@@ -1,12 +1,12 @@
-tf2onnx - convert tensorflow models to onnx models.
+tf2onnx - convert TensorFlow models to ONNX models.
 ========
 
-Tf2onnx converts a tensorflow graph to an onnx graph.
+Tf2onnx converts a TensorFlow graph to an ONNX graph.
 
-Tf2onnx is in its early development. Mileage will vary since tensorflow supports ~4 times the operations that the current onnx version supports. But standard models seem to be using mostly ops that onnx does support.
+Tf2onnx is in its early development. Mileage will vary since TensorFlow supports ~4 times the operations that the current ONNX version supports. But standard models seem to be using mostly ops that ONNX does support.
 
 # Status
-Baisc net and conv nets should work. A list of models that pass tests can be found [here](tests/run_pretrained_models.yaml)
+Basic net and conv nets should work. A list of models that pass tests can be found [here](tests/run_pretrained_models.yaml)
 
 # Installation
 Install dependencies:
@@ -14,7 +14,7 @@ Install dependencies:
 pip install onnx
 pip install tensorflow
 ```
-If you want to run unit tests against the caffe2 onnx backend, build and install caffe2 and onnx-caffe2:
+If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 and onnx-caffe2:
 ```
 https://github.com/caffe2/caffe2
 https://github.com/onnx/onnx-caffe2
@@ -42,13 +42,13 @@ For example:
 python -m tf2onnx.convert.py --input tests/models/fc-layers/frozen.pb --inputs X:0 --outputs output:0 --output tests/models/fc-layers/model.onnx --pretty --verbose
 ```
 
-To convert a tensorflow model, tf2onnx expects a ```frozen tensorflow graph``` and the user needs to specify inputs and outputs for the graph. 
-To find the inputs and outputs for the tensorflow graph the model developer will know or you can consult tensorflow's [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) tool, for example:
+To convert a TensorFlow model, tf2onnx expects a ```frozen TensorFlow graph``` and the user needs to specify inputs and outputs for the graph. 
+To find the inputs and outputs for the TensorFlow graph the model developer will know or you can consult TensorFlow's [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) tool, for example:
 ```
 summarize_graph --in_graph=tests/models/fc-layers/frozen.pb
 ```
 
-The tensorflow tool to freeze the graph is [here](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/tools/freeze_graph.py).
+The TensorFlow tool to freeze the graph is [here](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/tools/freeze_graph.py).
 
 For example:
 ```
@@ -72,7 +72,7 @@ There are 2 types of tests.
 python setup.py test
 ```
 
-## Validate pre-trained tensorflow models
+## Validate pre-trained TensorFlow models
 ```
 python tests/run_pretrained_models.py
 usage: run_pretrained_models.py [-h] [--cache CACHE] [--tests TESTS] [--backend BACKEND] [--verbose] [--debug] [--config yaml-config]
@@ -86,31 +86,31 @@ optional arguments:
   --verbose          verbose output
   --debug            dump generated graph with shape info
 ```
-```run_pretrained_models.py``` will run the tensorflow model, captures the tensorflow output and runs the same test against the specified onnx backend after converting the model. The only practical backend to use at this time is caffe2, and you need to install caffe2 for this to work.
+```run_pretrained_models.py``` will run the TensorFlow model, captures the TensorFlow output and runs the same test against the specified ONNX backend after converting the model. The only practical backend to use at this time is Caffe2, and you need to install Caffe2 for this to work.
 
 You call it for example with:
 ```
 python tests/run_pretrained_models.py --backend caffe2 --config tests/run_pretrained_models.yaml
 ```
 # How tf2onnx works
-While the protobuf format of onnx is not all that different than onnx, mileage will vary because tensorflow supports 4x the ops compared to the current version of onnx.
+While the protobuf format of ONNX is not all that different than onnx, mileage will vary because TensorFlow supports 4x the ops compared to the current version of ONNX.
 The converter needs to take care of a few things:
 1. Convert the protobuf format. Since the format is similar this step is straight forward.
-2. Tensorflow types need to be mapped to their onnx equivalent.
-3. For many ops tensorflow passes parameters like shapes as inputs where onnx wants to see them as attributes. Since we use a frozen graph, the converter will fetch the input as constant, converts it to an attribute and remove the original input.
-4. Tensorflow in many cases composes ops out of multiple simpler ops. The converter will need to identify the subgraph for such ops, slice the subgraph out and replace it with the onnx equivalent. This can become fairly complex so we use a graph matching library for it. A good example of this is the tensorflow transpose op.
-5. Tensorflow's default data format is NHWC where onnx requires NCHW. The converter will insert transpose ops to deal with this.
-6. There are some ops like relu6 that are not supported in onnx but the converter can be composed out of other onnx ops.
-7. Onnx backends are new and their implementations are not complete yet. For some ops the converter generate ops with deal with issues in existing backends.
+2. TensorFlow types need to be mapped to their ONNX equivalent.
+3. For many ops TensorFlow passes parameters like shapes as inputs where ONNX wants to see them as attributes. Since we use a frozen graph, the converter will fetch the input as constant, converts it to an attribute and remove the original input.
+4. TensorFlow in many cases composes ops out of multiple simpler ops. The converter will need to identify the subgraph for such ops, slice the subgraph out and replace it with the ONNX equivalent. This can become fairly complex so we use a graph matching library for it. A good example of this is the tensorflow transpose op.
+5. TensorFlow's default data format is NHWC where ONNX requires NCHW. The converter will insert transpose ops to deal with this.
+6. There are some ops like relu6 that are not supported in ONNX but the converter can be composed out of other ONNX ops.
+7. ONNX backends are new and their implementations are not complete yet. For some ops the converter generate ops with deal with issues in existing backends.
 
 ### Step 1 - start with a frozen graph.
 tf2onnx starts with a frozen graph. This is because of item 3 above.
 
 ### Step 2 - 1:1 convertion of the protobuf from tensorflow to onnx
-tf2onnx first does a simple convertion from the tensorflow protobuf format to the onnx protobuf format without looking at individual ops.
-We do this so we can use the onnx graph as internal representation and write helper functions around it.
-The code that does the conversion is in tensorflow_to_onnx(). tensorflow_to_onnx() will return the onnx graph and a dictionary with shape information from tensorflow. The shape information is helpfull in some cases when processing individual ops. 
-The onnx graph is wrapped in a Graph object and nodes in the graph are wrapped in a Node object to allow easier graph manipulations on the graph. All code that deals with nodes and graphs is in graph.py.
+tf2onnx first does a simple convertion from the TensorFlow protobuf format to the ONNX protobuf format without looking at individual ops.
+We do this so we can use the ONNX graph as internal representation and write helper functions around it.
+The code that does the conversion is in tensorflow_to_onnx(). tensorflow_to_onnx() will return the ONNX graph and a dictionary with shape information from TensorFlow. The shape information is helpful in some cases when processing individual ops. 
+The ONNX graph is wrapped in a Graph object and nodes in the graph are wrapped in a Node object to allow easier graph manipulations on the graph. All code that deals with nodes and graphs is in graph.py.
 
 ### Step 3 - rewrite subgraphs
 In the next step we apply graph matching code on the graph to re-write subgraphs for ops like transpose and lstm. For an example looks at rewrite_transpose().
@@ -119,7 +119,7 @@ In the next step we apply graph matching code on the graph to re-write subgraphs
 In the fourth step we look at individual ops that need attention. The dictionary _OPS_MAPPING will map tensorflow op types to a method that is used to process the op. The simplest case is direct_op() where the op can be taken as is. Whenever possible we try to group ops into common processing, for example all ops that require dealing with broadcasting are mapped to broadcast_op(). For an op that composes the tensorflow op from multiple onnx ops, see relu6_op().
 
 ### Step 5 - final processing
-Once all ops are converted, we need to do a topological sort since onnx requires it. process_tf_graph() is the method that takes care of all above steps.
+Once all ops are converted, we need to do a topological sort since ONNX requires it. process_tf_graph() is the method that takes care of all above steps.
 
 # Extending tf2onnx
 If you like to contribute and add new conversions to tf2onnx, the process is something like:
