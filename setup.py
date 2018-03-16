@@ -1,0 +1,83 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license.
+
+from collections import namedtuple
+import os
+from setuptools import setup, find_packages, Command
+import distutils.command.build
+import setuptools.command.build_py
+import setuptools.command.develop
+import setuptools.command.install
+import subprocess
+from textwrap import dedent
+
+TOP_DIR = os.path.realpath(os.path.dirname(__file__))
+SRC_DIR = os.path.join(TOP_DIR, 'tf2onnx')
+
+try:
+    git_version = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=TOP_DIR).decode('ascii').strip()
+except (OSError, subprocess.CalledProcessError):
+    git_version = None
+
+with open(os.path.join(TOP_DIR, 'VERSION_NUMBER')) as version_file:
+    VersionInfo = namedtuple('VersionInfo', ['version', 'git_version'])(
+        version=version_file.read().strip(),
+        git_version=git_version
+    )
+
+
+class create_version(Command):
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        with open(os.path.join(SRC_DIR, 'version.py'), 'w') as f:
+            f.write(dedent('''
+            version = '{version}'
+            git_version = '{git_version}'
+            '''.format(**dict(VersionInfo._asdict()))))
+
+
+class build_py(setuptools.command.build_py.build_py):
+    def run(self):
+        self.run_command('create_version')
+        setuptools.command.build_py.build_py.run(self)
+
+
+class build(distutils.command.build.build):
+    def run(self):
+        self.run_command('build_py')
+
+
+class develop(setuptools.command.develop.develop):
+    def run(self):
+        self.run_command('create_version')
+        self.run_command('build')
+        setuptools.command.develop.develop.run(self)
+
+
+cmdclass = {
+    'create_version': create_version,
+    'build_py': build_py,
+    'build': build,
+    'develop': develop,
+}
+
+setup(
+    name="tf2onnx",
+    version=VersionInfo.version,
+    description="tensorflow to onnx converter",
+    setup_requires=['pytest-runner'],
+    tests_require=['numpy', 'pytest', 'pytest-cov', 'psutil'],
+    cmdclass=cmdclass,
+    packages=find_packages(),
+    author='onnx@microsoft.com',
+    author_email='onnx@microsoft.com',
+    url='https://github.com/onnx/tensorflow-onnx',
+    install_requires=['tensorflow', 'onnx', 'graphviz', 'pyyaml', 'pytest-cov']
+)
