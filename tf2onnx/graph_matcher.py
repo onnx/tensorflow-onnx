@@ -145,6 +145,7 @@ class GraphMatcher(object):
     Returns:
       True if an TF expression rooted at `op` matches `pattern`.
     """
+    #print(pattern, op.type)
     if pattern.op_type is None:
       return True
 
@@ -158,11 +159,9 @@ class GraphMatcher(object):
       # If pattern.inputs is empty, skips the rest and accepts all the inputs.
       return True
 
-    matched = [
-      self._match_pattern(input_pattern, input_tensor, input_tensor)
-      for input_tensor, input_pattern in zip(op.inputs, pattern.inputs)
-    ]
-    return len(op.inputs) == len(pattern.inputs) and all(matched)
+    return op and len(op.inputs) == len(pattern.inputs) and \
+      all([self._match_pattern(input_pattern, input_tensor, input_tensor)
+        for input_tensor, input_pattern in zip(op.inputs, pattern.inputs)])
 
   def match_op(self, op):
     """Matches `op` against `self._pattern`.

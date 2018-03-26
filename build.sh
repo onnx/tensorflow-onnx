@@ -2,7 +2,6 @@
 
 set -x
 
-
 apt-get install -y protobuf-compiler libprotoc-dev
 pip install setuptools 
 pip install onnx pytest-cov

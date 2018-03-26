@@ -58,10 +58,12 @@ def get_ramp(inputs):
     return d
 
 
-_INPUT_FUNC_MAPPING = {"get_beach": get_beach,
-                       "get_random": get_random,
-                       "get_random256": get_random256,
-                       "get_ramp": get_ramp}
+_INPUT_FUNC_MAPPING = {
+    "get_beach": get_beach,
+    "get_random": get_random,
+    "get_random256": get_random256,
+    "get_ramp": get_ramp
+}
 
 
 def node_name(name):
@@ -127,15 +129,13 @@ class Test(object):
         for k, v in inputs.items():
             k = sess.graph.get_tensor_by_name(k)
             feed_dict[k] = v
-        outputs = [i for i in self.output_names]
-        result = sess.run(outputs, feed_dict=feed_dict)
+        result = sess.run(self.output_names, feed_dict=feed_dict)
         return result
 
     @staticmethod
     def to_onnx(tf_graph):
         """Convert graph to tensorflow."""
-        onnx = process_tf_graph(tf_graph)
-        return onnx
+        return process_tf_graph(tf_graph)
 
     def run_caffe2(self, name, onnx_graph, inputs):
         """Run test again caffe2 backend."""
@@ -143,15 +143,6 @@ class Test(object):
         model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
         prepared_backend = onnx_caffe2.backend.prepare(model_proto)
         results = prepared_backend.run(inputs)
-        return results
-
-    def run_onnxnumpy(self, name, onnx_graph, inputs):
-        """Run test against onnxnumpy backend."""
-        import onnxnumpy
-        model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
-        g = onnxnumpy.OnnxNumpy(model_proto.graph)
-        results = g.run(inputs)
-        results = list(results.values())[0]
         return results
 
     def run_onnxmsrt(self, name, onnx_graph, inputs):
@@ -165,6 +156,21 @@ class Test(object):
 
         m = lotus.ModelExecutor(model_path)
         results = m.run(self.output_names, inputs)
+        return results
+
+    def run_onnxcntk(self, name, onnx_graph, inputs):
+        """Run test against cntk backend."""
+        import cntk as C
+        model_path = os.path.join(TMPPATH, name + "_model.pb")
+        model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
+        with open(model_path, "wb") as f:
+            f.write(model_proto.SerializeToString())
+        z = C.Function.load(model_path, format=C.ModelFormat.ONNX)
+        input_args = {}
+        # FIXME: the model loads but eval() throws
+        for arg in z.arguments:
+            input_args[arg] = inputs[arg.name]
+        results = z.eval(input_args)
         return results
 
     def create_onnx_file(self, name, onnx_graph, inputs, outdir):
@@ -212,11 +218,10 @@ class Test(object):
             onnx_results = None
             if backend == "caffe2":
                 onnx_results = self.run_caffe2(name, onnx_graph, inputs)
-                onnx_results = onnx_results[0]
-            elif backend == "onnxnumpy":
-                onnx_results = self.run_onnxnumpy(name, onnx_graph, inputs)
             elif backend == "onnxmsrt":
                 onnx_results = self.run_onnxmsrt(name, onnx_graph, inputs)
+            elif backend == "cntk":
+                onnx_results = self.run_onnxcntk(name, onnx_graph, inputs)
             else:
                 raise ValueError("unknown backend")
             print("\trun_onnx OK")
@@ -240,7 +245,7 @@ def get_args():
     parser.add_argument("--cache", default="/tmp/pre-trained", help="pre-trained models cache dir")
     parser.add_argument("--config", default="tests/run_pretrained_models.yaml", help="yaml config to use")
     parser.add_argument("--tests", help="tests to run")
-    parser.add_argument("--backend", default="caffe2", help="backend to use")
+    parser.add_argument("--backend", default="caffe2", choices=["caffe2", "onnxmsrt", "cntk"], help="backend to use")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     parser.add_argument("--debug", help="debug vlog", action="store_true")
     parser.add_argument("--list", help="list tests", action="store_true")

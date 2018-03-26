@@ -4,25 +4,29 @@
 """
 tf2onnx.tf2onnx - rewrite tensorflow graph to onnx graph
 """
-import logging
 import collections
+import logging
 
-from onnx import ModelProto, helper
-import tf2onnx
-from tf2onnx import utils
-from tf2onnx.graph_matcher import *
-from tf2onnx.graph import Node, Graph
 import numpy as np
+import tf2onnx
+from onnx import helper
 from tensorflow.python.framework import graph_util
-from tensorflow.tools.graph_transforms import TransformGraph
 from tensorflow.python.tools.freeze_graph import freeze_graph
+from tensorflow.tools.graph_transforms import TransformGraph
+from tf2onnx import utils
+from tf2onnx.graph import Node, Graph
+from tf2onnx.graph_matcher import *
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx")
 
-
-FLAVOR = ["onnxmsrt"]
-
+# Target for the generated onnx graph. It possible targets:
+# onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)
+# caffe2 = include some workarounds for caffe2 and winml
+TARGET_ONNX_1_1 = "onnx-1.1"
+TARGET_CAFFE2 = "caffe2"
+POSSIBLE_TARGETS = [TARGET_ONNX_1_1, TARGET_CAFFE2]
+DEFAULT_TARGET = [TARGET_ONNX_1_1, TARGET_CAFFE2]
 
 def tensorflow_to_onnx(graph):
     """
@@ -104,9 +108,10 @@ def tensorflow_to_onnx(graph):
                 onnx_nodes.append(onnx_node)
             except Exception as ex:
                 log.error("pass1 convert failed for %s, ex=%s", node, ex)
-                raise ex
+                raise
 
     return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes
+
 
 # pylint: disable=W0613,C0111,W0612
 
@@ -141,14 +146,16 @@ def broadcast_op(ctx, node, name, args):
     shape1 = ctx.get_shape(node.input[1])
     if shape0 != shape1:
         node.set_attr("broadcast", 1)
-        if "onnxmsrt" in FLAVOR or "caffe2" in FLAVOR:
+        if ctx.is_target(TARGET_CAFFE2):
+            # this is more shortcoming in the broadcasting code
+            # of caffe2 and winml/rs4 but since those are the primary
+            # onnx-1.1 backends we don't use a seperate flag.
             if shape0 is not None and len(shape0) == 0:
                 if node.inputs[0].is_const():
                     shape0 = node.inputs[0].scalar_to_dim1()
             if shape1 is not None and len(shape1) == 0:
                 if node.inputs[1].is_const():
                     shape1 = node.inputs[1].scalar_to_dim1()
-            # caffe2 and onnxmsrt broadcast left to right only - swap if possible
             if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
                 tmp = node.input[0]
                 node.input[0] = node.input[1]
@@ -271,6 +278,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
             with_kernel: transpose the kernel
             new_kernel_shape: reshape the kernel
     """
+
     def calc_shape(a, b):
         if a and b:
             return [a[b[i]] for i in b]
@@ -548,12 +556,18 @@ def transpose_op(ctx, node, name, args):
     # T y = Transpose(T x, Tperm perm, @type Tperm)
     # T transposed = Transpose(T data, @INTS perm)
     if len(node.input) > 1:
-        shape = ctx.get_shape(node.inputs[1])
+        perm = node.inputs[1]
+        if perm.is_const():
+            # perms is passed as const
+            dims = perm.get_tensor_value()
+        else:
+            # calculate perms from shape
+            shape = ctx.get_shape(node.input[1])
+            dims = [i for i in range(len(shape) - 1, -1)]
         ctx.remove_input(node, node.input[1])
-        dims = [i for i in range(len(shape) - 1, 0)]
         node.set_attr("perm", dims)
     else:
-        # perm comes as attribute from tensorflow
+        # graph rewrite moved perm to attribute
         pass
     return node
 
@@ -630,25 +644,23 @@ def stridedslice_op(ctx, node, name, args):
     # T output = StridedSlice(T input, Index begin, Index end, Index strides,
     #               @type Index, @int begin_mask, @int end_mask, @int ellipsis_mask,
     #               @int new_axis_mask, @int shrink_axis_mask)
-    # FIXME: needed by ops like tf.flatten()
-    raise ValueError("stridedslice_op not implemented")
-    return node
+    raise ValueError("StridedSlice not implemented")
 
 
 def pow_op(ctx, node, name, args):
-    if "onnxmsrt" not in FLAVOR:
-        return node
-    # workaround a bug in onnxmsrt, pow(a, b) becomes np.exp(np.log(a) * b)
-    node.type = "Log"
-    b = node.input[1]
-    ctx.remove_input(node, node.input[1])
-    op_name = utils.make_name(node.name)
-    mul_op = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
-    mul_op.input.append(b)
-    op_name = utils.make_name(node.name)
-    exp_op = ctx.insert_new_node_on_output("Exp", mul_op.output[0], name=op_name)
-    ctx.copy_shape(node.output[0], exp_op.output[0])
-    return [node, broadcast_op(ctx, mul_op, name, args), exp_op]
+    if ctx.is_target(TARGET_CAFFE2):
+        # workaround a bug in caffe2 pre Feb2018, pow(a, b) becomes np.exp(np.log(a) * b)
+        node.type = "Log"
+        b = node.input[1]
+        ctx.remove_input(node, node.input[1])
+        op_name = utils.make_name(node.name)
+        mul_op = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
+        mul_op.input.append(b)
+        op_name = utils.make_name(node.name)
+        exp_op = ctx.insert_new_node_on_output("Exp", mul_op.output[0], name=op_name)
+        ctx.copy_shape(node.output[0], exp_op.output[0])
+        return [node, broadcast_op(ctx, mul_op, name, args), exp_op]
+    return node
 
 
 def lrn_op(ctx, node, name, args):
@@ -854,8 +866,7 @@ def rewrite_flatten(g, ops):
             OpTypePattern("*", name="input2"),
             OpTypePattern('Pack', inputs=[
                 OpTypePattern('StridedSlice', inputs=[
-                    OpTypePattern('Shape', name="input1", inputs=["*"]),
-                    "*", "*", "*"
+                    "*", "*", "*", "*",
                 ]),
                 "*",
             ]),
@@ -867,10 +878,10 @@ def rewrite_flatten(g, ops):
         outputs = match.get_op('outputs')
         op_name = utils.make_name("Flatten")
         out_name = op_name + ":0"
-        new_node = Node(helper.make_node("Flatten", [inputs2.output[0]], [out_name], name=op_name, ratio=1.0), g)
+        new_node = Node(helper.make_node("Flatten", [inputs2.output[0]], [out_name], name=op_name), g)
         g.replace_all_inputs(ops, outputs.output[0], out_name)
         to_be_removed = [node for node in match.get_nodes() if node != inputs2]
-        for i in range(len(ops)-1, -1, -1):
+        for i in range(len(ops) - 1, -1, -1):
             if ops[i] in to_be_removed:
                 del ops[i]
         ops.append(new_node)
@@ -903,7 +914,7 @@ def tensorflow_onnx_mapping(g, continue_on_error):
         try:
             onnx_node = func(g, node, node.name, args)
         except Exception as ex:
-            raise ex
+            raise
         if onnx_node:
             if isinstance(onnx_node, list):
                 onnx_nodes.extend(onnx_node)
@@ -917,7 +928,6 @@ def tensorflow_onnx_mapping(g, continue_on_error):
 def tf_optimize(sess, inputs, outputs, graph_def):
     """Optimize tensorflow graph for inference."""
     transforms = [
-        # "remove_nodes(op=Identity, op=CheckNumerics)",
         "fold_batch_norms",
         "fold_old_batch_norms"
         # fails: "fold_constants(ignore_errors=true)",
@@ -942,38 +952,15 @@ def tf_freeze(input_graph, input_checkpoint, output_graph, output_node_names):
                  initializer_nodes="")
 
 
-def optimize_onnxgraph(ctx, ops):
-    """
-    Optimize onnx graph.
-    For now remove equalizing transposes
-    """
-    # TODO: remove Transose->Relu->Transpose
-    ret_ops = []
-    for node in ops:
-        if node.type == "Transpose" and node.input and node.inputs[0] and node.inputs[0].type == "Transpose":
-            prev = node.inputs[0]
-            p1 = node.get_attr("perm").ints
-            p2 = prev.get_attr("perm").ints
-            if p1 == NHWC_TO_NCHW and p2 == NCHW_TO_NHWC:
-                input_name = prev.input[0]
-                output_name = node.output[0]
-                for next_node in ops:
-                    for i, n in enumerate(next_node.input):
-                        if n == output_name:
-                            next_node.input[i] = input_name
-                del prev
-        else:
-            ret_ops.append(node)
-    ctx.set_nodes(ret_ops)
-
-
-def process_tf_graph(graph, continue_on_error=False, verbose=False):
+def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None):
     """Convert tensorflow graph to onnx graph."""
 
-    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = \
-        tensorflow_to_onnx(graph)
+    if target is None:
+        target = DEFAULT_TARGET
 
-    g = Graph(onnx_nodes, output_shapes, dtypes)
+    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(graph)
+
+    g = Graph(onnx_nodes, output_shapes, dtypes, target)
     ops = g.get_nodes()
 
     # rewrites
@@ -988,7 +975,6 @@ def process_tf_graph(graph, continue_on_error=False, verbose=False):
     g.topological_sort(g.get_nodes())
     mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error)
     g.topological_sort(g.get_nodes())
-    optimize_onnxgraph(g, g.get_nodes())
 
     g.update_proto()
     if verbose:

@@ -1,3 +1,4 @@
+# taken from tensorflow, but indent=4
 [MASTER]
 
 # Specify a configuration file.
@@ -317,9 +318,3 @@ ignore-exceptions=AssertionError,NotImplementedError,StopIteration,TypeError
 # Number of spaces of indent required when the last token on the preceding line
 # is an open (, [, or {.
 indent-after-paren=4
-
-
-[GOOGLE LINES]
-
-# Regexp for a proper copyright notice.
-copyright=Copyright \d{4} The TensorFlow Authors\. +All [Rr]ights [Rr]eserved\.

@@ -6,6 +6,7 @@ Dump onnx graph.
 """
 import argparse
 import collections
+
 import onnx
 from onnx import ModelProto
 from onnx import helper
@@ -16,7 +17,7 @@ def get_args():
     parser.add_argument("--input", required=True, help="input model")
     parser.add_argument("--pbtxt", help="write pbtxt")
     parser.add_argument("--meta", help="include meta data", action="store_true")
-    parser.add_argument("--check", help="check model", action="store_true")
+    parser.add_argument("--check", help="check onnx model", action="store_true")
     parser.add_argument("--stats", help="collect stats", action="store_true")
     args = parser.parse_args()
     return args

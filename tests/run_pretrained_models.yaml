@@ -34,13 +34,23 @@ benchtf-ae0:
     - output:0
 
 benchtf-lstm:
+  disabled: true
   model: tests/models/lstm/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1, 784]
   outputs:
     - output:0
+
+benchtf-gru:
   disabled: true
+  model: tests/models/gru/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 784]
+    "keep_prob:0": [1]
+  outputs:
+    - output:0
 
 ##
 ## standard image nets

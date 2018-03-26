@@ -4,8 +4,8 @@
 """
 tf2onnx.graph - class to manage graph manipulation on top of onnx
 """
-from onnx import helper, numpy_helper
-from tf2onnx import utils, __version__
+from onnx import numpy_helper, optimizer, ModelProto
+from tf2onnx import utils, tfonnx, __version__
 from tf2onnx.utils import *
 
 
@@ -24,7 +24,6 @@ class Node(object):
         self._output = [i for i in node.output]
         self._attr = {}
         self.inserted_nchw = False
-        self.data_format = None
         # make sure this name is not used
         assert graph.get_node_by_name(node.name) is None
         graph.set_node_by_name(self)
@@ -38,6 +37,9 @@ class Node(object):
             if dtype:
                 dtype = dtype.i
         self._dtype = dtype
+        self.data_format = self.get_attr("data_format")
+        if self.data_format:
+            self.data_format = self.data_format.s.decode("utf-8")
 
     @property
     def input(self):
@@ -185,29 +187,29 @@ class Node(object):
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
 
-    def __init__(self, nodes, output_shapes=None, dtypes=None):
+    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None):
         """Create Graph.
         Args:
             nodes: list of Node()
             output_shapes: dict of tensorflow output shapes
             dtypes: dict of tensorflow dtype
         """
+        if target is None:
+            target = tfonnx.DEFAULT_TARGET
         self._nodes = []
         self._initializers = {}
         self._nodes_by_name = {}
         self.shapes = {}
         self.model_inputs = []
+        self._target = set(target)
         self.dtypes = dtypes
         self._output_shapes = output_shapes
-
-        ops = []
-        for node in nodes:
-            new_node = Node(node, self)
-            data_format = new_node.get_attr("data_format")
-            if data_format:
-                new_node.data_format = data_format.s.decode("utf-8")
-            ops.append(new_node)
+        ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
+
+    def is_target(self, name):
+        """Return True if target platform is name."""
+        return name in self._target
 
     def make_const(self, name, op_type, val):
         """Make a new constant in the graph."""
@@ -220,9 +222,7 @@ class Graph(object):
     def set_nodes(self, ops):
         """Set new node list."""
         self._nodes = ops
-        self._nodes_by_name = {}
-        for op in ops:
-            self._nodes_by_name[op.name] = op
+        self._nodes_by_name = {op.name: op for op in ops}
 
     def update_proto(self):
         """Update the onnx protobuf from out internal Node structure."""
@@ -250,6 +250,7 @@ class Graph(object):
 
     def get_shape(self, name):
         """Get shape for node."""
+        assert isinstance(name, str)
         shape = self._output_shapes.get(name)
         if shape:
             if shape[0] is None or shape[0] == -1:
@@ -321,55 +322,78 @@ class Graph(object):
         ret = [x for _, x in sorted(zip(label, ops))]
         self.set_nodes(ret)
 
-    def make_model(self, doc, inputs, outputs):
-        """Make final model from internal graph."""
-        voutputss = []
-        for i in outputs:
-            op = self.get_node_by_name(i)
+    def make_model(self, doc, input_names, output_names, optimize=True):
+        """
+        Create final ModelProto for onnx from internal graph.
+        Args:
+            optimize: optimize graph via onnx
+            doc: text for doc string of the model
+            input_names: list of model inputs
+            output_names: list of model outputs
+        """
+
+        # create output_tensor_values
+        output_tensor_values = []
+        for name in output_names:
+            op = self.get_node_by_name(name)
             if op:
                 dtype = op.dtype
                 if not dtype:
                     continue
-                v = helper.make_tensor_value_info(i, dtype, self.get_shape(i))
-                voutputss.append(v)
+                v = helper.make_tensor_value_info(name, dtype, self.get_shape(name))
+                output_tensor_values.append(v)
 
+        # update attributes
         ops = []
         for op in self.get_nodes():
-            onnxop = op.op
-            del onnxop.attribute[:]
+            onnx_op = op.op
+            del onnx_op.attribute[:]
             attr = []
             for a in op.attr.values():
                 if a.name in utils.ONNX_VALID_ATTRIBUTES:
                     attr.append(a)
             if attr:
-                onnxop.attribute.extend(attr)
-            ops.append(onnxop)
+                onnx_op.attribute.extend(attr)
+            ops.append(onnx_op)
 
+        # create input_tensor_values, initializers
         initializers = list(self._initializers.values())
         input_with_initializers = []
-        for i in initializers:
-            shape = self.get_shape(i.name)
-            if shape and list(shape) != i.dims:
+        for initializer in initializers:
+            shape = self.get_shape(initializer.name)
+            if shape and list(shape) != initializer.dims:
                 raise ValueError("initializer shape is inconsistent")
-            # make_tensor_value_info(name, elem_type, shape, doc_string=""):
-            val = helper.make_tensor_value_info(i.name, i.data_type, i.dims)
+            val = helper.make_tensor_value_info(initializer.name, initializer.data_type, initializer.dims)
             input_with_initializers.append(val)
-
         input_with_initializers.extend(self.model_inputs)
-        model_proto = helper.make_model(
-            helper.make_graph(ops, "tf2onnx", input_with_initializers, voutputss,
-                              initializer=initializers, doc_string=doc),
-            producer_name="tf2onnx", producer_version=__version__)
+
+        # create model proto
+        graph = helper.make_graph(ops, "tf2onnx",
+                                  input_with_initializers,
+                                  output_tensor_values,
+                                  initializer=initializers,
+                                  doc_string=doc)
+
+        model_proto = helper.make_model(graph, producer_name="tf2onnx", producer_version=__version__)
+
+        # optimize the model proto
+        if optimize:
+            optimized_model = optimizer.optimize(model_proto.SerializeToString(),
+                                                 ["fuse_consecutive_transposes",
+                                                  "fuse_transpose_into_gemm",
+                                                  "eliminate_nop_transpose"])
+            model_proto = ModelProto()
+            model_proto.ParseFromString(optimized_model)
         return model_proto
 
     def dump_graph(self):
-        """Dump graph with shapes for debugging."""
+        """Dump graph with shapes (helpful for debugging)."""
         for node in self.get_nodes():
             input_names = ["{}{}".format(n, self.get_shape(n)) for n in node.input]
             print("{} {} {} {}".format(node.type, self.get_shape(node.output[0]), node.name, ", ".join(input_names)))
 
     def follow_inputs(self, node, num, space=""):
-        """Dump graph with shapes for debugging."""
+        """Follow inputs for (helpful for debugging)."""
         val = []
         top = space == ""
         if num == 0:
@@ -377,7 +401,7 @@ class Graph(object):
         val.append("{}{} {} {}".format(space, node.type, node.name, self.get_shape(node.name + ":0")))
         space += "    "
         for j in node.inputs:
-            val.extend(self.follow_inputs(j, num-1, space))
+            val.extend(self.follow_inputs(j, num - 1, space))
         if top:
             print("\n".join(reversed(val)))
             print()
@@ -399,7 +423,7 @@ class Graph(object):
         # don't remove output from parent since others might depend on it
         return True
 
-    def insert_new_node_on_input(self, node, op_type, input_name, name=None, doc=None, **kwargs):
+    def insert_new_node_on_input(self, node, op_type, input_name, name=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             node: we want to replace the input for this node
@@ -413,15 +437,14 @@ class Graph(object):
         """
         assert isinstance(input_name, str) and isinstance(op_type, str)
         new_output = name + ":0"
-        new_node = Node(helper.make_node(op_type, [input_name], [new_output],
-                                         name=name, doc_string=doc, **kwargs), self)
+        new_node = Node(helper.make_node(op_type, [input_name], [new_output], name=name, **kwargs), self)
         for i, n in enumerate(node.input):
             if n == input_name:
                 node.input[i] = new_output
                 break
         return new_node
 
-    def insert_new_node_on_output(self, op_type, output_name, name=None, doc=None, **kwargs):
+    def insert_new_node_on_output(self, op_type, output_name, name=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             op_type: type for new operation
@@ -434,8 +457,7 @@ class Graph(object):
         """
         assert isinstance(output_name, str) and isinstance(op_type, str)
         new_output = name + ":0"
-        new_node = Node(helper.make_node(op_type, [output_name], [new_output],
-                                         name=name, doc_string=doc, **kwargs), self)
+        new_node = Node(helper.make_node(op_type, [output_name], [new_output], name=name, **kwargs), self)
         self.replace_all_inputs(self.get_nodes(), output_name, new_output)
         return new_node
 
@@ -461,7 +483,7 @@ class Graph(object):
     def replace_subgraph(ops, subgraph_nodes, old_inputs, old_outputs, new_inputs, new_outputs):
         """Replace subgraph."""
         if len(old_inputs) != len(new_inputs) or len(old_outputs) != len(new_outputs):
-            raise ValueError("fuse op - inputs and outputs need to be same length")
+            raise ValueError("replace_subgraph - inputs and outputs need to be same length")
 
         # point all children nodes inputs to the new node
         for oo, no in zip(old_outputs, new_outputs):
@@ -469,7 +491,6 @@ class Graph(object):
                 for child in ops:
                     for i, name in enumerate(child.input):
                         if name == output_name:
-                            # FIXME: don't hard-code :0
                             child.input[i] = no.name + ":0"
 
         # delete nodes no longer used
