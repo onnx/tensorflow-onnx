@@ -11,14 +11,17 @@ Basic net and conv nets should work. A list of models that pass tests can be fou
 # Installation
 Install dependencies:
 ```
-pip install onnx
+pip install onnx==1.1
 pip install tensorflow
 ```
 If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 and onnx-caffe2:
 ```
 https://github.com/caffe2/caffe2
-https://github.com/onnx/onnx-caffe2
+
+pip install onnx-caffe2==1.0
 ```
+We tested with tensorflow 1.5/1.6 and anaconda 3.5/3.6.
+
 Once dependencies are installed, from the tf2onnx root folder call:
 ```
 python setup.py install
@@ -35,14 +38,15 @@ python setup.py bdist_wheel
 # Usage
 ```
 python -m tf2onnx.convert
-usage: convert.py [-h] --input INPUT [--output OUTPUT] --inputs INPUTS --outputs OUTPUTS [--pbtxt PBTXT] [--pretty] [--continue_on_error] [--verbose]
+usage: convert.py [-h] --input INPUT [--output OUTPUT] [--target TARGET] --inputs INPUTS --outputs OUTPUTS [--continue_on_error] [--verbose]
 ```
 For example:
 ```
-python -m tf2onnx.convert --input tests/models/fc-layers/frozen.pb --inputs X:0 --outputs output:0 --output tests/models/fc-layers/model.onnx --pretty --verbose
+python -m tf2onnx.convert.py --input tests/models/fc-layers/frozen.pb --inputs X:0 --outputs output:0 --output tests/models/fc-layers/model.onnx --pretty --verbose
 ```
 
-To convert a TensorFlow model, tf2onnx expects a ```frozen TensorFlow graph``` and the user needs to specify inputs and outputs for the graph. 
+To convert a TensorFlow model, tf2onnx expects a ```frozen TensorFlow graph``` and the user needs to specify inputs and outputs for the graph by passing the input and output
+names with ```--inputs INPUTS``` and ```--outputs OUTPUTS```. 
 To find the inputs and outputs for the TensorFlow graph the model developer will know or you can consult TensorFlow's [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) tool, for example:
 ```
 summarize_graph --in_graph=tests/models/fc-layers/frozen.pb
@@ -63,6 +67,8 @@ python $tools/freeze_graph.py \
     --output_graph=tests/models/fc-layers/frozen.pb
 ```
 
+There are different onnx versions and workarounds for runtimes that can be set with ```--target TARGET```. The default is onnx-1.1 and caffe2 which generates a graph
+that can be executed on a onnx-1.0/onnx-1.1 runtime, like caffe2 and winml.
 
 # Testing
 There are 2 types of tests.
@@ -132,7 +138,7 @@ If you like to contribute and add new conversions to tf2onnx, the process is som
 # What is missing
 - lstm/gru support (working on this)
 - more testing
-- mode model coverage
+- more model coverage
 
 # License
 

@@ -92,6 +92,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# --input w:/tf2onnx/models/ppo/raw_graph_def.pb
-# --input \src\models\mobilenet_v1_1.0_224\frozen_graph.pb

@@ -1,15 +1,16 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
-from collections import namedtuple
-import os
-from setuptools import setup, find_packages, Command
 import distutils.command.build
+import os
+import subprocess
+from collections import namedtuple
+from textwrap import dedent
+
 import setuptools.command.build_py
 import setuptools.command.develop
 import setuptools.command.install
-import subprocess
-from textwrap import dedent
+from setuptools import setup, find_packages, Command
 
 TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 SRC_DIR = os.path.join(TOP_DIR, 'tf2onnx')
@@ -34,7 +35,7 @@ class create_version(Command):
 
     def finalize_options(self):
         pass
-
+        
     def run(self):
         with open(os.path.join(SRC_DIR, 'version.py'), 'w') as f:
             f.write(dedent('''
@@ -71,7 +72,7 @@ cmdclass = {
 setup(
     name="tf2onnx",
     version=VersionInfo.version,
-    description="tensorflow to onnx converter",
+    description='Tensorflow to ONNX converter',
     setup_requires=['pytest-runner'],
     tests_require=['numpy', 'pytest', 'pytest-cov', 'psutil'],
     cmdclass=cmdclass,
@@ -79,5 +80,5 @@ setup(
     author='onnx@microsoft.com',
     author_email='onnx@microsoft.com',
     url='https://github.com/onnx/tensorflow-onnx',
-    install_requires=['tensorflow', 'onnx', 'graphviz', 'pyyaml', 'pytest-cov']
+    install_requires=['tensorflow', 'onnx==1.1', 'graphviz', 'pyyaml', 'pytest-cov']
 )
