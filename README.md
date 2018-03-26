@@ -42,7 +42,7 @@ usage: convert.py [-h] --input INPUT [--output OUTPUT] [--target TARGET] --input
 ```
 For example:
 ```
-python -m tf2onnx.convert.py --input tests/models/fc-layers/frozen.pb --inputs X:0 --outputs output:0 --output tests/models/fc-layers/model.onnx --pretty --verbose
+python -m tf2onnx.convert --input tests/models/fc-layers/frozen.pb --inputs X:0 --outputs output:0 --output tests/models/fc-layers/model.onnx --pretty --verbose
 ```
 
 To convert a TensorFlow model, tf2onnx expects a ```frozen TensorFlow graph``` and the user needs to specify inputs and outputs for the graph by passing the input and output
