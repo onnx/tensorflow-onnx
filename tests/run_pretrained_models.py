@@ -141,7 +141,7 @@ class Test(object):
         """Run test again caffe2 backend."""
         import onnx_caffe2.backend
         model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
-        prepared_backend = onnx_caffe2.backend
+        prepared_backend = onnx_caffe2.backend.prepare(model_proto)
         results = prepared_backend.run(inputs)
         return results
 

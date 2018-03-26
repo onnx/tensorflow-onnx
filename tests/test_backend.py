@@ -71,18 +71,9 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def run_onnxcaffe2(onnx_graph, inputs):
         """Run test against caffe2 backend."""
         import onnx_caffe2.backend
-        prepared_backend = onnx_caffe2.backend
+        prepared_backend = onnx_caffe2.backend.prepare(onnx_graph)
         results = prepared_backend.run(inputs)
         return results[0]
-
-    @staticmethod
-    def run_onnxnumpy(onnx_graph, inputs):
-        """Run test against onnx-numpy backend."""
-        import onnxnumpy
-        g = onnxnumpy
-        results = {}
-        results = g.run(inputs)
-        return results
 
     @staticmethod
     def run_onnxmsrt(onnx_graph, inputs, output_names, test_name):
