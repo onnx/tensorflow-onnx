@@ -120,6 +120,18 @@ googlenet_v4_slim:
     - InceptionV4/Logits/Predictions:0
   rtol: 0.1
 
+mobilenet_v2_1.4_224:
+  # fails because input shape is not given - need to change
+  # conveter to support Shape() op (don't think there is a runtime that supports it yet)
+  disabled: true
+  url: https://storage.googleapis.com/mobilenet_v2/checkpoints/mobilenet_v2_1.4_224.tgz
+  model: mobilenet_v2_1.4_224_frozen.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - MobilenetV2/Predictions/Reshape_1:0
+
 mobilenet_v1_100_224:
   url: https://storage.googleapis.com/download.tensorflow.org/models/mobilenet_v1_1.0_224_frozen.tgz
   model: mobilenet_v1_1.0_224/frozen_graph.pb
