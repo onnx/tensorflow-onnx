@@ -253,7 +253,10 @@ class Graph(object):
         assert isinstance(name, str)
         shape = self._output_shapes.get(name)
         if shape:
-            if shape[0] is None or shape[0] == -1:
+            for i, v in enumerate(shape):
+                if v is None:
+                    shape[i] = -1
+            if shape[0] == -1:
                 shape[0] = utils.ONNX_UNKNOWN_DIMENSION
         return shape
 

@@ -56,9 +56,7 @@ The TensorFlow tool to freeze the graph is [here](https://github.com/tensorflow/
 
 For example:
 ```
-tools=`python -c "import tensorflow as tf; print(tf.sysconfig.get_lib()+'/python/tools')"`
-
-python $tools/freeze_graph.py \
+python -m tensorflow.python.tools.freeze_graph \
     --input_graph=my_checkpoint_dir/graphdef.pb \
     --input_binary=true \
     --input_names=input:0 \
