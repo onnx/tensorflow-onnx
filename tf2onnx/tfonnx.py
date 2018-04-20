@@ -11,7 +11,6 @@ import numpy as np
 import tf2onnx
 from onnx import helper
 from tensorflow.python.framework import graph_util
-from tensorflow.python.tools.freeze_graph import freeze_graph
 from tensorflow.tools.graph_transforms import TransformGraph
 from tf2onnx import utils
 from tf2onnx.graph import Node, Graph
@@ -960,20 +959,6 @@ def tf_optimize(sess, inputs, outputs, graph_def):
     graph_def = graph_util.extract_sub_graph(graph_def, needed_names)
     graph_def = TransformGraph(graph_def, inputs, outputs, transforms)
     return graph_def
-
-
-def tf_freeze(input_graph, input_checkpoint, output_graph, output_node_names):
-    """Freeze tensorflow graph."""
-    freeze_graph(input_graph=input_graph,
-                 input_saver="",
-                 input_binary=False,
-                 input_checkpoint=input_checkpoint,
-                 output_node_names=output_node_names,
-                 restore_op_name="save/restore_all",
-                 filename_tensor_name="save/Const:0",
-                 output_graph=output_graph,
-                 clear_devices=True,
-                 initializer_nodes="")
 
 
 def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None):

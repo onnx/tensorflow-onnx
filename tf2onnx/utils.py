@@ -7,59 +7,59 @@ tf2onnx.utils - misc utilities for tf2onnx
 
 import numpy as np
 import tensorflow as tf
-from onnx import helper, onnx_pb2
+from onnx import helper, onnx_pb
 from tensorflow.core.framework import types_pb2, tensor_pb2
 
 #
 #  mapping dtypes from tensorflow to onnx
 #
 TF_TO_ONNX_DTYPE = {
-    types_pb2.DT_FLOAT: onnx_pb2.TensorProto.FLOAT,
-    types_pb2.DT_HALF: onnx_pb2.TensorProto.FLOAT16,
-    types_pb2.DT_DOUBLE: onnx_pb2.TensorProto.DOUBLE,
-    types_pb2.DT_INT32: onnx_pb2.TensorProto.INT32,
-    types_pb2.DT_INT16: onnx_pb2.TensorProto.INT16,
-    types_pb2.DT_INT8: onnx_pb2.TensorProto.INT8,
-    types_pb2.DT_UINT8: onnx_pb2.TensorProto.UINT8,
-    types_pb2.DT_UINT16: onnx_pb2.TensorProto.UINT16,
-    types_pb2.DT_INT64: onnx_pb2.TensorProto.INT64,
-    types_pb2.DT_STRING: onnx_pb2.TensorProto.STRING,
-    types_pb2.DT_COMPLEX64: onnx_pb2.TensorProto.COMPLEX64,
-    types_pb2.DT_COMPLEX128: onnx_pb2.TensorProto.COMPLEX128,
-    types_pb2.DT_BOOL: onnx_pb2.TensorProto.BOOL,
+    types_pb2.DT_FLOAT: onnx_pb.TensorProto.FLOAT,
+    types_pb2.DT_HALF: onnx_pb.TensorProto.FLOAT16,
+    types_pb2.DT_DOUBLE: onnx_pb.TensorProto.DOUBLE,
+    types_pb2.DT_INT32: onnx_pb.TensorProto.INT32,
+    types_pb2.DT_INT16: onnx_pb.TensorProto.INT16,
+    types_pb2.DT_INT8: onnx_pb.TensorProto.INT8,
+    types_pb2.DT_UINT8: onnx_pb.TensorProto.UINT8,
+    types_pb2.DT_UINT16: onnx_pb.TensorProto.UINT16,
+    types_pb2.DT_INT64: onnx_pb.TensorProto.INT64,
+    types_pb2.DT_STRING: onnx_pb.TensorProto.STRING,
+    types_pb2.DT_COMPLEX64: onnx_pb.TensorProto.COMPLEX64,
+    types_pb2.DT_COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
+    types_pb2.DT_BOOL: onnx_pb.TensorProto.BOOL,
 }
 
 #
 # mapping dtypes from onnx to numpy
 #
 ONNX_TO_NUMPY_DTYPE = {
-    onnx_pb2.TensorProto.FLOAT: np.float32,
-    onnx_pb2.TensorProto.FLOAT16: np.float16,
-    onnx_pb2.TensorProto.DOUBLE: np.float64,
-    onnx_pb2.TensorProto.INT32: np.int32,
-    onnx_pb2.TensorProto.INT16: np.int16,
-    onnx_pb2.TensorProto.INT8: np.int8,
-    onnx_pb2.TensorProto.UINT8: np.uint8,
-    onnx_pb2.TensorProto.UINT16: np.uint16,
-    onnx_pb2.TensorProto.INT64: np.int64,
-    onnx_pb2.TensorProto.BOOL: np.bool,
+    onnx_pb.TensorProto.FLOAT: np.float32,
+    onnx_pb.TensorProto.FLOAT16: np.float16,
+    onnx_pb.TensorProto.DOUBLE: np.float64,
+    onnx_pb.TensorProto.INT32: np.int32,
+    onnx_pb.TensorProto.INT16: np.int16,
+    onnx_pb.TensorProto.INT8: np.int8,
+    onnx_pb.TensorProto.UINT8: np.uint8,
+    onnx_pb.TensorProto.UINT16: np.uint16,
+    onnx_pb.TensorProto.INT64: np.int64,
+    onnx_pb.TensorProto.BOOL: np.bool,
 }
 
 #
 #  onnx dtype names
 #
 ONNX_DTYPE_NAMES = {
-    onnx_pb2.TensorProto.FLOAT: "float",
-    onnx_pb2.TensorProto.FLOAT16: "float16",
-    onnx_pb2.TensorProto.DOUBLE: "double",
-    onnx_pb2.TensorProto.INT32: "int32",
-    onnx_pb2.TensorProto.INT16: "int16",
-    onnx_pb2.TensorProto.INT8: "int8",
-    onnx_pb2.TensorProto.UINT8: "uint8",
-    onnx_pb2.TensorProto.UINT16: "uint16",
-    onnx_pb2.TensorProto.INT64: "int64",
-    onnx_pb2.TensorProto.STRING: "string",
-    onnx_pb2.TensorProto.BOOL: "bool"
+    onnx_pb.TensorProto.FLOAT: "float",
+    onnx_pb.TensorProto.FLOAT16: "float16",
+    onnx_pb.TensorProto.DOUBLE: "double",
+    onnx_pb.TensorProto.INT32: "int32",
+    onnx_pb.TensorProto.INT16: "int16",
+    onnx_pb.TensorProto.INT8: "int8",
+    onnx_pb.TensorProto.UINT8: "uint8",
+    onnx_pb.TensorProto.UINT16: "uint16",
+    onnx_pb.TensorProto.INT64: "int64",
+    onnx_pb.TensorProto.STRING: "string",
+    onnx_pb.TensorProto.BOOL: "bool"
 }
 
 ONNX_UNKNOWN_DIMENSION = -1
