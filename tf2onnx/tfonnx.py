@@ -11,7 +11,6 @@ import numpy as np
 import tf2onnx
 from onnx import helper
 from tensorflow.python.framework import graph_util
-from tensorflow.python.tools.freeze_graph import freeze_graph
 from tensorflow.tools.graph_transforms import TransformGraph
 from tf2onnx import utils
 from tf2onnx.graph import Node, Graph
@@ -37,7 +36,7 @@ def tensorflow_to_onnx(graph):
     # ignore the following attributes
     ignored_attr = ["unknown_rank", "_class", "Tidx", "Tshape", "use_cudnn_on_gpu", "Index",
                     "Tpaddings", "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "element_shape",
-                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops"]
+                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -245,6 +244,8 @@ def reshape_op(ctx, node, name, args):
 def shape_op(ctx, node, name, args):
     # FIXME - this is not correct
     shape = ctx.get_shape(node.input[0])
+    if not shape:
+        shape.append(1)
     if shape[0] is None or shape[0] == -1:
         shape[0] = 1
     old_output = node.output[0]
@@ -602,6 +603,26 @@ def gather_op(ctx, node, name, args):
 
 
 def split_op(ctx, node, name, args):
+    # T output = Split(int32 split_dim, T value, @int num_split)
+    # T outputs = Split(T input, @INT axis, @INTS split)
+    split_dims = node.inputs[0].get_tensor_value()
+    ctx.remove_input(node, node.input[0])
+    node.set_attr("axis", split_dims[0])
+    return node
+
+
+def fill_op(ctx, node, name, args):
+    # T output = Fill(index_type dims, T value, @type index_type)
+    # T2 output = ConstantFill(T1 input, @INT dtype, @INTS extra_shape, @INT input_as_shape, @INTS shape, @FLOAT value)
+    # T X = GivenTensorFill(T shape, @INTS extra_shape, @INT input_as_shape, @INTS shape, @FLOATS values)
+    dims =  node.inputs[0].get_tensor_value()
+    value = node.inputs[1].get_tensor_value()
+    node.type = "ConstantFill"
+    ctx.remove_input(node, node.input[1])
+    return node
+
+
+def splitv_op(ctx, node, name, args):
     # T output = SplitV(T value, Tlen size_splits, int32 split_dim, @int num_split, @type Tlen)
     # T outputs = Split(T input, @INT axis, @INTS split)
     split = node.inputs[1].get_tensor_value()
@@ -707,6 +728,7 @@ _OPS_MAPPING = {
     "Elu": (direct_op, []),
     "Exp": (direct_op, []),
     "Floor": (direct_op, []),
+    "Fill": (fill_op, []),
     "Flatten": (direct_op, []),
     "Gather": (gather_op, []),
     "Greater": (broadcast_op, []),
@@ -743,7 +765,8 @@ _OPS_MAPPING = {
     "Shape": (shape_op, []),
     "Sigmoid": (direct_op, []),
     "Slice": (slice_op, []),
-    "SplitV": (split_op, ["Split"]),
+    "SplitV": (splitv_op, ["Split"]),
+    "Split": (split_op, ["Split"]),
     "Squeeze": (squeeze_op, []),
     "Sqrt": (direct_op, []),
     "Square": (square_op, []),
@@ -928,28 +951,14 @@ def tensorflow_onnx_mapping(g, continue_on_error):
 def tf_optimize(sess, inputs, outputs, graph_def):
     """Optimize tensorflow graph for inference."""
     transforms = [
+        "fold_constants(ignore_errors=true)",
         "fold_batch_norms",
-        "fold_old_batch_norms"
-        # fails: "fold_constants(ignore_errors=true)",
+        "fold_old_batch_norms",
     ]
     needed_names = [utils.node_name(i) for i in inputs] + [utils.node_name(i) for i in outputs]
     graph_def = graph_util.extract_sub_graph(graph_def, needed_names)
     graph_def = TransformGraph(graph_def, inputs, outputs, transforms)
     return graph_def
-
-
-def tf_freeze(input_graph, input_checkpoint, output_graph, output_node_names):
-    """Freeze tensorflow graph."""
-    freeze_graph(input_graph=input_graph,
-                 input_saver="",
-                 input_binary=False,
-                 input_checkpoint=input_checkpoint,
-                 output_node_names=output_node_names,
-                 restore_op_name="save/restore_all",
-                 filename_tensor_name="save/Const:0",
-                 output_graph=output_graph,
-                 clear_devices=True,
-                 initializer_nodes="")
 
 
 def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None):
