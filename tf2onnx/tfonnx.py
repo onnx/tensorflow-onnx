@@ -777,6 +777,7 @@ _OPS_MAPPING = {
     "Sub": (broadcast_op, []),
     "Sum": (reduce_op, ["ReduceSum"]),
     "Tanh": (direct_op, []),
+    "Tile": (direct_op, []), # requires opset-6
     "Transpose": (transpose_op, []),
 }
 
@@ -961,7 +962,7 @@ def tf_optimize(sess, inputs, outputs, graph_def):
     return graph_def
 
 
-def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None):
+def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None, opset=0):
     """Convert tensorflow graph to onnx graph."""
 
     if target is None:
@@ -969,7 +970,7 @@ def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None)
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(graph)
 
-    g = Graph(onnx_nodes, output_shapes, dtypes, target)
+    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset)
     ops = g.get_nodes()
 
     # rewrites

@@ -19,6 +19,7 @@ def get_args():
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", required=True, help="model input_names")
     parser.add_argument("--outputs", required=True, help="model output_names")
+    parser.add_argument("--opset", type=int, default=0, help="opset to use")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
@@ -53,7 +54,8 @@ def main():
         g = process_tf_graph(tf_graph,
                              continue_on_error=args.continue_on_error,
                              verbose=args.verbose,
-                             target=args.target)
+                             target=args.target,
+                             opset=args.opset)
 
     model_proto = g.make_model(
         "converted from {}".format(args.input), args.inputs, args.outputs)

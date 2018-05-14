@@ -4,7 +4,7 @@
 """
 tf2onnx.graph - class to manage graph manipulation on top of onnx
 """
-from onnx import numpy_helper, optimizer, ModelProto
+from onnx import numpy_helper, optimizer, ModelProto, defs, OperatorSetIdProto
 from tf2onnx import utils, tfonnx, __version__
 from tf2onnx.utils import *
 
@@ -187,7 +187,7 @@ class Node(object):
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
 
-    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None):
+    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=0):
         """Create Graph.
         Args:
             nodes: list of Node()
@@ -199,6 +199,7 @@ class Graph(object):
         self._nodes = []
         self._initializers = {}
         self._nodes_by_name = {}
+        self._opset = opset
         self.shapes = {}
         self.model_inputs = []
         self._target = set(target)
@@ -206,6 +207,10 @@ class Graph(object):
         self._output_shapes = output_shapes
         ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
+
+    @property
+    def opset(self):
+        return self._opset
 
     def is_target(self, name):
         """Return True if target platform is name."""
@@ -377,7 +382,14 @@ class Graph(object):
                                   initializer=initializers,
                                   doc_string=doc)
 
-        model_proto = helper.make_model(graph, producer_name="tf2onnx", producer_version=__version__)
+        kwargs = {"producer_name": "tf2onnx",
+                  "producer_version": __version__}
+        if self._opset > 0:
+            imp = OperatorSetIdProto()
+            imp.version = self._opset
+            kwargs["opset"] = imp
+
+        model_proto = helper.make_model(graph, **kwargs)
 
         # optimize the model proto
         if optimize:

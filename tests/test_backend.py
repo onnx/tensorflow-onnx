@@ -286,9 +286,9 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     def test_const(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
-        x = tf.constant(x_val, name=_TFINPUT)
-        x_ = tf.identity(x)
-        output = tf.add(x_, x_, name=_TFOUTPUT)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.constant(x_val, name="y")
+        output = tf.add(x, y, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
@@ -369,6 +369,17 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
+    @unittest.skipIf(BACKEND == "caffe2", "not supported in caffe2")
+    def test_tile(self):
+        x_val = np.array([[0, 1], [2, 3]], dtype=np.float32)
+        multiple = tf.constant([2, 2])
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.tile(x, multiple)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+
     def test_neg(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -445,6 +456,14 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
         x_ = tf.nn.relu(x)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    def test_leaky_relu(self):
+        x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
+        x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+        x_ = tf.nn.leaky_relu(x)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
