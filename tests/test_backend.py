@@ -145,7 +145,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def _run(self, output, tf_dict, onnx_dict):
         with tf.Session() as sess:
             expected = sess.run(output, feed_dict=tf_dict)
-            g = process_tf_graph(sess.graph, opset=7)
+            g = process_tf_graph(sess.graph)
             actual = self._run_backend(g, self._args1, onnx_dict, expected)
         return actual, expected
 
