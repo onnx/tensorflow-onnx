@@ -42,6 +42,12 @@ class Node(object):
             self.data_format = self.data_format.s.decode("utf-8")
 
     @property
+    def normalized_inputs(self):
+        val = sorted([self.graph.get_node_by_name(n)
+            for n in sorted(self._input)], key=lambda x: x.type)
+        return val
+
+    @property
     def input(self):
         return self._input
 
@@ -387,7 +393,7 @@ class Graph(object):
         if self._opset > 0:
             imp = OperatorSetIdProto()
             imp.version = self._opset
-            kwargs["opset"] = imp
+            kwargs["opset_imports"] = [imp]
 
         model_proto = helper.make_model(graph, **kwargs)
 

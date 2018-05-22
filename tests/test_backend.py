@@ -16,7 +16,8 @@ TMPPATH = tempfile.mkdtemp()
 
 BACKEND = "caffe2"
 # BACKEND = "onnxmsrt"
-# BACKEND = "cntk"
+# BACKEND = "onnxmsrtnext"
+# BACKEND = "onnx-tensorflow"
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
@@ -88,6 +89,18 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         return results[0]
 
     @staticmethod
+    def run_onnxmsrtnext(onnx_graph, inputs, output_names, test_name):
+        """Run test against msrt-next backend."""
+        import lotus
+        model_path = os.path.join(TMPPATH, test_name + ".pb")
+        with open(model_path, "wb") as f:
+            f.write(onnx_graph.SerializeToString())
+
+        m = lotus.InferenceSession(model_path)
+        results = m.run(output_names, inputs)
+        return results[0]
+
+    @staticmethod
     def run_onnxcntk(onnx_graph, inputs, test_name):
         """Run test against cntk backend."""
         import cntk as C
@@ -102,10 +115,20 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         results = z.eval(input_args)
         return results
 
-    def validate_onnx(self, g, args, input_dict, expected):
+    @staticmethod
+    def run_onnxtensorflow(onnx_graph, inputs):
+        """Run test against onnx-tensorflow backend."""
+        import onnx_tf.backend
+        prepared_backend = onnx_tf.backend.prepare(onnx_graph)
+        results = prepared_backend.run(inputs)
+        return results
+
+    def _run_backend(self, g, args, input_dict, expected):
         model_proto = g.make_model("test", args.inputs, args.outputs)
         if BACKEND == "onnxmsrt":
             y = self.run_onnxmsrt(model_proto, input_dict, args.outputs, self._testMethodName)
+        elif BACKEND == "onnxmsrtnext":
+            y = self.run_onnxmsrtnext(model_proto, input_dict, args.outputs, self._testMethodName)
         elif BACKEND == "cntk":
             y = self.run_onnxcntk(model_proto, input_dict, self._testMethodName)
         elif BACKEND == "caffe2":
@@ -113,6 +136,8 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         elif BACKEND == "onnxnumpy":
             y = self.run_onnxnumpy(model_proto, input_dict)
             y = y[args.outputs[0]]
+        elif BACKEND == "onnx-tensorflow":
+            y = self.run_onnxtensorflow(model_proto, input_dict)
         else:
             raise ValueError("unknown backend")
         return y
@@ -120,8 +145,8 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def _run(self, output, tf_dict, onnx_dict):
         with tf.Session() as sess:
             expected = sess.run(output, feed_dict=tf_dict)
-            g = process_tf_graph(sess.graph)
-            actual = self.validate_onnx(g, self._args1, onnx_dict, expected)
+            g = process_tf_graph(sess.graph, opset=7)
+            actual = self._run_backend(g, self._args1, onnx_dict, expected)
         return actual, expected
 
     def _test_expand_dims(self, idx):
@@ -129,13 +154,9 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_val = make_xval([3, 4])
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
         op = tf.expand_dims(x, idx)
-        with tf.Session() as sess:
-            output = tf.identity(op, name=_TFOUTPUT)
-            sess.run(tf.global_variables_initializer())
-            expected = sess.run(output, feed_dict={x: x_val})
-            g = process_tf_graph(sess.graph)
-            actual = self.validate_onnx(g, self._args1, {_INPUT: x_val}, expected)
-            self.assertAllClose(expected, actual)
+        output = tf.identity(op, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
 
     def test_expand_dims(self):
         for i in [-1, 0, 1, -2]:
@@ -162,15 +183,11 @@ class Tf2OnnxBackendTests(unittest.TestCase):
             strides = _STRIDE1x1
         tf.reset_default_graph()
         kernel = tf.constant(w, dtype=tf.float32, name='k')
-        with tf.Session() as sess:
-            x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
-            conv = tf.nn.conv2d(x, kernel, strides=strides, padding=padding)
-            output = tf.identity(conv, name=_TFOUTPUT)
-            sess.run(tf.global_variables_initializer())
-            expected = sess.run(output, feed_dict={x: x_val})
-            g = process_tf_graph(sess.graph)
-            actual = self.validate_onnx(g, self._args1, {_INPUT: x_val}, expected)
-        return expected, actual
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        conv = tf.nn.conv2d(x, kernel, strides=strides, padding=padding)
+        output = tf.identity(conv, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        return actual, expected
 
     def test_conv2d_1(self):
         x_val = make_xval((1, 1, 5, 5)).transpose(NCHW_TO_NHWC)
@@ -236,7 +253,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
             sess.run(tf.global_variables_initializer())
             expected = sess.run(output, feed_dict={x: x_val})
             g = process_tf_graph(sess.graph)
-            actual = self.validate_onnx(g, self._args1, {_INPUT: x_val}, expected)
+            actual = self._run_backend(g, self._args1, {_INPUT: x_val}, expected)
             self.assertAllClose(expected, actual, rtol=1e-05)
 
     def test_depthwiseconv_0(self):
@@ -717,6 +734,19 @@ class Tf2OnnxBackendTests(unittest.TestCase):
             [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.strided_slice(x, [1, 0, 0], [2, 1, 3], [1, 1, 1])
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skip
+    def test_resize_nearest_neighbor(self):
+        # this should work but no runtime I tried supports it.
+        x_shape = [1, 15, 20, 3]
+        x_new_size = [30, 40]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+        x_new_size_ = tf.constant(x_new_size)
+        x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
