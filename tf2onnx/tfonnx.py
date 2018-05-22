@@ -6,10 +6,12 @@ tf2onnx.tf2onnx - rewrite tensorflow graph to onnx graph
 """
 import collections
 import logging
+import sys
+import traceback
 
 import numpy as np
 import tf2onnx
-from onnx import helper
+from onnx import helper, onnx_pb
 from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 from tf2onnx import utils
@@ -698,6 +700,20 @@ def lrn_op(ctx, node, name, args):
     return node
 
 
+def upsample_op(ctx, node, name, args):
+    node.type = "Upsample"
+    shape = ctx.get_shape(node.input[0])
+    target_shape = node.inputs[1].get_tensor_value()
+    # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
+    # wants the input to be NHWC - adjust target_shape to this.
+    n, h, w, c = shape
+    nh, nw = target_shape
+    scaler = [float(n), float(nh) / h, float(nw) / w, float(c)]
+    node.set_attr("scales", scaler)
+    ctx.remove_input(node, node.input[1])
+    return node
+
+
 # pylint: enable=W0613,C0111,W0612
 
 # map tensorflow ops to onnx ops. The format below is
@@ -779,6 +795,7 @@ _OPS_MAPPING = {
     "Tanh": (direct_op, []),
     "Tile": (direct_op, []), # requires opset-6
     "Transpose": (transpose_op, []),
+    "ResizeNearestNeighbor": (upsample_op, []),
 }
 
 
@@ -918,13 +935,13 @@ def tensorflow_onnx_mapping(g, continue_on_error):
 
     ops = g.get_nodes()
     onnx_nodes = []
-    # noinspection PyNoneFunctionAssignment,PyNoneFunctionAssignment
     for node in ops:
         op = node.type
         map_info = _OPS_MAPPING.get(op)
         if map_info is None:
             if continue_on_error:
                 unmapped_op[op] += 1
+                onnx_nodes.append(node)
                 continue
             else:
                 raise ValueError("tensorflow op " + op + " is not supported")
@@ -938,7 +955,13 @@ def tensorflow_onnx_mapping(g, continue_on_error):
         try:
             onnx_node = func(g, node, node.name, args)
         except Exception as ex:
-            raise
+            type_, value_, traceback_ = sys.exc_info()
+            ex = traceback.format_exception(type_, value_, traceback_)
+            if continue_on_error:
+                print(ex)
+                onnx_nodes.append(node)
+            else:
+                raise ex
         if onnx_node:
             if isinstance(onnx_node, list):
                 onnx_nodes.extend(onnx_node)
