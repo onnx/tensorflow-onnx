@@ -207,3 +207,59 @@ style-transfer:
     "input:0": [1, 416, 416, 3]
   outputs:
     - output:0
+
+ssd_mobilenet_v1_coco:
+  # issues with control flow
+  disabled: true
+  url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_17.tar.gz
+  model: ssd_mobilenet_v1_coco_2017_11_17/frozen_inference_graph.pb
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0
+
+ssd_mobilenet_v2_coco:
+  # issues with control flow
+  disabled: true
+  url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
+  model: ssd_mobilenet_v2_coco_2018_03_29/frozen_inference_graph.pb
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0
+
+ssdlite_mobilenet_v2_coco:
+  # issues with control flow
+  disabled: true
+  url: http://download.tensorflow.org/models/object_detection/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
+  model: ssdlite_mobilenet_v2_coco_2018_05_09/frozen_inference_graph.pb
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0
+
+ssd_inception_v2_coco:
+  # issues with control flow
+  disabled: true
+  url: http://download.tensorflow.org/models/object_detection/ssd_inception_v2_coco_2017_11_17.tar.gz
+  model: ssd_inception_v2_coco_2017_11_17/frozen_inference_graph.pb
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0

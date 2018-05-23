@@ -1,4 +1,5 @@
 3DBall:
+  # needs RandomNormal
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/3DBall/TFModels/3DBall.bytes
   model: 3DBall.bytes
@@ -21,6 +22,28 @@
   outputs:
     - action:0
 
+BananaIL:
+  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/BananaCollectors/TFModels/BananaIL.bytes
+  model: BananaIL.bytes
+  input_get: get_random
+  inputs:
+    "vector_observation:0": [1, 159]
+  outputs:
+    - action:0
+
+BananaRL:
+  # needs RandomNormal
+  disabled: true
+  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/BananaCollectors/TFModels/BananaRL.bytes
+  model: BananaRL.bytes
+  input_get: get_random
+  inputs:
+    "vector_observation:0": [1, 159]
+  outputs:
+    - action_probs:0
+    - value_estimate:0
+
+
 Basic:
   # needs: onehot
   disabled: true
@@ -28,7 +51,7 @@ Basic:
   model: Basic.bytes
   input_get: get_random
   inputs:
-    "state:0": [1, 1]
+    "vector_observation:0": [1, 1]
   outputs:
     - action:0
     - action_probs:0
@@ -49,32 +72,11 @@ Bouncer:
 crawler:
   # needs RandomNormal
   disabled: true
-  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Crawler/TFModels/Crawler.bytes
-  model: Crawler.bytes
+  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Crawler/TFModels/crawler.bytes
+  model: crawler.bytes
   input_get: get_random
   inputs:
     "vector_observation:0": [1, 117]
-  outputs:
-    - action_probs:0
-    - value_estimate:0
-
-BananaI:
-  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/BananaCollectors/TFModels/BananaI.bytes
-  model: BananaI.bytes
-  input_get: get_random
-  inputs:
-    "state:0": [1, 159]
-  outputs:
-    - action:0
-
-BananaRL:
-  # needs RandomNormal
-  disabled: true
-  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/BananaCollectors/TFModels/BananaRL.bytes
-  model: BananaRL.bytes
-  input_get: get_random
-  inputs:
-    "vector_observation:0": [1, 159]
   outputs:
     - action_probs:0
     - value_estimate:0
@@ -112,7 +114,7 @@ Hallway:
   model: Hallway.bytes
   input_get: get_random
   inputs:
-    "visual_observation_0:0": [1, 84, 84, 3]
+    "vector_observation:0": [1, 36]
   outputs:
     - action_probs:0
     - value_estimate:0
