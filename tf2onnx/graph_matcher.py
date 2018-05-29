@@ -18,6 +18,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import copy
 
 class OpTypePattern(object):
   """A tree pattern that matches TF expressions with certain op types."""
@@ -92,9 +93,10 @@ class MatchResult(object):
   def add(self, pattern, op, tensor):
     self._pattern_to_op_tensor[pattern] = op, tensor
     if pattern.name is not None:
-      if pattern.name in self._name_to_pattern:
-        raise ValueError(
-            'Name %s is already bound to another pattern' % pattern.name)
+      # allow this so we can apply subgraphs multiple times
+      # if pattern.name in self._name_to_pattern:
+      #   raise ValueError(
+      #       'Name %s is already bound to another pattern' % pattern.name)
       self._name_to_pattern[pattern.name] = pattern
 
   def _to_pattern(self, pattern_or_name):
@@ -120,7 +122,7 @@ class MatchResult(object):
 class GraphMatcher(object):
   """Checks if a particular subgraph matches a given pattern."""
 
-  def __init__(self, pattern):
+  def __init__(self, pattern, allow_reorder=False):
     """Initializes a GraphMatcher.
 
     Args:
@@ -128,6 +130,7 @@ class GraphMatcher(object):
         subgraphs.
     """
     self._pattern = pattern
+    self._allow_reorder = allow_reorder
 
   def _match_pattern(self, pattern, op, tensor):
     """Returns whether an TF expression rooted at `op` matches `pattern`.
@@ -145,7 +148,6 @@ class GraphMatcher(object):
     Returns:
       True if an TF expression rooted at `op` matches `pattern`.
     """
-    #print(pattern, op.type)
     if pattern.op_type is None:
       return True
 
@@ -154,14 +156,38 @@ class GraphMatcher(object):
         return False
 
     self._match_result.add(pattern, op, tensor)
+    # print("matched", ",".join([op.type + "|" + op.name for op in self._match_result.get_nodes()]))
 
     if not pattern.inputs:
       # If pattern.inputs is empty, skips the rest and accepts all the inputs.
       return True
 
-    return op and len(op.inputs) == len(pattern.inputs) and \
-      all([self._match_pattern(input_pattern, input_tensor, input_tensor)
-        for input_tensor, input_pattern in zip(op.inputs, pattern.inputs)])
+    if not op or len(op.inputs) != len(pattern.inputs):
+      return False
+
+    if self._allow_reorder:
+      inputs = [None] * len(op.inputs)
+      wanted = copy.copy(pattern.inputs)
+      for idx, i in enumerate(op.inputs):
+        for j in range(len(wanted)):
+          if i.type == wanted[j].op_type:
+            inputs[idx] = wanted[j]
+            del wanted[j]
+            break
+      for idx, i in enumerate(inputs):
+        if i is None:
+          inputs[idx] = wanted[0]
+          del wanted[0]
+      pat = list(zip(op.inputs, inputs))
+    else:
+      pat = list(zip(op.inputs, pattern.inputs))
+
+    ret = []
+    for input_tensor, input_pattern in pat:
+      # print("MATCHING", input_pattern.op_type, input_tensor.type)
+      r = self._match_pattern(input_pattern, input_tensor, input_tensor)
+      ret.append(r)
+    return all(ret)
 
   def match_op(self, op):
     """Matches `op` against `self._pattern`.

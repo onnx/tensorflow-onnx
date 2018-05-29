@@ -38,7 +38,7 @@ def tensorflow_to_onnx(graph):
     # ignore the following attributes
     ignored_attr = ["unknown_rank", "_class", "Tidx", "Tshape", "use_cudnn_on_gpu", "Index",
                     "Tpaddings", "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "element_shape",
-                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type"]
+                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -92,7 +92,6 @@ def tensorflow_to_onnx(graph):
             elif a == "DstT":
                 dst = node.get_attr("DstT")
                 dst = tf2onnx.utils.TF_TO_ONNX_DTYPE[dst]
-                dst = tf2onnx.utils.ONNX_DTYPE_NAMES[dst]
                 attr["to"] = dst
             elif a == "SrcT":
                 continue
@@ -147,22 +146,42 @@ def broadcast_op(ctx, node, name, args):
     shape1 = ctx.get_shape(node.input[1])
     if shape0 != shape1:
         node.set_attr("broadcast", 1)
-        if ctx.is_target(TARGET_CAFFE2):
-            # this is more shortcoming in the broadcasting code
-            # of caffe2 and winml/rs4 but since those are the primary
-            # onnx-1.1 backends we don't use a seperate flag.
-            if shape0 is not None and len(shape0) == 0:
-                if node.inputs[0].is_const():
-                    shape0 = node.inputs[0].scalar_to_dim1()
-            if shape1 is not None and len(shape1) == 0:
-                if node.inputs[1].is_const():
-                    shape1 = node.inputs[1].scalar_to_dim1()
-            if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
-                tmp = node.input[0]
-                node.input[0] = node.input[1]
-                node.input[1] = tmp
+        # this is more shortcoming in the broadcasting code
+        # of caffe2 and winml/rs4 but since those are the primary
+        # onnx-1.1 backends we don't use a seperate flag.
+        if shape0 is not None and len(shape0) == 0:
+            if node.inputs[0].is_const():
+                shape0 = node.inputs[0].scalar_to_dim1()
+        if shape1 is not None and len(shape1) == 0:
+            if node.inputs[1].is_const():
+                shape1 = node.inputs[1].scalar_to_dim1()
+        if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
+            tmp = node.input[0]
+            node.input[0] = node.input[1]
+            node.input[1] = tmp
     else:
         node.set_attr("broadcast", 0)
+    return node
+
+
+def broadcast_op7(ctx, node, name, args):
+    """Elementwise Ops with broadcast flag."""
+    shape0 = ctx.get_shape(node.input[0])
+    shape1 = ctx.get_shape(node.input[1])
+    if shape0 != shape1:
+        # this is more shortcoming in the broadcasting code
+        # of caffe2 and winml/rs4 but since those are the primary
+        # onnx-1.1 backends we don't use a seperate flag.
+        if shape0 is not None and len(shape0) == 0:
+            if node.inputs[0].is_const():
+                shape0 = node.inputs[0].scalar_to_dim1()
+        if shape1 is not None and len(shape1) == 0:
+            if node.inputs[1].is_const():
+                shape1 = node.inputs[1].scalar_to_dim1()
+        if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
+            tmp = node.input[0]
+            node.input[0] = node.input[1]
+            node.input[1] = tmp
     return node
 
 
@@ -241,25 +260,6 @@ def reshape_op(ctx, node, name, args):
     node.set_attr("shape", shape)
     ctx.set_shape(node.output[0], shape)
     return node
-
-
-def shape_op(ctx, node, name, args):
-    # FIXME - this is not correct
-    shape = ctx.get_shape(node.input[0])
-    if not shape:
-        shape.append(1)
-    if shape[0] is None or shape[0] == -1:
-        shape[0] = 1
-    old_output = node.output[0]
-    node_name = utils.make_name(node.name)
-    new_node = ctx.make_const(node_name, "Const", np.zeros(shape, dtype=np.float32))
-    new_node.output.append(node_name + ":0")
-    for n in ctx.get_nodes():
-        for i, input_name in enumerate(n.input):
-            if input_name == old_output:
-                n.input[i] = node_name + ":0"
-                break
-    return new_node
 
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -543,7 +543,9 @@ def squareddifference_op(ctx, node, name, args):
 def cast_op(ctx, node, name, args):
     # DstT y = Cast(SrcT x, @type SrcT, @type DstT)
     # T2 output = Cast(T1 input, @STRING to)
-    # already done in pass1
+    dst = node.get_attr("to")
+    dst = tf2onnx.utils.ONNX_DTYPE_NAMES[dst]
+    node.set_attr("to", dst)
     return node
 
 
@@ -553,6 +555,14 @@ def biasadd_op(ctx, node, name, args):
     # TODO: for now use add. We may need to convert to NCHW.
     node.type = "Add"
     return broadcast_op(ctx, node, name, args)
+
+
+def biasadd_op7(ctx, node, name, args):
+    # T output = BiasAdd(T value, T bias, @string data_format)
+    # T output = BiasAddV1(T value, T bias)
+    # TODO: for now use add. We may need to convert to NCHW.
+    node.type = "Add"
+    return broadcast_op7(ctx, node, name, args)
 
 
 def transpose_op(ctx, node, name, args):
@@ -598,9 +608,11 @@ def slice_op(ctx, node, name, args):
     return node
 
 
-def gather_op(ctx, node, name, args):
-    # Tparams output = Gather(Tparams params, Tindices indices, @bool validate_indices, @type Tparams, @type Tindices)
-    # T output = Gather(T data, Tind indices, @INT axis)
+def gatherv2_op(ctx, node, name, args):
+    # for GatherV2 axis come as input
+    axis = node.inputs[2].get_tensor_value()
+    ctx.remove_input(node, node.input[2])
+    node.set_attr("axis", axis[0])
     return node
 
 
@@ -663,6 +675,14 @@ def expanddims_op(ctx, node, name, args):
     return node
 
 
+def expanddims_op7(ctx, node, name, args):
+    shape = ctx.get_shape(node.output[0])
+    node.type = "Unsqueeze"
+    ctx.remove_input(node, node.input[1])
+    node.set_attr("axes", shape)
+    return node
+
+
 def stridedslice_op(ctx, node, name, args):
     # T output = StridedSlice(T input, Index begin, Index end, Index strides,
     #               @type Index, @int begin_mask, @int end_mask, @int ellipsis_mask,
@@ -719,7 +739,7 @@ def upsample_op(ctx, node, name, args):
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
-_OPS_MAPPING = {
+_OPSET_4 = {
     "Abs": (direct_op, []),
     "Add": (broadcast_op, []),
     "ArgMax": (arg_minmax_op, []),
@@ -746,7 +766,8 @@ _OPS_MAPPING = {
     "Floor": (direct_op, []),
     "Fill": (fill_op, []),
     "Flatten": (direct_op, []),
-    "Gather": (gather_op, []),
+    "Gather": (direct_op, ["Gather"]),
+    "GatherV2": (gatherv2_op, ["Gather"]),
     "Greater": (broadcast_op, []),
     "Identity": (identity_op, ["Identity"]),
     "Less": (broadcast_op, []),
@@ -778,7 +799,8 @@ _OPS_MAPPING = {
     "Relu6": (relu6_op, []),
     "Reshape": (reshape_op, ["Reshape"]),
     "Rsqrt": (rsqrt_op, []),
-    "Shape": (shape_op, []),
+    "Shape": (direct_op, []),
+    "Size": (direct_op, []),
     "Sigmoid": (direct_op, []),
     "Slice": (slice_op, []),
     "SplitV": (splitv_op, ["Split"]),
@@ -793,11 +815,35 @@ _OPS_MAPPING = {
     "Sub": (broadcast_op, []),
     "Sum": (reduce_op, ["ReduceSum"]),
     "Tanh": (direct_op, []),
-    "Tile": (direct_op, []), # requires opset-6
     "Transpose": (transpose_op, []),
-    "ResizeNearestNeighbor": (upsample_op, []),
 }
 
+_OPSET_5 = {
+    "Reshape": (direct_op, ["Reshape"]),
+    "ExpandDims": (expanddims_op7, []),
+}
+
+_OPSET_7 = {
+    "Tile": (direct_op, []),
+    "ResizeNearestNeighbor": (upsample_op, []),
+    "BiasAdd": (biasadd_op7, []),
+    "BiasAddV1": (biasadd_op7, []),
+    "Add": (broadcast_op7, []),
+    "Sub": (direct_op, []),
+    "Mul": (broadcast_op7, []),
+    "RealDiv": (direct_op, ["Div"]),
+    "LogicalAnd": (direct_op, ["And"]),
+    "Greater": (direct_op, []),
+    "Less": (direct_op, []),
+    "Pow": (direct_op, []),
+    "Cast": (direct_op, []),
+}
+
+_OPSETS = [
+    (4, _OPSET_4),
+    (5, _OPSET_5),
+    (7, _OPSET_7),
+]
 
 def rewrite_random_uniform(g, ops):
     pattern = \
@@ -863,7 +909,6 @@ def rewrite_random_normal(g, ops):
     match_results = list(matcher.match_ops(ops))
     for match in match_results:
         output = match.get_op('output')
-
         mean = output.inputs[1].get_tensor_value()[0]
         shape = g.get_shape(output.output[0])
         dtype = output.dtype
@@ -933,11 +978,17 @@ def tensorflow_onnx_mapping(g, continue_on_error):
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
 
+    # create ops mapping for the desired opset
+    ops_mapping = {}
+    for target_opset, op_map in _OPSETS:
+        if target_opset <= g.opset:
+            ops_mapping.update(op_map)
+
     ops = g.get_nodes()
     onnx_nodes = []
     for node in ops:
         op = node.type
-        map_info = _OPS_MAPPING.get(op)
+        map_info = ops_mapping.get(op)
         if map_info is None:
             if continue_on_error:
                 unmapped_op[op] += 1
@@ -975,7 +1026,7 @@ def tensorflow_onnx_mapping(g, continue_on_error):
 def tf_optimize(sess, inputs, outputs, graph_def):
     """Optimize tensorflow graph for inference."""
     transforms = [
-        "fold_constants(ignore_errors=true)",
+        #"fold_constants(ignore_errors=true)",
         "fold_batch_norms",
         "fold_old_batch_norms",
     ]
@@ -985,7 +1036,7 @@ def tf_optimize(sess, inputs, outputs, graph_def):
     return graph_def
 
 
-def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None, opset=0):
+def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None, opset=None):
     """Convert tensorflow graph to onnx graph."""
 
     if target is None:
@@ -997,11 +1048,11 @@ def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None,
     ops = g.get_nodes()
 
     # rewrites
-    for rewrite in [rewrite_flatten,
+    for rewrite in [rewrite_transpose,
+                    rewrite_flatten,
                     rewrite_random_uniform,
                     rewrite_random_normal,
-                    rewrite_dropout,
-                    rewrite_transpose]:
+                    rewrite_dropout]:
         ops = rewrite(g, ops)
         g.set_nodes(ops)
 

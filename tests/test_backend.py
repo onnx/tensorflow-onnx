@@ -35,6 +35,7 @@ _TFOUTPUT = "output"
 _OUTPUT = "output:0"
 _OUTPUT1 = "output1:0"
 
+OPSET = 7
 
 # pylint: disable=C0111
 
@@ -71,8 +72,8 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     @staticmethod
     def run_onnxcaffe2(onnx_graph, inputs):
         """Run test against caffe2 backend."""
-        import onnx_caffe2.backend
-        prepared_backend = onnx_caffe2.backend.prepare(onnx_graph)
+        import caffe2.python.onnx.backend
+        prepared_backend = caffe2.python.onnx.backend.prepare(onnx_graph)
         results = prepared_backend.run(inputs)
         return results[0]
 
@@ -386,7 +387,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND == "caffe2", "not supported in caffe2")
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported in caffe2")
     def test_tile(self):
         x_val = np.array([[0, 1], [2, 3]], dtype=np.float32)
         multiple = tf.constant([2, 2])
@@ -477,6 +478,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
+    @unittest.skipIf(BACKEND == "caffe2", "fails on caffe2 with dim issue")
     def test_leaky_relu(self):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
@@ -669,14 +671,14 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {}, {})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
+    #@unittest.skip
     def test_argminmax(self):
         # TODO: fails on onnxmsrt caffe2
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
-        x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.argmin(x, axis=0)
         output = tf.identity(x_, name=_TFOUTPUT)
-        actual, expected = self._run(output, {}, {})
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
     def test_cast(self):
@@ -738,7 +740,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
+    @unittest.skipIf(OPSET < 7 or BACKEND in ["caffe2"], "since opset 7")
     def test_resize_nearest_neighbor(self):
         # this should work but no runtime I tried supports it.
         x_shape = [1, 15, 20, 3]

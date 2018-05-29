@@ -63,7 +63,8 @@ def main():
                              opset=args.opset)
 
     model_proto = g.make_model(
-        "converted from {}".format(args.input), args.inputs, args.outputs)
+        "converted from {}".format(args.input), args.inputs, args.outputs,
+        optimize=not args.continue_on_error)
 
     # write onnx graph
     if args.output:
