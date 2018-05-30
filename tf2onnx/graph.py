@@ -42,12 +42,6 @@ class Node(object):
             self.data_format = self.data_format.s.decode("utf-8")
 
     @property
-    def normalized_inputs(self):
-        val = sorted([self.graph.get_node_by_name(n)
-            for n in sorted(self._input)], key=lambda x: x.type)
-        return val
-
-    @property
     def input(self):
         return self._input
 
@@ -193,7 +187,7 @@ class Node(object):
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
 
-    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=0):
+    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=None):
         """Create Graph.
         Args:
             nodes: list of Node()
@@ -205,7 +199,6 @@ class Graph(object):
         self._nodes = []
         self._initializers = {}
         self._nodes_by_name = {}
-        self._opset = opset
         self.shapes = {}
         self.model_inputs = []
         self._target = set(target)
@@ -213,6 +206,9 @@ class Graph(object):
         self._output_shapes = output_shapes
         ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
+        if opset is None:
+            opset = defs.onnx_opset_version()
+        self._opset = opset
 
     @property
     def opset(self):
@@ -399,12 +395,10 @@ class Graph(object):
 
         # optimize the model proto
         if optimize:
-            optimized_model = optimizer.optimize(model_proto.SerializeToString(),
+            model_proto = optimizer.optimize(model_proto,
                                                  ["fuse_consecutive_transposes",
                                                   "fuse_transpose_into_gemm",
                                                   "eliminate_nop_transpose"])
-            model_proto = ModelProto()
-            model_proto.ParseFromString(optimized_model)
         return model_proto
 
     def dump_graph(self):

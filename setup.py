@@ -80,5 +80,5 @@ setup(
     author='onnx@microsoft.com',
     author_email='onnx@microsoft.com',
     url='https://github.com/onnx/tensorflow-onnx',
-    install_requires=['graphviz', 'pyyaml', 'pytest-cov']
+    install_requires=['graphviz', 'pyyaml']
 )

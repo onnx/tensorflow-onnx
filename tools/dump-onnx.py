@@ -6,6 +6,7 @@ Dump onnx graph.
 """
 import argparse
 import collections
+import re
 
 import onnx
 from onnx import ModelProto
@@ -16,6 +17,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, help="input model")
     parser.add_argument("--pbtxt", help="write pbtxt")
+    parser.add_argument("--dot", help="write dot file")
     parser.add_argument("--meta", help="include meta data", action="store_true")
     parser.add_argument("--check", help="check onnx model", action="store_true")
     parser.add_argument("--stats", help="collect stats", action="store_true")
@@ -54,6 +56,25 @@ def main():
     if args.pbtxt:
         with open(args.pbtxt, "w") as f:
             f.write(str(model.graph))
+
+    if args.dot:
+        with open(args.dot, "w") as f:
+            f.write("digraph graphname {\n")
+            for node in model.graph.node:
+                output_name = node.name
+                #f.write('"{}" [label="{}"];\n'.format(output_name, node.op_type))
+                name = node.name
+                color = ""
+                if node.op_type.startswith("_"):
+                    color = ' color="yellow"'
+                if node.op_type == "CELL":
+                    color = ' color="red"'
+                f.write('"{}" [label="{},{}"{}];\n'.format(output_name, node.op_type, name, color))
+                for input_name in node.input:
+                    parts = input_name.split(":")
+                    input_name = re.sub(r"^\^", "", parts[0])
+                    f.write('  "{}" -> "{}";\n'.format(input_name, output_name))
+            f.write("}\n")
 
 
 if __name__ == "__main__":

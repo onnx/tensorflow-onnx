@@ -137,5 +137,30 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         self.assertEqual(expected, result)
 
 
+    def test_match_flipped(self):
+        n1 = helper.make_node("Sub", ["i1", "i1"], ["n1:0"], name="n1")
+        n2 = helper.make_node("Add", ["i2", "i2"], ["n2:0"], name="n2")
+        n3 = helper.make_node("Mul", ["n1:0", "n2:0"], ["n3:0"], name="n3")
+
+        model_proto = helper.make_graph(
+            nodes=[n1, n2, n3],
+            name="test",
+            inputs=[helper.make_tensor_value_info("i1", TensorProto.FLOAT, [2, 2]),
+                    helper.make_tensor_value_info("i2", TensorProto.FLOAT, [2, 2])],
+            outputs=[helper.make_tensor_value_info("n2:0", TensorProto.FLOAT, [2, 2])],
+            initializer=[]
+        )
+        nodes = model_proto.node
+        g = tf2onnx.graph.Graph(nodes, output_shapes={}, dtypes={})
+        pattern = OpTypePattern('Mul', inputs=[
+            OpTypePattern('Add'),
+            OpTypePattern('Sub')
+        ])
+        ops = g.get_nodes()
+        matcher = GraphMatcher(pattern, allow_reorder=True)
+        match_results = list(matcher.match_ops(ops))
+        self.assertEqual(1, len(match_results))
+
+
 if __name__ == '__main__':
     unittest.main()
