@@ -24,10 +24,10 @@ log = logging.getLogger("tf2onnx")
 # Target for the generated onnx graph. It possible targets:
 # onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)
 # caffe2 = include some workarounds for caffe2 and winml
-TARGET_ONNX_1_1 = "onnx-1.1"
+TARGET_RS4 = "rs4"
 TARGET_CAFFE2 = "caffe2"
-POSSIBLE_TARGETS = [TARGET_ONNX_1_1, TARGET_CAFFE2]
-DEFAULT_TARGET = [TARGET_ONNX_1_1, TARGET_CAFFE2]
+POSSIBLE_TARGETS = [TARGET_RS4, TARGET_CAFFE2]
+DEFAULT_TARGET = [TARGET_RS4, TARGET_CAFFE2]
 
 def tensorflow_to_onnx(graph):
     """
@@ -38,7 +38,7 @@ def tensorflow_to_onnx(graph):
     # ignore the following attributes
     ignored_attr = ["unknown_rank", "_class", "Tidx", "Tshape", "use_cudnn_on_gpu", "Index",
                     "Tpaddings", "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "element_shape",
-                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis"]
+                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -1003,7 +1003,7 @@ def rewrite_flatten(g, ops):
     return ops
 
 
-def tensorflow_onnx_mapping(g, continue_on_error):
+def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
 
@@ -1019,16 +1019,18 @@ def tensorflow_onnx_mapping(g, continue_on_error):
         op = node.type
         map_info = ops_mapping.get(op)
         if map_info is None:
-            if continue_on_error:
-                unmapped_op[op] += 1
-                onnx_nodes.append(node)
-                continue
+            custom_op = custom_op_handlers.get(op)
+            if custom_op is None:
+                if continue_on_error:
+                    unmapped_op[op] += 1
+                    onnx_nodes.append(node)
+                    continue
+                else:
+                    raise ValueError("tensorflow op " + op + " is not supported")
             else:
-                raise ValueError("tensorflow op " + op + " is not supported")
-        else:
-            mapped_op[op] += 1
-            func, args = map_info
-
+                map_info = (custom_op, [])
+        mapped_op[op] += 1
+        func, args = map_info
         if args:
             node.type = args[0]
             args = args[1:]
@@ -1065,28 +1067,42 @@ def tf_optimize(sess, inputs, outputs, graph_def):
     return graph_def
 
 
-def process_tf_graph(graph, continue_on_error=False, verbose=False, target=None, opset=None):
-    """Convert tensorflow graph to onnx graph."""
-
+def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
+                     opset=None, custom_op_handlers=None, custom_rewriter=None):
+    """Convert tensorflow graph to onnx graph.
+        Args:
+            tf_graph: tensorflow graph
+            continue_on_error: if an op can't be processed (aka there is no mapping), continue
+            verbose: print summary stats
+            target: list of workarounds applied to help certain platforms
+            opset: the opset to be used (int, default is latest)
+            custom_op_handlers: dictionary of custom ops handlers
+            custom_rewriter: list of custom graph rewriters
+        Return:
+            onnx graph
+    """
     if target is None:
         target = DEFAULT_TARGET
 
-    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(graph)
+    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph)
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset)
     ops = g.get_nodes()
 
-    # rewrites
-    for rewrite in [rewrite_transpose,
-                    rewrite_flatten,
-                    rewrite_random_uniform,
-                    rewrite_random_normal,
-                    rewrite_dropout]:
+    # rewrite graph
+    rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
+                 rewrite_random_normal, rewrite_dropout]
+    if custom_rewriter is not None:
+        rewriters.extend(custom_rewriter)
+    for rewrite in rewriters:
         ops = rewrite(g, ops)
         g.set_nodes(ops)
-
     g.topological_sort(g.get_nodes())
-    mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error)
+
+    if custom_op_handlers is None:
+        custom_op_handlers = {}
+    mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error,
+                                                     custom_op_handlers)
     g.topological_sort(g.get_nodes())
 
     g.update_proto()

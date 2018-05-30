@@ -11,6 +11,7 @@ from onnx import helper
 
 import tf2onnx
 from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx.graph_matcher import *
 
 
 def onnx_to_graphviz(g):
@@ -232,6 +233,49 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             self.assertEqual(
                 'digraph { Reshape [op_type=Reshape] output [op_type=Identity] input1:0 -> Reshape ' \
                 '"Reshape/shape":0 -> Reshape Reshape:0 -> output }',
+                onnx_to_graphviz(g))
+
+    def test_custom_rewrite(self):
+        # rewriter called from inside process_tf_graph: make a Add a Mul type
+        def rewrite_test(g, ops):
+            pattern = \
+                OpTypePattern('Add', name='op', inputs=["*", "*"])
+            ops = g.get_nodes()
+            matcher = GraphMatcher(pattern)
+            match_results = list(matcher.match_ops(ops))
+            for match in match_results:
+                op = match.get_op('op')
+                op.type = "Mul"
+            return ops
+
+        with tf.Session() as sess:
+            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+            x_ = tf.add(x, x)
+            _ = tf.identity(x_, name="output")
+            g = process_tf_graph(sess.graph, custom_rewriter=[rewrite_test])
+            self.assertEqual(
+                'digraph { Add [op_type=Mul] output [op_type=Identity] input1:0 -> ' \
+                'Add input1:0 -> Add Add:0 -> output }',
+                onnx_to_graphviz(g))
+
+    def test_custom_op(self):
+
+        def print_handler(ctx, node, name, args):
+            # replace tf.Print() with Identity
+            #   T output = Print(T input, data, @list(type) U, @string message, @int first_n, @int summarize)
+            # becomes:
+            #   T output = Identity(T Input)
+            node.type = "Identity"
+            del node.input[1:]
+            return node
+
+        with tf.Session() as sess:
+            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+            x_ = tf.Print(x, [x], "hello")
+            _ = tf.identity(x_, name="output")
+            g = process_tf_graph(sess.graph, custom_op_handlers={"Print": print_handler})
+            self.assertEqual(
+                'digraph { Print [op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
                 onnx_to_graphviz(g))
 
 
