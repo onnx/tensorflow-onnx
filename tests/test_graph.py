@@ -99,10 +99,9 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             actual = onnx_to_graphviz(g)
-            expected = 'digraph { Add [broadcast=1 op_type=Add] Dropout__3 [op_type=Dropout] ' \
-                       'output1 [op_type=Identity] output2 [op_type=Identity] output [op_type=Identity] ' \
-                       'input1:0 -> Add input2:0 -> Add Add:0 -> Dropout__3 Dropout__3:0 -> output1 ' \
-                       'output1:0 -> output2 output2:0 -> output }'
+            expected = 'digraph { Add [op_type=Add] Dropout__3 [op_type=Dropout] output1 [op_type=Identity] ' \
+                       'output2 [op_type=Identity] output [op_type=Identity] input1:0 -> Add input2:0 -> ' \
+                       'Add Add:0 -> Dropout__3 Dropout__3:0 -> output1 output1:0 -> output2 output2:0 -> output }'
             self.assertEqual(expected, actual)
 
     def test_add(self):
@@ -113,8 +112,8 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Add [broadcast=1 op_type=Add] output [op_type=Identity] input1:0 -> Add '
-                'input2:0 -> Add Add:0 -> output }',
+                'digraph { Add [op_type=Add] output [op_type=Identity] input1:0 -> Add input2:0 -> ' \
+                'Add Add:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_squareddifference(self):
@@ -197,10 +196,10 @@ class Tf2OnnxGraphTests(unittest.TestCase):
 
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Conv2D__2 [op_type=Transpose] kernel [op_type=Reshape shape="[3, 3, 1, 1]"] '
-                'Conv2D__3 [op_type=Transpose] Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] '
-                'output [op_type=Identity] input1:0 -> Conv2D__2 k:0 -> kernel kernel:0 -> Conv2D__3 '
-                'Conv2D__2:0 -> Conv2D Conv2D__3:0 -> Conv2D Conv2D:0 -> Conv2D__4 Conv2D__4:0 -> output }',
+                'digraph { Conv2D__2 [op_type=Transpose] kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] ' \
+                'Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] output [op_type=Identity] input1:0 -> ' \
+                'Conv2D__2 k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 Conv2D__2:0 -> Conv2D ' \
+                'Conv2D__3:0 -> Conv2D Conv2D:0 -> Conv2D__4 Conv2D__4:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_squeeze(self):
@@ -231,8 +230,8 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Reshape [op_type=Reshape shape="[3, 2]"] output [op_type=Identity] input1:0 -> Reshape '
-                'Reshape:0 -> output }',
+                'digraph { Reshape [op_type=Reshape] output [op_type=Identity] input1:0 -> Reshape ' \
+                '"Reshape/shape":0 -> Reshape Reshape:0 -> output }',
                 onnx_to_graphviz(g))
 
 

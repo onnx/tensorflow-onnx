@@ -157,7 +157,7 @@ class Tf2OnnxInternalTests(unittest.TestCase):
             OpTypePattern('Sub')
         ])
         ops = g.get_nodes()
-        matcher = GraphMatcher(pattern)
+        matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(ops))
         self.assertEqual(1, len(match_results))
 
