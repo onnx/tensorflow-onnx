@@ -4,6 +4,7 @@
 """
 python -m tf2onnx.convert : tool to convert a frozen tensorflow to onnx
 """
+
 import argparse
 import sys
 
@@ -12,6 +13,7 @@ import tensorflow as tf
 import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 
+
 def get_args():
     """Parse commandline."""
     parser = argparse.ArgumentParser()
@@ -19,7 +21,8 @@ def get_args():
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", required=True, help="model input_names")
     parser.add_argument("--outputs", required=True, help="model output_names")
-    parser.add_argument("--opset", type=int, default=None, help="opset to use")
+    parser.add_argument("--opset", type=int, default=None, help="highest opset to use")
+    parser.add_argument("--custom-ops", help="list of custom ops")
     parser.add_argument("--unknown-dim", type=int, default=1, help="default for unknown dimensions")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
@@ -40,6 +43,11 @@ def get_args():
     return args
 
 
+def default_custom_op_handler(ctx, node, name, args):
+    node.name = "tf." + node.name
+    return node
+
+
 def main():
     args = get_args()
 
@@ -48,6 +56,8 @@ def main():
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.
     tf2onnx.utils.ONNX_UNKNOWN_DIMENSION = args.unknown_dim
+
+    custom_ops = {op: default_custom_op_handler for op in args.custom_ops.split(",")} if args.custom_ops else {}
 
     graph_def = tf.GraphDef()
     with tf.gfile.FastGFile(args.input, 'rb') as f:
@@ -60,7 +70,8 @@ def main():
                              continue_on_error=args.continue_on_error,
                              verbose=args.verbose,
                              target=args.target,
-                             opset=args.opset)
+                             opset=args.opset,
+                             custom_op_handlers=custom_ops)
 
     model_proto = g.make_model(
         "converted from {}".format(args.input), args.inputs, args.outputs,
