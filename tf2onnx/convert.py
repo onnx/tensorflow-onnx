@@ -44,7 +44,7 @@ def get_args():
 
 
 def default_custom_op_handler(ctx, node, name, args):
-    node.name = "tf." + node.name
+    node.type = "tf." + node.type
     return node
 
 
