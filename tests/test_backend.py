@@ -163,6 +163,25 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         for i in [-1, 0, 1, -2]:
             self._test_expand_dims(i)
 
+    def test_trig_ops(self):
+        for op in [tf.sin, tf.cos, tf.tan, tf.asin, tf.acos, tf.atan]:
+            tf.reset_default_graph()
+            x_val = make_xval([3, 4])
+            x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+            op_ = op(x)
+            output = tf.identity(op_, name=_TFOUTPUT)
+            actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+            self.assertAllClose(expected, actual, rtol=1e-06)
+
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
+    def test_multinomial(self):
+        x_val = make_xval([3, 4])
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        op = tf.multinomial(x, 2)
+        output = tf.identity(op, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual, rtol=1e-06)
+
     def test_maxppol(self):
         x_val = make_xval((1, 4, 4, 1))
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
@@ -397,7 +416,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-
     def test_neg(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -561,7 +579,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x0: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND == "caffe2", "not supported in caffe2")
     def test_reducesum(self):
         # not supported by onnx-caffe2
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
@@ -571,7 +588,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND == "caffe2", "not supported in caffe2")
     def test_sqrt(self):
         x_val = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
@@ -580,7 +596,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND == "caffe2", "not supported in caffe2")
     def test_rsqrt(self):
         x_val = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
@@ -589,7 +604,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual, rtol=1e-05)
 
-    @unittest.skipIf(BACKEND == "caffe2", "not supported in caffe2")
     def test_reciprocal(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
@@ -598,7 +612,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual, rtol=1e-04)
 
-    @unittest.skipIf(BACKEND == "caffe2", "not supported in caffe2")
     def test_reducemax(self):
         # not supported by onnx-caffe2
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
@@ -617,7 +630,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND == "caffe2", "not supported in caffe2")
     def test_reducemean(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
@@ -660,7 +672,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
     def test_randomuniform(self):
         # not supported by onnxmsrt or caffe2
         shape = tf.constant([2, 3], name="shape")
@@ -669,9 +681,10 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_ = tf.identity(x_, name="output2")
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {}, {})
-        self.assertAllClose(expected, actual)
+        # since results are random, compare the shapes only
+        self.assertAllClose(expected.shape, actual.shape)
 
-    #@unittest.skip
+    @unittest.skip
     def test_argminmax(self):
         # TODO: fails on onnxmsrt caffe2
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))

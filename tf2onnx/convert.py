@@ -19,7 +19,7 @@ def get_args():
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", required=True, help="model input_names")
     parser.add_argument("--outputs", required=True, help="model output_names")
-    parser.add_argument("--opset", type=int, default=0, help="opset to use")
+    parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--unknown-dim", type=int, default=1, help="default for unknown dimensions")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")

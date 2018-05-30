@@ -331,11 +331,22 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
 
         # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
         if new_kernel_shape:
-            op_name = utils.make_name(node.name)
-            input_name = node.input[1]
-            reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name, name=op_name)
-            reshape.set_attr("shape", new_kernel_shape)
-            ctx.set_shape(reshape.output[0], new_kernel_shape)
+            if ctx.opset < 5:
+                # old reshape takes new shape as attribute
+                op_name = utils.make_name(node.name)
+                input_name = node.input[1]
+                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name, name=op_name)
+                reshape.set_attr("shape", new_kernel_shape)
+                ctx.set_shape(reshape.output[0], new_kernel_shape)
+            else:
+                # new reshape takes new shape as input[1]
+                op_name = utils.make_name(node.name)
+                shape_name = utils.make_name(node.name)
+                shape_node = ctx.make_const(shape_name, "Const", np.array(new_kernel_shape))
+                input_name = node.input[1]
+                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name, name=op_name)
+                reshape.input.append(shape_name)
+                ctx.set_shape(reshape.output[0], new_kernel_shape)
             nodes.append(reshape)
 
     # insert conv node after inputs
@@ -450,7 +461,7 @@ def depthwiseconv_op(ctx, node, name, args):
     # T Y = ConvTranspose(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
     #           @AttrType.INTS kernel_shape, @AttrType.INTS output_shape, @AttrType.INTS pads, @AttrType.INTS strides)
     #
-    # this is clearly documented in onnx, the hint comes from pytorch documentation:
+    # this is not documented well in onnx, the hint comes from pytorch documentation:
     # http://pytorch.org/docs/master/nn.html#torch.nn.Conv2d
     #   The configuration when groups == in_channels and out_channels = K * in_channels
     #   where K is a positive integer is termed in literature as depthwise convolution.
@@ -677,9 +688,10 @@ def expanddims_op(ctx, node, name, args):
 
 def expanddims_op7(ctx, node, name, args):
     shape = ctx.get_shape(node.output[0])
-    node.type = "Unsqueeze"
-    ctx.remove_input(node, node.input[1])
-    node.set_attr("axes", shape)
+    shape_name = utils.make_name(node.name)
+    shape_node = ctx.make_const(shape_name, "Const", np.array(shape))
+    node.type = "Reshape"
+    node.input[1] = shape_name
     return node
 
 
@@ -730,6 +742,16 @@ def upsample_op(ctx, node, name, args):
     nh, nw = target_shape
     scaler = [float(n), float(nh) / h, float(nw) / w, float(c)]
     node.set_attr("scales", scaler)
+    ctx.remove_input(node, node.input[1])
+    return node
+
+def multinomial_op(ctx, node, name, args):
+    # output_dtype output = Multinomial(T logits, int32 num_samples, @int seed, @int seed2, @type output_dtype)
+    sample_size = node.inputs[1].get_tensor_value()
+    seed = node.get_attr("seed")
+    if seed:
+        node.set_attr("seed", float(seed.i))
+    node.set_attr("sample_size", sample_size[0])
     ctx.remove_input(node, node.input[1])
     return node
 
@@ -837,6 +859,13 @@ _OPSET_7 = {
     "Less": (direct_op, []),
     "Pow": (direct_op, []),
     "Cast": (direct_op, []),
+    "Acos": (direct_op, []),
+    "Asin": (direct_op, []),
+    "Atan": (direct_op, []),
+    "Cos": (direct_op, []),
+    "Sin": (direct_op, []),
+    "Tan": (direct_op, []),
+    "Multinomial": (multinomial_op, []),
 }
 
 _OPSETS = [

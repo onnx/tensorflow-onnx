@@ -133,15 +133,15 @@ class Test(object):
         return result
 
     @staticmethod
-    def to_onnx(tf_graph):
+    def to_onnx(tf_graph, opset=None):
         """Convert graph to tensorflow."""
-        return process_tf_graph(tf_graph)
+        return process_tf_graph(tf_graph, opset=opset)
 
     def run_caffe2(self, name, onnx_graph, inputs):
         """Run test again caffe2 backend."""
-        import onnx_caffe2.backend
+        import caffe2.python.onnx.backend
         model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
-        prepared_backend = onnx_caffe2.backend.prepare(model_proto)
+        prepared_backend = caffe2.python.onnx.backend.prepare(model_proto)
         results = prepared_backend.run(inputs)
         return results
 
@@ -153,10 +153,20 @@ class Test(object):
         model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
         with open(model_path, "wb") as f:
             f.write(model_proto.SerializeToString())
-
         m = lotus.ModelExecutor(model_path)
         results = m.run(self.output_names, inputs)
         return results
+
+    @staticmethod
+    def run_onnxmsrtnext(onnx_graph, inputs, output_names, test_name):
+        """Run test against msrt-next backend."""
+        import lotus
+        model_path = os.path.join(TMPPATH, test_name + ".pb")
+        with open(model_path, "wb") as f:
+            f.write(onnx_graph.SerializeToString())
+        m = lotus.InferenceSession(model_path)
+        results = m.run(output_names, inputs)
+        return results[0]
 
     def run_onnxcntk(self, name, onnx_graph, inputs):
         """Run test against cntk backend."""
@@ -181,7 +191,7 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None):
+    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None):
         """Run complete test against backend."""
         print(name)
         if self.url:
@@ -205,7 +215,7 @@ class Test(object):
             onnx_graph = None
             print("\ttensorflow", "OK")
             try:
-                onnx_graph = self.to_onnx(sess.graph)
+                onnx_graph = self.to_onnx(sess.graph, opset=opset)
                 print("\tto_onnx", "OK")
                 if debug:
                     onnx_graph.dump_graph()
@@ -220,6 +230,8 @@ class Test(object):
                 onnx_results = self.run_caffe2(name, onnx_graph, inputs)
             elif backend == "onnxmsrt":
                 onnx_results = self.run_onnxmsrt(name, onnx_graph, inputs)
+            elif backend == "onnxmsrtnext":
+                onnx_results = self.run_onnxmsrtnext(name, onnx_graph, inputs)
             elif backend == "cntk":
                 onnx_results = self.run_onnxcntk(name, onnx_graph, inputs)
             else:
@@ -245,8 +257,10 @@ def get_args():
     parser.add_argument("--cache", default="/tmp/pre-trained", help="pre-trained models cache dir")
     parser.add_argument("--config", default="tests/run_pretrained_models.yaml", help="yaml config to use")
     parser.add_argument("--tests", help="tests to run")
-    parser.add_argument("--backend", default="caffe2", choices=["caffe2", "onnxmsrt", "cntk"], help="backend to use")
+    parser.add_argument("--backend", default="caffe2",
+                        choices=["caffe2", "onnxmsrt", "onnxmsrtnext", "cntk"], help="backend to use")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
+    parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--debug", help="debug vlog", action="store_true")
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
@@ -292,7 +306,7 @@ def main():
             continue
         count += 1
         try:
-            ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file)
+            ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file, opset=args.opset)
         except Exception as ex:
             ret = None
             print(ex)

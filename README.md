@@ -11,16 +11,12 @@ Basic net and conv nets should work. A list of models that pass tests can be fou
 # Installation
 Install dependencies:
 ```
-pip install onnx==1.1
+pip install onnx==1.2
 pip install tensorflow
 ```
-If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 and onnx-caffe2:
-```
-https://github.com/caffe2/caffe2
-
-pip install onnx-caffe2==1.0
-```
-We tested with tensorflow 1.5/1.6 and anaconda 3.5/3.6.
+If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 from: ```
+https://github.com/pytorch/pytorch```
+We tested with tensorflow 1.5,1.6,1.7,1.8 and anaconda 3.5,3.6.
 
 Once dependencies are installed, from the tf2onnx root folder call:
 ```
@@ -38,7 +34,7 @@ python setup.py bdist_wheel
 # Usage
 ```
 python -m tf2onnx.convert
-usage: convert.py [-h] --input INPUT [--output OUTPUT] [--target TARGET] --inputs INPUTS --outputs OUTPUTS [--continue_on_error] [--verbose]
+usage: convert.py [-h] --input INPUT [--output OUTPUT] [--target TARGET] --inputs INPUTS --outputs OUTPUTS [--continue_on_error] [--verbose] [--opset OPSET]
 ```
 For example:
 ```
@@ -88,6 +84,7 @@ optional arguments:
   --backend BACKEND  backend to use
   --config           yaml config file
   --verbose          verbose output
+  --opset OPSET      target opset to use
   --debug            dump generated graph with shape info
 ```
 ```run_pretrained_models.py``` will run the TensorFlow model, captures the TensorFlow output and runs the same test against the specified ONNX backend after converting the model. The only practical backend to use at this time is Caffe2, and you need to install Caffe2 for this to work.
