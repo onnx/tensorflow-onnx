@@ -1081,6 +1081,16 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
+    def topological_sort(ops):
+        if not continue_on_error:
+            g.topological_sort(ops)
+        else:
+            try:
+                g.topological_sort(ops)
+            except:
+                # if we continue on error, ignore graph cycles so we can report all missing ops
+                pass
+
     if target is None:
         target = DEFAULT_TARGET
 
@@ -1097,13 +1107,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     for rewrite in rewriters:
         ops = rewrite(g, ops)
         g.set_nodes(ops)
-    g.topological_sort(g.get_nodes())
+    topological_sort(g.get_nodes())
 
     if custom_op_handlers is None:
         custom_op_handlers = {}
     mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error,
                                                      custom_op_handlers)
-    g.topological_sort(g.get_nodes())
+    topological_sort(g.get_nodes())
 
     g.update_proto()
     if verbose:
