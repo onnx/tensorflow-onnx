@@ -157,15 +157,15 @@ class Test(object):
         results = m.run(self.output_names, inputs)
         return results
 
-    @staticmethod
-    def run_onnxmsrtnext(onnx_graph, inputs, output_names, test_name):
+    def run_onnxmsrtnext(self, name, onnx_graph, inputs):
         """Run test against msrt-next backend."""
         import lotus
-        model_path = os.path.join(TMPPATH, test_name + ".pb")
+        model_path = os.path.join(TMPPATH, name + ".pb")
+        model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
         with open(model_path, "wb") as f:
-            f.write(onnx_graph.SerializeToString())
+            f.write(model_proto.SerializeToString())
         m = lotus.InferenceSession(model_path)
-        results = m.run(output_names, inputs)
+        results = m.run(self.output_names, inputs)
         return results[0]
 
     def run_onnxcntk(self, name, onnx_graph, inputs):
