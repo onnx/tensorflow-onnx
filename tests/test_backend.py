@@ -488,6 +488,17 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         self.assertEqual(expected.shape, actual.shape)
         self.assertAllClose(expected, actual)
 
+    @unittest.skipIf(OPSET < 5 or BACKEND in ["onnxmsrtnext"], "since opset 5, broken in msrtnext")
+    def test_reshape_dynamic(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
+        x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+        shape = tf.constant([4, 1])
+        x_ = tf.reshape(x, tf.transpose(shape))
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertEqual(expected.shape, actual.shape)
+        self.assertAllClose(expected, actual)
+
     def test_relu(self):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
@@ -753,7 +764,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(OPSET < 7 or BACKEND in ["caffe2"], "since opset 7")
+    @unittest.skip
     def test_resize_nearest_neighbor(self):
         # this should work but no runtime I tried supports it.
         x_shape = [1, 15, 20, 3]
