@@ -166,7 +166,7 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         m = lotus.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
-        return results[0]
+        return results
 
     def run_onnxcntk(self, name, onnx_graph, inputs):
         """Run test against cntk backend."""
