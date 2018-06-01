@@ -11,7 +11,7 @@ import traceback
 
 import numpy as np
 import tf2onnx
-from onnx import helper, onnx_pb
+from onnx import helper, onnx_pb, numpy_helper
 from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 from tf2onnx import utils
@@ -260,6 +260,26 @@ def reshape_op(ctx, node, name, args):
     node.set_attr("shape", shape)
     ctx.set_shape(node.output[0], shape)
     return node
+
+
+def reshape_op5(ctx, node, name, args):
+    shape_node = node.inputs[1]
+    # onnx wants reshape.input[1] to have the value be int64 which is not the case for tensorflow.
+    name = node.input[1]
+    if shape_node.is_const():
+        # if it is a const, change the const to be int64
+        shape = shape_node.get_tensor_value()
+        shape = np.array(list(shape), dtype=np.int64)
+        onnx_tensor = numpy_helper.from_array(shape, name)
+        ctx._initializers[name] = onnx_tensor
+        shape_node.set_attr("value", onnx_tensor)
+        return node
+    else:
+        op_name = utils.make_name(node.name)
+        cast_op = ctx.insert_new_node_on_input(node, "Cast", name, name=op_name)
+        cast_op.set_attr("to", onnx_pb.TensorProto.INT64)
+        ctx.copy_shape(name, op_name + ":0")
+        return [cast_op, node]
 
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -841,7 +861,7 @@ _OPSET_4 = {
 }
 
 _OPSET_5 = {
-    "Reshape": (direct_op, ["Reshape"]),
+    "Reshape": (reshape_op5, []),
     "ExpandDims": (expanddims_op7, []),
 }
 
