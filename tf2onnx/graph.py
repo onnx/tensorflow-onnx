@@ -355,7 +355,9 @@ class Graph(object):
 
         # update attributes
         ops = []
+        all_inputs = set()
         for op in self.get_nodes():
+            all_inputs |= set(op.input)
             onnx_op = op.op
             del onnx_op.attribute[:]
             attr = []
@@ -367,7 +369,7 @@ class Graph(object):
             ops.append(onnx_op)
 
         # create input_tensor_values, initializers
-        initializers = list(self._initializers.values())
+        initializers = [i for i in list(self._initializers.values()) if i.name in all_inputs]
         input_with_initializers = []
         for initializer in initializers:
             shape = self.get_shape(initializer.name)
