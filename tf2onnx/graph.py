@@ -102,6 +102,12 @@ class Node(object):
     def set_attr(self, name, value):
         self.attr[name] = helper.make_attribute(name, value)
 
+    def set_deleted(self):
+        self.type = "@@DELETED@@"
+
+    def is_deleted(self):
+        return self.type == "@@DELETED@@"
+
     @property
     def shape(self):
         """Get shape for now."""
@@ -132,6 +138,13 @@ class Node(object):
             if t.float_data:
                 return t.float_data
             raise ValueError("tensor data_type not handled in get_tensor_value")
+            
+    def get_tensor(self):
+        if not self.is_const():
+            raise ValueError("get tensor: {} must be Const".format(self.name))
+        t = self.get_attr("value")
+        if t:
+            t = numpy_helper.to_array(helper.get_attribute_value(t))
         return t
 
     def scalar_to_dim1(self):
@@ -223,7 +236,7 @@ class Graph(object):
         onnx_tensor = numpy_helper.from_array(val, name)
         self._initializers[name] = onnx_tensor
         self.set_shape(name, val.shape)
-        new_node = Node(helper.make_node(op_type, [], [], name=name, value=onnx_tensor), self)
+        new_node = Node(helper.make_node(op_type, [], [name], name=name, value=onnx_tensor), self)
         return new_node
 
     def set_nodes(self, ops):
@@ -397,10 +410,7 @@ class Graph(object):
 
         # optimize the model proto
         if optimize:
-            model_proto = optimizer.optimize(model_proto,
-                                                 ["fuse_consecutive_transposes",
-                                                  "fuse_transpose_into_gemm",
-                                                  "eliminate_nop_transpose"])
+            model_proto = optimizer.optimize(model_proto)
         return model_proto
 
     def dump_graph(self):
@@ -519,3 +529,7 @@ class Graph(object):
             removed.add(node)
         ops.extend(new_outputs)
         return ops
+
+    @staticmethod
+    def remove_deleted_nodes(ops):
+        return [node for node in ops if not node.is_deleted()]
