@@ -656,17 +656,6 @@ def split_op(ctx, node, name, args):
     return node
 
 
-def fill_op(ctx, node, name, args):
-    # T output = Fill(index_type dims, T value, @type index_type)
-    # T2 output = ConstantFill(T1 input, @INT dtype, @INTS extra_shape, @INT input_as_shape, @INTS shape, @FLOAT value)
-    # T X = GivenTensorFill(T shape, @INTS extra_shape, @INT input_as_shape, @INTS shape, @FLOATS values)
-    dims =  node.inputs[0].get_tensor_value()
-    value = node.inputs[1].get_tensor_value()
-    node.type = "ConstantFill"
-    ctx.remove_input(node, node.input[1])
-    return node
-
-
 def splitv_op(ctx, node, name, args):
     # T output = SplitV(T value, Tlen size_splits, int32 split_dim, @int num_split, @type Tlen)
     # T outputs = Split(T input, @INT axis, @INTS split)
@@ -806,7 +795,6 @@ _OPSET_4 = {
     "Elu": (direct_op, []),
     "Exp": (direct_op, []),
     "Floor": (direct_op, []),
-    "Fill": (fill_op, []),
     "Flatten": (direct_op, []),
     "Gather": (direct_op, ["Gather"]),
     "GatherV2": (gatherv2_op, ["Gather"]),
@@ -816,6 +804,7 @@ _OPSET_4 = {
     "Log": (direct_op, []),
     "LRN": (lrn_op, []),
     "LogicalAnd": (broadcast_op, ["And"]),
+    "LogicalOr": (broadcast_op, ["Or"]),
     "Max": (reduce_op, ["ReduceMax"]),
     "MatMul": (direct_op, ["MatMul"]),
     "Maximum": (direct_op, ["Max"]),
@@ -871,12 +860,13 @@ _OPSET_7 = {
     "BiasAdd": (biasadd_op7, []),
     "BiasAddV1": (biasadd_op7, []),
     "Add": (broadcast_op7, []),
-    "Sub": (direct_op, []),
+    "Sub": (broadcast_op7, []),
     "Mul": (broadcast_op7, []),
-    "RealDiv": (direct_op, ["Div"]),
-    "LogicalAnd": (direct_op, ["And"]),
-    "Greater": (direct_op, []),
-    "Less": (direct_op, []),
+    "RealDiv": (broadcast_op7, ["Div"]),
+    "LogicalAnd": (broadcast_op7, ["And"]),
+    "LogicalOr": (broadcast_op7, ["Or"]),
+    "Greater": (broadcast_op7, []),
+    "Less": (broadcast_op7, []),
     "Pow": (direct_op, []),
     "Cast": (direct_op, []),
     "Acos": (direct_op, []),
@@ -1131,10 +1121,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     if custom_op_handlers is None:
         custom_op_handlers = {}
-    mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error,
-                                                     custom_op_handlers)
+    mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers)
     topological_sort(g.get_nodes())
-
     g.update_proto()
     if verbose:
         print("tensorflow ops: {}".format(op_cnt))

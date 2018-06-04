@@ -348,6 +348,19 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x1: x1_val, x2: x2_val}, {_INPUT: x1_val, _INPUT1: x2_val})
         self.assertAllClose(expected, actual)
 
+    def test_add_bcast1(self):
+        # example taken from onnx doc
+        x1_val = np.random.randn(3, 4, 5).astype(np.float32)
+        x2_val = np.random.randn(5).astype(np.float32)
+        x1 = tf.placeholder(tf.float32, x1_val.shape, name="input")
+        x2 = tf.placeholder(tf.float32, x2_val.shape, name=_TFINPUT1)
+        x_ = tf.add(x1, x2)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        expected = np.add(x1_val, x2_val)
+        actual, tf_actual = self._run(output, {x1: x1_val, x2: x2_val}, {_INPUT: x1_val, _INPUT1: x2_val})
+        self.assertAllClose(expected, tf_actual)
+        self.assertAllClose(expected, actual)
+
     def test_matmul(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -773,6 +786,16 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
         x_new_size_ = tf.constant(x_new_size)
         x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skip
+    def test_fill(self):
+        # no official fill op in onnx
+        x_val = np.array([2, 3], dtype=np.int32)
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        x_ = tf.fill(x, 9)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
