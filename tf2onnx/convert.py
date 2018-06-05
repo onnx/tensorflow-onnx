@@ -12,6 +12,7 @@ import onnx
 import tensorflow as tf
 import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
+from onnx import helper
 
 
 def get_args():
@@ -44,7 +45,7 @@ def get_args():
 
 
 def default_custom_op_handler(ctx, node, name, args):
-    node.type = "tf." + node.type
+    node.domain = "tf"
     return node
 
 
@@ -57,7 +58,13 @@ def main():
     # support unknown dimensions.
     tf2onnx.utils.ONNX_UNKNOWN_DIMENSION = args.unknown_dim
 
-    custom_ops = {op: default_custom_op_handler for op in args.custom_ops.split(",")} if args.custom_ops else {}
+    if args.custom_ops:
+        # default custom ops for tensorflow-onnx are in the "tf" namespace
+        custom_ops = {op: default_custom_op_handler for op in args.custom_ops.split(",")}
+        extra_opset = [helper.make_opsetid("tf", 1)]
+    else:
+        args.custom_ops = {}
+        extra_opset = None
 
     graph_def = tf.GraphDef()
     with tf.gfile.FastGFile(args.input, 'rb') as f:
@@ -71,7 +78,8 @@ def main():
                              verbose=args.verbose,
                              target=args.target,
                              opset=args.opset,
-                             custom_op_handlers=custom_ops)
+                             custom_op_handlers=custom_ops,
+                             extra_opset=extra_opset)
 
     model_proto = g.make_model(
         "converted from {}".format(args.input), args.inputs, args.outputs,

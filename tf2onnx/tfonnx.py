@@ -705,10 +705,24 @@ def expanddims_op7(ctx, node, name, args):
 
 
 def stridedslice_op(ctx, node, name, args):
-    # T output = StridedSlice(T input, Index begin, Index end, Index strides,
-    #               @type Index, @int begin_mask, @int end_mask, @int ellipsis_mask,
-    #               @int new_axis_mask, @int shrink_axis_mask)
-    raise ValueError("StridedSlice not implemented")
+    # only the cases strides=1 can be mapped to onnx
+    not_supported_attr = ["begin_mask", "ellipsis_mask", "end_mask", "new_axis_mask", "shrink_axis_mask"]
+    for attr_name in not_supported_attr:
+        attr = node.get_attr(attr_name)
+        if attr is not None and attr.i != 0:
+            raise ValueError("StridedSlice: attribute " + attr_name + " must be 0")
+    begin = node.inputs[1].get_tensor_value()
+    end = node.inputs[2].get_tensor_value()
+    strides = node.inputs[3].get_tensor_value()[0]
+    if strides != 1:
+        raise ValueError("StridedSlice: only strides=1 is supported")
+    node.set_attr("starts", list(begin))
+    node.set_attr("ends", list(end))
+    node.type = "Slice"
+    ctx.remove_input(node, node.input[3])
+    ctx.remove_input(node, node.input[2])
+    ctx.remove_input(node, node.input[1])
+    return node
 
 
 def pow_op(ctx, node, name, args):
@@ -761,6 +775,14 @@ def multinomial_op(ctx, node, name, args):
     if seed:
         node.set_attr("seed", float(seed.i))
     node.set_attr("sample_size", sample_size[0])
+    ctx.remove_input(node, node.input[1])
+    return node
+
+
+def topk_op(ctx, node, name, args):
+    k = node.inputs[1].get_tensor_value()
+    node.set_attr("k", k[0])
+    node.type = "TopK"
     ctx.remove_input(node, node.input[1])
     return node
 
@@ -847,6 +869,7 @@ _OPSET_4 = {
     "Sum": (reduce_op, ["ReduceSum"]),
     "Tanh": (direct_op, []),
     "Transpose": (transpose_op, []),
+    "TopKV2": (topk_op, []),
 }
 
 _OPSET_5 = {
@@ -1078,7 +1101,7 @@ def tf_optimize(sess, inputs, outputs, graph_def):
 
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
-                     opset=None, custom_op_handlers=None, custom_rewriter=None):
+                     opset=None, custom_op_handlers=None, custom_rewriter=None, extra_opset=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -1106,7 +1129,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph)
 
-    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset)
+    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset)
     ops = g.get_nodes()
 
     # rewrite graph

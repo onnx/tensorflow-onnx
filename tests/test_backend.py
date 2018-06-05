@@ -84,7 +84,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         model_path = os.path.join(TMPPATH, test_name + ".pb")
         with open(model_path, "wb") as f:
             f.write(onnx_graph.SerializeToString())
-
         m = lotus.ModelExecutor(model_path)
         results = m.run(output_names, inputs)
         return results[0]
@@ -96,7 +95,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         model_path = os.path.join(TMPPATH, test_name + ".pb")
         with open(model_path, "wb") as f:
             f.write(onnx_graph.SerializeToString())
-
         m = lotus.InferenceSession(model_path)
         results = m.run(output_names, inputs)
         return results[0]
@@ -764,15 +762,28 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
-    def test_strided_slice0(self):
-        # FIXME: not implemented yet
-        x_val = np.array([
-            [[1, 1, 1], [2, 2, 2]],
-            [[3, 3, 3], [4, 4, 4]],
-            [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
+    def test_topk(self):
+        x_val = np.arange(3*2*3).astype("float32")
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        values, indices = tf.nn.top_k(x, 5, sorted=True)
+        output  = tf.identity(values, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
+    def test_strided_slice1(self):
+        x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.strided_slice(x, [1, 0, 0], [2, 1, 3], [1, 1, 1])
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
+    def test_strided_slice2(self):
+        x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.strided_slice(x, [1, 0, 0], [2, 2, 3], [1, 1, 1])
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)

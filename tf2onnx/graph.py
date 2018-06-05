@@ -81,6 +81,16 @@ class Node(object):
         """Set Op type."""
         self._op.op_type = val
 
+    @property
+    def domain(self):
+        """Return Op type."""
+        return self._op.domain
+
+    @type.setter
+    def domain(self, val):
+        """Set Op type."""
+        self._op.domain = val
+
     def is_nhwc(self):
         """Return True if node is in NCHW format."""
         return self.data_format == "NHWC"
@@ -200,7 +210,7 @@ class Node(object):
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
 
-    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=None):
+    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=None, extra_opset=None):
         """Create Graph.
         Args:
             nodes: list of Node()
@@ -219,9 +229,10 @@ class Graph(object):
         self._output_shapes = output_shapes
         ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
-        if opset is None:
+        if opset is None or opset == 0:
             opset = defs.onnx_opset_version()
         self._opset = opset
+        self._extra_opset = extra_opset
 
     @property
     def opset(self):
@@ -401,10 +412,13 @@ class Graph(object):
 
         kwargs = {"producer_name": "tf2onnx",
                   "producer_version": __version__}
-        if self._opset > 0:
-            imp = OperatorSetIdProto()
-            imp.version = self._opset
-            kwargs["opset_imports"] = [imp]
+        opsets = []
+        imp = OperatorSetIdProto()
+        imp.version = self._opset
+        opsets.append(imp)
+        if self._extra_opset is not None:
+            opsets.extend(self._extra_opset)
+        kwargs["opset_imports"] = opsets
 
         model_proto = helper.make_model(graph, **kwargs)
 
