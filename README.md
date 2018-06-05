@@ -5,6 +5,10 @@ Tf2onnx converts a TensorFlow graph to an ONNX graph.
 
 Tf2onnx is in its early development. Mileage will vary since TensorFlow supports ~4 times the operations that the current ONNX version supports. But standard models seem to be using mostly ops that ONNX does support.
 
+| Linux |
+|-------|
+| [![Build Status](https://travis-ci.org/tensorflow-onnx/tensorflow-onnx.svg?branch=master)](https://travis-ci.org/onnx/tensorflow-onnx) |
+
 # Status
 Basic net and conv nets should work. A list of models that pass tests can be found [here](tests/run_pretrained_models.yaml)
 
