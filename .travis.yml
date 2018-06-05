@@ -27,9 +27,8 @@ install:
   - printenv
   - conda config --set always_yes yes --set changeps1 no
   - conda install -c conda-forge protobuf numpy
-  - conda install -c caffe2 caffe2
   - cd $TRAVIS_BUILD_DIR && pip install onnx
-  - cd $TRAVIS_BUILD_DIR && pip install caffe2
+  - conda install -c caffe2 caffe2
   - cd $TRAVIS_BUILD_DIR && export PYTHONPATH=pwd
 
 script:
