@@ -266,6 +266,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             # becomes:
             #   T output = Identity(T Input)
             node.type = "Identity"
+            node.domain = "tf"
             del node.input[1:]
             return node
 
@@ -273,7 +274,9 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.Print(x, [x], "hello")
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph, custom_op_handlers={"Print": print_handler})
+            g = process_tf_graph(sess.graph,
+                                 custom_op_handlers={"Print": print_handler},
+                                 extra_opset=helper.make_opsetid("tf", 1))
             self.assertEqual(
                 'digraph { Print [op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
                 onnx_to_graphviz(g))
