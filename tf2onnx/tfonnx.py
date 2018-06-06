@@ -362,7 +362,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
                 # new reshape takes new shape as input[1]
                 op_name = utils.make_name(node.name)
                 shape_name = utils.make_name(node.name)
-                shape_node = ctx.make_const(shape_name, "Const", np.array(new_kernel_shape))
+                shape_node = ctx.make_const(shape_name, "Const", np.array(new_kernel_shape, dtype=np.int64))
                 input_name = node.input[1]
                 reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name, name=op_name)
                 reshape.input.append(shape_name)
