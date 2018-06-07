@@ -63,7 +63,7 @@ def main():
         custom_ops = {op: default_custom_op_handler for op in args.custom_ops.split(",")}
         extra_opset = [helper.make_opsetid("tf", 1)]
     else:
-        args.custom_ops = {}
+        custom_ops = {}
         extra_opset = None
 
     graph_def = tf.GraphDef()

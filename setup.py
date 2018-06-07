@@ -74,11 +74,11 @@ setup(
     version=VersionInfo.version,
     description='Tensorflow to ONNX converter',
     setup_requires=['pytest-runner'],
-    tests_require=['numpy', 'pytest', 'pytest-cov', 'psutil'],
+    tests_require=['numpy', 'pytest', 'pytest-cov', 'psutil', 'graphviz'],
     cmdclass=cmdclass,
     packages=find_packages(),
     author='onnx@microsoft.com',
     author_email='onnx@microsoft.com',
     url='https://github.com/onnx/tensorflow-onnx',
-    install_requires=['graphviz', 'pyyaml']
+    install_requires=['pyyaml', 'onnx>=1.2']
 )
