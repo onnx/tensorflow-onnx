@@ -66,20 +66,14 @@ def tensorflow_to_onnx(graph):
         for a in node.node_def.attr:
             attr_cnt[a] += 1
             if a == "dtype":
-                attr[a] = utils.get_tf_dtype(node)
+                attr[a] = utils.map_tf_dtype(node.get_attr("dtype"))
             elif a == "T":
                 dtype = node.get_attr("T")
                 if dtype:
                     if not isinstance(dtype, list):
-                        dtypes[node.name] = utils.TF_TO_ONNX_DTYPE.get(dtype)
-            elif a == "output_type":
-                out_type = node.get_attr("output_type")
-                out_type = utils.TF_TO_ONNX_DTYPE[out_type]
-                attr[a] = out_type
-            elif a == "out_type":
-                out_type = node.get_attr("out_type")
-                out_type = utils.TF_TO_ONNX_DTYPE[out_type]
-                attr[a] = out_type
+                        dtypes[node.name] = utils.map_tf_dtype(dtype)
+            elif a in ["output_type", "output_dtype", "out_type"]:
+                attr[a] = utils.map_tf_dtype(node.get_attr(a))
             elif a == "shape":
                 attr[a] = utils.get_shape(node)
             elif a == "Tperm":
@@ -90,9 +84,7 @@ def tensorflow_to_onnx(graph):
                 onnx_tensor = utils.tf_to_onnx_tensor(node.get_attr(a), name=node.name + ":0")
                 attr[a] = onnx_tensor
             elif a == "DstT":
-                dst = node.get_attr("DstT")
-                dst = tf2onnx.utils.TF_TO_ONNX_DTYPE[dst]
-                attr["to"] = dst
+                attr["to"] =  utils.map_tf_dtype(node.get_attr("DstT"))
             elif a == "SrcT":
                 continue
             elif a in ignored_attr:
@@ -768,12 +760,19 @@ def upsample_op(ctx, node, name, args):
     ctx.remove_input(node, node.input[1])
     return node
 
+
 def multinomial_op(ctx, node, name, args):
     # output_dtype output = Multinomial(T logits, int32 num_samples, @int seed, @int seed2, @type output_dtype)
     sample_size = node.inputs[1].get_tensor_value()
     seed = node.get_attr("seed")
     if seed:
         node.set_attr("seed", float(seed.i))
+    output_dtype = node.get_attr("output_dtype")
+    if output_dtype:
+        output_dtype = output_dtype.i
+    else:
+        output_dtype = onnx_pb.TensorProto.INT32
+    node.set_attr("dtype", output_dtype)
     node.set_attr("sample_size", sample_size[0])
     ctx.remove_input(node, node.input[1])
     return node
