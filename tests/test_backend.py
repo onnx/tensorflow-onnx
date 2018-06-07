@@ -175,7 +175,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def test_multinomial(self):
         x_val = make_xval([3, 4])
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
-        op = tf.multinomial(x, 2)
+        op = tf.multinomial(x, 2, output_dtype=tf.int64)
         output = tf.identity(op, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual, rtol=1e-06)
@@ -726,11 +726,11 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     @unittest.skip
     def test_onehot(self):
-        # FIXME via onnx-ml ?
+        # no such op in onnx
         x_val = np.array([0, 1, 2], dtype=np.int32)
         depth = 3
         x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
-        x_ = tf.one_hot(x, depth)
+        x_ = tf.one_hot(x, depth, on_value=1, axis=0, off_value=0)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)

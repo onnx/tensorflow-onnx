@@ -75,7 +75,7 @@ ONNX_VALID_ATTRIBUTES = {
     'min', 'seed', 'ends', 'paddings', 'to', 'gamma', 'width_scale', 'normalize_variance', 'group', 'ratio', 'values',
     'dtype', 'output_shape', 'spatial', 'split', 'input_forget', 'keepdims', 'transA', 'auto_pad', 'border', 'low',
     'linear_before_reset', 'height_scale', 'output_padding', 'shape', 'kernel_shape', 'epsilon', 'size', 'starts',
-    'direction', 'max', 'clip', 'across_channels', 'value', 'strides', 'extra_shape', 'scales', 'k'
+    'direction', 'max', 'clip', 'across_channels', 'value', 'strides', 'extra_shape', 'scales', 'k', 'sample_size'
 }
 
 
@@ -148,10 +148,7 @@ def get_shape(node):
         pass
     return dims
 
-
-def get_tf_dtype(node):
-    """Get dtype from tensorflow node."""
-    dtype = node.get_attr("dtype")
+def map_tf_dtype(dtype):
     if dtype:
         dtype = TF_TO_ONNX_DTYPE[dtype]
     return dtype
