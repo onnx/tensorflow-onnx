@@ -15,6 +15,9 @@ from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIB
 from onnx import helper
 
 
+_TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
+
+
 def get_args():
     """Parse commandline."""
     parser = argparse.ArgumentParser()
@@ -45,7 +48,7 @@ def get_args():
 
 
 def default_custom_op_handler(ctx, node, name, args):
-    node.domain = "tf"
+    node.domain = _TENSORFLOW_DOMAIN
     return node
 
 
@@ -61,7 +64,7 @@ def main():
     if args.custom_ops:
         # default custom ops for tensorflow-onnx are in the "tf" namespace
         custom_ops = {op: default_custom_op_handler for op in args.custom_ops.split(",")}
-        extra_opset = [helper.make_opsetid("tf", 1)]
+        extra_opset = [helper.make_opsetid(_TENSORFLOW_DOMAIN, 1)]
     else:
         custom_ops = {}
         extra_opset = None

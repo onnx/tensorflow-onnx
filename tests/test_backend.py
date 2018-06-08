@@ -173,12 +173,15 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
     def test_multinomial(self):
-        x_val = make_xval([3, 4])
+        shape = [2, 10]
+        x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
         op = tf.multinomial(x, 2, output_dtype=tf.int64)
         output = tf.identity(op, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
-        self.assertAllClose(expected, actual, rtol=1e-06)
+        # since returned indexes are random we can only check type and shape
+        self.assertEqual(expected.dtype, actual.dtype)
+        self.assertAllClose(expected.shape, actual.shape)
 
     def test_maxppol(self):
         x_val = make_xval((1, 4, 4, 1))
