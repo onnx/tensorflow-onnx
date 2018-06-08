@@ -770,6 +770,15 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
+    @unittest.skipIf(OPSET < 6, "supported since opset 6")
+    def test_addn(self):
+        x_val = np.arange(3*2*3).astype("float32")
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.add_n([x, x, x])
+        output  = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
     def test_strided_slice1(self):
         x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)

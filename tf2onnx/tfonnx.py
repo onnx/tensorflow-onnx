@@ -876,6 +876,10 @@ _OPSET_5 = {
     "ExpandDims": (expanddims_op7, []),
 }
 
+_OPSET_6 = {
+    "AddN": (direct_op, ["Sum"]),
+}
+
 _OPSET_7 = {
     "Tile": (direct_op, []),
     "ResizeNearestNeighbor": (upsample_op, []),
@@ -903,6 +907,7 @@ _OPSET_7 = {
 _OPSETS = [
     (4, _OPSET_4),
     (5, _OPSET_5),
+    (6, _OPSET_6),
     (7, _OPSET_7),
 ]
 
