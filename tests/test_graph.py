@@ -14,6 +14,9 @@ from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.graph_matcher import *
 
 
+_TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
+
+
 def onnx_to_graphviz(g):
     g2 = gv.Digraph()
     for node in g.get_nodes():
@@ -266,7 +269,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             # becomes:
             #   T output = Identity(T Input)
             node.type = "Identity"
-            node.domain = "tf"
+            node.domain = _TENSORFLOW_DOMAIN
             del node.input[1:]
             return node
 
@@ -276,7 +279,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph,
                                  custom_op_handlers={"Print": print_handler},
-                                 extra_opset=helper.make_opsetid("tf", 1))
+                                 extra_opset=helper.make_opsetid(_TENSORFLOW_DOMAIN, 1))
             self.assertEqual(
                 'digraph { Print [op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
                 onnx_to_graphviz(g))

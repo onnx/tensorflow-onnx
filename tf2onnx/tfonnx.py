@@ -105,8 +105,25 @@ def tensorflow_to_onnx(graph):
     return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes
 
 
-# pylint: disable=W0613,C0111,W0612
+def _convert_shapenode_to_int64(ctx, node, input_number):
+    shape_node = node.inputs[1]
+    name = node.input[1]
+    if shape_node.is_const():
+        # if it is a const, change the const to be int64
+        shape = shape_node.get_tensor_value()
+        shape = np.array(list(shape), dtype=np.int64)
+        onnx_tensor = numpy_helper.from_array(shape, name)
+        ctx._initializers[name] = onnx_tensor
+        shape_node.set_attr("value", onnx_tensor)
+        return [node]
+    else:
+        op_name = utils.make_name(node.name)
+        cast_op = ctx.insert_new_node_on_input(node, "Cast", name, name=op_name)
+        cast_op.set_attr("to", onnx_pb.TensorProto.INT64)
+        ctx.copy_shape(name, op_name + ":0")
+        return [cast_op, node]
 
+# pylint: disable=W0613,C0111,W0612
 
 def no_op(ctx, node, name, args):
     """Skip node."""
@@ -255,23 +272,8 @@ def reshape_op(ctx, node, name, args):
 
 
 def reshape_op5(ctx, node, name, args):
-    shape_node = node.inputs[1]
     # onnx wants reshape.input[1] to have the value be int64 which is not the case for tensorflow.
-    name = node.input[1]
-    if shape_node.is_const():
-        # if it is a const, change the const to be int64
-        shape = shape_node.get_tensor_value()
-        shape = np.array(list(shape), dtype=np.int64)
-        onnx_tensor = numpy_helper.from_array(shape, name)
-        ctx._initializers[name] = onnx_tensor
-        shape_node.set_attr("value", onnx_tensor)
-        return node
-    else:
-        op_name = utils.make_name(node.name)
-        cast_op = ctx.insert_new_node_on_input(node, "Cast", name, name=op_name)
-        cast_op.set_attr("to", onnx_pb.TensorProto.INT64)
-        ctx.copy_shape(name, op_name + ":0")
-        return [cast_op, node]
+    return _convert_shapenode_to_int64(ctx, node, 1)
 
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -690,7 +692,7 @@ def expanddims_op(ctx, node, name, args):
 def expanddims_op7(ctx, node, name, args):
     shape = ctx.get_shape(node.output[0])
     shape_name = utils.make_name(node.name)
-    shape_node = ctx.make_const(shape_name, "Const", np.array(shape))
+    shape_node = ctx.make_const(shape_name, "Const", np.array(shape, dtype=np.int64))
     node.type = "Reshape"
     node.input[1] = shape_name
     return node
@@ -784,6 +786,11 @@ def topk_op(ctx, node, name, args):
     node.type = "TopK"
     ctx.remove_input(node, node.input[1])
     return node
+
+
+def tile_op7(ctx, node, name, args):
+    # onnx wants shape input to be int64
+    return _convert_shapenode_to_int64(ctx, node, 1)
 
 
 # pylint: enable=W0613,C0111,W0612
@@ -881,7 +888,7 @@ _OPSET_6 = {
 }
 
 _OPSET_7 = {
-    "Tile": (direct_op, []),
+    "Tile": (tile_op7, []),
     "ResizeNearestNeighbor": (upsample_op, []),
     "BiasAdd": (biasadd_op7, []),
     "BiasAddV1": (biasadd_op7, []),
