@@ -199,13 +199,15 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    def _conv_test(self, x_val, w, strides=None, padding="VALID"):
+    def _conv_test(self, x_val, w, strides=None, padding="VALID", dilations=None):
         if strides is None:
             strides = _STRIDE1x1
+        if dilations is None:
+            dilations = [1, 1, 1, 1]
         tf.reset_default_graph()
         kernel = tf.constant(w, dtype=tf.float32, name='k')
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
-        conv = tf.nn.conv2d(x, kernel, strides=strides, padding=padding)
+        conv = tf.nn.conv2d(x, kernel, strides=strides, padding=padding, dilations=dilations)
         output = tf.identity(conv, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         return actual, expected
@@ -257,6 +259,17 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
         expected, actual = self._conv_test(x_val, kernel_val, strides=strides, padding="VALID")
+        self.assertAllClose(expected, actual, rtol=1e-05)
+
+
+    def test_conv2d_7(self):
+        x_shape = [1, 35, 35, 288]  # out: [1, 17, 17, 384]
+        kernel_shape = [3, 3, 288, 384]
+        strides = [1, 2, 2, 1]
+        dilations = [1, 3, 3, 1]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
+        expected, actual = self._conv_test(x_val, kernel_val, strides=strides, padding="VALID", dilations=dilations)
         self.assertAllClose(expected, actual, rtol=1e-05)
 
     def test_conv2d_transpose(self):
