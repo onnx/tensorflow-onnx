@@ -749,18 +749,22 @@ def lrn_op(ctx, node, name, args):
     return node
 
 
-def upsample_op(ctx, node, name, args):
-    node.type = "Upsample"
+def upsample_op7(ctx, node, name, args):
+    mode = args[0]
     shape = ctx.get_shape(node.input[0])
     target_shape = node.inputs[1].get_tensor_value()
     # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
     # wants the input to be NHWC - adjust target_shape to this.
     n, h, w, c = shape
     nh, nw = target_shape
-    scaler = [float(n), float(nh) / h, float(nw) / w, float(c)]
+    # scaler = [float(n), float(nh) / h, float(nw) / w, float(c)]
+    scaler = [float(nh) / h, float(nw) / w]
     node.set_attr("scales", scaler)
+    node.set_attr("mode", mode)
     ctx.remove_input(node, node.input[1])
-    return node
+    node.data_format = "NHWC"
+    nodes = conv_convert_inputs(ctx, node, with_kernel=False)
+    return nodes
 
 
 def multinomial_op(ctx, node, name, args):
@@ -897,7 +901,8 @@ _OPSET_6 = {
 
 _OPSET_7 = {
     "Tile": (tile_op7, []),
-    "ResizeNearestNeighbor": (upsample_op, []),
+    "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),
+    "ResizeBilinear": (upsample_op7, ["Upsample", "linear"]),
     "BiasAdd": (biasadd_op7, []),
     "BiasAddV1": (biasadd_op7, []),
     "Add": (broadcast_op7, []),
