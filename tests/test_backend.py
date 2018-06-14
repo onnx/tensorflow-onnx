@@ -823,15 +823,28 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not correctly supported")
     def test_resize_nearest_neighbor(self):
         # this should work but no runtime I tried supports it.
-        x_shape = [1, 15, 20, 3]
+        x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
         x_new_size_ = tf.constant(x_new_size)
         x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not correctly supported")
+    def test_resize_bilinear(self):
+        # this should work but no runtime I tried supports it.
+        x_shape = [1, 15, 20, 2]
+        x_new_size = [30, 40]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+        x_new_size_ = tf.constant(x_new_size)
+        x_ = tf.image.resize_bilinear(x, x_new_size_)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
