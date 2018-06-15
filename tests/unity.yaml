@@ -1,5 +1,6 @@
 3DBall:
-  # needs RandomNormal
+  # caffe2: needs RandomNormal
+  # onnxmsrtnext: int->float cast fails
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/3DBall/TFModels/3DBall.bytes
   model: 3DBall.bytes
@@ -32,17 +33,15 @@ BananaIL:
     - action:0
 
 BananaRL:
-  # needs RandomNormal
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/BananaCollectors/TFModels/BananaRL.bytes
   model: BananaRL.bytes
+  check_only_shape: true
   input_get: get_random
   inputs:
     "vector_observation:0": [1, 159]
   outputs:
     - action_probs:0
     - value_estimate:0
-
 
 Basic:
   # needs: onehot
@@ -58,7 +57,8 @@ Basic:
     - value_estimate:0
 
 Bouncer:
-  # needs RandomNormal
+  # caffe2: needs RandomNormal
+  # onnxmsrtnext: int->float cast fails
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Bouncer/TFModels/Bouncer.bytes
   model: Bouncer.bytes
@@ -70,7 +70,8 @@ Bouncer:
     - value_estimate:0
 
 crawler:
-  # needs RandomNormal
+  # caffe2: needs RandomNormal
+  # onnxmsrtnext: int->float cast fails
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Crawler/TFModels/crawler.bytes
   model: crawler.bytes
@@ -82,10 +83,9 @@ crawler:
     - value_estimate:0
 
 GridWorld_3x3:
-  # needs Multinomial
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/GridWorld/TFModels/GridWorld_3x3.bytes
   model: GridWorld_3x3.bytes
+  check_only_shape: true
   input_get: get_random
   inputs:
     "visual_observation_0:0": [1, 84, 84, 3]
@@ -95,11 +95,10 @@ GridWorld_3x3:
     - action:0
 
 GridWorld_5x5:
-  # needs Multinomial
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/GridWorld/TFModels/GridWorld_5x5.bytes
   model: GridWorld_5x5.bytes
   input_get: get_random
+  check_only_shape: true
   inputs:
     "visual_observation_0:0": [1, 84, 84, 3]
   outputs:
@@ -115,14 +114,15 @@ Hallway:
   input_get: get_random
   inputs:
     "vector_observation:0": [1, 36]
+    "recurrent_in:0": [1, 256]
+    "sequence_length:0": [256]
+    "prev_action:0": [1]
   outputs:
     - action_probs:0
     - value_estimate:0
     - action:0
 
 PushBlock:
-  # needs: Multinomial
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/PushBlock/TFModels/PushBlock.bytes
   model: PushBlock.bytes
   input_get: get_random
@@ -134,7 +134,8 @@ PushBlock:
     - action:0
 
 Reacher:
-  # needs RandomNormal
+  # caffe2: needs RandomNormal
+  # onnxmsrtnext: int->float cast fails
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Reacher/TFModels/Reacher.bytes
   model: Reacher.bytes
@@ -146,10 +147,9 @@ Reacher:
     - action:0
 
 Soccer:
-  # needs Multinomial
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Soccer/TFModels/Soccer.bytes
   model: Soccer.bytes
+  check_only_shape: true
   input_get: get_random
   inputs:
     "GoalieBrain/vector_observation:0": [1, 336]
@@ -163,8 +163,6 @@ Soccer:
     - StrikerBrain/value_estimate:0
 
 Tennis:
-  # needs RandomNormal
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Tennis/TFModels/Tennis.bytes
   model: Tennis.bytes
   input_get: get_random
@@ -174,10 +172,9 @@ Tennis:
     - value_estimate:0
 
 WallJump:
-  # needs Multinomial
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/WallJump/TFModels/WallJump.bytes
   model: WallJump.bytes
+  check_only_shape: true
   input_get: get_random
   inputs:
     "SmallWallBrain/vector_observation:0": [1, 444]

@@ -79,7 +79,7 @@ class Test(object):
     cache_dir = None
 
     def __init__(self, url, local, make_input, input_names, output_names,
-                 disabled=False, more_inputs=None, rtol=0.01, atol=0.):
+                 disabled=False, more_inputs=None, rtol=0.01, atol=0., check_only_shape=False):
         self.url = url
         self.make_input = make_input
         self.local = local
@@ -89,6 +89,7 @@ class Test(object):
         self.more_inputs = more_inputs
         self.rtol = rtol
         self.atol = atol
+        self.check_only_shape = check_only_shape
 
     def download_file(self):
         """Download file from url."""
@@ -239,7 +240,12 @@ class Test(object):
             print("\trun_onnx OK")
 
             try:
-                np.testing.assert_allclose(tf_results, onnx_results, rtol=self.rtol, atol=self.atol)
+                if self.check_only_shape:
+                    for i in range(len(tf_results)):
+                        np.testing.assert_array_equal(tf_results[i].shape, onnx_results[i].shape)
+                else:
+                    for i in range(len(tf_results)):
+                        np.testing.assert_allclose(tf_results[i], onnx_results[i], rtol=self.rtol, atol=self.atol)
                 print("\tResults: OK")
                 return True
             except Exception as ex:
@@ -276,7 +282,7 @@ def tests_from_yaml(fname):
         input_func = v.get("input_get")
         input_func = _INPUT_FUNC_MAPPING[input_func]
         kwargs = {}
-        for kw in ["rtol", "atol", "disabled", "more_inputs"]:
+        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape"]:
             if v.get(kw) is not None:
                 kwargs[kw] = v[kw]
 
