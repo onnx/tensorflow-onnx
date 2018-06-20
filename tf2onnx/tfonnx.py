@@ -38,7 +38,8 @@ def tensorflow_to_onnx(graph):
     # ignore the following attributes
     ignored_attr = ["unknown_rank", "_class", "Tidx", "Tshape", "use_cudnn_on_gpu", "Index",
                     "Tpaddings", "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "element_shape",
-                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U"]
+                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U",
+                    "maxval", "Tout"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -757,8 +758,8 @@ def upsample_op7(ctx, node, name, args):
     # wants the input to be NHWC - adjust target_shape to this.
     n, h, w, c = shape
     nh, nw = target_shape
-    # scaler = [float(n), float(nh) / h, float(nw) / w, float(c)]
-    scaler = [float(nh) / h, float(nw) / w]
+    # scaler is nchw
+    scaler = [1., 1., float(nh) / h, float(nw) / w]
     node.set_attr("scales", scaler)
     node.set_attr("mode", mode)
     ctx.remove_input(node, node.input[1])
