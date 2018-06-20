@@ -1,6 +1,6 @@
 3DBall:
   # caffe2: needs RandomNormal
-  # onnxmsrtnext: int->float cast fails
+  # onnxmsrtnext: fails on missing onnx min/max broadcast
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/3DBall/TFModels/3DBall.bytes
   model: 3DBall.bytes
@@ -58,7 +58,7 @@ Basic:
 
 Bouncer:
   # caffe2: needs RandomNormal
-  # onnxmsrtnext: int->float cast fails
+  # onnxmsrtnext: fails on missing onnx min/max broadcast
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Bouncer/TFModels/Bouncer.bytes
   model: Bouncer.bytes
@@ -71,7 +71,7 @@ Bouncer:
 
 crawler:
   # caffe2: needs RandomNormal
-  # onnxmsrtnext: int->float cast fails
+  # onnxmsrtnext: fails on missing onnx min/max broadcast
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Crawler/TFModels/crawler.bytes
   model: crawler.bytes
@@ -135,7 +135,7 @@ PushBlock:
 
 Reacher:
   # caffe2: needs RandomNormal
-  # onnxmsrtnext: int->float cast fails
+  # onnxmsrtnext: fails on missing onnx min/max broadcast
   disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Reacher/TFModels/Reacher.bytes
   model: Reacher.bytes
