@@ -57,6 +57,7 @@ def tensorflow_to_onnx(graph):
                 shape = out.get_shape().as_list()
             except Exception as ex:
                 shape = []
+            dtypes[out.name] = utils.map_tf_dtype(out.dtype)
             output_shapes[out.name] = shape
 
     # minimal conversion of attributes
@@ -805,6 +806,32 @@ def spacetodepth_op(ctx, node, name, args):
     return nodes
 
 
+def minmax_op(ctx, node, name, args):
+    # tensorflow minimum/maximum support broadcast. Onnx <= opset 7 does not.
+    # inject a add(0) as 'broadcast' operator if needed.
+    shapeo = ctx.get_shape(node.output[0])
+    needs_broadcast_op = []
+    for i, name in enumerate(node.input):
+        if ctx.get_shape(name) != shapeo:
+            needs_broadcast_op.append(i)
+    if needs_broadcast_op:
+        new_nodes = []
+        for i in needs_broadcast_op:
+            input_node = node.inputs[i]
+            dtype = ctx.dtypes[node.input[i]]
+            zero_name = utils.make_name(input_node.name)
+            zero_node = ctx.make_const(zero_name, "Const", np.zeros(shapeo, dtype=utils.ONNX_TO_NUMPY_DTYPE[dtype]))
+            op_name = utils.make_name(input_node.name)
+            output_name = op_name + ":0"
+            add_node = Node(helper.make_node("Add", [input_node.output[0], zero_name],
+                                             [output_name], name=op_name), ctx)
+            node.input[i] = output_name
+            new_nodes.append(add_node)
+        new_nodes.append(node)
+        return new_nodes
+    return node
+
+
 # pylint: enable=W0613,C0111,W0612
 
 # map tensorflow ops to onnx ops. The format below is
@@ -847,12 +874,12 @@ _OPSET_4 = {
     "LogicalOr": (broadcast_op, ["Or"]),
     "Max": (reduce_op, ["ReduceMax"]),
     "MatMul": (direct_op, ["MatMul"]),
-    "Maximum": (direct_op, ["Max"]),
+    "Maximum": (minmax_op, ["Max"]),
     "MaxPool": (pool_op, ["MaxPool"]),
     "MaxPoolV2": (pool_op, ["MaxPool"]),
     "Mean": (reduce_op, ["ReduceMean"]),
     "Min": (reduce_op, ["ReduceMin"]),
-    "Minimum": (direct_op, ["Min"]),
+    "Minimum": (minmax_op, ["Min"]),
     "Mul": (broadcast_op, []),
     "Neg": (direct_op, []),
     "NoOp": (no_op, []),
