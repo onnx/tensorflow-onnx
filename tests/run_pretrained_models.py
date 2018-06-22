@@ -4,6 +4,7 @@
 import argparse
 import os
 import tarfile
+import time
 import tempfile
 import urllib
 import urllib.request
@@ -18,6 +19,7 @@ from tensorflow.core.framework import graph_pb2
 from tf2onnx.tfonnx import process_tf_graph
 
 TMPPATH = tempfile.mkdtemp()
+PERFITER = 1000
 
 
 def get_beach(inputs):
@@ -90,6 +92,9 @@ class Test(object):
         self.rtol = rtol
         self.atol = atol
         self.check_only_shape = check_only_shape
+        self.perf = None
+        self.tf_runtime = 0
+        self.onnx_runtime = 0
 
     def download_file(self):
         """Download file from url."""
@@ -131,6 +136,11 @@ class Test(object):
             k = sess.graph.get_tensor_by_name(k)
             feed_dict[k] = v
         result = sess.run(self.output_names, feed_dict=feed_dict)
+        if self.perf:
+            start = time.time()
+            for _ in range(PERFITER):
+                _ = sess.run(self.output_names, feed_dict=feed_dict)
+            self.tf_runtime = time.time() - start
         return result
 
     @staticmethod
@@ -144,6 +154,11 @@ class Test(object):
         model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
         prepared_backend = caffe2.python.onnx.backend.prepare(model_proto)
         results = prepared_backend.run(inputs)
+        if self.perf:
+            start = time.time()
+            for _ in range(PERFITER):
+                _ = prepared_backend.run(inputs)
+            self.onnx_runtime = time.time() - start
         return results
 
     def run_onnxmsrt(self, name, onnx_graph, inputs):
@@ -156,6 +171,11 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         m = lotus.ModelExecutor(model_path)
         results = m.run(self.output_names, inputs)
+        if self.perf:
+            start = time.time()
+            for _ in range(PERFITER):
+                _ = m.run(self.output_names, inputs)
+            self.onnx_runtime = time.time() - start
         return results
 
     def run_onnxmsrtnext(self, name, onnx_graph, inputs):
@@ -167,6 +187,11 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         m = lotus.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
+        if self.perf:
+            start = time.time()
+            for _ in range(PERFITER):
+                _ = m.run(self.output_names, inputs)
+            self.onnx_runtime = time.time() - start
         return results
 
     def run_onnxcntk(self, name, onnx_graph, inputs):
@@ -182,6 +207,11 @@ class Test(object):
         for arg in z.arguments:
             input_args[arg] = inputs[arg.name]
         results = z.eval(input_args)
+        if self.perf:
+            start = time.time()
+            for _ in range(PERFITER):
+                _ = z.eval(input_args)
+            self.onnx_runtime = time.time() - start
         return results
 
     def create_onnx_file(self, name, onnx_graph, inputs, outdir):
@@ -192,9 +222,10 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None):
+    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None):
         """Run complete test against backend."""
         print(name)
+        self.perf = perf
         if self.url:
             _, dir_name = self.download_file()
             model_path = os.path.join(dir_name, self.local)
@@ -270,6 +301,7 @@ def get_args():
     parser.add_argument("--debug", help="debug vlog", action="store_true")
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
+    parser.add_argument("--perf", help="capture performance numbers")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
     return args
@@ -312,7 +344,8 @@ def main():
             continue
         count += 1
         try:
-            ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file, opset=args.opset)
+            ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file,
+                             opset=args.opset, perf=args.perf)
         except Exception as ex:
             ret = None
             print(ex)
@@ -321,6 +354,13 @@ def main():
 
     print("=== RESULT: {} failed of {}, backend={}".format(failed, count, args.backend))
 
+    if args.perf:
+        with open(args.perf, "w") as f:
+            f.write("test,tensorflow,onnx\n")
+            for test in test_keys:
+                t = tests[test]
+                if t.perf:
+                    f.write("{},{},{}\n".format(test, t.tf_runtime, t.onnx_runtime))
 
 if __name__ == "__main__":
     main()
