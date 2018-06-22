@@ -173,6 +173,17 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
     def test_multinomial(self):
+        x_val = np.array([[10., 10.]], dtype=np.float32)
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        op = tf.multinomial(tf.log(x), 5, output_dtype=tf.int64)
+        output = tf.identity(op, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        # since returned indexes are random we can only check type and shape
+        self.assertEqual(expected.dtype, actual.dtype)
+        self.assertEqual(expected.shape, actual.shape)
+
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
+    def test_multinomial1(self):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
@@ -181,7 +192,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         # since returned indexes are random we can only check type and shape
         self.assertEqual(expected.dtype, actual.dtype)
-        self.assertAllClose(expected.shape, actual.shape)
+        self.assertEqual(expected.shape, actual.shape)
 
     def test_maxppol(self):
         x_val = make_xval((1, 4, 4, 1))
@@ -462,11 +473,23 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def test_min(self):
         x_val1 = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32).reshape((2, 2))
         x_val2 = np.array([4.0, 4.0, 4.0, 4.0], dtype=np.float32).reshape((2, 2))
-        x1 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
-        x2 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT1)
+        x1 = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.placeholder(tf.float32, x_val2.shape, name=_TFINPUT1)
         mi = tf.minimum(x1, x2)
         output = tf.identity(mi, name=_TFOUTPUT)
         actual, expected = self._run(output, {x1: x_val1, x2: x_val2}, {_INPUT: x_val1, _INPUT1: x_val2, })
+        self.assertAllClose(expected, actual)
+
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "issue with broadcastnig scalar")
+    def test_min_broadcast(self):
+        # tests if the broadcast for min/max is working
+        x_val1 = np.array([2.0, 16.0, 5.0, 1.6], dtype=np.float32).reshape((2, 2))
+        x_val2 = np.array([4.0], dtype=np.float32)
+        x1 = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.constant(x_val2, dtype=tf.float32, name='x2')
+        mi = tf.minimum(x1, x2)
+        output = tf.identity(mi, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x1: x_val1}, {_INPUT: x_val1})
         self.assertAllClose(expected, actual)
 
     def test_logicaland(self):
@@ -712,9 +735,19 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
     def test_randomuniform(self):
-        # not supported by onnxmsrt or caffe2
         shape = tf.constant([2, 3], name="shape")
         x_ = tf.random_uniform(shape, name="rand", dtype=tf.float32)
+        x_ = tf.identity(x_, name="output1")
+        x_ = tf.identity(x_, name="output2")
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {}, {})
+        # since results are random, compare the shapes only
+        self.assertAllClose(expected.shape, actual.shape)
+
+    @unittest.skip
+    def test_randomuniform_int(self):
+        shape = tf.constant([2, 3], name="shape")
+        x_ = tf.random_uniform(shape, name="rand", dtype=tf.int32, maxval=10)
         x_ = tf.identity(x_, name="output1")
         x_ = tf.identity(x_, name="output2")
         output = tf.identity(x_, name=_TFOUTPUT)
