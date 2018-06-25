@@ -887,6 +887,7 @@ _OPSET_4 = {
     "Pad": (pad_op, []),
     "Placeholder": (placeholder_op, []),
     "PlaceholderV2": (placeholder_op, []),
+    "PlaceholderWithDefault": (placeholder_op, []),
     "Pow": (pow_op, []),
     "Prod": (reduce_op, ["ReduceProd"]),
     "RandomNormal": (direct_op, []),

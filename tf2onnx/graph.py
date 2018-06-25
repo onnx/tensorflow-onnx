@@ -151,6 +151,8 @@ class Node(object):
             
     def get_tensor(self):
         if not self.is_const():
+            if self.type == "Identity":
+                return self.inputs[0].get_tensor()
             raise ValueError("get tensor: {} must be Const".format(self.name))
         t = self.get_attr("value")
         if t:

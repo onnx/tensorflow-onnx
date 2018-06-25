@@ -17,6 +17,7 @@ import tf2onnx
 import yaml
 from tensorflow.core.framework import graph_pb2
 from tf2onnx.tfonnx import process_tf_graph
+from tensorflow.python.framework.graph_util import convert_variables_to_constants
 
 TMPPATH = tempfile.mkdtemp()
 PERFITER = 1000
@@ -77,11 +78,29 @@ def node_name(name):
     return name
 
 
+def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=True):
+    """Freezes the state of a session into a pruned computation graph."""
+    output_names = [i.replace(":0", "") for i in output_names]
+    graph = sess.graph
+    with graph.as_default():
+        freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
+        output_names = output_names or []
+        output_names += [v.op.name for v in tf.global_variables()]
+        input_graph_def = graph.as_graph_def()
+        if clear_devices:
+            for node in input_graph_def.node:
+                node.device = ""
+        frozen_graph = convert_variables_to_constants(sess, input_graph_def,
+                                                      output_names, freeze_var_names)
+        return frozen_graph
+
+
 class Test(object):
     cache_dir = None
 
     def __init__(self, url, local, make_input, input_names, output_names,
-                 disabled=False, more_inputs=None, rtol=0.01, atol=0., check_only_shape=False):
+                 disabled=False, more_inputs=None, rtol=0.01, atol=0.,
+                 check_only_shape=False, model_type="frozen"):
         self.url = url
         self.make_input = make_input
         self.local = local
@@ -95,6 +114,7 @@ class Test(object):
         self.perf = None
         self.tf_runtime = 0
         self.onnx_runtime = 0
+        self.model_type = model_type
 
     def download_file(self):
         """Download file from url."""
@@ -231,7 +251,17 @@ class Test(object):
             model_path = os.path.join(dir_name, self.local)
         else:
             model_path = self.local
+            dir_name = os.path.dirname(self.local)
         print("\tdownloaded", model_path)
+
+        # if the input model is a checkpoint, convert it to a frozen model
+        if self.model_type in ["checkpoint"]:
+            saver = tf.train.import_meta_graph(model_path)
+            with tf.Session() as sess:
+                saver.restore(sess, model_path[:-5])
+                frozen_graph = freeze_session(sess, output_names=self.output_names)
+                tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
+            model_path = os.path.join(dir_name, "frozen.pb")
 
         inputs = self.make_input(self.input_names)
         if self.more_inputs:
@@ -314,7 +344,7 @@ def tests_from_yaml(fname):
         input_func = v.get("input_get")
         input_func = _INPUT_FUNC_MAPPING[input_func]
         kwargs = {}
-        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape"]:
+        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape", "model_type"]:
             if v.get(kw) is not None:
                 kwargs[kw] = v[kw]
 
