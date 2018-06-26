@@ -834,18 +834,30 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    def test_stack_axis0(self):
-        x_val = [np.random.randn(3, 4).astype("float32") for _ in range(10)]
-        x = [tf.constant(x_val[i], dtype=tf.float32) for i in range(10)]
-        x_ = tf.stack(x, axis=0)
-        output = tf.identity(x_, name=_TFOUTPUT)
-        actual, expected = self._run(output, {}, {})
-        self.assertAllClose(expected, actual)
+    def test_stack_axis(self):
+        for axis in [0, 1]:
+            tf.reset_default_graph()
+            x_val = [np.random.randn(3, 4).astype("float32") for _ in range(10)]
+            x = [tf.constant(x_val[i], dtype=tf.float32) for i in range(10)]
+            x_ = tf.stack(x, axis=axis)
+            output = tf.identity(x_, name=_TFOUTPUT)
+            actual, expected = self._run(output, {}, {})
+            self.assertAllClose(expected, actual)
 
-    def test_stack_axis1(self):
-        x_val = [np.random.randn(3, 4).astype("float32") for _ in range(10)]
-        x = [tf.constant(x_val[i], dtype=tf.float32) for i in range(10)]
-        x_ = tf.stack(x, axis=1)
+    def test_unstack_axis(self):
+        for axis in [0, 1]:
+            tf.reset_default_graph()
+            x_val = np.random.randn(10, 3, 4).astype("float32")
+            x = tf.constant(x_val, dtype=tf.float32)
+            x_ = tf.unstack(x, axis=axis)
+            output = tf.identity(x_, name=_TFOUTPUT)
+            actual, expected = self._run(output, {}, {})
+            self.assertAllClose(expected, actual)
+
+    def test_unstack_axis1(self):
+        x_val = np.random.randn(10, 3, 4).astype("float32")
+        x = tf.constant(x_val, dtype=tf.float32)
+        x_ = tf.unstack(x, axis=1)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {}, {})
         self.assertAllClose(expected, actual)

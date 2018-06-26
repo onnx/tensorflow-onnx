@@ -853,6 +853,23 @@ def pack_op(ctx, node, name, args):
     ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], output_name)
     return [concat] + nodes
 
+def unpack_op(ctx, node, name, args):
+    # hack to make up for the missing onnx unpack op
+    axis = node.get_attr("axis").i
+    # split the tensor into n outputs
+    node.type = "Split"
+    nodes = [node]
+    # for each output we need to squeeze axis
+    for i, n in enumerate(node.output):
+        op_name = utils.make_name(node.name)
+        output_name = op_name + ":" + str(i)
+        new_node = Node(helper.make_node("Squeeze", [n], [output_name], name=op_name, axes=[axis]), ctx)
+        nodes.append(new_node)
+        ctx.copy_shape(n, output_name)
+        ctx.replace_all_inputs(ctx.get_nodes(), n, output_name)
+    return nodes
+
+
 # pylint: enable=W0613,C0111,W0612
 
 # map tensorflow ops to onnx ops. The format below is
@@ -939,6 +956,7 @@ _OPSET_4 = {
     "TopKV2": (topk_op, []),
     "SpaceToDepth": (spacetodepth_op, []),
     "Pack": (pack_op, []),
+    "Unpack": (unpack_op, []),
 }
 
 _OPSET_5 = {
