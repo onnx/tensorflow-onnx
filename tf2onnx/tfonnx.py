@@ -832,6 +832,27 @@ def minmax_op(ctx, node, name, args):
     return node
 
 
+def pack_op(ctx, node, name, args):
+    # hack to make up for the missing onnx pack op
+    axis = node.get_attr("axis").i
+    nodes = []
+    inputs = []
+    # insert Unsqueeze on each input
+    for i, n in enumerate(node.inputs):
+        op_name = utils.make_name(node.name)
+        output_name = op_name + ":0"
+        new_node = Node(helper.make_node("Unsqueeze", [node.input[i]], [output_name], name=op_name, axes=[axis]), ctx)
+        node.input[i] = output_name
+        nodes.append(new_node)
+        inputs.append(output_name)
+    # concat all unqueezes
+    op_name = utils.make_name(node.name)
+    output_name = op_name + ":0"
+    concat = Node(helper.make_node("Concat", inputs, [output_name], name=op_name, axis=axis), ctx)
+    ctx.copy_shape(node.output[0], concat.output[0])
+    ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], output_name)
+    return [concat] + nodes
+
 # pylint: enable=W0613,C0111,W0612
 
 # map tensorflow ops to onnx ops. The format below is
@@ -917,6 +938,7 @@ _OPSET_4 = {
     "Transpose": (transpose_op, []),
     "TopKV2": (topk_op, []),
     "SpaceToDepth": (spacetodepth_op, []),
+    "Pack": (pack_op, []),
 }
 
 _OPSET_5 = {
