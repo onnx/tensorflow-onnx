@@ -834,6 +834,22 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
+    def test_stack_axis0(self):
+        x_val = [np.random.randn(3, 4).astype("float32") for _ in range(10)]
+        x = [tf.constant(x_val[i], dtype=tf.float32) for i in range(10)]
+        x_ = tf.stack(x, axis=0)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {}, {})
+        self.assertAllClose(expected, actual)
+
+    def test_stack_axis1(self):
+        x_val = [np.random.randn(3, 4).astype("float32") for _ in range(10)]
+        x = [tf.constant(x_val[i], dtype=tf.float32) for i in range(10)]
+        x_ = tf.stack(x, axis=1)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {}, {})
+        self.assertAllClose(expected, actual)
+
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "Space2Depth not implemented, works on onnxmsrtnext")
     def test_space_to_depth(self):
         x_val = make_xval([1, 2, 2, 1])
@@ -873,7 +889,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not correctly supported")
     def test_resize_nearest_neighbor(self):
-        # this should work but no runtime I tried supports it.
         x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
@@ -886,7 +901,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not correctly supported")
     def test_resize_bilinear(self):
-        # this should work but no runtime I tried supports it.
         x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
