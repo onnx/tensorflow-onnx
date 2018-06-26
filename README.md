@@ -13,16 +13,18 @@ Tf2onnx is in its early development. Mileage will vary since TensorFlow supports
 Basic net and conv nets should work. A list of models that pass tests can be found [here](tests/run_pretrained_models.yaml)
 
 # Installation
-Install dependencies:
+If you don't have tensorflow installed already, install the desired tensorflow build, for example:
 ```
-pip install onnx==1.2
 pip install tensorflow
+or
+pip install tensorflow-gpu
 ```
-If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 from: ```
-https://github.com/pytorch/pytorch```
-We tested with tensorflow 1.5,1.6,1.7,1.8 and anaconda 3.5,3.6.
 
-Once dependencies are installed, from the tf2onnx root folder call:
+If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 following the instructions here: ```
+https://caffe2.ai/```
+We tested with tensorflow 1.5,1.6,1.7,1.8 and anaconda 3.5,3.6. 
+
+Once dependencies are installed, from the tensorflow-onnx folder call:
 ```
 python setup.py install
 ```
@@ -31,10 +33,13 @@ or
 python setup.py develop
 ```
 
-To create a wheel for distribution:
+To create a distribution:
 ```
-python setup.py bdist_wheel
+python setup.py sdist
 ```
+
+tensorflow-onnx requires onnx-1.2.2 or better and will install/upgrade onnx if needed.
+
 # Usage
 ```
 python -m tf2onnx.convert
