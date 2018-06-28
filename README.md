@@ -12,50 +12,79 @@ Tf2onnx is in its early development. Mileage will vary since TensorFlow supports
 # Status
 Basic net and conv nets should work. A list of models that pass tests can be found [here](tests/run_pretrained_models.yaml)
 
-# Installation
+# Prerequisites
+
+## Install TensorFlow
 If you don't have tensorflow installed already, install the desired tensorflow build, for example:
 ```
 pip install tensorflow
 or
 pip install tensorflow-gpu
 ```
-
+## Install Caffe2 [**Optional**]
 If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 following the instructions here: ```
 https://caffe2.ai/```
-We tested with tensorflow 1.5,1.6,1.7,1.8 and anaconda 3.5,3.6. 
+
+## Python Version
+We tested with tensorflow 1.5,1.6,1.7,1.8 and anaconda **3.5,3.6**.
+
+# Installation
 
 Once dependencies are installed, from the tensorflow-onnx folder call:
+
 ```
 python setup.py install
-```
 or 
-```
 python setup.py develop
 ```
+tensorflow-onnx requires onnx-1.2.2 or better and will install/upgrade onnx if needed.
 
 To create a distribution:
 ```
 python setup.py sdist
 ```
 
-tensorflow-onnx requires onnx-1.2.2 or better and will install/upgrade onnx if needed.
-
 # Usage
-```
-python -m tf2onnx.convert
-usage: convert.py [-h] --input INPUT [--output OUTPUT] [--target TARGET] --inputs INPUTS --outputs OUTPUTS [--continue_on_error] [--verbose] [--opset OPSET]
-```
-For example:
-```
-python -m tf2onnx.convert --input tests/models/fc-layers/frozen.pb --inputs X:0 --outputs output:0 --output tests/models/fc-layers/model.onnx --pretty --verbose
-```
 
 To convert a TensorFlow model, tf2onnx expects a ```frozen TensorFlow graph``` and the user needs to specify inputs and outputs for the graph by passing the input and output
 names with ```--inputs INPUTS``` and ```--outputs OUTPUTS```. 
+
+Usage command:
+```
+python -m tf2onnx.convert --input SOURCE_FROZEN_GRAPH_PB\
+    --inputs SOURCE_GRAPH_INPUTS\
+    --outputs SOURCE_GRAPH_OUTPUS\
+    [--output TARGET_ONNX_GRAPH]\
+    [--target TARGET]\
+    [--continue_on_error]\
+    [--verbose]\
+    [--opset OPSET]
+```
+
+Parameters:
+- input: frozen TensorFlow graph, which can be got with [freeze graph tool](#freeze_graph).
+- output: the target onnx file path.
+- inputs/outputs: Tensorflow graph's input/output names, which can be got with [summarize graph tool](#summarize_graph).
+- target: There are different onnx versions and workarounds for runtimes that can be set with ```--target TARGET```. The default is onnx-1.1 and caffe2 which generates a graph
+that can be executed on a onnx-1.0/onnx-1.1 runtime, like caffe2 and winml.
+
+Usage example (run following commands in tensorflow-onnx root directory):
+```
+python -m tf2onnx.convert\
+    --input tests/models/fc-layers/frozen.pb\
+    --inputs X:0\
+    --outputs output:0\
+    --output tests/models/fc-layers/model.onnx\
+    --verbose
+```
+
+## <a name="summarize_graph"></a>Tool to Get Graph Inputs & Outputs
+
 To find the inputs and outputs for the TensorFlow graph the model developer will know or you can consult TensorFlow's [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) tool, for example:
 ```
 summarize_graph --in_graph=tests/models/fc-layers/frozen.pb
 ```
+## <a name="freeze_graph"></a>Tool to Freeze Graph
 
 The TensorFlow tool to freeze the graph is [here](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/tools/freeze_graph.py).
 
@@ -70,8 +99,6 @@ python -m tensorflow.python.tools.freeze_graph \
     --output_graph=tests/models/fc-layers/frozen.pb
 ```
 
-There are different onnx versions and workarounds for runtimes that can be set with ```--target TARGET```. The default is onnx-1.1 and caffe2 which generates a graph
-that can be executed on a onnx-1.0/onnx-1.1 runtime, like caffe2 and winml.
 
 # Testing
 There are 2 types of tests.
