@@ -12,42 +12,57 @@ Tf2onnx is in its early development. Mileage will vary since TensorFlow supports
 # Status
 Basic net and conv nets should work. A list of models that pass tests can be found [here](tests/run_pretrained_models.yaml)
 
-# Installation
+# Prerequisites
+
+## Install TensorFlow
 If you don't have tensorflow installed already, install the desired tensorflow build, for example:
 ```
 pip install tensorflow
 or
 pip install tensorflow-gpu
 ```
-
+## Install Caffe2 [**Optional**]
 If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 following the instructions here: ```
 https://caffe2.ai/```
-We tested with tensorflow 1.5,1.6,1.7,1.8 and anaconda 3.5,3.6. 
+
+## Python Version
+We tested with tensorflow 1.5,1.6,1.7,1.8 and anaconda **3.5,3.6**.
+
+# Installation
 
 Once dependencies are installed, from the tensorflow-onnx folder call:
+
 ```
 python setup.py install
-```
 or 
-```
 python setup.py develop
 ```
+tensorflow-onnx requires onnx-1.2.2 or better and will install/upgrade onnx if needed.
 
 To create a distribution:
 ```
 python setup.py sdist
 ```
 
-tensorflow-onnx requires onnx-1.2.2 or better and will install/upgrade onnx if needed.
-
 # Usage
 ```
-python -m tf2onnx.convert
-usage: convert.py [-h] --input INPUT [--output OUTPUT] [--target TARGET] --inputs INPUTS --outputs OUTPUTS [--continue_on_error] [--verbose] [--opset OPSET]
+python -m tf2onnx.convert --input SOURCE_FROZEN_GRAPH_PB\
+    --inputs SOURCE_GRAPH_INPUTS\
+    --outputs SOURCE_GRAPH_OUTPUS\
+    [--output TARGET_ONNX_GRAPH\]
+    [--target TARGET]\
+    [--continue_on_error]\
+    [--verbose]\
+    [--opset OPSET]    
 ```
-For example:
+For example, run following commands in tensorflow-onnx root directory:
 ```
-python -m tf2onnx.convert --input tests/models/fc-layers/frozen.pb --inputs X:0 --outputs output:0 --output tests/models/fc-layers/model.onnx --pretty --verbose
+python -m tf2onnx.convert\
+    --input tests/models/fc-layers/frozen.pb\
+    --inputs X:0\
+    --outputs output:0\
+    --output tests/models/fc-layers/model.onnx\
+    --verbose
 ```
 
 To convert a TensorFlow model, tf2onnx expects a ```frozen TensorFlow graph``` and the user needs to specify inputs and outputs for the graph by passing the input and output
