@@ -129,6 +129,15 @@ class Node(object):
                 shape[0] = utils.ONNX_UNKNOWN_DIMENSION
         return shape
 
+    def get_tensor_type(self):
+        """Get the onnx data type of a tensor."""
+        t = self.get_attr("value")
+        if t:
+            t = helper.get_attribute_value(t)
+            if t:
+                return utils.ONNX_TO_NUMPY_DTYPE[t.data_type]
+        return onnx_pb.TensorProto.FLOAT
+
     def get_tensor_value(self):
         """Get value for onnx tensor."""
         if not self.is_const():
@@ -478,7 +487,8 @@ class Graph(object):
         Returns:
             node that was inserted
         """
-        assert isinstance(input_name, str) and isinstance(op_type, str)
+        if name is None:
+            name = utils.make_name(node.name)
         new_output = name + ":0"
         new_node = Node(helper.make_node(op_type, [input_name], [new_output], name=name, **kwargs), self)
         for i, n in enumerate(node.input):
@@ -503,6 +513,14 @@ class Graph(object):
         new_node = Node(helper.make_node(op_type, [output_name], [new_output], name=name, **kwargs), self)
         self.replace_all_inputs(self.get_nodes(), output_name, new_output)
         return new_node
+
+    def find_output_consumers(self, output_name):
+        """Find all nodes consuming a given output."""
+        nodes = []
+        for node in self.get_nodes():
+            if output_name in node.input:
+                nodes.append(node)
+        return nodes
 
     @staticmethod
     def replace_all_inputs(ops, old_input, new_input):

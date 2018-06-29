@@ -271,8 +271,18 @@ class Test(object):
         graph_def = graph_pb2.GraphDef()
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
+
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
+
+            # fix inputs if needed
+            for k in inputs.keys():
+                t = sess.graph.get_tensor_by_name(k)
+                dtype = tf.as_dtype(t.dtype).name
+                if type != "float32":
+                    v = inputs[k]
+                    inputs[k] = v.astype(dtype)
+
             tf_results = self.run_tensorflow(sess, inputs)
             onnx_graph = None
             print("\ttensorflow", "OK")
