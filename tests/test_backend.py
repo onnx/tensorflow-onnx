@@ -805,7 +805,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_val = np.array([0, 1, 2], dtype=np.int32)
         depth = 3
         x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
-        x_ = tf.one_hot(x, depth, on_value=5.0, axis=1, off_value=1.0, dtype=tf.float32)
+        x_ = tf.one_hot(x, depth, on_value=5.0, axis=0, off_value=1.0, dtype=tf.float32)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
@@ -817,6 +817,16 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         depth = 3
         x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
         x_ = tf.one_hot(x, depth, on_value=5.0, axis=-1, off_value=0.0, dtype=tf.float32)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    def test_onehot2(self):
+        # no such op in onnx
+        x_val = np.array([0, 1, 2, 1, 2, 0, 1, 2, 1, 2], dtype=np.int32)
+        depth = 20
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        x_ = tf.one_hot(x, depth, on_value=5.0, axis=-1, off_value=1.0, dtype=tf.float32)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)

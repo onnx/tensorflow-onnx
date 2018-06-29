@@ -892,12 +892,14 @@ def onehot_op(ctx, node, name, args):
     # until there is no onehot op in onnx, a workaround using gather from eye
     data = node.input[0]
     shape = ctx.get_shape(data)
+    shapeo = ctx.get_shape(node.output[0])
     if len(shape) != 1:
         # TODO: this works for rank=1 but tensorflow supports more than this.
         # Same principle should work but we need to implemtn our own eye.
         raise ValueError("onehot op: only rank1 is supported")
     axis = node.get_attr("axis")
     node.set_attr("axis", axis.i)
+    node.set_attr("axis", 0)
     depth = node.inputs[1].get_tensor_value()[0]
     on = node.inputs[2].get_tensor_value()[0]
     off = node.inputs[3].get_tensor_value()[0]
