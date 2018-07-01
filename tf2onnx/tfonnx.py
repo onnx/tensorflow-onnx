@@ -29,6 +29,7 @@ TARGET_CAFFE2 = "caffe2"
 POSSIBLE_TARGETS = [TARGET_RS4, TARGET_CAFFE2]
 DEFAULT_TARGET = [TARGET_RS4, TARGET_CAFFE2]
 
+
 def tensorflow_to_onnx(graph):
     """
     Load tensorflow graph into an onnx graph with minimal rewrites so
@@ -119,10 +120,9 @@ def _convert_shapenode_to_int64(ctx, node, input_number):
         shape_node.set_attr("value", onnx_tensor)
         return [node]
     else:
-        op_name = utils.make_name(node.name)
-        cast_op = ctx.insert_new_node_on_input(node, "Cast", name, name=op_name)
+        cast_op = ctx.insert_new_node_on_input(node, "Cast", name)
         cast_op.set_attr("to", onnx_pb.TensorProto.INT64)
-        ctx.copy_shape(name, op_name + ":0")
+        ctx.copy_shape(name, cast_op.output[0])
         return [cast_op, node]
 
 # pylint: disable=W0613,C0111,W0612
@@ -274,8 +274,29 @@ def reshape_op(ctx, node, name, args):
 
 
 def reshape_op5(ctx, node, name, args):
+    need_casting = node.dtype in [onnx_pb.TensorProto.INT32,
+                                  onnx_pb.TensorProto.INT16,
+                                  onnx_pb.TensorProto.INT64]
     # onnx wants reshape.input[1] to have the value be int64 which is not the case for tensorflow.
-    return _convert_shapenode_to_int64(ctx, node, 1)
+    nodes = _convert_shapenode_to_int64(ctx, node, 1)
+    if not need_casting:
+        # onnx reshape can handle the type - done
+        return nodes
+
+    # onnx < opset 8 does not know reshape for other types than float*, wrap the reshape in casts
+    input_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+    input_cast.set_attr("to", onnx_pb.TensorProto.FLOAT)
+    ctx.copy_shape(name, input_cast.output[0])
+
+    # if the next node is already a cast we don't need to insert another one
+    next_nodes = ctx.find_output_consumers(node.output[0])
+    if len(next_nodes) != 1 or next_nodes[0].type != "Cast":
+        op_name = utils.make_name(node.name)
+        output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
+        output_cast.set_attr("to", node.dtype)
+        ctx.copy_shape(name, output_cast.output[0])
+        nodes.append(output_cast)
+    return [input_cast] + nodes
 
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -317,8 +338,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
         else:
             # if input comes from a op, insert transpose op
             input_name = node.input[0]
-            op_name = utils.make_name(node.name)
-            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name, name=op_name)
+            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
             transpose.set_attr("perm", NHWC_TO_NCHW)
             transpose.inserted_nchw = True
             ctx.set_shape(transpose.output[0], calc_shape(ctx.get_shape(input_name), NHWC_TO_NCHW))
@@ -336,9 +356,8 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
                 parent.data_format = "NCHW"
         else:
             # kernel comes from op, insert transpose op
-            op_name = utils.make_name(node.name)
             input_name = node.input[1]
-            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name, name=op_name)
+            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
             transpose.set_attr("perm", HWCN_TO_NCHW)
             transpose.inserted_nchw = True
             ctx.copy_shape(input_name, transpose.output[0])
@@ -349,18 +368,16 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
         if new_kernel_shape:
             if ctx.opset < 5:
                 # old reshape takes new shape as attribute
-                op_name = utils.make_name(node.name)
                 input_name = node.input[1]
-                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name, name=op_name)
+                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
                 reshape.set_attr("shape", new_kernel_shape)
                 ctx.set_shape(reshape.output[0], new_kernel_shape)
             else:
                 # new reshape takes new shape as input[1]
-                op_name = utils.make_name(node.name)
                 shape_name = utils.make_name(node.name)
                 shape_node = ctx.make_const(shape_name, "Const", np.array(new_kernel_shape, dtype=np.int64))
                 input_name = node.input[1]
-                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name, name=op_name)
+                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
                 reshape.input.append(shape_name)
                 ctx.set_shape(reshape.output[0], new_kernel_shape)
             nodes.append(reshape)
@@ -820,7 +837,7 @@ def minmax_op(ctx, node, name, args):
             input_node = node.inputs[i]
             dtype = ctx.dtypes[node.input[i]]
             zero_name = utils.make_name(input_node.name)
-            zero_node = ctx.make_const(zero_name, "Const", np.zeros(shapeo, dtype=utils.ONNX_TO_NUMPY_DTYPE[dtype]))
+            ctx.make_const(zero_name, "Const", np.zeros(shapeo, dtype=utils.ONNX_TO_NUMPY_DTYPE[dtype]))
             op_name = utils.make_name(input_node.name)
             output_name = op_name + ":0"
             add_node = Node(helper.make_node("Add", [input_node.output[0], zero_name],
@@ -853,6 +870,7 @@ def pack_op(ctx, node, name, args):
     ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], output_name)
     return [concat] + nodes
 
+
 def unpack_op(ctx, node, name, args):
     # hack to make up for the missing onnx unpack op
     axis = node.get_attr("axis").i
@@ -868,6 +886,44 @@ def unpack_op(ctx, node, name, args):
         ctx.copy_shape(n, output_name)
         ctx.replace_all_inputs(ctx.get_nodes(), n, output_name)
     return nodes
+
+
+def onehot_op(ctx, node, name, args):
+    # until there is no onehot op in onnx, a workaround using gather from eye
+    indices_name = node.input[0]
+    indices_shape = ctx.get_shape(indices_name)
+    if len(indices_shape) != 1:
+        # TODO: this works for rank=1 but tensorflow supports more than this.
+        # Same principle should work but we need to implemtn our own eye.
+        raise ValueError("onehot op: only rank1 is supported")
+    axis = node.get_attr("axis")
+    # axis becomes axis for gather
+    node.set_attr("axis", 0)
+    depth = node.inputs[1].get_tensor_value()[0]
+    on = node.inputs[2].get_tensor_value()[0]
+    off = node.inputs[3].get_tensor_value()[0]
+    dtype = node.inputs[2].get_tensor_type()
+    eye = np.eye(depth, dtype=dtype)
+    if on != 0:
+        eye[eye == 1] = on
+        eye[eye == 0] = off
+    else:
+        eye[eye == 0] = off
+        eye[eye == 1] = on
+    const_name = utils.make_name(node.name)
+    ctx.make_const(const_name, "Const", eye)
+    # setup gather inputs
+    del node.input[:]
+    node.input.append(const_name)
+    node.input.append(indices_name)
+    node.type = "Gather"
+    if axis.i == 0:
+        # TODO: revisit for rank > 1
+        name = utils.make_name(node.name)
+        transpose_op = ctx.insert_new_node_on_output("Transpose", node.output[0], name)
+        ctx.copy_shape(node.output[0], transpose_op.output[0])
+        return [node, transpose_op]
+    return node
 
 
 # pylint: enable=W0613,C0111,W0612
@@ -962,6 +1018,7 @@ _OPSET_4 = {
 _OPSET_5 = {
     "Reshape": (reshape_op5, []),
     "ExpandDims": (expanddims_op7, []),
+    "OneHot": (onehot_op, []),
 }
 
 _OPSET_6 = {
@@ -1183,7 +1240,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
 def tf_optimize(sess, inputs, outputs, graph_def):
     """Optimize tensorflow graph for inference."""
     transforms = [
-        #"fold_constants(ignore_errors=true)",
+        "fold_constants(ignore_errors=true)",
         "fold_batch_norms",
         "fold_old_batch_norms",
     ]

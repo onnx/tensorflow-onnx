@@ -1,7 +1,9 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+import argparse
 import os
+import sys
 import tempfile
 import unittest
 from collections import namedtuple
@@ -553,6 +555,16 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         self.assertEqual(expected.shape, actual.shape)
         self.assertAllClose(expected, actual)
 
+    def test_reshape_int(self):
+        x_val = np.array([1, 2, 3, 4], dtype=np.int32).reshape((2, 2))
+        x = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT)
+        shape = tf.constant([1, 4])
+        x_ = tf.reshape(x, shape)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertEqual(expected.shape, actual.shape)
+        self.assertAllClose(expected, actual)
+
     @unittest.skipIf(OPSET < 5 or BACKEND in ["onnxmsrtnext"], "since opset 5, broken in msrtnext")
     def test_reshape_dynamic(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
@@ -788,13 +800,35 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
-    def test_onehot(self):
+    def test_onehot0(self):
         # no such op in onnx
         x_val = np.array([0, 1, 2], dtype=np.int32)
+        depth = 5
+        for axis in [-1, 0, 1]:
+            tf.reset_default_graph()
+            x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+            x_ = tf.one_hot(x, depth, on_value=5.0, axis=axis, off_value=1.0, dtype=tf.float32)
+            output = tf.identity(x_, name=_TFOUTPUT)
+            actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+            self.assertAllClose(expected, actual)
+
+    @unittest.skip
+    def test_onehot1(self):
+        # no such op in onnx
+        x_val = np.array([[0, 2], [1, -1]], dtype=np.int32)
         depth = 3
         x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
-        x_ = tf.one_hot(x, depth, on_value=1, axis=0, off_value=0)
+        x_ = tf.one_hot(x, depth, on_value=5.0, axis=-1, off_value=0.0, dtype=tf.float32)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    def test_onehot2(self):
+        # no such op in onnx
+        x_val = np.array([0, 1, 2, 1, 2, 0, 1, 2, 1, 2], dtype=np.int32)
+        depth = 20
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        x_ = tf.one_hot(x, depth, on_value=5.0, axis=-1, off_value=1.0, dtype=tf.float32)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
@@ -854,14 +888,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
             actual, expected = self._run(output, {}, {})
             self.assertAllClose(expected, actual)
 
-    def test_unstack_axis1(self):
-        x_val = np.random.randn(10, 3, 4).astype("float32")
-        x = tf.constant(x_val, dtype=tf.float32)
-        x_ = tf.unstack(x, axis=1)
-        output = tf.identity(x_, name=_TFOUTPUT)
-        actual, expected = self._run(output, {}, {})
-        self.assertAllClose(expected, actual)
-
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "Space2Depth not implemented, works on onnxmsrtnext")
     def test_space_to_depth(self):
         x_val = make_xval([1, 2, 2, 1])
@@ -870,7 +896,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         output  = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
-
 
     @unittest.skipIf(OPSET < 6, "supported since opset 6")
     def test_addn(self):
@@ -935,4 +960,14 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--backend', default='caffe2',
+                        choices=["caffe2", "onnxmsrt", "onnxmsrtnext", "onnx-tensorflow"],
+                        help="backend to test against")
+    parser.add_argument('unittest_args', nargs='*')
+
+    args = parser.parse_args()
+    BACKEND = args.backend
+    # Now set the sys.argv to the unittest_args (leaving sys.argv[0] alone)
+    sys.argv[1:] = args.unittest_args
     unittest.main()

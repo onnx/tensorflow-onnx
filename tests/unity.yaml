@@ -42,13 +42,11 @@ BananaRL:
     - value_estimate:0
 
 Basic:
-  # needs: onehot
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Basic/TFModels/Basic.bytes
   model: Basic.bytes
   input_get: get_random
   inputs:
-    "vector_observation:0": [1, 1]
+    "vector_observation:0": [10, 1]
   outputs:
     - action:0
     - action_probs:0
