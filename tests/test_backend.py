@@ -803,12 +803,14 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def test_onehot0(self):
         # no such op in onnx
         x_val = np.array([0, 1, 2], dtype=np.int32)
-        depth = 3
-        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
-        x_ = tf.one_hot(x, depth, on_value=5.0, axis=0, off_value=1.0, dtype=tf.float32)
-        output = tf.identity(x_, name=_TFOUTPUT)
-        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
-        self.assertAllClose(expected, actual)
+        depth = 5
+        for axis in [-1, 0, 1]:
+            tf.reset_default_graph()
+            x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+            x_ = tf.one_hot(x, depth, on_value=5.0, axis=axis, off_value=1.0, dtype=tf.float32)
+            output = tf.identity(x_, name=_TFOUTPUT)
+            actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+            self.assertAllClose(expected, actual)
 
     @unittest.skip
     def test_onehot1(self):

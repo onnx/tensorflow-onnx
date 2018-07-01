@@ -890,29 +890,39 @@ def unpack_op(ctx, node, name, args):
 
 def onehot_op(ctx, node, name, args):
     # until there is no onehot op in onnx, a workaround using gather from eye
-    data = node.input[0]
-    shape = ctx.get_shape(data)
-    shapeo = ctx.get_shape(node.output[0])
-    if len(shape) != 1:
+    indices_name = node.input[0]
+    indices_shape = ctx.get_shape(indices_name)
+    if len(indices_shape) != 1:
         # TODO: this works for rank=1 but tensorflow supports more than this.
         # Same principle should work but we need to implemtn our own eye.
         raise ValueError("onehot op: only rank1 is supported")
     axis = node.get_attr("axis")
-    node.set_attr("axis", axis.i)
+    # axis becomes axis for gather
     node.set_attr("axis", 0)
     depth = node.inputs[1].get_tensor_value()[0]
     on = node.inputs[2].get_tensor_value()[0]
     off = node.inputs[3].get_tensor_value()[0]
     dtype = node.inputs[2].get_tensor_type()
-    del node.input[:]
-    eye = np.eye(depth, dtype=dtype) * on
-    if off != 0:
+    eye = np.eye(depth, dtype=dtype)
+    if on != 0:
+        eye[eye == 1] = on
         eye[eye == 0] = off
+    else:
+        eye[eye == 0] = off
+        eye[eye == 1] = on
     const_name = utils.make_name(node.name)
     ctx.make_const(const_name, "Const", eye)
+    # setup gather inputs
+    del node.input[:]
     node.input.append(const_name)
-    node.input.append(data)
+    node.input.append(indices_name)
     node.type = "Gather"
+    if axis.i == 0:
+        # TODO: revisit for rank > 1
+        name = utils.make_name(node.name)
+        transpose_op = ctx.insert_new_node_on_output("Transpose", node.output[0], name)
+        ctx.copy_shape(node.output[0], transpose_op.output[0])
+        return [node, transpose_op]
     return node
 
 
