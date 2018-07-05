@@ -166,7 +166,7 @@ class Test(object):
     @staticmethod
     def to_onnx(tf_graph, opset=None):
         """Convert graph to tensorflow."""
-        return process_tf_graph(tf_graph, opset=opset)
+        return process_tf_graph(tf_graph, continue_on_error=False, opset=opset)
 
     def run_caffe2(self, name, onnx_graph, inputs):
         """Run test again caffe2 backend."""
@@ -271,6 +271,7 @@ class Test(object):
         graph_def = graph_pb2.GraphDef()
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
+        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def)
 
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:

@@ -76,7 +76,7 @@ ONNX_VALID_ATTRIBUTES = {
     'dtype', 'output_shape', 'spatial', 'split', 'input_forget', 'keepdims', 'transA', 'auto_pad', 'border', 'low',
     'linear_before_reset', 'height_scale', 'output_padding', 'shape', 'kernel_shape', 'epsilon', 'size', 'starts',
     'direction', 'max', 'clip', 'across_channels', 'value', 'strides', 'extra_shape', 'scales', 'k', 'sample_size',
-    'blocksize'
+    'blocksize', 'epsilon', 'momentum'
 }
 
 

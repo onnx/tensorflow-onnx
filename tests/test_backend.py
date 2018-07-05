@@ -95,6 +95,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         """Run test against msrt-next backend."""
         import lotus
         model_path = os.path.join(TMPPATH, test_name + ".pb")
+        # print(model_path)
         with open(model_path, "wb") as f:
             f.write(onnx_graph.SerializeToString())
         m = lotus.InferenceSession(model_path)
@@ -801,7 +802,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         self.assertAllClose(expected, actual)
 
     def test_onehot0(self):
-        # no such op in onnx
         x_val = np.array([0, 1, 2], dtype=np.int32)
         depth = 5
         for axis in [-1, 0, 1]:
@@ -814,7 +814,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     @unittest.skip
     def test_onehot1(self):
-        # no such op in onnx
+        # only rank 1 is currently implemented
         x_val = np.array([[0, 2], [1, -1]], dtype=np.int32)
         depth = 3
         x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
@@ -824,7 +824,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         self.assertAllClose(expected, actual)
 
     def test_onehot2(self):
-        # no such op in onnx
         x_val = np.array([0, 1, 2, 1, 2, 0, 1, 2, 1, 2], dtype=np.int32)
         depth = 20
         x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
@@ -924,6 +923,60 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
+    @unittest.skip
+    def test_strided_slice3(self):
+        x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = x[1:]
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skip
+    def test_strided_slice4(self):
+        x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = x[:2]
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skip
+    def test_strided_slice5(self):
+        x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = x[:2, 0:1, 1:]
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "fails with schema error")
+    def test_batchnorm(self):
+        x_shape = [1, 28, 28, 2]
+        x_dtype = np.float32
+        scale_dtype = np.float32
+        scale_shape =  [2]
+        # only nhwc is support on cpu for tensorflow
+        data_format = "NHWC"
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        mean_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        scale = tf.constant(scale_val, name='scale')
+        offset = tf.constant(offset_val, name='offset')
+        mean = tf.constant(mean_val, name='mean')
+        var = tf.constant(var_val, name='variance')
+        epsilon = 0.001
+        y, _, _ = tf.nn.fused_batch_norm(
+            x, scale, offset, mean=mean, variance=var,
+            epsilon=epsilon, data_format=data_format, is_training=False)
+        output = tf.identity(y, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual, rtol=1e-04)
+
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not correctly supported")
     def test_resize_nearest_neighbor(self):
         x_shape = [1, 15, 20, 2]
@@ -964,10 +1017,13 @@ if __name__ == "__main__":
     parser.add_argument('--backend', default='caffe2',
                         choices=["caffe2", "onnxmsrt", "onnxmsrtnext", "onnx-tensorflow"],
                         help="backend to test against")
+    parser.add_argument('--opset', default=OPSET,
+                        help="opset to test against")
     parser.add_argument('unittest_args', nargs='*')
 
     args = parser.parse_args()
     BACKEND = args.backend
+    OPSET = args.opset
     # Now set the sys.argv to the unittest_args (leaving sys.argv[0] alone)
     sys.argv[1:] = args.unittest_args
     unittest.main()
