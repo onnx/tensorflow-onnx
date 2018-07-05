@@ -305,7 +305,8 @@ HWCN_TO_NCHW = [3, 2, 0, 1]
 NCHW_TO_HWCN = [2, 3, 1, 0]
 
 
-def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
+def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
+                        input_indices=None, output_indices=None):
     """Convert input and kernel from tensorflow to onnx. This maybe require to
         to insert transpose ops for input, kernel and output unless they are constants
         and we can transpose the constant.
@@ -324,25 +325,32 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
             return [a[b[i]] for i in b]
         return None
 
+    if input_indices is None:
+        input_indices = [0]
+    if output_indices is None:
+        output_indices = [0]
+
     nodes = []
 
     if node.is_nhwc():
         # transpose input if needed, no need to record shapes on input
-        if node.inputs[0].is_const():
-            # if input is a constant, transpose that one
-            parent = node.inputs[0]
-            if not parent.data_format:
-                val = parent.get_tensor_value()
-                parent.set_tensor_value(val.transpose(NHWC_TO_NCHW))
-                parent.data_format = "NCHW"
-        else:
-            # if input comes from a op, insert transpose op
-            input_name = node.input[0]
-            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
-            transpose.set_attr("perm", NHWC_TO_NCHW)
-            transpose.inserted_nchw = True
-            ctx.set_shape(transpose.output[0], calc_shape(ctx.get_shape(input_name), NHWC_TO_NCHW))
-            nodes.append(transpose)
+        for idx in input_indices:
+            if node.inputs[idx].is_const():
+                # if input is a constant, transpose that one
+                parent = node.inputs[idx]
+                if not parent.data_format:
+                    val = parent.get_tensor_value()
+                    parent.set_tensor_value(val.transpose(NHWC_TO_NCHW))
+                    parent.data_format = "NCHW"
+            else:
+                # if input comes from a op, insert transpose op
+                input_name = node.input[idx]
+                transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
+                transpose.set_attr("perm", NHWC_TO_NCHW)
+                transpose.inserted_nchw = True
+                if idx == 0:
+                    ctx.set_shape(transpose.output[0], calc_shape(ctx.get_shape(input_name), NHWC_TO_NCHW))
+                nodes.append(transpose)
 
     # kernel mist to be transposed
     if with_kernel:
@@ -388,12 +396,13 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None):
     # transpose outputs if needed
     if node.is_nhwc():
         # TODO: what if len(output) > 0 ?
-        for i, output_name in enumerate(node.output):
+        for idx in output_indices:
+            output_name = node.output[idx]
             op_name = utils.make_name(node.name)
             transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
             transpose.set_attr("perm", NCHW_TO_NHWC)
             transpose.inserted_nchw = True
-            ctx.set_shape(transpose.output[0], calc_shape(ctx.get_shape(node.output[0]), NCHW_TO_NHWC))
+            ctx.set_shape(transpose.output[0], calc_shape(ctx.get_shape(node.output[idx]), NCHW_TO_NHWC))
             nodes.append(transpose)
     return nodes
 
@@ -925,6 +934,17 @@ def onehot_op(ctx, node, name, args):
         return [node, transpose_op]
     return node
 
+def fused_batchnorm_op7(ctx, node, name, args):
+    node.type = "BatchNormalization"
+    # tf inputs: x, scale, bias, mean, variance
+    # tf outputs: y, batch_mean, batch_var
+    # a: data_format, epsilon, is_training
+    # onnx inputs: X, scale, B, mean, variance, attributes: epsilon, momentum=0.9, spatial : 1
+    # output: mean, var, savedmean, savedvar,
+    nodes = conv_convert_inputs(ctx, node, with_kernel=False)
+    return nodes
+
+
 
 # pylint: enable=W0613,C0111,W0612
 
@@ -1048,6 +1068,7 @@ _OPSET_7 = {
     "Sin": (direct_op, []),
     "Tan": (direct_op, []),
     "Multinomial": (multinomial_op, []),
+    "FusedBatchNorm": (fused_batchnorm_op7, []),
 }
 
 _OPSETS = [

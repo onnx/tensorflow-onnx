@@ -25,6 +25,16 @@ benchtf-conv:
   outputs:
     - output:0
 
+benchtf-convbn:
+  disabled: true
+  # fails with: expects to be colocated with unknown node 'batch_normalization_1/gamma
+  model: tests/models/convbn-layers/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 784]
+  outputs:
+    - output:0
+
 benchtf-ae0:
   model: tests/models/ae0/frozen.pb
   input_get: get_ramp
