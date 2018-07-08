@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from collections import namedtuple
+from itertools import product
 
 import numpy as np
 import tensorflow as tf
@@ -15,6 +16,10 @@ from onnx import helper
 from tf2onnx.tfonnx import process_tf_graph
 
 TMPPATH = tempfile.mkdtemp()
+
+# we can override BACKEND and OPSET from the command line, but that is to late
+# to change the behavior of annotation. If need, pick the backend here.
+OPSET = 7
 
 BACKEND = "caffe2"
 # BACKEND = "onnxmsrt"
@@ -37,7 +42,6 @@ _TFOUTPUT = "output"
 _OUTPUT = "output:0"
 _OUTPUT1 = "output1:0"
 
-OPSET = 7
 
 # pylint: disable=C0111
 
@@ -45,6 +49,50 @@ OPSET = 7
 def make_xval(shape):
     x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
     return x_val
+
+
+def get_conv_getdata(kind=1):
+    if kind == 0:
+        # generate all combinations (costly)
+        dims = [
+            ("padding", ["SAME", "VALID"]),
+            ("input_sizes", [[32, 35, 35, 288], [32, 17, 17, 1248], [1, 28, 28, 3], [32, 8, 8, 2048]]),
+            ("filter_sizes", [[1, 3, 3, 1], [1, 2, 2, 1], [1, 5, 5, 1], [1, 1, 1, 1], [1, 5, 2, 1], [1, 2, 5, 1]]),
+            ("strides", [[1, 2, 2, 1], [1, 1, 1, 1]]),
+        ]
+        values = [key_values[1] for key_values in dims]
+        for idx, v in enumerate(product(*values)):
+            if True or idx == 30:
+                yield (idx,) + v
+    elif kind == 1:
+        # some combination to that give decent padding coverage
+        data = [
+            ('SAME', [32, 35, 35, 288], [1, 3, 3, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 288], [1, 2, 2, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 288], [1, 2, 2, 1], [1, 1, 1, 1]),
+            ('SAME', [32, 35, 35, 288], [1, 5, 5, 1], [1, 1, 1, 1]),
+            ('SAME', [32, 35, 35, 288], [1, 1, 1, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 288], [1, 1, 1, 1], [1, 1, 1, 1]),
+            ('SAME', [32, 35, 35, 288], [1, 5, 2, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 288], [1, 2, 5, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 288], [1, 2, 5, 1], [1, 1, 1, 1]),
+            ('SAME', [1, 28, 28, 3], [1, 3, 3, 1], [1, 2, 2, 1]),
+            ('SAME', [1, 28, 28, 3], [1, 3, 3, 1], [1, 1, 1, 1]),
+            ('SAME', [1, 28, 28, 3], [1, 2, 2, 1], [1, 2, 2, 1]),
+            ('SAME', [1, 28, 28, 3], [1, 2, 2, 1], [1, 1, 1, 1]),
+            ('SAME', [1, 28, 28, 3], [1, 5, 5, 1], [1, 2, 2, 1]),
+            ('SAME', [1, 28, 28, 3], [1, 5, 5, 1], [1, 1, 1, 1]),
+            ('SAME', [1, 28, 28, 3], [1, 5, 2, 1], [1, 2, 2, 1]),
+            ('SAME', [1, 28, 28, 3], [1, 2, 5, 1], [1, 1, 1, 1]),
+            ('SAME', [32, 8, 8, 2048], [1, 3, 3, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 8, 8, 2048], [1, 3, 3, 1], [1, 1, 1, 1]),
+            ('VALID', [32, 35, 35, 288], [1, 3, 3, 1], [1, 1, 1, 1]),
+            ('VALID', [32, 35, 35, 288], [1, 2, 2, 1], [1, 2, 2, 1]),
+        ]
+        for idx, v in enumerate(data):
+            yield (idx,) + v
+    else:
+        raise ValueError("kind not known")
 
 
 class Tf2OnnxBackendTests(unittest.TestCase):
@@ -198,20 +246,26 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         self.assertEqual(expected.shape, actual.shape)
 
     def test_maxppol(self):
-        x_val = make_xval((1, 4, 4, 1))
-        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
-        mp = tf.nn.max_pool(x, [1, 2, 2, 1], _STRIDE1x1, padding="VALID")
-        output = tf.identity(mp, name=_TFOUTPUT)
-        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
-        self.assertAllClose(expected, actual)
+        for p in get_conv_getdata():
+            idx, padding, x_shape, ksize, strides = p
+            tf.reset_default_graph()
+            x_val = make_xval(x_shape)
+            x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+            mp = tf.nn.max_pool(x, ksize, strides, padding=padding)
+            output = tf.identity(mp, name=_TFOUTPUT)
+            actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+            self.assertAllClose(expected, actual, err_msg=str(p))
 
     def test_avgppol(self):
-        x_val = make_xval((1, 4, 4, 1))
-        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
-        mp = tf.nn.avg_pool(x, [1, 2, 2, 1], _STRIDE1x1, padding="VALID")
-        output = tf.identity(mp, name=_TFOUTPUT)
-        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
-        self.assertAllClose(expected, actual)
+        for p in get_conv_getdata(kind=0):
+            idx, padding, x_shape, ksize, strides = p
+            tf.reset_default_graph()
+            x_val = make_xval(x_shape)
+            x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+            mp = tf.nn.avg_pool(x, ksize, strides, padding=padding)
+            output = tf.identity(mp, name=_TFOUTPUT)
+            actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+            self.assertAllClose(expected, actual, err_msg=str(p))
 
     def _conv_test(self, x_val, w, strides=None, padding="VALID", dilations=None):
         if strides is None:
@@ -753,13 +807,20 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     @unittest.skipIf(BACKEND == "caffe2", "not supported correctly in caffe2")
     def test_pad(self):
-        x_val = np.array([[1.0, 1.2], [2.3, 3.4], [4.5, 5.7]], dtype=np.float32)
-        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
-        paddings = tf.constant([[0, 0, ], [2, 0]])
-        op = tf.pad(x, paddings, "CONSTANT")
-        output = tf.identity(op, name=_TFOUTPUT)
-        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
-        self.assertAllClose(expected, actual)
+        params = [
+            ("CONSTANT", [[1, 1], [2, 2]], [[1.0, 1.2], [2.3, 3.4], [4.5, 5.7]]),
+            ("CONSTANT", [[0, 0], [3, 3], [3, 3], [0, 0]],  np.random.randn(1, 3, 4, 5).astype(np.float32)),
+        ]
+        for p in params:
+            tf.reset_default_graph()
+            mode, pad, xv = p
+            x_val = np.array(xv, dtype=np.float32)
+            x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            paddings = tf.constant(pad)
+            op = tf.pad(x, paddings, mode)
+            output = tf.identity(op, name=_TFOUTPUT)
+            actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+            self.assertAllClose(expected, actual, err_msg=str(p))
 
     @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
     def test_randomuniform(self):
