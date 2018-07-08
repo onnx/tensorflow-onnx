@@ -304,6 +304,11 @@ NHWC_TO_NCHW = [0, 3, 1, 2]
 HWCN_TO_NCHW = [3, 2, 0, 1]
 NCHW_TO_HWCN = [2, 3, 1, 0]
 
+def spatial_map(shape, perm):
+    new_shape = shape[:]
+    for i in perm:
+        new_shape[i] = shape[perm[i]]
+    return new_shape
 
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                         input_indices=None, output_indices=None):
@@ -320,11 +325,6 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             new_kernel_shape: reshape the kernel
     """
 
-    def calc_shape(a, b):
-        if a and b:
-            return [a[b[i]] for i in b]
-        return None
-
     if input_indices is None:
         input_indices = [0]
     if output_indices is None:
@@ -335,33 +335,33 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     if node.is_nhwc():
         # transpose input if needed, no need to record shapes on input
         for idx in input_indices:
+            parent = node.inputs[idx]
             if node.inputs[idx].is_const():
                 # if input is a constant, transpose that one
-                parent = node.inputs[idx]
                 if not parent.data_format:
                     val = parent.get_tensor_value()
                     parent.set_tensor_value(val.transpose(NHWC_TO_NCHW))
-                    parent.data_format = "NCHW"
             else:
                 # if input comes from a op, insert transpose op
                 input_name = node.input[idx]
                 transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
                 transpose.set_attr("perm", NHWC_TO_NCHW)
                 transpose.inserted_nchw = True
-                if idx == 0:
-                    ctx.set_shape(transpose.output[0], calc_shape(ctx.get_shape(input_name), NHWC_TO_NCHW))
+                shape = ctx.get_shape(input_name)
+                new_shape = spatial_map(shape, NHWC_TO_NCHW)
+                ctx.set_shape(transpose.output[0], new_shape)
                 nodes.append(transpose)
+            parent.data_format = "NCHW"
 
     # kernel mist to be transposed
     if with_kernel:
+        parent = node.inputs[1]
         if node.inputs[1].is_const():
             # kernel is const - transpose the const
-            parent = node.inputs[1]
             if not parent.data_format:
                 val = parent.get_tensor_value()
                 val = val.transpose(HWCN_TO_NCHW)
                 parent.set_tensor_value(val)
-                parent.data_format = "NCHW"
         else:
             # kernel comes from op, insert transpose op
             input_name = node.input[1]
@@ -369,8 +369,10 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             transpose.set_attr("perm", HWCN_TO_NCHW)
             transpose.inserted_nchw = True
             ctx.copy_shape(input_name, transpose.output[0])
-            ctx.set_shape(transpose.output[0], calc_shape(ctx.get_shape(input_name), HWCN_TO_NCHW))
+            new_shape = spatial_map(ctx.get_shape(input_name), HWCN_TO_NCHW)
+            ctx.set_shape(transpose.output[0], new_shape)
             nodes.append(transpose)
+        parent.data_format = "NCHW"
 
         # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
         if new_kernel_shape:
@@ -379,7 +381,6 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 input_name = node.input[1]
                 reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
                 reshape.set_attr("shape", new_kernel_shape)
-                ctx.set_shape(reshape.output[0], new_kernel_shape)
             else:
                 # new reshape takes new shape as input[1]
                 shape_name = utils.make_name(node.name)
@@ -387,7 +388,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 input_name = node.input[1]
                 reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
                 reshape.input.append(shape_name)
-                ctx.set_shape(reshape.output[0], new_kernel_shape)
+            ctx.set_shape(reshape.output[0], new_kernel_shape)
             nodes.append(reshape)
 
     # insert conv node after inputs
@@ -395,30 +396,37 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
 
     # transpose outputs if needed
     if node.is_nhwc():
-        # TODO: what if len(output) > 0 ?
         for idx in output_indices:
             output_name = node.output[idx]
             op_name = utils.make_name(node.name)
             transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
             transpose.set_attr("perm", NCHW_TO_NHWC)
             transpose.inserted_nchw = True
-            ctx.set_shape(transpose.output[0], calc_shape(ctx.get_shape(node.output[idx]), NCHW_TO_NHWC))
+            ctx.set_shape(transpose.output[0], ctx.get_shape(node.output[idx]))
             nodes.append(transpose)
+            node.data_format = "NCHW"
     return nodes
 
 
-def add_padding(node, kernel_shape, strides):
+def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
     padding = node.get_attr("padding")
     if padding:
+        if dilations is None:
+            dilations = [1] * spatial * 2
         padding = padding.s.decode("utf-8")
         if padding == 'SAME':
-            s_h, s_w = strides[0], strides[1]
-            k_h, k_w = kernel_shape[0], kernel_shape[1]
-            p_x0 = (k_w - s_w) // 2
-            p_y0 = (k_h - s_h) // 2
-            p_x1 = k_w - s_w - p_x0
-            p_y1 = k_h - s_h - p_y0
-            node.set_attr("pads", [p_y0, p_x0, p_y1, p_x1])
+            pads = [0] * spatial * 2
+            input_shape = ctx.get_shape(node.input[0])
+            output_shape = ctx.get_shape(node.output[0])
+            if node.is_nhwc():
+                input_shape = spatial_map(input_shape, NHWC_TO_NCHW)
+                output_shape = spatial_map(output_shape, NHWC_TO_NCHW)
+            for i in range(spatial):
+                pad = (output_shape[i + 2] - 1) * strides[i] + dilations[i] * kernel_shape[i] - input_shape[i + 2]
+                pad = max(pad, 0)
+                pads[i] = pad // 2
+                pads[i + spatial] = pad - pad // 2
+            node.set_attr("pads", pads)
         elif padding == 'VALID':
             pass
         else:
@@ -445,12 +453,11 @@ def conv_dims_attr(node, name, new_name=None):
     return dims
 
 
-def conv_kernel_shape(ctx, node, input_idx):
+def conv_kernel_shape(ctx, node, input_idx, spatial=2):
     kernel_shape = ctx.get_shape(node.input[1])
-    if len(kernel_shape) != 4:
-        raise ValueError("only Conv2D is supported")
-    h, w, c, n = kernel_shape
-    kernel_shape = [h, w]
+    if len(kernel_shape) != 2 * spatial:
+        raise ValueError("kernel rank must be 2* spatial")
+    kernel_shape = kernel_shape[0:spatial]
     node.set_attr("kernel_shape", kernel_shape)
     return kernel_shape
 
@@ -460,11 +467,10 @@ def conv_op(ctx, node, name, args):
     #                       @string padding, @string data_format)
     # T Y = Conv(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
     #                       @AttrType.INTS kernel_shape, @AttrType.INTS pads, @AttrType.INTS strides)
-    kernel_shape = conv_kernel_shape(ctx, node, 1)
+    kernel_shape = conv_kernel_shape(ctx, node, 1, spatial=2)
     strides = conv_dims_attr(node, "strides")
-    conv_dims_attr(node, "dilations")
-    add_padding(node, kernel_shape, strides)
-
+    dilations = conv_dims_attr(node, "dilations")
+    add_padding(ctx, node, kernel_shape, strides, dilations=dilations, spatial=2)
     nodes = conv_convert_inputs(ctx, node, with_kernel=True)
     return nodes
 
@@ -486,7 +492,7 @@ def convtranspose_op(ctx, node, name, args):
 
     strides = conv_dims_attr(node, "strides")
     conv_dims_attr(node, "dilations")
-    add_padding(node, kernel_shape, strides)
+    add_padding(ctx, node, kernel_shape, strides)
 
     # remove output_shapes input, swap data and kernel
     ctx.remove_input(node, node.input[0])
@@ -530,7 +536,7 @@ def depthwiseconv_op(ctx, node, name, args):
     strides = conv_dims_attr(node, "strides")
     conv_dims_attr(node, "dilations")
     node.set_attr("group", i_c)
-    add_padding(node, kernel_shape, strides)
+    add_padding(ctx, node, kernel_shape, strides)
 
     new_kernel_shape = [k_output_channels, 1, k_h, k_w]
     nodes = conv_convert_inputs(ctx, node, with_kernel=True, new_kernel_shape=new_kernel_shape)
@@ -561,7 +567,7 @@ def pool_op(ctx, node, name, args):
 
     conv_dims_attr(node, "dilations")
 
-    add_padding(node, kernel_shape, strides)
+    add_padding(ctx, node, kernel_shape, strides)
 
     nodes = conv_convert_inputs(ctx, node, with_kernel=False)
     return nodes
