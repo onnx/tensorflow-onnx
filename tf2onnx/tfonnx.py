@@ -733,24 +733,72 @@ def expanddims_op7(ctx, node, name, args):
 
 
 def stridedslice_op(ctx, node, name, args):
-    # only the cases strides=1 can be mapped to onnx
-    not_supported_attr = ["begin_mask", "ellipsis_mask", "end_mask", "new_axis_mask", "shrink_axis_mask"]
+    # for now we implement common cases. Things like strides!=1 are not mappable to onnx.
+    not_supported_attr = ["ellipsis_mask", "new_axis_mask"]
     for attr_name in not_supported_attr:
         attr = node.get_attr(attr_name)
         if attr is not None and attr.i != 0:
-            raise ValueError("StridedSlice: attribute " + attr_name + " must be 0")
+            raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
+
     begin = node.inputs[1].get_tensor_value()
     end = node.inputs[2].get_tensor_value()
-    strides = node.inputs[3].get_tensor_value()[0]
-    if strides != 1:
-        raise ValueError("StridedSlice: only strides=1 is supported")
-    node.set_attr("starts", list(begin))
-    node.set_attr("ends", list(end))
+    strides = node.inputs[3].get_tensor_value()
+    end_mask = node.get_attr("end_mask")
+    end_mask = end_mask.i if end_mask is not None else 0
+    shrink_axis_mask = node.get_attr("shrink_axis_mask")
+    shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
+    new_begin = []
+    new_end = []
+    axes = []
+    # onnx slice op can't remove a axis, track axis and add a squeeze op if needed
+    needs_squeeze = []
+    for idx in range(len(begin)):
+        if strides[idx] != 1:
+            raise ValueError("StridedSlice: only strides=1 is supported")
+        axes.append(idx)
+        mask = (shrink_axis_mask >> idx) & 1
+        if mask != 0:
+            new_begin.append(begin[idx])
+            new_end.append(end[idx])
+            needs_squeeze.append(idx)
+            continue
+
+        new_begin.append(begin[idx])
+        mask = (end_mask >> idx) & 1
+        if mask != 0:
+            new_end.append(sys.maxsize)
+        else:
+            new_end.append(end[idx])
+
+    node.set_attr("starts", new_begin)
+    node.set_attr("ends", new_end)
+    node.set_attr("axes", axes)
     node.type = "Slice"
     ctx.remove_input(node, node.input[3])
     ctx.remove_input(node, node.input[2])
     ctx.remove_input(node, node.input[1])
-    return node
+    nodes = [node]
+    if needs_squeeze:
+        name = utils.make_name(node.name)
+        squeeze_op = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+        squeeze_op.set_attr("axes", needs_squeeze)
+        nodes.append(squeeze_op)
+        ctx.copy_shape(node.output[0], squeeze_op.output[0])
+
+    # onnx slice as of opset 7 does only take float tensors ... cast if needed
+    input_dtype = ctx.get_dtype(node.input[0])
+    if input_dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
+        cast_op = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+        cast_op.set_attr("to", onnx_pb.TensorProto.FLOAT)
+        ctx.copy_shape(node.input[0], cast_op.output[0])
+        nodes.insert(0, cast_op)
+        name = utils.make_name(node.name)
+        cast_op = ctx.insert_new_node_on_output("Cast", nodes[-1].output[0], name)
+        cast_op.set_attr("to", input_dtype)
+        ctx.copy_shape(node.input[0], cast_op.output[0])
+        nodes.append(cast_op)
+
+    return nodes
 
 
 def pow_op(ctx, node, name, args):
@@ -1267,7 +1315,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
 def tf_optimize(sess, inputs, outputs, graph_def):
     """Optimize tensorflow graph for inference."""
     transforms = [
-        "fold_constants(ignore_errors=true)",
+        #"fold_constants(ignore_errors=true)",
         "fold_batch_norms",
         "fold_old_batch_norms",
     ]

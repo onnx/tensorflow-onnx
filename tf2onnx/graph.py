@@ -31,7 +31,7 @@ class Node(object):
         for a in node.attribute:
             self._attr[a.name] = a
         # try to find a dtype for this node
-        dtype = graph.dtypes.get(node.name)
+        dtype = graph._dtypes.get(node.name)
         if not dtype:
             dtype = self._attr.get("dtype")
             if dtype:
@@ -105,9 +105,10 @@ class Node(object):
     def __repr__(self):
         return "<onnx op type='%s' name=%s>" % (self.type, self._op.name)
 
-    def get_attr(self, name):
+    def get_attr(self, name, default=None):
         """Get attribute map."""
-        return self.attr.get(name)
+        attr = self.attr.get(name, default)
+        return attr
 
     def set_attr(self, name, value):
         self.attr[name] = helper.make_attribute(name, value)
@@ -236,7 +237,7 @@ class Graph(object):
         self.shapes = {}
         self.model_inputs = []
         self._target = set(target)
-        self.dtypes = dtypes
+        self._dtypes = dtypes
         self._output_shapes = output_shapes
         ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
@@ -289,6 +290,10 @@ class Graph(object):
     def add_initializer(self, tensor):
         """Add tensor to initializers."""
         self._initializers[tensor.name] = tensor
+
+    def get_dtype(self, name):
+        """Get dtype for node."""
+        return self._dtypes.get(name)
 
     def get_shape(self, name):
         """Get shape for node."""
