@@ -69,9 +69,6 @@ def get_conv_getdata(kind=1):
         data = [
             ('SAME', [32, 35, 35, 288], [1, 3, 3, 1], [1, 2, 2, 1]),
             ('SAME', [32, 35, 35, 288], [1, 2, 2, 1], [1, 2, 2, 1]),
-            ('SAME', [32, 35, 35, 288], [1, 2, 2, 1], [1, 1, 1, 1]),
-            ('SAME', [32, 35, 35, 288], [1, 5, 5, 1], [1, 1, 1, 1]),
-            ('SAME', [32, 35, 35, 288], [1, 1, 1, 1], [1, 2, 2, 1]),
             ('SAME', [32, 35, 35, 288], [1, 1, 1, 1], [1, 1, 1, 1]),
             ('SAME', [32, 35, 35, 288], [1, 5, 2, 1], [1, 2, 2, 1]),
             ('SAME', [32, 35, 35, 288], [1, 2, 5, 1], [1, 2, 2, 1]),
@@ -83,7 +80,6 @@ def get_conv_getdata(kind=1):
             ('SAME', [1, 28, 28, 3], [1, 5, 5, 1], [1, 2, 2, 1]),
             ('SAME', [1, 28, 28, 3], [1, 5, 5, 1], [1, 1, 1, 1]),
             ('SAME', [1, 28, 28, 3], [1, 5, 2, 1], [1, 2, 2, 1]),
-            ('SAME', [1, 28, 28, 3], [1, 2, 5, 1], [1, 1, 1, 1]),
             ('SAME', [32, 8, 8, 2048], [1, 3, 3, 1], [1, 2, 2, 1]),
             ('SAME', [32, 8, 8, 2048], [1, 3, 3, 1], [1, 1, 1, 1]),
             ('VALID', [32, 35, 35, 288], [1, 3, 3, 1], [1, 1, 1, 1]),
@@ -975,7 +971,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
     def test_strided_slice2(self):
         x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -984,7 +979,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
     def test_strided_slice3(self):
         x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -993,7 +987,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
     def test_strided_slice4(self):
         x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -1002,11 +995,22 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skip
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
     def test_strided_slice5(self):
         x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = x[:2, 0:1, 1:]
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
+    def test_strided_slice6(self):
+        # example from here:
+        # https://www.tensorflow.org/versions/r1.0/api_docs/cc/class/tensorflow/ops/strided-slice
+        x_val = np.arange(5*6).astype("float32").reshape(5, 6)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = x[2, :]
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
@@ -1075,7 +1079,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--backend', default='caffe2',
+    parser.add_argument('--backend', default=BACKEND,
                         choices=["caffe2", "onnxmsrt", "onnxmsrtnext", "onnx-tensorflow"],
                         help="backend to test against")
     parser.add_argument('--opset', default=OPSET,
