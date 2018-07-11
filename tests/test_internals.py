@@ -1,6 +1,9 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+from __future__ import division
+from __future__ import print_function
+
 import unittest
 from collections import namedtuple
 
@@ -135,7 +138,6 @@ class Tf2OnnxInternalTests(unittest.TestCase):
                    'n6 [op_type=Identity] input -> n1 n1:0 -> n3 n1:0 -> n2 n2:0 -> ReplacedOp__2 ' \
                    'n3:0 -> ReplacedOp__2 ReplacedOp__2:0 -> n6 }'
         self.assertEqual(expected, result)
-
 
     def test_match_flipped(self):
         n1 = helper.make_node("Sub", ["i1", "i1"], ["n1:0"], name="n1")
