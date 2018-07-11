@@ -9,14 +9,6 @@ benchtf-fc:
   outputs:
     - output:0
 
-benchtf-fc:
-  model: tests/models/fc-layers/frozen.pb
-  input_get: get_ramp
-  inputs:
-    "X:0": [1, 784]
-  outputs:
-    - output:0
-
 benchtf-conv:
   model: tests/models/conv-layers/frozen.pb
   input_get: get_ramp
