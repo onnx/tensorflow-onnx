@@ -93,8 +93,7 @@ For example:
 python -m tensorflow.python.tools.freeze_graph \
     --input_graph=my_checkpoint_dir/graphdef.pb \
     --input_binary=true \
-    --input_names=input:0 \
-    --output_node_names=output:0 \
+    --output_node_names=output \
     --input_checkpoint=my_checkpoint_dir \
     --output_graph=tests/models/fc-layers/frozen.pb
 ```
