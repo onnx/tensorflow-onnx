@@ -5,6 +5,9 @@
 tf2onnx.utils - misc utilities for tf2onnx
 """
 
+from __future__ import division
+from __future__ import print_function
+
 import numpy as np
 import tensorflow as tf
 from onnx import helper, onnx_pb
@@ -149,6 +152,7 @@ def get_shape(node):
         pass
     return dims
 
+
 def map_tf_dtype(dtype):
     if dtype:
         dtype = TF_TO_ONNX_DTYPE[dtype]
@@ -157,8 +161,6 @@ def map_tf_dtype(dtype):
 
 def node_name(name):
     """Get node name without io#."""
-    # FIXME: do we use this ?
-    assert isinstance(name, str)
     pos = name.find(":")
     if pos >= 0:
         return name[:pos]

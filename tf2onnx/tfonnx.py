@@ -4,6 +4,10 @@
 """
 tf2onnx.tf2onnx - rewrite tensorflow graph to onnx graph
 """
+
+from __future__ import division
+from __future__ import print_function
+
 import collections
 import logging
 import sys
@@ -87,7 +91,7 @@ def tensorflow_to_onnx(graph):
                 onnx_tensor = utils.tf_to_onnx_tensor(node.get_attr(a), name=node.name + ":0")
                 attr[a] = onnx_tensor
             elif a == "DstT":
-                attr["to"] =  utils.map_tf_dtype(node.get_attr("DstT"))
+                attr["to"] = utils.map_tf_dtype(node.get_attr("DstT"))
             elif a == "SrcT":
                 continue
             elif a in ignored_attr:
@@ -126,6 +130,7 @@ def _convert_shapenode_to_int64(ctx, node, input_number):
         return [cast_op, node]
 
 # pylint: disable=W0613,C0111,W0612
+
 
 def no_op(ctx, node, name, args):
     """Skip node."""
@@ -304,11 +309,13 @@ NHWC_TO_NCHW = [0, 3, 1, 2]
 HWCN_TO_NCHW = [3, 2, 0, 1]
 NCHW_TO_HWCN = [2, 3, 1, 0]
 
+
 def spatial_map(shape, perm):
     new_shape = shape[:]
     for i in perm:
         new_shape[i] = shape[perm[i]]
     return new_shape
+
 
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                         input_indices=None, output_indices=None):
@@ -988,6 +995,7 @@ def onehot_op(ctx, node, name, args):
         return [node, transpose_op]
     return node
 
+
 def fused_batchnorm_op7(ctx, node, name, args):
     node.type = "BatchNormalization"
     # tf inputs: x, scale, bias, mean, variance
@@ -997,7 +1005,6 @@ def fused_batchnorm_op7(ctx, node, name, args):
     # output: mean, var, savedmean, savedvar,
     nodes = conv_convert_inputs(ctx, node, with_kernel=False)
     return nodes
-
 
 
 # pylint: enable=W0613,C0111,W0612
@@ -1131,6 +1138,7 @@ _OPSETS = [
     (6, _OPSET_6),
     (7, _OPSET_7),
 ]
+
 
 def rewrite_random_uniform(g, ops):
     pattern = \
@@ -1315,7 +1323,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
 def tf_optimize(sess, inputs, outputs, graph_def):
     """Optimize tensorflow graph for inference."""
     transforms = [
-        #"fold_constants(ignore_errors=true)",
+        # "fold_constants(ignore_errors=true)",
         "fold_batch_norms",
         "fold_old_batch_norms",
     ]

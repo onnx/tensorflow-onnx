@@ -1,6 +1,9 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+from __future__ import division
+from __future__ import print_function
+
 import unittest
 from collections import namedtuple
 
@@ -116,7 +119,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Add [op_type=Add] output [op_type=Identity] input1:0 -> Add input2:0 -> ' \
+                'digraph { Add [op_type=Add] output [op_type=Identity] input1:0 -> Add input2:0 -> ' 
                 'Add Add:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -200,9 +203,9 @@ class Tf2OnnxGraphTests(unittest.TestCase):
 
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Conv2D__2 [op_type=Transpose] kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] ' \
-                'Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] output [op_type=Identity] input1:0 -> ' \
-                'Conv2D__2 k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 Conv2D__2:0 -> Conv2D ' \
+                'digraph { Conv2D__2 [op_type=Transpose] kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] ' 
+                'Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] output [op_type=Identity] input1:0 -> ' 
+                'Conv2D__2 k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 Conv2D__2:0 -> Conv2D ' 
                 'Conv2D__3:0 -> Conv2D Conv2D:0 -> Conv2D__4 Conv2D__4:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -234,7 +237,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Reshape [op_type=Reshape] output [op_type=Identity] input1:0 -> Reshape ' \
+                'digraph { Reshape [op_type=Reshape] output [op_type=Identity] input1:0 -> Reshape ' 
                 '"Reshape/shape":0 -> Reshape Reshape:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -257,7 +260,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, custom_rewriter=[rewrite_test])
             self.assertEqual(
-                'digraph { Add [op_type=Mul] output [op_type=Identity] input1:0 -> ' \
+                'digraph { Add [op_type=Mul] output [op_type=Identity] input1:0 -> '
                 'Add input1:0 -> Add Add:0 -> output }',
                 onnx_to_graphviz(g))
 

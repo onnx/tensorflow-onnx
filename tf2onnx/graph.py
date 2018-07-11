@@ -4,8 +4,13 @@
 """
 tf2onnx.graph - class to manage graph manipulation on top of onnx
 """
+
+from __future__ import division
+from __future__ import print_function
+
+import tf2onnx
 from onnx import numpy_helper, optimizer, ModelProto, defs, OperatorSetIdProto
-from tf2onnx import utils, tfonnx, __version__
+from tf2onnx import utils, __version__
 from tf2onnx.utils import *
 
 
@@ -31,7 +36,7 @@ class Node(object):
         for a in node.attribute:
             self._attr[a.name] = a
         # try to find a dtype for this node
-        dtype = graph._dtypes.get(node.name)
+        dtype = graph.get_dtype(node.name)
         if not dtype:
             dtype = self._attr.get("dtype")
             if dtype:
@@ -230,7 +235,7 @@ class Graph(object):
             dtypes: dict of tensorflow dtype
         """
         if target is None:
-            target = tfonnx.DEFAULT_TARGET
+            target = tf2onnx.tfonnx.DEFAULT_TARGET
         self._nodes = []
         self._initializers = {}
         self._nodes_by_name = {}

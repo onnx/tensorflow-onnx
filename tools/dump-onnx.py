@@ -4,6 +4,10 @@
 """
 Dump onnx graph.
 """
+
+from __future__ import division
+from __future__ import print_function
+
 import argparse
 import collections
 import re
@@ -62,7 +66,6 @@ def main():
             f.write("digraph graphname {\n")
             for node in model.graph.node:
                 output_name = node.name
-                #f.write('"{}" [label="{}"];\n'.format(output_name, node.op_type))
                 name = node.name
                 color = ""
                 if node.op_type.startswith("_"):

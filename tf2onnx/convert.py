@@ -5,6 +5,9 @@
 python -m tf2onnx.convert : tool to convert a frozen tensorflow to onnx
 """
 
+from __future__ import division
+from __future__ import print_function
+
 import argparse
 import sys
 

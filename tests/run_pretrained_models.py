@@ -1,13 +1,16 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import argparse
 import os
 import tarfile
 import time
 import tempfile
-import urllib
-import urllib.request
+import requests
 import zipfile
 
 import PIL.Image
@@ -136,7 +139,11 @@ class Test(object):
         os.makedirs(dir_name, exist_ok=True)
         fpath = os.path.join(dir_name, fname)
         if not os.path.exists(fpath):
-            urllib.request.urlretrieve(url, fpath)
+            response = requests.get(url)
+            if response.status_code not in [200]:
+                response.raise_for_status()
+            with open(fpath, "wb") as f:
+                f.write(response.content)
         model_path = os.path.join(dir_name, self.local)
         if not os.path.exists(model_path):
             if ftype == 'tgz':

@@ -1,6 +1,9 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+from __future__ import division
+from __future__ import print_function
+
 import argparse
 import os
 import sys
@@ -325,7 +328,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         expected, actual = self._conv_test(x_val, kernel_val, strides=strides, padding="VALID")
         self.assertAllClose(expected, actual, rtol=1e-05)
 
-
     def test_conv2d_7(self):
         x_shape = [1, 35, 35, 288]  # out: [1, 17, 17, 384]
         kernel_shape = [3, 3, 288, 384]
@@ -567,7 +569,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x2 = tf.placeholder(tf.bool, [2, 2], name=_TFINPUT1)
         mi = tf.logical_and(x1, x2)
         output = tf.identity(mi, name=_TFOUTPUT)
-        actual, expected = self._run(output, {x1: x_val1, x2: x_val2}, {_INPUT: x_val1, _INPUT1: x_val2,})
+        actual, expected = self._run(output, {x1: x_val1, x2: x_val2}, {_INPUT: x_val1, _INPUT1: x_val2})
         self.assertAllClose(expected, actual)
 
     def test_greater(self):
@@ -577,7 +579,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x2 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT1)
         mi = tf.greater(x1, x2)
         output = tf.identity(mi, name=_TFOUTPUT)
-        actual, expected = self._run(output, {x1: x_val1, x2: x_val2}, {_INPUT: x_val1, _INPUT1: x_val2,})
+        actual, expected = self._run(output, {x1: x_val1, x2: x_val2}, {_INPUT: x_val1, _INPUT1: x_val2})
         self.assertAllClose(expected, actual)
 
     def test_sequeeze(self):
@@ -780,9 +782,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     @unittest.skip
     def test_slice1(self):
         # FIXME: only 1 dimension supported by caffe2 and msrt
-        x_val = np.array([[[1, 1, 1], [2, 2, 2]],
-                       [[3, 3, 3], [4, 4, 4]],
-                       [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
+        x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]], [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
         t1 = tf.constant([1, 0, 0], dtype=tf.int32)
         t2 = tf.constant([1, 1, 3], dtype=tf.int32)
         x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -920,7 +920,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_val = np.arange(3*2*3).astype("float32")
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         values, indices = tf.nn.top_k(x, 5, sorted=True)
-        output  = tf.identity(values, name=_TFOUTPUT)
+        output = tf.identity(values, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
@@ -949,7 +949,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_val = make_xval([1, 2, 2, 1])
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.space_to_depth(x, block_size=2)
-        output  = tf.identity(x_, name=_TFOUTPUT)
+        output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
@@ -958,7 +958,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_val = np.arange(3*2*3).astype("float32")
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.add_n([x, x, x])
-        output  = tf.identity(x_, name=_TFOUTPUT)
+        output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
@@ -1020,7 +1020,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x_shape = [1, 28, 28, 2]
         x_dtype = np.float32
         scale_dtype = np.float32
-        scale_shape =  [2]
+        scale_shape = [2]
         # only nhwc is support on cpu for tensorflow
         data_format = "NHWC"
         x_val = np.random.random_sample(x_shape).astype(x_dtype)
