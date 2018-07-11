@@ -100,9 +100,6 @@ python -m tensorflow.python.tools.freeze_graph \
     --output_graph=tests/models/fc-layers/frozen.pb
 ```
 
-# Using the converter via Python Api
-In some cases it might be desirable to use the converter from a python script.
-
 # Testing
 There are 2 types of tests.
 
@@ -173,10 +170,39 @@ with tf.Session() as sess:
     with open("/tmp/model.onnx", "wb") as f:
         f.write(model_proto.SerializeToString())
 ```
-## Using custom ops from python
+## Creating custom op mappings from python
 For complex custom ops that require graph rewrites or input / attribute rewrites using the python interface to insert a custom op will be the eaiest way to accomplish the task.
 A dictionary of name->custom_op_handler can be passed to tf2onnx.tfonnx.process_tf_graph. If the op name is found in the graph the handler will have access to all internal structures and can rewrite that is needed. For example [examples/custom_op_via_python.py]():
 ```
+import tensorflow as tf
+import tf2onnx
+from onnx import helper
+
+_TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
+
+
+def print_handler(ctx, node, name, args):
+    # replace tf.Print() with Identity
+    #   T output = Print(T input, data, @list(type) U, @string message, @int first_n, @int summarize)
+    # becomes:
+    #   T output = Identity(T Input)
+    node.type = "Identity"
+    node.domain = _TENSORFLOW_DOMAIN
+    del node.input[1:]
+    return node
+
+
+with tf.Session() as sess:
+    x = tf.placeholder(tf.float32, [2, 3], name="input")
+    x_ = tf.add(x, x)
+    x_ = tf.Print(x, [x], "hello")
+    _ = tf.identity(x_, name="output")
+    onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph,
+                                                 custom_op_handlers={"Print": print_handler},
+                                                 extra_opset=[helper.make_opsetid(_TENSORFLOW_DOMAIN, 1)])
+    model_proto = onnx_graph.make_model("test", ["input:0"], ["output:0"])
+    with open("/tmp/model.onnx", "wb") as f:
+        f.write(model_proto.SerializeToString())
 ```
 
 # How tf2onnx works
