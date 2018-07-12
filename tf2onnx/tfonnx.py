@@ -1279,22 +1279,24 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
         if target_opset <= g.opset:
             ops_mapping.update(op_map)
 
+    # apply custom ops on top of the assembled opset. We can either completment the opset
+    # or override existing ops with a custom op.
+    if custom_op_handlers is not None:
+        custom_opset = {k: [v, []] for k, v in custom_op_handlers.items()}
+        ops_mapping.update(custom_opset)
+
     ops = g.get_nodes()
     onnx_nodes = []
     for node in ops:
         op = node.type
         map_info = ops_mapping.get(op)
         if map_info is None:
-            custom_op = custom_op_handlers.get(op)
-            if custom_op is None:
-                if continue_on_error:
-                    unmapped_op[op] += 1
-                    onnx_nodes.append(node)
-                    continue
-                else:
-                    raise ValueError("tensorflow op " + op + " is not supported")
+            if continue_on_error:
+                unmapped_op[op] += 1
+                onnx_nodes.append(node)
+                continue
             else:
-                map_info = (custom_op, [])
+                raise ValueError("tensorflow op " + op + " is not supported")
         mapped_op[op] += 1
         func, args = map_info
         if args:
