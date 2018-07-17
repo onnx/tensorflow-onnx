@@ -129,6 +129,7 @@ mobilenet_v2_1.4_224:
   url: https://storage.googleapis.com/mobilenet_v2/checkpoints/mobilenet_v2_1.4_224.tgz
   model: mobilenet_v2_1.4_224_frozen.pb
   input_get: get_beach
+  force_input_shape: true
   inputs:
     "input:0": [1, 224, 224, 3]
   outputs:

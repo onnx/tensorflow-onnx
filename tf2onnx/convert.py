@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import re
 import sys
 
 import onnx
@@ -36,8 +37,22 @@ def get_args():
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     args = parser.parse_args()
 
+    args.shape_override = None
     if args.inputs:
-        args.inputs = args.inputs.split(",")
+        inputs = []
+        shapes = {}
+        # input takes in most cases the format name:0, where 0 is the output number
+        # in some cases placeholders don't have a rank which onnx can't handle so we let uses override the shape
+        # by appending the same, ie : [1,28,28,3]
+        #
+        pattern = r"(?:([\w:]+)(\[[\d,]+\])?),?"
+        splits = re.split(pattern, args.inputs)
+        for i in range(1, len(splits), 3):
+            inputs.append(splits[i])
+            if splits[i+1] is not None:
+                shapes[splits[i]] = [int(n) for n in splits[i+1][1:-1].split(",")]
+        args.inputs = inputs
+        args.shape_override = shapes
     if args.outputs:
         args.outputs = args.outputs.split(",")
     if args.target:
@@ -85,7 +100,8 @@ def main():
                              target=args.target,
                              opset=args.opset,
                              custom_op_handlers=custom_ops,
-                             extra_opset=extra_opset)
+                             extra_opset=extra_opset,
+                             shape_override=args.shape_override)
 
     model_proto = g.make_model(
         "converted from {}".format(args.input), args.inputs, args.outputs,
