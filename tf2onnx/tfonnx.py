@@ -34,7 +34,7 @@ POSSIBLE_TARGETS = [TARGET_RS4, TARGET_CAFFE2]
 DEFAULT_TARGET = [TARGET_RS4, TARGET_CAFFE2]
 
 
-def tensorflow_to_onnx(graph):
+def tensorflow_to_onnx(graph, shape_override):
     """
     Load tensorflow graph into an onnx graph with minimal rewrites so
     we can use the onnx graph as intermediate graph.
@@ -58,10 +58,12 @@ def tensorflow_to_onnx(graph):
     # create dict with output to shape mappings
     for node in ops:
         for out in node.outputs:
-            try:
-                shape = out.get_shape().as_list()
-            except Exception as ex:
-                shape = []
+            shape = shape_override.get(out.name)
+            if shape is None:
+                try:
+                    shape = out.get_shape().as_list()
+                except Exception as ex:
+                    shape = []
             dtypes[out.name] = utils.map_tf_dtype(out.dtype)
             output_shapes[out.name] = shape
 
@@ -1306,9 +1308,9 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
             onnx_node = func(g, node, node.name, args)
         except Exception as ex:
             type_, value_, traceback_ = sys.exc_info()
-            ex = traceback.format_exception(type_, value_, traceback_)
+            ex_ext = traceback.format_exception(type_, value_, traceback_)
             if continue_on_error:
-                print(ex)
+                print(ex_ext)
                 onnx_nodes.append(node)
             else:
                 raise ex
@@ -1336,7 +1338,8 @@ def tf_optimize(sess, inputs, outputs, graph_def):
 
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
-                     opset=None, custom_op_handlers=None, custom_rewriter=None, extra_opset=None):
+                     opset=None, custom_op_handlers=None, custom_rewriter=None,
+                     extra_opset=None, shape_override=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -1359,10 +1362,12 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                 # if we continue on error, ignore graph cycles so we can report all missing ops
                 pass
 
+    if shape_override is None:
+        shape_override = {}
     if target is None:
         target = DEFAULT_TARGET
 
-    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph)
+    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset)
     ops = g.get_nodes()

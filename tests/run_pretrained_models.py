@@ -103,7 +103,7 @@ class Test(object):
 
     def __init__(self, url, local, make_input, input_names, output_names,
                  disabled=False, more_inputs=None, rtol=0.01, atol=0.,
-                 check_only_shape=False, model_type="frozen"):
+                 check_only_shape=False, model_type="frozen", force_input_shape=False):
         self.url = url
         self.make_input = make_input
         self.local = local
@@ -118,6 +118,7 @@ class Test(object):
         self.tf_runtime = 0
         self.onnx_runtime = 0
         self.model_type = model_type
+        self.force_input_shape = force_input_shape
 
     def download_file(self):
         """Download file from url."""
@@ -171,9 +172,9 @@ class Test(object):
         return result
 
     @staticmethod
-    def to_onnx(tf_graph, opset=None):
+    def to_onnx(tf_graph, opset=None, shape_override=None):
         """Convert graph to tensorflow."""
-        return process_tf_graph(tf_graph, continue_on_error=False, opset=opset)
+        return process_tf_graph(tf_graph, continue_on_error=False, opset=opset, shape_override=shape_override)
 
     def run_caffe2(self, name, onnx_graph, inputs):
         """Run test again caffe2 backend."""
@@ -253,6 +254,8 @@ class Test(object):
         """Run complete test against backend."""
         print(name)
         self.perf = perf
+
+        # get the model
         if self.url:
             _, dir_name = self.download_file()
             model_path = os.path.join(dir_name, self.local)
@@ -270,6 +273,7 @@ class Test(object):
                 tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
             model_path = os.path.join(dir_name, "frozen.pb")
 
+        # create the input data
         inputs = self.make_input(self.input_names)
         if self.more_inputs:
             for k, v in self.more_inputs.items():
@@ -278,8 +282,9 @@ class Test(object):
         graph_def = graph_pb2.GraphDef()
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
-        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def)
 
+        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def)
+        shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
 
@@ -290,12 +295,16 @@ class Test(object):
                 if type != "float32":
                     v = inputs[k]
                     inputs[k] = v.astype(dtype)
+            if self.force_input_shape:
+                shape_override = self.input_names
 
+            # run the model with tensorflow
             tf_results = self.run_tensorflow(sess, inputs)
             onnx_graph = None
             print("\ttensorflow", "OK")
             try:
-                onnx_graph = self.to_onnx(sess.graph, opset=opset)
+                # convert model to onnx
+                onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
                 print("\tto_onnx", "OK")
                 if debug:
                     onnx_graph.dump_graph()
@@ -362,7 +371,7 @@ def tests_from_yaml(fname):
         input_func = v.get("input_get")
         input_func = _INPUT_FUNC_MAPPING[input_func]
         kwargs = {}
-        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape", "model_type"]:
+        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape", "model_type", "force_input_shape"]:
             if v.get(kw) is not None:
                 kwargs[kw] = v[kw]
 

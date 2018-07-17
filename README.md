@@ -68,7 +68,7 @@ Parameters:
 - inputs/outputs: Tensorflow graph's input/output names, which can be found with [summarize graph tool](#summarize_graph).
 - target: There are different onnx versions and workarounds for runtimes that can be set with ```--target TARGET```. 
 - opset: by default we uses the newest opset installed with the onnx package (for example onnx-1.2.2 would have opset 7). By specifieing ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
-- custom-ops: the runtime may support custom ops that are not defined in onnx. A user can asked the converter to map to custom ops by listing them with the --custom-ops option. Tensorflow ops listed here will be mapped to a custom op of the same name as the tensorflow op but in the onnx domain ai.onnx.converters.tensorflow. For example: ```--custom-ops Print``` will insert a op ```Print``` in the onnx domain ```ai.onnx.converters.tensorflow``` into the graph. We also support a python api for custom ops documented later in this readme.
+- custom-ops: the runtime may support custom ops that are not defined in onnx. A user can asked the converter to map to custom ops by listing them with the --custom-ops option. Tensorflow ops listed here will be mapped to a custom op of the same name as the tensorflow op but in the onnx domain ai.onnx.converters.tensorflow. For example: ```--custom-ops Print``` will insert a op ```Print``` in the onnx domain ```ai.onnx.converters.tensorflow``` into the graph. We also support a python api for custom ops documented later in this readme. 
 
 Usage example (run following commands in tensorflow-onnx root directory):
 ```
@@ -79,6 +79,8 @@ python -m tf2onnx.convert\
     --output tests/models/fc-layers/model.onnx\
     --verbose
 ```
+Some models specify placeholders with unknown ranks which can not be mapped to onnx. 
+In those cases one can add the shape behind the input name in ```[]```, for example ```--input X:0[1,28,28,3]```
 
 ## <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
 
