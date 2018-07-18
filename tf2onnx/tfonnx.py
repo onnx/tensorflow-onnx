@@ -277,7 +277,6 @@ def reshape_op(ctx, node, name, args):
     ctx.set_shape(node.output[0], shape)
     return node
 
-
 def reshape_op5(ctx, node, name, args):
     need_casting = node.dtype in [onnx_pb.TensorProto.INT32,
                                   onnx_pb.TensorProto.INT16,
@@ -302,6 +301,22 @@ def reshape_op5(ctx, node, name, args):
         ctx.copy_shape(name, output_cast.output[0])
         nodes.append(output_cast)
     return [input_cast] + nodes
+
+def fill_op(ctx, node, name, args):
+    shape_node = node.inputs[0]
+    value_node = node.inputs[1]
+    shape = shape_node.get_tensor_value()
+    fill_value = value_node.get_tensor_value()
+    if shape is None:
+        log.error("Fill on node %s does not have a const shape", node.name)
+        return None
+    ctx.set_shape(node.output[0], shape)
+
+    ctx.remove_input(node, node.input[1])
+    ctx.remove_input(node, node.input[0])
+    node.set_attr("shape", shape)
+    node.set_attr("value", shape)
+    return node
 
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -426,6 +441,8 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
             input_shape = ctx.get_shape(node.input[0])
             output_shape = ctx.get_shape(node.output[0])
             if node.is_nhwc():
+                print(node.name + "~~~~~~~~~~~~~~~~~~~~~~")
+                print(input_shape)
                 input_shape = spatial_map(input_shape, NHWC_TO_NCHW)
                 output_shape = spatial_map(output_shape, NHWC_TO_NCHW)
             for i in range(spatial):
@@ -1036,6 +1053,7 @@ _OPSET_4 = {
     "Dropout": (direct_op, []),
     "Elu": (direct_op, []),
     "Exp": (direct_op, []),
+    "Fill": (fill_op, ["ConstantFill"]), # Experimental    
     "Floor": (direct_op, []),
     "Flatten": (direct_op, []),
     "Gather": (direct_op, ["Gather"]),
