@@ -441,8 +441,6 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
             input_shape = ctx.get_shape(node.input[0])
             output_shape = ctx.get_shape(node.output[0])
             if node.is_nhwc():
-                print(node.name + "~~~~~~~~~~~~~~~~~~~~~~")
-                print(input_shape)
                 input_shape = spatial_map(input_shape, NHWC_TO_NCHW)
                 output_shape = spatial_map(output_shape, NHWC_TO_NCHW)
             for i in range(spatial):
