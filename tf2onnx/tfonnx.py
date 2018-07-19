@@ -463,7 +463,7 @@ def conv_dims_attr(node, name, new_name=None):
 
 
 def conv_kernel_shape(ctx, node, input_idx, spatial=2):
-    kernel_shape = ctx.get_shape(node.input[1])
+    kernel_shape = ctx.get_shape(node.input[input_idx])
     if len(kernel_shape) != 2 * spatial:
         raise ValueError("kernel rank must be 2* spatial")
     kernel_shape = kernel_shape[0:spatial]
@@ -492,6 +492,8 @@ def convtranspose_op(ctx, node, name, args):
 
     # Note: inputs are reversed from what one would expect.
     kernel_shape = conv_kernel_shape(ctx, node, 1)
+
+    # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
     output_shape = node.inputs[0].get_tensor_value()
     if node.is_nhwc():
         new_output_shape = [output_shape[1], output_shape[2]]
@@ -501,15 +503,17 @@ def convtranspose_op(ctx, node, name, args):
 
     strides = conv_dims_attr(node, "strides")
     conv_dims_attr(node, "dilations")
-    add_padding(ctx, node, kernel_shape, strides)
 
-    # remove output_shapes input, swap data and kernel
+    # remove output_shapes input
     ctx.remove_input(node, node.input[0])
+    # swap data and kernel
     t = node.input[0]
     node.input[0] = node.input[1]
     node.input[1] = t
 
     nodes = conv_convert_inputs(ctx, node, with_kernel=True)
+
+    # Note: output_padding, group are left default.
     return nodes
 
 
