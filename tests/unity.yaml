@@ -4,9 +4,11 @@
   model: 3DBall.bytes
   input_get: get_random
   inputs:
-    "vector_observation:0": [1, 24]
+    "vector_observation:0": [1, 8]
   outputs:
     - action:0
+    - action_probs:0
+    - value_estimate:0
 
 3DBallHard:
   # needs: lstm
@@ -20,26 +22,6 @@
     "sequence_length:0": [256]
   outputs:
     - action:0
-
-BananaIL:
-  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/BananaCollectors/TFModels/BananaIL.bytes
-  model: BananaIL.bytes
-  input_get: get_random
-  inputs:
-    "vector_observation:0": [1, 159]
-  outputs:
-    - action:0
-
-BananaRL:
-  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/BananaCollectors/TFModels/BananaRL.bytes
-  model: BananaRL.bytes
-  check_only_shape: true
-  input_get: get_random
-  inputs:
-    "vector_observation:0": [1, 159]
-  outputs:
-    - action_probs:0
-    - value_estimate:0
 
 Basic:
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Basic/TFModels/Basic.bytes
@@ -63,16 +45,29 @@ Bouncer:
     - action_probs:0
     - value_estimate:0
 
-crawler:
+DynamicCrawler:
   check_only_shape: true
-  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Crawler/TFModels/crawler.bytes
-  model: crawler.bytes
+  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Crawler/TFModels/DynamicCrawler.bytes
+  model: DynamicCrawler.bytes
   input_get: get_random
   inputs:
-    "vector_observation:0": [1, 117]
+    "vector_observation:0": [1, 129]
   outputs:
     - action_probs:0
     - value_estimate:0
+    - action:0
+
+FixedCrawler:
+  check_only_shape: true
+  url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Crawler/TFModels/FixedCrawler.bytes
+  model: FixedCrawler.bytes
+  input_get: get_random
+  inputs:
+    "vector_observation:0": [1, 129]
+  outputs:
+    - action_probs:0
+    - value_estimate:0
+    - action:0
 
 GridWorld_3x3:
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/GridWorld/TFModels/GridWorld_3x3.bytes
@@ -131,10 +126,11 @@ Reacher:
   model: Reacher.bytes
   input_get: get_random
   inputs:
-    "vector_observation:0": [1, 78]
+    "vector_observation:0": [1, 33]
   outputs:
-    - value_estimate:0
     - action:0
+    - value_estimate:0
+    - action_probs:0
 
 Soccer:
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/unity-environment/Assets/ML-Agents/Examples/Soccer/TFModels/Soccer.bytes

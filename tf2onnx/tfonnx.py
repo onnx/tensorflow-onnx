@@ -911,7 +911,7 @@ def minmax_op(ctx, node, name, args):
         new_nodes = []
         for i in needs_broadcast_op:
             input_node = node.inputs[i]
-            dtype = ctx.dtypes[node.input[i]]
+            dtype = ctx.get_dtype(node.input[i])
             zero_name = utils.make_name(input_node.name)
             ctx.make_const(zero_name, "Const", np.zeros(shapeo, dtype=utils.ONNX_TO_NUMPY_DTYPE[dtype]))
             op_name = utils.make_name(input_node.name)

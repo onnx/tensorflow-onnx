@@ -80,7 +80,7 @@ python -m tf2onnx.convert\
     --verbose
 ```
 Some models specify placeholders with unknown ranks which can not be mapped to onnx. 
-In those cases one can add the shape behind the input name in ```[]```, for example ```--input X:0[1,28,28,3]```
+In those cases one can add the shape behind the input name in ```[]```, for example ```--inputs X:0[1,28,28,3]```
 
 ## <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
 
