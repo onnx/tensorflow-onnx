@@ -300,6 +300,10 @@ class Graph(object):
         """Get dtype for node."""
         return self._dtypes.get(name)
 
+    def set_dtype(self, name, val):
+        """Set dtype for node."""
+        self._dtypes[name] = val
+
     def get_shape(self, name):
         """Get shape for node."""
         assert isinstance(name, str)
