@@ -390,13 +390,11 @@ class Graph(object):
         # create output_tensor_values
         output_tensor_values = []
         for name in output_names:
-            op = self.get_node_by_name(name)
-            if op:
-                dtype = op.dtype
-                if not dtype:
-                    continue
-                v = helper.make_tensor_value_info(name, dtype, self.get_shape(name))
-                output_tensor_values.append(v)
+            dtype = self.get_dtype(name);
+            if not dtype:
+                raise ValueError("cannot found the output dtype for " + name)
+            v = helper.make_tensor_value_info(name, dtype, self.get_shape(name))
+            output_tensor_values.append(v)
 
         # update attributes
         ops = []
