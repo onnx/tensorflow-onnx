@@ -20,15 +20,20 @@ from tf2onnx.graph_matcher import *
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 
 
-def onnx_to_graphviz(g):
+def onnx_to_graphviz(g, include_attrs = False):
     g2 = gv.Digraph()
     for node in g.get_nodes():
         kwarg = {}
         attr = node.attr
-        if "shape" in attr:
-            kwarg["shape"] = str(attr["shape"].ints)
-        if "broadcast" in attr:
-            kwarg["broadcast"] = str(attr["broadcast"].i)
+        if include_attrs:
+            for a in attr:
+               kwarg[a] = str(helper.get_attribute_value(attr[a])) 
+        else: 
+            if "shape" in attr:
+                kwarg["shape"] = str(attr["shape"].ints)
+            if "broadcast" in attr:
+                kwarg["broadcast"] = str(attr["broadcast"].i)
+        
         g2.node(node.name, op_type=node.type, **kwarg)
     for node in g.get_nodes():
         for i in node.input:
@@ -286,6 +291,21 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             self.assertEqual(
                 'digraph { Print [op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
                 onnx_to_graphviz(g))
+
+    def test_pad(self):
+        with tf.Session() as sess:
+            t = tf.constant([[1, 2, 3], [4, 5, 6]], name= "input1")
+            paddings = tf.constant([[1, 1,], [2, 2]], name="paddings")
+            a = tf.pad(t, paddings, "CONSTANT", "const_no_val")
+            b = tf.pad(t, paddings, "CONSTANT", "const_with_val", 999)
+            c= tf.pad(t, paddings, "REFLECT", "reflect") 
+            g = process_tf_graph(sess.graph)
+
+            self.assertEqual('digraph { const_no_val [op_type=Pad pads="[1, 2, 1, 2]"]'
+                ' const_with_val [op_type=Pad pads="[1, 2, 1, 2]" value=999]'
+                ' reflect [mode="b\'reflect\'" op_type=Pad pads="[1, 2, 1, 2]"]'
+                ' input1:0 -> const_no_val input1:0 -> const_with_val input1:0 -> reflect }', 
+                onnx_to_graphviz(g, True))
 
 
 if __name__ == '__main__':

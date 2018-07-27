@@ -718,15 +718,15 @@ def pad_op(ctx, node, name, args):
     mode = node.get_attr("mode")
     if mode:
         mode = mode.s.decode("utf-8").lower()
-
+        node.set_attr("mode", mode)
     if mode not in [None, "constant", "reflect"]:
         raise ValueError(mode + " pad mode is not supported")
     
     if mode in [None, "constant"] and len(node.input) == 3:
-        const_val = node.input[2]
+        const_val = node.inputs[2].get_tensor_value()[0]
         node.set_attr("value", const_val)
         ctx.remove_input(node, node.input[2])
-        
+       
     ctx.remove_input(node, node.input[1])
     node.set_attr("pads", paddings)
     return node
