@@ -725,9 +725,23 @@ def splitv_op(ctx, node, name, args):
 
 
 def pad_op(ctx, node, name, args):
-    # T output = Pad(T input, Tpaddings paddings, @type Tpaddings)
+    # T output = Pad(T input, int32 paddings, @type Tpaddings), CONST model using default value
+    #  or PadV2(T input, int32 paddings, T constant_value, @type Tpaddings), CONST mode - default value specified
+    #  or MirrorPad(T input, int32 paddings, @type Tpaddings, @STRING mode), other mode.
     # T output = Pad(T data, @STRING mode, @INTS pads, @FLOAT value)
     paddings = np.array(node.inputs[1].get_tensor_value()).transpose().flatten()
+    mode = node.get_attr("mode")
+    if mode:
+        mode = mode.s.decode("utf-8").lower()
+
+    if mode not in [None, "constant", "reflect"]:
+        raise ValueError(mode + " pad mode is not supported")
+    
+    if mode in [None, "constant"] and len(node.input) == 3:
+        const_val = node.input[2]
+        node.set_attr("value", const_val)
+        ctx.remove_input(node, node.input[2])
+        
     ctx.remove_input(node, node.input[1])
     node.set_attr("pads", paddings)
     return node
@@ -1082,11 +1096,13 @@ _OPSET_4 = {
     "Mean": (reduce_op, ["ReduceMean"]),
     "Min": (reduce_op, ["ReduceMin"]),
     "Minimum": (minmax_op, ["Min"]),
+    "MirrorPad": (pad_op, ["Pad"]),
     "Mul": (broadcast_op, []),
     "Neg": (direct_op, []),
     "NoOp": (no_op, []),
     "NotEqual": (direct_op, ["Not"]),
     "Pad": (pad_op, []),
+    "PadV2": (pad_op, ["Pad"]),
     "Placeholder": (placeholder_op, []),
     "PlaceholderV2": (placeholder_op, []),
     "PlaceholderWithDefault": (placeholder_op, []),
