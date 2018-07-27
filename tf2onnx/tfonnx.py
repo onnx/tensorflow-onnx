@@ -279,7 +279,6 @@ def reshape_op(ctx, node, name, args):
     ctx.set_shape(node.output[0], shape)
     return node
 
-
 def reshape_op5(ctx, node, name, args):
     need_casting = node.dtype in [onnx_pb.TensorProto.INT32,
                                   onnx_pb.TensorProto.INT16,
@@ -304,6 +303,22 @@ def reshape_op5(ctx, node, name, args):
         ctx.copy_shape(name, output_cast.output[0])
         nodes.append(output_cast)
     return [input_cast] + nodes
+
+def fill_op(ctx, node, name, args):
+    shape_node = node.inputs[0]
+    value_node = node.inputs[1]
+    shape = shape_node.get_tensor_value()
+    fill_value = value_node.get_tensor_value()
+    if shape is None:
+        log.error("Fill on node %s does not have a const shape", node.name)
+        return None
+    ctx.set_shape(node.output[0], shape)
+
+    ctx.remove_input(node, node.input[1])
+    ctx.remove_input(node, node.input[0])
+    node.set_attr("shape", shape)
+    node.set_attr("value", shape)
+    return node
 
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -710,9 +725,23 @@ def splitv_op(ctx, node, name, args):
 
 
 def pad_op(ctx, node, name, args):
-    # T output = Pad(T input, Tpaddings paddings, @type Tpaddings)
+    # T output = Pad(T input, int32 paddings, @type Tpaddings), CONST model using default value
+    #  or PadV2(T input, int32 paddings, T constant_value, @type Tpaddings), CONST mode - default value specified
+    #  or MirrorPad(T input, int32 paddings, @type Tpaddings, @STRING mode), other mode.
     # T output = Pad(T data, @STRING mode, @INTS pads, @FLOAT value)
     paddings = np.array(node.inputs[1].get_tensor_value()).transpose().flatten()
+    mode = node.get_attr("mode")
+    if mode:
+        mode = mode.s.decode("utf-8").lower()
+
+    if mode not in [None, "constant", "reflect"]:
+        raise ValueError(mode + " pad mode is not supported")
+    
+    if mode in [None, "constant"] and len(node.input) == 3:
+        const_val = node.input[2]
+        node.set_attr("value", const_val)
+        ctx.remove_input(node, node.input[2])
+        
     ctx.remove_input(node, node.input[1])
     node.set_attr("pads", paddings)
     return node
@@ -884,6 +913,9 @@ def topk_op(ctx, node, name, args):
     node.set_attr("k", k[0])
     node.type = "TopK"
     ctx.remove_input(node, node.input[1])
+
+    # the second of TopK operator must be INT64 per ONNX requires. 
+    ctx.set_dtype(name + ":1", onnx_pb.TensorProto.INT64)
     return node
 
 
@@ -1044,6 +1076,7 @@ _OPSET_4 = {
     "Dropout": (direct_op, []),
     "Elu": (direct_op, []),
     "Exp": (direct_op, []),
+    "Fill": (fill_op, ["ConstantFill"]), # Experimental    
     "Floor": (direct_op, []),
     "Flatten": (direct_op, []),
     "Gather": (direct_op, ["Gather"]),
@@ -1063,11 +1096,13 @@ _OPSET_4 = {
     "Mean": (reduce_op, ["ReduceMean"]),
     "Min": (reduce_op, ["ReduceMin"]),
     "Minimum": (minmax_op, ["Min"]),
+    "MirrorPad": (pad_op, ["Pad"]),
     "Mul": (broadcast_op, []),
     "Neg": (direct_op, []),
     "NoOp": (no_op, []),
     "NotEqual": (direct_op, ["Not"]),
     "Pad": (pad_op, []),
+    "PadV2": (pad_op, ["Pad"]),
     "Placeholder": (placeholder_op, []),
     "PlaceholderV2": (placeholder_op, []),
     "PlaceholderWithDefault": (placeholder_op, []),
