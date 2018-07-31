@@ -235,7 +235,7 @@ def reduce_op(ctx, node, name, args):
 
 
 def placeholder_op(ctx, node, name, args):
-    input_node = helper.make_tensor_value_info(node.output[0], node.dtype, node.shape)
+    input_node = helper.make_tensor_value_info(node.output[0], node.dtype, ctx.get_shape(node.output[0]))
     ctx.model_inputs.append(input_node)
     return None
 
