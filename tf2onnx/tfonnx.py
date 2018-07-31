@@ -1027,8 +1027,25 @@ def fused_batchnorm_op7(ctx, node, name, args):
     # tf outputs: y, batch_mean, batch_var
     # a: data_format, epsilon, is_training
     # onnx inputs: X, scale, B, mean, variance, attributes: epsilon, momentum=0.9, spatial : 1
-    # output: mean, var, savedmean, savedvar,
+    # output: y, mean, var, savedmean, savedvar,
     nodes = conv_convert_inputs(ctx, node, with_kernel=False)
+    scale_shape = ctx.get_shape(node.input[1])
+    mean_shape = ctx.get_shape(node.input[3])
+    var_shape = ctx.get_shape(node.input[4])
+    val_type = utils.ONNX_TO_NUMPY_DTYPE[node.inputs[1].dtype]
+
+    if mean_shape != scale_shape:
+        new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(), scale_shape), dtype=val_type)
+        new_mean_node_name= utils.make_name(node.name)
+        new_mean_node = ctx.make_const(new_mean_node_name, "Const", new_mean_value)
+        node.input[3] = new_mean_node_name
+
+    if var_shape != scale_shape:
+        new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(), scale_shape), dtype=val_type)
+        new_val_node_name= utils.make_name(node.name)
+        new_var_node = ctx.make_const(new_val_node_name, "Const", new_var_value)
+        node.input[4] = new_val_node_name
+
     return nodes
 
 
