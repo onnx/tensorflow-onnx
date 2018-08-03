@@ -8,10 +8,12 @@ tf2onnx.utils - misc utilities for tf2onnx
 from __future__ import division
 from __future__ import print_function
 
+import re
 import numpy as np
 import tensorflow as tf
 from onnx import helper, onnx_pb
 from tensorflow.core.framework import types_pb2, tensor_pb2
+
 
 #
 #  mapping dtypes from tensorflow to onnx
@@ -92,6 +94,24 @@ def make_name(name):
     global INTERNAL_NAME
     INTERNAL_NAME += 1
     return "{}__{}".format(name, INTERNAL_NAME)
+
+
+def split_nodename_and_shape(name):
+    # pattern for a node name
+    inputs = []
+    shapes = {}
+    # input takes in most cases the format name:0, where 0 is the output number
+    # in some cases placeholders don't have a rank which onnx can't handle so we let uses override the shape
+    # by appending the same, ie : [1,28,28,3]
+    name_pattern = r"(?:([\w\d/\-_:]+)(\[[\d,]+\])?),?"
+    splits = re.split(name_pattern, name)
+    for i in range(1, len(splits), 3):
+        inputs.append(splits[i])
+        if splits[i + 1] is not None:
+            shapes[splits[i]] = [int(n) for n in splits[i + 1][1:-1].split(",")]
+    if len(shapes) == 0:
+        shapes = None
+    return inputs, shapes
 
 
 def tf_to_onnx_tensor(tensor, name=""):
