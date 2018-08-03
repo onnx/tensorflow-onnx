@@ -39,20 +39,7 @@ def get_args():
 
     args.shape_override = None
     if args.inputs:
-        inputs = []
-        shapes = {}
-        # input takes in most cases the format name:0, where 0 is the output number
-        # in some cases placeholders don't have a rank which onnx can't handle so we let uses override the shape
-        # by appending the same, ie : [1,28,28,3]
-        #
-        pattern = r"(?:([\w:]+)(\[[\d,]+\])?),?"
-        splits = re.split(pattern, args.inputs)
-        for i in range(1, len(splits), 3):
-            inputs.append(splits[i])
-            if splits[i+1] is not None:
-                shapes[splits[i]] = [int(n) for n in splits[i+1][1:-1].split(",")]
-        args.inputs = inputs
-        args.shape_override = shapes
+        args.inputs, args.shape_override = tf2onnx.utils.split_nodename_and_shape(args.inputs)
     if args.outputs:
         args.outputs = args.outputs.split(",")
     if args.target:

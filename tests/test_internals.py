@@ -163,6 +163,14 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         match_results = list(matcher.match_ops(ops))
         self.assertEqual(1, len(match_results))
 
+    def test_cmdarg_parse(self):
+        arg = "input/V-1_2:0,input/X:0[1,2,3],Y:1[4,5],Z:3,A:1,B"
+        expected_inputs = ['input/V-1_2:0', 'input/X:0', 'Y:1', 'Z:3', 'A:1', 'B']
+        expected_shape = {'Y:1': [4, 5], 'input/X:0': [1, 2, 3]}
+        inputs, shape_override = tf2onnx.utils.split_nodename_and_shape(arg)
+        self.assertEqual(expected_inputs, inputs)
+        self.assertEqual(expected_shape, shape_override)
+
 
 if __name__ == '__main__':
     unittest.main()
