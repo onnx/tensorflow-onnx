@@ -148,6 +148,8 @@ def get_tf_tensor_data(tensor):
         data = [0]
     elif tensor.dtype == tf.float32:
         data = [0.]
+    elif tensor.dtype == tf.float16:
+        data = [0]
     elif tensor.string_val:
         data = tensor.string_val
     else:
