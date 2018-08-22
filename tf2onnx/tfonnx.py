@@ -1369,7 +1369,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
 def tf_optimize(sess, inputs, outputs, graph_def):
     """Optimize tensorflow graph for inference."""
     transforms = [
-        # "fold_constants(ignore_errors=true)",
+        "fold_constants(ignore_errors=true)",
         "fold_batch_norms",
         "fold_old_batch_norms",
     ]

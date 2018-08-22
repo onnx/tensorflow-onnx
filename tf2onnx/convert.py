@@ -17,7 +17,8 @@ import tensorflow as tf
 import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 from onnx import helper
-
+from tf2onnx.optimizer.onnx_graph import OnnxGraph
+from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 
@@ -94,10 +95,14 @@ def main():
         "converted from {}".format(args.input), args.inputs, args.outputs,
         optimize=not args.continue_on_error)
 
+    onnx_graph = OnnxGraph(model_proto.graph)
+    optimizer = TransposeOptimizer(onnx_graph)
+    opt_model_proto = optimizer.optimize()
+
     # write onnx graph
     if args.output:
         with open(args.output, "wb") as f:
-            f.write(model_proto.SerializeToString())
+            f.write(opt_model_proto.SerializeToString())
 
 
 main()
