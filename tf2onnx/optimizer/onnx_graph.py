@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import collections
 import tf2onnx
-from onnx import numpy_helper, optimizer
+from onnx import numpy_helper, optimizer, TensorShapeProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import *
 
