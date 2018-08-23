@@ -98,7 +98,7 @@ def main():
 
     if args.optimize_transpose == True:
         onnx_graph = OnnxGraph(model_proto.graph)
-        optimizer = TransposeOptimizer(onnx_graph)
+        optimizer = TransposeOptimizer(onnx_graph, verbose)
         model_proto = optimizer.optimize()
 
     # write onnx graph
