@@ -297,7 +297,7 @@ class Test(object):
 
             # run the model with tensorflow
             tf_results = self.run_tensorflow(sess, inputs)
-            opt_model_proto = None
+            model_proto = None
             print("\ttensorflow", "OK")
             try:
                 # convert model to onnx
