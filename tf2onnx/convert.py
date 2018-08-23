@@ -34,6 +34,7 @@ def get_args():
     parser.add_argument("--custom-ops", help="list of custom ops")
     parser.add_argument("--unknown-dim", type=int, default=1, help="default for unknown dimensions")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
+    parser.add_argument("--optimize_transpose", type=bool, default=False, help="eliminate transposes that can be removed")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     args = parser.parse_args()
@@ -78,7 +79,7 @@ def main():
     graph_def = tf.GraphDef()
     with tf.gfile.FastGFile(args.input, 'rb') as f:
         graph_def.ParseFromString(f.read())
-    graph_def = tf_optimize(None, args.inputs, args.outputs, graph_def)
+    graph_def = tf_optimize(None, args.inputs, args.outputs, graph_def, args.optimize_transpose)
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')
     with tf.Session(graph=tf_graph) as sess:
@@ -95,14 +96,15 @@ def main():
         "converted from {}".format(args.input), args.inputs, args.outputs,
         optimize=not args.continue_on_error)
 
-    onnx_graph = OnnxGraph(model_proto.graph)
-    optimizer = TransposeOptimizer(onnx_graph)
-    opt_model_proto = optimizer.optimize()
+    if args.optimize_transpose == True:
+        onnx_graph = OnnxGraph(model_proto.graph)
+        optimizer = TransposeOptimizer(onnx_graph)
+        model_proto = optimizer.optimize()
 
     # write onnx graph
     if args.output:
         with open(args.output, "wb") as f:
-            f.write(opt_model_proto.SerializeToString())
+            f.write(model_proto.SerializeToString())
 
 
 main()

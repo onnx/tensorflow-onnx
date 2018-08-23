@@ -247,7 +247,7 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None):
+    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, transpose_opt=False):
         """Run complete test against backend."""
         print(name)
         self.perf = perf
@@ -280,7 +280,7 @@ class Test(object):
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
 
-        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def)
+        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def, transpose_opt)
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
@@ -303,27 +303,29 @@ class Test(object):
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
                 model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
-                # optimize the onnx graph with TransposeOptimizer
-                optimizer = TransposeOptimizer(OnnxGraph(model_proto.graph))
-                opt_model_proto = optimizer.optimize()
+
+                if transpose_opt:
+                    # optimize the onnx graph with TransposeOptimizer
+                    optimizer = TransposeOptimizer(OnnxGraph(model_proto.graph))
+                    model_proto = optimizer.optimize()
                 print("\tto_onnx", "OK")
                 if debug:
-                    opt_model_proto.dump_graph()
+                    model_proto.dump_graph()
                 if onnx_file:
-                    self.create_onnx_file(name, opt_model_proto, inputs, onnx_file)
+                    self.create_onnx_file(name, model_proto, inputs, onnx_file)
             except Exception as ex:
                 print("\tto_onnx", "FAIL", ex)
 
         try:
             onnx_results = None
             if backend == "caffe2":
-                onnx_results = self.run_caffe2(name, opt_model_proto, inputs)
+                onnx_results = self.run_caffe2(name, model_proto, inputs)
             elif backend == "onnxmsrt":
-                onnx_results = self.run_onnxmsrt(name, opt_model_proto, inputs)
+                onnx_results = self.run_onnxmsrt(name, model_proto, inputs)
             elif backend == "onnxmsrtnext":
-                onnx_results = self.run_onnxmsrtnext(name, opt_model_proto, inputs)
+                onnx_results = self.run_onnxmsrtnext(name, model_proto, inputs)
             elif backend == "cntk":
-                onnx_results = self.run_onnxcntk(name, opt_model_proto, inputs)
+                onnx_results = self.run_onnxcntk(name, model_proto, inputs)
             else:
                 raise ValueError("unknown backend")
             print("\trun_onnx OK")
@@ -360,6 +362,7 @@ def get_args():
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
     parser.add_argument("--perf", help="capture performance numbers")
+    parser.add_argument("--optimize_transpose", type=bool, default=False, help="eliminate transposes that can be removed")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
     return args
@@ -403,7 +406,7 @@ def main():
         count += 1
         try:
             ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file,
-                             opset=args.opset, perf=args.perf)
+                             opset=args.opset, perf=args.perf, transpose_opt=args.optimize_transpose)
         except Exception as ex:
             ret = None
             print(ex)

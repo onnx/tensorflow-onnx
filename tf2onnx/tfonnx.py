@@ -1366,13 +1366,16 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     return mapped_op, unmapped_op
 
 
-def tf_optimize(sess, inputs, outputs, graph_def):
+def tf_optimize(sess, inputs, outputs, graph_def, fold_constant = False):
     """Optimize tensorflow graph for inference."""
-    transforms = [
-        "fold_constants(ignore_errors=true)",
+    transforms = []
+    if fold_constant:
+        transforms.append("fold_constants(ignore_errors=true)")
+
+    transforms.extend([
         "fold_batch_norms",
         "fold_old_batch_norms",
-    ]
+    ])
     needed_names = [utils.node_name(i) for i in inputs] + [utils.node_name(i) for i in outputs]
     graph_def = graph_util.extract_sub_graph(graph_def, needed_names)
     graph_def = TransformGraph(graph_def, inputs, outputs, transforms)
