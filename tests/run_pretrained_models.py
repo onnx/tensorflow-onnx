@@ -21,7 +21,6 @@ import yaml
 from tensorflow.core.framework import graph_pb2
 from tf2onnx.tfonnx import process_tf_graph
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
-from tf2onnx.optimizer.onnx_graph import OnnxGraph
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
 TMPPATH = tempfile.mkdtemp()
@@ -247,7 +246,7 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, transpose_opt=False):
+    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, transpose_opt=None):
         """Run complete test against backend."""
         print(name)
         self.perf = perf
@@ -302,12 +301,11 @@ class Test(object):
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
-                model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
-
                 if transpose_opt:
-                    # optimize the onnx graph with TransposeOptimizer
-                    optimizer = TransposeOptimizer(OnnxGraph(model_proto.graph))
-                    model_proto = optimizer.optimize()
+                    optimizer = TransposeOptimizer(onnx_graph, debug)
+                    optimizer.optimize()
+  
+                model_proto = onnx_graph.make_model("test", self.output_names)
                 print("\tto_onnx", "OK")
                 if debug:
                     model_proto.dump_graph()
@@ -362,7 +360,7 @@ def get_args():
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
     parser.add_argument("--perf", help="capture performance numbers")
-    parser.add_argument("--optimize_transpose", type=bool, default=False, help="eliminate transposes that can be removed")
+    parser.add_argument("--optimize_transpose", help="eliminate transposes that can be removed", action="store_true")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
     return args

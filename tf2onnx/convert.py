@@ -17,7 +17,6 @@ import tensorflow as tf
 import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 from onnx import helper
-from tf2onnx.optimizer.onnx_graph import OnnxGraph
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
@@ -34,7 +33,7 @@ def get_args():
     parser.add_argument("--custom-ops", help="list of custom ops")
     parser.add_argument("--unknown-dim", type=int, default=1, help="default for unknown dimensions")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
-    parser.add_argument("--optimize_transpose", type=bool, default=False, help="eliminate transposes that can be removed")
+    parser.add_argument("--optimize_transpose", help="eliminate transposes that can be removed", action="store_true")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     args = parser.parse_args()
@@ -92,14 +91,13 @@ def main():
                              extra_opset=extra_opset,
                              shape_override=args.shape_override)
 
-    model_proto = g.make_model(
-        "converted from {}".format(args.input), args.inputs, args.outputs,
-        optimize=not args.continue_on_error)
+    if args.optimize_transpose:
+        optimizer = TransposeOptimizer(g, args.verbose != None)
+        optimizer.optimize()
 
-    if args.optimize_transpose == True:
-        onnx_graph = OnnxGraph(model_proto.graph)
-        optimizer = TransposeOptimizer(onnx_graph, verbose)
-        model_proto = optimizer.optimize()
+    model_proto = g.make_model(
+        "converted from {}".format(args.input), args.outputs,
+        optimize=not args.continue_on_error)
 
     # write onnx graph
     if args.output:

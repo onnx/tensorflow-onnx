@@ -236,9 +236,8 @@ def reduce_op(ctx, node, name, args):
 
 def placeholder_op(ctx, node, name, args):
     input_node = helper.make_tensor_value_info(node.output[0], node.dtype, ctx.get_shape(node.output[0]))
-    ctx.model_inputs.append(input_node)
+    ctx.add_model_input(input_node.name, input_node)
     return None
-
 
 def square_op(ctx, node, name, args):
     node.type = "Mul"
@@ -1343,6 +1342,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
                 raise ValueError("tensorflow op " + op + " is not supported")
         mapped_op[op] += 1
         func, args = map_info
+        onnx_node = None
         if args:
             node.type = args[0]
             args = args[1:]
@@ -1366,7 +1366,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     return mapped_op, unmapped_op
 
 
-def tf_optimize(sess, inputs, outputs, graph_def, fold_constant = False):
+def tf_optimize(sess, inputs, outputs, graph_def, fold_constant = None):
     """Optimize tensorflow graph for inference."""
     transforms = []
     if fold_constant:

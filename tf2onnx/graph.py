@@ -7,9 +7,9 @@ tf2onnx.graph - class to manage graph manipulation on top of onnx
 
 from __future__ import division
 from __future__ import print_function
-
+import collections
 import tf2onnx
-from onnx import numpy_helper, optimizer, ModelProto, defs, OperatorSetIdProto
+from onnx import numpy_helper, optimizer, ModelProto, defs, OperatorSetIdProto, TensorShapeProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import *
 
@@ -240,7 +240,7 @@ class Graph(object):
         self._initializers = {}
         self._nodes_by_name = {}
         self.shapes = {}
-        self.model_inputs = []
+        self._model_inputs = {}
         self._target = set(target)
         self._dtypes = dtypes
         self._output_shapes = output_shapes
@@ -258,6 +258,10 @@ class Graph(object):
     def is_target(self, name):
         """Return True if target platform is name."""
         return name in self._target
+
+    def is_initializer(self, input):
+        """Check the input is a constant value. input is in format - node_name:<int> """
+        return input in self._initializers
 
     def make_const(self, name, op_type, val):
         """Make a new constant in the graph."""
@@ -277,6 +281,17 @@ class Graph(object):
         for node in self._nodes:
             node.update_proto()
 
+        # update attributes to proto
+        for op in self.get_nodes():
+            onnx_op = op.op
+            del onnx_op.attribute[:]
+            attr = []
+            for a in op.attr.values():
+                if a.name in utils.ONNX_VALID_ATTRIBUTES:
+                    attr.append(a)
+            if attr:
+                onnx_op.attribute.extend(attr)
+
     def get_nodes(self):
         """Get node list."""
         return self._nodes
@@ -292,9 +307,37 @@ class Graph(object):
         """Set node by name."""
         self._nodes_by_name[node.name] = node
 
+    def add_model_input(self, name, tensor_value_info):
+        """Add placeholder node as model's input"""
+        if name not in self._model_inputs:
+            self._model_inputs[name] = tensor_value_info
+        else:
+            raise ValueError("model input already exists")
+
     def add_initializer(self, tensor):
         """Add tensor to initializers."""
-        self._initializers[tensor.name] = tensor
+        if tensor.name not in self._initializers:
+            self._initializers[tensor.name] = tensor
+            self.set_shape(tensor.name, tensor.dims)
+        else:
+            raise ValueError("initializer already exists")
+
+    def get_initializer(self, name):
+        """Return tensor or throw exception if it does not exist."""
+        if self.is_initializer(name):
+            return self._initializers[name]
+        raise ValueError("no initializer called" + name)
+    
+    def update_initializer(self, name, tensor):
+        if self.is_initializer(name):
+            new_tensor = numpy_helper.from_array(tensor, name)
+            if new_tensor.dims != self._initializers[name].dims:
+                self.set_shape(name, new_tensor.dims)
+
+            del self._initializers[name]
+            self._initializers[name] = new_tensor
+        else:
+            raise ValueError("no initializer called " + name)
 
     def get_dtype(self, name):
         """Get dtype for node."""
@@ -381,20 +424,19 @@ class Graph(object):
         ret = [x for _, x in sorted(zip(label, ops))]
         self.set_nodes(ret)
 
-    def make_model(self, doc, input_names, output_names, optimize=True):
+    def make_model(self, doc, output_names, optimize=True):
         """
         Create final ModelProto for onnx from internal graph.
         Args:
             optimize: optimize graph via onnx
             doc: text for doc string of the model
-            input_names: list of model inputs
             output_names: list of model outputs
         """
-
+        self.update_proto()
         # create output_tensor_values
         output_tensor_values = []
         for name in output_names:
-            dtype = self.get_dtype(name);
+            dtype = self.get_dtype(name)
             if not dtype:
                 raise ValueError("cannot found the output dtype for " + name)
             v = helper.make_tensor_value_info(name, dtype, self.get_shape(name))
@@ -406,25 +448,20 @@ class Graph(object):
         for op in self.get_nodes():
             all_inputs |= set(op.input)
             onnx_op = op.op
-            del onnx_op.attribute[:]
-            attr = []
-            for a in op.attr.values():
-                if a.name in utils.ONNX_VALID_ATTRIBUTES:
-                    attr.append(a)
-            if attr:
-                onnx_op.attribute.extend(attr)
             ops.append(onnx_op)
 
         # create input_tensor_values, initializers
+        # if initilizer is not used as input by any node, then it will be ignored
         initializers = [i for i in list(self._initializers.values()) if i.name in all_inputs]
         input_with_initializers = []
         for initializer in initializers:
             shape = self.get_shape(initializer.name)
             if shape and list(shape) != initializer.dims:
-                raise ValueError("initializer shape is inconsistent")
+                raise ValueError("initializer shape is inconsistent for " + initializer.name)
             val = helper.make_tensor_value_info(initializer.name, initializer.data_type, initializer.dims)
             input_with_initializers.append(val)
-        input_with_initializers.extend(self.model_inputs)
+
+        input_with_initializers.extend(list(self._model_inputs.values()))
 
         # create model proto
         graph = helper.make_graph(ops, "tf2onnx",
@@ -442,7 +479,6 @@ class Graph(object):
         if self._extra_opset is not None:
             opsets.extend(self._extra_opset)
         kwargs["opset_imports"] = opsets
-
         model_proto = helper.make_model(graph, **kwargs)
 
         # optimize the model proto
@@ -471,6 +507,12 @@ class Graph(object):
             print()
         else:
             return val
+
+    def dump_node_statistics(self, description):
+        op_cnt = collections.Counter()
+        for n in self.get_nodes():
+            op_cnt[n.type] += 1
+        print(description + ": ops statistics: {}".format(op_cnt))
 
     @staticmethod
     def remove_input(node, to_be_removed):
@@ -543,12 +585,12 @@ class Graph(object):
                     node.input[i] = new_input
 
     @staticmethod
-    def replace_input(node, old, new):
+    def replace_input(node, old_input, new_input):
         """Replace node."""
-        assert isinstance(node, Node) and isinstance(old, str) and isinstance(new, str)
-        for i, name in enumerate(node.input):
-            if name == old:
-                node.input[i] = new
+        assert isinstance(node, Node) and isinstance(old_input, str) and isinstance(new_input, str)
+        for i, input_name in enumerate(node.input):
+            if input_name == old_input:
+                node.input[i] = new_input
                 return True
         return False
 
