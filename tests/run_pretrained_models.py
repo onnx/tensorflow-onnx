@@ -21,6 +21,7 @@ import yaml
 from tensorflow.core.framework import graph_pb2
 from tf2onnx.tfonnx import process_tf_graph
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
+from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
 TMPPATH = tempfile.mkdtemp()
 PERFITER = 1000
@@ -176,10 +177,9 @@ class Test(object):
         """Convert graph to tensorflow."""
         return process_tf_graph(tf_graph, continue_on_error=False, opset=opset, shape_override=shape_override)
 
-    def run_caffe2(self, name, onnx_graph, inputs):
+    def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
         import caffe2.python.onnx.backend
-        model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
         prepared_backend = caffe2.python.onnx.backend.prepare(model_proto)
         results = prepared_backend.run(inputs)
         if self.perf:
@@ -189,12 +189,11 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def run_onnxmsrt(self, name, onnx_graph, inputs):
+    def run_onnxmsrt(self, name, model_proto, inputs):
         """Run test against onnxmsrt backend."""
         import lotus
         # create model and datafile in tmp path.
         model_path = os.path.join(TMPPATH, name + "_model.pb")
-        model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
         with open(model_path, "wb") as f:
             f.write(model_proto.SerializeToString())
         m = lotus.ModelExecutor(model_path)
@@ -206,11 +205,10 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def run_onnxmsrtnext(self, name, onnx_graph, inputs):
+    def run_onnxmsrtnext(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import lotus
         model_path = os.path.join(TMPPATH, name + ".pb")
-        model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
         with open(model_path, "wb") as f:
             f.write(model_proto.SerializeToString())
         m = lotus.InferenceSession(model_path)
@@ -222,11 +220,10 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def run_onnxcntk(self, name, onnx_graph, inputs):
+    def run_onnxcntk(self, name, model_proto, inputs):
         """Run test against cntk backend."""
         import cntk as C
         model_path = os.path.join(TMPPATH, name + "_model.pb")
-        model_proto = onnx_graph.make_model("test", inputs.keys(), self.output_names)
         with open(model_path, "wb") as f:
             f.write(model_proto.SerializeToString())
         z = C.Function.load(model_path, format=C.ModelFormat.ONNX)
@@ -242,15 +239,14 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def create_onnx_file(self, name, onnx_graph, inputs, outdir):
+    def create_onnx_file(self, name, model_proto, inputs, outdir):
         os.makedirs(outdir, exist_ok=True)
         model_path = os.path.join(outdir, name + ".onnx")
-        model_proto = onnx_graph.make_model(name, inputs.keys(), self.output_names)
         with open(model_path, "wb") as f:
             f.write(model_proto.SerializeToString())
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None):
+    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, transpose_opt=None):
         """Run complete test against backend."""
         print(name)
         self.perf = perf
@@ -283,7 +279,7 @@ class Test(object):
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
 
-        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def)
+        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def, transpose_opt)
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
@@ -300,29 +296,34 @@ class Test(object):
 
             # run the model with tensorflow
             tf_results = self.run_tensorflow(sess, inputs)
-            onnx_graph = None
+            model_proto = None
             print("\ttensorflow", "OK")
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
+                if transpose_opt:
+                    optimizer = TransposeOptimizer(onnx_graph, debug)
+                    optimizer.optimize()
+  
+                model_proto = onnx_graph.make_model("test", self.output_names)
                 print("\tto_onnx", "OK")
                 if debug:
-                    onnx_graph.dump_graph()
+                    model_proto.dump_graph()
                 if onnx_file:
-                    self.create_onnx_file(name, onnx_graph, inputs, onnx_file)
+                    self.create_onnx_file(name, model_proto, inputs, onnx_file)
             except Exception as ex:
                 print("\tto_onnx", "FAIL", ex)
 
         try:
             onnx_results = None
             if backend == "caffe2":
-                onnx_results = self.run_caffe2(name, onnx_graph, inputs)
+                onnx_results = self.run_caffe2(name, model_proto, inputs)
             elif backend == "onnxmsrt":
-                onnx_results = self.run_onnxmsrt(name, onnx_graph, inputs)
+                onnx_results = self.run_onnxmsrt(name, model_proto, inputs)
             elif backend == "onnxmsrtnext":
-                onnx_results = self.run_onnxmsrtnext(name, onnx_graph, inputs)
+                onnx_results = self.run_onnxmsrtnext(name, model_proto, inputs)
             elif backend == "cntk":
-                onnx_results = self.run_onnxcntk(name, onnx_graph, inputs)
+                onnx_results = self.run_onnxcntk(name, model_proto, inputs)
             else:
                 raise ValueError("unknown backend")
             print("\trun_onnx OK")
@@ -359,6 +360,7 @@ def get_args():
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
     parser.add_argument("--perf", help="capture performance numbers")
+    parser.add_argument("--optimize_transpose", help="eliminate transposes that can be removed", action="store_true")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
     return args
@@ -402,7 +404,7 @@ def main():
         count += 1
         try:
             ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file,
-                             opset=args.opset, perf=args.perf)
+                             opset=args.opset, perf=args.perf, transpose_opt=args.optimize_transpose)
         except Exception as ex:
             ret = None
             print(ex)
