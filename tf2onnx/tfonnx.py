@@ -1048,6 +1048,30 @@ def fused_batchnorm_op7(ctx, node, name, args):
     return nodes
 
 
+def matmul_op(ctx, node, name, args):
+    nodes = []
+    # tensorflow allows transpose and conjugated. If found, insert the required transpose.
+    # We could use Gemm as well but tensorflow does not pass bias in matmul.
+    transpose_a = node.get_attr("transpose_a")
+    transpose_b = node.get_attr("transpose_b")
+    transpose_a = 0 if transpose_a is None else transpose_a.i
+    transpose_b = 0 if transpose_b is None else transpose_b.i
+    if transpose_a != 0:
+        transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[0])
+        nodes.insert(0, transpose)
+    if transpose_b != 0:
+        transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
+        nodes.insert(0, transpose)
+
+    unsupported = ["adjoint_a", "adjoint_b", "a_is_sparse", "b_is_sparse", "adj_x", "adj_y"]
+    for i in unsupported:
+        val = node.get_attr(i)
+        if val is not None and val.i != 0:
+            raise ValueError(node.type + " attribute " + i + " is not supported")
+    nodes.append(node)
+    return nodes
+
+
 # pylint: enable=W0613,C0111,W0612
 
 # map tensorflow ops to onnx ops. The format below is
@@ -1089,7 +1113,8 @@ _OPSET_4 = {
     "LogicalAnd": (broadcast_op, ["And"]),
     "LogicalOr": (broadcast_op, ["Or"]),
     "Max": (reduce_op, ["ReduceMax"]),
-    "MatMul": (direct_op, ["MatMul"]),
+    "MatMul": (matmul_op, ["MatMul"]),
+    "BatchMatMul": (matmul_op, ["MatMul"]),
     "Maximum": (minmax_op, ["Max"]),
     "MaxPool": (pool_op, ["MaxPool"]),
     "MaxPoolV2": (pool_op, ["MaxPool"]),
