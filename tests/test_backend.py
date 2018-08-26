@@ -456,12 +456,30 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         self.assertAllClose(expected, tf_actual)
         self.assertAllClose(expected, actual)
 
-    def test_matmul(self):
+    def test_matmul0(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.matmul(x, x)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    def test_matmul1(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.matmul(x, x, transpose_a=True)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    def test_matmul2(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        y_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.float32, y_val.shape, name=_TFINPUT1)
+        x_ = tf.matmul(x, y, transpose_b=True)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val, y: y_val}, {_INPUT: x_val, _INPUT1: y_val})
         self.assertAllClose(expected, actual)
 
     def test_sub(self):
