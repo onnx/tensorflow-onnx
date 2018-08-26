@@ -173,7 +173,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         return results
 
     def _run_backend(self, g, args, input_dict, expected):
-        model_proto = g.make_model("test", args.inputs, args.outputs)
+        model_proto = g.make_model("test", args.outputs)
         if BACKEND == "onnxmsrt":
             y = self.run_onnxmsrt(model_proto, input_dict, args.outputs, self._testMethodName)
         elif BACKEND == "onnxmsrtnext":
