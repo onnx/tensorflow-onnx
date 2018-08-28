@@ -899,7 +899,7 @@ def topk_op(ctx, node, name, args):
     ctx.remove_input(node, node.input[1])
 
     # the second of TopK operator must be INT64 per ONNX requires. 
-    ctx.set_dtype(name + ":1", onnx_pb.TensorProto.INT64)
+    ctx.override_dtype(name + ":1", onnx_pb.TensorProto.INT64)
     return node
 
 
