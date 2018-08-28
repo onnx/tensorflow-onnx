@@ -115,8 +115,8 @@ def tensorflow_to_onnx(graph, shape_override):
 
 
 def _convert_shapenode_to_int64(ctx, node, input_number):
-    shape_node = node.inputs[1]
-    name = node.input[1]
+    shape_node = node.inputs[input_number]
+    name = node.input[input_number]
     if shape_node.is_const():
         # if it is a const, change the const to be int64
         shape = shape_node.get_tensor_value()
