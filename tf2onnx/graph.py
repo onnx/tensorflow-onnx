@@ -29,6 +29,7 @@ class Node(object):
         self._output = [i for i in node.output]
         self._attr = {}
         self.inserted_nchw = False
+
         # make sure this name is not used
         assert graph.get_node_by_name(node.name) is None
         graph.set_node_by_name(self)
@@ -243,6 +244,12 @@ class Graph(object):
         self._model_inputs = {}
         self._target = set(target)
         self._dtypes = dtypes
+
+        # override tf original output type, only used in make_model.
+        # for some ops such as TopK, the 2nd output must be int64 in onnx
+        # but has type int32 in tf
+        self._dtypes_override = {}
+
         self._output_shapes = output_shapes
         ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
@@ -343,9 +350,9 @@ class Graph(object):
         """Get dtype for node."""
         return self._dtypes.get(name)
 
-    def set_dtype(self, name, val):
-        """Set dtype for node."""
-        self._dtypes[name] = val
+    def override_dtype(self, name, val):
+        """Override dtype for node, the val will be used when build final model"""
+        self._dtypes_override[name] = val
 
     def get_shape(self, name):
         """Get shape for node."""
@@ -436,7 +443,10 @@ class Graph(object):
         # create output_tensor_values
         output_tensor_values = []
         for name in output_names:
-            dtype = self.get_dtype(name)
+            if name in self._dtypes_override:
+                dtype = self._dtypes_override[name]
+            else:
+                dtype = self.get_dtype(name)
             if not dtype:
                 raise ValueError("cannot found the output dtype for " + name)
             v = helper.make_tensor_value_info(name, dtype, self.get_shape(name))
