@@ -657,6 +657,15 @@ def transpose_op(ctx, node, name, args):
 
 
 def concat_op(ctx, node, name, args):
+    # old concat op has axis as input[0]
+    axis_node = node.inputs[0]
+    axis = axis_node.get_tensor_value()
+    ctx.remove_input(node, node.input[0])
+    node.set_attr("axis", axis[0])
+    return node
+
+
+def concatv2_op(ctx, node, name, args):
     # T output = ConcatV2(T values, Tidx axis, @int N, @type Tidx)
     # T concat_result = Concat(T inputs, @INT axis)
     axis_node = node.inputs[-1]
@@ -1088,7 +1097,7 @@ _OPSET_4 = {
     "BiasAddV1": (biasadd_op, []),
     "Cast": (cast_op, []),
     "Concat": (concat_op, ["Concat"]),
-    "ConcatV2": (concat_op, ["Concat"]),
+    "ConcatV2": (concatv2_op, ["Concat"]),
     "Const": (const_op, []),
     "ConstV2": (const_op, []),
     "Conv2D": (conv_op, ["Conv"]),
