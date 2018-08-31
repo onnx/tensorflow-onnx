@@ -65,6 +65,10 @@ class TransposeOptimizer(object):
             self._g.set_nodes(ops)
             self._g.topological_sort(ops)
 
+    def post_optimize_action(self):
+        self._g.update_proto()
+        self._g.topological_sort(self._g.get_nodes())
+
     def optimize(self):
         self._g.dump_node_statistics("before optimization")
         no_action = False
@@ -90,9 +94,10 @@ class TransposeOptimizer(object):
             # for debugging purpose
             if "stop" in self._force_stop and self._force_stop["stop"] == 1:
                 break
-        self._g.dump_node_statistics("after optimization")
-        self._g.update_proto()
+
         print("finish after " + str(iteration_cnt) + " iteration(s)")
+        self.post_optimize_action()
+        self._g.dump_node_statistics("after optimization")
 
     def _initialize_handlers(self):
         self._handler_map = {
