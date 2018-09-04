@@ -15,7 +15,8 @@ import traceback
 
 import numpy as np
 import tf2onnx
-from onnx import helper, onnx_pb, numpy_helper
+from onnx import helper, onnx_pb, numpy_helper, defs
+
 from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 from tf2onnx import utils
@@ -31,7 +32,17 @@ log = logging.getLogger("tf2onnx")
 TARGET_RS4 = "rs4"
 TARGET_CAFFE2 = "caffe2"
 POSSIBLE_TARGETS = [TARGET_RS4, TARGET_CAFFE2]
-DEFAULT_TARGET = [TARGET_RS4, TARGET_CAFFE2]
+DEFAULT_TARGET = []
+PREFERRED_OPSET = 7
+
+
+def find_opset(opset):
+    if opset is None or opset == 0:
+        opset = defs.onnx_opset_version()
+        if opset > PREFERRED_OPSET:
+            # if we use a newer onnx opset than most runtimes support, default to the one most supported
+            opset = PREFERRED_OPSET
+    return opset
 
 
 def tensorflow_to_onnx(graph, shape_override):
@@ -1209,11 +1220,16 @@ _OPSET_7 = {
     "FusedBatchNorm": (fused_batchnorm_op7, []),
 }
 
+_OPSET_8 = {
+    # don't need special handling of ops for opset 8
+}
+
 _OPSETS = [
     (4, _OPSET_4),
     (5, _OPSET_5),
     (6, _OPSET_6),
     (7, _OPSET_7),
+    (8, _OPSET_8),
 ]
 
 

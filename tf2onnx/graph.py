@@ -9,7 +9,7 @@ from __future__ import division
 from __future__ import print_function
 import collections
 import tf2onnx
-from onnx import numpy_helper, optimizer, ModelProto, defs, OperatorSetIdProto, TensorShapeProto
+from onnx import numpy_helper, optimizer, ModelProto, OperatorSetIdProto, TensorShapeProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import *
 
@@ -253,9 +253,7 @@ class Graph(object):
         self._output_shapes = output_shapes
         ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
-        if opset is None or opset == 0:
-            opset = defs.onnx_opset_version()
-        self._opset = opset
+        self._opset = tf2onnx.tfonnx.find_opset(opset)
         self._extra_opset = extra_opset
 
     @property
