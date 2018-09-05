@@ -22,6 +22,7 @@ from tensorflow.tools.graph_transforms import TransformGraph
 from tf2onnx import utils
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import *
+from tf2onnx.lstm import *
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx")
@@ -1469,7 +1470,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # rewrite graph
     rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
-                 rewrite_random_normal, rewrite_dropout]
+                 rewrite_random_normal, rewrite_dropout, tf2onnx.lstm.find_lstm_cells]
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
     for rewrite in rewriters:
