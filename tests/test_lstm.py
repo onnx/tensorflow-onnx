@@ -23,7 +23,7 @@ TMPPATH = tempfile.mkdtemp()
 
 BACKEND = "caffe2"
 # BACKEND = "onnxmsrt"
-BACKEND = "onnxmsrtnext"
+# BACKEND = "onnxmsrtnext"
 # BACKEND = "onnx-tensorflow"
 
 # names for input and outputs for tests
