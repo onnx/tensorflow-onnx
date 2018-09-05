@@ -10,13 +10,11 @@ Tf2onnx is in its early development. Mileage will vary since TensorFlow supports
 | [![Build Status](https://travis-ci.org/onnx/tensorflow-onnx.svg?branch=master)](https://travis-ci.org/onnx/tensorflow-onnx)
 
 # Supported ONNX version
-tensorflow-onnx will use the onnx version installed on your system and installs onnx-1.2.2 if none is found.
+tensorflow-onnx will use the onnx version installed on your system and installs the latest onnx version if none is found.
 
-One important thing with onnx-1.3 being released:
+By default we use opset 7 for the resulting onnx graph since most runtimes will support opset 7.
 
-by default tensorflow-onnx will use the highest opset found on your system to generate the onnx graph.
-If you have onnx-1.3 installed the graph is generated with opset 8.
-You can tell tensorflow-onnx with ```--opset 7``` to generated the graph with opset 7 so runtimes that don't support opset 8 keep working.
+With the release of onnx-1.3 there is now opset 8 - to create an onnx graph for opset 8 use in the command line ```--opset 8```.
 
 # Status
 Basic net and conv nets should work. A list of models that pass tests can be found [here](tests/run_pretrained_models.yaml)

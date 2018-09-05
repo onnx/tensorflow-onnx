@@ -61,7 +61,8 @@ def default_custom_op_handler(ctx, node, name, args):
 def main():
     args = get_args()
 
-    print("using tensorflow={}, onnx={}".format(tf.__version__, onnx.__version__))
+    opset = tf2onnx.tfonnx.find_opset(args.opset)
+    print("using tensorflow={}, onnx={}, opset={}".format(tf.__version__, onnx.__version__, opset))
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.
