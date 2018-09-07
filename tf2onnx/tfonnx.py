@@ -936,30 +936,41 @@ def spacetodepth_op(ctx, node, name, args):
 
 
 def minmax_op(ctx, node, name, args):
-    # tensorflow minimum/maximum support broadcast. Onnx <= opset 7 does not.
-    # inject a add(0) as 'broadcast' operator if needed.
+    # tensorflow minimum/maximum does support broadcast, onnx < opset 8 does not.
+    # handle this by doing something like:
+    # y = min(x1, add(x2, sub(x1, x1))), where x1, x2 are the inputs and x2 is a scalar
+    # this will create a tensor of zeros of the shape of x1, adds x2 to it (which broadcasts) and use that for min.
     shapeo = ctx.get_shape(node.output[0])
     needs_broadcast_op = []
-    for i, name in enumerate(node.input):
-        if ctx.get_shape(name) != shapeo:
-            needs_broadcast_op.append(i)
+    has_correct_shape = []
+    # TODO: test with opset 8 runtime before removing True
+    if True or ctx.opset < 8:
+        for i, name in enumerate(node.input):
+            if ctx.get_shape(name) != shapeo:
+                needs_broadcast_op.append(i)
+            else:
+                has_correct_shape.append(name)
     if needs_broadcast_op:
         new_nodes = []
+        has_correct_shape = has_correct_shape[0]
         for i in needs_broadcast_op:
             input_node = node.inputs[i]
-            # we don't track dtype for inserted ops but we know the output dtype here is
-            # the one we want.
-            dtype = ctx.get_dtype(node.output[0])
-            zero_name = utils.make_name(input_node.name)
-            ctx.make_const(zero_name, "Const", np.zeros(shapeo, dtype=utils.ONNX_TO_NUMPY_DTYPE[dtype]))
-            op_name = utils.make_name(input_node.name)
-            output_name = op_name + ":0"
-            add_node = Node(helper.make_node("Add", [input_node.output[0], zero_name],
-                                             [output_name], name=op_name), ctx)
-            node.input[i] = output_name
+            sub_name = utils.make_name(input_node.name)
+            sub_output = utils.port_name(sub_name)
+            # get a tensor with zeros (since there is no Fill op as of opset8)
+            sub_node = Node(helper.make_node("Sub", [has_correct_shape, has_correct_shape],
+                                             [sub_output], name=sub_name), ctx)
+            add_name = utils.make_name(input_node.name)
+            add_output = utils.port_name(add_name)
+            # use add as 'broadcast' op
+            add_node = Node(helper.make_node("Add", [input_node.output[0], sub_output],
+                                             [add_output], name=add_name), ctx)
+            node.input[i] = add_output
+            new_nodes.append(sub_node)
             new_nodes.append(add_node)
         new_nodes.append(node)
         return new_nodes
+
     return node
 
 
@@ -1155,6 +1166,8 @@ _OPSET_4 = {
     "Prod": (reduce_op, ["ReduceProd"]),
     "RandomNormal": (direct_op, []),
     "RandomUniform": (direct_op, []),
+    "RandomNormalLike": (direct_op, []),
+    "RandomUniformLike": (direct_op, []),
     "RealDiv": (broadcast_op, ["Div"]),
     "Reciprocal": (direct_op, []),
     "Relu": (direct_op, ["Relu"]),
@@ -1237,7 +1250,7 @@ def rewrite_random_uniform(g, ops):
     pattern = \
         OpTypePattern('Add', name='output', inputs=[
             OpTypePattern('Mul', inputs=[
-                OpTypePattern('RandomUniform', name='input1'),
+                OpTypePattern('RandomUniform', name='input1', inputs=["*"]),
                 OpTypePattern('Sub', name='input2', inputs=["*", "*"]),
             ]), None
         ])
@@ -1250,11 +1263,19 @@ def rewrite_random_uniform(g, ops):
         # max is on input 0
         tmax = input2.inputs[0].get_tensor_value()[0]
         tmin = input2.inputs[1].get_tensor_value()[0]
-        shape = g.get_shape(output.output[0])
         dtype = output.dtype
         op_name = utils.make_name("RandomUniform")
         out_name = op_name + ":0"
-        new_node = Node(helper.make_node("RandomUniform", [], [out_name],
+        ru_op = match.get_op('input1')
+        if ru_op.inputs[0].type == "Shape":
+            shape_op = ru_op.inputs[0]
+            new_node = Node(helper.make_node("RandomUniformLike", [shape_op.input[0]], [out_name],
+                                         name=op_name, low=tmin, high=tmax,
+                                         dtype=dtype), g)
+            ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
+        else:
+            shape = g.get_shape(output.output[0])
+            new_node = Node(helper.make_node("RandomUniform", [], [out_name],
                                          name=op_name, low=tmin, high=tmax,
                                          dtype=dtype, shape=shape), g)
         ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
@@ -1298,14 +1319,23 @@ def rewrite_random_normal(g, ops):
     for match in match_results:
         output = match.get_op('output')
         mean = output.inputs[1].get_tensor_value()[0]
-        shape = g.get_shape(output.output[0])
         dtype = output.dtype
         op_name = utils.make_name("RandomNormal")
         out_name = op_name + ":0"
-        new_node = Node(helper.make_node("RandomNormal", [], [out_name],
+
+        rn_op = match.get_op('input1')
+        if rn_op.inputs[0].type == "Shape":
+            shape_op = rn_op.inputs[0]
+            new_node = Node(helper.make_node("RandomNormalLike", [shape_op.input[0]], [out_name],
+                                         name=op_name, mean=mean, scale=1.0,
+                                         dtype=dtype), g)
+            ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
+        else:
+            shape = g.get_shape(output.output[0])
+            new_node = Node(helper.make_node("RandomNormal", [], [out_name],
                                          name=op_name, shape=shape, mean=mean, scale=1.0,
                                          dtype=dtype), g)
-        ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
+            ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
 
     return ops
 

@@ -360,6 +360,8 @@ class Graph(object):
             for i, v in enumerate(shape):
                 if v is None:
                     shape[i] = -1
+            # hack to allow utils.ONNX_UNKNOWN_DIMENSION to override batchsize if needed.
+            # default is -1.
             if shape[0] == -1:
                 shape[0] = utils.ONNX_UNKNOWN_DIMENSION
         return shape
