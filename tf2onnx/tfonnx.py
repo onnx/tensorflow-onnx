@@ -660,8 +660,8 @@ def biasadd_op7(ctx, node, name, args):
             reshape_op = ctx.insert_new_node_on_input(node, "Reshape", op_name)
             reshape_op.input.append(shape_name)
             ctx.set_shape(reshape_op.output[0], new_broadcast_shape)
-
-    return [reshape_op, node]
+            return [reshape_op, node]
+    return node
 
 
 def transpose_op(ctx, node, name, args):
