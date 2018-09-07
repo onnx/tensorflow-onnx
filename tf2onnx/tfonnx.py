@@ -642,9 +642,26 @@ def biasadd_op(ctx, node, name, args):
 def biasadd_op7(ctx, node, name, args):
     # T output = BiasAdd(T value, T bias, @string data_format)
     # T output = BiasAddV1(T value, T bias)
-    # TODO: for now use add. We may need to convert to NCHW.
+    # According TF bias_add definition, the input dim is always only 1.
     node.type = "Add"
-    return broadcast_op7(ctx, node, name, args)
+    node = broadcast_op7(ctx, node, name, args)
+
+    # on NHWC, bias will broadcast from largest dim, which is default onnx Add op broadcast behavior.
+    if not node.is_nhwc():
+        # however, in NCHW, bias should be at 2nd dim, which by default onnx Add op has no way to know,
+        # so it needs being reshaped into 3-dim tensor before add
+        shape0 = ctx.get_shape(node.input[0])
+        shape1 = ctx.get_shape(node.input[1])
+        if node.inputs[1].type == 'Const' and len(shape1) == 1:
+            new_broadcast_shape = [shape1[0], ] + [1, ] * (len(shape0) - 2)
+            shape_name = utils.make_name(node.name)
+            ctx.make_const(shape_name, "Const", np.array(new_broadcast_shape, dtype=np.int64))
+            op_name = node.input[1]
+            reshape_op = ctx.insert_new_node_on_input(node, "Reshape", op_name)
+            reshape_op.input.append(shape_name)
+            ctx.set_shape(reshape_op.output[0], new_broadcast_shape)
+
+    return [reshape_op, node]
 
 
 def transpose_op(ctx, node, name, args):
