@@ -644,7 +644,24 @@ def biasadd_op7(ctx, node, name, args):
     # T output = BiasAddV1(T value, T bias)
     # TODO: for now use add. We may need to convert to NCHW.
     node.type = "Add"
-    return broadcast_op7(ctx, node, name, args)
+    node = broadcast_op7(ctx, node, name, args)
+    shape1 = ctx.get_shape(node.input[1])
+
+    # in NCHW, bias should be at 2nd dim, which by default onnx Add op has no way to know,
+    # so need reshape bias into 3-dim tensor.
+    if node.data_format == 'NCHW' and \
+            node.inputs[1].type == 'Const' and len(shape1) == 1:
+
+        new_broadcast_shape = [shape1[0], 1, 1]
+        shape_name = utils.make_name(node.name)
+        ctx.make_const(shape_name, "Const", np.array(new_broadcast_shape, dtype=np.int64))
+        input_name = node.input[1]
+        reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
+        reshape.input.append(shape_name)
+        ctx.set_shape(reshape.output[0], new_broadcast_shape)
+        ctx.get_nodes().append(reshape)
+
+    return node
 
 
 def transpose_op(ctx, node, name, args):
