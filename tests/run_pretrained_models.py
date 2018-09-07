@@ -385,7 +385,6 @@ def tests_from_yaml(fname):
 def main():
     args = get_args()
     Test.cache_dir = args.cache
-    tf2onnx.utils.ONNX_UNKNOWN_DIMENSION = 1
     tests = tests_from_yaml(args.config)
     if args.list:
         print(sorted(tests.keys()))

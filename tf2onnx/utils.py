@@ -187,3 +187,8 @@ def node_name(name):
     if pos >= 0:
         return name[:pos]
     return name
+
+
+def port_name(name, nr=0):
+    """Map node output number to name."""
+    return name + ":" + str(nr)

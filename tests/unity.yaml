@@ -4,7 +4,7 @@
   model: 3DBall.bytes
   input_get: get_random
   inputs:
-    "vector_observation:0": [1, 8]
+    "vector_observation:0": [3, 8]
   outputs:
     - action:0
     - action_probs:0
