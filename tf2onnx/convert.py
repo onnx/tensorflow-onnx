@@ -31,7 +31,7 @@ def get_args():
     parser.add_argument("--outputs", required=True, help="model output_names")
     parser.add_argument("--opset", type=int, default=None, help="highest opset to use")
     parser.add_argument("--custom-ops", help="list of custom ops")
-    parser.add_argument("--unknown-dim", type=int, default=1, help="default for unknown dimensions")
+    parser.add_argument("--unknown-dim", type=int, default=-1, help="default for unknown dimensions")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
     parser.add_argument("--optimize_transpose", help="eliminate transposes that can be removed", action="store_true")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
