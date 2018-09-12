@@ -597,21 +597,56 @@ def pool_op(ctx, node, name, args):
 
 
 def relu6_op(ctx, node, name, args):
-    # min(max(features, 0), 6)
-    node.type = "Max"
+    # relu6 = min(max(features, 0), 6)
+    # since onnx does not have relu6, compose it with multipe ops.
+    old_output = node.output[0]
     shape = ctx.get_shape(node.input[0])
-    zero_name = utils.make_name(node.name)
-    zero_node = ctx.make_const(zero_name, "Const", np.zeros(shape, dtype=np.float32))
-    six_name = utils.make_name(node.name)
-    six = np.zeros(shape, dtype=np.float32)
-    six.fill(6.0)
-    six_node = ctx.make_const(six_name, "Const", six)
-    node.input.append(zero_name)
-    op_name = utils.make_name(node.name)
-    new_op = ctx.insert_new_node_on_output("Min", node.output[0], name=op_name)
-    new_op.input.append(six_name)
-    ctx.copy_shape(node.output[0], new_op.output[0])
-    return [node, new_op]
+    if -1 in shape:
+        # if the shape has unknown dims we need to do something like this:
+        # tz = sub(features, features)  - no fill in onnx (comes with opset9 or so)
+        # t6 = add(6, tz)
+        # relu6 = min(max(features, t0), t6)
+        input_node = node.inputs[0]
+        node.type = "Max"
+
+        # const tensor 6
+        six_name = utils.make_name(node.name)
+        six_node = ctx.make_const(six_name, "Const",  np.array([6.], dtype=np.float32))
+
+        # get a tensor of input shape with zeros
+        sub_name = utils.make_name(input_node.name)
+        sub_output = utils.port_name(sub_name)
+        sub_node = Node(helper.make_node("Sub", [node.input[0], node.input[0]],
+                                         [sub_output], name=sub_name), ctx)
+        node.input.append(sub_output)
+
+        # get a tensor of input shape with 6
+        add_name = utils.make_name(input_node.name)
+        add_output = utils.port_name(add_name)
+        add_node = Node(helper.make_node("Add", [six_node.output[0], sub_output],
+                                         [add_output], name=add_name), ctx)
+
+        min_name = utils.make_name(node.name)
+        min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
+        min_node.input.append(add_output)
+        ctx.copy_shape(old_output, min_node.output[0])
+        return [sub_node, add_node, node, min_node]
+
+    else:
+        # if there is no unknown dim in shape we can use constants
+        node.type = "Max"
+        zero_name = utils.make_name(node.name)
+        zero_node = ctx.make_const(zero_name, "Const", np.zeros(shape, dtype=np.float32))
+        six_name = utils.make_name(node.name)
+        six = np.zeros(shape, dtype=np.float32)
+        six.fill(6.0)
+        six_node = ctx.make_const(six_name, "Const", six)
+        node.input.append(zero_name)
+        min_name = utils.make_name(node.name)
+        min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
+        min_node.input.append(six_name)
+        ctx.copy_shape(old_output, min_node.output[0])
+        return [node, min_node]
 
 
 def squareddifference_op(ctx, node, name, args):
