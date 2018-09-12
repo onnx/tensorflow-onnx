@@ -1,5 +1,5 @@
 3DBall:
-  check_only_shape: true
+  check_only_shape: true # model uses RandomNormal
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/3DBall/TFModels/3DBall.bytes
   model: 3DBall.bytes
   input_get: get_random
@@ -11,20 +11,16 @@
     - value_estimate:0
 
 3DBallHard:
-  # needs: lstm
-  disabled: true
+  check_only_shape: true # model uses RandomNormal
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/3DBall/TFModels/3DBallHard.bytes
   model: 3DBallHard.bytes
   input_get: get_random
   inputs:
     "vector_observation:0": [1, 25]
-    "recurrent_in:0": [1, 256]
-    "sequence_length:0": [256]
   outputs:
     - action:0
 
 Basic:
-  # FIXME
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Basic/TFModels/Basic.bytes
   model: Basic.bytes
   input_get: get_random
@@ -37,7 +33,7 @@ Basic:
     - value_estimate:0
 
 Bouncer:
-  check_only_shape: true
+  check_only_shape: true # model uses RandomNormal
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Bouncer/TFModels/Bouncer.bytes
   model: Bouncer.bytes
   input_get: get_random
@@ -106,8 +102,9 @@ Hallway:
   inputs:
     "vector_observation:0": [1, 36]
     "recurrent_in:0": [1, 256]
-    "sequence_length:0": [256]
-    "prev_action:0": [1]
+    "sequence_length:0": np.array(1)
+    "action_masks:0": [1,5]
+    "prev_action:0": [1, 1]
   outputs:
     - action_probs:0
     - value_estimate:0

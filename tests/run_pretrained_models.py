@@ -27,42 +27,31 @@ TMPPATH = tempfile.mkdtemp()
 PERFITER = 1000
 
 
-def get_beach(inputs):
+def get_beach(shape):
     """Get beach image as input."""
-    for name, shape in inputs.items():
-        break
     resize_to = shape[1:3]
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beach.jpg")
     img = PIL.Image.open(path)
     img = img.resize(resize_to, PIL.Image.ANTIALIAS)
     img_np = np.array(img).astype(np.float32)
     img_np = img_np.reshape(shape)
-    return {name: img_np}
+    return img_np
 
 
-def get_random(inputs):
+def get_random(shape):
     """Get random input."""
-    d = {}
-    for k, v in inputs.items():
-        d[k] = np.random.sample(v).astype(np.float32)
-    return d
+    return np.random.sample(shape).astype(np.float32)
 
 
-def get_random256(inputs):
+def get_random256(shape):
     """Get random imput between 0 and 255."""
-    d = {}
-    for k, v in inputs.items():
-        d[k] = np.round(np.random.sample(v) * 256).astype(np.float32)
-    return d
+    return np.round(np.random.sample(shape) * 256).astype(np.float32)
 
 
-def get_ramp(inputs):
+def get_ramp(shape):
     """Get ramp input."""
-    d = {}
-    for k, v in inputs.items():
-        size = np.prod(v)
-        d[k] = np.linspace(1, size, size).reshape(v).astype(np.float32)
-    return d
+    size = np.prod(shape)
+    return np.linspace(1, size, size).reshape(shape).astype(np.float32)
 
 
 _INPUT_FUNC_MAPPING = {
@@ -270,7 +259,12 @@ class Test(object):
             model_path = os.path.join(dir_name, "frozen.pb")
 
         # create the input data
-        inputs = self.make_input(self.input_names)
+        inputs = {}
+        for k, v in self.input_names.items():
+            if isinstance(v, str) and v.startswith("np."):
+                inputs[k] = eval(v)
+            else:
+                inputs[k] = self.make_input(v)
         if self.more_inputs:
             for k, v in self.more_inputs.items():
                 inputs[k] = v
