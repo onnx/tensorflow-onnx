@@ -268,13 +268,13 @@ class Graph(object):
         """Check the input is a constant value. input is in format - node_name:<int> """
         return input in self._initializers
 
-    def make_const(self, name, op_type, val):
-        """Make a new constant in the graph."""
-        onnx_tensor = numpy_helper.from_array(val, name)
-        self._initializers[name] = onnx_tensor
-        self.set_shape(name, val.shape)
-        new_node = Node(helper.make_node(op_type, [], [name], name=name, value=onnx_tensor), self)
-        return new_node
+    def make_const(self, name, np_val):
+        """Make a new constant in the graph"""
+        onnx_tensor = numpy_helper.from_array(np_val, name)
+        self.add_initializer(onnx_tensor)
+
+        Node(helper.make_node("Const", [], [name], name=name, value=onnx_tensor), self)
+        return name
 
     def set_nodes(self, ops):
         """Set new node list."""
