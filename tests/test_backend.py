@@ -194,7 +194,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def _run(self, output, tf_dict, onnx_dict):
         with tf.Session() as sess:
             expected = sess.run(output, feed_dict=tf_dict)
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=OPSET)
             actual = self._run_backend(g, self._args1, onnx_dict, expected)
         return actual, expected
 
@@ -352,7 +352,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
             output = tf.identity(conv, name=_TFOUTPUT)
             sess.run(tf.global_variables_initializer())
             expected = sess.run(output, feed_dict={x: x_val})
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=OPSET)
             actual = self._run_backend(g, self._args1, {_INPUT: x_val}, expected)
             self.assertAllClose(expected, actual, rtol=1e-05)
 
@@ -683,6 +683,14 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def test_relu6(self):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+        x_ = tf.nn.relu6(x)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
+        self.assertAllClose(expected, actual)
+
+    def test_relu6_dynamic(self):
+        x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
+        x = tf.placeholder(tf.float32, [None, 2], name=_TFINPUT)
         x_ = tf.nn.relu6(x)
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
@@ -1100,7 +1108,7 @@ if __name__ == "__main__":
     parser.add_argument('--backend', default=BACKEND,
                         choices=["caffe2", "onnxmsrt", "onnxmsrtnext", "onnx-tensorflow"],
                         help="backend to test against")
-    parser.add_argument('--opset', default=OPSET,
+    parser.add_argument('--opset', type=int, default=OPSET,
                         help="opset to test against")
     parser.add_argument('unittest_args', nargs='*')
 

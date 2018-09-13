@@ -504,7 +504,7 @@ def convtranspose_op(ctx, node, name, args):
     kernel_shape = conv_kernel_shape(ctx, node, 1)
 
     # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
-    output_shape = node.inputs[0].get_tensor_value()
+    output_shape = ctx.get_shape(node.output[0])
     if node.is_nhwc():
         new_output_shape = [output_shape[1], output_shape[2]]
     else:
@@ -597,21 +597,80 @@ def pool_op(ctx, node, name, args):
 
 
 def relu6_op(ctx, node, name, args):
-    # min(max(features, 0), 6)
-    node.type = "Max"
+    # relu6 = min(max(features, 0), 6)
+    # since onnx does not have relu6, compose it with multipe ops.
+    old_output = node.output[0]
+    dtype = ctx.get_dtype(node.input[0])
+    dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
     shape = ctx.get_shape(node.input[0])
-    zero_name = utils.make_name(node.name)
-    ctx.make_const(zero_name, np.zeros(shape, dtype=np.float32))
+
+    if -1 in shape:
+        # if the shape has unknown dims we need to do something like this for opset < 8 (=no broadcast for min/max):
+        # tz = sub(features, features)
+        # t6 = add(6, tz)
+        # relu6 = min(max(features, t0), t6)
+        input_node = node.inputs[0]
+        node.type = "Max"
+
+        # const tensor 6
+        six_name = utils.make_name(node.name)
+        ctx.make_const(six_name, np.array([6.], dtype=dtype))
+
+        # get a tensor of input shape with zeros
+        sub_name = utils.make_name(input_node.name)
+        sub_output = utils.port_name(sub_name)
+        sub_node = Node(helper.make_node("Sub", [node.input[0], node.input[0]],
+                                         [sub_output], name=sub_name), ctx)
+        node.input.append(sub_output)
+
+        # get a tensor of input shape with 6
+        add_name = utils.make_name(input_node.name)
+        add_output = utils.port_name(add_name)
+        add_node = Node(helper.make_node("Add", [six_node.output[0], sub_output],
+                                         [add_output], name=add_name), ctx)
+
+        min_name = utils.make_name(node.name)
+        min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
+        min_node.input.append(add_output)
+        ctx.copy_shape(old_output, min_node.output[0])
+        return [sub_node, add_node, node, min_node]
+    else:
+        # if there is no unknown dim in shape we can use constants
+        node.type = "Max"
+        zero_name = utils.make_name(node.name)
+        ctx.make_const(zero_name, np.zeros(shape, dtype=dtype))
+        six_name = utils.make_name(node.name)
+        six = np.zeros(shape, dtype=dtype)
+        six.fill(6)
+        ctx.make_const(six_name, six)
+        node.input.append(zero_name)
+        min_name = utils.make_name(node.name)
+        min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
+        min_node.input.append(six_name)
+        ctx.copy_shape(old_output, min_node.output[0])
+        return [node, min_node]
+
+
+def relu6_op8(ctx, node, name, args):
+    # relu6 = min(max(features, 0), 6) for opset >= 8
+    # since onnx does not have relu6, compose it with multipe ops.
+    old_output = node.output[0]
+    dtype = ctx.get_dtype(node.input[0])
+    dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
+    node.type = "Max"
+
+    # const tensor 6
     six_name = utils.make_name(node.name)
-    six = np.zeros(shape, dtype=np.float32)
-    six.fill(6.0)
-    ctx.make_const(six_name, six)
+    ctx.make_const(six_name, np.array([6], dtype=dtype))
+    zero_name = utils.make_name(node.name)
+    ctx.make_const(zero_name, np.array([0], dtype=dtype))
+
     node.input.append(zero_name)
-    op_name = utils.make_name(node.name)
-    new_op = ctx.insert_new_node_on_output("Min", node.output[0], name=op_name)
-    new_op.input.append(six_name)
-    ctx.copy_shape(node.output[0], new_op.output[0])
-    return [node, new_op]
+    min_name = utils.make_name(node.name)
+    min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
+    min_node.input.append(six_name)
+    ctx.copy_shape(old_output, min_node.output[0])
+    return [node, min_node]
 
 
 def squareddifference_op(ctx, node, name, args):
@@ -642,9 +701,26 @@ def biasadd_op(ctx, node, name, args):
 def biasadd_op7(ctx, node, name, args):
     # T output = BiasAdd(T value, T bias, @string data_format)
     # T output = BiasAddV1(T value, T bias)
-    # TODO: for now use add. We may need to convert to NCHW.
+    # According TF bias_add definition, the input dim is always only 1.
     node.type = "Add"
-    return broadcast_op7(ctx, node, name, args)
+    node = broadcast_op7(ctx, node, name, args)
+
+    # on NHWC, bias will broadcast from largest dim, which is default onnx Add op broadcast behavior.
+    if not node.is_nhwc():
+        # however, in NCHW, bias should be at 2nd dim, which by default onnx Add op has no way to know,
+        # so it needs being reshaped into 3-dim tensor before add
+        shape0 = ctx.get_shape(node.input[0])
+        shape1 = ctx.get_shape(node.input[1])
+        if node.inputs[1].type == 'Const' and len(shape1) == 1:
+            new_broadcast_shape = [shape1[0], ] + [1, ] * (len(shape0) - 2)
+            shape_name = utils.make_name(node.name)
+            ctx.make_const(shape_name, "Const", np.array(new_broadcast_shape, dtype=np.int64))
+            op_name = node.input[1]
+            reshape_op = ctx.insert_new_node_on_input(node, "Reshape", op_name)
+            reshape_op.input.append(shape_name)
+            ctx.set_shape(reshape_op.output[0], new_broadcast_shape)
+            return [reshape_op, node]
+    return node
 
 
 def transpose_op(ctx, node, name, args):
@@ -936,30 +1012,41 @@ def spacetodepth_op(ctx, node, name, args):
 
 
 def minmax_op(ctx, node, name, args):
-    # tensorflow minimum/maximum support broadcast. Onnx <= opset 7 does not.
-    # inject a add(0) as 'broadcast' operator if needed.
+    # tensorflow minimum/maximum does support broadcast, onnx < opset 8 does not.
+    # handle this by doing something like:
+    # y = min(x1, add(x2, sub(x1, x1))), where x1, x2 are the inputs and x2 is a scalar
+    # this will create a tensor of zeros of the shape of x1, adds x2 to it (which broadcasts) and use that for min.
     shapeo = ctx.get_shape(node.output[0])
     needs_broadcast_op = []
-    for i, name in enumerate(node.input):
-        if ctx.get_shape(name) != shapeo:
-            needs_broadcast_op.append(i)
+    has_correct_shape = []
+    # TODO: test with opset 8 runtime before removing True
+    if True or ctx.opset < 8:
+        for i, name in enumerate(node.input):
+            if ctx.get_shape(name) != shapeo:
+                needs_broadcast_op.append(i)
+            else:
+                has_correct_shape.append(name)
     if needs_broadcast_op:
         new_nodes = []
+        has_correct_shape = has_correct_shape[0]
         for i in needs_broadcast_op:
             input_node = node.inputs[i]
-            # we don't track dtype for inserted ops but we know the output dtype here is
-            # the one we want.
-            dtype = ctx.get_dtype(node.output[0])
-            zero_name = utils.make_name(input_node.name)
-            ctx.make_const(zero_name, np.zeros(shapeo, dtype=utils.ONNX_TO_NUMPY_DTYPE[dtype]))
-            op_name = utils.make_name(input_node.name)
-            output_name = op_name + ":0"
-            add_node = Node(helper.make_node("Add", [input_node.output[0], zero_name],
-                                             [output_name], name=op_name), ctx)
-            node.input[i] = output_name
+            sub_name = utils.make_name(input_node.name)
+            sub_output = utils.port_name(sub_name)
+            # get a tensor with zeros (since there is no Fill op as of opset8)
+            sub_node = Node(helper.make_node("Sub", [has_correct_shape, has_correct_shape],
+                                             [sub_output], name=sub_name), ctx)
+            add_name = utils.make_name(input_node.name)
+            add_output = utils.port_name(add_name)
+            # use add as 'broadcast' op
+            add_node = Node(helper.make_node("Add", [input_node.output[0], sub_output],
+                                             [add_output], name=add_name), ctx)
+            node.input[i] = add_output
+            new_nodes.append(sub_node)
             new_nodes.append(add_node)
         new_nodes.append(node)
         return new_nodes
+
     return node
 
 
@@ -1155,6 +1242,8 @@ _OPSET_4 = {
     "Prod": (reduce_op, ["ReduceProd"]),
     "RandomNormal": (direct_op, []),
     "RandomUniform": (direct_op, []),
+    "RandomNormalLike": (direct_op, []),
+    "RandomUniformLike": (direct_op, []),
     "RealDiv": (broadcast_op, ["Div"]),
     "Reciprocal": (direct_op, []),
     "Relu": (direct_op, ["Relu"]),
@@ -1221,7 +1310,7 @@ _OPSET_7 = {
 }
 
 _OPSET_8 = {
-    # don't need special handling of ops for opset 8
+    "Relu6": (relu6_op8, []),
 }
 
 _OPSETS = [
@@ -1237,7 +1326,7 @@ def rewrite_random_uniform(g, ops):
     pattern = \
         OpTypePattern('Add', name='output', inputs=[
             OpTypePattern('Mul', inputs=[
-                OpTypePattern('RandomUniform', name='input1'),
+                OpTypePattern('RandomUniform', name='input1', inputs=["*"]),
                 OpTypePattern('Sub', name='input2', inputs=["*", "*"]),
             ]), None
         ])
@@ -1250,11 +1339,19 @@ def rewrite_random_uniform(g, ops):
         # max is on input 0
         tmax = input2.inputs[0].get_tensor_value()[0]
         tmin = input2.inputs[1].get_tensor_value()[0]
-        shape = g.get_shape(output.output[0])
         dtype = output.dtype
         op_name = utils.make_name("RandomUniform")
         out_name = op_name + ":0"
-        new_node = Node(helper.make_node("RandomUniform", [], [out_name],
+        ru_op = match.get_op('input1')
+        if ru_op.inputs[0].type == "Shape":
+            shape_op = ru_op.inputs[0]
+            new_node = Node(helper.make_node("RandomUniformLike", [shape_op.input[0]], [out_name],
+                                         name=op_name, low=tmin, high=tmax,
+                                         dtype=dtype), g)
+            ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
+        else:
+            shape = g.get_shape(output.output[0])
+            new_node = Node(helper.make_node("RandomUniform", [], [out_name],
                                          name=op_name, low=tmin, high=tmax,
                                          dtype=dtype, shape=shape), g)
         ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
@@ -1298,14 +1395,23 @@ def rewrite_random_normal(g, ops):
     for match in match_results:
         output = match.get_op('output')
         mean = output.inputs[1].get_tensor_value()[0]
-        shape = g.get_shape(output.output[0])
         dtype = output.dtype
         op_name = utils.make_name("RandomNormal")
         out_name = op_name + ":0"
-        new_node = Node(helper.make_node("RandomNormal", [], [out_name],
+
+        rn_op = match.get_op('input1')
+        if rn_op.inputs[0].type == "Shape":
+            shape_op = rn_op.inputs[0]
+            new_node = Node(helper.make_node("RandomNormalLike", [shape_op.input[0]], [out_name],
+                                         name=op_name, mean=mean, scale=1.0,
+                                         dtype=dtype), g)
+            ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
+        else:
+            shape = g.get_shape(output.output[0])
+            new_node = Node(helper.make_node("RandomNormal", [], [out_name],
                                          name=op_name, shape=shape, mean=mean, scale=1.0,
                                          dtype=dtype), g)
-        ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
+            ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
 
     return ops
 
