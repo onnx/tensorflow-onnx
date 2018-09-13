@@ -403,7 +403,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             else:
                 # new reshape takes new shape as input[1]
                 shape_name = utils.make_name(node.name)
-                shape_node = ctx.make_const(shape_name, "Const", np.array(new_kernel_shape, dtype=np.int64))
+                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
                 input_name = node.input[1]
                 reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
                 reshape.input.append(shape_name)
@@ -601,11 +601,11 @@ def relu6_op(ctx, node, name, args):
     node.type = "Max"
     shape = ctx.get_shape(node.input[0])
     zero_name = utils.make_name(node.name)
-    zero_node = ctx.make_const(zero_name, "Const", np.zeros(shape, dtype=np.float32))
+    ctx.make_const(zero_name, np.zeros(shape, dtype=np.float32))
     six_name = utils.make_name(node.name)
     six = np.zeros(shape, dtype=np.float32)
     six.fill(6.0)
-    six_node = ctx.make_const(six_name, "Const", six)
+    ctx.make_const(six_name, six)
     node.input.append(zero_name)
     op_name = utils.make_name(node.name)
     new_op = ctx.insert_new_node_on_output("Min", node.output[0], name=op_name)
@@ -772,7 +772,7 @@ def expanddims_op(ctx, node, name, args):
 def expanddims_op7(ctx, node, name, args):
     shape = ctx.get_shape(node.output[0])
     shape_name = utils.make_name(node.name)
-    shape_node = ctx.make_const(shape_name, "Const", np.array(shape, dtype=np.int64))
+    ctx.make_const(shape_name, np.array(shape, dtype=np.int64))
     node.type = "Reshape"
     node.input[1] = shape_name
     return node
@@ -951,7 +951,7 @@ def minmax_op(ctx, node, name, args):
             # the one we want.
             dtype = ctx.get_dtype(node.output[0])
             zero_name = utils.make_name(input_node.name)
-            ctx.make_const(zero_name, "Const", np.zeros(shapeo, dtype=utils.ONNX_TO_NUMPY_DTYPE[dtype]))
+            ctx.make_const(zero_name, np.zeros(shapeo, dtype=utils.ONNX_TO_NUMPY_DTYPE[dtype]))
             op_name = utils.make_name(input_node.name)
             output_name = op_name + ":0"
             add_node = Node(helper.make_node("Add", [input_node.output[0], zero_name],
@@ -1025,7 +1025,7 @@ def onehot_op(ctx, node, name, args):
         eye[eye == 0] = off
         eye[eye == 1] = on
     const_name = utils.make_name(node.name)
-    ctx.make_const(const_name, "Const", eye)
+    ctx.make_const(const_name, eye)
     # setup gather inputs
     del node.input[:]
     node.input.append(const_name)
@@ -1056,13 +1056,13 @@ def fused_batchnorm_op7(ctx, node, name, args):
     if mean_shape != scale_shape:
         new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(), scale_shape), dtype=val_type)
         new_mean_node_name= utils.make_name(node.name)
-        new_mean_node = ctx.make_const(new_mean_node_name, "Const", new_mean_value)
+        ctx.make_const(new_mean_node_name, new_mean_value)
         node.input[3] = new_mean_node_name
 
     if var_shape != scale_shape:
         new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(), scale_shape), dtype=val_type)
         new_val_node_name= utils.make_name(node.name)
-        new_var_node = ctx.make_const(new_val_node_name, "Const", new_var_value)
+        ctx.make_const(new_val_node_name, new_var_value)
         node.input[4] = new_val_node_name
 
     return nodes
