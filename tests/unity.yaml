@@ -35,7 +35,7 @@ Basic:
 Banana:
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/BananaCollectors/TFModels/Banana.bytes
   model: Banana.bytes
-  input_get: get_random
+  input_get: get_random256
   inputs:
     "vector_observation:0": [1, 159]
   outputs:
