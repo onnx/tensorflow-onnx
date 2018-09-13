@@ -713,7 +713,7 @@ def biasadd_op7(ctx, node, name, args):
         if node.inputs[1].type == 'Const' and len(shape1) == 1:
             new_broadcast_shape = [shape1[0], ] + [1, ] * (len(shape0) - 2)
             shape_name = utils.make_name(node.name)
-            ctx.make_const(shape_name, "Const", np.array(new_broadcast_shape, dtype=np.int64))
+            ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
             op_name = node.input[1]
             reshape_op = ctx.insert_new_node_on_input(node, "Reshape", op_name)
             reshape_op.input.append(shape_name)
