@@ -742,12 +742,44 @@ def transpose_op(ctx, node, name, args):
     return node
 
 
+def _wrap_concat_with_cast(ctx, node):
+    """wrap concat in casts for opset < 8 since it only supports."""
+    supported_types = [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16]
+    dtype = node.dtype
+    need_casting = dtype not in supported_types
+    nodes = []
+    if need_casting:
+        output_name = node.output[0]
+        # cast each inputs to float
+        for i, inp in enumerate(node.inputs):
+            input_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[i])
+            input_cast.set_attr("to", onnx_pb.TensorProto.FLOAT)
+            nodes.append(input_cast)
+        nodes.append(node)
+        next_nodes = ctx.find_output_consumers(node.output[0])
+        # cast output back to dtype unless the next op is a cast
+        if next_nodes[0].type != "Cast":
+            op_name = utils.make_name(node.name)
+            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=op_name)
+            output_cast.set_attr("to", dtype)
+            output_cast.dtype = dtype
+            ctx.copy_shape(output_name, output_cast.output[0])
+            nodes.append(output_cast)
+    else:
+        nodes.append(node)
+    return nodes
+
+
 def concat_op(ctx, node, name, args):
     # old concat op has axis as input[0]
     axis_node = node.inputs[0]
     axis = axis_node.get_tensor_value()
     ctx.remove_input(node, node.input[0])
     node.set_attr("axis", axis[0])
+    if ctx.opset < 8:
+        # opset < 8: might need to wrap concat in casts since only float is supported
+        nodes = _wrap_concat_with_cast(ctx, node)
+        return nodes
     return node
 
 
@@ -758,6 +790,10 @@ def concatv2_op(ctx, node, name, args):
     axis = axis_node.get_tensor_value()
     ctx.remove_input(node, node.input[-1])
     node.set_attr("axis", axis[0])
+    if ctx.opset < 8:
+        # opset < 8: might need to wrap concat in casts since only float is supported
+        nodes = _wrap_concat_with_cast(ctx, node)
+        return nodes
     return node
 
 
@@ -1309,7 +1345,7 @@ _OPSET_7 = {
 }
 
 _OPSET_8 = {
-    "Relu6": (relu6_op8, []),
+    "Relu6": (relu6_op8, []), # make use of min/max broadcast
 }
 
 _OPSETS = [
