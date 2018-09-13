@@ -664,7 +664,6 @@ def relu6_op8(ctx, node, name, args):
     ctx.make_const(six_name, np.array([6], dtype=dtype))
     zero_name = utils.make_name(node.name)
     ctx.make_const(zero_name, np.array([0], dtype=dtype))
-
     node.input.append(zero_name)
     min_name = utils.make_name(node.name)
     min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
