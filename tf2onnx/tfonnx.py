@@ -626,7 +626,7 @@ def relu6_op(ctx, node, name, args):
         # get a tensor of input shape with 6
         add_name = utils.make_name(input_node.name)
         add_output = utils.port_name(add_name)
-        add_node = Node(helper.make_node("Add", [six_node.output[0], sub_output],
+        add_node = Node(helper.make_node("Add", [six_name, sub_output],
                                          [add_output], name=add_name), ctx)
 
         min_name = utils.make_name(node.name)
@@ -713,7 +713,7 @@ def biasadd_op7(ctx, node, name, args):
         if node.inputs[1].type == 'Const' and len(shape1) == 1:
             new_broadcast_shape = [shape1[0], ] + [1, ] * (len(shape0) - 2)
             shape_name = utils.make_name(node.name)
-            ctx.make_const(shape_name, "Const", np.array(new_broadcast_shape, dtype=np.int64))
+            ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
             op_name = node.input[1]
             reshape_op = ctx.insert_new_node_on_input(node, "Reshape", op_name)
             reshape_op.input.append(shape_name)
