@@ -626,7 +626,7 @@ def relu6_op(ctx, node, name, args):
         # get a tensor of input shape with 6
         add_name = utils.make_name(input_node.name)
         add_output = utils.port_name(add_name)
-        add_node = Node(helper.make_node("Add", [six_node.output[0], sub_output],
+        add_node = Node(helper.make_node("Add", [six_name, sub_output],
                                          [add_output], name=add_name), ctx)
 
         min_name = utils.make_name(node.name)
