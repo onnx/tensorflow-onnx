@@ -32,6 +32,17 @@ Basic:
     - action_probs:0
     - value_estimate:0
 
+Banana:
+  url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/BananaCollectors/TFModels/Banana.bytes
+  model: Banana.bytes
+  input_get: get_random
+  inputs:
+    "vector_observation:0": [1, 159]
+  outputs:
+    - action:0
+    - action_probs:0
+    - value_estimate:0
+
 Bouncer:
   check_only_shape: true # model uses RandomNormal
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Bouncer/TFModels/Bouncer.bytes
@@ -177,3 +188,22 @@ WallJump:
     - BigWallBrain/action_probs:0
     - BigWallBrain/action:0
     - BigWallBrain/value_estimate:0
+
+Pyramids:
+  url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Pyramids/TFModels/Pyramids.bytes
+  model: Pyramids.bytes
+  input_get: get_random
+  inputs:
+    "vector_observation:0": [1, 172]
+  outputs:
+    - value_estimate:0
+
+Walker:
+  url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Walker/TFModels/Walker.bytes
+  model: Walker.bytes
+  input_get: get_random
+  inputs:
+    "vector_observation:0": [1, 212]
+  outputs:
+    - value_estimate:0
+
