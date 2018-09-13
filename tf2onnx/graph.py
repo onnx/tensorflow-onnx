@@ -269,7 +269,7 @@ class Graph(object):
         return input in self._initializers
 
     def make_const(self, name, np_val):
-        """Make a new constant in the graph as a onnx initializer"""
+        """Make a new constant in the graph as an onnx initializer"""
         new_tensor = numpy_helper.from_array(np_val, name)
         self.add_initializer(new_tensor)
         return name
