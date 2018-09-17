@@ -1,10 +1,6 @@
 tf2onnx - convert TensorFlow models to ONNX models.
 ========
 
-Tf2onnx converts a TensorFlow graph to an ONNX graph.
-
-Tf2onnx is in its early development. Mileage will vary since TensorFlow supports ~4 times the operations that the current ONNX version supports. But standard models seem to be using mostly ops that ONNX does support.
-
 | Linux |
 |-------|
 | [![Build Status](https://travis-ci.org/onnx/tensorflow-onnx.svg?branch=master)](https://travis-ci.org/onnx/tensorflow-onnx)
@@ -12,7 +8,7 @@ Tf2onnx is in its early development. Mileage will vary since TensorFlow supports
 # Supported ONNX version
 tensorflow-onnx will use the onnx version installed on your system and installs the latest onnx version if none is found.
 
-By default we use opset 7 for the resulting onnx graph since most runtimes will support opset 7.
+By default we use opset 7 for the resulting onnx graph since most runtimes will support opset 7. Opset 7 was introduced in ONNX 1.2.
 
 With the release of onnx-1.3 there is now opset 8 - to create an onnx graph for opset 8 use in the command line ```--opset 8```.
 
@@ -144,9 +140,9 @@ You call it for example with:
 python tests/run_pretrained_models.py --backend caffe2 --config tests/run_pretrained_models.yaml --perf perf.csv
 ```
 
-# Using the Python Api
-## Tensorflow to onnx conversion
-In some cases it will be usefull to convert the models from tensorflow to onnx from a python script. You can use the following api:
+# Using the Python API
+## TensorFlow to ONNX conversion
+In some cases it will be useful to convert the models from TensorFlow to ONNX from a python script. You can use the following API:
 ```
 import tf2onnx
 
@@ -218,7 +214,6 @@ with tf.Session() as sess:
 ```
 
 # How tf2onnx works
-While the protobuf format of ONNX is not all that different than onnx, mileage will vary because TensorFlow supports 4x the ops compared to the current version of ONNX.
 The converter needs to take care of a few things:
 1. Convert the protobuf format. Since the format is similar this step is straight forward.
 2. TensorFlow types need to be mapped to their ONNX equivalent.
