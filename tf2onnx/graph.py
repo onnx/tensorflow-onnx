@@ -598,11 +598,12 @@ class Graph(object):
     def replace_input(node, old_input, new_input):
         """Replace node."""
         assert isinstance(node, Node) and isinstance(old_input, str) and isinstance(new_input, str)
+        is_replaced = False
         for i, input_name in enumerate(node.input):
             if input_name == old_input:
                 node.input[i] = new_input
-                return True
-        return False
+                is_replaced = True
+        return is_replaced
 
     @staticmethod
     def replace_subgraph(ops, subgraph_nodes, old_inputs, old_outputs, new_inputs, new_outputs):
