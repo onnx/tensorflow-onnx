@@ -17,14 +17,6 @@ def is_useless_transpose(transpose_node):
     perm_attr = transpose_node.get_attr('perm')
     return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints == [0, 1, 2, 3]
 
-def are_all_input_nodes_nhwc(node):
-    all_true = True
-    for n in node.inputs:
-        if not is_nhwc_transpose(n):
-            all_true = False
-            break
-    return all_true
-
 class TransposeOptimizer(object):
     def __init__(self, graph, debug = False):
         self._g = graph
@@ -102,17 +94,18 @@ class TransposeOptimizer(object):
     def _initialize_handlers(self):
         self._handler_map = {
             "Add": self._add_handler,
-            "Relu": self._relu_handler,
-            "Transpose": self._transpose_handler,
+            "Concat": self._concat_handler,
+            "Identity": self._identity_handler,
             "Max": self._maxmin_handler, 
             "Min": self._maxmin_handler,
             "Mul": self._mul_handler,
-            "Identity": self._identity_handler,
-            "Concat": self._concat_handler,
-            "Split": self._split_handler,
             "Pad": self._pad_handler,
             "ReduceMean": self._reducemean_handler,
+            "Relu": self._relu_handler,
             "Slice": self._slice_handler,
+            "Split": self._split_handler,
+            "Tanh": self._tanh_handler,
+            "Transpose": self._transpose_handler,
         }
 
     # if there is nodes added, removed, or inputs changed, we need update the output_nodes/output_number etc.
@@ -130,9 +123,12 @@ class TransposeOptimizer(object):
             self._g.set_nodes(ops)
 
     def _handle_node_having_branches(self, node):
+        # create transpose pairs if some input are not.
+        self._create_transpose_pairs_before_node(node)
+
         # make sure node's all input transpose all have only 1 consumer node, 
         # otherwise, it would impact their other output nodes
-        if are_all_input_nodes_nhwc(node) and self._transpose_has_single_consumer_node(node.inputs):
+        if self._transpose_has_single_consumer_node(node.inputs):
             self._create_transpose_pairs_after_node(node)
             to_remove = []
 
@@ -160,7 +156,7 @@ class TransposeOptimizer(object):
             return True
 
         else:
-            #print("not all input path ends with nhwc transpose, skipping...")
+            print("input transpose does not have single consumer, skipping...")
             pass
 
     # the assumption is: only node.input[0] and trans.input[0] will be token care here.
@@ -248,6 +244,38 @@ class TransposeOptimizer(object):
             nchw_node = Node(nchw, self._g)
             nhwc_node = Node(nhwc, self._g)
             self._g.replace_input(consumer, node.output[0], nhwc_out_name)
+            added_node.extend([nchw_node, nhwc_node])
+
+        if added_node:
+            self._update_graph_nodes(added_node, None, True)
+        return added_node
+
+    def _create_transpose_pairs_before_node(self, node):
+        non_nhwc_trans_inputs = []
+        for input_id, n in zip(node.input, node.inputs):
+            if not is_nhwc_transpose(n):
+                # check in case node has two inputs coming from a same node output.
+                if [input_id, n] not in non_nhwc_trans_inputs:
+                    non_nhwc_trans_inputs.append([input_id, n])
+
+        added_node = []
+        # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nhwc_trans_consumers
+        for input_id, n in non_nhwc_trans_inputs:
+            nchw_op_name = utils.make_name("Transpose")
+            nchw_out_name = nchw_op_name + ":0"
+
+            kwargs = {"perm": [0, 3, 1, 2]}
+            nchw = helper.make_node("Transpose", [input_id], [nchw_out_name], name=nchw_op_name, **kwargs)
+
+            nhwc_op_name = utils.make_name("Transpose")
+            nhwc_out_name = nhwc_op_name + ":0"
+
+            kwargs = {"perm": [0, 2, 3, 1]}
+            nhwc= helper.make_node("Transpose", [nchw_out_name], [nhwc_out_name], name=nhwc_op_name, **kwargs)
+
+            nchw_node = Node(nchw, self._g)
+            nhwc_node = Node(nhwc, self._g)
+            self._g.replace_input(node, input_id, nhwc_out_name)
             added_node.extend([nchw_node, nhwc_node])
 
         if added_node:
@@ -373,4 +401,11 @@ class TransposeOptimizer(object):
         else:
             return
         self._switch_transpose_and_node(node, trans)
+        return True
+
+    # todo: consider share a same logic for element-wise op.
+    def _tanh_handler(self, trans, node):
+        self._g.replace_all_inputs(self._g.get_nodes(), node.output[0], trans.output[0])
+        node.input[0] = trans.input[0]
+        trans.input[0] = node.output[0]
         return True
