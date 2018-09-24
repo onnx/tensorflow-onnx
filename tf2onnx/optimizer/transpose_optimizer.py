@@ -19,7 +19,6 @@ def is_useless_transpose(transpose_node):
 
 class TransposeOptimizer(object):
     def __init__(self, graph, debug = False):
-        print("start")
         self._g = graph
         self._debug = debug
         self._handler_map = {}
