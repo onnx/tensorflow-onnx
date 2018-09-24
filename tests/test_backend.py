@@ -24,10 +24,7 @@ TMPPATH = tempfile.mkdtemp()
 # to change the behavior of annotation. If need, pick the backend here.
 OPSET = 7
 
-BACKEND = "caffe2"
-# BACKEND = "onnxmsrt"
-# BACKEND = "onnxmsrtnext"
-# BACKEND = "onnx-tensorflow"
+BACKEND = "onnxruntime"
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
@@ -127,17 +124,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         return results[0]
 
     @staticmethod
-    def run_onnxmsrt(onnx_graph, inputs, output_names, test_name):
-        """Run test against msrt backend."""
-        import lotus
-        model_path = os.path.join(TMPPATH, test_name + ".pb")
-        with open(model_path, "wb") as f:
-            f.write(onnx_graph.SerializeToString())
-        m = lotus.ModelExecutor(model_path)
-        results = m.run(output_names, inputs)
-        return results[0]
-
-    @staticmethod
     def run_onnxmsrtnext(onnx_graph, inputs, output_names, test_name):
         """Run test against msrt-next backend."""
         import lotus
@@ -150,43 +136,25 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         return results[0]
 
     @staticmethod
-    def run_onnxcntk(onnx_graph, inputs, test_name):
-        """Run test against cntk backend."""
-        import cntk as C
-        print(test_name)
+    def run_onnxruntime(onnx_graph, inputs, output_names, test_name):
+        """Run test against msrt-next backend."""
+        import onnxruntime as rt
         model_path = os.path.join(TMPPATH, test_name + ".pb")
+        # print(model_path)
         with open(model_path, "wb") as f:
             f.write(onnx_graph.SerializeToString())
-        z = C.Function.load(model_path, format=C.ModelFormat.ONNX)
-        input_args = {}
-        for arg in z.arguments:
-            input_args[arg] = inputs[arg.name]
-        results = z.eval(input_args)
-        return results
-
-    @staticmethod
-    def run_onnxtensorflow(onnx_graph, inputs):
-        """Run test against onnx-tensorflow backend."""
-        import onnx_tf.backend
-        prepared_backend = onnx_tf.backend.prepare(onnx_graph)
-        results = prepared_backend.run(inputs)
-        return results
+        m = rt.InferenceSession(model_path)
+        results = m.run(output_names, inputs)
+        return results[0]
 
     def _run_backend(self, g, args, input_dict, expected):
         model_proto = g.make_model("test", args.outputs)
-        if BACKEND == "onnxmsrt":
-            y = self.run_onnxmsrt(model_proto, input_dict, args.outputs, self._testMethodName)
-        elif BACKEND == "onnxmsrtnext":
+        if BACKEND == "onnxmsrtnext":
             y = self.run_onnxmsrtnext(model_proto, input_dict, args.outputs, self._testMethodName)
-        elif BACKEND == "cntk":
-            y = self.run_onnxcntk(model_proto, input_dict, self._testMethodName)
+        elif BACKEND == "onnxruntime":
+            y = self.run_onnxruntime(model_proto, input_dict, args.outputs, self._testMethodName)
         elif BACKEND == "caffe2":
             y = self.run_onnxcaffe2(model_proto, input_dict)
-        elif BACKEND == "onnxnumpy":
-            y = self.run_onnxnumpy(model_proto, input_dict)
-            y = y[args.outputs[0]]
-        elif BACKEND == "onnx-tensorflow":
-            y = self.run_onnxtensorflow(model_proto, input_dict)
         else:
             raise ValueError("unknown backend")
         return y
@@ -221,7 +189,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
             actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
             self.assertAllClose(expected, actual, rtol=1e-06)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
+    @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
     def test_multinomial(self):
         x_val = np.array([[10., 10.]], dtype=np.float32)
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
@@ -232,7 +200,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         self.assertEqual(expected.dtype, actual.dtype)
         self.assertEqual(expected.shape, actual.shape)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
+    @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
     def test_multinomial1(self):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
@@ -532,7 +500,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported in caffe2")
+    @unittest.skipIf(BACKEND in ["caffe2"], "not supported in caffe2")
     def test_tile(self):
         x_val = np.array([[0, 1], [2, 3]], dtype=np.float32)
         multiple = tf.constant([2, 2])
@@ -568,7 +536,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x1: x_val1, x2: x_val2}, {_INPUT: x_val1, _INPUT1: x_val2, })
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "issue with broadcastnig scalar")
+    @unittest.skipIf(BACKEND in ["caffe2"], "issue with broadcastnig scalar")
     def test_min_broadcast(self):
         # tests if the broadcast for min/max is working
         x_val1 = np.array([2.0, 16.0, 5.0, 1.6], dtype=np.float32).reshape((2, 2))
@@ -857,7 +825,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
             actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
             self.assertAllClose(expected, actual, err_msg=str(p))
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not supported correctly in caffe2")
+    @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
     def test_randomuniform(self):
         shape = tf.constant([2, 3], name="shape")
         x_ = tf.random_uniform(shape, name="rand", dtype=tf.float32)
@@ -983,7 +951,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
             actual, expected = self._run(output, {}, {})
             self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "Space2Depth not implemented, works on onnxmsrtnext")
+    @unittest.skipIf(BACKEND in ["caffe2"], "Space2Depth not implemented, works on onnxmsrtnext")
     def test_space_to_depth(self):
         x_val = make_xval([1, 2, 2, 1])
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -1001,7 +969,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
+    @unittest.skipIf(BACKEND in ["caffe2"], "multiple dims not supported")
     def test_strided_slice1(self):
         x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -1034,7 +1002,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
+    @unittest.skipIf(BACKEND in ["caffe2"], "multiple dims not supported")
     def test_strided_slice5(self):
         x_val = np.arange(3*2*3).astype("float32").reshape(3, 2, 3)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -1043,7 +1011,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "multiple dims not supported")
+    @unittest.skipIf(BACKEND in ["caffe2"], "multiple dims not supported")
     def test_strided_slice6(self):
         # example from here:
         # https://www.tensorflow.org/versions/r1.0/api_docs/cc/class/tensorflow/ops/strided-slice
@@ -1054,7 +1022,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "fails with schema error")
+    @unittest.skipIf(BACKEND in ["caffe2"], "fails with schema error")
     def test_batchnorm(self):
         x_shape = [1, 28, 28, 2]
         x_dtype = np.float32
@@ -1081,7 +1049,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual, rtol=1e-04)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not correctly supported")
+    @unittest.skipIf(BACKEND in ["caffe2"], "not correctly supported")
     def test_resize_nearest_neighbor(self):
         x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
@@ -1093,7 +1061,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    @unittest.skipIf(BACKEND in ["caffe2", "onnxmsrt"], "not correctly supported")
+    @unittest.skipIf(BACKEND in ["caffe2"], "not correctly supported")
     def test_resize_bilinear(self):
         x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
@@ -1119,7 +1087,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--backend', default=BACKEND,
-                        choices=["caffe2", "onnxmsrt", "onnxmsrtnext", "onnx-tensorflow"],
+                        choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                         help="backend to test against")
     parser.add_argument('--opset', type=int, default=OPSET,
                         help="opset to test against")

@@ -178,22 +178,6 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def run_onnxmsrt(self, name, model_proto, inputs):
-        """Run test against onnxmsrt backend."""
-        import lotus
-        # create model and datafile in tmp path.
-        model_path = os.path.join(TMPPATH, name + "_model.pb")
-        with open(model_path, "wb") as f:
-            f.write(model_proto.SerializeToString())
-        m = lotus.ModelExecutor(model_path)
-        results = m.run(self.output_names, inputs)
-        if self.perf:
-            start = time.time()
-            for _ in range(PERFITER):
-                _ = m.run(self.output_names, inputs)
-            self.onnx_runtime = time.time() - start
-        return results
-
     def run_onnxmsrtnext(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import lotus
@@ -209,22 +193,18 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def run_onnxcntk(self, name, model_proto, inputs):
-        """Run test against cntk backend."""
-        import cntk as C
-        model_path = os.path.join(TMPPATH, name + "_model.pb")
+    def run_onnxruntime(self, name, model_proto, inputs):
+        """Run test against msrt-next backend."""
+        import onnxruntime as rt
+        model_path = os.path.join(TMPPATH, name + ".pb")
         with open(model_path, "wb") as f:
             f.write(model_proto.SerializeToString())
-        z = C.Function.load(model_path, format=C.ModelFormat.ONNX)
-        input_args = {}
-        # FIXME: the model loads but eval() throws
-        for arg in z.arguments:
-            input_args[arg] = inputs[arg.name]
-        results = z.eval(input_args)
+        m = rt.InferenceSession(model_path)
+        results = m.run(self.output_names, inputs)
         if self.perf:
             start = time.time()
             for _ in range(PERFITER):
-                _ = z.eval(input_args)
+                _ = m.run(self.output_names, inputs)
             self.onnx_runtime = time.time() - start
         return results
 
@@ -312,12 +292,10 @@ class Test(object):
             onnx_results = None
             if backend == "caffe2":
                 onnx_results = self.run_caffe2(name, model_proto, inputs)
-            elif backend == "onnxmsrt":
-                onnx_results = self.run_onnxmsrt(name, model_proto, inputs)
             elif backend == "onnxmsrtnext":
                 onnx_results = self.run_onnxmsrtnext(name, model_proto, inputs)
-            elif backend == "cntk":
-                onnx_results = self.run_onnxcntk(name, model_proto, inputs)
+            elif backend == "onnxruntime":
+                onnx_results = self.run_onnxruntime(name, model_proto, inputs)
             else:
                 raise ValueError("unknown backend")
             print("\trun_onnx OK")
@@ -346,8 +324,8 @@ def get_args():
     parser.add_argument("--cache", default="/tmp/pre-trained", help="pre-trained models cache dir")
     parser.add_argument("--config", default="tests/run_pretrained_models.yaml", help="yaml config to use")
     parser.add_argument("--tests", help="tests to run")
-    parser.add_argument("--backend", default="caffe2",
-                        choices=["caffe2", "onnxmsrt", "onnxmsrtnext", "cntk"], help="backend to use")
+    parser.add_argument("--backend", default="onnxruntime",
+                        choices=["caffe2", "onnxmsrtnext", "onnxruntime"], help="backend to use")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--debug", help="debug vlog", action="store_true")
