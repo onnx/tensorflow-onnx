@@ -18,8 +18,7 @@ benchtf-conv:
     - output:0
 
 benchtf-convbn:
-  disabled: true
-  # fails with: expects to be colocated with unknown node 'batch_normalization_1/gamma
+  disabled: true # some if from training isn't removed
   model: tests/models/convbn-layers/frozen.pb
   input_get: get_ramp
   inputs:
@@ -69,7 +68,6 @@ inception_v3_slim:
   atol: 0.000001
 
 googlenet_v1_nonslim:
-  # LRN op missing
   disabled: true
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception5h.zip
   model: tensorflow_inception_graph.pb
@@ -110,7 +108,7 @@ googlenet_v2_slim:
   outputs:
     - InceptionV2/Predictions/Softmax:0
   rtol: 0.05
-  atol: 0.00001
+  atol: 0.00005
 
 googlenet_v4_slim:
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v4_2016_09_09_frozen.pb.tar.gz
@@ -123,8 +121,7 @@ googlenet_v4_slim:
   rtol: 0.1
 
 mobilenet_v2_1.4_224:
-  # fails because input shape is not given - need to change
-  # conveter to support Shape() op (don't think there is a runtime that supports it yet)
+  # fails because of input[1] in squeeze is 0 instead of 1
   disabled: true
   url: https://storage.googleapis.com/mobilenet_v2/checkpoints/mobilenet_v2_1.4_224.tgz
   model: mobilenet_v2_1.4_224_frozen.pb
@@ -186,16 +183,29 @@ vgg-16:
   outputs:
     - output:0
 
-resnet50:
-  # has only checkpoint format
-  disabled: true
-  url: http://download.tensorflow.org/models/official/resnet50_2017_11_30.tar.gz
-  model: fixme
+resnet50_v2:
+  skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
+  model_type: saved_model
+  url: http://download.tensorflow.org/models/official/20180601_resnet_v2_imagenet_savedmodel.tar.gz
+  model: 20180601_resnet_v2_imagenet_savedmodel/1527887769
   input_get: get_beach
   inputs:
-    "input:0": [1, 416, 416, 3]
+    "input_tensor:0": [128, 224, 224, 3]
   outputs:
-    - output:0
+    - ArgMax:0
+    - softmax_tensor:0
+
+resnet50_v1:
+  skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
+  model_type: saved_model
+  url: http://download.tensorflow.org/models/official/20180601_resnet_v1_imagenet_savedmodel.tar.gz
+  model: 20180601_resnet_v1_imagenet_savedmodel/1527888778
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [128, 224, 224, 3]
+  outputs:
+    - ArgMax:0
+    - softmax_tensor:0
 
 #
 # models that will never work
