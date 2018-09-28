@@ -8,7 +8,7 @@ tf2onnx - convert TensorFlow models to ONNX models.
 # Supported ONNX version
 tensorflow-onnx will use the onnx version installed on your system and installs the latest onnx version if none is found.
 
-By default we use opset 7 for the resulting onnx graph since most runtimes will support opset 7. Opset 7 was introduced in ONNX 1.2.
+By default we use opset 7 for the resulting onnx graph since most runtimes will support opset 7. Opset 7 was introduced in onnx-1.2.
 
 With the release of onnx-1.3 there is now opset 8 - to create an onnx graph for opset 8 use in the command line ```--opset 8```.
 
@@ -24,12 +24,22 @@ pip install tensorflow
 or
 pip install tensorflow-gpu
 ```
-## Install Caffe2 [**Optional**]
-If you want to run unit tests against the Caffe2 onnx backend, build and install Caffe2 following the instructions here: ```
-https://caffe2.ai/```
+## Install  runtime
+Install an onnx runtime of your choice if you want to run tests. For example:
+
+onnxruntime (only avaliable on linux):
+
+```pip install onnxruntime```
+
+For caffe2, follow the instructions here:
+
+```https://caffe2.ai/```
+
+
+We tested with caffe2 and onnxruntime and unit tests are passing for those.
 
 ## Python Version
-We tested with tensorflow 1.5,1.6,1.7,1.8 and anaconda **3.5,3.6**.
+We tested with tensorflow 1.5-1.9 and anaconda **3.5,3.6**.
 
 # Installation
 
