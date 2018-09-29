@@ -1523,7 +1523,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     onnx_nodes = []
     for node in ops:
         if node.need_skip():
-            print("explictly skip node " + node.name)
+            log.debug("explictly skip node " + node.name)
             onnx_nodes.append(node)
             continue
         op = node.type
