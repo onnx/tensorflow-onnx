@@ -162,18 +162,10 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         tf.reset_default_graph()
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
-            g = process_tf_graph(sess.graph, continue_on_error=True) # shape_override={"output:0": [1, 6,4,5]}
+            g = process_tf_graph(sess.graph, continue_on_error=True, enable_lstm=True) # shape_override={"output:0": [1, 6,4,5]}
             actual = self._run_backend(g, output_names_with_port, feed_dict)
 
         for i in range(len(expected)):
-            
-            if False:
-                print("~~~~~~~~~~~~expect~~~~~~~~~~~~~~~")
-                print(expected[i])
-                print("------------------")
-                print(actual[i])
-                print("~~~~~~~~~~~~actual~~~~~~~~~~~~~")
-            
             self.assertAllClose(expected[i], actual[i], rtol=rtol, atol=0.)
 
     #@unittest.skip("reason for skipping")

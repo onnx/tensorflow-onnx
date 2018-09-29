@@ -119,7 +119,8 @@ Hallway:
   outputs:
     - action_probs:0
     - value_estimate:0
-    - action:0 # for batch-size > 1, use Log:0 to replace action:0, because mutinomial is random sample, so results won't usually be same.
+    # please change this to action:0 for real conversion.
+    - Log:0 #  use Log:0 to replace action:0, because mutinomial is random sample, so results won't usually be same.
     - recurrent_out:0
 
 Hallway-realdata:
@@ -135,7 +136,8 @@ Hallway-realdata:
   outputs:
     - action_probs:0
     - value_estimate:0
-    - action:0 # for batch-size > 1, use Log:0 to replace action:0, because mutinomial is random sample, so results won't usually be same.
+    # please change this to action:0 for real conversion.
+    - Log:0 # use Log:0 to replace action:0, because mutinomial is random sample, so results won't usually be same.
     - recurrent_out:0
 
 PushBlock:
