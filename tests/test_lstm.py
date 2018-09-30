@@ -5,14 +5,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
-import tempfile
-import unittest
-from collections import namedtuple
-
+import argparse
 import numpy as np
+import os
+import sys
+import tempfile
 import tensorflow as tf
 import tf2onnx.utils
+import unittest
+
+from collections import namedtuple
 from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
@@ -23,7 +25,7 @@ TMPPATH = tempfile.mkdtemp()
 
 # BACKEND = "caffe2"
 # BACKEND = "onnxmsrt"
-BACKEND = "onnxmsrtnext"
+BACKEND = "onnxruntime"
 # BACKEND = "onnx-tensorflow"
 
 # names for input and outputs for tests
@@ -40,8 +42,7 @@ _OUTPUT1 = "output1:0"
 
 OPSET = 7
 
-
-class Tf2OnnxBackendTests(unittest.TestCase):
+class Tf2OnnxLSTMTests(unittest.TestCase):
     def setUp(self):
         self.maxDiff = None
         tf.reset_default_graph()
@@ -74,18 +75,6 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         return results[0]
 
     @staticmethod
-    def run_onnxmsrt(onnx_graph, inputs, output_names, test_name):
-        """Run test against msrt backend."""
-        import lotus
-        model_path = os.path.join(TMPPATH, test_name + ".pb")
-        with open(model_path, "wb") as f:
-            f.write(onnx_graph.SerializeToString())
-
-        m = lotus.ModelExecutor(model_path)
-        results = m.run(output_names, inputs)
-        return results[0]
-
-    @staticmethod
     def run_onnxmsrtnext(onnx_graph, inputs, output_names, test_name):
         """Run test against msrt-next backend."""
         import lotus
@@ -98,12 +87,23 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         results = m.run(output_names, inputs)
         return results
 
+    @staticmethod
+    def run_onnxruntime(onnx_graph, inputs, output_names, test_name):
+        """Run test against msrt-next backend."""
+        import onnxruntime as rt
+        model_path = os.path.join(TMPPATH, test_name + ".pb")
+        with open(model_path, "wb") as f:
+            f.write(onnx_graph.SerializeToString())
+        m = rt.InferenceSession(model_path)
+        results = m.run(output_names, inputs)
+        return results
+
     def _run_backend(self, g, outputs, input_dict):
         model_proto = g.make_model("test", outputs, False)
-        if BACKEND == "onnxmsrt":
-            y = self.run_onnxmsrt(model_proto, input_dict, outputs, self._testMethodName)
-        elif BACKEND == "onnxmsrtnext":
+        if BACKEND == "onnxmsrtnext":
             y = self.run_onnxmsrtnext(model_proto, input_dict, outputs, self._testMethodName)
+        elif BACKEND == "onnxruntime":
+            y = self.run_onnxruntime(model_proto, input_dict, outputs, self._testMethodName)
         elif BACKEND == "caffe2":
             y = self.run_onnxcaffe2(model_proto, input_dict)
         else:
@@ -351,4 +351,18 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--backend', default=BACKEND,
+                        choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
+                        help="backend to test against")
+
+    parser.add_argument('--opset', type=int, default=OPSET,
+                        help="opset to test against")
+    parser.add_argument('unittest_args', nargs='*')
+
+    args = parser.parse_args()
+    BACKEND = args.backend
+    OPSET = args.opset
+    # Now set the sys.argv to the unittest_args (leaving sys.argv[0] alone)
+    sys.argv[1:] = args.unittest_args
     unittest.main()
