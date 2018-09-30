@@ -22,15 +22,15 @@ from tf2onnx.rewriter.rnn_utils import *
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.rnn_unit_writer_base")
 
-# dynamic_rnn or bidirectional_dynamic_rnn related logic will be mapped to this base calls.
+# dynamic_rnn or bidirectional_dynamic_rnn related logic will be mapped to this base class.
 class UnitRewriterBase:
     def __init__(self, g):
         self.g = g
         self.all_nodes = self.g.get_nodes()
-        # used to track nodes in rnn_scope_name to keep for each single match
+        # used to track nodes in rnn_scope_name to keep (e.g. not delete) for each single match run
         self.must_keep_nodes = []
 
-    def print_step(self, level_2, level_1 = "find_dynamic_run_lstm"):
+    def print_step(self, level_2, level_1 = "find_dynamic_run_unit"):
         log.info(level_1 + " >> " + level_2)
 
     def ct_switch_check(self, enter_target_node_input_id, identity_consumers, match):
