@@ -145,14 +145,19 @@ def get_pattern(cell_type_name):
     return rnn_cell_patterns[cell_type_name]
 
 def get_weights_from_const_node(node):
+    temp = node
     val = None
     dtype = None
-    if node and node.type == 'Const':
-        val = node.get_tensor_value()
-        dtype = utils.ONNX_TO_NUMPY_DTYPE[node.dtype]
-        log.info("found weights " + node.name)
+    # this would help ignore Identity in non-const_folded graph.
+    while temp.type == 'Identity':
+        temp = temp.inputs[0]
+
+    if temp and temp.type == 'Const':
+        val = temp.get_tensor_value()
+        dtype = utils.ONNX_TO_NUMPY_DTYPE[temp.dtype]
+        log.info("found weights " + temp.name)
     else:
-        log.error("weight node seems not to be Const, skip, node name is " + node.name)
+        log.error("weight node seems not to be Const, skip, node name is " + temp.name)
         return
 
     return RnnWeight(node, val, dtype)

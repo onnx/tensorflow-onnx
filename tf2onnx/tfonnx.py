@@ -1579,7 +1579,7 @@ def tf_optimize(sess, inputs, outputs, graph_def, fold_constant = None):
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
-                     extra_opset=None, shape_override=None, enable_lstm=None):
+                     extra_opset=None, shape_override=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -1614,10 +1614,9 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # rewrite graph
     rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
-                 rewrite_random_normal, rewrite_dropout]
-
-    if enable_lstm:
-        rewriters.append(tf2onnx.rewriter.rnn.rewrite_single_direction_lstm)
+                 rewrite_random_normal, rewrite_dropout,
+                 tf2onnx.rewriter.rnn.rewrite_single_direction_lstm,
+                ]
 
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)

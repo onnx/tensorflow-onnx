@@ -167,9 +167,9 @@ class Test(object):
         return result
 
     @staticmethod
-    def to_onnx(tf_graph, opset=None, shape_override=None, enable_lstm=None):
+    def to_onnx(tf_graph, opset=None, shape_override=None):
         """Convert graph to tensorflow."""
-        return process_tf_graph(tf_graph, continue_on_error=False, opset=opset, shape_override=shape_override, enable_lstm=enable_lstm)
+        return process_tf_graph(tf_graph, continue_on_error=False, opset=opset, shape_override=shape_override)
 
     def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
@@ -220,7 +220,7 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, transpose_opt=None, enable_lstm=None):
+    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, transpose_opt=None):
         """Run complete test against backend."""
         print(name)
         self.perf = perf
@@ -275,7 +275,7 @@ class Test(object):
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
 
-        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def, transpose_opt or enable_lstm)
+        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def, transpose_opt)
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
@@ -299,7 +299,7 @@ class Test(object):
             model_proto = None
             try:
                 # convert model to onnx
-                onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override, enable_lstm=enable_lstm)
+                onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
                 if transpose_opt:
                     optimizer = TransposeOptimizer(onnx_graph, debug)
                     optimizer.optimize()
@@ -361,7 +361,6 @@ def get_args():
     parser.add_argument("--onnx-file", help="create onnx file in directory")
     parser.add_argument("--perf", help="capture performance numbers")
     parser.add_argument("--optimize_transpose", help="eliminate transposes that can be removed", action="store_true")
-    parser.add_argument("--enable_lstm", help="enable lstm support", action="store_true")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
     return args
@@ -405,8 +404,7 @@ def main():
         count += 1
         try:
             ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file,
-                             opset=args.opset, perf=args.perf, transpose_opt=args.optimize_transpose,
-                            enable_lstm=args.enable_lstm)
+                             opset=args.opset, perf=args.perf, transpose_opt=args.optimize_transpose)
         except Exception as ex:
             ret = None
             print(ex)

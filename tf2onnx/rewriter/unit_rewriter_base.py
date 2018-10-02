@@ -78,10 +78,12 @@ class UnitRewriterBase:
         cell_pattern = get_pattern(unit_type)
         matcher = GraphMatcher(cell_pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(self.g.get_nodes()))
-        for match in match_results:
-            self.run_single_match(match)
-        self.print_step("finish handling")
-        self.g.update_proto()
+
+        if match_results:
+            for match in match_results:
+                self.run_single_match(match)
+            self.print_step("finish handling")
+            self.g.update_proto()
 
         return self.g.get_nodes()
 

@@ -128,7 +128,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             actual = self._run_backend(g, self._args1, onnx_dict)
         return actual, expected
 
-    def run_test_temp(self, output_dict, feed_dict, input_names_with_port, output_names_with_port, rtol=0.000001):
+    def run_test_internel(self, output_dict, feed_dict, input_names_with_port, output_names_with_port, rtol=0.000001):
         with tf.Session() as sess:
             variables_lib.global_variables_initializer().run()
             expected = sess.run(output_dict, feed_dict=feed_dict)
@@ -162,17 +162,15 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         tf.reset_default_graph()
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
-            g = process_tf_graph(sess.graph, continue_on_error=True, enable_lstm=True) # shape_override={"output:0": [1, 6,4,5]}
+            g = process_tf_graph(sess.graph, continue_on_error=True) # shape_override={"output:0": [1, 6,4,5]}
             actual = self._run_backend(g, output_names_with_port, feed_dict)
 
         for i in range(len(expected)):
             self.assertAllClose(expected[i], actual[i], rtol=rtol, atol=0.)
 
-    #@unittest.skip("reason for skipping")
     def test_test_single_dynamic_lstm_stateistuple(self):
         self.internel_test_single_dynamic_lstm(True)
 
-    #@unittest.skip("reason for skipping")
     def test_test_single_dynamic_lstm_stateisnottuple(self):
         self.internel_test_single_dynamic_lstm(False)
 
@@ -202,9 +200,8 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_temp(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
-    #@unittest.skip("reason for skipping")
     def test_single_dynamic_lstm_randomweights(self, state_is_tuple = True):
         hidden_size = 5
         batch_size = 6
@@ -232,9 +229,8 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_temp(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.0001)
+        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.0001)
 
-    #@unittest.skip("reason for skipping")
     def test_single_dynamic_lstm_randomweights2(self, state_is_tuple = True):
         hidden_size = 128
         batch_size = 1
@@ -261,13 +257,11 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_temp(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.01)
+        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.01)
 
-    #@unittest.skip("reason for skipping")
     def test_multiple_dynamic_lstm_stateistuple(self):
         self.internel_test_multiple_dynamic_lstm_with_parameters(True)
 
-    #@unittest.skip("reason for skipping")
     def test_multiple_dynamic_lstm_stateisnottuple(self):
         self.internel_test_multiple_dynamic_lstm_with_parameters(False)
 
@@ -319,9 +313,8 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_temp(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
-    #@unittest.skip("reason for skipping")
     def test_dynamic_basiclstm(self):
         units = 5
         batch_size = 6
@@ -347,7 +340,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_temp(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
 
 if __name__ == "__main__":
