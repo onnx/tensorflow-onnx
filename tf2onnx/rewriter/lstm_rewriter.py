@@ -176,19 +176,19 @@ class LSTMUnitRewriter(UnitRewriterBase):
                 if n.type == "ReverseV2" and n.inputs[0].type in ["Transpose", "TensorArrayGatherV3"] and n.inputs[0].name.startswith(rnn_scope_name):
                     input_n = n.inputs[0]
                     n.input[0] = lstm_node.output[0]
-                    new_nodes = self.create_transform_nodes_after_lstm(input_n, n, rnn_props.time_major)
+                    new_nodes = self._create_transform_nodes_after_lstm(input_n, n, rnn_props.time_major)
                     self.g.replace_all_inputs(self.all_nodes, n.output[0], new_nodes[-1].output[0])
                     self.all_nodes.extend(new_nodes)
                     # Y_h/Y_c handler 
-                elif self.check_is_consumer_of_tupled_ch(n, match):
+                elif self._check_is_consumer_of_tupled_ch(n, match):
                     # For reverse, unlike output node (who is followed by a reversev2), 
                     # the Pack node generating cell_state don't have reversev2 followed.
-                    self.connect_rnn_with_tupled_ch_consumer_nodes(lstm_node, n)
+                    self._connect_rnn_with_tupled_ch_consumer_nodes(lstm_node, n)
                 # todo: non-tupled check
             else:
                 # tupled Y_c/Y_h handling, use tuple directly
-                if self.check_is_consumer_of_tupled_ch(n, match):
-                    self.connect_rnn_with_tupled_ch_consumer_nodes(lstm_node, n)
+                if self._check_is_consumer_of_tupled_ch(n, match):
+                    self._connect_rnn_with_tupled_ch_consumer_nodes(lstm_node, n)
                 else:
                     to_replace = {}
                     for input_id, input_n in zip(n.input, n.inputs):
@@ -200,19 +200,19 @@ class LSTMUnitRewriter(UnitRewriterBase):
                             continue
                         else:
                             # Y handler
-                            if self.check_is_rnn_outputs_node(input_n, rnn_props.time_major):
+                            if self._check_is_rnn_outputs_node(input_n, rnn_props.time_major):
                                 log.debug("this is the rnn output node's consumer")
-                                new_nodes = self.create_transform_nodes_after_lstm(self.g, lstm_node, rnn_props.time_major)
+                                new_nodes = self._create_transform_nodes_after_lstm(self.g, lstm_node, rnn_props.time_major)
                                 to_replace[input_id] = new_nodes[-1].output[0]
                                 self.all_nodes.extend(new_nodes)
                             else:
-                                error_code = self.check_is_consumer_of_exit_after_ch(match, input_n)
+                                error_code = self._check_is_consumer_of_exit_after_ch(match, input_n)
                                 if error_code == 1: # tupled Y_c/Y_h handling, use tuple.c
-                                    self.connect_rnn_with_one_of_tupled_ch_consumer_nodes(lstm_node.output[2], input_id)
+                                    self._connect_rnn_with_one_of_tupled_ch_consumer_nodes(lstm_node.output[2], input_id)
                                 elif error_code == 2: # tupled Y_c/Y_h handling, use tuple.h
-                                    self.connect_rnn_with_one_of_tupled_ch_consumer_nodes(lstm_node.output[1], input_id)
+                                    self._connect_rnn_with_one_of_tupled_ch_consumer_nodes(lstm_node.output[1], input_id)
                                 elif error_code == 3: # non-tupled Y_c/Y_h handling. (shared same Exit)
-                                    self.connect_rnn_with_non_tupled_ch_consumer_nodes(lstm_node, n, input_id)
+                                    self._connect_rnn_with_non_tupled_ch_consumer_nodes(lstm_node, n, input_id)
                                 else:
                                     raise ValueError("not match rnn output node, skip " + input_n.name)
                     for input_id in to_replace:
@@ -220,15 +220,15 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
     # c: memory (in TF, it was called hidden state)
     # h: hidden state (in TF, it was called output)
-    def check_is_consumer_of_tupled_ch(self, n, match):
+    def _check_is_consumer_of_tupled_ch(self, pack_node, match):
         # This Pack is generated when dynamic_rnn return cell_state as a tuple, e.g <c, h>.
         # Pack's name is not in the rnn scope.
-        if not (n.type == "Pack" and len(n.inputs) == 2):
+        if not (pack_node.type == "Pack" and len(pack_node.inputs) == 2):
             log.debug("check_is_ch_output_node Pack check fail")
             return False
 
-        exit_1 = n.inputs[0]
-        exit_2 = n.inputs[1]
+        exit_1 = pack_node.inputs[0]
+        exit_2 = pack_node.inputs[1]
         if not (exit_1 and exit_1.type == "Exit" and exit_2 and exit_2.type == "Exit"):
             log.debug("check_is_ch_output_node Exit check fail")
             return False
@@ -258,14 +258,14 @@ class LSTMUnitRewriter(UnitRewriterBase):
         log.debug("fail to found ct and ht node based on pattern")
         return False
 
-    def check_is_consumer_of_exit_after_ch(self, match, connector_in_rnnscope):
+    def _check_is_consumer_of_exit_after_ch(self, match, connector_in_rnnscope):
         if not (connector_in_rnnscope and connector_in_rnnscope.type == "Exit"):
-            log.debug("check_is_consumer_of_exit_after_ch Exit check fail")
+            log.debug("_check_is_consumer_of_exit_after_ch Exit check fail")
             return False
 
         switch = connector_in_rnnscope.inputs[0]
         if not (switch.type == "Switch"):
-            log.debug("check_is_consumer_of_exit_after_ch Switch check fail")
+            log.debug("_check_is_consumer_of_exit_after_ch Switch check fail")
             return False
 
         enter_target_input_id = self.check_switch_by_usage_pattern(switch, match, self.ct_switch_check)
@@ -280,10 +280,10 @@ class LSTMUnitRewriter(UnitRewriterBase):
         if enter_target_input_id:
             return 3
 
-        log.debug("check_is_consumer_of_exit_after_ch fail to found ct and ht node based on pattern")
+        log.debug("_check_is_consumer_of_exit_after_ch fail to found ct and ht node based on pattern")
         return False
 
-    def check_is_rnn_outputs_node(self, connector_in_rnnscope, time_major):
+    def _check_is_rnn_outputs_node(self, connector_in_rnnscope, time_major):
         node_to_check = connector_in_rnnscope
         if not time_major:
             # in batch_major mode, rnn outputs will ends with a Tranpose. So
@@ -291,7 +291,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
             # Be noted, in TF, transpose has 2 inputs.
             if not (len(connector_in_rnnscope.inputs) == 2 and check_is_timemajor_transpose(connector_in_rnnscope)):
-                log.debug("check_is_rnn_outputs_node error, in batch_major mode, Transpose should be found but actually not.")
+                log.debug("_check_is_rnn_outputs_node error, in batch_major mode, Transpose should be found but actually not.")
                 return False
             # the first input is data
             node_to_check = connector_in_rnnscope.inputs[0]
@@ -300,7 +300,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
             log.debug("Find output node " + connector_in_rnnscope.name)
             return True
 
-    def create_transform_nodes_after_lstm(self, input_n, parent_node, time_major):
+    def _create_transform_nodes_after_lstm(self, input_n, parent_node, time_major):
         # here we gave up existing transpose, instead, add some ops based on lstm node's result (indirect or directly)
         # just make sure the final output is [batch, time, hidden]
 
@@ -320,31 +320,22 @@ class LSTMUnitRewriter(UnitRewriterBase):
             assert input_n.type == "TensorArrayGatherV3"
             return [squeeze_node]
 
-    def connect_rnn_with_tupled_ch_consumer_nodes(self, lstm_node, connector_node_outside_rnn_scope):
-        n = connector_node_outside_rnn_scope
-        assert len(n.input) == 2
-        c_slice_name = utils.make_name("Slice")
-        attr = {"axes": [0], "starts": [0], "ends": [1]}
-        c_slice_node = Node(helper.make_node("Slice", [lstm_node.output[2]], [c_slice_name+":0"], name=c_slice_name, **attr), self.g, skip_conversion = True)
-
-        h_slice_name = utils.make_name("Slice")
-        attr = {"axes": [0], "starts": [0], "ends": [1]}
-        h_slice_node = Node(helper.make_node("Slice", [lstm_node.output[1]], [h_slice_name+":0"], name=h_slice_name, **attr), self.g, skip_conversion = True)
-
-        n.input[0] = c_slice_node.output[0] # new c
-        n.input[1] = h_slice_node.output[0] # new h
+    def _connect_rnn_with_tupled_ch_consumer_nodes(self, lstm_node, pack_node):
+        assert len(pack_node.input) == 2
+        pack_node.input[0] = lstm_node.output[2] # new c
+        pack_node.input[1] = lstm_node.output[1] # new h
 
         # For all Pack's consumers, they originaly expect data [tuple_size, batch_size, hidden_size],
         # tuple_size inidicate c or h
         # BUT now, we have [tuple size, num_directions, batch_size, hidden_size]
         # since this branch handles forward only, num_directions = 1
         op_name = utils.make_name("Squeeze")
-        squeeze_node = Node(helper.make_node("Squeeze", [n.output[0]], [op_name + ":0"], name=op_name, axes=[1]), self.g, skip_conversion = True)
-        self.g.replace_all_inputs(self.g.get_nodes(), n.output[0], squeeze_node.output[0])
+        squeeze_node = Node(helper.make_node("Squeeze", [pack_node.output[0]], [op_name + ":0"], name=op_name, axes=[1]), self.g, skip_conversion = True)
+        self.g.replace_all_inputs(self.g.get_nodes(), pack_node.output[0], squeeze_node.output[0])
 
-        self.all_nodes.extend([c_slice_node, h_slice_node, squeeze_node])
+        self.all_nodes.extend([squeeze_node])
 
-    def connect_rnn_with_one_of_tupled_ch_consumer_nodes(self, lstm_output_id, input_id):
+    def _connect_rnn_with_one_of_tupled_ch_consumer_nodes(self, lstm_output_id, input_id):
         # For original consumers, they originaly expect data [batch_size, hidden_size],
         # BUT now, we have [num_directions, batch_size, hidden_size]
         # since this branch handles forward only, num_directions = 1
@@ -354,7 +345,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
         self.all_nodes.extend([squeeze_node])
 
-    def connect_rnn_with_non_tupled_ch_consumer_nodes(self, lstm_node, connector_node_outside_rnn_scope, input_id):
+    def _connect_rnn_with_non_tupled_ch_consumer_nodes(self, lstm_node, connector_node_outside_rnn_scope, input_id):
         n = connector_node_outside_rnn_scope
         c_slice_name = utils.make_name("Slice")
         attr = {"axes": [0], "starts": [0], "ends": [1]}

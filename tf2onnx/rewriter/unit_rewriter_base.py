@@ -187,7 +187,6 @@ class UnitRewriterBase:
 
         self.g.set_nodes(new_nodes)
 
-
     def find_input_and_connectors(self, rnn_scope_name, input_blacklist = None):
         rnn_props = RnnProperties()
         rnn_input_nodes = []
@@ -346,7 +345,7 @@ class UnitRewriterBase:
         # but, during TF handling, at the beginning, the data will be transposed to [time, batch, ...]
         # after processing, the format is changed back before returning result.
         # So here, we judge the time_major by checking the transpose operator existence.
-        converted_transpose = self.convert_timemajor_transpose(possible_transpose_after_input)
+        converted_transpose = self._convert_timemajor_transpose(possible_transpose_after_input)
         if converted_transpose:
             log.debug("detect batch-major inputs")
             rnn_props.time_major = False
@@ -359,7 +358,7 @@ class UnitRewriterBase:
 
         return rnn_props
 
-    def convert_timemajor_transpose(self, node):
+    def _convert_timemajor_transpose(self, node):
         if not check_is_timemajor_transpose(node):
             log.debug("not found timemajor transpose")
             return
@@ -371,6 +370,7 @@ class UnitRewriterBase:
         self.g.replace_all_inputs(self.g.get_nodes(), node.output[0], new_trans.output[0])
         return new_trans
 
+    # todo: refine when implementing GRU
     def process_non_tuple_ch_init_nodes(self, input_id, hidden_size):
         op_name = utils.make_name("Slice")
         attr = { "axes": [1], "starts": [0], "ends": [hidden_size] }
@@ -387,6 +387,7 @@ class UnitRewriterBase:
         self.all_nodes.extend([slice_node1, slice_node2, squeeze_node_1, squeeze_node_2])
         return squeeze_node_1.output[0], squeeze_node_2.output[0]
 
+    # todo: refine when implementing GRU
     def process_tuple_ch_init_nodes(self, c_init_input_id, h_init_input_id, hidden_size):
         h_node_output = self.connect_initializer_node(h_init_input_id, hidden_size)
         c_node_output = self.connect_initializer_node(c_init_input_id, hidden_size)
