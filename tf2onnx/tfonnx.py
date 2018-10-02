@@ -22,6 +22,7 @@ from tensorflow.tools.graph_transforms import TransformGraph
 from tf2onnx import utils
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import *
+from tf2onnx.rewriter.rnn import *
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx")
@@ -166,8 +167,8 @@ def identity_op(ctx, node, name, args):
                 if parent_name == output_name:
                     n.input[i] = input_name
         return None
+    ctx.copy_shape(node.input[0], node.output[0])
     return node
-
 
 def broadcast_op(ctx, node, name, args):
     """Elementwise Ops with broadcast flag."""
@@ -952,9 +953,8 @@ def stridedslice_op(ctx, node, name, args):
         name = utils.make_name(node.name)
         cast_op = ctx.insert_new_node_on_output("Cast", nodes[-1].output[0], name)
         cast_op.set_attr("to", input_dtype)
-        ctx.copy_shape(node.input[0], cast_op.output[0])
+        ctx.copy_shape(node.output[0], cast_op.output[0])
         nodes.append(cast_op)
-
     return nodes
 
 
@@ -1522,6 +1522,10 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     ops = g.get_nodes()
     onnx_nodes = []
     for node in ops:
+        if node.need_skip():
+            log.debug("explictly skip node " + node.name)
+            onnx_nodes.append(node)
+            continue
         op = node.type
         map_info = ops_mapping.get(op)
         if map_info is None:
@@ -1610,14 +1614,17 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # rewrite graph
     rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
-                 rewrite_random_normal, rewrite_dropout]
+                 rewrite_random_normal, rewrite_dropout,
+                 tf2onnx.rewriter.rnn.rewrite_single_direction_lstm,
+                ]
+
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
     for rewrite in rewriters:
         ops = rewrite(g, ops)
         g.set_nodes(ops)
     topological_sort(g.get_nodes())
-
+    
     if custom_op_handlers is None:
         custom_op_handlers = {}
     mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers)

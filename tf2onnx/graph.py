@@ -17,7 +17,7 @@ from tf2onnx.utils import *
 class Node(object):
     """A Node - wrapper around onnx nodes that we use for graph manipulations."""
 
-    def __init__(self, node, graph):
+    def __init__(self, node, graph, skip_conversion = False):
         """Create Node.
         Args:
             node: Onnx node in NodeProto
@@ -46,6 +46,7 @@ class Node(object):
         self.data_format = self.get_attr("data_format")
         if self.data_format:
             self.data_format = self.data_format.s.decode("utf-8")
+        self._skip_conversion = skip_conversion
 
     @property
     def input(self):
@@ -124,6 +125,10 @@ class Node(object):
 
     def is_deleted(self):
         return self.type == "@@DELETED@@"
+
+    # If some Node is created as onnx_node, then we don't need convert it
+    def need_skip(self):
+        return self._skip_conversion == True
 
     @property
     def shape(self):
@@ -268,13 +273,13 @@ class Graph(object):
         """Check the input is a constant value. input is in format - node_name:<int> """
         return input in self._initializers
 
-    def make_const(self, name, np_val):
+    def make_const(self, name, np_val, skip_conversion = False):
         """Make a new constant in the graph"""
         onnx_tensor = numpy_helper.from_array(np_val, name)
         self.add_initializer(onnx_tensor)
 
-        Node(helper.make_node("Const", [], [name], name=name, value=onnx_tensor), self)
-        return name
+        node = Node(helper.make_node("Const", [], [name], name=name, value=onnx_tensor), self, skip_conversion)
+        return node
 
     def set_nodes(self, ops):
         """Set new node list."""
