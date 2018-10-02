@@ -106,7 +106,6 @@ GridWorld_5x5:
 
 Hallway:
   # needs: lstm
-  disabled: true
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Hallway/TFModels/Hallway.bytes
   model: Hallway.bytes
   input_get: get_random
