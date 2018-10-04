@@ -33,9 +33,9 @@ def get_args():
     parser.add_argument("--custom-ops", help="list of custom ops")
     parser.add_argument("--unknown-dim", type=int, default=-1, help="default for unknown dimensions")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
-    parser.add_argument("--optimize_transpose", help="eliminate transposes that can be removed", action="store_true")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
+    parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion", action="store_true")
     args = parser.parse_args()
 
     args.shape_override = None
@@ -79,7 +79,9 @@ def main():
     graph_def = tf.GraphDef()
     with tf.gfile.FastGFile(args.input, 'rb') as f:
         graph_def.ParseFromString(f.read())
-    graph_def = tf_optimize(None, args.inputs, args.outputs, graph_def, args.optimize_transpose)
+
+    # todo: consider to enable const folding by default?
+    graph_def = tf_optimize(None, args.inputs, args.outputs, graph_def, args.fold_const)
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')
     with tf.Session(graph=tf_graph) as sess:
@@ -92,9 +94,8 @@ def main():
                              extra_opset=extra_opset,
                              shape_override=args.shape_override)
 
-    if args.optimize_transpose:
-        optimizer = TransposeOptimizer(g, args.verbose != None)
-        optimizer.optimize()
+    optimizer = TransposeOptimizer(g, args.verbose != None)
+    optimizer.optimize()
 
     model_proto = g.make_model(
         "converted from {}".format(args.input), args.outputs,

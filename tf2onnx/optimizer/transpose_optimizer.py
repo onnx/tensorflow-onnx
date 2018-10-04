@@ -1,9 +1,13 @@
 import collections
+import logging
 import numpy as np
 import onnx
 from onnx import helper, numpy_helper
 from tf2onnx.graph import Graph, Node
 from tf2onnx import utils
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("tf2onnx.optimizer.transpose_optimizer")
 
 def is_nhwc_transpose(transpose_node):
     perm_attr = transpose_node.get_attr('perm')
@@ -87,7 +91,7 @@ class TransposeOptimizer(object):
             if "stop" in self._force_stop and self._force_stop["stop"] == 1:
                 break
 
-        print("finish after " + str(iteration_cnt) + " iteration(s)")
+        log.info("finish after " + str(iteration_cnt) + " iteration(s)")
         self.post_optimize_action()
         self._g.dump_node_statistics("after optimization")
 
@@ -156,7 +160,7 @@ class TransposeOptimizer(object):
             return True
 
         else:
-            print("input transpose does not have single consumer, skipping...")
+            log.debug("input transpose does not have single consumer, skipping...")
             pass
 
     # the assumption is: only node.input[0] and trans.input[0] will be token care here.
@@ -296,7 +300,7 @@ class TransposeOptimizer(object):
                 self._update_graph_nodes([conv_node], [t_p, node], True)
                 return True
             else:
-                print("shift add.input[1] to left")
+                log.debug("shift add.input[1] to left")
         else:
             return self._handle_node_having_branches(node)
 
@@ -350,9 +354,9 @@ class TransposeOptimizer(object):
                     self._g.set_nodes(ops)
                     return True
                 else: # if the muler is not a single number, we need pad and reshape the data
-                    print("pad & reshape Conv's weight to mul-able with NCHW tensor")
+                    log.debug("pad & reshape Conv's weight to mul-able with NCHW tensor")
         else:
-            print("Mul's second input is not a const, skipping")
+            log.debug("Mul's second input is not a const, skipping")
 
     def _identity_handler(self, trans, node):
         ops = self._g.get_nodes()

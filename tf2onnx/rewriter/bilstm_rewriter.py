@@ -147,7 +147,6 @@ def batch_major_ch_match_check(g, ops, is_tuple, merged_matches):
 # currently we only support inputs having shapes.
 # only support batch_major right now.
 def process_bilstm_batch_major(g, ops):
-    log.info("start rewriting bidirection lstm graph")
     # we use two sub-graph do pattern matching, to make sure we don't make mistakes.
     merged_matches = {}
     batch_major_ouput_match_check(g, ops, merged_matches)
@@ -279,7 +278,8 @@ def process_bilstm_batch_major(g, ops):
         all_nodes.extend(to_append)
         g.set_nodes(all_nodes)
 
-    log.info("done rewriting bidirection lstm graph")
+    if merged_matches:
+        log.info("done rewriting bidirection lstm graph")
     return g.get_nodes()
 
 def check_const(g, input_id):
