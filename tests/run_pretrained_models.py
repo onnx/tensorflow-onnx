@@ -220,7 +220,7 @@ class Test(object):
             f.write(model_proto.SerializeToString())
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, transpose_opt=None):
+    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, fold_const=None):
         """Run complete test against backend."""
         print(name)
         self.perf = perf
@@ -275,7 +275,7 @@ class Test(object):
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
 
-        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def, transpose_opt)
+        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def, fold_const)
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
@@ -300,9 +300,8 @@ class Test(object):
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
-                if transpose_opt:
-                    optimizer = TransposeOptimizer(onnx_graph, debug)
-                    optimizer.optimize()
+                optimizer = TransposeOptimizer(onnx_graph, debug)
+                optimizer.optimize()
   
                 model_proto = onnx_graph.make_model("test", self.output_names)
                 print("\tto_onnx", "OK")
@@ -360,7 +359,7 @@ def get_args():
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
     parser.add_argument("--perf", help="capture performance numbers")
-    parser.add_argument("--optimize_transpose", help="eliminate transposes that can be removed", action="store_true")
+    parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion", action="store_true")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
     return args
@@ -404,7 +403,7 @@ def main():
         count += 1
         try:
             ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file,
-                             opset=args.opset, perf=args.perf, transpose_opt=args.optimize_transpose)
+                             opset=args.opset, perf=args.perf, fold_const=args.fold_const)
         except Exception as ex:
             ret = None
             print(ex)

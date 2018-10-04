@@ -73,7 +73,7 @@ python -m tf2onnx.convert --input SOURCE_FROZEN_GRAPH_PB\
     [--verbose]\
     [--custom-ops list-of-custom-ops]\
     [--opset OPSET]
-    [--optimize_transpose]
+    [--fold_const]
 ```
 
 Parameters:
@@ -83,7 +83,7 @@ Parameters:
 - target: There are different onnx versions and workarounds for runtimes that can be set with ```--target TARGET```. 
 - opset: by default we uses the newest opset installed with the onnx package (for example onnx-1.2.2 would have opset 7). By specifieing ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
 - custom-ops: the runtime may support custom ops that are not defined in onnx. A user can asked the converter to map to custom ops by listing them with the --custom-ops option. Tensorflow ops listed here will be mapped to a custom op of the same name as the tensorflow op but in the onnx domain ai.onnx.converters.tensorflow. For example: ```--custom-ops Print``` will insert a op ```Print``` in the onnx domain ```ai.onnx.converters.tensorflow``` into the graph. We also support a python api for custom ops documented later in this readme. 
-- optimize_transpose: when set, those transpose operations introduced during tfgraph-to-onnxgraph conversion will be removed.
+- fold_const: when set, TensorFlow fold_constants transformation will be applied before conversion. This will benefit features including Transpose optimization (e.g. Transpose operations introduced during tf-graph-to-onnx-graph conversion will be removed), and RNN unit conversion (for example LSTM).
 
 Usage example (run following commands in tensorflow-onnx root directory):
 ```
@@ -140,7 +140,7 @@ optional arguments:
   --opset OPSET      target opset to use
   --perf csv-file    capture performance numbers or tensorflow and onnx runtime
   --debug            dump generated graph with shape info
-  --optimize_transpose when set, those transpose operations introduced during tf-graph-to-onnx-graph conversion will be removed.
+  --fold_const when set, TensorFlow fold_constants transformation will be applied before conversion. This will benefit features including Transpose optimization (e.g. Transpose operations introduced during tf-graph-to-onnx-graph conversion will be removed), and RNN unit conversion (for example LSTM).
 ```
 ```run_pretrained_models.py``` will run the TensorFlow model, captures the TensorFlow output and runs the same test against the specified ONNX backend after converting the model. The only practical backend to use at this time is Caffe2, and you need to install Caffe2 for this to work. 
 If the option ```--perf csv-file``` is specified, we'll capture the eval runtime for tensorflow and onnx runtime and write the result into the given csv file.
