@@ -88,6 +88,7 @@ class MatchedLSTM:
         self.lstm_fw = lstm_fw
         self.lstm_bw = lstm_bw
         self.output_pack = output_pack
+        self.state_is_tuple = None
 
         tmp_nodes = []
         tmp_nodes.extend(nodes_to_delete)

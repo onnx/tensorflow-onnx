@@ -259,10 +259,10 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
         self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.01)
 
-    def test_multiple_dynamic_lstm_stateistuple(self):
+    def test_multiple_dynamic_lstm_state_is_tuple(self):
         self.internel_test_multiple_dynamic_lstm_with_parameters(True)
 
-    def test_multiple_dynamic_lstm_stateisnottuple(self):
+    def test_multiple_dynamic_lstm_state_is_not_tuple(self):
         self.internel_test_multiple_dynamic_lstm_with_parameters(False)
 
     def internel_test_multiple_dynamic_lstm_with_parameters(self, state_is_tuple):
@@ -342,6 +342,84 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
         self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
+    def test_dynamic_bilstm_state_is_tuple(self):
+        self.internel_test_dynamic_bilstm_with_parameters(True)
+
+    def test_dynamic_bilstm_state_is_not_tuple(self):
+        self.internel_test_dynamic_bilstm_with_parameters(False)
+
+    def internel_test_dynamic_bilstm_with_parameters(self, state_is_tuple):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        initializer = init_ops.constant_initializer(0.5)
+
+        lstm_list = []
+        if True:
+            # bilstm, no scope
+            cell1 = rnn.LSTMCell(
+                units,
+                initializer=initializer,
+                state_is_tuple=state_is_tuple)
+                #state_is_tuple will impact the Pack node (for cell_state)'s usage pattern
+            cell2 = rnn.LSTMCell(
+                units,
+                initializer=initializer,
+                state_is_tuple=state_is_tuple)
+            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+                cell1,
+                cell2,
+                x,
+                dtype=tf.float32)
+            lstm_list.append(outputs)
+
+        output = tf.identity(outputs, name=_TFOUTPUT)
+        cellstate = tf.identity(cell_state, name=_TFOUTPUT_CELLSTATE)
+
+        feed_dict = {_INPUT: x_val}
+        output_dict = [output, cellstate]
+        input_names_with_port = [_INPUT]
+        output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
+        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+
+    def test_dynamic_bilstm_output_consumed_only(self, state_is_tuple = True):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        initializer = init_ops.constant_initializer(0.5)
+
+        lstm_list = []
+        if True:
+            # bilstm, no scope
+            cell1 = rnn.LSTMCell(
+                units,
+                initializer=initializer,
+                state_is_tuple=state_is_tuple)
+                #state_is_tuple will impact the Pack node (for cell_state)'s usage pattern
+            cell2 = rnn.LSTMCell(
+                units,
+                initializer=initializer,
+                state_is_tuple=state_is_tuple)
+            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+                cell1,
+                cell2,
+                x,
+                dtype=tf.float32)
+            lstm_list.append(outputs)
+
+        output = tf.identity(outputs, name=_TFOUTPUT)
+
+        feed_dict = {_INPUT: x_val}
+        output_dict = [output]
+        input_names_with_port = [_INPUT]
+        output_names_with_port = [_OUTPUT]
+        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

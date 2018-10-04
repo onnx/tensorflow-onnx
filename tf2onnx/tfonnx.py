@@ -1616,6 +1616,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
                  rewrite_random_normal, rewrite_dropout,
                  tf2onnx.rewriter.rnn.rewrite_single_direction_lstm,
+                 tf2onnx.rewriter.rnn.rewrite_bi_direction_lstm,
                 ]
 
     if custom_rewriter is not None:
