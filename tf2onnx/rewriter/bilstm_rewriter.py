@@ -32,13 +32,13 @@ batch_major_ouput_pattern =  \
                 # that are not in g._nodes, so match pattern search will fail.
             ])
         ]),
-        OpTypePattern("Transpose", inputs = [
-            OpTypePattern("Squeeze", inputs = [
-                OpTypePattern("ReverseV2", inputs = [
+        OpTypePattern("ReverseV2", inputs = [
+            OpTypePattern("Transpose", inputs = [
+                OpTypePattern("Squeeze", inputs = [
                     OpTypePattern("LSTM", name = "lstm_bw"),
-                    OpTypePattern("*", name ="reversev2_axis"),
                 ]),
             ]),
+            OpTypePattern("*", name ="reversev2_axis"),
         ]),
     ])
 
@@ -71,7 +71,7 @@ batch_major_ch_pattern_state_is_tuple = \
     ])
 
 def batch_major_ouput_match_check(g, ops, merged_matches):
-    matcher = GraphMatcher(batch_major_ouput_pattern, allow_reorder=False)
+    matcher = GraphMatcher(batch_major_ouput_pattern, allow_reorder=True)
     output_match_results = list(matcher.match_ops(ops))
     for match in output_match_results:
         lstm_fw = match.get_op("lstm_fw")
@@ -86,10 +86,8 @@ def batch_major_ouput_match_check(g, ops, merged_matches):
         rnn_input_bw = reverse_bw.input[0]
 
         final_pack = match.get_op("output_fw_bw_tuple")
-        left_tran = final_pack.inputs[0]
-        right_tran = final_pack.inputs[1]
 
-        if rnn_input_fw == rnn_input_bw and left_tran.type == "Transpose" and right_tran.type == "Transpose":
+        if rnn_input_fw == rnn_input_bw:
             fw_bw_pair_name = lstm_fw.name + "," + lstm_bw.name
             if fw_bw_pair_name not in merged_matches:
                 merged_matches[fw_bw_pair_name] = [None, None]
@@ -236,7 +234,7 @@ def process_bilstm_batch_major(g, ops):
         to_append.append(bi_lstm_node)
         log.info("processing output nodes")
         if o_lstm:
-            log.debug("handle o_lstm outputs")
+            log.info("handle o_lstm outputs")
             # we need tranpose LSTM result to original consumer (they assume that)
             # source [seq_length, num_directions, batch_size, hidden_size] 
             # dest [num_directions, batch_size, seq_length, hidden_size]
@@ -253,7 +251,7 @@ def process_bilstm_batch_major(g, ops):
                     all_nodes.remove(n)
 
         if ch_lstm:
-            log.debug("handle ch_lstm outputs")
+            log.info("handle ch_lstm outputs")
             # onnx lstm c/h: [num_directions, batch_size, hidden_size]
             if ch_lstm.state_is_tuple:
                 # original Pack's output is [num_directions, tuple_size_h_c(e.g. 2), batch_size, hidden_size]
