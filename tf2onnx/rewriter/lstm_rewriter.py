@@ -335,8 +335,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
         ch_outputer_node = self._prepare_y_ch_node_outputer(lstm_node, True)
         self.g.replace_all_inputs(self.all_nodes, pack_node.output[0], ch_outputer_node.output[0])
-        # For all Pack's consumers, they originally expect data [tuple_size, batch_size, hidden_size],
-        # tuple_size indicate c or h
+        # For all Pack's consumers, they originally expect data [tuple_size (e.g. 2), batch_size, hidden_size],
 
         # here we give up the original pack_node.
         self.all_nodes.remove(pack_node)
