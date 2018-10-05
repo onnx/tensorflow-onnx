@@ -23,7 +23,7 @@ from tf2onnx.rewriter.rnn_utils import *
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.bilstm_rewriter")
 
-batch_major_ouput_pattern =  \
+batch_major_output_pattern =  \
     OpTypePattern('Pack', name='output_fw_bw_tuple', inputs = [
         OpTypePattern("Transpose", inputs = [
             OpTypePattern("Squeeze", inputs = [
@@ -70,8 +70,8 @@ batch_major_ch_pattern_state_is_tuple = \
         ]),
     ])
 
-def batch_major_ouput_match_check(g, ops, merged_matches):
-    matcher = GraphMatcher(batch_major_ouput_pattern, allow_reorder=True)
+def batch_major_output_match_check(g, ops, merged_matches):
+    matcher = GraphMatcher(batch_major_output_pattern, allow_reorder=True)
     output_match_results = list(matcher.match_ops(ops))
     for match in output_match_results:
         lstm_fw = match.get_op("lstm_fw")
@@ -91,7 +91,7 @@ def batch_major_ouput_match_check(g, ops, merged_matches):
             fw_bw_pair_name = lstm_fw.name + "," + lstm_bw.name
             if fw_bw_pair_name not in merged_matches:
                 merged_matches[fw_bw_pair_name] = [None, None]
-                log.debug("batch_major_ouput_match_check: found fw_bw pair " + fw_bw_pair_name)
+                log.debug("batch_major_output_match_check: found fw_bw pair " + fw_bw_pair_name)
 
             assert not merged_matches[fw_bw_pair_name][0]
             to_delete = [transpose_bw, reverse_bw]
@@ -149,13 +149,13 @@ def batch_major_ch_match_check(g, ops, is_tuple, merged_matches):
 def process_bilstm_batch_major(g, ops):
     # we use two sub-graph do pattern matching, to make sure we don't make mistakes.
     merged_matches = {}
-    batch_major_ouput_match_check(g, ops, merged_matches)
+    batch_major_output_match_check(g, ops, merged_matches)
     batch_major_ch_match_checks(g, ops, merged_matches)
 
     # for each found lstm cell, find its outer scope and collect its nodes into a dict.
     for pair_name in merged_matches:
         log.info("=========================")
-        log.info("start handling potential bidirection lstm " + pair_name)
+        log.info("start handling potential bidirectional lstm " + pair_name)
         matches = merged_matches[pair_name]
         lstm_fw = None
         lstm_bw = None
@@ -227,9 +227,7 @@ def process_bilstm_batch_major(g, ops):
             continue
 
         attr = { "direction": direction, "hidden_size": hidden_size}
-        lstm_name = utils.make_name("LSTM")
-        lstm_outputs = [lstm_name + ":" + str(i) for i in np.arange(3)]
-        bi_lstm_node = Node(helper.make_node("LSTM", lstm_inputs , lstm_outputs, name=lstm_name, **attr), g, skip_conversion = True)
+        bi_lstm_node = make_onnx_node(g, "LSTM", lstm_inputs, attr=attr, output_count=3)
         to_append.append(bi_lstm_node)
         log.info("processing output nodes")
         if o_lstm:
@@ -237,9 +235,8 @@ def process_bilstm_batch_major(g, ops):
             # we need tranpose LSTM result to original consumer (they assume that)
             # source [seq_length, num_directions, batch_size, hidden_size] 
             # dest [num_directions, batch_size, seq_length, hidden_size]
-            new_trans_name = utils.make_name("Transpose")
-            attr={ "perm": np.array([1, 2, 0, 3], dtype=np.int64) }
-            new_trans = Node(helper.make_node("Transpose", [bi_lstm_node.output[0]], [new_trans_name + ":0"], name=new_trans_name, **attr), g, skip_conversion = True)
+            attr = { "perm": np.array([1, 2, 0, 3], dtype=np.int64) }
+            new_trans = make_onnx_node(g, "Transpose", [bi_lstm_node.output[0]], attr)
             g.set_shape(new_trans.output[0], (num_directions, batch_size, time_step, hidden_size))
 
             # start to modify graph
@@ -254,15 +251,14 @@ def process_bilstm_batch_major(g, ops):
             # onnx lstm c/h: [num_directions, batch_size, hidden_size]
             if ch_lstm.state_is_tuple:
                 # original Pack's output is [num_directions, tuple_size_h_c(e.g. 2), batch_size, hidden_size]
-                stack_ch_name = utils.make_name("Pack")
-                attr = { "axis": 1 }
-                stack_ch = Node(helper.make_node("Pack", [bi_lstm_node.output[2], bi_lstm_node.output[1]], [stack_ch_name + ":0"], name=stack_ch_name, **attr), g, skip_conversion = False)
+                stack_ch = make_onnx_node(
+                    g, "Pack", [bi_lstm_node.output[2], bi_lstm_node.output[1]], 
+                    attr={ "axis": 1 }, output_count=1, skip_conversion=False)
                 g.set_shape(stack_ch.output[0], (num_directions, 2, batch_size, hidden_size))
             else:
                 # original Pack's output is [num_directions, batch_size, hidden_size*2]
-                stack_ch_name = utils.make_name("Concat")
                 attr = { "axis": 2 }
-                stack_ch = Node(helper.make_node("Concat", [bi_lstm_node.output[2], bi_lstm_node.output[1]], [stack_ch_name + ":0"], name=stack_ch_name, **attr), g, skip_conversion = True)
+                stack_ch = make_onnx_node(g, "Concat", [bi_lstm_node.output[2], bi_lstm_node.output[1]], attr)
                 g.set_shape(stack_ch.output[0], (num_directions, batch_size, hidden_size*2))
 
             to_append.extend([stack_ch])
@@ -279,7 +275,7 @@ def process_bilstm_batch_major(g, ops):
         g.set_nodes(all_nodes)
 
     if merged_matches:
-        log.info("done rewriting bidirection lstm graph")
+        log.info("done rewriting bidirectional lstm graph")
     return g.get_nodes()
 
 def check_const(g, input_id):
@@ -300,13 +296,13 @@ def get_np_val_for_const(g, node, input_index):
 def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
     fw_init_is_const, init_fw_val = check_const(g, fw_init_input_id)
     bw_init_is_const, init_bw_val = check_const(g, bw_init_input_id)
-    init_name = utils.make_name("initial")
     if fw_init_is_const and bw_init_is_const:
         initial_val = np.concatenate((init_fw_val, init_bw_val), axis=0)
+        init_name = utils.make_name("initial")
         init_node = g.make_const(init_name, initial_val, skip_conversion = True)
     else:
         attr = { "axis" : 0 }
-        init_node = Node(helper.make_node("Concat", [fw_init_input_id, bw_init_input_id] , [init_name + ":0"], name=init_name, **attr), g, skip_conversion = True)
+        init_node = make_onnx_node(g, "Concat", [fw_init_input_id, bw_init_input_id], attr)
         to_append.append(init_node)
 
     return init_node

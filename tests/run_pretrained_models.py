@@ -153,7 +153,7 @@ class Test(object):
         return fpath, dir_name
 
     def run_tensorflow(self, sess, inputs):
-        """Run model on tensorflow so we have a referecne output."""
+        """Run model on tensorflow so we have a reference output."""
         feed_dict = {}
         for k, v in inputs.items():
             k = sess.graph.get_tensor_by_name(k)

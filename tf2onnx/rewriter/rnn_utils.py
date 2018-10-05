@@ -182,8 +182,8 @@ def check_is_timemajor_transpose(node):
 # todo: fix this
 def check_is_unfolded_perm(perm_node):
     # For some case, like HallWay, the perm is a ConcatV2,
-    # but it should be calculated when constant-fold. TODO: invetigate why not constant fold.
-    # current workaround: use np to calculate the val explictily. 
+    # but it should be calculated when constant-fold. TODO: investigate why not constant fold.
+    # current workaround: use np to calculate the val explicitly. 
     if perm_node.type == "ConcatV2" and len(perm_node.inputs) == 3:
         const_node_val = perm_node.inputs[0].get_tensor_value()
         if list(const_node_val) != [1, 0]:
@@ -198,3 +198,12 @@ def check_is_unfolded_perm(perm_node):
             # todo: refine this
             return True
     return False
+
+def make_onnx_node(g, op_type, inputs, attr = {}, output_count = 1, skip_conversion = True):
+    node_name = utils.make_name(op_type)
+    outputs = [node_name + ":" + str(i) for i in np.arange(output_count)]
+    node = Node(
+        helper.make_node(op_type, inputs, outputs, name = node_name, **attr),
+        g, skip_conversion = skip_conversion)
+
+    return node

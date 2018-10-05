@@ -72,7 +72,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
         return RnnWeights(w, b, ft)
 
     def ct_switch_check(self, enter_target_node_input_id, identity_consumers, match):
-        # original we use c.inputs[0] == match.get_op("ft") to check c initilier for LSTMCell
+        # original we use c.inputs[0] == match.get_op("ft") to check c initializer for LSTMCell
         # but in BasicLSTMCell, c.inputs[1] is "ft", that's because BasicLSTMCell and LSTMCell's call 
         # function are defining the multiplication with different order. So we change to match.get_op("ft") in c.inputs
         mul_nodes = [c for c in identity_consumers if c.type == "Mul" and match.get_op("ft") in c.inputs]
@@ -163,10 +163,10 @@ class LSTMUnitRewriter(UnitRewriterBase):
         #    2.1 if state_is_tuple is true:
         #        2.1.1 which would ends with a Pack<C, H> operator when cell_state is used.
         #        2.1.2 which would ends with "Exit" for c and h respectively, when cell_state.c/h is used.
-        #    2.2 which would ends with "Exit" if state_is_tupe is false
+        #    2.2 which would ends with "Exit" if state_is_tuple is false
         connector_nodes = set(rnn_props.connectors)
         for n in connector_nodes:
-            log.debug("processiong connector node called "+ n.name)
+            log.debug("processing connector node called "+ n.name)
             # todo: change to another way
             if n.need_skip():
                 log.debug("newly created nodes, won't consider as RNN outputs.")
@@ -315,15 +315,13 @@ class LSTMUnitRewriter(UnitRewriterBase):
         # just make sure the final output is [batch, time, hidden]
 
         # insert Squeeze in axes 1
-        op_name = utils.make_name("Squeeze")
         # lstm's 1st output shape is [time, num_directions, batch, hidden]
-        squeeze_node = Node(helper.make_node("Squeeze", [output_id], [op_name+":0"], name=op_name, axes=[1]), self.g, skip_conversion = True)
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [1]})
 
         if not time_major:
-            # transpose to [batch, time, hidden], since node n orignally use this
-            new_trans_name = utils.make_name("Transpose")
-            attr={ "perm": np.array([1, 0, 2], dtype=np.int64) }
-            new_trans = Node(helper.make_node("Transpose", [squeeze_node.output[0]], [new_trans_name + ":0"], name=new_trans_name, **attr), self.g, skip_conversion = True)
+            # transpose to [batch, time, hidden], since node n originally use this
+            attr = { "perm": np.array([1, 0, 2], dtype=np.int64) }
+            new_trans = make_onnx_node(self.g, "Transpose", [squeeze_node.output[0]], attr)
             self.all_nodes.extend([squeeze_node, new_trans])
             return new_trans
         else:
@@ -338,7 +336,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
         ch_outputer_node = self._prepare_y_ch_node_outputer(lstm_node, True)
         self.g.replace_all_inputs(self.all_nodes, pack_node.output[0], ch_outputer_node.output[0])
         # For all Pack's consumers, they originally expect data [tuple_size, batch_size, hidden_size],
-        # tuple_size inidicate c or h
+        # tuple_size indicate c or h
 
         # here we give up the original pack_node.
         self.all_nodes.remove(pack_node)
@@ -347,10 +345,8 @@ class LSTMUnitRewriter(UnitRewriterBase):
         # For original consumers, they originally expect data [batch_size, hidden_size],
         # BUT now, we have [num_directions, batch_size, hidden_size]
         # since this branch handles forward only, num_directions = 1
-        op_name = utils.make_name("Squeeze")
-        squeeze_node = Node(helper.make_node("Squeeze", [lstm_output_id], [op_name + ":0"], name=op_name, axes=[0]), self.g, skip_conversion = True)
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [lstm_output_id], {"axes" :[0]})
         self.g.replace_all_inputs(self.all_nodes, exit_node_output_id, squeeze_node.output[0])
-
         self.all_nodes.extend([squeeze_node])
 
     def _connect_rnn_with_non_tupled_ch_consumer_nodes(self, lstm_node, connector_node_outside_rnn_scope, exit_node_output_id):
@@ -362,15 +358,13 @@ class LSTMUnitRewriter(UnitRewriterBase):
         axis = None
         squeeze_axes = None
         # if original graph need tupled output, then we concat c and h with axis = 0
-        # otherwise, 
         if is_ch_tupled:
             axis = 0
         else:
             axis = 2
             squeeze_axes = [0]
-        op_name = utils.make_name("Concat")
-        attr = {"axis": axis }
-        concat = Node(helper.make_node("Concat", [lstm_node.output[2], lstm_node.output[1]], [op_name + ":0"], name=op_name, **attr), self.g, skip_conversion = True)
+
+        concat = make_onnx_node(self.g, "Concat", [lstm_node.output[2], lstm_node.output[1]], attr={"axis": axis })
         self.all_nodes.append(concat)
 
         # For all tupled-ch's consumers, they originally expect data [tuple_size (e.g. 2), batch_size, hidden_size].
@@ -381,8 +375,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
         # For all non-tupled-ch's consumers, they originally expect data [batch_size, hidden_size*2].
         # since this branch handles forward only, num_directions = 1
-        op_name = utils.make_name("Squeeze")
-        squeeze_node = Node(helper.make_node("Squeeze", [concat.output[0]], [op_name + ":0"], name=op_name, axes=squeeze_axes), self.g, skip_conversion = True)
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [concat.output[0]], attr={ "axes": squeeze_axes })
         self.all_nodes.append(squeeze_node)
 
         return squeeze_node
