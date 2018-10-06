@@ -340,7 +340,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.00001)
 
     def test_dynamic_bilstm_state_is_tuple(self):
         self.internel_test_dynamic_bilstm_with_parameters(True)

@@ -345,7 +345,7 @@ class TransposeOptimizer(object):
                 return True
             else:
                 mul_dim = self._g.get_initializer(node.input[1]).dims[0]
-                if mul_dim == 1: # if there is only 1 number, so we just move transponse after the mul
+                if mul_dim == 1: # if there is only 1 number, so we just move transpose after the mul
                     ops = self._g.get_nodes()
                     self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
 
@@ -353,7 +353,7 @@ class TransposeOptimizer(object):
                     trans.input[0] = node.name + ":0"
                     self._g.set_nodes(ops)
                     return True
-                else: # if the muler is not a single number, we need pad and reshape the data
+                else: # if the multiplier is not a single number, we need pad and reshape the data
                     log.debug("pad & reshape Conv's weight to mul-able with NCHW tensor")
         else:
             log.debug("Mul's second input is not a const, skipping")
@@ -387,7 +387,7 @@ class TransposeOptimizer(object):
     def _reducemean_handler(self, trans, node):
         axes = node.get_attr("axes").ints
         keepdims = node.get_attr("keepdims")
-        # make sure keepdims is 1, then we can do the swap, otherwise, plese don't, because
+        # make sure keepdims is 1, then we can do the swap, otherwise, please don't, because
         # once keepdims is not set, original dims are lost, so transpose back won't work well.
         # by default, if keepdims is not specified, it is 1
         if axes == [1, 2] and ((keepdims and keepdims.i == 1) or (not keepdims)):

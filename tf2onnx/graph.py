@@ -466,7 +466,7 @@ class Graph(object):
             ops.append(onnx_op)
 
         # create input_tensor_values, initializers
-        # if initilizer is not used as input by any node, then it will be ignored
+        # if initializer is not used as input by any node, then it will be ignored
         initializers = [i for i in list(self._initializers.values()) if i.name in all_inputs]
         input_with_initializers = []
         for initializer in initializers:

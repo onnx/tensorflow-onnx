@@ -335,7 +335,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     """Convert input and kernel from tensorflow to onnx. This maybe require to
         to insert transpose ops for input, kernel and output unless they are constants
         and we can transpose the constant.
-        We transpose inputs if they are in NHWC. We always transpsoe the kernel from
+        We transpose inputs if they are in NHWC. We always transpose the kernel from
         HWNC to NCHW. Outputs are transposed if the format is NHWC.
         Some convolutions like depthwise_conv2d require a reshape of the kernel.
         Args:
@@ -599,7 +599,7 @@ def pool_op(ctx, node, name, args):
 
 def relu6_op(ctx, node, name, args):
     # relu6 = min(max(features, 0), 6)
-    # since onnx does not have relu6, compose it with multipe ops.
+    # since onnx does not have relu6, compose it with multiple ops.
     old_output = node.output[0]
     dtype = ctx.get_dtype(node.input[0])
     dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
@@ -654,7 +654,7 @@ def relu6_op(ctx, node, name, args):
 
 def relu6_op8(ctx, node, name, args):
     # relu6 = min(max(features, 0), 6) for opset >= 8
-    # since onnx does not have relu6, compose it with multipe ops.
+    # since onnx does not have relu6, compose it with multiple ops.
     old_output = node.output[0]
     dtype = ctx.get_dtype(node.input[0])
     dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
@@ -873,7 +873,7 @@ def rsqrt_op(ctx, node, name, args):
 
 def expanddims_op(ctx, node, name, args):
     # T output = ExpandDims(T input, Tdim dim, @type Tdim)
-    # tensorflow already inferes the output shape so we can just take it
+    # tensorflow already infers the output shape so we can just take it
     shape = ctx.get_shape(node.output[0])
     node.type = "Reshape"
     ctx.remove_input(node, node.input[1])
