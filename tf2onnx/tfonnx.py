@@ -1386,7 +1386,6 @@ def rewrite_random_uniform(g, ops):
             new_node = Node(helper.make_node("RandomUniformLike",
                                              [shape_op.input[0]], [out_name], name=op_name,
                                              low=tmin, high=tmax, dtype=dtype), g)
-            ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
         else:
             shape = g.get_shape(output.output[0])
             new_node = Node(helper.make_node("RandomUniform",
