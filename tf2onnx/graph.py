@@ -272,7 +272,7 @@ class Graph(object):
         return name in self._target
 
     def is_initializer(self, name):
-        """Check the name is a constant value. input is in format - node_name:<int> """
+        """Check the name is a constant value. name is in format - node_name:<int> """
         return name in self._initializers
 
     def make_const(self, name, np_val, skip_conversion=False):
