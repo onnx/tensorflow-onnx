@@ -8,16 +8,7 @@ tf2onnx.rewriter.rnn - lstm support
 from __future__ import division
 from __future__ import print_function
 
-import collections
-import logging
-import numpy as np
-import tf2onnx
-from onnx import helper, defs, numpy_helper, checker, onnx_pb
-from onnx import AttributeProto, TensorProto, GraphProto
-from tf2onnx import utils
-from tf2onnx.graph import Node, Graph
-from tf2onnx.graph_matcher import *
-from tf2onnx.rewriter.bilstm_rewriter import * 
+from tf2onnx.rewriter.bilstm_rewriter import *
 from tf2onnx.rewriter.lstm_rewriter import *
 from tf2onnx.rewriter.rnn_utils import *
 

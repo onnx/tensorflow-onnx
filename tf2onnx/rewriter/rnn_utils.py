@@ -5,16 +5,13 @@
 tf2onnx.rewriter.rnn_utils - rnn support
 """
 
-import collections
 import logging
-import numpy as np
-import tf2onnx
 from enum import Enum
-from onnx import AttributeProto, TensorProto, GraphProto
-from onnx import helper, defs, numpy_helper, checker
-from onnx import onnx_pb
+
+import numpy as np
+from onnx import helper
 from tf2onnx import utils
-from tf2onnx.graph import Node, Graph
+from tf2onnx.graph import Node
 from tf2onnx.graph_matcher import *
 
 logging.basicConfig(level=logging.INFO)
@@ -199,7 +196,9 @@ def check_is_unfolded_perm(perm_node):
             return True
     return False
 
-def make_onnx_node(g, op_type, inputs, attr = {}, output_count = 1, skip_conversion = True):
+def make_onnx_node(g, op_type, inputs, attr=None, output_count=1, skip_conversion=True):
+    if attr is None:
+        attr = {}
     node_name = utils.make_name(op_type)
     outputs = [node_name + ":" + str(i) for i in np.arange(output_count)]
     node = Node(

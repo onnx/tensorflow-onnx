@@ -23,6 +23,7 @@ from tf2onnx import utils
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import *
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
+from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx")
@@ -102,7 +103,7 @@ def tensorflow_to_onnx(graph, shape_override):
             elif a == "_output_shapes":
                 attr[a] = utils.get_shape(node)
             elif a == "value":
-                onnx_tensor = utils.tf_to_onnx_tensor(node.get_attr(a), name=node.name + ":0")
+                onnx_tensor = utils.tf_to_onnx_tensor(node.get_attr(a), name=port_name(node.name))
                 attr[a] = onnx_tensor
             elif a == "DstT":
                 attr["to"] = utils.map_tf_dtype(node.get_attr("DstT"))
@@ -169,6 +170,7 @@ def identity_op(ctx, node, name, args):
         return None
     ctx.copy_shape(node.input[0], node.output[0])
     return node
+
 
 def broadcast_op(ctx, node, name, args):
     """Elementwise Ops with broadcast flag."""
@@ -250,6 +252,7 @@ def placeholder_op(ctx, node, name, args):
     input_node = helper.make_tensor_value_info(node.output[0], node.dtype, ctx.get_shape(node.output[0]))
     ctx.add_model_input(input_node.name, input_node)
     return None
+
 
 def square_op(ctx, node, name, args):
     node.type = "Mul"
@@ -852,12 +855,12 @@ def pad_op(ctx, node, name, args):
         node.set_attr("mode", mode)
     if mode not in [None, "constant", "reflect"]:
         raise ValueError(mode + " pad mode is not supported")
-    
+
     if mode in [None, "constant"] and len(node.input) == 3:
         const_val = node.inputs[2].get_tensor_value()[0]
         node.set_attr("value", const_val)
         ctx.remove_input(node, node.input[2])
-       
+
     ctx.remove_input(node, node.input[1])
     node.set_attr("pads", paddings)
     return node
@@ -1029,8 +1032,8 @@ def topk_op(ctx, node, name, args):
     node.type = "TopK"
     ctx.remove_input(node, node.input[1])
 
-    # the second of TopK operator must be INT64 per ONNX requires. 
-    ctx.override_dtype(name + ":1", onnx_pb.TensorProto.INT64)
+    # the second of TopK operator must be INT64 per ONNX requires
+    ctx.override_dtype(port_name(name, 1), onnx_pb.TensorProto.INT64)
     return node
 
 
@@ -1093,14 +1096,14 @@ def pack_op(ctx, node, name, args):
     # insert Unsqueeze on each input
     for i, n in enumerate(node.inputs):
         op_name = utils.make_name(node.name)
-        output_name = op_name + ":0"
+        output_name = port_name(op_name)
         new_node = Node(helper.make_node("Unsqueeze", [node.input[i]], [output_name], name=op_name, axes=[axis]), ctx)
         node.input[i] = output_name
         nodes.append(new_node)
         inputs.append(output_name)
     # concat all unqueezes
     op_name = utils.make_name(node.name)
-    output_name = op_name + ":0"
+    output_name = port_name(op_name)
     concat = Node(helper.make_node("Concat", inputs, [output_name], name=op_name, axis=axis), ctx)
     ctx.copy_shape(node.output[0], concat.output[0])
     ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], output_name)
@@ -1177,13 +1180,13 @@ def fused_batchnorm_op7(ctx, node, name, args):
 
     if mean_shape != scale_shape:
         new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(), scale_shape), dtype=val_type)
-        new_mean_node_name= utils.make_name(node.name)
+        new_mean_node_name = utils.make_name(node.name)
         ctx.make_const(new_mean_node_name, new_mean_value)
         node.input[3] = new_mean_node_name
 
     if var_shape != scale_shape:
         new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(), scale_shape), dtype=val_type)
-        new_val_node_name= utils.make_name(node.name)
+        new_val_node_name = utils.make_name(node.name)
         ctx.make_const(new_val_node_name, new_var_value)
         node.input[4] = new_val_node_name
 
@@ -1345,7 +1348,7 @@ _OPSET_7 = {
 }
 
 _OPSET_8 = {
-    "Relu6": (relu6_op8, []), # make use of min/max broadcast
+    "Relu6": (relu6_op8, []),  # make use of min/max broadcast
 }
 
 _OPSETS = [
@@ -1376,19 +1379,19 @@ def rewrite_random_uniform(g, ops):
         tmin = input2.inputs[1].get_tensor_value()[0]
         dtype = output.dtype
         op_name = utils.make_name("RandomUniform")
-        out_name = op_name + ":0"
+        out_name = port_name(op_name)
         ru_op = match.get_op('input1')
         if ru_op.inputs[0].type == "Shape":
             shape_op = ru_op.inputs[0]
-            new_node = Node(helper.make_node("RandomUniformLike", [shape_op.input[0]], [out_name],
-                                         name=op_name, low=tmin, high=tmax,
-                                         dtype=dtype), g)
+            new_node = Node(helper.make_node("RandomUniformLike",
+                                             [shape_op.input[0]], [out_name], name=op_name,
+                                             low=tmin, high=tmax, dtype=dtype), g)
             ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
         else:
             shape = g.get_shape(output.output[0])
-            new_node = Node(helper.make_node("RandomUniform", [], [out_name],
-                                         name=op_name, low=tmin, high=tmax,
-                                         dtype=dtype, shape=shape), g)
+            new_node = Node(helper.make_node("RandomUniform",
+                                             [], [out_name], name=op_name,
+                                             low=tmin, high=tmax, dtype=dtype, shape=shape), g)
         ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
 
     return ops
@@ -1432,20 +1435,20 @@ def rewrite_random_normal(g, ops):
         mean = output.inputs[1].get_tensor_value()[0]
         dtype = output.dtype
         op_name = utils.make_name("RandomNormal")
-        out_name = op_name + ":0"
+        out_name = port_name(op_name)
 
         rn_op = match.get_op('input1')
         if rn_op.inputs[0].type == "Shape":
             shape_op = rn_op.inputs[0]
             new_node = Node(helper.make_node("RandomNormalLike", [shape_op.input[0]], [out_name],
-                                         name=op_name, mean=mean, scale=1.0,
-                                         dtype=dtype), g)
+                                             name=op_name, mean=mean, scale=1.0,
+                                             dtype=dtype), g)
             ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
         else:
             shape = g.get_shape(output.output[0])
             new_node = Node(helper.make_node("RandomNormal", [], [out_name],
-                                         name=op_name, shape=shape, mean=mean, scale=1.0,
-                                         dtype=dtype), g)
+                                             name=op_name, shape=shape, mean=mean, scale=1.0,
+                                             dtype=dtype), g)
             ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
 
     return ops
@@ -1468,7 +1471,7 @@ def rewrite_dropout(g, ops):
         inputs2 = match.get_op('input2')
         outputs = match.get_op('outputs')
         op_name = utils.make_name("Dropout")
-        out_name = op_name + ":0"
+        out_name = port_name(op_name)
         new_node = Node(helper.make_node("Dropout", [inputs2.input[0]], [out_name], name=op_name, ratio=1.0), g)
         ops = g.replace_subgraph(ops, match, [inputs2], [outputs], [new_node], [new_node])
 
@@ -1492,7 +1495,7 @@ def rewrite_flatten(g, ops):
         inputs2 = match.get_op('input2')
         outputs = match.get_op('outputs')
         op_name = utils.make_name("Flatten")
-        out_name = op_name + ":0"
+        out_name = port_name(op_name)
         new_node = Node(helper.make_node("Flatten", [inputs2.output[0]], [out_name], name=op_name), g)
         g.replace_all_inputs(ops, outputs.output[0], out_name)
         to_be_removed = [node for node in match.get_nodes() if node != inputs2]
@@ -1547,7 +1550,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
             type_, value_, traceback_ = sys.exc_info()
             ex_ext = traceback.format_exception(type_, value_, traceback_)
             if continue_on_error:
-                print(ex_ext)
+                log.info(ex_ext)
                 onnx_nodes.append(node)
             else:
                 raise ex
@@ -1561,7 +1564,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     return mapped_op, unmapped_op
 
 
-def tf_optimize(sess, inputs, outputs, graph_def, fold_constant = None):
+def tf_optimize(sess, inputs, outputs, graph_def, fold_constant=None):
     """Optimize tensorflow graph for inference."""
     transforms = []
     if fold_constant:
@@ -1615,8 +1618,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     # rewrite graph
     rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
                  rewrite_random_normal, rewrite_dropout,
-                 rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
-                ]
+                 rewrite_single_direction_lstm, rewrite_bi_direction_lstm]
 
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
@@ -1624,7 +1626,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         ops = rewrite(g, ops)
         g.set_nodes(ops)
     topological_sort(g.get_nodes())
-    
+
     if custom_op_handlers is None:
         custom_op_handlers = {}
     mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers)

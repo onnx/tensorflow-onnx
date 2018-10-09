@@ -9,15 +9,14 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
-import re
 import sys
 
 import onnx
 import tensorflow as tf
 import tf2onnx.utils
-from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 from onnx import helper
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 
@@ -35,7 +34,8 @@ def get_args():
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
-    parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion", action="store_true")
+    parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
+                        action="store_true")
     args = parser.parse_args()
 
     args.shape_override = None
@@ -94,7 +94,7 @@ def main():
                              extra_opset=extra_opset,
                              shape_override=args.shape_override)
 
-    optimizer = TransposeOptimizer(g, args.verbose != None)
+    optimizer = TransposeOptimizer(g, args.verbose is not None)
     optimizer.optimize()
 
     model_proto = g.make_model(

@@ -8,16 +8,6 @@ tf2onnx.rewriter.lstm_rewriter - lstm support
 from __future__ import division
 from __future__ import print_function
 
-import collections
-import logging
-import numpy as np
-import tf2onnx
-from onnx import helper, defs, numpy_helper, checker, onnx_pb
-from onnx import AttributeProto, TensorProto, GraphProto
-from tf2onnx import utils
-from tf2onnx.graph import Node, Graph
-from tf2onnx.graph_matcher import *
-from tf2onnx.rewriter.rnn_utils import *
 from tf2onnx.rewriter.unit_rewriter_base import *
 
 logging.basicConfig(level=logging.INFO)
@@ -288,7 +278,8 @@ class LSTMUnitRewriter(UnitRewriterBase):
         log.debug("_check_is_consumer_of_exit_after_ch fail to found ct and ht node based on pattern")
         return False
 
-    def _check_is_rnn_outputs_node(self, connector_in_rnnscope, time_major, rnn_scope_name):
+    @staticmethod
+    def _check_is_rnn_outputs_node(connector_in_rnnscope, time_major, rnn_scope_name):
         node_to_check = connector_in_rnnscope
         if not time_major:
             # in batch_major mode, rnn outputs will ends with a Tranpose. So

@@ -42,6 +42,7 @@ _OUTPUT1 = "output1:0"
 
 OPSET = 7
 
+
 class Tf2OnnxLSTMTests(unittest.TestCase):
     def setUp(self):
         self.maxDiff = None
@@ -110,7 +111,6 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             raise ValueError("unknown backend")
         return y
 
-
     def _run(self, output, tf_dict, onnx_dict):
         with tf.Session() as sess:
             expected = sess.run(output, feed_dict=tf_dict)
@@ -153,7 +153,8 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
                 f.write(sess.graph_def.SerializeToString())
 
             print("created file " + model_path)
-            graph_def = tf2onnx.tfonnx.tf_optimize(None, input_names_with_port, output_names_with_port, sess.graph_def, True)
+            graph_def = tf2onnx.tfonnx.tf_optimize(None, input_names_with_port,
+                                                   output_names_with_port, sess.graph_def, True)
             model_path = os.path.join(TMPPATH, "after_tf_optimize.pb")
             with open(model_path, "wb") as f:
                 f.write(graph_def.SerializeToString())
@@ -162,7 +163,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         tf.reset_default_graph()
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
-            g = process_tf_graph(sess.graph, continue_on_error=True) # shape_override={"output:0": [1, 6,4,5]}
+            g = process_tf_graph(sess.graph, continue_on_error=True)  # shape_override={"output:0": [1, 6,4,5]}
             actual = self._run_backend(g, output_names_with_port, feed_dict)
 
         for i in range(len(expected)):
@@ -202,7 +203,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
         self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
-    def test_single_dynamic_lstm_randomweights(self, state_is_tuple = True):
+    def test_single_dynamic_lstm_randomweights(self, state_is_tuple=True):
         hidden_size = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -231,7 +232,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
         self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.0001)
 
-    def test_single_dynamic_lstm_randomweights2(self, state_is_tuple = True):
+    def test_single_dynamic_lstm_randomweights2(self, state_is_tuple=True):
         hidden_size = 128
         batch_size = 1
         x_val = np.random.randn(1, 133).astype('f')
@@ -363,8 +364,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             cell1 = rnn.LSTMCell(
                 units,
                 initializer=initializer,
-                state_is_tuple=state_is_tuple)
-                #state_is_tuple will impact the Pack node (for cell_state)'s usage pattern
+                state_is_tuple=state_is_tuple)  # state_is_tuple will impact the Pack node (for cell_state)'s usage pattern
             cell2 = rnn.LSTMCell(
                 units,
                 initializer=initializer,
@@ -385,7 +385,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
         self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
-    def test_dynamic_bilstm_output_consumed_only(self, state_is_tuple = True):
+    def test_dynamic_bilstm_output_consumed_only(self, state_is_tuple=True):
         units = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
@@ -400,8 +400,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             cell1 = rnn.LSTMCell(
                 units,
                 initializer=initializer,
-                state_is_tuple=state_is_tuple)
-                #state_is_tuple will impact the Pack node (for cell_state)'s usage pattern
+                state_is_tuple=state_is_tuple)  # state_is_tuple will impact the Pack node (for cell_state)'s usage pattern
             cell2 = rnn.LSTMCell(
                 units,
                 initializer=initializer,

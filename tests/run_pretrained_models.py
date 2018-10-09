@@ -8,23 +8,22 @@ from __future__ import print_function
 import argparse
 import os
 import tarfile
-import time
 import tempfile
-import requests
+import time
 import zipfile
 
 import PIL.Image
 import numpy as np
+import requests
 import tensorflow as tf
 import tf2onnx
 import yaml
+from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
 from tensorflow.core.framework import graph_pb2
-from tf2onnx.tfonnx import process_tf_graph
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
 from tensorflow.python.tools import saved_model_utils
-from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
-
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+from tf2onnx.tfonnx import process_tf_graph
 
 TMPPATH = tempfile.mkdtemp()
 PERFITER = 1000
@@ -213,7 +212,8 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def create_onnx_file(self, name, model_proto, inputs, outdir):
+    @staticmethod
+    def create_onnx_file(name, model_proto, inputs, outdir):
         os.makedirs(outdir, exist_ok=True)
         model_path = os.path.join(outdir, name + ".onnx")
         with open(model_path, "wb") as f:
@@ -251,10 +251,10 @@ class Test(object):
                 outputs = {}
                 for k in meta_graph_def.signature_def.keys():
                     inputs_tensor_info = signature_def_utils.get_signature_def_by_key(meta_graph_def, k).inputs
-                    for input_key, input_tensor in sorted(inputs_tensor_info.items()):
+                    for _, input_tensor in sorted(inputs_tensor_info.items()):
                         inputs[input_tensor.name] = sess.graph.get_tensor_by_name(input_tensor.name)
                     outputs_tensor_info = signature_def_utils.get_signature_def_by_key(meta_graph_def, k).outputs
-                    for output_key, output_tensor in sorted(outputs_tensor_info.items()):
+                    for _, output_tensor in sorted(outputs_tensor_info.items()):
                         outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
                 frozen_graph = freeze_session(sess, output_names=list(outputs.keys()))
                 tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
@@ -302,7 +302,7 @@ class Test(object):
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
                 optimizer = TransposeOptimizer(onnx_graph, debug)
                 optimizer.optimize()
-  
+
                 model_proto = onnx_graph.make_model("test", self.output_names)
                 print("\tto_onnx", "OK")
                 if debug:
@@ -359,7 +359,8 @@ def get_args():
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
     parser.add_argument("--perf", help="capture performance numbers")
-    parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion", action="store_true")
+    parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
+                        action="store_true")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
     return args

@@ -8,19 +8,12 @@ tf2onnx.rewriter.rnn_unit_base - lstm support
 from __future__ import division
 from __future__ import print_function
 
-import collections
-import logging
-import numpy as np
-import tf2onnx
-from onnx import helper, defs, numpy_helper, checker, onnx_pb
-from onnx import AttributeProto, TensorProto, GraphProto
-from tf2onnx import utils
-from tf2onnx.graph import Node, Graph
-from tf2onnx.graph_matcher import *
+from onnx import onnx_pb
 from tf2onnx.rewriter.rnn_utils import *
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.rnn_unit_writer_base")
+
 
 # dynamic_rnn or bidirectional_dynamic_rnn related logic will be mapped to this base class.
 class UnitRewriterBase:
@@ -30,7 +23,8 @@ class UnitRewriterBase:
         # used to track nodes in rnn_scope_name to keep (e.g. not delete) for each single match run
         self.must_keep_nodes = []
 
-    def print_step(self, level_2, level_1 = "find_dynamic_run_unit"):
+    @staticmethod
+    def print_step(level_2, level_1="find_dynamic_run_unit"):
         log.info(level_1 + " >> " + level_2)
 
     def ct_switch_check(self, enter_target_node_input_id, identity_consumers, match):
@@ -66,7 +60,7 @@ class UnitRewriterBase:
 
         # weight/bias inputs, and c/h initializers are dynamic_rnn/LSTMCell's parameters.
         # we will use them to filter out the dynamic_rnn's input tensor. 
-        blacklist_inputs = [rnn_weights.kernel.node, rnn_weights.bias.node, rnn_weights.forget_bias.node ]
+        blacklist_inputs = [rnn_weights.kernel.node, rnn_weights.bias.node, rnn_weights.forget_bias.node]
         blacklist_inputs.extend(c_h_nodes)
 
         return blacklist_inputs
@@ -129,34 +123,36 @@ class UnitRewriterBase:
 
         # create node
         w_name = utils.make_name("W")
-        w_node = self.g.make_const(w_name, W, skip_conversion = True)
+        w_node = self.g.make_const(w_name, W, skip_conversion=True)
 
         r_name = utils.make_name("R")
-        r_node = self.g.make_const(r_name, R, skip_conversion = True)
+        r_node = self.g.make_const(r_name, R, skip_conversion=True)
 
         b_name = utils.make_name("B")
-        b_node = self.g.make_const(b_name, B, skip_conversion = True)
+        b_node = self.g.make_const(b_name, B, skip_conversion=True)
 
         init_h_id = None
         init_c_id = None
         if rnn_inits.share_init_node:
             init_h_id, init_c_id = self.process_non_tuple_ch_init_nodes(rnn_inits.share_init_input_id, hidden_size)
         else:
-            init_h_id, init_c_id = self.process_tuple_ch_init_nodes(rnn_inits.c_init_input_id, rnn_inits.h_init_input_id, hidden_size)
+            init_h_id, init_c_id = self.process_tuple_ch_init_nodes(rnn_inits.c_init_input_id,
+                                                                    rnn_inits.h_init_input_id, hidden_size)
         assert init_h_id and init_c_id
 
         len_node = self.create_seq_len_node(rnn_props)
 
         self.print_step("start to build new LSTM node")
 
-        # specify if the RNN is forward, reverse, or bidirectional. Must be one of forward (default), reverse, or bidirectional.
+        # specify if the RNN is forward, reverse, or bidirectional.
+        # Must be one of forward (default), reverse, or bidirectional.
         # Here we won't mark bidirectional, we will have another rewriter running after this one, which will based 
         # on patterns to combine a forward LSTM and a backward LSTM into a bidirectional one.
         direction = "forward"
         if rnn_props.is_backward:
             direction = "reverse"
         # todo: input_forget
-        attr = { "direction": direction, "hidden_size": hidden_size }
+        attr = {"direction": direction, "hidden_size": hidden_size}
         lstm_input_nodes = [rnn_props.x_node, w_node, r_node, b_node, len_node]
         lstm_inputs = list(map(lambda n: n.output[0], lstm_input_nodes))
         lstm_inputs.extend([init_h_id, init_c_id])
@@ -180,7 +176,7 @@ class UnitRewriterBase:
 
         self.g.set_nodes(new_nodes)
 
-    def find_input_and_connectors(self, rnn_scope_name, input_blacklist = None):
+    def find_input_and_connectors(self, rnn_scope_name, input_blacklist=None):
         rnn_props = RnnProperties()
         rnn_input_nodes = []
         connector_nodes = []
@@ -236,14 +232,14 @@ class UnitRewriterBase:
                 else:
                     raise ValueError("only a LoopCond is expected to find in a dynamic run")
 
-        if loop_cond_op == None:
+        if loop_cond_op is None:
             log.error("No LoopCond op is found, skip")
             return None
 
         # be noted: dynamic_rnn's initial_state can be constant or not.
         h_initializer = None
         c_initializer = None
-        shared_ch_initializer_input_id = None # only for non-tuple c_h initializer
+        shared_ch_initializer_input_id = None  # only for non-tuple c_h initializer
         switch_nodes = self.g.find_output_consumers(loop_cond_op.output[0])
         for n in switch_nodes:
             if n.type != 'Switch':
@@ -320,7 +316,8 @@ class UnitRewriterBase:
                     cur_rnn_consumers.append(consumer)
 
         if len(cur_rnn_consumers) != 1:
-            log.error("RNN input node has " + str(len(cur_rnn_consumers)) + " consumers in current rnn scope " + rnn_scope_name + ", skip")
+            log.error("RNN input node has " + str(len(cur_rnn_consumers)) +
+                      " consumers in current rnn scope " + rnn_scope_name + ", skip")
             return None
 
         possible_transpose_after_input = cur_rnn_consumers[0]
@@ -328,9 +325,8 @@ class UnitRewriterBase:
             assert possible_transpose_after_input.type == "ReverseV2"
             self.must_keep_nodes.append(possible_transpose_after_input)
             reverse_outputs = self.g.find_output_consumers(possible_transpose_after_input.output[0])
-            assert len(reverse_outputs) == 1 # bidirectional_dynamic_rnn logic will promise this
+            assert len(reverse_outputs) == 1  # bidirectional_dynamic_rnn logic will promise this
             possible_transpose_after_input = reverse_outputs[0]
-
 
         self.print_step("convert the transpose to onnx node if there is one found.")
         # check whether time_major is enabled or not
@@ -356,7 +352,7 @@ class UnitRewriterBase:
             log.debug("not found timemajor transpose")
             return
 
-        attr = { "perm": np.array([1, 0, 2], dtype=np.int64) }
+        attr = {"perm": np.array([1, 0, 2], dtype=np.int64)}
         new_trans = make_onnx_node(self.g, "Transpose", [node.input[0]], attr)
 
         self.g.copy_shape(node.output[0], new_trans.output[0])
@@ -366,15 +362,15 @@ class UnitRewriterBase:
     # todo: refine when implementing GRU
     def process_non_tuple_ch_init_nodes(self, input_id, hidden_size):
 
-        attr = { "axes": [1], "starts": [0], "ends": [hidden_size] }
+        attr = {"axes": [1], "starts": [0], "ends": [hidden_size]}
         slice_node1 = make_onnx_node(self.g, "Slice", [input_id], attr)
 
-        unsqueeze_node_1 = make_onnx_node(self.g, "Unsqueeze", [slice_node1.output[0]], attr={ "axes": [0] })
+        unsqueeze_node_1 = make_onnx_node(self.g, "Unsqueeze", [slice_node1.output[0]], attr={"axes": [0]})
 
-        attr = { "axes": [1], "starts": [hidden_size], "ends": [hidden_size*2] }
+        attr = {"axes": [1], "starts": [hidden_size], "ends": [hidden_size*2]}
         slice_node2 = make_onnx_node(self.g, "Slice", [input_id], attr)
 
-        unsqueeze_node_2 = make_onnx_node(self.g, "Unsqueeze", [slice_node2.output[0]], attr={ "axes": [0] })
+        unsqueeze_node_2 = make_onnx_node(self.g, "Unsqueeze", [slice_node2.output[0]], attr={"axes": [0]})
 
         self.all_nodes.extend([slice_node1, slice_node2, unsqueeze_node_1, unsqueeze_node_2])
         return unsqueeze_node_1.output[0], unsqueeze_node_2.output[0]
@@ -394,7 +390,7 @@ class UnitRewriterBase:
             const_node = self.g.make_const(initial_name, new_val)
             return const_node.output[0]
         else:
-            squeeze_node = make_onnx_node(self.g, "Unsqueeze", [initializer_input_id], attr={ "axes": [0] })
+            squeeze_node = make_onnx_node(self.g, "Unsqueeze", [initializer_input_id], attr={"axes": [0]})
             self.g.replace_all_inputs(self.g.get_nodes(), initializer_input_id, squeeze_node.output[0])
             self.all_nodes.append(squeeze_node)
             return squeeze_node.output[0]
@@ -402,7 +398,7 @@ class UnitRewriterBase:
     def create_seq_len_node(self, rnn_props):
         # check whether input_node has valid shape
         if rnn_props.input_node.shape:
-            self.print_step("input node has shape, so parse out batch_size, time_step, input_size. and create seq_len constant nodes")
+            self.print_step("input node has shape: parse batch_size, time_step, input_size, create seq_len const nodes")
             if rnn_props.time_major and rnn_props.input_node.shape[1] != utils.ONNX_UNKNOWN_DIMENSION:
                 time_step = rnn_props.input_node.shape[0]
                 batch_size = rnn_props.input_node.shape[1]
@@ -416,7 +412,7 @@ class UnitRewriterBase:
             # todo: what if batch_size = -1
             sequence_lens = np.array([time_step for l in np.arange(batch_size)], dtype=np.int32)
             len_name = utils.make_name("Const")
-            len_node = self.g.make_const(len_name, sequence_lens, skip_conversion = True)
+            len_node = self.g.make_const(len_name, sequence_lens, skip_conversion=True)
             self.g.set_shape(len_node.output[0], sequence_lens.shape)
         else:
             self.print_step("prepare input nodes for new lstm node")
@@ -424,25 +420,26 @@ class UnitRewriterBase:
 
             # LSTMCell only allow inputs of [batch, input_size], so we assume dynamic_rnn has 3 dims.
             # Slice cannot support Int64 in OPSET 7, so we cast here.
-            attr = { "to" : onnx_pb.TensorProto.FLOAT }
+            attr = {"to": onnx_pb.TensorProto.FLOAT}
             cast_shape_node = make_onnx_node(self.g, "Cast", [shape_node.output[0]], attr)
             self.g.copy_shape(shape_node.output[0], cast_shape_node.output[0])
 
-            attr = { "axes" : [0], "starts": [0], "ends": [1] }
+            attr = {"axes": [0], "starts": [0], "ends": [1]}
             batchsize_node = make_onnx_node(self.g, "Slice", [cast_shape_node.output[0]], attr)
 
-            attr = { "to" : onnx_pb.TensorProto.INT64 }
+            attr = {"to": onnx_pb.TensorProto.INT64}
             repeat_node = make_onnx_node(self.g, 'Cast', [batchsize_node.output[0]], attr)
 
-            attr = { "axes" : [0], "starts": [1], "ends": [2] }
+            attr = {"axes": [0], "starts": [1], "ends": [2]}
             timestep_node = make_onnx_node(self.g, 'Slice', [cast_shape_node.output[0]], attr)
 
             tile_node = make_onnx_node(self.g, 'Tile', [timestep_node.output[0], repeat_node.output[0]])
 
-            attr = { "to" : onnx_pb.TensorProto.INT32 } # LSTM sequence_lens needs to be int32
+            attr = {"to": onnx_pb.TensorProto.INT32}  # LSTM sequence_lens needs to be int32
             cast_back_node = make_onnx_node(self.g, 'Cast', [tile_node.output[0]], attr)
 
             len_node = cast_back_node
-            self.all_nodes.extend([shape_node, cast_shape_node, timestep_node, batchsize_node, repeat_node, tile_node, len_node])
+            self.all_nodes.extend([shape_node, cast_shape_node,
+                                   timestep_node, batchsize_node, repeat_node, tile_node, len_node])
 
         return len_node
