@@ -7,9 +7,11 @@ tf2onnx.graph - class to manage graph manipulation on top of onnx
 
 from __future__ import division
 from __future__ import print_function
+
 import collections
+
 import tf2onnx
-from onnx import numpy_helper, optimizer, ModelProto, OperatorSetIdProto, TensorShapeProto
+from onnx import numpy_helper, optimizer, OperatorSetIdProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import *
 
@@ -17,7 +19,7 @@ from tf2onnx.utils import *
 class Node(object):
     """A Node - wrapper around onnx nodes that we use for graph manipulations."""
 
-    def __init__(self, node, graph, skip_conversion = False):
+    def __init__(self, node, graph, skip_conversion=False):
         """Create Node.
         Args:
             node: Onnx node in NodeProto
@@ -269,11 +271,11 @@ class Graph(object):
         """Return True if target platform is name."""
         return name in self._target
 
-    def is_initializer(self, input):
-        """Check the input is a constant value. input is in format - node_name:<int> """
-        return input in self._initializers
+    def is_initializer(self, name):
+        """Check the name is a constant value. name is in format - node_name:<int> """
+        return name in self._initializers
 
-    def make_const(self, name, np_val, skip_conversion = False):
+    def make_const(self, name, np_val, skip_conversion=False):
         """Make a new constant in the graph"""
         onnx_tensor = numpy_helper.from_array(np_val, name)
         self.add_initializer(onnx_tensor)
@@ -513,7 +515,7 @@ class Graph(object):
         top = space == ""
         if num == 0:
             return []
-        val.append("{}{} {} {}".format(space, node.type, node.name, self.get_shape(node.name + ":0")))
+        val.append("{}{} {} {}".format(space, node.type, node.name, self.get_shape(port_name(node.name))))
         space += "    "
         for j in node.inputs:
             val.extend(self.follow_inputs(j, num - 1, space))
@@ -558,7 +560,7 @@ class Graph(object):
         """
         if name is None:
             name = utils.make_name(node.name)
-        new_output = name + ":0"
+        new_output = port_name(name)
         new_node = Node(helper.make_node(op_type, [input_name], [new_output], name=name, **kwargs), self)
         for i, n in enumerate(node.input):
             if n == input_name:
@@ -578,7 +580,7 @@ class Graph(object):
             node that was inserted
         """
         assert isinstance(output_name, str) and isinstance(op_type, str)
-        new_output = name + ":0"
+        new_output = port_name(name)
         new_node = Node(helper.make_node(op_type, [output_name], [new_output], name=name, **kwargs), self)
         self.replace_all_inputs(self.get_nodes(), output_name, new_output)
         return new_node
@@ -622,7 +624,7 @@ class Graph(object):
                 for child in ops:
                     for i, name in enumerate(child.input):
                         if name == output_name:
-                            child.input[i] = no.name + ":0"
+                            child.input[i] = port_name(no.name)
 
         # delete nodes no longer used
         removed = set()

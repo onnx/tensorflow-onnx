@@ -9,66 +9,59 @@ This rewriter depends on tf2onnx.rewriter.lstm_rewriter's results.
 from __future__ import division
 from __future__ import print_function
 
-import collections
-import numpy as np
-import tf2onnx
-
-from onnx import helper, defs, numpy_helper, checker, onnx_pb
-from onnx import AttributeProto, TensorProto, GraphProto
-from tf2onnx import utils
-from tf2onnx.graph import Node, Graph
-from tf2onnx.graph_matcher import *
+from onnx import numpy_helper
 from tf2onnx.rewriter.rnn_utils import *
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.bilstm_rewriter")
 
 batch_major_output_pattern =  \
-    OpTypePattern('Pack', name='output_fw_bw_tuple', inputs = [
-        OpTypePattern("Transpose", inputs = [
-            OpTypePattern("Squeeze", inputs = [
-                OpTypePattern("LSTM", name = "lstm_fw")
+    OpTypePattern('Pack', name='output_fw_bw_tuple', inputs=[
+        OpTypePattern("Transpose", inputs=[
+            OpTypePattern("Squeeze", inputs=[
+                OpTypePattern("LSTM", name="lstm_fw")
                 # we cannot define inner pattern for LSTM's input, because if some of inputs are const, 
                 # that are not in g._nodes, so match pattern search will fail.
             ])
         ]),
-        OpTypePattern("ReverseV2", inputs = [
-            OpTypePattern("Transpose", inputs = [
-                OpTypePattern("Squeeze", inputs = [
-                    OpTypePattern("LSTM", name = "lstm_bw"),
+        OpTypePattern("ReverseV2", inputs=[
+            OpTypePattern("Transpose", inputs=[
+                OpTypePattern("Squeeze", inputs=[
+                    OpTypePattern("LSTM", name="lstm_bw"),
                 ]),
             ]),
-            OpTypePattern("*", name ="reversev2_axis"),
+            OpTypePattern("*", name="reversev2_axis"),
         ]),
     ])
 
 batch_major_ch_pattern_state_is_not_tuple = \
     OpTypePattern('Pack', name='cell_state_fw_bw_tuple', inputs=[
-        OpTypePattern("Squeeze", name="fw_ch_output_squeeze", inputs = [
-            OpTypePattern("Concat", inputs = [
-                OpTypePattern("LSTM", name = "lstm_fw"),
-                OpTypePattern("LSTM", name = "lstm_fw1")
+        OpTypePattern("Squeeze", name="fw_ch_output_squeeze", inputs=[
+            OpTypePattern("Concat", inputs=[
+                OpTypePattern("LSTM", name="lstm_fw"),
+                OpTypePattern("LSTM", name="lstm_fw1")
             ]),
         ]),
-        OpTypePattern("Squeeze", inputs = [
-            OpTypePattern("Concat", inputs = [
-                OpTypePattern("LSTM", name = "lstm_bw"),
-                OpTypePattern("LSTM", name = "lstm_bw1")
+        OpTypePattern("Squeeze", inputs=[
+            OpTypePattern("Concat", inputs=[
+                OpTypePattern("LSTM", name="lstm_bw"),
+                OpTypePattern("LSTM", name="lstm_bw1")
             ]),
         ]),
     ])
 
 batch_major_ch_pattern_state_is_tuple = \
     OpTypePattern('Pack', name='cell_state_fw_bw_tuple', inputs=[
-        OpTypePattern("Concat", inputs = [
-            OpTypePattern("LSTM", name = "lstm_fw"),
-            OpTypePattern("LSTM", name = "lstm_fw1")
+        OpTypePattern("Concat", inputs=[
+            OpTypePattern("LSTM", name="lstm_fw"),
+            OpTypePattern("LSTM", name="lstm_fw1")
         ]),
-        OpTypePattern("Concat", inputs = [
-            OpTypePattern("LSTM", name = "lstm_bw"),
-            OpTypePattern("LSTM", name = "lstm_bw1")
+        OpTypePattern("Concat", inputs=[
+            OpTypePattern("LSTM", name="lstm_bw"),
+            OpTypePattern("LSTM", name="lstm_bw1")
         ]),
     ])
+
 
 def batch_major_output_match_check(g, ops, merged_matches):
     matcher = GraphMatcher(batch_major_output_pattern, allow_reorder=True)
@@ -95,13 +88,16 @@ def batch_major_output_match_check(g, ops, merged_matches):
 
             assert not merged_matches[fw_bw_pair_name][0]
             to_delete = [transpose_bw, reverse_bw]
-            merged_matches[fw_bw_pair_name][0] = MatchedLSTM(transpose_fw.inputs[0], lstm_fw, lstm_bw, final_pack, to_delete, match)
+            merged_matches[fw_bw_pair_name][0] = MatchedLSTM(transpose_fw.inputs[0],
+                                                             lstm_fw, lstm_bw, final_pack, to_delete, match)
         else:
             continue
 
+
 def batch_major_ch_match_checks(g, ops, merged_matches):
-    batch_major_ch_match_check(g, ops, True , merged_matches)
+    batch_major_ch_match_check(g, ops, True, merged_matches)
     batch_major_ch_match_check(g, ops, False, merged_matches)
+
 
 def batch_major_ch_match_check(g, ops, is_tuple, merged_matches):
     if is_tuple:
@@ -110,7 +106,7 @@ def batch_major_ch_match_check(g, ops, is_tuple, merged_matches):
         pattern = batch_major_ch_pattern_state_is_not_tuple
 
     # make allow_reorder be False, since we need know which is fw.
-    matcher = GraphMatcher(pattern, allow_reorder = False)
+    matcher = GraphMatcher(pattern, allow_reorder=False)
     cell_state_match_results = list(matcher.match_ops(ops))
     for match in cell_state_match_results:
         lstm_fw = match.get_op("lstm_fw")
@@ -143,6 +139,7 @@ def batch_major_ch_match_check(g, ops, is_tuple, merged_matches):
             merged_matches[fw_bw_pair_name][1] = matched_lstm
         else:
             continue
+
 
 # currently we only support inputs having shapes.
 # only support batch_major right now.
@@ -178,7 +175,7 @@ def process_bilstm_batch_major(g, ops):
             time_step = _lstm.input.shape[1]
         else:
             raise ValueError("lstm input does not has shape.")
-    
+
         w_fw = get_np_val_for_const(g, lstm_fw, 1)
         w_bw = get_np_val_for_const(g, lstm_bw, 1)
         r_fw = get_np_val_for_const(g, lstm_fw, 2)
@@ -207,14 +204,14 @@ def process_bilstm_batch_major(g, ops):
 
         # create node
         w_name = utils.make_name("W")
-        w_node = g.make_const(w_name, W, skip_conversion = True)
+        w_node = g.make_const(w_name, W, skip_conversion=True)
 
         r_name = utils.make_name("R")
-        r_node = g.make_const(r_name, R, skip_conversion = True)
+        r_node = g.make_const(r_name, R, skip_conversion=True)
 
         b_name = utils.make_name("B")
-        b_node = g.make_const(b_name, B, skip_conversion = True)
-        lstm_inputs= [lstm_fw.input[0], w_node.output[0], r_node.output[0], b_node.output[0]]
+        b_node = g.make_const(b_name, B, skip_conversion=True)
+        lstm_inputs = [lstm_fw.input[0], w_node.output[0], r_node.output[0], b_node.output[0]]
         if len(lstm_fw.inputs) > 4:
             lstm_inputs.extend([lstm_fw.input[4], h_node.output[0], c_node.output[0]])
 
@@ -226,7 +223,7 @@ def process_bilstm_batch_major(g, ops):
             log.error("fw and bw has different hidden_size, skip")
             continue
 
-        attr = { "direction": direction, "hidden_size": hidden_size}
+        attr = {"direction": direction, "hidden_size": hidden_size}
         bi_lstm_node = make_onnx_node(g, "LSTM", lstm_inputs, attr=attr, output_count=3)
         to_append.append(bi_lstm_node)
         log.info("processing output nodes")
@@ -235,7 +232,7 @@ def process_bilstm_batch_major(g, ops):
             # we need tranpose LSTM result to original consumer (they assume that)
             # source [seq_length, num_directions, batch_size, hidden_size] 
             # dest [num_directions, batch_size, seq_length, hidden_size]
-            attr = { "perm": np.array([1, 2, 0, 3], dtype=np.int64) }
+            attr = {"perm": np.array([1, 2, 0, 3], dtype=np.int64)}
             new_trans = make_onnx_node(g, "Transpose", [bi_lstm_node.output[0]], attr)
             g.set_shape(new_trans.output[0], (num_directions, batch_size, time_step, hidden_size))
 
@@ -252,12 +249,12 @@ def process_bilstm_batch_major(g, ops):
             if ch_lstm.state_is_tuple:
                 # original Pack's output is [num_directions, tuple_size_h_c(e.g. 2), batch_size, hidden_size]
                 stack_ch = make_onnx_node(
-                    g, "Pack", [bi_lstm_node.output[2], bi_lstm_node.output[1]], 
-                    attr={ "axis": 1 }, output_count=1, skip_conversion=False)
+                    g, "Pack", [bi_lstm_node.output[2], bi_lstm_node.output[1]],
+                    attr={"axis": 1}, output_count=1, skip_conversion=False)
                 g.set_shape(stack_ch.output[0], (num_directions, 2, batch_size, hidden_size))
             else:
                 # original Pack's output is [num_directions, batch_size, hidden_size*2]
-                attr = { "axis": 2 }
+                attr = {"axis": 2}
                 stack_ch = make_onnx_node(g, "Concat", [bi_lstm_node.output[2], bi_lstm_node.output[1]], attr)
                 g.set_shape(stack_ch.output[0], (num_directions, batch_size, hidden_size*2))
 
@@ -278,20 +275,23 @@ def process_bilstm_batch_major(g, ops):
         log.info("done rewriting bidirectional lstm graph")
     return g.get_nodes()
 
+
 def check_const(g, input_id):
     node = g.get_node_by_name(input_id)
     if node and node.is_const():
-        return (True, node.get_tensor_value())
+        return True, node.get_tensor_value()
     elif g.is_initializer(input_id):
         tensor = g.get_initializer(input_id)
-        return (True, numpy_helper.to_array(tensor))
+        return True, numpy_helper.to_array(tensor)
 
-    return (None, None)
+    return None, None
+
 
 def get_np_val_for_const(g, node, input_index):
     input_name = node.input[input_index]
     tensor = g.get_initializer(input_name)
     return numpy_helper.to_array(tensor)
+
 
 def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
     fw_init_is_const, init_fw_val = check_const(g, fw_init_input_id)
@@ -299,13 +299,14 @@ def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
     if fw_init_is_const and bw_init_is_const:
         initial_val = np.concatenate((init_fw_val, init_bw_val), axis=0)
         init_name = utils.make_name("initial")
-        init_node = g.make_const(init_name, initial_val, skip_conversion = True)
+        init_node = g.make_const(init_name, initial_val, skip_conversion=True)
     else:
-        attr = { "axis" : 0 }
+        attr = {"axis": 0}
         init_node = make_onnx_node(g, "Concat", [fw_init_input_id, bw_init_input_id], attr)
         to_append.append(init_node)
 
     return init_node
+
 
 def process_ch_init_nodes(g, lstm_fw, lstm_bw, to_append):
     h_node = _process_single_init_node(g, lstm_fw.input[5], lstm_bw.input[5], to_append)
