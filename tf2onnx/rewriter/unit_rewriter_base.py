@@ -25,7 +25,7 @@ class UnitRewriterBase:
 
     @staticmethod
     def print_step(level_2, level_1="find_dynamic_run_unit"):
-        log.info(level_1 + " >> " + level_2)
+        log.debug(level_1 + " >> " + level_2)
 
     def ct_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         pass
@@ -82,7 +82,7 @@ class UnitRewriterBase:
         return self.g.get_nodes()
 
     def run_single_match(self, match):
-        log.info("=========================")
+        log.debug("=========================")
         self.print_step("start handling a new potential LSTM Cell")
         self.all_nodes = self.g.get_nodes()
         self.must_keep_nodes = []
@@ -92,7 +92,7 @@ class UnitRewriterBase:
             log.error("unable to find rnn scope name, skip")
             return REWRITER_RESULT.SKIP
         else:
-            log.info("rnn scope name is " + rnn_scope_name)
+            log.debug("rnn scope name is " + rnn_scope_name)
 
         self.print_step("get_weight_and_bias starts")
         rnn_weights = self.get_weight_and_bias(match)
@@ -219,7 +219,7 @@ class UnitRewriterBase:
         # output back. And the 2 reverses operators are not within the dynamic_rnn scope. 
         # So, in this case, we might get a reverse op in rnn_input_nodes. 
         if is_reverse_op(input_node_candidate):
-            log.info("found reverse pattern")
+            log.debug("found reverse pattern")
             rnn_props.is_backward = True
 
             # reverse has 2 inputs, the second is axis.
@@ -430,7 +430,7 @@ class UnitRewriterBase:
         seq_len_nodes = []
         for n in self.g.get_nodes():
             if n.name.endswith("sequence_length") and n.name.startswith(rnn_scope_name) and n.type == "Identity":
-                print("found sequence_length node ")
+
                 seq_len_nodes.append(n)
 
         seq_len_node_cnt = len(seq_len_nodes)

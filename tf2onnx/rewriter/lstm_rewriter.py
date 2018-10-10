@@ -67,7 +67,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
         # function are defining the multiplication with different order. So we change to match.get_op("ft") in c.inputs
         mul_nodes = [c for c in identity_consumers if c.type == "Mul" and match.get_op("ft") in c.inputs]
         if len(mul_nodes) == 1:
-            log.info("find c initializer value at " + enter_target_node_input_id)
+            log.debug("find c initializer value at " + enter_target_node_input_id)
             return enter_target_node_input_id
         elif len(mul_nodes) > 1:
             raise ValueError("multiple Mul matching found, cannot identify c initializer")
@@ -75,7 +75,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
     def ht_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         concat_nodes = [c for c in identity_consumers if c == match.get_op("xh")]
         if len(concat_nodes) == 1:
-            log.info("find h initializer value at " + enter_target_node_input_id)
+            log.debug("find h initializer value at " + enter_target_node_input_id)
             return enter_target_node_input_id
         elif len(concat_nodes) > 1:
             raise ValueError(str(len(concat_nodes)) + "Concat matching found, cannot identify h initializer")
@@ -103,7 +103,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
                 h_slice = s
 
         if c_slice and h_slice:
-            log.info("find c_h shared initializer value at " + enter_target_node_input_id) 
+            log.debug("find c_h shared initializer value at " + enter_target_node_input_id) 
             return enter_target_node_input_id
 
     def process_weights_and_bias(self, rnn_weights):

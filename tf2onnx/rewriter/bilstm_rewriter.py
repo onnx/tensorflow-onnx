@@ -27,8 +27,8 @@ log = logging.getLogger("tf2onnx.rewriter.bilstm_rewriter")
 def process_bilstm(g, bi_lstms):
     for fw, bw in bi_lstms:
         input_id = fw[0]
-        log.info("=========================")
-        log.info("start handling potential bidirectional lstm " + input_id)
+        log.debug("=========================")
+        log.debug("start handling potential bidirectional lstm " + input_id)
 
         lstm_fw = fw[1]
         lstm_bw = bw[1]
@@ -74,7 +74,7 @@ def process_bilstm(g, bi_lstms):
         attr = {"direction": direction, "hidden_size": hidden_size}
         bi_lstm_node = make_onnx_node(g, "LSTM", lstm_inputs, attr=attr, output_count=3)
         all_nodes.append(bi_lstm_node)
-        log.info("processing output nodes")
+        log.debug("processing output nodes")
 
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 0, all_nodes)
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 1, all_nodes)
@@ -177,10 +177,10 @@ def rewrite_bidirectional_lstms(g, ops):
             is_backward_lstm = True
 
         if is_backward_lstm:
-            log.info("find bw lstm" + input_id)
+            log.debug("find bw lstm" + input_id)
             bw_lstm[input_id] = [input_id, n]
         else:
-            log.info("find fw lstm" + input_id)
+            log.debug("find fw lstm" + input_id)
             fw_lstm[input_id] = [input_id, n]
 
     bilstm_input = list(set(fw_lstm.keys()).intersection(bw_lstm.keys()))
