@@ -1332,6 +1332,8 @@ _OPSET_7 = {
     "Sub": (broadcast_op7, []),
     "Mul": (broadcast_op7, []),
     "RealDiv": (broadcast_op7, ["Div"]),
+    "Div": (broadcast_op7, ["Div"]),
+    "TruncateDiv": (broadcast_op7, ["Div"]),
     "LogicalAnd": (broadcast_op7, ["And"]),
     "LogicalOr": (broadcast_op7, ["Or"]),
     "Greater": (broadcast_op7, []),
