@@ -14,14 +14,15 @@ import sys
 import traceback
 
 import numpy as np
-import tf2onnx
 from onnx import helper, onnx_pb, numpy_helper, defs
 
 from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
+
+import tf2onnx
 from tf2onnx import utils
 from tf2onnx.graph import Node, Graph
-from tf2onnx.graph_matcher import *
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
 from tf2onnx.utils import port_name
 
@@ -37,6 +38,9 @@ POSSIBLE_TARGETS = [TARGET_RS4, TARGET_CAFFE2]
 DEFAULT_TARGET = []
 PREFERRED_OPSET = 7
 
+# pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
+# FIXME:
+# pylint: disable=unused-variable
 
 def find_opset(opset):
     if opset is None or opset == 0:
@@ -128,6 +132,7 @@ def tensorflow_to_onnx(graph, shape_override):
 
 
 def _convert_shapenode_to_int64(ctx, node, input_number):
+    """cast int32 shape into int64 shape."""
     shape_node = node.inputs[input_number]
     name = node.input[input_number]
     if shape_node.is_const():
@@ -135,16 +140,14 @@ def _convert_shapenode_to_int64(ctx, node, input_number):
         shape = shape_node.get_tensor_value()
         shape = np.array(list(shape), dtype=np.int64)
         onnx_tensor = numpy_helper.from_array(shape, name)
-        ctx._initializers[name] = onnx_tensor
+        ctx.set_initializer(name, onnx_tensor)
         shape_node.set_attr("value", onnx_tensor)
         return [node]
-    else:
-        cast_op = ctx.insert_new_node_on_input(node, "Cast", name)
-        cast_op.set_attr("to", onnx_pb.TensorProto.INT64)
-        ctx.copy_shape(name, cast_op.output[0])
-        return [cast_op, node]
 
-# pylint: disable=W0613,C0111,W0612
+    cast_node = ctx.insert_new_node_on_input(node, "Cast", name)
+    cast_node.set_attr("to", onnx_pb.TensorProto.INT64)
+    ctx.copy_shape(name, cast_node.output[0])
+    return [cast_node, node]
 
 
 def no_op(ctx, node, name, args):
@@ -178,13 +181,12 @@ def broadcast_op(ctx, node, name, args):
     shape1 = ctx.get_shape(node.input[1])
     if shape0 != shape1:
         node.set_attr("broadcast", 1)
-        # this is more shortcoming in the broadcasting code
-        # of caffe2 and winml/rs4 but since those are the primary
-        # onnx-1.1 backends we don't use a seperate flag.
-        if shape0 is not None and len(shape0) == 0:
+        # this works around shortcomings in the broadcasting code
+        # of caffe2 and winml/rs4.
+        if not shape0:
             if node.inputs[0].is_const():
                 shape0 = node.inputs[0].scalar_to_dim1()
-        if shape1 is not None and len(shape1) == 0:
+        if not shape1:
             if node.inputs[1].is_const():
                 shape1 = node.inputs[1].scalar_to_dim1()
         if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
@@ -201,13 +203,12 @@ def broadcast_op7(ctx, node, name, args):
     shape0 = ctx.get_shape(node.input[0])
     shape1 = ctx.get_shape(node.input[1])
     if shape0 != shape1:
-        # this is more shortcoming in the broadcasting code
-        # of caffe2 and winml/rs4 but since those are the primary
-        # onnx-1.1 backends we don't use a seperate flag.
-        if shape0 is not None and len(shape0) == 0:
+        # this works around shortcomings in the broadcasting code
+        # of caffe2 and winml/rs4.
+        if not shape0:
             if node.inputs[0].is_const():
                 shape0 = node.inputs[0].scalar_to_dim1()
-        if shape1 is not None and len(shape1) == 0:
+        if not shape1:
             if node.inputs[1].is_const():
                 shape1 = node.inputs[1].scalar_to_dim1()
         if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
@@ -638,21 +639,21 @@ def relu6_op(ctx, node, name, args):
         min_node.input.append(add_output)
         ctx.copy_shape(old_output, min_node.output[0])
         return [sub_node, add_node, node, min_node]
-    else:
-        # if there is no unknown dim in shape we can use constants
-        node.type = "Max"
-        zero_name = utils.make_name(node.name)
-        ctx.make_const(zero_name, np.zeros(shape, dtype=dtype))
-        six_name = utils.make_name(node.name)
-        six = np.zeros(shape, dtype=dtype)
-        six.fill(6)
-        ctx.make_const(six_name, six)
-        node.input.append(zero_name)
-        min_name = utils.make_name(node.name)
-        min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
-        min_node.input.append(six_name)
-        ctx.copy_shape(old_output, min_node.output[0])
-        return [node, min_node]
+
+    # if there is no unknown dim in shape we can use constants
+    node.type = "Max"
+    zero_name = utils.make_name(node.name)
+    ctx.make_const(zero_name, np.zeros(shape, dtype=dtype))
+    six_name = utils.make_name(node.name)
+    six = np.zeros(shape, dtype=dtype)
+    six.fill(6)
+    ctx.make_const(six_name, six)
+    node.input.append(zero_name)
+    min_name = utils.make_name(node.name)
+    min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
+    min_node.input.append(six_name)
+    ctx.copy_shape(old_output, min_node.output[0])
+    return [node, min_node]
 
 
 def relu6_op8(ctx, node, name, args):
@@ -715,14 +716,14 @@ def biasadd_op7(ctx, node, name, args):
         shape0 = ctx.get_shape(node.input[0])
         shape1 = ctx.get_shape(node.input[1])
         if node.inputs[1].type == 'Const' and len(shape1) == 1:
-            new_broadcast_shape = [shape1[0], ] + [1, ] * (len(shape0) - 2)
+            new_broadcast_shape = [shape1[0],] + [1,] * (len(shape0) - 2)
             shape_name = utils.make_name(node.name)
             ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
             op_name = node.input[1]
-            reshape_op = ctx.insert_new_node_on_input(node, "Reshape", op_name)
-            reshape_op.input.append(shape_name)
-            ctx.set_shape(reshape_op.output[0], new_broadcast_shape)
-            return [reshape_op, node]
+            reshape_node = ctx.insert_new_node_on_input(node, "Reshape", op_name)
+            reshape_node.input.append(shape_name)
+            ctx.set_shape(reshape_node.output[0], new_broadcast_shape)
+            return [reshape_node, node]
     return node
 
 
@@ -925,18 +926,18 @@ def stridedslice_op(ctx, node, name, args):
     axes = []
     # onnx slice op can't remove a axis, track axis and add a squeeze op if needed
     needs_squeeze = []
-    for idx in range(len(begin)):
+    for idx, item in enumerate(begin):
         if strides[idx] != 1:
             raise ValueError("StridedSlice: only strides=1 is supported")
         axes.append(idx)
         mask = (shrink_axis_mask >> idx) & 1
         if mask != 0:
-            new_begin.append(begin[idx])
+            new_begin.append(item)
             new_end.append(end[idx])
             needs_squeeze.append(idx)
             continue
 
-        new_begin.append(begin[idx])
+        new_begin.append(item)
         mask = (end_mask >> idx) & 1
         if mask != 0:
             new_end.append(sys.maxsize)
@@ -953,23 +954,23 @@ def stridedslice_op(ctx, node, name, args):
     nodes = [node]
     if needs_squeeze:
         name = utils.make_name(node.name)
-        squeeze_op = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
-        squeeze_op.set_attr("axes", needs_squeeze)
-        nodes.append(squeeze_op)
-        ctx.copy_shape(node.output[0], squeeze_op.output[0])
+        squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+        squeeze_node.set_attr("axes", needs_squeeze)
+        nodes.append(squeeze_node)
+        ctx.copy_shape(node.output[0], squeeze_node.output[0])
 
     # onnx slice as of opset 7 does only take float tensors ... cast if needed
     input_dtype = ctx.get_dtype(node.input[0])
     if input_dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
-        cast_op = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
-        cast_op.set_attr("to", onnx_pb.TensorProto.FLOAT)
-        ctx.copy_shape(node.input[0], cast_op.output[0])
-        nodes.insert(0, cast_op)
+        cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+        cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
+        ctx.copy_shape(node.input[0], cast_node.output[0])
+        nodes.insert(0, cast_node)
         name = utils.make_name(node.name)
-        cast_op = ctx.insert_new_node_on_output("Cast", nodes[-1].output[0], name)
-        cast_op.set_attr("to", input_dtype)
-        ctx.copy_shape(node.output[0], cast_op.output[0])
-        nodes.append(cast_op)
+        cast_node = ctx.insert_new_node_on_output("Cast", nodes[-1].output[0], name)
+        cast_node.set_attr("to", input_dtype)
+        ctx.copy_shape(node.output[0], cast_node.output[0])
+        nodes.append(cast_node)
     return nodes
 
 
@@ -1069,13 +1070,12 @@ def minmax_op(ctx, node, name, args):
     shapeo = ctx.get_shape(node.output[0])
     needs_broadcast_op = []
     has_correct_shape = []
-    # TODO: test with opset 8 runtime before removing True
-    if True or ctx.opset < 8:
-        for i, name in enumerate(node.input):
-            if ctx.get_shape(name) != shapeo:
+    if ctx.opset < 8:
+        for i, input_name in enumerate(node.input):
+            if ctx.get_shape(input_name) != shapeo:
                 needs_broadcast_op.append(i)
             else:
-                has_correct_shape.append(name)
+                has_correct_shape.append(input_name)
     if needs_broadcast_op:
         new_nodes = []
         has_correct_shape = has_correct_shape[0]
@@ -1171,9 +1171,9 @@ def onehot_op(ctx, node, name, args):
     if axis.i == 0:
         # TODO: revisit for rank > 1
         name = utils.make_name(node.name)
-        transpose_op = ctx.insert_new_node_on_output("Transpose", node.output[0], name)
-        ctx.copy_shape(node.output[0], transpose_op.output[0])
-        return [node, transpose_op]
+        transpose_node = ctx.insert_new_node_on_output("Transpose", node.output[0], name)
+        ctx.copy_shape(node.output[0], transpose_node.output[0])
+        return [node, transpose_node]
     return node
 
 
@@ -1228,8 +1228,6 @@ def matmul_op(ctx, node, name, args):
     nodes.append(node)
     return nodes
 
-
-# pylint: enable=W0613,C0111,W0612
 
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
@@ -1575,7 +1573,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     return mapped_op, unmapped_op
 
 
-def tf_optimize(sess, inputs, outputs, graph_def, fold_constant=None):
+def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
     """Optimize tensorflow graph for inference."""
     transforms = []
     if fold_constant:
@@ -1615,7 +1613,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         else:
             try:
                 g.topological_sort(ops)
-            except:
+            except:  # pylint: disable=bare-except
                 # if we continue on error, ignore graph cycles so we can report all missing ops
                 pass
 

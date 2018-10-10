@@ -10,8 +10,10 @@ from __future__ import print_function
 
 import re
 import numpy as np
-import tensorflow as tf
+
 from onnx import helper, onnx_pb
+
+import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
 
 
@@ -98,6 +100,7 @@ def make_name(name):
 
 
 def split_nodename_and_shape(name):
+    """input name with shape into name and shape."""
     # pattern for a node name
     inputs = []
     shapes = {}
@@ -110,7 +113,7 @@ def split_nodename_and_shape(name):
         inputs.append(splits[i])
         if splits[i + 1] is not None:
             shapes[splits[i]] = [int(n) for n in splits[i + 1][1:-1].split(",")]
-    if len(shapes) == 0:
+    if not shapes:
         shapes = None
     return inputs, shapes
 
@@ -171,7 +174,7 @@ def get_shape(node):
             dims = [d.size for d in shape.dim]
         if shape[0] is not None or shape[0] == -1:
             shape[0] = 1
-    except Exception as ex:
+    except:  # pylint: disable=bare-except
         pass
     return dims
 

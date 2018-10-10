@@ -114,7 +114,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
     def _run(self, output, tf_dict, onnx_dict):
         with tf.Session() as sess:
             expected = sess.run(output, feed_dict=tf_dict)
-            graph_def = tf2onnx.tfonnx.tf_optimize(None, args.inputs, args.outputs, sess.graph, True)
+            graph_def = tf2onnx.tfonnx.tf_optimize(args.inputs, args.outputs, sess.graph, True)
 
             outdir = "./tmp"
             os.makedirs(outdir, exist_ok=True)
@@ -153,7 +153,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
                 f.write(sess.graph_def.SerializeToString())
 
             print("created file " + model_path)
-            graph_def = tf2onnx.tfonnx.tf_optimize(None, input_names_with_port,
+            graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port,
                                                    output_names_with_port, sess.graph_def, True)
             model_path = os.path.join(TMPPATH, "after_tf_optimize.pb")
             with open(model_path, "wb") as f:

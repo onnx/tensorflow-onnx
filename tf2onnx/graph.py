@@ -9,12 +9,13 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+import numpy as np
+
+from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto
 
 import tf2onnx
-from onnx import numpy_helper, optimizer, OperatorSetIdProto
 from tf2onnx import utils, __version__
-from tf2onnx.utils import *
-
+from tf2onnx.utils import node_name, port_name
 
 class Node(object):
     """A Node - wrapper around onnx nodes that we use for graph manipulations."""
@@ -95,7 +96,7 @@ class Node(object):
         """Return Op type."""
         return self._op.domain
 
-    @type.setter
+    @domain.setter
     def domain(self, val):
         """Set Op type."""
         self._op.domain = val
@@ -130,7 +131,7 @@ class Node(object):
 
     # If some Node is created as onnx_node, then we don't need convert it
     def need_skip(self):
-        return self._skip_conversion == True
+        return self._skip_conversion
 
     @property
     def shape(self):
@@ -170,8 +171,8 @@ class Node(object):
                 return t.int64_data
             if t.float_data:
                 return t.float_data
-            raise ValueError("tensor data_type not handled in get_tensor_value")
-            
+        raise ValueError("tensor data_type not handled in get_tensor_value")
+
     def get_tensor(self):
         if not self.is_const():
             if self.type == "Identity":
@@ -190,7 +191,7 @@ class Node(object):
         t = self.get_attr("value")
         if t:
             t = helper.get_attribute_value(t)
-            if len(t.dims) == 0:
+            if not t.dims:
                 t.dims.extend([1])
         return t.dims
 
@@ -205,7 +206,7 @@ class Node(object):
         if not t.raw_data:
             raise ValueError("set tensor value: {} is not raw_data".format(self.name))
         t.raw_data = new_val.tobytes()
-        for i, v in enumerate(t.dims):
+        for i, _ in enumerate(t.dims):
             t.dims[i] = new_val.shape[i]
         # track shapes in _output_shapes
         self.graph.set_shape(t.name, t.dims)
@@ -272,8 +273,12 @@ class Graph(object):
         return name in self._target
 
     def is_initializer(self, name):
-        """Check the name is a constant value. name is in format - node_name:<int> """
+        """Check the name is a constant value. name is in format - node_name:<int>."""
         return name in self._initializers
+
+    def set_initializer(self, name, val):
+        """Set initializer."""
+        self._initializers[name] = val
 
     def make_const(self, name, np_val, skip_conversion=False):
         """Make a new constant in the graph"""
@@ -339,7 +344,7 @@ class Graph(object):
         if self.is_initializer(name):
             return self._initializers[name]
         raise ValueError("no initializer called" + name)
-    
+
     def update_initializer(self, name, tensor):
         if self.is_initializer(name):
             new_tensor = numpy_helper.from_array(tensor, name)
@@ -375,7 +380,7 @@ class Graph(object):
 
     def set_shape(self, name, val):
         """Set new shape of node."""
-        if type(val) is np.ndarray:
+        if isinstance(val, np.ndarray):
             val = val.tolist()
         self._output_shapes[name] = val
 
@@ -424,7 +429,7 @@ class Graph(object):
         while not_visited:
             node = list(not_visited.keys())[0]
             _push_stack(stack, node, in_stack)
-            while len(stack) > 0:
+            while stack:
                 node = _get_unvisited_child(g, stack[-1], not_visited)
                 if node != -1:
                     _push_stack(stack, node, in_stack)
@@ -522,8 +527,8 @@ class Graph(object):
         if top:
             print("\n".join(reversed(val)))
             print()
-        else:
-            return val
+            return []
+        return val
 
     def dump_node_statistics(self, description):
         op_cnt = collections.Counter()
