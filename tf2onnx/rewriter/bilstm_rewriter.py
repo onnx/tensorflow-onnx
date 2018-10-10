@@ -9,15 +9,7 @@ This rewriter depends on tf2onnx.rewriter.lstm_rewriter's results.
 from __future__ import division
 from __future__ import print_function
 
-import collections
-import numpy as np
-import tf2onnx
-
-from onnx import helper, defs, numpy_helper, checker, onnx_pb
-from onnx import AttributeProto, TensorProto, GraphProto
-from tf2onnx import utils
-from tf2onnx.graph import Node, Graph
-from tf2onnx.graph_matcher import *
+from onnx import numpy_helper
 from tf2onnx.rewriter.rnn_utils import *
 
 logging.basicConfig(level=logging.INFO)
