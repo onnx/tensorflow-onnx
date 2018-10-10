@@ -13,9 +13,10 @@ import numpy as np
 
 from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto
 
-import tf2onnx
+#import tf2onnx
 from tf2onnx import utils, __version__
-from tf2onnx.utils import node_name, port_name
+from tf2onnx.utils import node_name, port_name, find_opset
+
 
 class Node(object):
     """A Node - wrapper around onnx nodes that we use for graph manipulations."""
@@ -261,7 +262,7 @@ class Graph(object):
         self._output_shapes = output_shapes
         ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
-        self._opset = tf2onnx.tfonnx.find_opset(opset)
+        self._opset = find_opset(opset)
         self._extra_opset = extra_opset
 
     @property

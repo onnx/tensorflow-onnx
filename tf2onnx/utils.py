@@ -11,7 +11,7 @@ from __future__ import print_function
 import re
 import numpy as np
 
-from onnx import helper, onnx_pb
+from onnx import helper, onnx_pb, defs
 
 import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
@@ -196,3 +196,15 @@ def node_name(name):
 def port_name(name, nr=0):
     """Map node output number to name."""
     return name + ":" + str(nr)
+
+
+PREFERRED_OPSET = 7
+
+
+def find_opset(opset):
+    if opset is None or opset == 0:
+        opset = defs.onnx_opset_version()
+        if opset > PREFERRED_OPSET:
+            # if we use a newer onnx opset than most runtimes support, default to the one most supported
+            opset = PREFERRED_OPSET
+    return opset

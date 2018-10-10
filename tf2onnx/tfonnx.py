@@ -14,7 +14,7 @@ import sys
 import traceback
 
 import numpy as np
-from onnx import helper, onnx_pb, numpy_helper, defs
+from onnx import helper, onnx_pb, numpy_helper
 
 from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
@@ -36,19 +36,10 @@ TARGET_RS4 = "rs4"
 TARGET_CAFFE2 = "caffe2"
 POSSIBLE_TARGETS = [TARGET_RS4, TARGET_CAFFE2]
 DEFAULT_TARGET = []
-PREFERRED_OPSET = 7
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
 # FIXME:
 # pylint: disable=unused-variable
-
-def find_opset(opset):
-    if opset is None or opset == 0:
-        opset = defs.onnx_opset_version()
-        if opset > PREFERRED_OPSET:
-            # if we use a newer onnx opset than most runtimes support, default to the one most supported
-            opset = PREFERRED_OPSET
-    return opset
 
 
 def tensorflow_to_onnx(graph, shape_override):
