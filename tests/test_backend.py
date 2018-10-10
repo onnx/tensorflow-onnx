@@ -690,6 +690,19 @@ class Tf2OnnxBackendTests(unittest.TestCase):
                                      {_INPUT: x_val1, _INPUT1: x_val2, "input3:0": x_val3})
         self.assertAllClose(expected, actual)
 
+    def test_concat_negative_axis(self):
+        x_val1 = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32)
+        x_val2 = np.array([[7, 8, 9], [10, 11, 12]], dtype=np.float32)
+        x_val3 = np.array([[13, 14, 15], [16, 17, 18]], dtype=np.float32)
+        x1 = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.placeholder(tf.float32, x_val2.shape, name=_TFINPUT1)
+        x3 = tf.placeholder(tf.float32, x_val3.shape, name="input3")
+        x_ = tf.concat([x1, x2, x3], -1)
+        output = tf.identity(x_, name=_TFOUTPUT)
+        actual, expected = self._run(output, {x1: x_val1, x2: x_val2, x3: x_val3},
+                                     {_INPUT: x_val1, _INPUT1: x_val2, "input3:0": x_val3})
+        self.assertAllClose(expected, actual)
+
     def test_pow(self):
         x_val = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32)
         e = np.array([2.0, 2.0, 2.0, 2.0], dtype=np.float32)
