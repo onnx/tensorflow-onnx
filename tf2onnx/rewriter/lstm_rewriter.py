@@ -48,7 +48,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
         b_e = match.get_op("cell_bias")
         b = get_weights_from_const_node(b_e)
         if not b or b.value.shape[0] != w.value.shape[1]:
-            log.warning("cell_kernel and cell_bias's dimentions does not match, skip")
+            log.warning("cell_kernel and cell_bias's dimensions does not match, skip")
             return 
 
         ft_bias = match.get_op("ft_bias")
@@ -165,16 +165,16 @@ class LSTMUnitRewriter(UnitRewriterBase):
             # Y handler for reverse lstm
             if rnn_props.is_backward:
                 # Y handler
-                if n.type == "ReverseV2":
+                if is_reverse_op(n):
                     output_node_in_scope = n.inputs[0]
                     if self._check_is_rnn_outputs_node(output_node_in_scope, rnn_props.time_major, rnn_scope_name):
-                        last_node = self._create_transform_nodes_after(lstm_node.output[0], rnn_props.time_major)
+                        last_node = self._create_transform_nodes_after_lstm_output(lstm_node, rnn_props.time_major)
                         n.input[0] = last_node.output[0]
                         continue
 
             # tupled Y_c/Y_h handling, use tuple directly
-            # be noted: for reverse, unlike output node (who is followed by a reversev2), 
-            # the Pack node generating cell_state don't have reversev2 followed.
+            # be noted: for reverse, unlike output node (who is followed by a reverse op), 
+            # the Pack node generating cell_state don't have reverse op followed.
             if self._check_is_consumer_of_tupled_ch(n, match, rnn_scope_name):
                 self._connect_rnn_with_tupled_ch_consumer_nodes(lstm_node, n)
             else:
@@ -190,7 +190,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
                         # Y handler for Non-reverse lstm
                         if not rnn_props.is_backward and self._check_is_rnn_outputs_node(input_n, rnn_props.time_major, rnn_scope_name):
                             log.debug("this is the rnn output node's consumer")
-                            last_node = self._create_transform_nodes_after(lstm_node.output[0], rnn_props.time_major)
+                            last_node = self._create_transform_nodes_after_lstm_output(lstm_node, rnn_props.time_major)
                             to_replace[input_id] = last_node.output[0]
                         else:
                             error_code = self._check_is_consumer_of_exit_after_ch(match, input_n, rnn_scope_name)
@@ -301,12 +301,13 @@ class LSTMUnitRewriter(UnitRewriterBase):
             log.debug("Find output node " + connector_in_rnnscope.name)
             return True
 
-    def _create_transform_nodes_after(self, output_id, time_major):
+    def _create_transform_nodes_after_lstm_output(self, lstm_node, time_major):
         # here we gave up existing transpose, instead, add some ops based on lstm node's result (indirect or directly)
         # just make sure the final output is [batch, time, hidden]
 
         # insert Squeeze in axes 1
         # lstm's 1st output shape is [time, num_directions, batch, hidden]
+        output_id = lstm_node.output[0]
         squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [1]})
 
         if not time_major:

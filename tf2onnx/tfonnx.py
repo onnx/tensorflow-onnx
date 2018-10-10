@@ -1567,7 +1567,10 @@ def tf_optimize(sess, inputs, outputs, graph_def, fold_constant=None):
     """Optimize tensorflow graph for inference."""
     transforms = []
     if fold_constant:
-        transforms.append("fold_constants(ignore_errors=true)")
+        transforms.extend([
+            "fold_constants(ignore_errors=true)",
+            "remove_attribute(attribute_name=_class)", # remove node colocation attributes
+        ])
 
     transforms.extend([
         "fold_batch_norms",

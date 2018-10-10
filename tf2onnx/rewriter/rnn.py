@@ -20,4 +20,4 @@ def rewrite_single_direction_lstm(g, ops):
     return r.run()
 
 def rewrite_bi_direction_lstm(g, ops): 
-    return process_bilstm_batch_major(g, ops)
+    return rewrite_bidirectional_lstms(g, ops)
