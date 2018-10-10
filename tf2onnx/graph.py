@@ -245,7 +245,7 @@ class Graph(object):
             dtypes: dict of tensorflow dtype
         """
         if target is None:
-            target = tf2onnx.tfonnx.DEFAULT_TARGET
+            target = []
         self._nodes = []
         self._initializers = {}
         self._nodes_by_name = {}
