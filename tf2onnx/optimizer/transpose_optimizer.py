@@ -389,6 +389,7 @@ class TransposeOptimizer(object):
         if self._handle_node_having_branches(node):
             node.set_attr("axis", 1)
             return True
+        return False
 
     def _pad_handler(self, trans, node):
         # [N-start, H-start, W-start, C-start, N-end, H-end,  W-end, C-end]

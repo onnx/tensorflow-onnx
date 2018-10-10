@@ -30,5 +30,5 @@ install:
   - cd $TRAVIS_BUILD_DIR && export PYTHONPATH=pwd
 
 script:
-    - pylint --rcfile=tools/pylintrc tf2onnx/*.py tf2onnx/optimizer/transpose_optimizer.py
+    - pylint --rcfile=tools/pylintrc --ignore=version.py tf2onnx/*.py
     - python -m pytest --cov=tf2onnx --cov-report=term --cov-report=html --cov-report=xml tests
