@@ -13,7 +13,6 @@ import numpy as np
 
 from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto
 
-#import tf2onnx
 from tf2onnx import utils, __version__
 from tf2onnx.utils import node_name, port_name, find_opset
 
