@@ -6,9 +6,8 @@ tf2onnx.rewriter.rnn_utils - rnn support
 """
 
 import logging
-from enum import Enum
-
 import numpy as np
+from enum import Enum
 from onnx import helper
 from tf2onnx import utils
 from tf2onnx.graph import Node
@@ -22,17 +21,20 @@ class REWRITER_RESULT(Enum):
     OK = 2
     FAIL = 3
 
+
 class RnnWeight:
     def __init__(self, node, np_val, np_dtype):
         self.node = node
         self.value = np_val
         self.dtype = np_dtype
 
+
 class RnnWeights:
     def __init__(self, kernel, bias, forget_bias):
         self.kernel = kernel
         self.bias = bias
         self.forget_bias = forget_bias
+
 
 class RnnInitializers:
     def __init__(self, c_init, h_init, c_h_shared_init):
@@ -49,17 +51,22 @@ class RnnInitializers:
             self.h_init_input_id = h_init
             self.share_init_node = False
 
+
 class RnnProperties:
     def __init__(self):
+        # RNN input who are outside of rnn scope
         self.input_node = None
         self.input_id = None
-        self.connectors = None # RNN outputs consumers who is outside of rnn scope
+
+        # RNN output consumers who are outside of rnn scope
+        self.connectors = None
         self.is_backward = False
 
         self.time_major = False
-        self.x_node = None # used to serve lstm's 1st input
+        self.x_input_id = None # used to serve lstm's 1st input
         self.input_size = None
         self.hidden_size = None
+        self.batch_size_node = None
 
     def is_valid(self):
         if not self.input_node:
@@ -78,20 +85,6 @@ class RnnProperties:
         return True
 
 
-class MatchedLSTM:
-    def __init__(self, input_node, lstm_fw, lstm_bw, output_pack, nodes_to_delete, match):
-        self.input = input_node
-        self.match = match
-        self.lstm_fw = lstm_fw
-        self.lstm_bw = lstm_bw
-        self.output_pack = output_pack
-        self.state_is_tuple = None
-
-        tmp_nodes = []
-        tmp_nodes.extend(nodes_to_delete)
-        tmp_nodes.extend(match.get_nodes())
-        self.nodes_to_delete = set(tmp_nodes)
-
 # TensorFlow LSTMCell/BasicLSTMCell computation graph matching
 xc_pattern = OpTypePattern('Split', inputs=[
     OpTypePattern("Const"), # axis for split
@@ -107,6 +100,7 @@ xc_pattern = OpTypePattern('Split', inputs=[
         ]),
     ]),
 ])
+
 
 lstmcell_pattern = \
     OpTypePattern('Mul', name='ht', inputs=[
@@ -134,13 +128,16 @@ class RNNUnitType(Enum):
     LSTMCell = 0 # TF LSTMCell and BasicLSTMCell share the same pattern
     GRUCell = 1
 
+
 rnn_cell_patterns = {
     RNNUnitType.LSTMCell: lstmcell_pattern,
     RNNUnitType.GRUCell: None
 }
 
+
 def get_pattern(cell_type_name):
     return rnn_cell_patterns[cell_type_name]
+
 
 def get_weights_from_const_node(node):
     temp = node
@@ -153,12 +150,13 @@ def get_weights_from_const_node(node):
     if temp and temp.type == 'Const':
         val = temp.get_tensor_value()
         dtype = utils.ONNX_TO_NUMPY_DTYPE[temp.dtype]
-        log.info("found weights " + temp.name)
+        log.debug("found weights " + temp.name)
     else:
         log.error("weight node seems not to be Const, skip, node name is " + temp.name)
         return
 
     return RnnWeight(node, val, dtype)
+
 
 def check_is_timemajor_transpose(node):
     # TensorFlow transpose node has perm as its second input
@@ -175,6 +173,7 @@ def check_is_timemajor_transpose(node):
         return True
     else:
         raise ValueError("Not supported yet")
+
 
 # todo: fix this
 def check_is_unfolded_perm(perm_node):
@@ -196,6 +195,7 @@ def check_is_unfolded_perm(perm_node):
             return True
     return False
 
+
 def make_onnx_node(g, op_type, inputs, attr=None, output_count=1, skip_conversion=True):
     if attr is None:
         attr = {}
@@ -206,3 +206,7 @@ def make_onnx_node(g, op_type, inputs, attr=None, output_count=1, skip_conversio
         g, skip_conversion = skip_conversion)
 
     return node
+
+
+def is_reverse_op(op):
+    return op.type in ("ReverseV2", "ReverseSequence")

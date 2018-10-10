@@ -48,7 +48,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
         b_e = match.get_op("cell_bias")
         b = get_weights_from_const_node(b_e)
         if not b or b.value.shape[0] != w.value.shape[1]:
-            log.warning("cell_kernel and cell_bias's dimentions does not match, skip")
+            log.warning("cell_kernel and cell_bias's dimensions does not match, skip")
             return 
 
         ft_bias = match.get_op("ft_bias")
@@ -67,7 +67,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
         # function are defining the multiplication with different order. So we change to match.get_op("ft") in c.inputs
         mul_nodes = [c for c in identity_consumers if c.type == "Mul" and match.get_op("ft") in c.inputs]
         if len(mul_nodes) == 1:
-            log.info("find c initializer value at " + enter_target_node_input_id)
+            log.debug("find c initializer value at " + enter_target_node_input_id)
             return enter_target_node_input_id
         elif len(mul_nodes) > 1:
             raise ValueError("multiple Mul matching found, cannot identify c initializer")
@@ -75,7 +75,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
     def ht_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         concat_nodes = [c for c in identity_consumers if c == match.get_op("xh")]
         if len(concat_nodes) == 1:
-            log.info("find h initializer value at " + enter_target_node_input_id)
+            log.debug("find h initializer value at " + enter_target_node_input_id)
             return enter_target_node_input_id
         elif len(concat_nodes) > 1:
             raise ValueError(str(len(concat_nodes)) + "Concat matching found, cannot identify h initializer")
@@ -103,7 +103,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
                 h_slice = s
 
         if c_slice and h_slice:
-            log.info("find c_h shared initializer value at " + enter_target_node_input_id) 
+            log.debug("find c_h shared initializer value at " + enter_target_node_input_id) 
             return enter_target_node_input_id
 
     def process_weights_and_bias(self, rnn_weights):
@@ -165,16 +165,16 @@ class LSTMUnitRewriter(UnitRewriterBase):
             # Y handler for reverse lstm
             if rnn_props.is_backward:
                 # Y handler
-                if n.type == "ReverseV2":
+                if is_reverse_op(n):
                     output_node_in_scope = n.inputs[0]
                     if self._check_is_rnn_outputs_node(output_node_in_scope, rnn_props.time_major, rnn_scope_name):
-                        last_node = self._create_transform_nodes_after(lstm_node.output[0], rnn_props.time_major)
+                        last_node = self._create_transform_nodes_after_lstm_output(lstm_node, rnn_props.time_major)
                         n.input[0] = last_node.output[0]
                         continue
 
             # tupled Y_c/Y_h handling, use tuple directly
-            # be noted: for reverse, unlike output node (who is followed by a reversev2), 
-            # the Pack node generating cell_state don't have reversev2 followed.
+            # be noted: for reverse, unlike output node (who is followed by a reverse op), 
+            # the Pack node generating cell_state don't have reverse op followed.
             if self._check_is_consumer_of_tupled_ch(n, match, rnn_scope_name):
                 self._connect_rnn_with_tupled_ch_consumer_nodes(lstm_node, n)
             else:
@@ -190,7 +190,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
                         # Y handler for Non-reverse lstm
                         if not rnn_props.is_backward and self._check_is_rnn_outputs_node(input_n, rnn_props.time_major, rnn_scope_name):
                             log.debug("this is the rnn output node's consumer")
-                            last_node = self._create_transform_nodes_after(lstm_node.output[0], rnn_props.time_major)
+                            last_node = self._create_transform_nodes_after_lstm_output(lstm_node, rnn_props.time_major)
                             to_replace[input_id] = last_node.output[0]
                         else:
                             error_code = self._check_is_consumer_of_exit_after_ch(match, input_n, rnn_scope_name)
@@ -301,18 +301,23 @@ class LSTMUnitRewriter(UnitRewriterBase):
             log.debug("Find output node " + connector_in_rnnscope.name)
             return True
 
-    def _create_transform_nodes_after(self, output_id, time_major):
+    def _create_transform_nodes_after_lstm_output(self, lstm_node, time_major):
         # here we gave up existing transpose, instead, add some ops based on lstm node's result (indirect or directly)
         # just make sure the final output is [batch, time, hidden]
 
         # insert Squeeze in axes 1
         # lstm's 1st output shape is [time, num_directions, batch, hidden]
+        output_id = lstm_node.output[0]
         squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [1]})
+        lstm_output_shape = self.g.get_shape(output_id)
+        self.g.set_shape(squeeze_node.output[0], [lstm_output_shape[0], lstm_output_shape[2], lstm_output_shape[3]])
 
         if not time_major:
             # transpose to [batch, time, hidden], since node n originally use this
             attr = { "perm": np.array([1, 0, 2], dtype=np.int64) }
             new_trans = make_onnx_node(self.g, "Transpose", [squeeze_node.output[0]], attr)
+            trans_input_shape = self.g.get_shape(squeeze_node.output[0])
+            self.g.set_shape(new_trans.output[0], [trans_input_shape[1], trans_input_shape[0], trans_input_shape[2]])
             self.all_nodes.extend([squeeze_node, new_trans])
             return new_trans
         else:
@@ -336,6 +341,8 @@ class LSTMUnitRewriter(UnitRewriterBase):
         # BUT now, we have [num_directions, batch_size, hidden_size]
         # since this branch handles forward only, num_directions = 1
         squeeze_node = make_onnx_node(self.g, "Squeeze", [lstm_output_id], {"axes" :[0]})
+        lstm_output_shape = self.g.get_shape(lstm_output_id)
+        self.g.set_shape(squeeze_node.output[0], [lstm_output_shape[1], lstm_output_shape[2]])
         self.g.replace_all_inputs(self.all_nodes, exit_node_output_id, squeeze_node.output[0])
         self.all_nodes.extend([squeeze_node])
 
@@ -346,26 +353,22 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
     def _prepare_y_ch_node_outputer(self, lstm_node, is_ch_tupled):
         axis = None
-        squeeze_axes = None
         # if original graph need tupled output, then we concat c and h with axis = 0
-        if is_ch_tupled:
-            axis = 0
-        else:
-            axis = 2
-            squeeze_axes = [0]
-
-        concat = make_onnx_node(self.g, "Concat", [lstm_node.output[2], lstm_node.output[1]], attr={"axis": axis })
+        axis = 0 if is_ch_tupled else 2
+        concat = make_onnx_node(self.g, "Concat", [lstm_node.output[2], lstm_node.output[1]], attr={"axis": axis})
         self.all_nodes.append(concat)
-
-        # For all tupled-ch's consumers, they originally expect data [tuple_size (e.g. 2), batch_size, hidden_size].
-        # BUT now, we have [num_directions, batch_size, hidden_size] as the c/h output of lstm_node.
-        # no more squeeze needed.
-        if is_ch_tupled:
+        yc_shape = self.g.get_shape(lstm_node.output[2])
+        if is_ch_tupled: 
+            self.g.set_shape(concat.output[0], [yc_shape[0] * 2, yc_shape[1], yc_shape[2]])
             return concat
+        else: 
+            self.g.set_shape(concat.output[0], [yc_shape[0], yc_shape[1], yc_shape[2] * 2])
 
         # For all non-tupled-ch's consumers, they originally expect data [batch_size, hidden_size*2].
         # since this branch handles forward only, num_directions = 1
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [concat.output[0]], attr={ "axes": squeeze_axes })
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [concat.output[0]], attr={"axes": [0]})
+        concat_shape = self.g.get_shape(concat.output[0])
+        self.g.set_shape(squeeze_node.output[0], [concat_shape[1], concat_shape[2]])
         self.all_nodes.append(squeeze_node)
 
         return squeeze_node
