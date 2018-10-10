@@ -309,11 +309,15 @@ class LSTMUnitRewriter(UnitRewriterBase):
         # lstm's 1st output shape is [time, num_directions, batch, hidden]
         output_id = lstm_node.output[0]
         squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [1]})
+        lstm_output_shape = self.g.get_shape(output_id)
+        self.g.set_shape(squeeze_node.output[0], [lstm_output_shape[0], lstm_output_shape[2], lstm_output_shape[3]])
 
         if not time_major:
             # transpose to [batch, time, hidden], since node n originally use this
             attr = { "perm": np.array([1, 0, 2], dtype=np.int64) }
             new_trans = make_onnx_node(self.g, "Transpose", [squeeze_node.output[0]], attr)
+            trans_input_shape = self.g.get_shape(squeeze_node.output[0])
+            self.g.set_shape(new_trans.output[0], [trans_input_shape[1], trans_input_shape[0], trans_input_shape[2]])
             self.all_nodes.extend([squeeze_node, new_trans])
             return new_trans
         else:
@@ -337,6 +341,8 @@ class LSTMUnitRewriter(UnitRewriterBase):
         # BUT now, we have [num_directions, batch_size, hidden_size]
         # since this branch handles forward only, num_directions = 1
         squeeze_node = make_onnx_node(self.g, "Squeeze", [lstm_output_id], {"axes" :[0]})
+        lstm_output_shape = self.g.get_shape(lstm_output_id)
+        self.g.set_shape(squeeze_node.output[0], [lstm_output_shape[1], lstm_output_shape[2]])
         self.g.replace_all_inputs(self.all_nodes, exit_node_output_id, squeeze_node.output[0])
         self.all_nodes.extend([squeeze_node])
 
@@ -347,26 +353,22 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
     def _prepare_y_ch_node_outputer(self, lstm_node, is_ch_tupled):
         axis = None
-        squeeze_axes = None
         # if original graph need tupled output, then we concat c and h with axis = 0
-        if is_ch_tupled:
-            axis = 0
-        else:
-            axis = 2
-            squeeze_axes = [0]
-
-        concat = make_onnx_node(self.g, "Concat", [lstm_node.output[2], lstm_node.output[1]], attr={"axis": axis })
+        axis = 0 if is_ch_tupled else 2
+        concat = make_onnx_node(self.g, "Concat", [lstm_node.output[2], lstm_node.output[1]], attr={"axis": axis})
         self.all_nodes.append(concat)
-
-        # For all tupled-ch's consumers, they originally expect data [tuple_size (e.g. 2), batch_size, hidden_size].
-        # BUT now, we have [num_directions, batch_size, hidden_size] as the c/h output of lstm_node.
-        # no more squeeze needed.
-        if is_ch_tupled:
+        yc_shape = self.g.get_shape(lstm_node.output[2])
+        if is_ch_tupled: 
+            self.g.set_shape(concat.output[0], [yc_shape[0] * 2, yc_shape[1], yc_shape[2]])
             return concat
+        else: 
+            self.g.set_shape(concat.output[0], [yc_shape[0], yc_shape[1], yc_shape[2] * 2])
 
         # For all non-tupled-ch's consumers, they originally expect data [batch_size, hidden_size*2].
         # since this branch handles forward only, num_directions = 1
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [concat.output[0]], attr={ "axes": squeeze_axes })
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [concat.output[0]], attr={"axes": [0]})
+        concat_shape = self.g.get_shape(concat.output[0])
+        self.g.set_shape(squeeze_node.output[0], [concat_shape[1], concat_shape[2]])
         self.all_nodes.append(squeeze_node)
 
         return squeeze_node

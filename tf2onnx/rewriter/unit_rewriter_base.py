@@ -152,6 +152,7 @@ class UnitRewriterBase:
         # Here we won't mark bidirectional, we will have another rewriter running after this one, which will based 
         # on patterns to combine a forward LSTM and a backward LSTM into a bidirectional one.
         direction = "forward"
+        num_direction = 1
         if rnn_props.is_backward:
             direction = "reverse"
         # todo: input_forget
@@ -161,7 +162,14 @@ class UnitRewriterBase:
         lstm_inputs.extend(list(map(lambda n: n.output[0], lstm_input_nodes)))
         lstm_inputs.extend([init_h_id, init_c_id])
         lstm_node = make_onnx_node(self.g, "LSTM", lstm_inputs, attr, 3)
-        self.all_nodes.extend([lstm_node])
+
+        x_shape = self.g.get_shape(lstm_node.input[0]) 
+        x_seq_length = x_shape[0] 
+        x_batch_size = x_shape[1] 
+        self.g.set_shape(lstm_node.output[0], [x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size]) 
+        self.g.set_shape(lstm_node.output[1], [num_direction, x_batch_size, rnn_props.hidden_size]) 
+        self.g.copy_shape(lstm_node.output[1], lstm_node.output[2])
+        self.all_nodes.append(lstm_node)
 
         self.print_step("start to handle output connectors")
         self.process_output_connectors(match, lstm_node, rnn_props, rnn_scope_name)
