@@ -26,7 +26,7 @@ install:
   - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH$PWD/build/lib"
   - conda config --set always_yes yes --set changeps1 no
   - conda install -c conda-forge protobuf numpy
-  - cd $TRAVIS_BUILD_DIR && pip install onnx pytest pytest-cov pytest-runner graphviz tensorflow==1.9 onnxruntime
+  - cd $TRAVIS_BUILD_DIR && pip install onnx pytest pytest-cov pytest-runner graphviz tensorflow==1.9 onnxruntime pylint
   - cd $TRAVIS_BUILD_DIR && export PYTHONPATH=pwd
 
 script:
