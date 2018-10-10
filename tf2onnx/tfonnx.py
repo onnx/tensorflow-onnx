@@ -779,7 +779,13 @@ def concat_op(ctx, node, name, args):
     axis_node = node.inputs[0]
     axis = axis_node.get_tensor_value()
     ctx.remove_input(node, node.input[0])
-    node.set_attr("axis", axis[0])
+
+    axis_val = axis[0]
+    if axis_val < 0: # onnxruntime does not support -1 axis, but TF supports.
+        input_shape = ctx.get_shape(node.input[0])
+        axis_val = len(input_shape) + axis_val
+    node.set_attr("axis", axis_val)
+
     if ctx.opset < 8:
         # opset < 8: might need to wrap concat in casts since only float is supported
         nodes = _wrap_concat_with_cast(ctx, node)
@@ -793,7 +799,13 @@ def concatv2_op(ctx, node, name, args):
     axis_node = node.inputs[-1]
     axis = axis_node.get_tensor_value()
     ctx.remove_input(node, node.input[-1])
-    node.set_attr("axis", axis[0])
+
+    axis_val = axis[0]
+    if axis_val < 0: # onnxruntime does not support -1 axis, but TF supports.
+        input_shape = ctx.get_shape(node.input[0])
+        axis_val = len(input_shape) + axis_val
+    node.set_attr("axis", axis_val)
+
     if ctx.opset < 8:
         # opset < 8: might need to wrap concat in casts since only float is supported
         nodes = _wrap_concat_with_cast(ctx, node)
