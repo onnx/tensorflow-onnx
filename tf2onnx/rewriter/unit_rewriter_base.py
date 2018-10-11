@@ -429,18 +429,29 @@ class UnitRewriterBase:
 
         seq_len_nodes = []
         for n in self.g.get_nodes():
-            if n.name.endswith("sequence_length") and n.name.startswith(rnn_scope_name) and n.type == "Identity":
+            if not n.name.startswith(rnn_scope_name):
+                continue
 
-                seq_len_nodes.append(n)
+            if n.name.endswith("sequence_length") and n.type in ("Identity"):
+                log.debug("find non-const sequence length node")
+            elif "CheckSeqLen" in n.name and n.is_const():
+                # if seq length is const, the node might be const folded,
+                # so we check this way.
+                log.debug("find const sequence length node")
+            else:
+                continue
+            seq_len_nodes.append(n)
 
         seq_len_node_cnt = len(seq_len_nodes)
-
         if seq_len_node_cnt == 0:
             return
         elif seq_len_node_cnt == 1:
-            seq_len_identity_node = seq_len_nodes[0]
-            if not seq_len_identity_node.inputs[0].name.startswith(rnn_scope_name):
-                return seq_len_identity_node.inputs[0]
+            seq_len_node = seq_len_nodes[0]
+            if seq_len_node.is_const():
+                self.must_keep_nodes.append(seq_len_node)
+                return seq_len_node
+            elif not seq_len_node.inputs[0].name.startswith(rnn_scope_name):
+                return seq_len_node.inputs[0]
             else:
                 raise ValueError("sequence length node should be outside of rnn scope")
         else:

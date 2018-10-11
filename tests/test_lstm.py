@@ -35,9 +35,13 @@ _TFINPUT1 = "input1"
 _INPUT1 = "input1:0"
 _TFOUTPUT = "output"
 _TFOUTPUT_CELLSTATE = "cellstate_output"
+_TFOUTPUT_CELLSTATE_C = "cellstate_output_c"
+_TFOUTPUT_CELLSTATE_H = "cellstate_output_h"
 _TFOUTPUT1 = "output1"
 _OUTPUT = "output:0"
 _OUTPUT_CELLSTATE = "cellstate_output:0"
+_OUTPUT_CELLSTATE_C = "cellstate_output_c:0"
+_OUTPUT_CELLSTATE_H = "cellstate_output_h:0"
 _OUTPUT1 = "output1:0"
 
 OPSET = 7
@@ -128,7 +132,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             actual = self._run_backend(g, self._args1, onnx_dict)
         return actual, expected
 
-    def run_test_internel(self, output_dict, feed_dict, input_names_with_port, output_names_with_port, rtol=0.000001):
+    def run_test_internal(self, output_dict, feed_dict, input_names_with_port, output_names_with_port, rtol=0.000001):
         with tf.Session() as sess:
             variables_lib.global_variables_initializer().run()
             expected = sess.run(output_dict, feed_dict=feed_dict)
@@ -147,19 +151,23 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
                 output_dict.append(sess.graph.get_tensor_by_name(out_name))
 
             expected = sess.run(output_dict, feed_dict=feed_dict)
+            debug = False
 
-            model_path = os.path.join(TMPPATH, "before_tf_optimize.pb")
-            with open(model_path, "wb") as f:
-                f.write(sess.graph_def.SerializeToString())
+            if debug:
+                model_path = os.path.join(TMPPATH, self._testMethodName + "_before_tf_optimize.pb")
+                with open(model_path, "wb") as f:
+                    f.write(sess.graph_def.SerializeToString())
 
-            print("created file " + model_path)
+                print("created file " + model_path)
             graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port,
                                                    output_names_with_port, sess.graph_def, True)
-            model_path = os.path.join(TMPPATH, "after_tf_optimize.pb")
-            with open(model_path, "wb") as f:
-                f.write(graph_def.SerializeToString())
 
-            print("created file " + model_path)
+            if debug:
+                model_path = os.path.join(TMPPATH, self._testMethodName + "_after_tf_optimize.pb")
+                with open(model_path, "wb") as f:
+                    f.write(graph_def.SerializeToString())
+
+                print("created file " + model_path)
         tf.reset_default_graph()
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:
@@ -169,10 +177,10 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         for i in range(len(expected)):
             self.assertAllClose(expected[i], actual[i], rtol=rtol, atol=0.)
 
-    def test_test_single_dynamic_lstm_stateistuple(self):
+    def test_test_single_dynamic_lstm_state_is_tuple(self):
         self.internel_test_single_dynamic_lstm(True)
 
-    def test_test_single_dynamic_lstm_stateisnottuple(self):
+    def test_test_single_dynamic_lstm_state_is_not_tuple(self):
         self.internel_test_single_dynamic_lstm(False)
 
     def internel_test_single_dynamic_lstm(self, state_is_tuple):
@@ -201,7 +209,156 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+
+    def test_single_dynamic_lstm_seq_length_is_const(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+        state_is_tuple = True
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        initializer = init_ops.constant_initializer(0.5)
+
+        # no scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            dtype=tf.float32,
+            sequence_length=[4, 3, 4, 5, 2, 1])
+
+        output = tf.identity(outputs, name=_TFOUTPUT)
+        cellstate = tf.identity(cell_state, name=_TFOUTPUT_CELLSTATE)
+
+        feed_dict = {_INPUT: x_val}
+        output_dict = [output, cellstate]
+        input_names_with_port = [_INPUT]
+        output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+
+    def test_single_dynamic_lstm_seq_length_is_not_const(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+        state_is_tuple = True
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        initializer = init_ops.constant_initializer(0.5)
+
+        y_val = np.array([4, 3, 4, 5, 2, 1], dtype=np.int32)
+        seq_length = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+
+        # no scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            dtype=tf.float32,
+            sequence_length=tf.identity(seq_length))
+
+        output = tf.identity(outputs, name=_TFOUTPUT)
+        cellstate = tf.identity(cell_state, name=_TFOUTPUT_CELLSTATE)
+
+        feed_dict = {_INPUT: x_val, _INPUT1: y_val}
+        output_dict = [output, cellstate]
+        input_names_with_port = [_INPUT]
+        output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+
+    def test_single_dynamic_lstm_placeholder_input(self):
+        units = 5
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
+        x_val = np.stack([x_val] * 6)
+        state_is_tuple = True
+        x = tf.placeholder(tf.float32, shape=(None, 4, 2), name=_TFINPUT)
+        initializer = init_ops.constant_initializer(0.5)
+
+        # no scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            dtype=tf.float32) # by default zero initializer is used
+
+        output = tf.identity(outputs, name=_TFOUTPUT)
+        cellstate = tf.identity(cell_state, name=_TFOUTPUT_CELLSTATE)
+
+        feed_dict = {_INPUT: x_val}
+        output_dict = [output, cellstate]
+        input_names_with_port = [_INPUT]
+        output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+
+    def test_single_dynamic_lstm_ch_zero_state_initializer(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+        state_is_tuple = True
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        initializer = init_ops.constant_initializer(0.5)
+
+        # no scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+
+        # defining initial state
+        initial_state = cell.zero_state(batch_size, dtype=tf.float32)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            initial_state=initial_state,
+            dtype=tf.float32)
+
+        output = tf.identity(outputs, name=_TFOUTPUT)
+        cellstate = tf.identity(cell_state, name=_TFOUTPUT_CELLSTATE)
+
+        feed_dict = {_INPUT: x_val}
+        output_dict = [output, cellstate]
+        input_names_with_port = [_INPUT]
+        output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+
+    def test_single_dynamic_lstm_consume_one_of_ch_tuple(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        initializer = init_ops.constant_initializer(0.5)
+        state_is_tuple = True
+        # no scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            dtype=tf.float32)
+
+        output = tf.identity(outputs, name=_TFOUTPUT)
+        cellstate_c = tf.identity(cell_state.c, name=_TFOUTPUT_CELLSTATE_C)
+        cellstate_h = tf.identity(cell_state.h, name=_TFOUTPUT_CELLSTATE_H)
+
+        feed_dict = {_INPUT: x_val}
+        output_dict = [output, cellstate_c, cellstate_h]
+        input_names_with_port = [_INPUT]
+        output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE_C, _OUTPUT_CELLSTATE_H]
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
     def test_single_dynamic_lstm_randomweights(self, state_is_tuple=True):
         hidden_size = 5
@@ -230,7 +387,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.0001)
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.0001)
 
     def test_single_dynamic_lstm_randomweights2(self, state_is_tuple=True):
         hidden_size = 128
@@ -258,7 +415,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.01)
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.01)
 
     def test_multiple_dynamic_lstm_state_is_tuple(self):
         self.internel_test_multiple_dynamic_lstm_with_parameters(True)
@@ -314,7 +471,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
     def test_dynamic_basiclstm(self):
         units = 5
@@ -341,7 +498,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.00001)
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.00001)
 
     def test_dynamic_bilstm_state_is_tuple(self):
         self.internel_test_dynamic_bilstm_with_parameters(True)
@@ -383,7 +540,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output, cellstate]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
-        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
     def test_dynamic_bilstm_output_consumed_only(self, state_is_tuple=True):
         units = 5
@@ -418,7 +575,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_dict = [output]
         input_names_with_port = [_INPUT]
         output_names_with_port = [_OUTPUT]
-        self.run_test_internel(output_dict, feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

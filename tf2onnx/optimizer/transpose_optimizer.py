@@ -108,7 +108,7 @@ class TransposeOptimizer(object):
             if "stop" in self._force_stop and self._force_stop["stop"] == 1:
                 break
 
-        log.info("finish after " + str(iteration_cnt) + " iteration(s)")
+        log.debug("finish after " + str(iteration_cnt) + " iteration(s)")
         self.post_optimize_action()
         self._g.dump_node_statistics("after optimization")
 
