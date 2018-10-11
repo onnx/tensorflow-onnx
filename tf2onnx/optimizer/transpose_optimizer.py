@@ -137,7 +137,7 @@ class TransposeOptimizer(object):
             for n in nodes_to_remove:
                 ops.remove(n)
 
-        if nodes_to_extend and nodes_to_extend:
+        if nodes_to_extend:
             ops.extend(nodes_to_extend)
 
         if nodes_to_extend or nodes_to_remove or has_input_changed:
