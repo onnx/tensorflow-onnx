@@ -178,12 +178,12 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             self.assertAllClose(expected[i], actual[i], rtol=rtol, atol=0.)
 
     def test_test_single_dynamic_lstm_state_is_tuple(self):
-        self.internel_test_single_dynamic_lstm(True)
+        self.internal_test_single_dynamic_lstm(True)
 
     def test_test_single_dynamic_lstm_state_is_not_tuple(self):
-        self.internel_test_single_dynamic_lstm(False)
+        self.internal_test_single_dynamic_lstm(False)
 
-    def internel_test_single_dynamic_lstm(self, state_is_tuple):
+    def internal_test_single_dynamic_lstm(self, state_is_tuple):
         units = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -360,7 +360,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE_C, _OUTPUT_CELLSTATE_H]
         self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port)
 
-    def test_single_dynamic_lstm_randomweights(self, state_is_tuple=True):
+    def test_single_dynamic_lstm_random_weights(self, state_is_tuple=True):
         hidden_size = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -389,7 +389,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         output_names_with_port = [_OUTPUT, _OUTPUT_CELLSTATE]
         self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.0001)
 
-    def test_single_dynamic_lstm_randomweights2(self, state_is_tuple=True):
+    def test_single_dynamic_lstm_random_weights2(self, state_is_tuple=True):
         hidden_size = 128
         batch_size = 1
         x_val = np.random.randn(1, 133).astype('f')
@@ -418,12 +418,12 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.01)
 
     def test_multiple_dynamic_lstm_state_is_tuple(self):
-        self.internel_test_multiple_dynamic_lstm_with_parameters(True)
+        self.internal_test_multiple_dynamic_lstm_with_parameters(True)
 
     def test_multiple_dynamic_lstm_state_is_not_tuple(self):
-        self.internel_test_multiple_dynamic_lstm_with_parameters(False)
+        self.internal_test_multiple_dynamic_lstm_with_parameters(False)
 
-    def internel_test_multiple_dynamic_lstm_with_parameters(self, state_is_tuple):
+    def internal_test_multiple_dynamic_lstm_with_parameters(self, state_is_tuple):
         units = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -501,12 +501,12 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         self.run_test_internal(output_dict, feed_dict, input_names_with_port, output_names_with_port, 0.00001)
 
     def test_dynamic_bilstm_state_is_tuple(self):
-        self.internel_test_dynamic_bilstm_with_parameters(True)
+        self.internal_test_dynamic_bilstm_with_parameters(True)
 
     def test_dynamic_bilstm_state_is_not_tuple(self):
-        self.internel_test_dynamic_bilstm_with_parameters(False)
+        self.internal_test_dynamic_bilstm_with_parameters(False)
 
-    def internel_test_dynamic_bilstm_with_parameters(self, state_is_tuple):
+    def internal_test_dynamic_bilstm_with_parameters(self, state_is_tuple):
         units = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
@@ -562,7 +562,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            outputs, _ = tf.nn.bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
