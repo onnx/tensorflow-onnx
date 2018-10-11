@@ -275,7 +275,7 @@ class Test(object):
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
 
-        graph_def = tf2onnx.tfonnx.tf_optimize(None, inputs, self.output_names, graph_def, fold_const)
+        graph_def = tf2onnx.tfonnx.tf_optimize(inputs, self.output_names, graph_def, fold_const)
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(graph=g) as sess:

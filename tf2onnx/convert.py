@@ -12,13 +12,16 @@ import argparse
 import sys
 
 import onnx
-import tensorflow as tf
-import tf2onnx.utils
 from onnx import helper
+import tensorflow as tf
+
+import tf2onnx.utils
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
+
+# pylint: disable=unused-argument
 
 
 def get_args():
@@ -61,7 +64,7 @@ def default_custom_op_handler(ctx, node, name, args):
 def main():
     args = get_args()
 
-    opset = tf2onnx.tfonnx.find_opset(args.opset)
+    opset = tf2onnx.utils.find_opset(args.opset)
     print("using tensorflow={}, onnx={}, opset={}".format(tf.__version__, onnx.__version__, opset))
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
@@ -81,10 +84,10 @@ def main():
         graph_def.ParseFromString(f.read())
 
     # todo: consider to enable const folding by default?
-    graph_def = tf_optimize(None, args.inputs, args.outputs, graph_def, args.fold_const)
+    graph_def = tf_optimize(args.inputs, args.outputs, graph_def, args.fold_const)
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')
-    with tf.Session(graph=tf_graph) as sess:
+    with tf.Session(graph=tf_graph):
         g = process_tf_graph(tf_graph,
                              continue_on_error=args.continue_on_error,
                              verbose=args.verbose,
