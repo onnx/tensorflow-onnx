@@ -304,17 +304,18 @@ class TransposeOptimizer(object):
     def _add_handler(self, trans, node):
         if self._g.is_initializer(node.input[1]):
             t_p = trans.inputs[0]
-            if t_p.type == "Conv" and len(t_p.input) == 2:
-                # if Conv's bias input is not set, then we set, otherwise, we don't set
+            if t_p.type in ("Conv", "ConvTranspose") and len(t_p.input) == 2:
+                # if Conv or ConvTranspose's bias input is not set, then we set, otherwise, we don't set
                 # todo: maybe we can add already set bias with the input??? try later
-                conv_node = self._make_onnx_node("Conv", [t_p.input[0], t_p.input[1], node.input[1]], t_p.op.attribute)
+                conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
+                conv_node = self._make_onnx_node(t_p.type, conv_inputs, t_p.op.attribute)
 
                 ops = self._g.get_nodes()
                 trans.input[0] = utils.port_name(conv_node.name)
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
                 self._update_graph_nodes([conv_node], [t_p, node], True)
                 return True
-            log.debug("shift add.input[1] to left")
+            return False
         return self._handle_node_having_branches(node)
 
     def _relu_handler(self, trans, node):
