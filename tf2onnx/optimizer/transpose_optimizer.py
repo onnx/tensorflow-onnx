@@ -307,7 +307,8 @@ class TransposeOptimizer(object):
             if t_p.type in ("Conv", "ConvTranspose") and len(t_p.input) == 2:
                 # if Conv or ConvTranspose's bias input is not set, then we set, otherwise, we don't set
                 # todo: maybe we can add already set bias with the input??? try later
-                conv_node = self._make_onnx_node(t_p.type, [t_p.input[0], t_p.input[1], node.input[1]], t_p.op.attribute)
+                conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
+                conv_node = self._make_onnx_node(t_p.type, conv_inputs, t_p.op.attribute)
 
                 ops = self._g.get_nodes()
                 trans.input[0] = utils.port_name(conv_node.name)
