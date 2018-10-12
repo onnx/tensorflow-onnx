@@ -46,12 +46,14 @@ def get_beach(shape):
 
 def get_random(shape):
     """Get random input."""
-    return np.random.sample(shape).astype(np.float32)
+    # add 1 to make sure generated data is not zero, for some ops will have a problem when encounter zero value, such as divide
+    return (np.random.sample(shape) + 1).astype(np.float32)
 
 
 def get_random256(shape):
     """Get random imput between 0 and 255."""
-    return np.round(np.random.sample(shape) * 256).astype(np.float32)
+    # add 1 to make sure generated data is not zero, for some ops will have a problem when encounter zero value, such as divide
+    return np.round((np.random.sample(shape) + 1e-2) * 256).astype(np.float32)
 
 
 def get_ramp(shape):
