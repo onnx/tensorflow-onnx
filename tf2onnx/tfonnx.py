@@ -1197,13 +1197,35 @@ def fused_batchnorm_op7(ctx, node, name, args):
 
 
 def matmul_op(ctx, node, name, args):
+    # onnx matmul only support float16, float, double for now
+    if node.dtype not in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
+        raise ValueError("dtype " + node.dtype + " is not supported in onnx matmul for now")
+
     nodes = []
     # tensorflow allows transpose and conjugated. If found, insert the required transpose.
     # We could use Gemm as well but tensorflow does not pass bias in matmul.
     transpose_a = node.get_attr("transpose_a")
-    transpose_b = node.get_attr("transpose_b")
     transpose_a = 0 if transpose_a is None else transpose_a.i
+
+    transpose_b = node.get_attr("transpose_b")
     transpose_b = 0 if transpose_b is None else transpose_b.i
+
+    adjoint_a = node.get_attr("adjoint_a")
+    adjoint_a = 0 if adjoint_a is None else adjoint_a.i
+
+    adjoint_b = node.get_attr("adjoint_b")
+    adjoint_b = 0 if adjoint_b is None else adjoint_b.i
+
+    adj_x = node.get_attr("adj_x")
+    adj_x = 0 if adj_x is None else adj_x.i
+
+    adj_y = node.get_attr("adj_y")
+    adj_y = 0 if adj_y is None else adj_y.i
+
+    ##since dtype cann't be complex, so action "adjoint" is same as "transpose"
+    transpose_a = (transpose_a + adjoint_a + adj_x) % 2
+    transpose_b = (transpose_b + adjoint_b + adj_y) % 2
+    ##if dtype cann't be complex then adjoint is same as transpose
     if transpose_a != 0:
         transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[0])
         nodes.insert(0, transpose)
@@ -1211,7 +1233,7 @@ def matmul_op(ctx, node, name, args):
         transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
         nodes.insert(0, transpose)
 
-    unsupported = ["adjoint_a", "adjoint_b", "a_is_sparse", "b_is_sparse", "adj_x", "adj_y"]
+    unsupported = ["a_is_sparse", "b_is_sparse"]
     for i in unsupported:
         val = node.get_attr(i)
         if val is not None and val.i != 0:
