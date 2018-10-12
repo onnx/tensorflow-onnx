@@ -1346,6 +1346,7 @@ _OPSET_7 = {
     "Tan": (direct_op, []),
     "Multinomial": (multinomial_op, []),
     "FusedBatchNorm": (fused_batchnorm_op7, []),
+    "FusedBatchNormV2": (fused_batchnorm_op7, []),
 }
 
 _OPSET_8 = {

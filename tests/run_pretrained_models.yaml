@@ -183,19 +183,46 @@ vgg-16:
   outputs:
     - output:0
 
-resnet50_v2:
+resnet50_v2_nchw:
   skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
   model_type: saved_model
-  url: http://download.tensorflow.org/models/official/20180601_resnet_v2_imagenet_savedmodel.tar.gz
-  model: 20180601_resnet_v2_imagenet_savedmodel/1527887769
+  url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NCHW.tar.gz
+  model: resnet_v2_fp32_savedmodel_NCHW/1538687196
   input_get: get_beach
   inputs:
-    "input_tensor:0": [128, 224, 224, 3]
+    "input_tensor:0": [64, 224, 224, 3]
   outputs:
     - ArgMax:0
     - softmax_tensor:0
 
+
+resnet50_v2_nhwc:
+  disabled: true # FIXME: numerical results are correct but shape=(64,) for tf and (64,1) for lotus
+  model_type: saved_model
+  url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NHWC.tar.gz
+  model: resnet_v2_fp32_savedmodel_NHWC/1538687283
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [64, 224, 224, 3]
+  outputs:
+    - ArgMax:0
+    - softmax_tensor:0
+
+resnet50_fp16_v2:
+  disabled: true # FIXME: need to handle float16 constants
+  model_type: saved_model
+  url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp16_savedmodel_NHWC.tar.gz
+  model: resnet_v2_fp16_savedmodel_NHWC/1538686978
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [64, 224, 224, 3]
+  outputs:
+    - ArgMax:0
+    - softmax_tensor:0
+
+
 resnet50_v1:
+  disabled: true # works, disabled because its nearly the same as resnet50_v2_nchw
   skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
   model_type: saved_model
   url: http://download.tensorflow.org/models/official/20180601_resnet_v1_imagenet_savedmodel.tar.gz

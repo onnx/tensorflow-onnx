@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+"""Tool to convert and test pre-trained tensorflow models."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -15,15 +17,18 @@ import zipfile
 import PIL.Image
 import numpy as np
 import requests
-import tensorflow as tf
-import tf2onnx
 import yaml
+
+import tensorflow as tf
 from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
-from tensorflow.python.tools import saved_model_utils
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 from tf2onnx.tfonnx import process_tf_graph
+
+import tf2onnx
+
+# pylint: disable=broad-except,logging-not-lazy,unused-argument
 
 TMPPATH = tempfile.mkdtemp()
 PERFITER = 1000
@@ -91,6 +96,8 @@ def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=T
 
 
 class Test(object):
+    """Main Test class."""
+
     cache_dir = None
 
     def __init__(self, url, local, make_input, input_names, output_names,
@@ -264,7 +271,7 @@ class Test(object):
         inputs = {}
         for k, v in self.input_names.items():
             if isinstance(v, str) and v.startswith("np."):
-                inputs[k] = eval(v)
+                inputs[k] = eval(v)  # pylint: disable=eval-used
             else:
                 inputs[k] = self.make_input(v)
         if self.more_inputs:
@@ -281,7 +288,7 @@ class Test(object):
         with tf.Session(graph=g) as sess:
 
             # fix inputs if needed
-            for k in inputs.keys():
+            for k in inputs.keys():  # pylint: disable=consider-iterating-dictionary
                 t = sess.graph.get_tensor_by_name(k)
                 dtype = tf.as_dtype(t.dtype).name
                 if type != "float32":
@@ -329,11 +336,11 @@ class Test(object):
                     print("\tResults: skipped tensorflow")
                 else:
                     if self.check_only_shape:
-                        for i in range(len(tf_results)):
-                            np.testing.assert_array_equal(tf_results[i].shape, onnx_results[i].shape)
+                        for tf_res, onnx_res in zip(tf_results, onnx_results):
+                            np.testing.assert_array_equal(tf_res.shape, onnx_res.shape)
                     else:
-                        for i in range(len(tf_results)):
-                            np.testing.assert_allclose(tf_results[i], onnx_results[i], rtol=self.rtol, atol=self.atol)
+                        for tf_res, onnx_res in zip(tf_results, onnx_results):
+                            np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
                     print("\tResults: OK")
                 return True
             except Exception as ex:
@@ -367,6 +374,7 @@ def get_args():
 
 
 def tests_from_yaml(fname):
+    """Create test class from yaml file."""
     tests = {}
     config = yaml.load(open(fname, 'r').read())
     for k, v in config.items():
