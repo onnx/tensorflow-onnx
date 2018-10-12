@@ -314,8 +314,7 @@ class TransposeOptimizer(object):
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
                 self._update_graph_nodes([conv_node], [t_p, node], True)
                 return True
-            else:
-                return False
+            return False
         return self._handle_node_having_branches(node)
 
     def _relu_handler(self, trans, node):
