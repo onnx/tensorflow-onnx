@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+"""Unit tests using onnx backends."""
+
 from __future__ import division
 from __future__ import print_function
 
@@ -15,8 +17,10 @@ from itertools import product
 import numpy as np
 import tensorflow as tf
 import tf2onnx.utils
-from onnx import helper
+
 from tf2onnx.tfonnx import process_tf_graph
+
+# pylint: disable=missing-docstring,invalid-name,unused-argument
 
 TMPPATH = tempfile.mkdtemp()
 
@@ -93,7 +97,6 @@ def get_conv_getdata(kind=1):
 
 class Tf2OnnxBackendTests(unittest.TestCase):
     def setUp(self):
-        self.maxDiff = None
         tf.reset_default_graph()
         # reset name generation on every test
         tf2onnx.utils.INTERNAL_NAME = 1
@@ -147,12 +150,12 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         results = m.run(output_names, inputs)
         return results[0]
 
-    def _run_backend(self, g, args, input_dict, expected):
-        model_proto = g.make_model("test", args.outputs)
+    def _run_backend(self, g, arg, input_dict, expected):
+        model_proto = g.make_model("test", arg.outputs)
         if BACKEND == "onnxmsrtnext":
-            y = self.run_onnxmsrtnext(model_proto, input_dict, args.outputs, self._testMethodName)
+            y = self.run_onnxmsrtnext(model_proto, input_dict, arg.outputs, self._testMethodName)
         elif BACKEND == "onnxruntime":
-            y = self.run_onnxruntime(model_proto, input_dict, args.outputs, self._testMethodName)
+            y = self.run_onnxruntime(model_proto, input_dict, arg.outputs, self._testMethodName)
         elif BACKEND == "caffe2":
             y = self.run_onnxcaffe2(model_proto, input_dict)
         else:
@@ -214,7 +217,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     def test_maxppol(self):
         for p in get_conv_getdata():
-            idx, padding, x_shape, ksize, strides = p
+            _, padding, x_shape, ksize, strides = p
             tf.reset_default_graph()
             x_val = make_xval(x_shape)
             x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
@@ -225,7 +228,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
 
     def test_avgppol(self):
         for p in get_conv_getdata(kind=0):
-            idx, padding, x_shape, ksize, strides = p
+            _, padding, x_shape, ksize, strides = p
             tf.reset_default_graph()
             x_val = make_xval(x_shape)
             x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
@@ -533,7 +536,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         x2 = tf.placeholder(tf.float32, x_val2.shape, name=_TFINPUT1)
         mi = tf.minimum(x1, x2)
         output = tf.identity(mi, name=_TFOUTPUT)
-        actual, expected = self._run(output, {x1: x_val1, x2: x_val2}, {_INPUT: x_val1, _INPUT1: x_val2, })
+        actual, expected = self._run(output, {x1: x_val1, x2: x_val2}, {_INPUT: x_val1, _INPUT1: x_val2})
         self.assertAllClose(expected, actual)
 
     @unittest.skipIf(BACKEND in ["caffe2"], "issue with broadcastnig scalar")
@@ -825,7 +828,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def test_pad(self):
         params = [
             ("CONSTANT", [[1, 1], [2, 2]], [[1.0, 1.2], [2.3, 3.4], [4.5, 5.7]]),
-            ("CONSTANT", [[0, 0], [3, 3], [3, 3], [0, 0]],  np.random.randn(1, 3, 4, 5).astype(np.float32)),
+            ("CONSTANT", [[0, 0], [3, 3], [3, 3], [0, 0]], np.random.randn(1, 3, 4, 5).astype(np.float32)),
         ]
         for p in params:
             tf.reset_default_graph()
@@ -939,7 +942,7 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     def test_topk(self):
         x_val = np.arange(3*2*3).astype("float32")
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
-        values, indices = tf.nn.top_k(x, 5, sorted=True)
+        values, _ = tf.nn.top_k(x, 5, sorted=True)
         output = tf.identity(values, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)

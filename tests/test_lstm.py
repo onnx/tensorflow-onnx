@@ -1,31 +1,36 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+"""Unit Tests for lstm."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import argparse
-import numpy as np
 import os
 import sys
 import tempfile
-import tensorflow as tf
-import tf2onnx.utils
 import unittest
-
 from collections import namedtuple
+
+import numpy as np
+import tensorflow as tf
 from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from tensorflow.python.ops import variables as variables_lib
+
+import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph
+
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
 TMPPATH = tempfile.mkdtemp()
 
+BACKEND = "onnxruntime"
 # BACKEND = "caffe2"
 # BACKEND = "onnxmsrt"
-BACKEND = "onnxruntime"
 # BACKEND = "onnx-tensorflow"
 
 # names for input and outputs for tests
@@ -174,8 +179,8 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             g = process_tf_graph(sess.graph, continue_on_error=True)  # shape_override={"output:0": [1, 6,4,5]}
             actual = self._run_backend(g, output_names_with_port, feed_dict)
 
-        for i in range(len(expected)):
-            self.assertAllClose(expected[i], actual[i], rtol=rtol, atol=0.)
+        for expected_val, actual_val in zip(expected, actual):
+            self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=0.)
 
     def test_test_single_dynamic_lstm_state_is_tuple(self):
         self.internal_test_single_dynamic_lstm(True)
@@ -430,7 +435,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
         x_val = np.stack([x_val] * batch_size)
 
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
-        y = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT1)
+        _ = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT1)
         initializer = init_ops.constant_initializer(0.5)
 
         lstm_output_list = []
@@ -521,7 +526,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             cell1 = rnn.LSTMCell(
                 units,
                 initializer=initializer,
-                state_is_tuple=state_is_tuple)  # state_is_tuple will impact the Pack node (for cell_state)'s usage pattern
+                state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
             cell2 = rnn.LSTMCell(
                 units,
                 initializer=initializer,
@@ -557,7 +562,7 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
             cell1 = rnn.LSTMCell(
                 units,
                 initializer=initializer,
-                state_is_tuple=state_is_tuple)  # state_is_tuple will impact the Pack node (for cell_state)'s usage pattern
+                state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
             cell2 = rnn.LSTMCell(
                 units,
                 initializer=initializer,

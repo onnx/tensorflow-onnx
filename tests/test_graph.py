@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+"""Unit Tests for graph related code."""
+
 from __future__ import division
 from __future__ import print_function
 
@@ -14,26 +16,28 @@ from onnx import helper
 
 import tf2onnx
 from tf2onnx.tfonnx import process_tf_graph
-from tf2onnx.graph_matcher import *
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 
+# pylint: disable=missing-docstring
 
-def onnx_to_graphviz(g, include_attrs = False):
+def onnx_to_graphviz(g, include_attrs=False):
+    """Return dot for graph."""
     g2 = gv.Digraph()
     for node in g.get_nodes():
         kwarg = {}
         attr = node.attr
         if include_attrs:
             for a in attr:
-               kwarg[a] = str(helper.get_attribute_value(attr[a])) 
-        else: 
+                kwarg[a] = str(helper.get_attribute_value(attr[a]))
+        else:
             if "shape" in attr:
                 kwarg["shape"] = str(attr["shape"].ints)
             if "broadcast" in attr:
                 kwarg["broadcast"] = str(attr["broadcast"].i)
-        
+
         g2.node(node.name, op_type=node.type, **kwarg)
     for node in g.get_nodes():
         for i in node.input:
@@ -43,14 +47,16 @@ def onnx_to_graphviz(g, include_attrs = False):
 
 
 def onnx_pretty(g, args=None):
+    """Pretty print graph."""
     model_proto = g.make_model("converted from {}".format(args.input), args.inputs, args.outputs)
     return helper.printable_graph(model_proto.graph)
 
 
 class Tf2OnnxGraphTests(unittest.TestCase):
+    """Test cases."""
 
     def setUp(self):
-        self.maxDiff = None
+        """Setup test."""
         # reset name generation on every test
         tf2onnx.utils.INTERNAL_NAME = 1
         tf.reset_default_graph()
@@ -124,7 +130,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Add [op_type=Add] output [op_type=Identity] input1:0 -> Add input2:0 -> ' 
+                'digraph { Add [op_type=Add] output [op_type=Identity] input1:0 -> Add input2:0 -> '
                 'Add Add:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -204,13 +210,13 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             conv = tf.nn.conv2d(image_, kernel, strides=[1, 1, 1, 1], padding='VALID')
             _ = tf.identity(conv, name="output")
             sess.run(tf.global_variables_initializer())
-            ret = sess.run(conv, feed_dict={image_: image})
+            _ = sess.run(conv, feed_dict={image_: image})
 
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Conv2D__2 [op_type=Transpose] kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] ' 
-                'Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] output [op_type=Identity] input1:0 -> ' 
-                'Conv2D__2 k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 Conv2D__2:0 -> Conv2D ' 
+                'digraph { Conv2D__2 [op_type=Transpose] kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] '
+                'Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] output [op_type=Identity] input1:0 -> '
+                'Conv2D__2 k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 Conv2D__2:0 -> Conv2D '
                 'Conv2D__3:0 -> Conv2D Conv2D:0 -> Conv2D__4 Conv2D__4:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -242,7 +248,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Reshape [op_type=Reshape] output [op_type=Identity] input1:0 -> Reshape ' 
+                'digraph { Reshape [op_type=Reshape] output [op_type=Identity] input1:0 -> Reshape '
                 '"Reshape/shape":0 -> Reshape Reshape:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -270,8 +276,9 @@ class Tf2OnnxGraphTests(unittest.TestCase):
                 onnx_to_graphviz(g))
 
     def test_custom_op(self):
+        """Custom op test."""
 
-        def print_handler(ctx, node, name, args):
+        def print_handler(ctx, node, name, args):  # pylint: disable=unused-argument
             # replace tf.Print() with Identity
             #   T output = Print(T input, data, @list(type) U, @string message, @int first_n, @int summarize)
             # becomes:
@@ -294,17 +301,18 @@ class Tf2OnnxGraphTests(unittest.TestCase):
 
     def test_pad(self):
         with tf.Session() as sess:
-            t = tf.constant([[1, 2, 3], [4, 5, 6]], name= "input1")
+            t = tf.constant([[1, 2, 3], [4, 5, 6]], name="input1")
             paddings = tf.constant([[1, 1,], [2, 2]], name="paddings")
-            a = tf.pad(t, paddings, "CONSTANT", "const_no_val")
-            b = tf.pad(t, paddings, "CONSTANT", "const_with_val", 999)
-            c= tf.pad(t, paddings, "REFLECT", "reflect") 
+            tf.pad(t, paddings, "CONSTANT", "const_no_val")
+            tf.pad(t, paddings, "CONSTANT", "const_with_val", 999)
+            tf.pad(t, paddings, "REFLECT", "reflect")
             g = process_tf_graph(sess.graph)
 
-            self.assertEqual('digraph { const_no_val [op_type=Pad pads="[1, 2, 1, 2]"]'
+            self.assertEqual(
+                'digraph { const_no_val [op_type=Pad pads="[1, 2, 1, 2]"]'
                 ' const_with_val [op_type=Pad pads="[1, 2, 1, 2]" value=999]'
                 ' reflect [mode="b\'reflect\'" op_type=Pad pads="[1, 2, 1, 2]"]'
-                ' input1:0 -> const_no_val input1:0 -> const_with_val input1:0 -> reflect }', 
+                ' input1:0 -> const_no_val input1:0 -> const_with_val input1:0 -> reflect }',
                 onnx_to_graphviz(g, True))
 
 

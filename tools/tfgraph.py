@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+"""Simple tool to guess inputs and outputs of a tensorflow model."""
+
 from __future__ import division
 from __future__ import print_function
 
@@ -8,8 +10,6 @@ import argparse
 from collections import Counter
 
 import tensorflow as tf
-from tensorflow.python.framework import graph_util
-from tensorflow.tools.graph_transforms import TransformGraph
 
 IGNORE_INPUT = ["Const", "ConstV2", "Variable", "VariableV2", "RestoreV2", "Restore"]
 IGNORE_OUTPUT = ["NoOp", "Assign", "TensorSummaryV2", "Placeholder"]
@@ -21,21 +21,8 @@ def get_args():
     return parser.parse_args()
 
 
-def tf_optimize(sess, input_names, output_names, graph_def):
-    transforms = [
-        "remove_nodes(op=Identity, op=CheckNumerics)",
-        "fold_batch_norms",
-        "fold_old_batch_norms"
-        # fails: "fold_constants(ignore_errors=true)",
-    ]
-    needed_names = input_names + output_names
-    graph_def = graph_util.extract_sub_graph(graph_def, needed_names)
-    graph_def = TransformGraph(graph_def, input_names, output_names, transforms)
-    return graph_def
-
-
 def cleanup_io_name(name):
-    # name = name.replace("\^", "")
+    """Cleanup op names."""
     pos = name.find(":")
     if pos >= 0:
         return name[:pos]
@@ -53,7 +40,7 @@ def main():
         graph_def.ParseFromString(f.read())
     with tf.Graph().as_default() as g:
         tf.import_graph_def(graph_def, name='')
-    with tf.Session(graph=g) as sess:
+    with tf.Session(graph=g):
         inputs = []
         outputs = []
         ops = g.get_operations()
@@ -68,15 +55,14 @@ def main():
                 try:
                     shape = i.get_shape().as_list()
                     shapes[i.name] = shape
-                except:
+                except:  # pylint: disable=bare-except
                     pass
         for node in ops:
-            name = node.name
             for i in node.outputs:
                 if i.name not in input_nodes:
                     outputs.append(i.name)
-            if len(node.inputs) == 0 and len(node.control_inputs) == 0 and node.type not in IGNORE_INPUT:
-                if len(node.outputs) > 0:
+            if not node.inputs and not node.control_inputs and node.type not in IGNORE_INPUT:
+                if node.outputs:
                     inputs.append(node.outputs[0].name)
             if node.type in ["PlaceHolder"]:
                 inputs.append(node.outputs[0].name)

@@ -1,6 +1,10 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+"""
+simple tool to convert .meta to .pb.
+"""
+
 from __future__ import division
 from __future__ import print_function
 
@@ -18,7 +22,8 @@ def get_args():
 
 
 def to_pb(src):
-    saver = tf.train.import_meta_graph(src)
+    """Convert .meta to .pb."""
+    _ = tf.train.import_meta_graph(src)
     graph = tf.get_default_graph()
 
     fname = os.path.basename(src)[:-5]
