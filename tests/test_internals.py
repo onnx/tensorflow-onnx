@@ -1,8 +1,11 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
+"""Unit Tests for internal methods."""
+
 from __future__ import division
 from __future__ import print_function
+
 
 import unittest
 from collections import namedtuple
@@ -14,8 +17,9 @@ from onnx import helper
 import tf2onnx
 import tf2onnx.utils
 from tf2onnx.graph import Node, Graph
-from tf2onnx.graph_matcher import *
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
+# pylint: disable=missing-docstring
 
 def onnx_to_graphviz(g):
     """Onnx graph as dot string."""
@@ -44,8 +48,7 @@ def onnx_pretty(g, args=None):
 class Tf2OnnxInternalTests(unittest.TestCase):
 
     def setUp(self):
-        self.maxDiff = None
-        # reset name generation on every test
+        """Setup test."""
         tf2onnx.utils.INTERNAL_NAME = 1
         arg = namedtuple("Arg", "input inputs outputs verbose")
         self._args0 = arg(input="test", inputs=[], outputs=["output:0"], verbose=False)
