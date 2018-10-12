@@ -14,19 +14,18 @@ import tempfile
 import time
 import zipfile
 
-import PIL.Image
 import numpy as np
 import requests
-import yaml
-
 import tensorflow as tf
 from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
-from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
-from tf2onnx.tfonnx import process_tf_graph
+import yaml
+import PIL.Image
 
 import tf2onnx
+from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument
 
