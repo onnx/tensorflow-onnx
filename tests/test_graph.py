@@ -6,6 +6,7 @@
 from __future__ import division
 from __future__ import print_function
 
+import os
 import unittest
 from collections import namedtuple
 
@@ -58,6 +59,10 @@ class Tf2OnnxGraphTests(unittest.TestCase):
     def setUp(self):
         """Setup test."""
         # reset name generation on every test
+        # suppress log info of tensorflow so that result of test can be seen much easier
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        tf.logging.set_verbosity(tf.logging.WARN)
+
         tf2onnx.utils.INTERNAL_NAME = 1
         tf.reset_default_graph()
         arg = namedtuple("Arg", "input inputs outputs verbose continue_on_error")

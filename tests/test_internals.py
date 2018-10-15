@@ -7,6 +7,7 @@ from __future__ import division
 from __future__ import print_function
 
 
+import os
 import unittest
 from collections import namedtuple
 
@@ -14,6 +15,7 @@ import graphviz as gv
 from onnx import TensorProto
 from onnx import helper
 
+import tensorflow as tf
 import tf2onnx
 import tf2onnx.utils
 from tf2onnx.graph import Node, Graph
@@ -49,6 +51,10 @@ class Tf2OnnxInternalTests(unittest.TestCase):
 
     def setUp(self):
         """Setup test."""
+        # suppress log info of tensorflow so that result of test can be seen much easier
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        tf.logging.set_verbosity(tf.logging.WARN)
+
         tf2onnx.utils.INTERNAL_NAME = 1
         arg = namedtuple("Arg", "input inputs outputs verbose")
         self._args0 = arg(input="test", inputs=[], outputs=["output:0"], verbose=False)

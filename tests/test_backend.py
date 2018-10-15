@@ -97,6 +97,10 @@ def get_conv_getdata(kind=1):
 
 class Tf2OnnxBackendTests(unittest.TestCase):
     def setUp(self):
+        # suppress log info of tensorflow so that result of test can be seen much easier
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        tf.logging.set_verbosity(tf.logging.WARN)
+
         tf.reset_default_graph()
         # reset name generation on every test
         tf2onnx.utils.INTERNAL_NAME = 1
