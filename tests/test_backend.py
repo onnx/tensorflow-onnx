@@ -1103,29 +1103,26 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
 
-    def test_div(self):
-        '''
-            from tensorflow file "cwise_op_div.cc", it can be known:
-                                                                    when data is float,   "Div" will call same func as "RealDiv"
-                                                                    when data is integer, "Div" will call same func as "TruncateDiv"
-        '''
-        # test float data
-        # add 1e-6 to random data to avoid divide zero error
-        shape = 1000000
-        x_val = (np.random.random_sample(shape)+1e-6).astype(np.float32)
-        y_val = (np.random.random_sample(shape)+1e-6).astype(np.float32)
+    def test_tf_div(self):
+        from tensorflow.python.ops.gen_math_ops import div
+        shape = 1000
+        # test floating data
+        x_val = (np.random.sample(shape)+1e-6).astype(np.float32)
+        y_val = (np.random.sample(shape)+1e-6).astype(np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
-        y = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT1)
-        output = tf.realdiv(x,y, name=_TFOUTPUT)
+        y = tf.placeholder(tf.float32, y_val.shape, name=_TFINPUT1)
+        output = div(x, y, name=_TFOUTPUT)
+        assert output.op.type == "Div"
         actual, expected = self._run(output, tf_dict={x: x_val, y: y_val}, onnx_dict={_INPUT: x_val, _INPUT1: y_val})
         self.assertAllClose(expected, actual)
         tf.reset_default_graph()
         # test integer data
-        x_val = ((np.random.random_sample(shape)+1)*100).astype(np.int32)
-        y_val = ((np.random.random_sample(shape)+1)*100).astype(np.int32)
+        x_val = (100*np.random.sample(shape)+1).astype(np.int32)
+        y_val = (100*np.random.sample(shape)+1).astype(np.int32)
         x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
-        y = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT1)
-        output = tf.truncatediv(x,y, name=_TFOUTPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        output = div(x, y, name=_TFOUTPUT)
+        assert output.op.type == "Div"
         actual, expected = self._run(output, tf_dict={x: x_val, y: y_val}, onnx_dict={_INPUT: x_val, _INPUT1: y_val})
         self.assertAllEqual(expected, actual)
 
