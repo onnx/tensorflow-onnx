@@ -268,6 +268,10 @@ class Graph(object):
     def opset(self):
         return self._opset
 
+    @property
+    def initializers(self):
+        return self._initializers
+
     def is_target(self, name):
         """Return True if target platform is name."""
         return name in self._target
