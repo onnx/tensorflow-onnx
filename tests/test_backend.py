@@ -97,6 +97,10 @@ def get_conv_getdata(kind=1):
 
 class Tf2OnnxBackendTests(unittest.TestCase):
     def setUp(self):
+        # suppress log info of tensorflow so that result of test can be seen much easier
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        tf.logging.set_verbosity(tf.logging.WARN)
+
         tf.reset_default_graph()
         # reset name generation on every test
         tf2onnx.utils.INTERNAL_NAME = 1
@@ -117,6 +121,10 @@ class Tf2OnnxBackendTests(unittest.TestCase):
     @staticmethod
     def assertAllClose(expected, actual, **kwargs):
         np.testing.assert_allclose(expected, actual, **kwargs)
+
+    @staticmethod
+    def assertAllEqual(expected, actual, **kwargs):
+        np.testing.assert_array_equal(expected, actual, **kwargs)
 
     @staticmethod
     def run_onnxcaffe2(onnx_graph, inputs):
@@ -1098,6 +1106,29 @@ class Tf2OnnxBackendTests(unittest.TestCase):
         output = tf.identity(x_, name=_TFOUTPUT)
         actual, expected = self._run(output, {x: x_val}, {_INPUT: x_val})
         self.assertAllClose(expected, actual)
+
+    def test_tf_div(self):
+        from tensorflow.python.ops.gen_math_ops import div
+        shape = 1000
+        # test floating data
+        x_val = (np.random.sample(shape)+1e-6).astype(np.float32)
+        y_val = (np.random.sample(shape)+1e-6).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.float32, y_val.shape, name=_TFINPUT1)
+        output = div(x, y, name=_TFOUTPUT)
+        assert output.op.type == "Div"
+        actual, expected = self._run(output, tf_dict={x: x_val, y: y_val}, onnx_dict={_INPUT: x_val, _INPUT1: y_val})
+        self.assertAllClose(expected, actual)
+        tf.reset_default_graph()
+        # test integer data
+        x_val = (100*np.random.sample(shape)+1).astype(np.int32)
+        y_val = (100*np.random.sample(shape)+1).astype(np.int32)
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        output = div(x, y, name=_TFOUTPUT)
+        assert output.op.type == "Div"
+        actual, expected = self._run(output, tf_dict={x: x_val, y: y_val}, onnx_dict={_INPUT: x_val, _INPUT1: y_val})
+        self.assertAllEqual(expected, actual)
 
 
 if __name__ == "__main__":

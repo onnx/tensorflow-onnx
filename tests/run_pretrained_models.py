@@ -391,6 +391,10 @@ def tests_from_yaml(fname):
 
 
 def main():
+    # suppress log info of tensorflow so that result of test can be seen much easier
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    tf.logging.set_verbosity(tf.logging.WARN)
+
     args = get_args()
     Test.cache_dir = args.cache
     tests = tests_from_yaml(args.config)

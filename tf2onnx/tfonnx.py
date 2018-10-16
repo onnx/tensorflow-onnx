@@ -1204,13 +1204,21 @@ def fused_batchnorm_op7(ctx, node, name, args):
 
 
 def matmul_op(ctx, node, name, args):
-    nodes = []
     # tensorflow allows transpose and conjugated. If found, insert the required transpose.
     # We could use Gemm as well but tensorflow does not pass bias in matmul.
-    transpose_a = node.get_attr("transpose_a")
-    transpose_b = node.get_attr("transpose_b")
-    transpose_a = 0 if transpose_a is None else transpose_a.i
-    transpose_b = 0 if transpose_b is None else transpose_b.i
+    attrs = ["transpose_a", "transpose_b", "adjoint_a", "adjoint_b", "adj_x", "adj_y"]
+    attrs_val = [node.get_attr(attr) for attr in attrs]
+    attrs_val = [0 if val is None else val.i for val in attrs_val]
+
+    if any(attrs_val[2:]):
+        # conjugation operation on complex data not supported in onnx for now, so if it's complex than raise exception
+        if node.dtype not in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
+            raise ValueError("dtype " + node.dtype + " is not supported in onnx matmul for now")
+
+    transpose_a = (attrs_val[0] + attrs_val[2] + attrs_val[4]) % 2
+    transpose_b = (attrs_val[1] + attrs_val[3] + attrs_val[5]) % 2
+
+    nodes = []
     if transpose_a != 0:
         transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[0])
         nodes.insert(0, transpose)
@@ -1218,7 +1226,7 @@ def matmul_op(ctx, node, name, args):
         transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
         nodes.insert(0, transpose)
 
-    unsupported = ["adjoint_a", "adjoint_b", "a_is_sparse", "b_is_sparse", "adj_x", "adj_y"]
+    unsupported = ["a_is_sparse", "b_is_sparse"]
     for i in unsupported:
         val = node.get_attr(i)
         if val is not None and val.i != 0:
@@ -1339,6 +1347,8 @@ _OPSET_7 = {
     "Sub": (broadcast_op7, []),
     "Mul": (broadcast_op7, []),
     "RealDiv": (broadcast_op7, ["Div"]),
+    "Div": (broadcast_op7, ["Div"]),
+    "TruncateDiv": (broadcast_op7, ["Div"]),
     "LogicalAnd": (broadcast_op7, ["And"]),
     "LogicalOr": (broadcast_op7, ["Or"]),
     "Greater": (broadcast_op7, []),

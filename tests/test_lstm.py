@@ -54,6 +54,10 @@ OPSET = 7
 
 class Tf2OnnxLSTMTests(unittest.TestCase):
     def setUp(self):
+        # suppress log info of tensorflow so that result of test can be seen much easier
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        tf.logging.set_verbosity(tf.logging.WARN)
+
         self.maxDiff = None
         tf.reset_default_graph()
         # reset name generation on every test
