@@ -11,7 +11,7 @@ from __future__ import print_function
 import re
 import numpy as np
 
-from onnx import helper, onnx_pb, defs
+from onnx import helper, onnx_pb, defs, numpy_helper
 
 import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
@@ -127,7 +127,12 @@ def tf_to_onnx_tensor(tensor, name=""):
     if dims == [0]:
         dims = [1]
     is_raw, data = get_tf_tensor_data(tensor)
-    onnx_tensor = helper.make_tensor(name, new_type, dims, data, is_raw)
+    if not is_raw and len(data) == 1 and np.prod(dims) > 1:
+        batch_data = np.zeros(dims, dtype=ONNX_TO_NUMPY_DTYPE[new_type])
+        batch_data.fill(data[0])
+        onnx_tensor = numpy_helper.from_array(batch_data, name=name)
+    else:
+        onnx_tensor = helper.make_tensor(name, new_type, dims, data, is_raw)
     return onnx_tensor
 
 
