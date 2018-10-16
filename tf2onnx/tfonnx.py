@@ -42,9 +42,9 @@ DEFAULT_TARGET = []
 # pylint: disable=unused-variable
 
 
-def tensorflow_to_onnx(graph, shape_override):
+def tflist_to_onnx(node_list, shape_override):
     """
-    Load tensorflow graph into an onnx graph with minimal rewrites so
+    Convert the tf-node list into an onnx graph with minimal rewrites so
     we can use the onnx graph as intermediate graph.
     """
 
@@ -61,7 +61,7 @@ def tensorflow_to_onnx(graph, shape_override):
     dtypes = {}
 
     # find outputs
-    ops = graph.get_operations()
+    ops = node_list
 
     # create dict with output to shape mappings
     for node in ops:
@@ -120,6 +120,13 @@ def tensorflow_to_onnx(graph, shape_override):
                 raise
 
     return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes
+
+
+def tensorflow_to_onnx(graph, shape_override):
+    """
+    Load tensorflow graph and do a conversion.
+    """
+    return tflist_to_onnx(graph.get_operations(), shape_override)
 
 
 def _convert_shapenode_to_int64(ctx, node, input_number):
