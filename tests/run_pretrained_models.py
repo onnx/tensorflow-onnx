@@ -98,6 +98,7 @@ class Test(object):
     """Main Test class."""
 
     cache_dir = None
+    target = []
 
     def __init__(self, url, local, make_input, input_names, output_names,
                  disabled=False, more_inputs=None, rtol=0.01, atol=0.,
@@ -174,7 +175,8 @@ class Test(object):
     @staticmethod
     def to_onnx(tf_graph, opset=None, shape_override=None):
         """Convert graph to tensorflow."""
-        return process_tf_graph(tf_graph, continue_on_error=False, opset=opset, shape_override=shape_override)
+        return process_tf_graph(tf_graph, continue_on_error=True, verbose=True, opset=opset,
+                                target=Test.target, shape_override=shape_override)
 
     def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
@@ -357,6 +359,7 @@ def get_args():
     parser.add_argument("--cache", default="/tmp/pre-trained", help="pre-trained models cache dir")
     parser.add_argument("--config", default="tests/run_pretrained_models.yaml", help="yaml config to use")
     parser.add_argument("--tests", help="tests to run")
+    parser.add_argument("--target", default="", help="target platform")
     parser.add_argument("--backend", default="onnxruntime",
                         choices=["caffe2", "onnxmsrtnext", "onnxruntime"], help="backend to use")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
@@ -369,6 +372,8 @@ def get_args():
                         action="store_true")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
+
+    args.target = args.target.split(",")
     return args
 
 
@@ -393,6 +398,7 @@ def tests_from_yaml(fname):
 def main():
     args = get_args()
     Test.cache_dir = args.cache
+    Test.target = args.target
     tests = tests_from_yaml(args.config)
     if args.list:
         print(sorted(tests.keys()))

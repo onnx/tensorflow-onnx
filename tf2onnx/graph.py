@@ -33,8 +33,6 @@ class Node(object):
         self._attr = {}
         self.inserted_nchw = False
 
-        # make sure this name is not used
-        assert graph.get_node_by_name(node.name) is None
         graph.set_node_by_name(self)
         # dict to original attributes
         for a in node.attribute:
@@ -284,7 +282,6 @@ class Graph(object):
         """Make a new constant in the graph"""
         onnx_tensor = numpy_helper.from_array(np_val, name)
         self.add_initializer(onnx_tensor)
-
         node = Node(helper.make_node("Const", [], [name], name=name, value=onnx_tensor), self, skip_conversion)
         return node
 
@@ -316,8 +313,17 @@ class Graph(object):
     def get_node_by_name(self, name):
         """Get node by name."""
         ret = self._nodes_by_name.get(name)
-        if not ret and name:
+        if not ret:
             ret = self._nodes_by_name.get(node_name(name))
+        if not ret:
+            # if we processed the graph fully, set_nodes() the graph has no longer const nodes
+            # since we moved them to be initializers. But all graph processing code uses Node
+            # as the common data structure. To avoid special casing lots of code for initializers
+            # we create a dummy 'Const' Node here.
+            initializer = self._initializers.get(name)
+            if initializer:
+                ret = Node(helper.make_node("Const", [], [name], name=name, value=initializer),
+                           self, skip_conversion=True)
         return ret
 
     def set_node_by_name(self, node):
@@ -333,17 +339,14 @@ class Graph(object):
 
     def add_initializer(self, tensor):
         """Add tensor to initializers."""
-        if tensor.name not in self._initializers:
-            self._initializers[tensor.name] = tensor
-            self.set_shape(tensor.name, tensor.dims)
-        else:
-            raise ValueError("initializer already exists")
+        self._initializers[tensor.name] = tensor
+        self.set_shape(tensor.name, tensor.dims)
 
     def get_initializer(self, name):
         """Return tensor or throw exception if it does not exist."""
         if self.is_initializer(name):
             return self._initializers[name]
-        raise ValueError("no initializer called" + name)
+        raise ValueError("no initializer called " + name)
 
     def update_initializer(self, name, tensor):
         if self.is_initializer(name):
@@ -359,6 +362,10 @@ class Graph(object):
     def get_dtype(self, name):
         """Get dtype for node."""
         return self._dtypes.get(name)
+
+    def set_dtype(self, name, dtype):
+        """Set dtype for node."""
+        self._dtypes[name] = dtype
 
     def override_dtype(self, name, val):
         """Override dtype for node, the val will be used when build final model"""
@@ -416,7 +423,7 @@ class Graph(object):
         for i, op in enumerate(ops):
             for inp in op.input:
                 j = self.get_node_by_name(inp)
-                if j:
+                if j and j.type != "Const":
                     g[op_name_to_index[j.name]].append(i)
 
         # label for each op. highest = sink nodes.
