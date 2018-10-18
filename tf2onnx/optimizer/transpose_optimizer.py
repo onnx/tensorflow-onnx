@@ -30,7 +30,7 @@ def is_nchw_transpose(transpose_node):
 
 def is_useless_transpose(transpose_node):
     perm_attr = transpose_node.get_attr('perm')
-    return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints == [0, 1, 2, 3]
+    return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints == list(range(len(perm_attr.ints)))
 
 
 class TransposeOptimizer(object):
