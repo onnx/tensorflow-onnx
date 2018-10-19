@@ -57,16 +57,16 @@ class RnnProperties:
         # RNN input who are outside of rnn scope
         self.input_node = None
         self.input_id = None
+        self.var_initializers = {}
 
-        # RNN output consumers who are outside of rnn scope
-        self.connectors = None
-        self.is_backward = False
+        self.onnx_input_ids = {}
 
         self.time_major = False
         self.x_input_id = None # used to serve lstm's 1st input
         self.input_size = None
         self.hidden_size = None
-        self.batch_size_node = None
+
+        self.batch_size_node = None # only for fill constant workaround
 
     def is_valid(self):
         if not self.input_node:
@@ -74,13 +74,6 @@ class RnnProperties:
             return False
         else:
             log.debug("input node with port id " + self.input_id)
-
-        if not self.connectors:
-            log.error("no output node found for current rnn, skip")
-            return False
-        else:
-            connector_names = ",".join([c.name for c in self.connectors])
-            log.debug("output consumer nodes are " + connector_names)
 
         return True
 

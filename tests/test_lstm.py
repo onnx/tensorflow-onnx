@@ -105,7 +105,8 @@ class Tf2OnnxLSTMTests(unittest.TestCase):
     def run_onnxruntime(onnx_graph, inputs, output_names, test_name):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
-        model_path = os.path.join(TMPPATH, test_name + ".pb")
+        model_path = os.path.join(TMPPATH, test_name + ".onnx")
+        print("create model file before run in lotus: " + model_path)
         with open(model_path, "wb") as f:
             f.write(onnx_graph.SerializeToString())
         m = rt.InferenceSession(model_path)
