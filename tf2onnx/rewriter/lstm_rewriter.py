@@ -17,6 +17,13 @@ log = logging.getLogger("tf2onnx.rewriter.lstm_rewriter")
 class LSTMUnitRewriter(UnitRewriterBase):
     def __init__(self, g):
         super(LSTMUnitRewriter, self).__init__(g)
+        self.switch_checkers = {
+            # True means we need parse its initial value in later logic.
+            "ct": (self._ct_switch_check, self._connect_lstm_yc_to_graph, True),
+            "ht": (self._ht_switch_check, self._connect_lstm_yh_to_graph, True),
+            "ct_ht": (self._ct_ht_shared_switch_check, self._connect_lstm_ych_to_graph, True),
+            "output": (self._output_switch_check, self._connect_lstm_output_to_graph, False),
+        }
 
     def run(self):
         return super(LSTMUnitRewriter, self).run(RNNUnitType.LSTMCell)
@@ -61,7 +68,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
         return RnnWeights(w, b, ft)
 
-    def ct_switch_check(self, enter_target_node_input_id, identity_consumers, match):
+    def _ct_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         # original we use c.inputs[0] == match.get_op("ft") to check c initializer for LSTMCell
         # but in BasicLSTMCell, c.inputs[1] is "ft", that's because BasicLSTMCell and LSTMCell's call 
         # function are defining the multiplication with different order. So we change to match.get_op("ft") in c.inputs
@@ -69,18 +76,21 @@ class LSTMUnitRewriter(UnitRewriterBase):
         if len(mul_nodes) == 1:
             log.debug("find c initializer value at " + enter_target_node_input_id)
             return enter_target_node_input_id
-        elif len(mul_nodes) > 1:
-            raise ValueError("multiple Mul matching found, cannot identify c initializer")
+        else:
+            log.debug("multiple Mul matching found, cannot identify c initializer")
+            return None
 
-    def ht_switch_check(self, enter_target_node_input_id, identity_consumers, match):
+    def _ht_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         concat_nodes = [c for c in identity_consumers if c == match.get_op("xh")]
         if len(concat_nodes) == 1:
             log.debug("find h initializer value at " + enter_target_node_input_id)
             return enter_target_node_input_id
-        elif len(concat_nodes) > 1:
-            raise ValueError(str(len(concat_nodes)) + "Concat matching found, cannot identify h initializer")
+        else:
+            log.debug(str(len(concat_nodes)) + "Concat matching found, cannot identify h initializer")
+            return None
 
-    def ct_ht_shared_switch_check(self, enter_target_node_input_id, identity_consumers, match):
+    # when state is not tuple, ct and ht may share same switch.
+    def _ct_ht_shared_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         slices = [c for c in identity_consumers if c.type == "Slice"]
         if not slices:
             log.debug("find no switch_identity_slice nodes")
@@ -105,8 +115,71 @@ class LSTMUnitRewriter(UnitRewriterBase):
         if c_slice and h_slice:
             log.debug("find c_h shared initializer value at " + enter_target_node_input_id) 
             return enter_target_node_input_id
+        return None
 
-    def process_weights_and_bias(self, rnn_weights):
+    def _output_switch_check(self, enter_target_node_input_id, identity_consumers, match):
+        ta_write_nodes = [c for c in identity_consumers if c.type == "TensorArrayWriteV3"]
+        if len(ta_write_nodes) == 1:
+            enter_target_node = self.g.get_node_by_name(enter_target_node_input_id)
+            if enter_target_node.type == "TensorArrayV3":
+                log.debug("found output switch node")
+                return enter_target_node_input_id
+            log.debug("found enter target node is not ta node")
+            return None
+        log.debug(str(len(ta_write_nodes)) + " TensorArrayWriteV3 matching found, cannot validate output switch")
+        return None
+
+    def process_input_x(self, rnn_props, rnn_scope_name):
+        self.print_step("look for possible transpose following RNN input node")
+        # todo: peepholdes P is not considered now
+        input_consumers = self.g.find_output_consumers(rnn_props.input_id)
+        consumers_in_rnn_scope = []
+        for consumer in input_consumers:
+            if consumer.name.startswith(rnn_scope_name):
+                consumers_in_rnn_scope.append(consumer)
+
+        if len(consumers_in_rnn_scope) != 1:
+            log.error("RNN input node has " + str(len(consumers_in_rnn_scope)) +
+                      " consumers in current rnn scope " + rnn_scope_name + ", skip")
+            return None
+
+        possible_transpose_after_input = consumers_in_rnn_scope[0]
+
+        self.print_step("convert the transpose to onnx node if there is one found.")
+        # check whether time_major is enabled or not
+        # in TF, if time_major is not enabled, input format is [batch, time, ...]
+        # but, during TF handling, at the beginning, the data will be transposed to [time, batch, ...]
+        # after processing, the format is changed back before returning result.
+        # So here, we judge the time_major by checking the transpose operator existence.
+        converted_transpose = self._convert_timemajor_transpose(possible_transpose_after_input)
+        if converted_transpose:
+            log.debug("detect batch-major inputs")
+            rnn_props.time_major = False
+            rnn_props.x_input_id = converted_transpose.output[0]
+            self.all_nodes.extend([converted_transpose])
+        else:
+            log.debug("detect timer-major inputs")
+            rnn_props.time_major = True
+            rnn_props.x_input_id = rnn_props.input_id
+
+        rnn_props.onnx_input_ids["X"] = rnn_props.x_input_id
+        return rnn_props
+
+    def _convert_timemajor_transpose(self, node):
+        if not check_is_timemajor_transpose(node):
+            log.debug("not found timemajor transpose")
+            return
+
+        log.debug("found timemajor transpose")
+
+        attr = {"perm": np.array([1, 0, 2], dtype=np.int64)}
+        new_trans = make_onnx_node(self.g, "Transpose", [node.input[0]], attr)
+
+        self.g.copy_shape(node.output[0], new_trans.output[0])
+        self.g.replace_all_inputs(self.g.get_nodes(), node.output[0], new_trans.output[0])
+        return new_trans
+
+    def process_weights_and_bias(self, rnn_weights, rnn_props):
         w_r_icfo = rnn_weights.kernel.value
         w_dtype = rnn_weights.kernel.dtype
         b_r_icfo = rnn_weights.bias.value
@@ -144,231 +217,252 @@ class LSTMUnitRewriter(UnitRewriterBase):
         W = np.array([W_iofc], w_dtype)
         R = np.array([R_iofc], w_dtype)
 
-        return W, R, B, input_size, hidden_size
+        # create node
+        w_name = utils.make_name("W")
+        w_node = self.g.make_const(w_name, W, skip_conversion=True)
 
-    def process_output_connectors(self, match, lstm_node, rnn_props, rnn_scope_name):
-        # There are 2 kinds of output nodes for dynamic_rnn
-        # 1. output node, which would either ends with a Transpose (when time_major is False), or ends with TensorArrayGatherV3
-        # 2. cell_state node, 
-        #    2.1 if state_is_tuple is true:
-        #        2.1.1 which would ends with a Pack<C, H> operator when cell_state is used.
-        #        2.1.2 which would ends with "Exit" for c and h respectively, when cell_state.c/h is used.
-        #    2.2 which would ends with "Exit" if state_is_tuple is false
-        connector_nodes = set(rnn_props.connectors)
-        for n in connector_nodes:
-            log.debug("processing connector node called "+ n.name)
-            # todo: change to another way
-            if n.need_skip():
-                log.debug("newly created nodes, won't consider as RNN outputs.")
-                continue
+        r_name = utils.make_name("R")
+        r_node = self.g.make_const(r_name, R, skip_conversion=True)
 
-            # Y handler for reverse lstm
-            if rnn_props.is_backward:
-                # Y handler
-                if is_reverse_op(n):
-                    output_node_in_scope = n.inputs[0]
-                    if self._check_is_rnn_outputs_node(output_node_in_scope, rnn_props.time_major, rnn_scope_name):
-                        last_node = self._create_transform_nodes_after_lstm_output(lstm_node, rnn_props.time_major)
-                        n.input[0] = last_node.output[0]
-                        continue
+        b_name = utils.make_name("B")
+        b_node = self.g.make_const(b_name, B, skip_conversion=True)
 
-            # tupled Y_c/Y_h handling, use tuple directly
-            # be noted: for reverse, unlike output node (who is followed by a reverse op), 
-            # the Pack node generating cell_state don't have reverse op followed.
-            if self._check_is_consumer_of_tupled_ch(n, match, rnn_scope_name):
-                self._connect_rnn_with_tupled_ch_consumer_nodes(lstm_node, n)
-            else:
-                to_replace = {}
-                for input_id, input_n in zip(n.input, n.inputs):
-                    if not input_n:
-                        log.debug("node " + input_id + " is none, skip")
-                        continue
-                    if not input_n.name.startswith(rnn_scope_name):
-                        log.debug("skip " + input_n.name)
-                        continue
-                    else:
-                        # Y handler for Non-reverse lstm
-                        if not rnn_props.is_backward and self._check_is_rnn_outputs_node(input_n, rnn_props.time_major, rnn_scope_name):
-                            log.debug("this is the rnn output node's consumer")
-                            last_node = self._create_transform_nodes_after_lstm_output(lstm_node, rnn_props.time_major)
-                            to_replace[input_id] = last_node.output[0]
-                        else:
-                            error_code = self._check_is_consumer_of_exit_after_ch(match, input_n, rnn_scope_name)
-                            if error_code == 1: # tupled Y_c/Y_h handling, use tuple.c
-                                self._connect_rnn_with_one_of_tupled_ch_consumer_nodes(lstm_node.output[2], input_id)
-                            elif error_code == 2: # tupled Y_c/Y_h handling, use tuple.h
-                                self._connect_rnn_with_one_of_tupled_ch_consumer_nodes(lstm_node.output[1], input_id)
-                            elif error_code == 3: # non-tupled Y_c/Y_h handling. (shared same Exit)
-                                self._connect_rnn_with_non_tupled_ch_consumer_nodes(lstm_node, n, input_id)
-                            else:
-                                raise ValueError("not match rnn output node, skip " + input_n.name)
-                for input_id in to_replace:
-                    self.g.replace_all_inputs(self.all_nodes, input_id, to_replace[input_id])
+        rnn_props.input_size = input_size
+        rnn_props.hidden_size = hidden_size
+        rnn_props.onnx_input_ids["W"] = w_node.output[0]
+        rnn_props.onnx_input_ids["R"] = r_node.output[0]
+        rnn_props.onnx_input_ids["B"] = b_node.output[0]
+        return input_size, hidden_size
 
-    # c: memory (in TF, it was called hidden state)
-    # h: hidden state (in TF, it was called output)
-    def _check_is_consumer_of_tupled_ch(self, pack_node, match, rnn_scope_name):
-        # This Pack is generated when dynamic_rnn return cell_state as a tuple, e.g <c, h>.
-        # Pack's name is not in the rnn scope.
-        if not (pack_node.type == "Pack" and len(pack_node.inputs) == 2):
-            log.debug("check_is_ch_output_node Pack check fail")
-            return False
+    def process_var_init_nodes(self, rnn_props):
+        init_h_id = None
+        init_c_id = None
+        if "ct_ht" in rnn_props.var_initializers:
+            init_h_id, init_c_id = self._process_non_tuple_ch_init_nodes(rnn_props)
+        elif "ct" in rnn_props.var_initializers and "ht" in rnn_props.var_initializers:
+            init_h_id, init_c_id = self._process_tuple_ch_init_nodes(rnn_props)
+        else:
+            raise ValueError("no initializers, unexpected")
+        assert init_h_id and init_c_id
+        rnn_props.onnx_input_ids["initial_h"] = init_h_id
+        rnn_props.onnx_input_ids["initial_c"] = init_c_id
 
-        exit_1 = pack_node.inputs[0]
-        exit_2 = pack_node.inputs[1]
-        if not (exit_1 and exit_1.type == "Exit" and exit_2 and exit_2.type == "Exit"):
-            log.debug("check_is_ch_output_node Exit check fail")
-            return False
+    # todo: refine when implementing GRU
+    def _process_non_tuple_ch_init_nodes(self, rnn_props):
+        input_id = rnn_props.var_initializers["ct_ht"]
+        hidden_size = rnn_props.hidden_size
 
-        if not (exit_1.name.startswith(rnn_scope_name) and exit_2.name.startswith(rnn_scope_name)):
-            log.debug("check_is_ch_output_node Exits rnn scope name is not consistent")
-            return False
+        # todo: remove this once Fill ops is supported 
+        fill_ch_init_node = self._workaround_fill_ch_init_node(input_id, rnn_props)
+        if fill_ch_init_node: 
+            return fill_ch_init_node.output[0], fill_ch_init_node.output[0]
 
-        switch_1 = exit_1.inputs[0]
-        switch_2 = exit_2.inputs[0]
-        if not (switch_1.type == "Switch" and switch_2.type == "Switch"):
-            log.debug("check_is_ch_output_node Switch check fail")
-            return False
+        attr = {"axes": [1], "starts": [0], "ends": [hidden_size]}
+        slice_node1 = make_onnx_node(self.g, "Slice", [input_id], attr)
+        unsqueeze_node_1 = make_onnx_node(self.g, "Unsqueeze", [slice_node1.output[0]], attr={"axes": [0]})
 
-        ct_enter_target_node = None
-        ht_enter_target_node = None
-        for s in [switch_1, switch_2]:
-            enter_target_input_id = self.check_switch_by_usage_pattern(s, match, self.ct_switch_check)
-            if enter_target_input_id:
-                ct_enter_target_node = enter_target_input_id
-                continue
+        attr = {"axes": [1], "starts": [hidden_size], "ends": [hidden_size*2]}
+        slice_node2 = make_onnx_node(self.g, "Slice", [input_id], attr)
+        unsqueeze_node_2 = make_onnx_node(self.g, "Unsqueeze", [slice_node2.output[0]], attr={"axes": [0]})
 
-            enter_target_input_id = self.check_switch_by_usage_pattern(s, match, self.ht_switch_check)
-            if enter_target_input_id:
-                ht_enter_target_node = enter_target_input_id
-                continue
+        self.all_nodes.extend([slice_node1, slice_node2, unsqueeze_node_1, unsqueeze_node_2])
+        self.must_keep_nodes.append(self.g.get_node_by_name(input_id))
+        return unsqueeze_node_1.output[0], unsqueeze_node_2.output[0]
 
-        if ct_enter_target_node and ht_enter_target_node:
-            return True
+    def _process_tuple_ch_init_nodes(self, rnn_props):
+        h_init_input_id = rnn_props.var_initializers["ht"]
+        c_init_input_id = rnn_props.var_initializers["ct"]
+        h_node_output = self._process_c_or_h_init_nodes(h_init_input_id, rnn_props)
+        c_node_output = self._process_c_or_h_init_nodes(c_init_input_id, rnn_props)
+        return h_node_output, c_node_output
 
-        log.debug("fail to found ct and ht node based on pattern")
-        return False
+    def _process_c_or_h_init_nodes(self, initializer_input_id, rnn_props):
+        # todo: remove this once Fill ops is supported
+        fill_ch_init_node = self._workaround_fill_ch_init_node(initializer_input_id, rnn_props) 
+        if fill_ch_init_node: 
+            return fill_ch_init_node.output[0]
 
-    def _check_is_consumer_of_exit_after_ch(self, match, connector_in_rnnscope, rnn_scope_name):
-        if not (connector_in_rnnscope and connector_in_rnnscope.type == "Exit"):
-            log.debug("_check_is_consumer_of_exit_after_ch Exit check fail")
-            return False
+        node = self.g.get_node_by_name(initializer_input_id)
+        self.must_keep_nodes.append(node)
+        if node.is_const():
+            val = node.get_tensor_value()
+            initial_name = utils.make_name("Const")
+            new_val = np.expand_dims(val, axis=0)
+            const_node = self.g.make_const(initial_name, new_val)
+            return const_node.output[0]
+        else:
+            squeeze_node = make_onnx_node(self.g, "Unsqueeze", [initializer_input_id], attr={"axes": [0]})
+            self.g.replace_all_inputs(self.g.get_nodes(), initializer_input_id, squeeze_node.output[0])
+            self.all_nodes.append(squeeze_node)
+            return squeeze_node.output[0]
 
-        if not connector_in_rnnscope.name.startswith(rnn_scope_name):
-            log.debug("_check_is_consumer_of_exit_after_ch Exit rnn scope name check fail")
-            return False
+    def _workaround_fill_ch_init_node(self, initializer_input_id, rnn_props):
+        node = self.g.get_node_by_name(initializer_input_id)
+        if node.type != "Fill":
+            return 
 
-        switch = connector_in_rnnscope.inputs[0]
-        if not (switch.type == "Switch"):
-            log.debug("_check_is_consumer_of_exit_after_ch Switch check fail")
-            return False
+        self.must_keep_nodes.remove(node)
 
-        enter_target_input_id = self.check_switch_by_usage_pattern(switch, match, self.ct_switch_check)
-        if enter_target_input_id:
-            return 1
-        
-        enter_target_input_id = self.check_switch_by_usage_pattern(switch, match, self.ht_switch_check)
-        if enter_target_input_id:
-            return 2
+        fill_val = node.inputs[1].get_tensor_value()[0]
+        fill_val_dtype = utils.ONNX_TO_NUMPY_DTYPE[node.inputs[1].dtype]
 
-        enter_target_input_id = self.check_switch_by_usage_pattern(switch, match, self.ct_ht_shared_switch_check)
-        if enter_target_input_id:
-            return 3
+        # this must be int64, since Concat's input data type must be consistent.
+        num_direction_node = self.g.make_const(utils.make_name("Const"), np.array([1], dtype=np.float32))
+        h_node = self.g.make_const(utils.make_name("Const"), np.array([rnn_props.hidden_size], dtype=np.float32))
+        b_node = rnn_props.batch_size_node
+        # Concat in OPSET7 does not support int64.
+        tile_shape = make_onnx_node(self.g, "Concat", [num_direction_node.output[0], b_node.output[0], h_node.output[0]], attr={"axis": 0})
 
-        log.debug("_check_is_consumer_of_exit_after_ch fail to found ct and ht node based on pattern")
-        return False
+        # Tile's repeats must be INT64
+        attr = {"to": onnx_pb.TensorProto.INT64}
+        tile_shape_int64 = make_onnx_node(self.g, 'Cast', [tile_shape.output[0]], attr)
 
-    @staticmethod
-    def _check_is_rnn_outputs_node(connector_in_rnnscope, time_major, rnn_scope_name):
-        node_to_check = connector_in_rnnscope
-        if not time_major:
-            # in batch_major mode, rnn outputs will ends with a Tranpose. So
-            # here we check the Transpose. 
+        const_node = self.g.make_const(utils.make_name("Const"), np.array([[[fill_val]]], dtype=fill_val_dtype))
+        tile_node = make_onnx_node(self.g, 'Tile', [const_node.output[0], tile_shape_int64.output[0]])
+        self.all_nodes.extend([tile_shape, tile_shape_int64, tile_node])
+        return tile_node
 
-            # Be noted, in TF, transpose has 2 inputs.
-            if not (len(connector_in_rnnscope.inputs) == 2 and check_is_timemajor_transpose(connector_in_rnnscope)):
-                log.debug("_check_is_rnn_outputs_node error, in batch_major mode, Transpose should be found but actually not.")
-                return False
+    def process_seq_length(self, rnn_props, seq_length_node):
+        # output: [time step, batch size, input size]
+        shape_node = make_onnx_node(self.g, "Shape", [rnn_props.x_input_id])
 
-            if not connector_in_rnnscope.name.startswith(rnn_scope_name):
-                log.debug("_check_is_rnn_outputs_node Tranpose not in current rnn scope")
-                return False
+        # LSTMCell only allow inputs of [batch size, input_size], so we assume dynamic_rnn has 3 dims.
+        # Slice cannot support Int64 in OPSET 7, so we cast here.
+        attr = {"to": onnx_pb.TensorProto.FLOAT}
+        cast_shape_node = make_onnx_node(self.g, "Cast", [shape_node.output[0]], attr)
+        self.g.copy_shape(shape_node.output[0], cast_shape_node.output[0])
 
-            # the first input is data
-            node_to_check = connector_in_rnnscope.inputs[0]
+        attr = {"axes": [0], "starts": [1], "ends": [2]}
+        batchsize_node = make_onnx_node(self.g, "Slice", [cast_shape_node.output[0]], attr)
 
-        if node_to_check.type in ["TensorArrayGatherV3"] and node_to_check.name.startswith(rnn_scope_name):
-            log.debug("Find output node " + connector_in_rnnscope.name)
-            return True
+        # Tile's repeats must be INT64
+        attr = {"to": onnx_pb.TensorProto.INT64}
+        repeat_node = make_onnx_node(self.g, 'Cast', [batchsize_node.output[0]], attr)
 
-    def _create_transform_nodes_after_lstm_output(self, lstm_node, time_major):
-        # here we gave up existing transpose, instead, add some ops based on lstm node's result (indirect or directly)
-        # just make sure the final output is [batch, time, hidden]
+        self.all_nodes.extend([shape_node, cast_shape_node, batchsize_node, repeat_node])
 
-        # insert Squeeze in axes 1
-        # lstm's 1st output shape is [time, num_directions, batch, hidden]
+        if not seq_length_node:
+            attr = {"axes" : [0], "starts": [0], "ends": [1]}
+            timestep_node = make_onnx_node(self.g, 'Slice', [cast_shape_node.output[0]], attr)
+
+            tile_node = make_onnx_node(self.g, 'Tile', [timestep_node.output[0], repeat_node.output[0]])
+
+            attr = {"to": onnx_pb.TensorProto.INT32}  # LSTM sequence_lens needs to be int32
+            seq_length_node = make_onnx_node(self.g, 'Cast', [tile_node.output[0]], attr)
+
+            self.all_nodes.extend([timestep_node, tile_node, seq_length_node])
+
+        rnn_props.onnx_input_ids["sequence_lens"] = seq_length_node.output[0]
+        return seq_length_node, batchsize_node
+
+    def create_rnn_node(self, rnn_props):
+        # specify if the RNN is forward, reverse, or bidirectional.
+        # Must be one of forward (default), reverse, or bidirectional.
+        # Here we won't mark bidirectional/reverse, we will have another rewriter running after this one, which will based 
+        # on patterns to combine a forward LSTM and a backward LSTM into a bidirectional one.
+        direction = "forward"
+        num_direction = 1
+        # todo: input_forget
+        attr = {"direction": direction, "hidden_size": rnn_props.hidden_size}
+        inputs = rnn_props.onnx_input_ids
+        lstm_inputs = [
+            inputs["X"], inputs["W"], inputs["R"], inputs["B"],
+            inputs["sequence_lens"], inputs["initial_h"], inputs["initial_c"]]
+        lstm_node = make_onnx_node(self.g, "LSTM", lstm_inputs, attr, 3)
+
+        x_shape = self.g.get_shape(lstm_node.input[0])
+        x_seq_length = x_shape[0] 
+        x_batch_size = x_shape[1] 
+        self.g.set_shape(lstm_node.output[0], [x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size]) 
+        self.g.set_shape(lstm_node.output[1], [num_direction, x_batch_size, rnn_props.hidden_size]) 
+        self.g.copy_shape(lstm_node.output[1], lstm_node.output[2])
+        return lstm_node
+
+    def _connect_lstm_yh_to_graph(self, lstm_node, exit_node, rnn_props):
+        # in tf, y_h output shape is: [batch, hidden]
+        # in onnx, output shape is: [number_directions, batch, hidden]
+        output_id = lstm_node.output[1]
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [0]})
+        lstm_yh_shape = self.g.get_shape(output_id)
+        self.g.set_shape(squeeze_node.output[0], [lstm_yh_shape[1], lstm_yh_shape[2]])
+        self.all_nodes.extend([squeeze_node])
+        self.g.replace_all_inputs(self.all_nodes, exit_node.output[0], squeeze_node.output[0])
+
+    def _connect_lstm_yc_to_graph(self, lstm_node, exit_node, rnn_props):
+        # in tf, y_c output shape is: [batch, hidden]
+        # in onnx, output shape is: [number_directions, batch, hidden]
+        output_id = lstm_node.output[2]
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [0]})
+        lstm_yc_shape = self.g.get_shape(output_id)
+        self.g.set_shape(squeeze_node.output[0], [lstm_yc_shape[1], lstm_yc_shape[2]])
+        self.all_nodes.extend([squeeze_node])
+        self.g.replace_all_inputs(self.all_nodes, exit_node.output[0], squeeze_node.output[0])
+
+    def _connect_lstm_ych_to_graph(self, lstm_node, exit_node, rnn_props):
+        # in tf, concat of y_c and y_h output shape is: [batch, hidden *2]
+        # in onnx, y_c/y_h output shape is: [number_directions, batch, hidden]
+
+        concat = make_onnx_node(self.g, "Concat", [lstm_node.output[2], lstm_node.output[1]], attr={"axis": 2})
+        yc_shape = self.g.get_shape(lstm_node.output[2])
+        self.g.set_shape(concat.output[0], [yc_shape[0], yc_shape[1], yc_shape[2] * 2])
+
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [concat.output[0]], attr={"axes": [0]})
+        concat_shape = self.g.get_shape(concat.output[0])
+        self.g.set_shape(squeeze_node.output[0], [concat_shape[1], concat_shape[2]])
+        self.all_nodes.extend([concat, squeeze_node])
+
+        self.g.replace_all_inputs(self.all_nodes, exit_node.output[0], squeeze_node.output[0])
+
+    def _connect_lstm_output_to_graph(self, lstm_node, exit_node, rnn_props):
+        exit_consumers = self.g.find_output_consumers(exit_node.output[0])
+        gather_node = self._validate_output_exit_consumers(exit_consumers)
+        if len(exit_consumers) != 2 or not gather_node:
+            log.debug("lstm output exit node has " + str(len(exit_consumers)) + " consumers")
+            raise ValueError("lstm output exit node check failed")
+
+        # gather output for sure has shape [time, batch, hidden]
+        gather_output_id = gather_node.output[0]
+        log.debug("found output ta gather node " + gather_output_id)
+        # in tf batch major mode, output shape is : [batch, time, hidden]
+        # in time major mode, output shape is: [time, batch, hidden]
+        # in onnx, output shape is : [time, num_directions, batch, hidden]
+
         output_id = lstm_node.output[0]
         squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [1]})
         lstm_output_shape = self.g.get_shape(output_id)
         self.g.set_shape(squeeze_node.output[0], [lstm_output_shape[0], lstm_output_shape[2], lstm_output_shape[3]])
 
-        if not time_major:
-            # transpose to [batch, time, hidden], since node n originally use this
+        if not rnn_props.time_major:
+            gather_consumers = self.g.find_output_consumers(gather_output_id)
+            print(gather_consumers)
+            gather_trans_consumers = [n for n in gather_consumers if check_is_timemajor_transpose(n)]
+            if len(gather_trans_consumers) != 1:
+                raise ValueError("batch major should expect a transpose after gather")
+            trans = gather_trans_consumers[0] # trans has rnn scope name
+
+            # we just check the transpose here, but will not re-use it, because
+            # it may hold non-const perms. so we re-create a new transpose to replace it
             attr = { "perm": np.array([1, 0, 2], dtype=np.int64) }
             new_trans = make_onnx_node(self.g, "Transpose", [squeeze_node.output[0]], attr)
             trans_input_shape = self.g.get_shape(squeeze_node.output[0])
+            self.g.replace_all_inputs(self.all_nodes, trans.output[0], new_trans.output[0])
             self.g.set_shape(new_trans.output[0], [trans_input_shape[1], trans_input_shape[0], trans_input_shape[2]])
-            self.all_nodes.extend([squeeze_node, new_trans])
-            return new_trans
-        else:
-            self.all_nodes.append(squeeze_node)
-            return squeeze_node
+            self.all_nodes.extend([new_trans])
 
-    def _connect_rnn_with_tupled_ch_consumer_nodes(self, lstm_node, pack_node):
-        # Pack_node's original two inputs in TF have shape: [batch_size, hidden_size]
-        # BUT now, we have [num_directions, batch_size, hidden_size] for each input
-        # since this branch handles forward/reverse only, num_directions = 1
-
-        ch_outputer_node = self._prepare_y_ch_node_outputer(lstm_node, True)
-        self.g.replace_all_inputs(self.all_nodes, pack_node.output[0], ch_outputer_node.output[0])
-        # For all Pack's consumers, they originally expect data [tuple_size (e.g. 2), batch_size, hidden_size],
-
-        # here we give up the original pack_node.
-        self.all_nodes.remove(pack_node)
-
-    def _connect_rnn_with_one_of_tupled_ch_consumer_nodes(self, lstm_output_id, exit_node_output_id):
-        # For original consumers, they originally expect data [batch_size, hidden_size],
-        # BUT now, we have [num_directions, batch_size, hidden_size]
-        # since this branch handles forward only, num_directions = 1
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [lstm_output_id], {"axes" :[0]})
-        lstm_output_shape = self.g.get_shape(lstm_output_id)
-        self.g.set_shape(squeeze_node.output[0], [lstm_output_shape[1], lstm_output_shape[2]])
-        self.g.replace_all_inputs(self.all_nodes, exit_node_output_id, squeeze_node.output[0])
+        self.g.replace_all_inputs(self.all_nodes, gather_output_id, squeeze_node.output[0])
         self.all_nodes.extend([squeeze_node])
 
-    def _connect_rnn_with_non_tupled_ch_consumer_nodes(self, lstm_node, connector_node_outside_rnn_scope, exit_node_output_id):
-        n = connector_node_outside_rnn_scope
-        ch_outputer_node = self._prepare_y_ch_node_outputer(lstm_node, False)
-        self.g.replace_input(n, exit_node_output_id, ch_outputer_node.output[0])
+    def _validate_output_exit_consumers(self, exit_consumers):
+        if len(exit_consumers) != 2:
+            return None
+        
+        gather_node = None
+        for n in exit_consumers:
+            if n.type == "TensorArrayGatherV3":
+                gather_node = n
+            elif n.type == "TensorArraySizeV3":
+                continue
+            else:
+                return None
 
-    def _prepare_y_ch_node_outputer(self, lstm_node, is_ch_tupled):
-        axis = None
-        # if original graph need tupled output, then we concat c and h with axis = 0
-        axis = 0 if is_ch_tupled else 2
-        concat = make_onnx_node(self.g, "Concat", [lstm_node.output[2], lstm_node.output[1]], attr={"axis": axis})
-        self.all_nodes.append(concat)
-        yc_shape = self.g.get_shape(lstm_node.output[2])
-        if is_ch_tupled: 
-            self.g.set_shape(concat.output[0], [yc_shape[0] * 2, yc_shape[1], yc_shape[2]])
-            return concat
-        else: 
-            self.g.set_shape(concat.output[0], [yc_shape[0], yc_shape[1], yc_shape[2] * 2])
-
-        # For all non-tupled-ch's consumers, they originally expect data [batch_size, hidden_size*2].
-        # since this branch handles forward only, num_directions = 1
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [concat.output[0]], attr={"axes": [0]})
-        concat_shape = self.g.get_shape(concat.output[0])
-        self.g.set_shape(squeeze_node.output[0], [concat_shape[1], concat_shape[2]])
-        self.all_nodes.append(squeeze_node)
-
-        return squeeze_node
+        return gather_node

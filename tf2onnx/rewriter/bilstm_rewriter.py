@@ -68,32 +68,71 @@ def process_bilstm(g, bi_lstms):
         all_nodes.append(bi_lstm_node)
         log.debug("processing output nodes")
 
-        slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 0, all_nodes)
-        slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 1, all_nodes)
-        slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 2, all_nodes)
-
-        reverse_ops = [op for op in all_nodes if is_reverse_op(op)]
-        for r_op in reverse_ops:
-            g.replace_all_inputs(all_nodes, r_op.output[0], r_op.input[0])
-
         to_remove = [lstm_fw.name, lstm_fw.input[1], lstm_fw.input[2], lstm_fw.input[3], 
-            lstm_fw.input[5], lstm_fw.input[6], lstm_bw.name, lstm_bw.input[1],
-            lstm_bw.input[2], lstm_bw.input[3], lstm_bw.input[5], lstm_bw.input[6]]
-        to_remove.extend([r_op.name for r_op in reverse_ops])
+            lstm_bw.name, lstm_bw.input[1], lstm_bw.input[2], lstm_bw.input[3]]
+        slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 0, all_nodes, to_remove)
+        slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 1, all_nodes, to_remove)
+        slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 2, all_nodes, to_remove)
+
+        lstm_bw_old_x = lstm_bw.input[0]
         new_nodes = []
         for n in all_nodes:
             if n.name not in to_remove:
                 new_nodes.append(n)
         g.set_nodes(new_nodes)
+
+        old_x_consumers = g.find_output_consumers(lstm_bw_old_x)
+        # the transpose/reverse here must be followed by LSTM if it is still useful.
+        # this is guaranteed by dynamic_rnn logic.
+        old_x_has_lstm_as_consumer = [n for n in old_x_consumers if n.type == "LSTM"]
+        if not old_x_has_lstm_as_consumer:
+            log.debug("plan to remove useless reverse op in bw")
+            reverse_node = g.get_node_by_name(lstm_bw_old_x)
+
+            if reverse_node.type == "Transpose":
+                reverse_node = reverse_node.inputs[0]
+
+            g.replace_all_inputs(g.get_nodes(), reverse_node.output[0], reverse_node.input[0])
+            new_nodes = g.get_nodes()
+            new_nodes.remove(reverse_node)
+            g.set_nodes(new_nodes)
+        else:
+            raise ValueError("Reverse is still used by LSTM as input, cannot remove")
+
+
+    g.update_proto()
     return g.get_nodes()
 
 
-def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_output_index, all_nodes):
+def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_output_index, all_nodes, to_remove):
     fw_consumers = g.find_output_consumers(lstm_fw.output[lstm_output_index])
     bw_consumers = g.find_output_consumers(lstm_bw.output[lstm_output_index])
 
     if lstm_output_index == 0:
         axis = 1
+        # remove reverse op for lstm_bw
+        # todo: figure out a better way to remove reverse op
+        squeeze_nodes = [c for c in bw_consumers if c.type == "Squeeze" ]
+        s_cnt = len(squeeze_nodes)
+        if s_cnt > 1:
+            raise ValueError("unexpected number of squeeze following LSTM 1st output")
+        elif s_cnt == 1:
+            s = squeeze_nodes[0]
+            trans_nodes = g.find_output_consumers(s.output[0])
+            if len(trans_nodes) == 1:
+                if trans_nodes[0].type == "Transpose":
+                    reverse_nodes = g.find_output_consumers(trans_nodes[0].output[0])
+                elif is_reverse_op(trans_nodes[0]):
+                    reverse_nodes = trans_nodes
+                else:
+                    raise ValueError("not found reverse op, unexpected")
+
+                for r_op in reverse_nodes:
+                    log.debug("remove reverse op called " + r_op.name)
+                    g.replace_all_inputs(all_nodes, r_op.output[0], r_op.input[0])
+                    to_remove.append(r_op.name)
+            else:
+                raise ValueError("unexpected number of transpose after LSTM 1st output")
     elif lstm_output_index == 1 or lstm_output_index == 2:
         axis = 0
     else:
