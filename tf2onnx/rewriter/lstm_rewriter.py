@@ -434,7 +434,6 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
         if not rnn_props.time_major:
             gather_consumers = self.g.find_output_consumers(gather_output_id)
-            print(gather_consumers)
             gather_trans_consumers = [n for n in gather_consumers if check_is_timemajor_transpose(n)]
             if len(gather_trans_consumers) != 1:
                 raise ValueError("batch major should expect a transpose after gather")
