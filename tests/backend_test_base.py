@@ -25,8 +25,8 @@ from tf2onnx.tfonnx import process_tf_graph
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     # static variables
     TMPPATH = tempfile.mkdtemp()
-    BACKEND = None
-    OPSET = None
+    BACKEND = "onnxruntime"
+    OPSET = 7
     DEBUG = None
 
     def debug_mode(self):
