@@ -101,8 +101,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     # only when transform_tf_graph is true, input_names_with_port is necessary.
     def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07,
-            convert_var_to_const=True, transform_tf_graph=True, check_value=True, check_shape=False,
-            check_dtype=False):
+                      convert_var_to_const=True, transform_tf_graph=True, check_value=True, check_shape=False,
+                      check_dtype=False):
         graph_def = None
         if convert_var_to_const:
             with tf.Session() as sess:
@@ -110,7 +110,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 #expected = sess.run(output_dict, feed_dict=feed_dict)
                 output_name_without_port = [n.split(':')[0] for n in output_names_with_port]
                 graph_def = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def,
-                                output_name_without_port)
+                                                                         output_name_without_port)
 
             tf.reset_default_graph()
             tf.import_graph_def(graph_def, name='')
@@ -130,8 +130,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     f.write(sess.graph_def.SerializeToString())
                 self.log.debug("created file %s", model_path)
 
-            graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port, output_names_with_port, 
-                            sess.graph_def, True)
+            graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port, output_names_with_port,
+                                                   sess.graph_def, True)
 
             if self.debug_mode():
                 model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_after_tf_optimize.pb")

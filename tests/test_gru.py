@@ -7,13 +7,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import numpy as np
-import tensorflow as tf
-import tf2onnx.utils
-
-from tensorflow.contrib import rnn
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -24,4 +17,3 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
 if __name__ == '__main__':
     Tf2OnnxBackendTestBase.trigger(GRUTests)
-

@@ -6,19 +6,12 @@
 from __future__ import division
 from __future__ import print_function
 
-import argparse
-import os
-import sys
-import tempfile
 import unittest
-from collections import namedtuple
 from itertools import product
 
 import numpy as np
 import tensorflow as tf
-import tf2onnx.utils
 
-from tf2onnx.tfonnx import process_tf_graph
 from backend_test_base import Tf2OnnxBackendTestBase
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
@@ -130,7 +123,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         # since returned indexes are random we can only check type and shape
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, check_value=False,
-            check_shape=True, check_dtype=True)
+                            check_shape=True, check_dtype=True)
 
 
     @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
@@ -142,7 +135,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(op, name=_TFOUTPUT)
         # since returned indexes are random we can only check type and shape
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, check_value=False,
-            check_shape=True, check_dtype=True)
+                            check_shape=True, check_dtype=True)
 
     def test_maxpool(self):
         for p in get_conv_getdata():
@@ -231,7 +224,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
         self._conv_test(x_val, kernel_val, strides=strides, padding="VALID",
-            dilations=dilations, rtol=1e-05)
+                        dilations=dilations, rtol=1e-05)
 
     def test_conv2d_transpose(self):
         x_shape = [2, 6, 4, 3]
@@ -243,7 +236,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, shape=x_shape, name=_TFINPUT)
         f = tf.constant(kernel_val, name="kernel", dtype=tf.float32)
         conv = tf.nn.conv2d_transpose(x, f, output_shape, strides=strides, padding="VALID")
-        output = tf.identity(conv, name=_TFOUTPUT)
+        _ = tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
 
     def test_depthwiseconv_0(self):
@@ -275,7 +268,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # FIXME: numerical results are not correct
         x_shape = [1, 3, 4, 3]
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
-        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        _ = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
         op = tf.nn.local_response_normalization(x_val)
         _ = tf.identity(op, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05)

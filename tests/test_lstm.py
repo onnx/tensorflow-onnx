@@ -9,7 +9,6 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-import tf2onnx.utils
 
 from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
@@ -299,8 +298,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             lstm_output_list.append(outputs)
             lstm_cell_state_list.append(cell_state)
 
-        output = tf.identity(lstm_output_list, name="output")
-        cellstate = tf.identity(lstm_cell_state_list, name="cell_state")
+        _ = tf.identity(lstm_output_list, name="output")
+        _ = tf.identity(lstm_cell_state_list, name="cell_state")
 
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
@@ -323,8 +322,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             x,
             dtype=tf.float32)
 
-        output = tf.identity(outputs, name="output")
-        cellstate = tf.identity(cell_state, name="cell_state")
+        _ = tf.identity(outputs, name="output")
+        _ = tf.identity(cell_state, name="cell_state")
 
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
