@@ -16,9 +16,9 @@ import unittest
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.ops import variables as variables_lib
 import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph
-from tensorflow.python.ops import variables as variables_lib
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
@@ -68,7 +68,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         """Run test against msrt-next backend."""
         import lotus
         model_path = os.path.join(type(self).TMPPATH, test_name + ".onnx")
-        self.log.debug("create model file: " + model_path)
+        self.log.debug("create model file: %s", model_path)
         with open(model_path, "wb") as f:
             f.write(onnx_graph.SerializeToString())
 
@@ -80,7 +80,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
         model_path = os.path.join(type(self).TMPPATH, test_name + ".onnx")
-        self.log.debug("create model file: " + model_path)
+        self.log.debug("create model file: %s", model_path)
         with open(model_path, "wb") as f:
             f.write(onnx_graph.SerializeToString())
         m = rt.InferenceSession(model_path)
@@ -101,15 +101,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     # only when transform_tf_graph is true, input_names_with_port is necessary.
     def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07,
-        convert_var_to_const=True, transform_tf_graph=True, check_value=True, check_shape=False,
-        check_dtype=False):
+            convert_var_to_const=True, transform_tf_graph=True, check_value=True, check_shape=False,
+            check_dtype=False):
         graph_def = None
         if convert_var_to_const:
             with tf.Session() as sess:
                 variables_lib.global_variables_initializer().run()
                 #expected = sess.run(output_dict, feed_dict=feed_dict)
                 output_name_without_port = [n.split(':')[0] for n in output_names_with_port]
-                graph_def = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def, output_name_without_port)
+                graph_def = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def,
+                                output_name_without_port)
 
             tf.reset_default_graph()
             tf.import_graph_def(graph_def, name='')
@@ -127,16 +128,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_before_tf_optimize.pb")
                 with open(model_path, "wb") as f:
                     f.write(sess.graph_def.SerializeToString())
-                self.log.debug("created file " + model_path)
+                self.log.debug("created file %s", model_path)
 
-            graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port,
-                                                output_names_with_port, sess.graph_def, True)
+            graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port, output_names_with_port, 
+                            sess.graph_def, True)
 
             if self.debug_mode():
                 model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_after_tf_optimize.pb")
                 with open(model_path, "wb") as f:
                     f.write(graph_def.SerializeToString())
-                self.log.debug("created file " + model_path)
+                self.log.debug("created file  %s", model_path)
 
             tf.reset_default_graph()
             tf.import_graph_def(graph_def, name='')

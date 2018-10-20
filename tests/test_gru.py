@@ -24,3 +24,4 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
 if __name__ == '__main__':
     Tf2OnnxBackendTestBase.trigger(GRUTests)
+
