@@ -185,12 +185,14 @@ def broadcast_op(ctx, node, name, args):
         node.set_attr("broadcast", 1)
         # this works around shortcomings in the broadcasting code
         # of caffe2 and winml/rs4.
-        if not shape0:
-            if node.inputs[0].is_const():
-                shape0 = node.inputs[0].scalar_to_dim1()
-        if not shape1:
-            if node.inputs[1].is_const():
-                shape1 = node.inputs[1].scalar_to_dim1()
+        if ctx.is_target(TARGET_RS4):
+            # in rs4 mul and add do not support scalar correctly
+            if not shape0:
+                if node.inputs[0].is_const():
+                    shape0 = node.inputs[0].scalar_to_dim1()
+            if not shape1:
+                if node.inputs[1].is_const():
+                    shape1 = node.inputs[1].scalar_to_dim1()
         if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
             tmp = node.input[0]
             node.input[0] = node.input[1]
@@ -207,12 +209,14 @@ def broadcast_op7(ctx, node, name, args):
     if shape0 != shape1:
         # this works around shortcomings in the broadcasting code
         # of caffe2 and winml/rs4.
-        if not shape0:
-            if node.inputs[0].is_const():
-                shape0 = node.inputs[0].scalar_to_dim1()
-        if not shape1:
-            if node.inputs[1].is_const():
-                shape1 = node.inputs[1].scalar_to_dim1()
+        if ctx.is_target(TARGET_RS4):
+            # in rs4 mul and add do not support scalar correctly
+            if not shape0:
+                if node.inputs[0].is_const():
+                    shape0 = node.inputs[0].scalar_to_dim1()
+            if not shape1:
+                if node.inputs[1].is_const():
+                    shape1 = node.inputs[1].scalar_to_dim1()
         if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
             tmp = node.input[0]
             node.input[0] = node.input[1]
