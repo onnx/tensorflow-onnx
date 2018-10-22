@@ -107,7 +107,7 @@ def split_nodename_and_shape(name):
     # input takes in most cases the format name:0, where 0 is the output number
     # in some cases placeholders don't have a rank which onnx can't handle so we let uses override the shape
     # by appending the same, ie : [1,28,28,3]
-    name_pattern = r"(?:([\w\d/\-_:]+)(\[[\d,]+\])?),?"
+    name_pattern = r"(?:([\w\d/\-\._:]+)(\[[\d,]+\])?),?"
     splits = re.split(name_pattern, name)
     for i in range(1, len(splits), 3):
         inputs.append(splits[i])
