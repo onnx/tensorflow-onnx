@@ -551,11 +551,12 @@ class Graph(object):
             return []
         return val
 
-    def dump_node_statistics(self, description):
+    def dump_node_statistics(self):
         op_cnt = collections.Counter()
         for n in self.get_nodes():
             op_cnt[n.type] += 1
-        print(description + ": ops statistics: {}".format(op_cnt))
+
+        return op_cnt
 
     @staticmethod
     def remove_input(node, to_be_removed):
