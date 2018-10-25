@@ -102,7 +102,7 @@ class TransposeOptimizer(object):
                 if is_useless_transpose(n):
                     no_action = False
                     iteration_cnt += 1
-                    self._remove_useless_transpose(n)
+                    self._remove_useless_tranpose(n)
                     break
             # for debugging purpose
             if "stop" in self._force_stop and self._force_stop["stop"] == 1:
@@ -123,7 +123,6 @@ class TransposeOptimizer(object):
             "Pad": self._pad_handler,
             "ReduceMean": self._reducemean_handler,
             "Relu": self._relu_handler,
-            "Shape": self._shape_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
             "Tanh": self._tanh_handler,
@@ -209,7 +208,7 @@ class TransposeOptimizer(object):
         self._update_graph_nodes(to_append, [trans], True)
         return False
 
-    def _remove_useless_transpose(self, trans):
+    def _remove_useless_tranpose(self, trans):
         self._g.replace_all_inputs(self._g.get_nodes(), trans.output[0], trans.input[0])
         self._update_graph_nodes(None, [trans], True)
 
@@ -426,18 +425,7 @@ class TransposeOptimizer(object):
 
     # todo: consider share a same logic for element-wise op.
     def _tanh_handler(self, trans, node):
-        self._switch_transpose_and_node(node, trans)
+        self._g.replace_all_inputs(self._g.get_nodes(), node.output[0], trans.output[0])
+        node.input[0] = trans.input[0]
+        trans.input[0] = node.output[0]
         return True
-
-    def _shape_handler(self, trans, node):
-        if self._transpose_has_single_consumer_node([trans]):
-            ops = self._g.get_nodes()
-            self._g.replace_all_inputs(ops, trans.output[0], trans.input[0])
-
-            const_name = utils.port_name(utils.make_name("Const"))
-            indices_node = self._g.make_const(const_name, np.array([0, 2, 3, 1], dtype=np.int32))
-            gather_node = self._make_onnx_node("Gather", [node.output[0], const_name])
-            self._g.replace_all_inputs(ops, node.output[0], gather_node.output[0])
-            self._update_graph_nodes([gather_node], [trans], True)
-            return True
-        return False
