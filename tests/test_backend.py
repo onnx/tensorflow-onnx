@@ -805,13 +805,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {})
 
-    @unittest.skipIf(BACKEND in ["caffe2"], "Space2Depth not implemented, works on onnxmsrtnext")
-    def test_space_to_depth(self):
-        x_val = make_xval([1, 2, 2, 1])
+    def _test_reorganize_data(self, op, shape):
+        x_val = make_xval(shape)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
-        x_ = tf.space_to_depth(x, block_size=2)
+        x_ = op(x, block_size=2)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(BACKEND in ["caffe2"], "Space2Depth not implemented, works on onnxmsrtnext")
+    def test_space_to_depth(self):
+        self._test_reorganize_data(tf.space_to_depth, [1, 2, 2, 1])
+
+    @unittest.skipIf(BACKEND in ["caffe2"], "Space2Depth not implemented, works on onnxmsrtnext")
+    def test_depth_to_space(self):
+        self._test_reorganize_data(tf.depth_to_space, [1, 1, 1, 4])
 
     @unittest.skipIf(OPSET < 6, "supported since opset 6")
     def test_addn(self):

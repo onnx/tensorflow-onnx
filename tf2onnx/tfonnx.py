@@ -1068,7 +1068,7 @@ def tile_op7(ctx, node, name, args):
     return _convert_shapenode_to_int64(ctx, node, 1)
 
 
-def spacetodepth_op(ctx, node, name, args):
+def reorganize_data_op(ctx, node, name, args):
     block_size = node.get_attr("block_size")
     node.set_attr("blocksize", block_size.i)
     nodes = conv_convert_inputs(ctx, node, with_kernel=False)
@@ -1345,7 +1345,8 @@ _OPSET_4 = {
     "Tanh": (direct_op, []),
     "Transpose": (transpose_op, []),
     "TopKV2": (topk_op, []),
-    "SpaceToDepth": (spacetodepth_op, []),
+    "SpaceToDepth": (reorganize_data_op, []),
+    "DepthToSpace": (reorganize_data_op, []),
     "Pack": (pack_op, []),
     "Unpack": (unpack_op, []),
 }
