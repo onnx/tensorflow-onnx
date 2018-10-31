@@ -923,13 +923,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skip
-    def test_fill(self):
-        # no official fill op in onnx
-        x_val = np.array([2, 3], dtype=np.int32)
-        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
-        x_ = tf.fill(x, 9)
-        _ = tf.identity(x_, name=_TFOUTPUT)
+    @unittest.skipIf(OPSET < 9, "supported with opset 9 or better")
+    def test_fill_float32(self):
+        x_shape = [1, 15, 20, 2]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x1 = tf.fill(x_val.shape, 9.0)
+        x2 = tf.add(x0, x1)
+        _ = tf.identity(x2, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(OPSET < 9, "supported with opset 9 or better")
+    def test_fill_int32(self):
+        x_shape = [1, 15, 20, 2]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("int32").reshape(x_shape)
+        x0 = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        x1 = tf.fill(x_val.shape, 9)
+        x2 = tf.add(x0, x1)
+        _ = tf.identity(x2, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_tf_div(self):
