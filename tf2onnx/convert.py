@@ -33,12 +33,15 @@ def get_args():
     parser.add_argument("--outputs", required=True, help="model output_names")
     parser.add_argument("--opset", type=int, default=None, help="highest opset to use")
     parser.add_argument("--custom-ops", help="list of custom ops")
-    parser.add_argument("--unknown-dim", type=int, default=-1, help="default for unknown dimensions")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
                         action="store_true")
+    # experimental
+    parser.add_argument("--inputs-as-nchw", help="transpose inputs as from nhwc to nchw")
+    # depreciated, going to be removed some time in the future
+    parser.add_argument("--unknown-dim", type=int, default=-1, help="default for unknown dimensions")
     args = parser.parse_args()
 
     args.shape_override = None
@@ -46,6 +49,8 @@ def get_args():
         args.inputs, args.shape_override = tf2onnx.utils.split_nodename_and_shape(args.inputs)
     if args.outputs:
         args.outputs = args.outputs.split(",")
+    if args.inputs_as_nchw:
+        args.inputs_as_nchw = args.inputs_as_nchw.split(",")
     if args.target:
         args.target = args.target.split(",")
         for target in args.target:

@@ -102,12 +102,17 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     # only when transform_tf_graph is true, input_names_with_port is necessary.
     def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07,
                       convert_var_to_const=True, transform_tf_graph=True, check_value=True, check_shape=False,
-                      check_dtype=False):
+                      check_dtype=False, process_args=None, onnx_feed_dict=None):
+        # optional - passed to process_tf_graph
+        if process_args is None:
+            process_args = {}
+        # optional - pass distinct feed_dict to onnx runtime
+        if onnx_feed_dict is None:
+            onnx_feed_dict = feed_dict
         graph_def = None
         if convert_var_to_const:
             with tf.Session() as sess:
                 variables_lib.global_variables_initializer().run()
-                #expected = sess.run(output_dict, feed_dict=feed_dict)
                 output_name_without_port = [n.split(':')[0] for n in output_names_with_port]
                 graph_def = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def,
                                                                          output_name_without_port)
@@ -120,7 +125,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             output_dict = []
             for out_name in output_names_with_port:
                 output_dict.append(sess.graph.get_tensor_by_name(out_name))
-
             expected = sess.run(output_dict, feed_dict=feed_dict)
 
         if transform_tf_graph:
@@ -143,8 +147,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf.import_graph_def(graph_def, name='')
 
         with tf.Session() as sess:
-            g = process_tf_graph(sess.graph, opset=type(self).OPSET) #continue_on_error=True,
-            actual = self._run_backend(g, output_names_with_port, feed_dict)
+            g = process_tf_graph(sess.graph, opset=type(self).OPSET, **process_args)
+            actual = self._run_backend(g, output_names_with_port, onnx_feed_dict)
 
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
@@ -160,9 +164,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         parser.add_argument('--backend', default="onnxruntime",
                             choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                             help="backend to test against")
-
-        parser.add_argument('--opset', type=int, default=7,
-                            help="opset to test against")
+        parser.add_argument('--opset', type=int, default=7, help="opset to test against")
         parser.add_argument("--debug", help="output debugging information", action="store_true")
         parser.add_argument('unittest_args', nargs='*')
 

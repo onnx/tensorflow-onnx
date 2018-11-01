@@ -31,4 +31,4 @@ install:
 
 script:
     - pylint --rcfile=tools/pylintrc --ignore=version.py --disable=cyclic-import tf2onnx/*.py tests/*.py tf2onnx/optimizer/transpose_optimizer.py
-    - python -m pytest --cov=tf2onnx --cov-report=term tests/test_backend.py tests/test_graph.py tests/test_internals.py tests/test_lstm.py
+    - python -m pytest --cov=tf2onnx --cov-report=term tests/test_backend.py tests/backend_test_base.py tests/test_graph.py tests/test_internals.py tests/test_lstm.py
