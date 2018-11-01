@@ -1258,6 +1258,23 @@ def matmul_op(ctx, node, name, args):
     return nodes
 
 
+def fill_op(ctx, node, name, args):
+    node.type = "ConstantLike"
+    # both shape and value in tensorflow are passed as tensor.
+    # In onnx the value is an attribute so we need to fetch the value as const which
+    # sooner or later will be a problem for tensorflow-onnx.
+    shape = ctx.get_shape(node.output[0])
+    value = node.inputs[1].get_tensor_value()
+    value_proto = numpy_helper.from_array(node.inputs[1].get_tensor())
+    dtype = value_proto.data_type
+    # onnx spec says value MUST be float.
+    node.set_attr("value", float(value[0]))
+    node.set_attr("shape", shape)
+    node.set_attr("dtype", dtype)
+    del node.input[:]
+    return node
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1394,12 +1411,17 @@ _OPSET_8 = {
     "Relu6": (relu6_op8, []),  # make use of min/max broadcast
 }
 
+_OPSET_9 = {
+    "Fill": (fill_op, []),
+}
+
 _OPSETS = [
     (4, _OPSET_4),
     (5, _OPSET_5),
     (6, _OPSET_6),
     (7, _OPSET_7),
     (8, _OPSET_8),
+    (9, _OPSET_9),
 ]
 
 
