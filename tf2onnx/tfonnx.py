@@ -1263,20 +1263,47 @@ def fill_op7(ctx, node, name, args):
     nodes = [node]
     fill_shape = ctx.get_shape(node.input[0])
     fill_shape_dims = fill_shape[0]
-    attr = {"axes": [0]}
+    val_dtype = ctx.get_dtype(node.input[1])
+    val_shape = ctx.get_shape(node.input[1])
+
+    need_cast = val_dtype != onnx_pb.TensorProto.FLOAT
+    new_dtype = val_dtype
+    if need_cast:
+        new_dtype = onnx_pb.TensorProto.FLOAT
+        attr = {"to": new_dtype}
+        cast_to_float = ctx.insert_new_node_on_input(node, "Cast", node.input[1], name=None, **attr)
+        nodes.insert(0, cast_to_float)
+        ctx.set_dtype(cast_to_float.output[0], new_dtype)
+        ctx.set_shape(cast_to_float.output[0], val_shape)
+
     for i in range(fill_shape_dims):
+        attr = {"axes": [0]}
+        shape = ctx.get_shape(node.input[1])
         unsqueeze_node = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=None, **attr)
         nodes.insert(0, unsqueeze_node)
+        ctx.set_dtype(unsqueeze_node.output[0], new_dtype)
+        ctx.set_shape(unsqueeze_node.output[0], [1] + shape)
 
     # Tile's repeats must be INT64
     attr = {"to": onnx_pb.TensorProto.INT64}
     tile_shape_int64 = ctx.insert_new_node_on_input(node, "Cast", node.input[0], name=None, **attr)
+    ctx.set_dtype(tile_shape_int64.output[0], onnx_pb.TensorProto.INT64)
+    ctx.set_shape(tile_shape_int64.output[0], fill_shape)
     nodes.insert(0, tile_shape_int64)
 
     tmp = node.input[0]
     node.input[0] = node.input[1]
     node.input[1] = tmp
     node.type = "Tile"
+    ctx.set_dtype(node.output[0], new_dtype)
+
+    if need_cast:
+        attr = {"to": val_dtype}
+        op_name = utils.make_name(node.name)
+        cast_back = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name, **attr)
+        nodes.insert(0, cast_back)
+        ctx.set_dtype(cast_back.output[0], val_dtype)
+
     return nodes
 
 def fill_op(ctx, node, name, args):
