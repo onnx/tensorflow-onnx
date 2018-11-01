@@ -1257,6 +1257,27 @@ def matmul_op(ctx, node, name, args):
     nodes.append(node)
     return nodes
 
+def fill_op7(ctx, node, name, args):
+    # T output = Fill(int32 dims, T value, @int32 index_type)
+    # T outputs = Tile(T value, int64 repeats (e.g. dims))
+    nodes = [node]
+    fill_shape = ctx.get_shape(node.input[0])
+    fill_shape_dims = fill_shape[0]
+    attr = {"axes": [0]}
+    for i in range(fill_shape_dims):
+        unsqueeze_node = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=None, **attr)
+        nodes.insert(0, unsqueeze_node)
+
+    # Tile's repeats must be INT64
+    attr = {"to": onnx_pb.TensorProto.INT64}
+    tile_shape_int64 = ctx.insert_new_node_on_input(node, "Cast", node.input[0], name=None, **attr)
+    nodes.insert(0, tile_shape_int64)
+
+    tmp = node.input[0]
+    node.input[0] = node.input[1]
+    node.input[1] = tmp
+    node.type = "Tile"
+    return nodes
 
 def fill_op(ctx, node, name, args):
     node.type = "ConstantLike"
@@ -1403,6 +1424,7 @@ _OPSET_7 = {
     "Sin": (direct_op, []),
     "Tan": (direct_op, []),
     "Multinomial": (multinomial_op, []),
+    "Fill": (fill_op7, []),
     "FusedBatchNorm": (fused_batchnorm_op7, []),
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
 }
@@ -1578,7 +1600,6 @@ def rewrite_incomplete_type_support(g, ops):
     """
     new_ops = []
     needs_pass2 = False
-
     for op in ops:
         if op.type in ["Unsqueeze", "Mul", "Concat"]:
             cast_inserted = []
