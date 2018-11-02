@@ -953,6 +953,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x2, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @unittest.skipIf(OPSET < 7, "supported with opset 7 or better")
+    def test_fill7_int32(self):
+        x_shape = [1, 15, 20, 2]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("int32").reshape(x_shape)
+        x0 = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        x1 = tf.fill(x_val.shape, 9)
+        x2 = tf.add(x0, x1)
+        _ = tf.identity(x2, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def test_tf_div(self):
         from tensorflow.python.ops.gen_math_ops import div
         shape = 1000
