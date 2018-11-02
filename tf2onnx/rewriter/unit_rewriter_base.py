@@ -27,48 +27,9 @@ class UnitRewriterBase:
         # exit connector signature: func_name(rnn_node, exit_node, rnn_props)
         self.switch_checkers = {}
 
-    @staticmethod
-    def print_step(level_2, level_1="find_dynamic_run_unit"):
-        log.debug(level_1 + " >> " + level_2)
-
-    def get_rnn_scope_name(self, match):
-        pass
-
-    def get_weight_and_bias(self, match):
-        pass
-
-    def process_input_x(self, rnn_props, rnn_scope_name):
-        pass
-
-    def process_weights_and_bias(self, rnn_weights, rnn_props):
-        pass
-
-    def process_var_init_nodes(self, rnn_props):
-        pass
-
-    def process_seq_length(self, rnn_props, seq_len_input_node):
-        pass
-
-    def create_rnn_node(self, rnn_props):
-        pass
-
-    def get_rnn_input_blacklist(self, rnn_weights, rnn_props):
-        var_init_nodes = []
-        for _, init_input_id in rnn_props.var_initializers.items():
-            init_node = self.g.get_node_by_name(init_input_id)
-            var_init_nodes.append(init_node)
-            self.must_keep_nodes.append(init_node)
-
-        # weight/bias inputs, and c/h initializers are dynamic_rnn/LSTMCell's parameters.
-        # we will use them to filter out the dynamic_rnn's input tensor. 
-        blacklist_inputs = [rnn_weights.kernel.node, rnn_weights.bias.node, rnn_weights.forget_bias.node]
-        blacklist_inputs.extend(var_init_nodes)
-
-        return blacklist_inputs
-
     def run(self, unit_type):
         # allow_reorder must be true. because LSTMCell and BasicLSTMCell's call function
-        # are defining the calculation with different orders. Then we can share the same 
+        # are defining the calculation with different orders. Then we can share the same
         # pattern.
         cell_pattern = get_pattern(unit_type)
         matcher = GraphMatcher(cell_pattern, allow_reorder=True)
@@ -150,29 +111,12 @@ class UnitRewriterBase:
 
         self.g.set_nodes(new_nodes)
 
-    def find_inputs(self, rnn_scope_name, rnn_props, input_blacklist=None):
-        rnn_input_nodes = []
-        for n in self.g.get_nodes():
-            if n.name.startswith(rnn_scope_name):
-                # find input node that are not within rnn scope
-                for input_id, input_node in zip(n.input, n.inputs):
-                    if not input_node.name.startswith(rnn_scope_name):
-                        if input_node not in input_blacklist:
-                            rnn_input_nodes.append([input_node, input_id])
+# find needed info from graph
+    def get_rnn_scope_name(self, match):
+        pass
 
-        if len(rnn_input_nodes) != 1:
-            log.error("found " + str(len(rnn_input_nodes)) + " inputs for the dynamic_run, unexpected. They are ")
-            log.error(rnn_input_nodes)
-            return rnn_props
-
-        input_node_candidate = rnn_input_nodes[0][0]
-        input_id_candidate = rnn_input_nodes[0][1]
-
-        # we should not limit the rnn_input_nodes' type be Placeholder or Const, 
-        # because there might some Reshape/etc. ops after the Placeholder
-        rnn_props.input_node = input_node_candidate
-        rnn_props.input_id = input_id_candidate
-        return rnn_props
+    def get_weight_and_bias(self, match):
+        pass
 
     def get_var_initializers(self, match, rnn_props, rnn_scope_name):
         loop_cond_op = None
@@ -201,39 +145,6 @@ class UnitRewriterBase:
                     log.debug("found initializer node for " + var_name + ": " + enter_target_input_id)
                     rnn_props.var_initializers[var_name] = enter_target_input_id
                     break
-
-    def check_switch_by_usage_pattern(self, switch_node, match, check_func):
-        if switch_node.type != 'Switch':
-            return None
-
-        # the first input is data
-        merge_node = switch_node.inputs[0]
-        if merge_node.type != "Merge":
-            return None
-
-        target_node_input_id = None
-        for merge_input in merge_node.inputs:
-            if merge_input.type == 'Enter':
-                target_node_input_id = merge_input.input[0]
-                log.debug("a Switch >> Merge >> Enter is found called " + merge_input.inputs[0].name)
-                break
-            else:
-                log.debug("skip the non-Enter input node of the merge_node")
-                continue
-
-        # check whether it is c_initialize or h_initialize
-        if target_node_input_id:
-            switch_consumers = self.g.find_output_consumers(switch_node.output[1])
-            assert len(switch_consumers) == 1
-            if switch_consumers[0].type == "Identity":
-                identity_consumers = self.g.find_output_consumers(switch_consumers[0].output[0])
-                return check_func(target_node_input_id, identity_consumers, match)
-            else:
-                log.error("not expected, skip ")
-        else:
-            log.warning("is_switch_used_by found no merge>>Enter node")
-
-        return None
 
     def find_sequence_length_node(self, rnn_scope_name):
         # "sequence_length" under current rnn scope is the seq len node (if there is).
@@ -269,12 +180,63 @@ class UnitRewriterBase:
         else:
             raise ValueError("there are more sequence length nodes than expected")
 
+    def get_rnn_input_blacklist(self, rnn_weights, rnn_props):
+        var_init_nodes = []
+        for _, init_input_id in rnn_props.var_initializers.items():
+            init_node = self.g.get_node_by_name(init_input_id)
+            var_init_nodes.append(init_node)
+            self.must_keep_nodes.append(init_node)
+
+        # weight/bias inputs, and c/h initializers are dynamic_rnn/LSTMCell's parameters.
+        # we will use them to filter out the dynamic_rnn's input tensor.
+        blacklist_inputs = [rnn_weights.kernel.node, rnn_weights.bias.node, rnn_weights.forget_bias.node]
+        blacklist_inputs.extend(var_init_nodes)
+
+        return blacklist_inputs
+
+    def find_inputs(self, rnn_scope_name, rnn_props, input_blacklist=None):
+        rnn_input_nodes = []
+        for n in self.g.get_nodes():
+            if n.name.startswith(rnn_scope_name):
+                # find input node that are not within rnn scope
+                for input_id, input_node in zip(n.input, n.inputs):
+                    if not input_node.name.startswith(rnn_scope_name):
+                        if input_node not in input_blacklist:
+                            rnn_input_nodes.append([input_node, input_id])
+
+        if len(rnn_input_nodes) != 1:
+            log.error("found " + str(len(rnn_input_nodes)) + " inputs for the dynamic_run, unexpected. They are ")
+            log.error(rnn_input_nodes)
+            return rnn_props
+
+        input_node_candidate = rnn_input_nodes[0][0]
+        input_id_candidate = rnn_input_nodes[0][1]
+
+        # we should not limit the rnn_input_nodes' type be Placeholder or Const,
+        # because there might some Reshape/etc. ops after the Placeholder
+        rnn_props.input_node = input_node_candidate
+        rnn_props.input_id = input_id_candidate
+        return rnn_props
+
+# process found info according to ONNX requirement
+    def process_input_x(self, rnn_props, rnn_scope_name):
+        pass
+
+    def process_weights_and_bias(self, rnn_weights, rnn_props):
+        pass
+
+    def process_var_init_nodes(self, rnn_props):
+        pass
+
+    def process_seq_length(self, rnn_props, seq_len_input_node):
+        pass
+
     def process_outputs(self, match, rnn_node, rnn_props, rnn_scope_name):
         # There are 2 kinds of output nodes for dynamic_rnn
         # 1. output node, which ends with "Exit" followed
         #    either Transpose (when time_major is False),
         #    or TensorArrayGather
-        # 2. cell_state node, 
+        # 2. cell_state node,
         #    2.1 if state_is_tuple is true:
         #        2.1.1 which ends with "Exit" followed by a Pack<C, H> whose name is out of rnn scope.
         #        2.1.2 which ends with "Exit" for c and h respectively, when cell_state.c/h is used.
@@ -298,6 +260,43 @@ class UnitRewriterBase:
                         var_exit_connector(rnn_node, n, rnn_props)
                         break
 
+    def create_rnn_node(self, rnn_props):
+        pass
 
+# helper function
+    def check_switch_by_usage_pattern(self, switch_node, match, check_func):
+        if switch_node.type != 'Switch':
+            return None
 
+        # the first input is data
+        merge_node = switch_node.inputs[0]
+        if merge_node.type != "Merge":
+            return None
 
+        target_node_input_id = None
+        for merge_input in merge_node.inputs:
+            if merge_input.type == 'Enter':
+                target_node_input_id = merge_input.input[0]
+                log.debug("a Switch >> Merge >> Enter is found called " + merge_input.inputs[0].name)
+                break
+            else:
+                log.debug("skip the non-Enter input node of the merge_node")
+                continue
+
+        # check whether it is c_initialize or h_initialize
+        if target_node_input_id:
+            switch_consumers = self.g.find_output_consumers(switch_node.output[1])
+            assert len(switch_consumers) == 1
+            if switch_consumers[0].type == "Identity":
+                identity_consumers = self.g.find_output_consumers(switch_consumers[0].output[0])
+                return check_func(target_node_input_id, identity_consumers, match)
+            else:
+                log.error("not expected, skip ")
+        else:
+            log.warning("is_switch_used_by found no merge>>Enter node")
+
+        return None
+
+    @staticmethod
+    def print_step(level_2, level_1="find_dynamic_run_unit"):
+        log.debug(level_1 + " >> " + level_2)
