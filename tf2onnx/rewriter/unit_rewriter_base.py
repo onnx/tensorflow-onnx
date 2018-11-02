@@ -22,7 +22,10 @@ class UnitRewriterBase:
         self.all_nodes = self.g.get_nodes()
         # used to track nodes in rnn_scope_name to keep (e.g. not delete) for each single match run
         self.must_keep_nodes = []
-
+        # bi-directional rnn can use only one lstm/gru cell.
+        # if so, there are some nodes belong to bw rnn but in fw rnn name scope
+        # then we have to keep these nodes when calling "run_single_match", and delete them after final match
+        self.keep_when_run_single_match = set()
         # checker signature : func_name(enter_target_node_input_id, identity_consumers, match)
         # exit connector signature: func_name(rnn_node, exit_node, rnn_props)
         self.switch_checkers = {}
@@ -38,8 +41,15 @@ class UnitRewriterBase:
         if match_results:
             for match in match_results:
                 self.run_single_match(match)
-            self.print_step("finish handling")
+
+            new_nodes = []
+            for node in self.g.get_nodes():
+                if node not in self.keep_when_run_single_match:
+                    new_nodes.append(node)
+
+            self.g.set_nodes(new_nodes)
             self.g.update_proto()
+            self.print_step("finish handling")
         return self.g.get_nodes()
 
     def run_single_match(self, match):
@@ -54,7 +64,7 @@ class UnitRewriterBase:
             return REWRITER_RESULT.SKIP
         else:
             log.debug("rnn scope name is " + rnn_scope_name)
-
+        cell_scope_name = self.get_cell_scope_name(match)
         self.print_step("get_weight_and_bias starts")
         rnn_weights = self.get_weight_and_bias(match)
         if not rnn_weights:
@@ -72,7 +82,7 @@ class UnitRewriterBase:
         if seq_len_input_node:
             input_filter.append(seq_len_input_node)
 
-        self.find_inputs(rnn_scope_name, rnn_props, input_filter)
+        self.find_inputs(rnn_scope_name, rnn_props, match, input_filter)
         if not rnn_props.is_valid():
             log.error("rnn properties are not valid, skip")
             return REWRITER_RESULT.SKIP
@@ -91,10 +101,13 @@ class UnitRewriterBase:
 
         self.print_step("start to build new rnn node")
 
+        rnn_props.activation = self.get_rnn_activation(match)
+
         rnn_node = self.create_rnn_node(rnn_props)
         self.all_nodes.append(rnn_node)
 
         self.print_step("start to handle outputs")
+        # format of ONNX output is different with tf
         self.process_outputs(match, rnn_node, rnn_props, rnn_scope_name)
 
         self.print_step("remove all nodes within original rnn scope except some nodes still useful")
@@ -105,7 +118,11 @@ class UnitRewriterBase:
                 continue
             else:
                 if n.name.startswith(rnn_scope_name):
-                    pass
+                    if cell_scope_name and n.name.startswith(cell_scope_name):
+                        self.keep_when_run_single_match.add(n)
+                        new_nodes.append(n)
+                    else:
+                        pass
                 else:
                     new_nodes.append(n)
 
@@ -115,10 +132,23 @@ class UnitRewriterBase:
     def get_rnn_scope_name(self, match):
         pass
 
+    def get_cell_scope_name(self, match):
+        return None
+
+    @staticmethod
+    def get_rnn_activation(match):
+        return None
+
     def get_weight_and_bias(self, match):
         pass
 
     def get_var_initializers(self, match, rnn_props, rnn_scope_name):
+        """
+                initializer op can be found by tracing from switch mode. while rnn has multiple switch nodes
+                so have to discriminate them by a check
+
+                switch nodes can be found by tracing LoopCond
+        """
         loop_cond_op = None
         for n in self.g.get_nodes():
             if n.type == 'LoopCond' and n.name.startswith(rnn_scope_name):
@@ -173,10 +203,21 @@ class UnitRewriterBase:
             if seq_len_node.is_const():
                 self.must_keep_nodes.append(seq_len_node)
                 return seq_len_node
-            elif not seq_len_node.inputs[0].name.startswith(rnn_scope_name):
-                return seq_len_node.inputs[0]
             else:
-                raise ValueError("sequence length node should be outside of rnn scope")
+                # input of the "identity" node may be a "cast"
+                # if so, then we have to keep it
+                # sentence "math_ops.to_int32(sequence_length)" in tf results in the "cast" op
+                if seq_len_node.inputs[0].type == "Cast":
+                    cast_node = seq_len_node.inputs[0]
+                    if not cast_node.inputs[0].name.startswith(rnn_scope_name):
+                        self.must_keep_nodes.append(cast_node)
+                        return seq_len_node.inputs[0]
+                    else:
+                        raise ValueError("sequence length node should be outside of rnn scope")
+                elif not seq_len_node.inputs[0].name.startswith(rnn_scope_name):
+                    return seq_len_node.inputs[0]
+                else:
+                    raise ValueError("sequence length node should be outside of rnn scope")
         else:
             raise ValueError("there are more sequence length nodes than expected")
 
@@ -194,7 +235,7 @@ class UnitRewriterBase:
 
         return blacklist_inputs
 
-    def find_inputs(self, rnn_scope_name, rnn_props, input_blacklist=None):
+    def find_inputs(self, rnn_scope_name, rnn_props, match, input_blacklist=None):
         rnn_input_nodes = []
         for n in self.g.get_nodes():
             if n.name.startswith(rnn_scope_name):
