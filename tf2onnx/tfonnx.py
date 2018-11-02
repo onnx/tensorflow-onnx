@@ -1266,7 +1266,7 @@ def fill_op7(ctx, node, name, args):
     val_dtype = ctx.get_dtype(node.input[1])
     val_shape = ctx.get_shape(node.input[1])
 
-    need_cast = val_dtype != onnx_pb.TensorProto.FLOAT
+    need_cast = val_dtype != onnx_pb.TensorProto.FLOAT and ctx.opset < 8
     new_dtype = val_dtype
     if need_cast:
         new_dtype = onnx_pb.TensorProto.FLOAT
