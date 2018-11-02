@@ -199,7 +199,7 @@ def node_name(name):
     return name
 
 
-def sanitize_shape(shape):
+def make_onnx_shape(shape):
     """shape with -1 is not valid in onnx ... make it a name."""
     return [make_name("unk") if i == -1 else i for i in shape]
 
