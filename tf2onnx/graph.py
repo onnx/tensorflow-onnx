@@ -463,6 +463,14 @@ class Graph(object):
             output_names: list of model outputs
         """
         self.update_proto()
+
+        # TODO: we'd want to do something like this so that transpose optimizer is active
+        # for  all (unit) tests
+        # if optimize:
+        #    from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+        #    optimizer = TransposeOptimizer(self, False)
+        #    optimizer.optimize()
+
         # create output_tensor_values
         output_tensor_values = []
         for name in output_names:

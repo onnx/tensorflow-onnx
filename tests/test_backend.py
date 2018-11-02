@@ -263,6 +263,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
 
+    def test_conv2d_with_input_transpose(self):
+        x_shape = [2, 32, 32, 3]
+        kernel_shape = [3, 3, 3, 3]
+        x_val = make_xval(x_shape)
+        x_val_for_onnx = x_val.transpose(NHWC_TO_NCHW)
+        kernel = tf.constant(make_xval(kernel_shape), dtype=tf.float32, name='k')
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        conv = tf.nn.conv2d(x, kernel, strides=[1, 1, 1, 1], padding="SAME")
+        _ = tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
+                            process_args={"inputs_as_nchw": [_INPUT]},
+                            onnx_feed_dict={_INPUT: x_val_for_onnx})
+
     @unittest.skip
     def test_lrn(self):
         # FIXME: numerical results are not correct

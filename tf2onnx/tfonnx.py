@@ -384,7 +384,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 nodes.append(transpose)
             parent.data_format = "NCHW"
 
-    # kernel mist to be transposed
+    # kernel must to be transposed
     if with_kernel:
         parent = node.inputs[1]
         if node.inputs[1].is_const():
@@ -1743,6 +1743,31 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     return mapped_op, unmapped_op
 
 
+def transpose_inputs(ctx, inputs_as_nchw):
+    """Insert a transpose from NHWC to NCHW on model input on users request."""
+    ops = []
+    for node in ctx.get_nodes():
+        for idx, output_name in enumerate(node.output):
+            if output_name in inputs_as_nchw:
+                shape = ctx.get_shape(output_name)
+                if len(shape) != len(NCHW_TO_NHWC):
+                    log.warning("transpose_input for %s: shape must be rank 4, ignored" % output_name)
+                    ops.append(node)
+                    continue
+                # insert transpose
+                op_name = utils.make_name(node.name)
+                transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
+                transpose.set_attr("perm", NCHW_TO_NHWC)
+                transpose.inserted_nchw = True
+                ctx.copy_shape(output_name, transpose.output[0])
+                ctx.set_shape(output_name, np.array(shape)[NHWC_TO_NCHW])
+                ops.append(transpose)
+                ops.append(node)
+                continue
+            ops.append(node)
+    ctx.set_nodes(ops)
+
+
 def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
     """Optimize tensorflow graph for inference."""
     transforms = []
@@ -1764,7 +1789,7 @@ def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
-                     extra_opset=None, shape_override=None):
+                     extra_opset=None, shape_override=None, inputs_as_nchw=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -1774,6 +1799,9 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             opset: the opset to be used (int, default is latest)
             custom_op_handlers: dictionary of custom ops handlers
             custom_rewriter: list of custom graph rewriters
+            extra_opset: list of extra opset's, for example the opset's used by custom ops
+            shape_override: dict with inputs that override the shapes given by tensorflow
+            inputs_as_nchw: transpose inputs in list from nchw to nchw
         Return:
             onnx graph
     """
@@ -1789,13 +1817,16 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     if shape_override is None:
         shape_override = {}
+    if inputs_as_nchw is None:
+        inputs_as_nchw = []
     if target is None:
         target = DEFAULT_TARGET
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset)
-    ops = g.get_nodes()
+    if inputs_as_nchw:
+        transpose_inputs(g, inputs_as_nchw)
 
     # pre-processing graph rewrites
     rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
@@ -1804,6 +1835,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
+
+    ops = g.get_nodes()
     for rewrite in rewriters:
         ops = rewrite(g, ops)
         g.set_nodes(ops)
@@ -1828,9 +1861,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     topological_sort(g.get_nodes())
 
     g.update_proto()
+
     if verbose:
         print("tensorflow ops: {}".format(op_cnt))
         print("tensorflow attr: {}".format(attr_cnt))
         print("onnx mapped: {}".format(mapped_op))
         print("onnx unmapped: {}".format(unmapped_op))
+
     return g
