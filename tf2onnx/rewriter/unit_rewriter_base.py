@@ -121,9 +121,7 @@ class UnitRewriterBase:
             return REWRITER_RESULT.SKIP
 
         self.print_step("process the weights/bias/ft_bias, to fit onnx weights/bias requirements")
-        input_size, hidden_size = self.process_weights_and_bias(rnn_weights, rnn_props)
-        rnn_props.input_size = input_size
-        rnn_props.hidden_size = hidden_size
+        self.process_weights_and_bias(rnn_weights, rnn_props)
 
         _, batch_size_node = self.process_seq_length(rnn_props, seq_len_input_node)
         rnn_props.batch_size_node = batch_size_node
