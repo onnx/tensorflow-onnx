@@ -1293,7 +1293,10 @@ def fill_op7(ctx, node, name, args):
         unsqueeze_node = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=None, **attr)
         nodes.insert(0, unsqueeze_node)
         ctx.set_dtype(unsqueeze_node.output[0], new_dtype)
-        ctx.set_shape(unsqueeze_node.output[0], [1] + shape)
+        if shape:
+            ctx.set_shape(unsqueeze_node.output[0], [1] + shape)
+        else:
+            ctx.set_shape(unsqueeze_node.output[0], [1])
 
     # Tile's repeats must be INT64
     attr = {"to": onnx_pb.TensorProto.INT64}
