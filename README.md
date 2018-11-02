@@ -40,7 +40,7 @@ For caffe2, follow the instructions here:
 We tested with caffe2 and onnxruntime and unit tests are passing for those.
 
 ## Python Version
-We tested with tensorflow 1.5-1.9 and anaconda **3.5,3.6**.
+We tested with tensorflow 1.5-1.11 and anaconda **3.5,3.6**.
 
 # Installation
 
