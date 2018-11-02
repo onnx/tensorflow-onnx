@@ -275,7 +275,7 @@ class UnitRewriterBase:
         # There are 2 kinds of output nodes for dynamic_rnn
         # 1. output node, which ends with "Exit" followed
         #    either Transpose (when time_major is False),
-        #    or TensorArrayGatherV3
+        #    or TensorArrayGather
         # 2. cell_state node, 
         #    2.1 if state_is_tuple is true:
         #        2.1.1 which ends with "Exit" followed by a Pack<C, H> whose name is out of rnn scope.

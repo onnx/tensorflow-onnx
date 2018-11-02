@@ -118,15 +118,15 @@ class LSTMUnitRewriter(UnitRewriterBase):
         return None
 
     def _output_switch_check(self, enter_target_node_input_id, identity_consumers, match):
-        ta_write_nodes = [c for c in identity_consumers if c.type == "TensorArrayWriteV3"]
+        ta_write_nodes = [c for c in identity_consumers if c.type.startswith("TensorArrayWriteV")]
         if len(ta_write_nodes) == 1:
             enter_target_node = self.g.get_node_by_name(enter_target_node_input_id)
-            if enter_target_node.type == "TensorArrayV3":
+            if enter_target_node.type.startswith("TensorArrayV"):
                 log.debug("found output switch node")
                 return enter_target_node_input_id
             log.debug("found enter target node is not ta node")
             return None
-        log.debug(str(len(ta_write_nodes)) + " TensorArrayWriteV3 matching found, cannot validate output switch")
+        log.debug(str(len(ta_write_nodes)) + " TensorArrayWrite matching found, cannot validate output switch")
         return None
 
     def process_input_x(self, rnn_props, rnn_scope_name):
@@ -457,9 +457,9 @@ class LSTMUnitRewriter(UnitRewriterBase):
         
         gather_node = None
         for n in exit_consumers:
-            if n.type == "TensorArrayGatherV3":
+            if n.type.startswith("TensorArrayGatherV"):
                 gather_node = n
-            elif n.type == "TensorArraySizeV3":
+            elif n.type.startswith("TensorArraySizeV"):
                 continue
             else:
                 return None
