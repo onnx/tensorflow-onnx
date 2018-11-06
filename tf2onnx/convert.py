@@ -70,7 +70,9 @@ def main():
     args = get_args()
 
     opset = tf2onnx.utils.find_opset(args.opset)
-    print("using tensorflow={}, onnx={}, opset={}".format(tf.__version__, onnx.__version__, opset))
+    print("using tensorflow={}, onnx={}, opset={}, tfonnx={}/{}".format(
+        tf.__version__, onnx.__version__, opset,
+        tf2onnx.__version__, tf2onnx.version.git_version[:6]))
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.
