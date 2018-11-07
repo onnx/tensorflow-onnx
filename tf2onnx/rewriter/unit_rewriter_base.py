@@ -31,6 +31,22 @@ class UnitRewriterBase:
         self.switch_checkers = {}
 
     def run(self, unit_type):
+        """
+        main procedures:
+        1 use cell op pattern to find cell >> the found cell is the start pointer of the procedures below
+        2 find needed info from tensorflow graph:
+            1 rnn scope name
+            2 input_x
+            3 weight
+            4 sequence node
+            5 initializer
+            6 state output & hidden output
+        3 process found info according to ONNX requirement
+
+        remember: op pattern and scope name is useful
+                  they are used to get needed info from tensorflow graph
+                  raw found info need to be formatted according to ONNX requirement
+        """
         # allow_reorder must be true. because LSTMCell and BasicLSTMCell's call function
         # are defining the calculation with different orders. Then we can share the same
         # pattern.
@@ -53,18 +69,34 @@ class UnitRewriterBase:
         return self.g.get_nodes()
 
     def run_single_match(self, match):
+        """
+        methods to get needed info from tf graph:
+          1 input_x: specific node in found cell, then trace TensorArrayReadV >..>input of "TensorArrayScatterV",
+              if "Transpose" found under rnn scope, then input of "Transpose" is "input_x"
+          2 weight: specific node in cell computation graph and specific op  pattern as input_x
+          3 sequence node: "Identity" op with name "sequence_length", the name is hard code in tensorflow code
+          4 state initializer: "LoopCond" and then specific op pattern >> LoopCond > Switch > Switch usage checker
+          5 hidden output and state output: find switch and use switch checker to distinguish different switch nodes
+
+          6 scope name of rnn and gru/lstm cell: specific node in cell computation graph,
+              and use found convention in tensorflow code to split name of node to get needed scooe name
+
+          most found info is stored in "rnn_props"
+        """
         log.debug("=========================")
         self.print_step("start handling a new potential rnn cell")
         self.all_nodes = self.g.get_nodes()
         self.must_keep_nodes = []
-
+        # when single direction, node in while will be rnnxx/fw/fw/while/... >> scope name is rnnxx/fw/fw
+        # when bi-directional, node in while will be rnnxx/while/... >> scope name is rnnxx
+        # and rnnxx can be assigned by users but not "fw", though maybe "FW" in another tf version
         rnn_scope_name = self.get_rnn_scope_name(match)
         if not rnn_scope_name:
             log.error("unable to find rnn scope name, skip")
             return REWRITER_RESULT.SKIP
         else:
             log.debug("rnn scope name is " + rnn_scope_name)
-        cell_scope_name = self.get_cell_scope_name(match)
+
         self.print_step("get_weight_and_bias starts")
         rnn_weights = self.get_weight_and_bias(match)
         if not rnn_weights:
@@ -111,6 +143,7 @@ class UnitRewriterBase:
         self.process_outputs(match, rnn_node, rnn_props, rnn_scope_name)
 
         self.print_step("remove all nodes within original rnn scope except some nodes still useful")
+        cell_scope_name = self.get_cell_scope_name(match)
         new_nodes = []
         for n in self.all_nodes:
             if n in self.must_keep_nodes:
@@ -185,7 +218,7 @@ class UnitRewriterBase:
             if not n.name.startswith(rnn_scope_name):
                 continue
 
-            if n.name.endswith("sequence_length") and n.type in ("Identity"):
+            if n.name.endswith("sequence_length") and n.type in "Identity":
                 log.debug("find non-const sequence length node")
             elif "CheckSeqLen" in n.name and n.is_const():
                 # if seq length is const, the node might be const folded,
