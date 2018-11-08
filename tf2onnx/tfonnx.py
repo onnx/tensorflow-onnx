@@ -451,15 +451,24 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
             pads = [0] * spatial * 2
             input_shape = ctx.get_shape(node.input[0])
             output_shape = ctx.get_shape(node.output[0])
+            # check if the input shape is valid
+            if len(input_shape) != len(pads):
+                log.error("node %s input needs to be rank %d, is %d" % (node.name, len(pads), len(input_shape)))
+            # transpose shape to nchw
             if node.is_nhwc():
                 input_shape = spatial_map(input_shape, NHWC_TO_NCHW)
                 output_shape = spatial_map(output_shape, NHWC_TO_NCHW)
+            # calculate pads
             for i in range(spatial):
+                if input_shape[i + 2] == -1:
+                    log.error("node %s has unknown dim %s for pads calculation" % (node.name, str(input_shape)))
+                    continue
                 pad = (output_shape[i + 2] - 1) * strides[i] + dilations[i] * kernel_shape[i] - input_shape[i + 2]
                 pad = max(pad, 0)
                 pads[i] = pad // 2
                 pads[i + spatial] = pad - pad // 2
             node.set_attr("pads", pads)
+
         elif padding == 'VALID':
             pass
         else:
@@ -1728,6 +1737,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
             onnx_node = func(g, node, node.name, args)
         except Exception as ex:
             type_, value_, traceback_ = sys.exc_info()
+            log.error("node %s: exception %s" % (node.name, ex))
             ex_ext = traceback.format_exception(type_, value_, traceback_)
             if continue_on_error:
                 log.info(ex_ext)

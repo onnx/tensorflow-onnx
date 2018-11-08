@@ -31,6 +31,30 @@ def get_args():
     return args
 
 
+def check_connectivity(model):
+    """Check connectivity of all nodes."""
+    g = model.graph
+    inputs = set()
+    outputs = set()
+    external_inputs = set([i.name for i in g.input])
+    external_outputs = set([o.name for o in g.output])
+    initializers = set([i.name for i in g.initializer])
+    for node in g.node:
+        for i in node.input:
+            inputs.add(i)
+        for o in node.output:
+            outputs.add(i)
+    unconnected_inputs = initializers.union(outputs).difference(inputs)
+    if unconnected_inputs:
+        print("node inputs not connected: {}".format(unconnected_inputs))
+    unused_outputs = outputs.union(outputs).difference(inputs.union(external_outputs))
+    if unused_outputs:
+        print("unused node outputs: {}".format(unused_outputs))
+    unused_initializers = initializers.difference(inputs.union(external_outputs))
+    if unused_initializers:
+        print("unused initializers: {}".format(unused_initializers))
+
+
 def main():
     args = get_args()
 
@@ -40,6 +64,7 @@ def main():
         model.ParseFromString(data)
 
     if args.check:
+        check_connectivity(model)
         onnx.checker.check_model(model)
 
     if args.stats:
