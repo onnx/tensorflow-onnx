@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
-"""Unit Tests for gru."""
+"""Unit Tests for grublock."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -11,13 +11,14 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.contrib import rnn
-from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
+
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
 
-class GRUTests(Tf2OnnxBackendTestBase):
+class GRUBlockTests(Tf2OnnxBackendTestBase):
+
     def test_single_dynamic_gru(self):
         units = 5
         batch_size = 6
@@ -27,9 +28,8 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
         # no scope
-        cell = rnn.GRUCell(
-            units,
-            activation=None)
+        cell = rnn.GRUBlockCell(
+            units)
         outputs, cell_state = tf.nn.dynamic_rnn(
             cell,
             x,
@@ -41,7 +41,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         input_names_with_port = ["input_1:0"]
         feed_dict = {"input_1:0": x_val}
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
 
     def test_multiple_dynamic_gru(self):
         units = 5
@@ -56,9 +56,8 @@ class GRUTests(Tf2OnnxBackendTestBase):
         gru_cell_state_list = []
         if True:
             # no scope
-            cell = rnn.GRUCell(
-                units,
-                activation=None)
+            cell = rnn.GRUBlockCell(
+                units)
             outputs, cell_state = tf.nn.dynamic_rnn(
                 cell,
                 x,
@@ -68,9 +67,8 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
         if True:
             # given scope
-            cell = rnn.GRUCell(
-                units,
-                activation=None)
+            cell = rnn.GRUBlockCell(
+                units)
             with variable_scope.variable_scope("root1") as scope:
                 outputs, cell_state = tf.nn.dynamic_rnn(
                     cell,
@@ -95,12 +93,10 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
         x_val = np.stack([x_val] * batch_size)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
 
         # no scope
-        cell = rnn.GRUCell(
-            units,
-            kernel_initializer=initializer)
+        cell = rnn.GRUBlockCell(
+            units)
         outputs, cell_state = tf.nn.dynamic_rnn(
             cell,
             x,
@@ -121,15 +117,13 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
         x_val = np.stack([x_val] * batch_size)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
 
         y_val = np.array([4, 3, 4, 5, 2, 1], dtype=np.int32)
         seq_length = tf.placeholder(tf.int32, y_val.shape, name="input_2")
 
         # no scope
-        cell = rnn.GRUCell(
-            units,
-            kernel_initializer=initializer)
+        cell = rnn.GRUBlockCell(
+            units)
         outputs, cell_state = tf.nn.dynamic_rnn(
             cell,
             x,
@@ -149,12 +143,10 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
         x_val = np.stack([x_val] * 6)
         x = tf.placeholder(tf.float32, shape=(None, 4, 2), name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
 
         # no scope
-        cell = rnn.GRUCell(
-            units,
-            kernel_initializer=initializer)
+        cell = rnn.GRUBlockCell(
+            units)
         outputs, cell_state = tf.nn.dynamic_rnn(
             cell,
             x,
@@ -166,7 +158,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
 
     def test_single_dynamic_gru_ch_zero_state_initializer(self):
         units = 5
@@ -174,12 +166,9 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
         x_val = np.stack([x_val] * batch_size)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
-
         # no scope
-        cell = rnn.GRUCell(
-            units,
-            kernel_initializer=initializer)
+        cell = rnn.GRUBlockCell(
+            units)
 
         # defining initial state
         initial_state = cell.zero_state(batch_size, dtype=tf.float32)
@@ -204,12 +193,9 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = tf.random_uniform_initializer(-1.0, 1.0)
-
         # no scope
-        cell = rnn.GRUCell(
-            hidden_size,
-            kernel_initializer=initializer)
+        cell = rnn.GRUBlockCell(
+            hidden_size)
 
         outputs, cell_state = tf.nn.dynamic_rnn(
             cell,
@@ -231,11 +217,9 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = tf.random_uniform_initializer(0.0, 1.0)
         # no scope
-        cell = rnn.GRUCell(
-            hidden_size,
-            kernel_initializer=initializer)
+        cell = rnn.GRUBlockCell(
+            hidden_size)
 
         outputs, cell_state = tf.nn.dynamic_rnn(
             cell,
@@ -257,17 +241,14 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
 
         gru_list = []
         if True:
             # bigru, no scope
-            cell1 = rnn.GRUCell(
-                units,
-                kernel_initializer=initializer)
-            cell2 = rnn.GRUCell(
-                units,
-                kernel_initializer=initializer)
+            cell1 = rnn.GRUBlockCell(
+                units)
+            cell2 = rnn.GRUBlockCell(
+                units)
             outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
@@ -290,17 +271,14 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
 
         gru_list = []
         if True:
             # bigru, no scope
-            cell1 = rnn.GRUCell(
-                units,
-                kernel_initializer=initializer)
-            cell2 = rnn.GRUCell(
-                units,
-                kernel_initializer=initializer)
+            cell1 = rnn.GRUBlockCell(
+                units)
+            cell2 = rnn.GRUBlockCell(
+                units)
             outputs, _ = tf.nn.bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
@@ -322,14 +300,12 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
 
         gru_list = []
         if True:
             # bigru, no scope
-            cell = rnn.GRUCell(
-                units,
-                kernel_initializer=initializer)
+            cell = rnn.GRUBlockCell(
+                units)
             outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
                 cell,
                 cell,
@@ -356,7 +332,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         gru_list = []
         if True:
             # bigru, no scope
-            cell = rnn.GRUCell(
+            cell = rnn.GRUBlockCell(
                 units)
             outputs, _ = tf.nn.bidirectional_dynamic_rnn(
                 cell,
@@ -374,4 +350,4 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
-    Tf2OnnxBackendTestBase.trigger(GRUTests)
+    Tf2OnnxBackendTestBase.trigger(GRUBlockTests)

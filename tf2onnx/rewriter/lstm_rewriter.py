@@ -118,66 +118,16 @@ class LSTMUnitRewriter(UnitRewriterBase):
         return None
 
     def _output_switch_check(self, enter_target_node_input_id, identity_consumers, match):
-        ta_write_nodes = [c for c in identity_consumers if c.type == "TensorArrayWriteV3"]
+        ta_write_nodes = [c for c in identity_consumers if is_tensor_array_write_op(c)]
         if len(ta_write_nodes) == 1:
             enter_target_node = self.g.get_node_by_name(enter_target_node_input_id)
-            if enter_target_node.type == "TensorArrayV3":
+            if is_tensor_array_op(enter_target_node):
                 log.debug("found output switch node")
                 return enter_target_node_input_id
             log.debug("found enter target node is not ta node")
             return None
-        log.debug(str(len(ta_write_nodes)) + " TensorArrayWriteV3 matching found, cannot validate output switch")
+        log.debug(str(len(ta_write_nodes)) + " TensorArrayWrite matching found, cannot validate output switch")
         return None
-
-    def process_input_x(self, rnn_props, rnn_scope_name):
-        self.print_step("look for possible transpose following RNN input node")
-        # todo: peepholdes P is not considered now
-        input_consumers = self.g.find_output_consumers(rnn_props.input_id)
-        consumers_in_rnn_scope = []
-        for consumer in input_consumers:
-            if consumer.name.startswith(rnn_scope_name):
-                consumers_in_rnn_scope.append(consumer)
-
-        if len(consumers_in_rnn_scope) != 1:
-            log.error("RNN input node has " + str(len(consumers_in_rnn_scope)) +
-                      " consumers in current rnn scope " + rnn_scope_name + ", skip")
-            return None
-
-        possible_transpose_after_input = consumers_in_rnn_scope[0]
-
-        self.print_step("convert the transpose to onnx node if there is one found.")
-        # check whether time_major is enabled or not
-        # in TF, if time_major is not enabled, input format is [batch, time, ...]
-        # but, during TF handling, at the beginning, the data will be transposed to [time, batch, ...]
-        # after processing, the format is changed back before returning result.
-        # So here, we judge the time_major by checking the transpose operator existence.
-        converted_transpose = self._convert_timemajor_transpose(possible_transpose_after_input)
-        if converted_transpose:
-            log.debug("detect batch-major inputs")
-            rnn_props.time_major = False
-            rnn_props.x_input_id = converted_transpose.output[0]
-            self.all_nodes.extend([converted_transpose])
-        else:
-            log.debug("detect timer-major inputs")
-            rnn_props.time_major = True
-            rnn_props.x_input_id = rnn_props.input_id
-
-        rnn_props.onnx_input_ids["X"] = rnn_props.x_input_id
-        return rnn_props
-
-    def _convert_timemajor_transpose(self, node):
-        if not check_is_timemajor_transpose(node):
-            log.debug("not found timemajor transpose")
-            return
-
-        log.debug("found timemajor transpose")
-
-        attr = {"perm": np.array([1, 0, 2], dtype=np.int64)}
-        new_trans = make_onnx_node(self.g, "Transpose", [node.input[0]], attr)
-
-        self.g.copy_shape(node.output[0], new_trans.output[0])
-        self.g.replace_all_inputs(self.g.get_nodes(), node.output[0], new_trans.output[0])
-        return new_trans
 
     def process_weights_and_bias(self, rnn_weights, rnn_props):
         w_r_icfo = rnn_weights.kernel.value
@@ -232,7 +182,6 @@ class LSTMUnitRewriter(UnitRewriterBase):
         rnn_props.onnx_input_ids["W"] = w_node.output[0]
         rnn_props.onnx_input_ids["R"] = r_node.output[0]
         rnn_props.onnx_input_ids["B"] = b_node.output[0]
-        return input_size, hidden_size
 
     def process_var_init_nodes(self, rnn_props):
         init_h_id = None
@@ -295,65 +244,6 @@ class LSTMUnitRewriter(UnitRewriterBase):
             self.g.replace_all_inputs(self.g.get_nodes(), initializer_input_id, squeeze_node.output[0])
             self.all_nodes.append(squeeze_node)
             return squeeze_node.output[0]
-
-    def _workaround_fill_ch_init_node(self, initializer_input_id, rnn_props):
-        node = self.g.get_node_by_name(initializer_input_id)
-        if node.type != "Fill":
-            return 
-
-        self.must_keep_nodes.remove(node)
-
-        fill_val = node.inputs[1].get_tensor_value()[0]
-        fill_val_dtype = utils.ONNX_TO_NUMPY_DTYPE[node.inputs[1].dtype]
-
-        # this must be int64, since Concat's input data type must be consistent.
-        num_direction_node = self.g.make_const(utils.make_name("Const"), np.array([1], dtype=np.float32))
-        h_node = self.g.make_const(utils.make_name("Const"), np.array([rnn_props.hidden_size], dtype=np.float32))
-        b_node = rnn_props.batch_size_node
-        # Concat in OPSET7 does not support int64.
-        tile_shape = make_onnx_node(self.g, "Concat", [num_direction_node.output[0], b_node.output[0], h_node.output[0]], attr={"axis": 0})
-
-        # Tile's repeats must be INT64
-        attr = {"to": onnx_pb.TensorProto.INT64}
-        tile_shape_int64 = make_onnx_node(self.g, 'Cast', [tile_shape.output[0]], attr)
-
-        const_node = self.g.make_const(utils.make_name("Const"), np.array([[[fill_val]]], dtype=fill_val_dtype))
-        tile_node = make_onnx_node(self.g, 'Tile', [const_node.output[0], tile_shape_int64.output[0]])
-        self.all_nodes.extend([tile_shape, tile_shape_int64, tile_node])
-        return tile_node
-
-    def process_seq_length(self, rnn_props, seq_length_node):
-        # output: [time step, batch size, input size]
-        shape_node = make_onnx_node(self.g, "Shape", [rnn_props.x_input_id])
-
-        # LSTMCell only allow inputs of [batch size, input_size], so we assume dynamic_rnn has 3 dims.
-        # Slice cannot support Int64 in OPSET 7, so we cast here.
-        attr = {"to": onnx_pb.TensorProto.FLOAT}
-        cast_shape_node = make_onnx_node(self.g, "Cast", [shape_node.output[0]], attr)
-        self.g.copy_shape(shape_node.output[0], cast_shape_node.output[0])
-
-        attr = {"axes": [0], "starts": [1], "ends": [2]}
-        batchsize_node = make_onnx_node(self.g, "Slice", [cast_shape_node.output[0]], attr)
-
-        # Tile's repeats must be INT64
-        attr = {"to": onnx_pb.TensorProto.INT64}
-        repeat_node = make_onnx_node(self.g, 'Cast', [batchsize_node.output[0]], attr)
-
-        self.all_nodes.extend([shape_node, cast_shape_node, batchsize_node, repeat_node])
-
-        if not seq_length_node:
-            attr = {"axes" : [0], "starts": [0], "ends": [1]}
-            timestep_node = make_onnx_node(self.g, 'Slice', [cast_shape_node.output[0]], attr)
-
-            tile_node = make_onnx_node(self.g, 'Tile', [timestep_node.output[0], repeat_node.output[0]])
-
-            attr = {"to": onnx_pb.TensorProto.INT32}  # LSTM sequence_lens needs to be int32
-            seq_length_node = make_onnx_node(self.g, 'Cast', [tile_node.output[0]], attr)
-
-            self.all_nodes.extend([timestep_node, tile_node, seq_length_node])
-
-        rnn_props.onnx_input_ids["sequence_lens"] = seq_length_node.output[0]
-        return seq_length_node, batchsize_node
 
     def create_rnn_node(self, rnn_props):
         # specify if the RNN is forward, reverse, or bidirectional.
@@ -457,9 +347,9 @@ class LSTMUnitRewriter(UnitRewriterBase):
         
         gather_node = None
         for n in exit_consumers:
-            if n.type == "TensorArrayGatherV3":
+            if is_tensor_array_gather_op(n):
                 gather_node = n
-            elif n.type == "TensorArraySizeV3":
+            elif is_tensor_array_size_op(n):
                 continue
             else:
                 return None

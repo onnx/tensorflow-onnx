@@ -24,6 +24,10 @@ from tf2onnx import utils
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
+from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
+from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
+from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
+
 from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
@@ -1293,7 +1297,11 @@ def fill_op7(ctx, node, name, args):
         unsqueeze_node = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=None, **attr)
         nodes.insert(0, unsqueeze_node)
         ctx.set_dtype(unsqueeze_node.output[0], new_dtype)
-        ctx.set_shape(unsqueeze_node.output[0], [1] + shape)
+        if shape:
+            shape = [1] + shape
+        else:
+            shape = [1]
+        ctx.set_shape(unsqueeze_node.output[0], shape)
 
     # Tile's repeats must be INT64
     attr = {"to": onnx_pb.TensorProto.INT64}
@@ -1841,9 +1849,12 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         transpose_inputs(g, inputs_as_nchw)
 
     # pre-processing graph rewrites
+    # bi-directional re-writer should be place after single directional re-writer
     rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
                  rewrite_random_normal, rewrite_dropout,
-                 rewrite_single_direction_lstm, rewrite_bi_direction_lstm]
+                 rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
+                 rewrite_single_direction_gru, rewrite_single_direction_grublock,
+                 rewrite_bi_direction_gru]
 
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)

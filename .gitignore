@@ -12,3 +12,4 @@ __pycache__
 .cache
 .eggs
 *.egg-info
+run.sh
