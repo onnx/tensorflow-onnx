@@ -42,7 +42,7 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         input_names_with_port = ["input_1:0"]
         feed_dict = {"input_1:0": x_val}
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
 
     def test_multiple_dynamic_gru(self):
         units = 5
@@ -86,7 +86,7 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
 
     def test_single_dynamic_gru_seq_length_is_const(self):
         units = 5
@@ -110,7 +110,7 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-4)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
 
     def test_single_dynamic_gru_seq_length_is_not_const(self):
         units = 5
@@ -137,7 +137,7 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val, "input_2:0": y_val}
         input_names_with_port = ["input_1:0", "input_2:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-04)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03)
 
     def test_single_dynamic_gru_placeholder_input(self):
         units = 5
@@ -159,7 +159,7 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
 
     def test_single_dynamic_gru_ch_zero_state_initializer(self):
         units = 5
@@ -185,7 +185,7 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-05)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03)
 
     def test_single_dynamic_gru_random_weights(self):
         hidden_size = 5
