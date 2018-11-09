@@ -29,7 +29,7 @@ class GRUUnitRewriter(UnitRewriterBase):
     def run(self):
         return super(GRUUnitRewriter, self).run(RNNUnitType.GRUCell)
 
-    def run2(self, unit_type):
+    def run_with_unit_type(self, unit_type):
         return super(GRUUnitRewriter, self).run(unit_type)
 
     def get_rnn_scope_name(self, match):
@@ -73,13 +73,13 @@ class GRUUnitRewriter(UnitRewriterBase):
 
     def find_inputs(self, rnn_scope_name, rnn_props, match, input_blacklist=None):
         concat_node = match.get_op("cell_inputs")
-        assert concat_node.type.startswith("ConcatV")
+        assert is_concat_op(concat_node)
         read_node = concat_node.inputs[0]
-        assert read_node.type.startswith("TensorArrayReadV")
+        assert is_tensor_array_read_op(read_node)
         enter_node = read_node.inputs[2]
         assert enter_node.type == "Enter"
         scatter_node = enter_node.inputs[0]
-        assert scatter_node.type.startswith("TensorArrayScatterV")
+        assert is_tensor_array_scatter_op(scatter_node)
         node = scatter_node.inputs[2]
         node_id = scatter_node.input[2]
         # dynamic_rnn may insert transpose op if input data format is [B, T, D]
@@ -112,10 +112,10 @@ class GRUUnitRewriter(UnitRewriterBase):
         self.g.replace_all_inputs(self.all_nodes, exit_node.output[0], squeeze_node.output[0])
 
     def _output_switch_check(self, enter_target_node_input_id, identity_consumers, match):
-        ta_write_nodes = [c for c in identity_consumers if c.type.startswith("TensorArrayWriteV")]
+        ta_write_nodes = [c for c in identity_consumers if is_tensor_array_write_op(c)]
         if len(ta_write_nodes) == 1:
             enter_target_node = self.g.get_node_by_name(enter_target_node_input_id)
-            if enter_target_node.type.startswith("TensorArrayV"):
+            if is_tensor_array_op(enter_target_node):
                 log.debug("found output switch node")
                 return enter_target_node_input_id
             log.debug("found enter target node is not ta node")
@@ -168,9 +168,9 @@ class GRUUnitRewriter(UnitRewriterBase):
 
         gather_node = None
         for n in exit_consumers:
-            if n.type.startswith("TensorArrayGatherV"):
+            if is_tensor_array_gather_op(n):
                 gather_node = n
-            elif n.type.startswith("TensorArraySizeV"):
+            elif is_tensor_array_size_op(n):
                 continue
             else:
                 return None

@@ -25,7 +25,7 @@ from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
-from tf2onnx.rewriter.rnn import rewrite_grublock
+from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
 from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
 
 from tf2onnx.utils import port_name
@@ -1298,9 +1298,10 @@ def fill_op7(ctx, node, name, args):
         nodes.insert(0, unsqueeze_node)
         ctx.set_dtype(unsqueeze_node.output[0], new_dtype)
         if shape:
-            ctx.set_shape(unsqueeze_node.output[0], [1] + shape)
+            shape = [1] + shape
         else:
-            ctx.set_shape(unsqueeze_node.output[0], [1])
+            shape = [1]
+        ctx.set_shape(unsqueeze_node.output[0], shape)
 
     # Tile's repeats must be INT64
     attr = {"to": onnx_pb.TensorProto.INT64}
@@ -1852,7 +1853,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
                  rewrite_random_normal, rewrite_dropout,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
-                 rewrite_single_direction_gru, rewrite_grublock,
+                 rewrite_single_direction_gru, rewrite_single_direction_grublock,
                  rewrite_bi_direction_gru]
 
     if custom_rewriter is not None:

@@ -23,7 +23,7 @@ class UnitRewriterBase:
         # used to track nodes in rnn_scope_name to keep (e.g. not delete) for each single match run
         self.must_keep_nodes = []
         # bi-directional rnn can use only one lstm/gru cell.
-        # if so, there are some nodes belong to bw rnn but in fw rnn name scope
+        # if so, there are some nodes belonging to bw rnn but in fw rnn name scope
         # then we have to keep these nodes when calling "run_single_match", and delete them after final match
         self.keep_when_run_single_match = set()
         # checker signature : func_name(enter_target_node_input_id, identity_consumers, match)
@@ -43,7 +43,7 @@ class UnitRewriterBase:
             6 state output & hidden output
         3 process found info according to ONNX requirement
 
-        remember: op pattern and scope name is useful
+        remember: op pattern and scope name are useful
                   they are used to get needed info from tensorflow graph
                   raw found info need to be formatted according to ONNX requirement
         """
@@ -87,8 +87,8 @@ class UnitRewriterBase:
         self.print_step("start handling a new potential rnn cell")
         self.all_nodes = self.g.get_nodes()
         self.must_keep_nodes = []
-        # when single direction, node in while will be rnnxx/fw/fw/while/... >> scope name is rnnxx/fw/fw
-        # when bi-directional, node in while will be rnnxx/while/... >> scope name is rnnxx
+        # when bi-directional, node in while will be rnnxx/fw/fw/while/... >> scope name is rnnxx/fw/fw
+        # when single direction, node in while will be rnnxx/while/... >> scope name is rnnxx
         # and rnnxx can be assigned by users but not "fw", though maybe "FW" in another tf version
         rnn_scope_name = self.get_rnn_scope_name(match)
         if not rnn_scope_name:
@@ -161,6 +161,7 @@ class UnitRewriterBase:
 
         self.g.set_nodes(new_nodes)
 
+#####################################################################################
 # find needed info from graph
     def get_rnn_scope_name(self, match):
         pass
@@ -177,10 +178,9 @@ class UnitRewriterBase:
 
     def get_var_initializers(self, match, rnn_props, rnn_scope_name):
         """
-                initializer op can be found by tracing from switch mode. while rnn has multiple switch nodes
-                so have to discriminate them by a check
-
-                switch nodes can be found by tracing LoopCond
+        initializer op can be found by tracing from switch mode. while rnn has multiple switch nodes,
+        so have to discriminate them by a check.
+        switch nodes can be found by tracing LoopCond
         """
         loop_cond_op = None
         for n in self.g.get_nodes():
@@ -218,7 +218,7 @@ class UnitRewriterBase:
             if not n.name.startswith(rnn_scope_name):
                 continue
 
-            if n.name.endswith("sequence_length") and n.type in "Identity":
+            if n.name.endswith("sequence_length") and n.type == "Identity":
                 log.debug("find non-const sequence length node")
             elif "CheckSeqLen" in n.name and n.is_const():
                 # if seq length is const, the node might be const folded,
@@ -292,6 +292,7 @@ class UnitRewriterBase:
         rnn_props.input_id = input_id_candidate
         return rnn_props
 
+#####################################################################################
 # process found info according to ONNX requirement
     def process_input_x(self, rnn_props, rnn_scope_name):
         self.print_step("look for possible transpose following RNN input node")
@@ -400,6 +401,7 @@ class UnitRewriterBase:
     def create_rnn_node(self, rnn_props):
         pass
 
+#####################################################################################
 # helper function
     def check_switch_by_usage_pattern(self, switch_node, match, check_func):
         if switch_node.type != 'Switch':

@@ -257,3 +257,32 @@ def make_onnx_node(g, op_type, inputs, attr=None, output_count=1, skip_conversio
 
 def is_reverse_op(op):
     return op.type in ("ReverseV2", "ReverseSequence")
+
+
+def is_concat_op(op):
+    return op.type in ("ConcatV2", "ConcatV3")
+
+
+def is_tensor_array_scatter_op(op):
+    return op.type in ("TensorArrayScatterV2", "TensorArrayScatterV3")
+
+
+def is_tensor_array_gather_op(op):
+    return op.type in ("TensorArrayGatherV2", "TensorArrayGatherV3")
+
+
+def is_tensor_array_read_op(op):
+    return op.type in ("TensorArrayReadV2", "TensorArrayReadV3")
+
+
+def is_tensor_array_write_op(op):
+    return op.type in ("TensorArrayWriteV2", "TensorArrayWriteV3")
+
+
+def is_tensor_array_op(op):
+    return op.type in ("TensorArrayV2", "TensorArrayV3")
+
+
+def is_tensor_array_size_op(op):
+    return op.type in ("TensorArraySizeV2", "TensorArraySizeV3")
+

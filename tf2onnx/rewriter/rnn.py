@@ -36,6 +36,6 @@ def rewrite_bi_direction_gru(g, ops):
     return rewrite_bidirectional_grus(g, ops)
 
 
-def rewrite_grublock(g, ops):
+def rewrite_single_direction_grublock(g, ops):
     r = GRUBlockUnitRewriter(g)
     return r.run()

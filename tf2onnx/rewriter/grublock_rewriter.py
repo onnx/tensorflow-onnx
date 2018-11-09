@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.rewriter.gru_rewriter - gru support
+tf2onnx.rewriter.gruBlock_rewriter - gruBlock support
 """
 
 from __future__ import division
@@ -26,7 +26,7 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
         }
 
     def run(self):
-        return super(GRUBlockUnitRewriter, self).run2(RNNUnitType.GRUBlockCell)
+        return super(GRUBlockUnitRewriter, self).run_with_unit_type(RNNUnitType.GRUBlockCell)
 
     def get_rnn_scope_name(self, match):
         # take the cell output and go up 3 levels to find the scope:
@@ -66,11 +66,11 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
         cell_node = match.get_op("GRUBlockCell")
         assert cell_node.type == "GRUBlockCell"
         read_node = cell_node.inputs[0]
-        assert read_node.type.startswith("TensorArrayReadV")
+        assert is_tensor_array_read_op(read_node)
         enter_node = read_node.inputs[2]
         assert enter_node.type == "Enter"
         scatter_node = enter_node.inputs[0]
-        assert scatter_node.type.startswith("TensorArrayScatterV")
+        assert is_tensor_array_scatter_op(scatter_node)
         node = scatter_node.inputs[2]
         node_id = scatter_node.input[2]
         # dynamic_rnn may insert transpose op if input data format is [B, T, D]
