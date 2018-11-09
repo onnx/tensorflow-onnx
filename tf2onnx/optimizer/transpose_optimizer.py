@@ -85,17 +85,17 @@ class TransposeOptimizer(object):
             if op.type == "Transpose":
                 input_shape = self._g.get_shape(op.input[0])
                 new_shape = []
-                if is_nchw_transpose(op) and (input_shape[3]==1 or (input_shape[1]==1 and input_shape[2]==1)): 
+                if is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1] == 1 and input_shape[2] == 1)):
                     new_shape = [input_shape[0], input_shape[3], input_shape[1], input_shape[2]]
-                if is_nhwc_transpose(op) and (input_shape[1]==1 or (input_shape[2]==1 and input_shape[3]==1)):
+                if is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2] == 1 and input_shape[3] == 1)):
                     new_shape = [input_shape[0], input_shape[2], input_shape[3], input_shape[1]]
                 if len(new_shape) == 4:
                     out_nodes = self._g.find_output_consumers(op.output[0])
                     need_insert_reshape = False
                     for out_node in out_nodes:
                         if out_node.type != "Reshape":
-                            need_insert_reshape=True
-                    if(need_insert_reshape):
+                            need_insert_reshape = True
+                    if need_insert_reshape:
                         op_name = utils.make_name("reshape")
                         shape_name = utils.make_name(op_name)
                         self._g.make_const(shape_name, np.array(new_shape, dtype=np.int64))
