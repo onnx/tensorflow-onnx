@@ -1809,7 +1809,7 @@ def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
-                     extra_opset=None, shape_override=None, inputs_as_nchw=None):
+                     extra_opset=None, shape_override=None, inputs_as_nchw=None, output_names=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -1822,6 +1822,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
             inputs_as_nchw: transpose inputs in list from nchw to nchw
+            output_names: name of output nodes in graph
         Return:
             onnx graph
     """
@@ -1844,7 +1845,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
 
-    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset)
+    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
     if inputs_as_nchw:
         transpose_inputs(g, inputs_as_nchw)
 

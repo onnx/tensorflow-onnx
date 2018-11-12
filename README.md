@@ -175,7 +175,8 @@ import tf2onnx
 tf2onnx.tfonnx.process_tf_graph(tf_graph, 
             continue_on_error=False, verbose=False, target=None,
             opset=None, custom_op_handlers=None,
-            custom_rewriter=None, extra_opset=None):
+            custom_rewriter=None, extra_opset=None,
+            shape_override=None, inputs_as_nchw=None, output_names=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -188,6 +189,7 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
             inputs_as_nchw: transpose inputs in list from nchw to nchw
+            output_names: name of output nodes in graph
         Return:
             onnx graph
     """

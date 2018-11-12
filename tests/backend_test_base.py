@@ -147,7 +147,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf.import_graph_def(graph_def, name='')
 
         with tf.Session() as sess:
-            g = process_tf_graph(sess.graph, opset=type(self).OPSET, **process_args)
+            g = process_tf_graph(sess.graph, opset=type(self).OPSET, output_names=output_names_with_port,
+                                 **process_args)
             actual = self._run_backend(g, output_names_with_port, onnx_feed_dict)
 
         for expected_val, actual_val in zip(expected, actual):

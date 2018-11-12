@@ -102,7 +102,8 @@ def main():
                              opset=args.opset,
                              custom_op_handlers=custom_ops,
                              extra_opset=extra_opset,
-                             shape_override=args.shape_override)
+                             shape_override=args.shape_override,
+                             output_names=args.outputs)
 
     optimizer = TransposeOptimizer(g, args.verbose is not None)
     optimizer.optimize()

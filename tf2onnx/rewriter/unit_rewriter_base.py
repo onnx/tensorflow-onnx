@@ -58,14 +58,10 @@ class UnitRewriterBase:
             for match in match_results:
                 self.run_single_match(match)
 
-            new_nodes = []
-            for node in self.g.get_nodes():
-                if node not in self.keep_when_run_single_match:
-                    new_nodes.append(node)
-
-            self.g.set_nodes(new_nodes)
+            self.g.delete_unused_nodes(self.g.output_names)
             self.g.update_proto()
             self.print_step("finish handling")
+
         return self.g.get_nodes()
 
     def run_single_match(self, match):
@@ -161,7 +157,6 @@ class UnitRewriterBase:
 
         self.g.set_nodes(new_nodes)
 
-#####################################################################################
 # find needed info from graph
     def get_rnn_scope_name(self, match):
         pass
@@ -292,7 +287,6 @@ class UnitRewriterBase:
         rnn_props.input_id = input_id_candidate
         return rnn_props
 
-#####################################################################################
 # process found info according to ONNX requirement
     def process_input_x(self, rnn_props, rnn_scope_name):
         self.print_step("look for possible transpose following RNN input node")
@@ -401,7 +395,6 @@ class UnitRewriterBase:
     def create_rnn_node(self, rnn_props):
         pass
 
-#####################################################################################
 # helper function
     def check_switch_by_usage_pattern(self, switch_node, match, check_func):
         if switch_node.type != 'Switch':
