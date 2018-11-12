@@ -37,7 +37,7 @@ def eight_bit_quantitize(w_in):
     """quantitize to 8 bit as scale and zeropoint"""
     low = np.min(w_in)
     high = np.max(w_in)
-    scale = (high - low) / 256
+    scale = (high - low) / 256.
     w = (w_in - low) / scale
     w_out = w.astype("uint8")
     return w_out, low, scale
@@ -89,8 +89,8 @@ def quantitize_graph(g, verbose=False):
         if w.data_type != onnx_pb.TensorProto.FLOAT:
             continue
         w_np = numpy_helper.to_array(w)
-        # only look at sizes >= 128 bytes
-        if w_np.size < 128:
+        # only look at sizes >= 32 elements
+        if w_np.size < 32:
             continue
 
         # weights we want to quantitize
@@ -102,10 +102,14 @@ def quantitize_graph(g, verbose=False):
         nw = numpy_helper.from_array(w_quant, name=name)
         if verbose:
             w_dequant = eight_bit_dequantitize(w_quant, zp, scale)
-            diff = (w_np - w_dequant) * 100.0
-            log.info("pct diff: %s", stats(diff))
-            # log.info("%s", stats(w_np))
-            # log.info("%s", stats(w_dequant))
+            rtol = np.abs(w_dequant - w_np)
+            s = {}
+            for i in [1.0, 5.0, 10.0, 20.0]:
+                above_rtol = np.sum(rtol > np.abs(i * w_np / 100.)) / w_np.size
+                s["> " + str(i) + "%"] = "{:.2f}".format(100. * above_rtol)
+            log.info("above_rtol: %s", str(s))
+            log.info("raw:   %s", stats(w_np))
+            log.info("quant: %s", stats(w_dequant))
         output_name = _compose_quantitize(nodes, new_weights, zp, scale, name)
         remap[name] = output_name
         quantitized_weights.append(nw)
