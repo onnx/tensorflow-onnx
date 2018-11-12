@@ -215,7 +215,6 @@ class LSTMUnitRewriter(UnitRewriterBase):
         unsqueeze_node_2 = make_onnx_node(self.g, "Unsqueeze", [slice_node2.output[0]], attr={"axes": [0]})
 
         self.all_nodes.extend([slice_node1, slice_node2, unsqueeze_node_1, unsqueeze_node_2])
-        self.must_keep_nodes.append(self.g.get_node_by_name(input_id))
         return unsqueeze_node_1.output[0], unsqueeze_node_2.output[0]
 
     def _process_tuple_ch_init_nodes(self, rnn_props):
@@ -232,7 +231,6 @@ class LSTMUnitRewriter(UnitRewriterBase):
             return fill_ch_init_node.output[0]
 
         node = self.g.get_node_by_name(initializer_input_id)
-        self.must_keep_nodes.append(node)
         if node.is_const():
             val = node.get_tensor_value()
             initial_name = utils.make_name("Const")

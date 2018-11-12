@@ -20,12 +20,6 @@ class UnitRewriterBase:
     def __init__(self, g):
         self.g = g
         self.all_nodes = self.g.get_nodes()
-        # used to track nodes in rnn_scope_name to keep (e.g. not delete) for each single match run
-        self.must_keep_nodes = []
-        # bi-directional rnn can use only one lstm/gru cell.
-        # if so, there are some nodes belonging to bw rnn but in fw rnn name scope
-        # then we have to keep these nodes when calling "run_single_match", and delete them after final match
-        self.keep_when_run_single_match = set()
         # checker signature : func_name(enter_target_node_input_id, identity_consumers, match)
         # exit connector signature: func_name(rnn_node, exit_node, rnn_props)
         self.switch_checkers = {}
@@ -82,7 +76,6 @@ class UnitRewriterBase:
         log.debug("=========================")
         self.print_step("start handling a new potential rnn cell")
         self.all_nodes = self.g.get_nodes()
-        self.must_keep_nodes = []
         # when bi-directional, node in while will be rnnxx/fw/fw/while/... >> scope name is rnnxx/fw/fw
         # when single direction, node in while will be rnnxx/while/... >> scope name is rnnxx
         # and rnnxx can be assigned by users but not "fw", though maybe "FW" in another tf version
@@ -137,25 +130,6 @@ class UnitRewriterBase:
         self.print_step("start to handle outputs")
         # format of ONNX output is different with tf
         self.process_outputs(match, rnn_node, rnn_props, rnn_scope_name)
-
-        self.print_step("remove all nodes within original rnn scope except some nodes still useful")
-        cell_scope_name = self.get_cell_scope_name(match)
-        new_nodes = []
-        for n in self.all_nodes:
-            if n in self.must_keep_nodes:
-                new_nodes.append(n)
-                continue
-            else:
-                if n.name.startswith(rnn_scope_name):
-                    if cell_scope_name and n.name.startswith(cell_scope_name):
-                        self.keep_when_run_single_match.add(n)
-                        new_nodes.append(n)
-                    else:
-                        pass
-                else:
-                    new_nodes.append(n)
-
-        self.g.set_nodes(new_nodes)
 
 # find needed info from graph
     def get_rnn_scope_name(self, match):
@@ -229,7 +203,6 @@ class UnitRewriterBase:
         elif seq_len_node_cnt == 1:
             seq_len_node = seq_len_nodes[0]
             if seq_len_node.is_const():
-                self.must_keep_nodes.append(seq_len_node)
                 return seq_len_node
             else:
                 # input of the "identity" node may be a "cast"
@@ -238,7 +211,6 @@ class UnitRewriterBase:
                 if seq_len_node.inputs[0].type == "Cast":
                     cast_node = seq_len_node.inputs[0]
                     if not cast_node.inputs[0].name.startswith(rnn_scope_name):
-                        self.must_keep_nodes.append(cast_node)
                         return seq_len_node.inputs[0]
                     else:
                         raise ValueError("sequence length node should be outside of rnn scope")
@@ -254,7 +226,6 @@ class UnitRewriterBase:
         for _, init_input_id in rnn_props.var_initializers.items():
             init_node = self.g.get_node_by_name(init_input_id)
             var_init_nodes.append(init_node)
-            self.must_keep_nodes.append(init_node)
 
         # weight/bias inputs, and c/h initializers are dynamic_rnn/LSTMCell's parameters.
         # we will use them to filter out the dynamic_rnn's input tensor.
@@ -437,8 +408,6 @@ class UnitRewriterBase:
         node = self.g.get_node_by_name(initializer_input_id)
         if node.type != "Fill":
             return
-
-        self.must_keep_nodes.remove(node)
 
         fill_val = node.inputs[1].get_tensor_value()[0]
         fill_val_dtype = utils.ONNX_TO_NUMPY_DTYPE[node.inputs[1].dtype]
