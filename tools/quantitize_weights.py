@@ -168,7 +168,8 @@ def main():
         # create model proto
         model_proto_out = helper.make_model(g,
                                             producer_name="quantized {}".format(model_proto.producer_name),
-                                            producer_version=model_proto.producer_version)
+                                            producer_version=model_proto.producer_version,
+                                            opset_imports=model_proto.opset_import)
         f.write(model_proto_out.SerializeToString())
 
 
