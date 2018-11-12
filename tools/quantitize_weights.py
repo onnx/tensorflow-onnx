@@ -118,6 +118,7 @@ def quantitize_graph(g, verbose=False):
 
     # 2. add quantitized to initializers
     g.initializer.extend(new_weights)
+    g.initializer.extend(quantitized_weights)
 
     # 3. modify the type of weights that we quantitized
     modified = {w.name: w for w in quantitized_weights}
