@@ -39,11 +39,14 @@ For caffe2, follow the instructions here:
 
 We tested with caffe2 and onnxruntime and unit tests are passing for those.
 
-## Python Version
+## Supported Tensorflow and Python Versions
 We tested with tensorflow 1.5-1.11 and anaconda **3.5,3.6**.
 
 # Installation
+## From Pypi
+```pip install -U tf2onnx```
 
+## From Source
 Once dependencies are installed, from the tensorflow-onnx folder call:
 
 ```
@@ -55,7 +58,7 @@ tensorflow-onnx requires onnx-1.2.2 or better and will install/upgrade onnx if n
 
 To create a distribution:
 ```
-python setup.py sdist
+python setup.py bdist_wheel
 ```
 
 # Usage
