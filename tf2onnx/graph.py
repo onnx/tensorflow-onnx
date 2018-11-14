@@ -456,13 +456,12 @@ class Graph(object):
         ret = [x for _, x in sorted(zip(label, ops))]
         self.set_nodes(ret)
 
-    def make_model(self, doc, output_names, optimize=True):
+    def make_model(self, doc, optimize=True):
         """
         Create final ModelProto for onnx from internal graph.
         Args:
             optimize: optimize graph via onnx
             doc: text for doc string of the model
-            output_names: list of model outputs
         """
         self.update_proto()
 
@@ -475,7 +474,7 @@ class Graph(object):
 
         # create output_tensor_values
         output_tensor_values = []
-        for name in output_names:
+        for name in self.output_names:
             if name in self._dtypes_override:
                 dtype = self._dtypes_override[name]
             else:

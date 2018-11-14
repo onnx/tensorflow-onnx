@@ -109,7 +109,7 @@ def main():
     optimizer.optimize()
 
     model_proto = g.make_model(
-        "converted from {}".format(args.input), args.outputs,
+        "converted from {}".format(args.input),
         optimize=not args.continue_on_error)
 
     # write onnx graph

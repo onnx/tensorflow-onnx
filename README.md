@@ -203,9 +203,8 @@ with tf.Session() as sess:
     x = tf.placeholder(tf.float32, [2, 3], name="input")
     x_ = tf.add(x, x)
     _ = tf.identity(x_, name="output")
-    onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph)
-    model_proto = onnx_graph.make_model("test", 
-                                        ["input:0"], ["output:0"])
+    onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph, output_names=["output:0"])
+    model_proto = onnx_graph.make_model("test")
     with open("/tmp/model.onnx", "wb") as f:
         f.write(model_proto.SerializeToString())
 ```
@@ -238,8 +237,9 @@ with tf.Session() as sess:
     _ = tf.identity(x_, name="output")
     onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph,
                                                  custom_op_handlers={"Print": print_handler},
-                                                 extra_opset=[helper.make_opsetid(_TENSORFLOW_DOMAIN, 1)])
-    model_proto = onnx_graph.make_model("test", ["input:0"], ["output:0"])
+                                                 extra_opset=[helper.make_opsetid(_TENSORFLOW_DOMAIN, 1)],
+                                                 output_names=["output:0"])
+    model_proto = onnx_graph.make_model("test")
     with open("/tmp/model.onnx", "wb") as f:
         f.write(model_proto.SerializeToString())
 ```
