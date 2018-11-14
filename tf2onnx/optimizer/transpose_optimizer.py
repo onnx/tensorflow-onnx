@@ -36,8 +36,10 @@ def is_useless_transpose(transpose_node):
 class TransposeOptimizer(object):
     """Transpose Optimizer."""
 
-    def __init__(self, graph, debug=False):
+    def __init__(self, graph, output_names, debug=False):
         self._g = graph
+        self._output_names = [name.split(":")[0] for name in output_names]
+        print(self._output_names)
         self._debug = debug
         self._handler_map = {}
         self._force_stop = {}
@@ -84,6 +86,9 @@ class TransposeOptimizer(object):
         for op in nodes:
             if op.type == "Transpose":
                 input_shape = self._g.get_shape(op.input[0])
+                if not input_shape:
+                    continue
+
                 new_shape = []
                  # when transpose is NHWC_TO_NCHW
                 if is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1] == 1 and input_shape[2] == 1)):
@@ -221,6 +226,10 @@ class TransposeOptimizer(object):
         out_nodes = self._g.find_output_consumers(trans.output[0])
         if len(out_nodes) == 1:
             p = out_nodes[0]
+            if p.name in self._output_names:
+                log.debug("cannot move transpose down since it met output node %s", p.name)
+                return False
+
             if p.type in self._handler_map:
                 op_handler = self._handler_map[p.type]
                 return op_handler(trans, p)

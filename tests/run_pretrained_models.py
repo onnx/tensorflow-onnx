@@ -308,13 +308,13 @@ class Test(object):
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
-                optimizer = TransposeOptimizer(onnx_graph, debug)
+                optimizer = TransposeOptimizer(onnx_graph, self.output_names, debug)
                 optimizer.optimize()
 
                 model_proto = onnx_graph.make_model("test", self.output_names)
                 print("\tto_onnx", "OK")
                 if debug:
-                    model_proto.dump_graph()
+                    onnx_graph.dump_graph()
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
             except Exception as ex:
