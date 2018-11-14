@@ -313,14 +313,14 @@ def reshape_op5(ctx, node, name, args):
                                   onnx_pb.TensorProto.INT64]
     # onnx wants reshape.input[1] to have the value be int64 which is not the case for tensorflow.
     nodes = _convert_shapenode_to_int64(ctx, node, 1)
-    if not need_casting:
+    if ctx.opset >= 8 or not need_casting:
         # onnx reshape can handle the type - done
         return nodes
 
     # onnx < opset 8 does not know reshape for other types than float*, wrap the reshape in casts
     input_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
     input_cast.set_attr("to", onnx_pb.TensorProto.FLOAT)
-    ctx.copy_shape(name, input_cast.output[0])
+    ctx.copy_shape(node.output[0], input_cast.output[0])
 
     # if the next node is already a cast we don't need to insert another one
     next_nodes = ctx.find_output_consumers(node.output[0])
@@ -329,7 +329,7 @@ def reshape_op5(ctx, node, name, args):
         output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
         output_cast.set_attr("to", node.dtype)
         ctx.set_dtype(output_cast.output[0], node.dtype)
-        ctx.copy_shape(name, output_cast.output[0])
+        ctx.copy_shape(node.output[0], output_cast.output[0])
         nodes.append(output_cast)
     return [input_cast] + nodes
 
@@ -1636,6 +1636,47 @@ def rewrite_flatten(g, ops):
                 del ops[i]
         ops.append(new_node)
     return ops
+
+
+def rewrite_constant_fold(g, ops):
+    """
+    We call tensorflow transform with constant folding but in some cases tensorflow does
+    fold all constants. Since there are a bunch of ops in onnx that use attributes where
+    tensorflow has dynamic inputs, we badly want constant folding to work. For cases where
+    tensorflow missed something, make another pass over the graph and fix want we care about.
+    """
+    func_map = {"Sub": np.subtract,
+                "Mul": np.multiply,
+                "Add": np.add,
+                "Sqrt": np.sqrt}
+
+    keep_looking = True
+    while keep_looking:
+        keep_looking = False
+        for idx, op in enumerate(ops):
+            if op.is_deleted() or op.type in ["Identity", "TensorArrayV3", "Enter", "Assert"]:
+                continue
+            try:
+                inputs = []
+                for node in op.inputs:
+                    if not node.is_const():
+                        break
+                    inputs.append(node.get_tensor())
+                if inputs and len(op.input) == len(inputs):
+                    func = func_map.get(op.type)
+                    if func is None:
+                        # log.warning("want to fold node type=%s, name=%s but op not supported" % (op.type, op.name))
+                        continue
+                    log.info("folding node type=%s, name=%s" % (op.type, op.name))
+                    val = func(*inputs)
+                    ops[idx] = g.make_const(op.name, val)
+                    for node in op.inputs:
+                        node.set_deleted()
+                    keep_looking = True
+            except: # pylint: disable=bare-except
+                # ignore errors
+                pass
+    return g.remove_deleted_nodes(ops)
 
 
 def rewrite_incomplete_type_support(g, ops):

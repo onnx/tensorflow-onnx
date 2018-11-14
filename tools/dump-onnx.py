@@ -36,14 +36,14 @@ def check_connectivity(model):
     g = model.graph
     inputs = set()
     outputs = set()
-    external_inputs = set([i.name for i in g.input])
-    external_outputs = set([o.name for o in g.output])
-    initializers = set([i.name for i in g.initializer])
+    # external_inputs = {i.name for i in g.input}
+    external_outputs = {o.name for o in g.output}
+    initializers = {i.name for i in g.initializer}
     for node in g.node:
         for i in node.input:
             inputs.add(i)
         for o in node.output:
-            outputs.add(i)
+            outputs.add(o)
     unconnected_inputs = initializers.union(outputs).difference(inputs)
     if unconnected_inputs:
         print("node inputs not connected: {}".format(unconnected_inputs))
