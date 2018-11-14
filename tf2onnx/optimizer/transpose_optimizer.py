@@ -475,16 +475,3 @@ class TransposeOptimizer(object):
     # todo: consider share a same logic for element-wise op.
     def _tanh_handler(self, trans, node):
         return self._switch_transpose_and_node(node, trans)
-
-    def _shape_handler(self, trans, node):
-        if self._transpose_has_single_consumer_node([trans]):
-            ops = self._g.get_nodes()
-            self._g.replace_all_inputs(ops, trans.output[0], trans.input[0])
-
-            const_name = utils.port_name(utils.make_name("Const"))
-            indices_node = self._g.make_const(const_name, np.array([0, 2, 3, 1], dtype=np.int32))
-            gather_node = self._make_onnx_node("Gather", [node.output[0], const_name])
-            self._g.replace_all_inputs(ops, node.output[0], gather_node.output[0])
-            self._update_graph_nodes([gather_node], [trans], True)
-            return True
-        return False
