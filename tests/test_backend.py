@@ -1000,7 +1000,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
     def test_reverse_sequence(self):
-        x_val = np.array([[[1, 2, 3], [4, 5, 6], [0, 0, 0]], 
+        x_val = np.array([[[1, 2, 3], [4, 5, 6], [0, 0, 0]],
                           [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                           [[1, 2, 3], [0, 0, 0], [0, 0, 0]]],
                          dtype=np.float32)

@@ -1355,10 +1355,10 @@ def reverse_op8(ctx, node, name, args):
         input_shape = ctx.get_shape(node.input[0])
 
         # create one input (ValueInfoProto)
-        X = helper.make_tensor_value_info('X', input_dtype, input_shape[2:])
+        x = helper.make_tensor_value_info('X', input_dtype, input_shape[2:])
 
         # create one output (ValueInfoProto)
-        Y = helper.make_tensor_value_info('Y', input_dtype, input_shape[2:])
+        y = helper.make_tensor_value_info('Y', input_dtype, input_shape[2:])
 
         # create a node (NodeProto)
         node_def = helper.make_node(
@@ -1371,8 +1371,8 @@ def reverse_op8(ctx, node, name, args):
         graph_def = helper.make_graph(
             [node_def],
             'reverse_scan-body-graph',
-            [X],
-            [Y],
+            [x],
+            [y],
         )
         node.set_attr("body", graph_def)
         node.set_attr("directions", [1]) # reverse the scan input
@@ -1390,8 +1390,8 @@ def reverse_op8(ctx, node, name, args):
         node.input[1] = tmp
 
     else:
-        raise ValueError("unsupported seq_dim or batch_dim for reverse, seq_dim:%d, batch_dim:%d",
-                         seq_dim, batch_dim)
+        error_msg = "unsupported attributes, seq_dim:{}, batch_dim:{}".format(seq_dim, batch_dim)
+        raise ValueError(error_msg)
     return nodes
 
 
