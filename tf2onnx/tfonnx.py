@@ -1342,6 +1342,10 @@ def fill_op(ctx, node, name, args):
     return node
 
 
+def erf_op(ctx, node, name, args):
+    raise NotImplementedError("erf op not implemented")
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1433,6 +1437,7 @@ _OPSET_4 = {
     "DepthToSpace": (reorganize_data_op, []),
     "Pack": (pack_op, []),
     "Unpack": (unpack_op, []),
+    "Erf": (erf_op, []),
 }
 
 _OPSET_5 = {
@@ -1645,11 +1650,14 @@ def rewrite_constant_fold(g, ops):
     tensorflow has dynamic inputs, we badly want constant folding to work. For cases where
     tensorflow missed something, make another pass over the graph and fix want we care about.
     """
-    func_map = {"Sub": np.subtract,
-                "Mul": np.multiply,
-                "Add": np.add,
-                "Sqrt": np.sqrt}
+    func_map = {
+        "Add": np.add,
+        "Sub": np.subtract,
+        "Mul": np.multiply,
+        "Pack": np.stack,
+        "Sqrt": np.sqrt}
 
+    # pylint: disable=too-many-nested-blocks
     keep_looking = True
     while keep_looking:
         keep_looking = False
@@ -1667,8 +1675,20 @@ def rewrite_constant_fold(g, ops):
                     inputs.append(node.get_tensor())
                 if inputs and len(op.input) == len(inputs):
                     log.info("folding node type=%s, name=%s" % (op.type, op.name))
-                    val = func(*inputs)
+                    if op.type in ["Pack"]:
+                        # handle ops that need input array and axis
+                        axis = op.get_attr_int("axis")
+                        val = func(inputs, axis=axis)
+                    else:
+                        val = func(*inputs)
                     ops[idx] = g.make_const(op.name, val)
+                    old_output_name = op.output[0]
+                    new_output_name = op.name
+                    # need to re-write the consumers input name to use the const name
+                    consumers = g.find_output_consumers(old_output_name)
+                    if consumers:
+                        for consumer in consumers:
+                            g.replace_input(consumer, old_output_name, new_output_name)
                     for node in op.inputs:
                         node.set_deleted()
                     # keep looking until there is nothing we can fold.
@@ -1678,6 +1698,7 @@ def rewrite_constant_fold(g, ops):
             except: # pylint: disable=bare-except
                 # ignore errors
                 pass
+        # pylint: enable=too-many-nested-blocks
     return g.remove_deleted_nodes(ops)
 
 

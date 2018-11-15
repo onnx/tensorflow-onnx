@@ -118,6 +118,15 @@ class Node(object):
         attr = self.attr.get(name, default)
         return attr
 
+    def get_attr_int(self, name):
+        """Get attribute map."""
+        attr = self.attr.get(name)
+        if attr is not None:
+            attr = attr.i
+        else:
+            attr = 0
+        return attr
+
     def set_attr(self, name, value):
         self.attr[name] = helper.make_attribute(name, value)
 
