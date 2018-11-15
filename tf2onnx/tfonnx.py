@@ -1654,7 +1654,10 @@ def rewrite_constant_fold(g, ops):
     while keep_looking:
         keep_looking = False
         for idx, op in enumerate(ops):
-            if op.is_deleted() or op.type in ["Identity", "TensorArrayV3", "Enter", "Assert"]:
+            if op.is_deleted():
+                continue
+            func = func_map.get(op.type)
+            if func is None:
                 continue
             try:
                 inputs = []
@@ -1663,15 +1666,14 @@ def rewrite_constant_fold(g, ops):
                         break
                     inputs.append(node.get_tensor())
                 if inputs and len(op.input) == len(inputs):
-                    func = func_map.get(op.type)
-                    if func is None:
-                        # log.warning("want to fold node type=%s, name=%s but op not supported" % (op.type, op.name))
-                        continue
                     log.info("folding node type=%s, name=%s" % (op.type, op.name))
                     val = func(*inputs)
                     ops[idx] = g.make_const(op.name, val)
                     for node in op.inputs:
                         node.set_deleted()
+                    # keep looking until there is nothing we can fold.
+                    # We keep the graph in topological order so if we folded,
+                    # the result might help a following op.
                     keep_looking = True
             except: # pylint: disable=bare-except
                 # ignore errors
