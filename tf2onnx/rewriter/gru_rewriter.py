@@ -181,7 +181,6 @@ class GRUUnitRewriter(UnitRewriterBase):
         for _, init_input_id in rnn_props.var_initializers.items():
             init_node = self.g.get_node_by_name(init_input_id)
             var_init_nodes.append(init_node)
-            self.must_keep_nodes.append(init_node)
         blacklist_inputs = []
         blacklist_inputs.extend(var_init_nodes)
         # weight/bias inputs, and c/h initializer are dynamic_rnn/GRUCell's parameters.
@@ -259,7 +258,6 @@ class GRUUnitRewriter(UnitRewriterBase):
             return fill_ch_init_node.output[0]
 
         node = self.g.get_node_by_name(initializer_input_id)
-        self.must_keep_nodes.append(node)
         if node.is_const():
             val = node.get_tensor_value()
             initial_name = utils.make_name("Const")

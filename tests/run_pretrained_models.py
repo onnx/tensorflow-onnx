@@ -172,11 +172,10 @@ class Test(object):
             self.tf_runtime = time.time() - start
         return result
 
-    @staticmethod
-    def to_onnx(tf_graph, opset=None, shape_override=None):
+    def to_onnx(self, tf_graph, opset=None, shape_override=None):
         """Convert graph to tensorflow."""
         return process_tf_graph(tf_graph, continue_on_error=True, verbose=True, opset=opset,
-                                target=Test.target, shape_override=shape_override)
+                                target=Test.target, shape_override=shape_override, output_names=self.output_names)
 
     def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
@@ -311,7 +310,7 @@ class Test(object):
                 optimizer = TransposeOptimizer(onnx_graph, self.output_names, debug)
                 optimizer.optimize()
 
-                model_proto = onnx_graph.make_model("test", self.output_names)
+                model_proto = onnx_graph.make_model("test")
                 print("\tto_onnx", "OK")
                 if debug:
                     onnx_graph.dump_graph()

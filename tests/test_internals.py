@@ -43,7 +43,7 @@ def onnx_to_graphviz(g):
 
 def onnx_pretty(g, args=None):
     """Onnx graph pretty print."""
-    model_proto = g.make_model("converted from {}".format(args.input), args.inputs, args.outputs)
+    model_proto = g.make_model("converted from {}".format(args.input))
     return helper.printable_graph(model_proto.graph)
 
 

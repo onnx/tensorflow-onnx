@@ -286,3 +286,6 @@ def is_tensor_array_op(op):
 def is_tensor_array_size_op(op):
     return op.type in ("TensorArraySizeV2", "TensorArraySizeV3")
 
+
+def is_placeholder_op(op):
+    return op.type == "Placeholder"

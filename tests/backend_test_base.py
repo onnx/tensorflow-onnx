@@ -88,7 +88,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         return results
 
     def _run_backend(self, g, outputs, input_dict):
-        model_proto = g.make_model("test", outputs)
+        model_proto = g.make_model("test")
         if type(self).BACKEND == "onnxmsrtnext":
             y = self.run_onnxmsrtnext(model_proto, input_dict, outputs, self._testMethodName)
         elif type(self).BACKEND == "onnxruntime":
@@ -147,7 +147,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf.import_graph_def(graph_def, name='')
 
         with tf.Session() as sess:
-            g = process_tf_graph(sess.graph, opset=type(self).OPSET, **process_args)
+            g = process_tf_graph(sess.graph, opset=type(self).OPSET, output_names=output_names_with_port,
+                                 **process_args)
             actual = self._run_backend(g, output_names_with_port, onnx_feed_dict)
 
         for expected_val, actual_val in zip(expected, actual):
