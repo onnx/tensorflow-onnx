@@ -73,8 +73,10 @@ def _compose_quantitize(nodes, weights, zp, scale, name):
 
     return _port_name(name_add)
 
+
 def stats(a):
     return {"mean": a.mean(), "std": a.std(), "max": a.max(), "min": a.min()}
+
 
 def quantitize_graph(g, verbose=False):
     """Quantitize graph."""
@@ -104,9 +106,9 @@ def quantitize_graph(g, verbose=False):
             w_dequant = eight_bit_dequantitize(w_quant, zp, scale)
             rtol = np.abs(w_dequant - w_np)
             s = {}
-            for i in [1.0, 5.0, 10.0, 20.0]:
-                above_rtol = np.sum(rtol > np.abs(i * w_np / 100.)) / w_np.size
-                s["> " + str(i) + "%"] = "{:.2f}".format(100. * above_rtol)
+            for j in [1.0, 5.0, 10.0, 20.0]:
+                above_rtol = np.sum(rtol > np.abs(j * w_np / 100.)) / w_np.size
+                s["> " + str(j) + "%"] = "{:.2f}".format(100. * above_rtol)
             log.info("above_rtol: %s", str(s))
             log.info("raw:   %s", stats(w_np))
             log.info("quant: %s", stats(w_dequant))
