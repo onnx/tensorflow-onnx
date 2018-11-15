@@ -104,7 +104,7 @@ def main():
                              extra_opset=extra_opset,
                              shape_override=args.shape_override)
 
-    optimizer = TransposeOptimizer(g, args.verbose is not None)
+    optimizer = TransposeOptimizer(g, args.outputs, args.verbose is not None)
     optimizer.optimize()
 
     model_proto = g.make_model(
