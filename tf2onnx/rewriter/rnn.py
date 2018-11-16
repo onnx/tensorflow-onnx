@@ -8,11 +8,14 @@ tf2onnx.rewriter.rnn - lstm support
 from __future__ import division
 from __future__ import print_function
 
-from tf2onnx.rewriter.bilstm_rewriter import *
-from tf2onnx.rewriter.lstm_rewriter import *
-from tf2onnx.rewriter.grublock_rewriter import *
-from tf2onnx.rewriter.bigru_rewriter import *
+import logging
 
+from tf2onnx.rewriter.bilstm_rewriter import rewrite_bidirectional_lstms
+from tf2onnx.rewriter.lstm_rewriter import LSTMUnitRewriter
+from tf2onnx.rewriter.grublock_rewriter import GRUUnitRewriter, GRUBlockUnitRewriter
+from tf2onnx.rewriter.bigru_rewriter import rewrite_bidirectional_grus
+
+# pylint: disable=invalid-name,unused-argument,missing-docstring
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.rnn")

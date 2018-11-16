@@ -8,12 +8,19 @@ tf2onnx.rewriter.rnn_unit_base - lstm support
 from __future__ import division
 from __future__ import print_function
 
+import logging
+import numpy as np
 from onnx import onnx_pb
-from tf2onnx.rewriter.rnn_utils import *
+from tf2onnx import utils
+from tf2onnx.rewriter.rnn_utils import make_onnx_node, get_pattern, RnnProperties, \
+     check_is_timemajor_transpose, REWRITER_RESULT
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher # pylint: disable=unused-import
+
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.rnn_unit_writer_base")
 
+# pylint: disable=invalid-name,unused-argument,missing-docstring
 
 # dynamic_rnn or bidirectional_dynamic_rnn related logic will be mapped to this base class.
 class UnitRewriterBase:
@@ -76,6 +83,9 @@ class UnitRewriterBase:
         log.debug("=========================")
         self.print_step("start handling a new potential rnn cell")
         self.all_nodes = self.g.get_nodes()
+        # FIXME:
+        # pylint: disable=assignment-from-none,assignment-from-no-return
+
         # when bi-directional, node in while will be rnnxx/fw/fw/while/... >> scope name is rnnxx/fw/fw
         # when single direction, node in while will be rnnxx/while/... >> scope name is rnnxx
         # and rnnxx can be assigned by users but not "fw", though maybe "FW" in another tf version
@@ -83,8 +93,7 @@ class UnitRewriterBase:
         if not rnn_scope_name:
             log.error("unable to find rnn scope name, skip")
             return REWRITER_RESULT.SKIP
-        else:
-            log.debug("rnn scope name is " + rnn_scope_name)
+        log.debug("rnn scope name is %s", rnn_scope_name)
 
         self.print_step("get_weight_and_bias starts")
         rnn_weights = self.get_weight_and_bias(match)
@@ -130,6 +139,9 @@ class UnitRewriterBase:
         self.print_step("start to handle outputs")
         # format of ONNX output is different with tf
         self.process_outputs(match, rnn_node, rnn_props, rnn_scope_name)
+        # FIXME:
+        # pylint: enable=assignment-from-none,assignment-from-no-return
+        return REWRITER_RESULT.OK
 
 # find needed info from graph
     def get_rnn_scope_name(self, match):
@@ -170,13 +182,14 @@ class UnitRewriterBase:
 
             for var_name, funcs in self.switch_checkers.items():
                 var_checker = funcs[0]
-                if funcs[2] == False:
+                if not funcs[2]:
                     continue
                 enter_target_input_id = self.check_switch_by_usage_pattern(n, match, var_checker)
                 if enter_target_input_id:
                     log.debug("found initializer node for " + var_name + ": " + enter_target_input_id)
                     rnn_props.var_initializers[var_name] = enter_target_input_id
                     break
+        return None
 
     def find_sequence_length_node(self, rnn_scope_name):
         # "sequence_length" under current rnn scope is the seq len node (if there is).
@@ -199,27 +212,23 @@ class UnitRewriterBase:
 
         seq_len_node_cnt = len(seq_len_nodes)
         if seq_len_node_cnt == 0:
-            return
-        elif seq_len_node_cnt == 1:
+            return None
+        if seq_len_node_cnt == 1:
             seq_len_node = seq_len_nodes[0]
             if seq_len_node.is_const():
                 return seq_len_node
-            else:
-                # input of the "identity" node may be a "cast"
-                # if so, then we have to keep it
-                # sentence "math_ops.to_int32(sequence_length)" in tf results in the "cast" op
-                if seq_len_node.inputs[0].type == "Cast":
-                    cast_node = seq_len_node.inputs[0]
-                    if not cast_node.inputs[0].name.startswith(rnn_scope_name):
-                        return seq_len_node.inputs[0]
-                    else:
-                        raise ValueError("sequence length node should be outside of rnn scope")
-                elif not seq_len_node.inputs[0].name.startswith(rnn_scope_name):
+            # input of the "identity" node may be a "cast"
+            # if so, then we have to keep it
+            # sentence "math_ops.to_int32(sequence_length)" in tf results in the "cast" op
+            if seq_len_node.inputs[0].type == "Cast":
+                cast_node = seq_len_node.inputs[0]
+                if not cast_node.inputs[0].name.startswith(rnn_scope_name):
                     return seq_len_node.inputs[0]
-                else:
-                    raise ValueError("sequence length node should be outside of rnn scope")
-        else:
-            raise ValueError("there are more sequence length nodes than expected")
+                raise ValueError("sequence length node should be outside of rnn scope")
+            if not seq_len_node.inputs[0].name.startswith(rnn_scope_name):
+                return seq_len_node.inputs[0]
+            raise ValueError("sequence length node should be outside of rnn scope")
+        raise ValueError("there are more sequence length nodes than expected")
 
     def get_rnn_input_blacklist(self, rnn_weights, rnn_props):
         var_init_nodes = []
@@ -245,8 +254,8 @@ class UnitRewriterBase:
                             rnn_input_nodes.append([input_node, input_id])
 
         if len(rnn_input_nodes) != 1:
-            log.error("found " + str(len(rnn_input_nodes)) + " inputs for the dynamic_run, unexpected. They are ")
-            log.error(rnn_input_nodes)
+            log.error("found %d inputs for the dynamic_run, unexpected. They are %s",
+                      len(rnn_input_nodes), rnn_input_nodes)
             return rnn_props
 
         input_node_candidate = rnn_input_nodes[0][0]
@@ -269,8 +278,8 @@ class UnitRewriterBase:
                 consumers_in_rnn_scope.append(consumer)
 
         if len(consumers_in_rnn_scope) != 1:
-            log.error("RNN input node has " + str(len(consumers_in_rnn_scope)) +
-                      " consumers in current rnn scope " + rnn_scope_name + ", skip")
+            log.error("RNN input node has %d onsumers in current rnn scope %s skip",
+                      len(consumers_in_rnn_scope), rnn_scope_name)
             return None
 
         possible_transpose_after_input = consumers_in_rnn_scope[0]
@@ -321,7 +330,7 @@ class UnitRewriterBase:
         self.all_nodes.extend([shape_node, cast_shape_node, batchsize_node, repeat_node])
 
         if not seq_length_node:
-            attr = {"axes" : [0], "starts": [0], "ends": [1]}
+            attr = {"axes": [0], "starts": [0], "ends": [1]}
             timestep_node = make_onnx_node(self.g, 'Slice', [cast_shape_node.output[0]], attr)
 
             tile_node = make_onnx_node(self.g, 'Tile', [timestep_node.output[0], repeat_node.output[0]])
@@ -359,7 +368,7 @@ class UnitRewriterBase:
 
                     enter_target_input_id = self.check_switch_by_usage_pattern(switch, match, var_checker)
                     if enter_target_input_id:
-                        log.debug("this is " + var_name +" exit node")
+                        log.debug("this is %s exit node", var_name)
                         var_exit_connector(rnn_node, n, rnn_props)
                         break
 
@@ -380,7 +389,7 @@ class UnitRewriterBase:
         for merge_input in merge_node.inputs:
             if merge_input.type == 'Enter':
                 target_node_input_id = merge_input.input[0]
-                log.debug("a Switch >> Merge >> Enter is found called " + merge_input.inputs[0].name)
+                log.debug("a Switch >> Merge >> Enter is found called %s", merge_input.inputs[0].name)
                 break
             else:
                 log.debug("skip the non-Enter input node of the merge_node")
@@ -393,10 +402,8 @@ class UnitRewriterBase:
             if switch_consumers[0].type == "Identity":
                 identity_consumers = self.g.find_output_consumers(switch_consumers[0].output[0])
                 return check_func(target_node_input_id, identity_consumers, match)
-            else:
-                log.error("not expected, skip ")
-        else:
-            log.warning("is_switch_used_by found no merge>>Enter node")
+            log.error("not expected, skip ")
+        log.warning("is_switch_used_by found no merge>>Enter node")
 
         return None
 
@@ -407,7 +414,7 @@ class UnitRewriterBase:
     def _workaround_fill_ch_init_node(self, initializer_input_id, rnn_props):
         node = self.g.get_node_by_name(initializer_input_id)
         if node.type != "Fill":
-            return
+            return None
 
         fill_val = node.inputs[1].get_tensor_value()[0]
         fill_val_dtype = utils.ONNX_TO_NUMPY_DTYPE[node.inputs[1].dtype]
@@ -417,7 +424,9 @@ class UnitRewriterBase:
         h_node = self.g.make_const(utils.make_name("Const"), np.array([rnn_props.hidden_size], dtype=np.float32))
         b_node = rnn_props.batch_size_node
         # Concat in OPSET7 does not support int64.
-        tile_shape = make_onnx_node(self.g, "Concat", [num_direction_node.output[0], b_node.output[0], h_node.output[0]], attr={"axis": 0})
+        tile_shape = make_onnx_node(self.g, "Concat",
+                                    [num_direction_node.output[0], b_node.output[0], h_node.output[0]],
+                                    attr={"axis": 0})
 
         # Tile's repeats must be INT64
         attr = {"to": onnx_pb.TensorProto.INT64}
@@ -431,7 +440,7 @@ class UnitRewriterBase:
     def _convert_timemajor_transpose(self, node):
         if not check_is_timemajor_transpose(node):
             log.debug("not found timemajor transpose")
-            return
+            return None
 
         log.debug("found timemajor transpose")
 

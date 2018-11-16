@@ -8,12 +8,16 @@ tf2onnx.rewriter.gruBlock_rewriter - gruBlock support
 from __future__ import division
 from __future__ import print_function
 
-from tf2onnx.rewriter.gru_rewriter import *
+import logging
+from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
+from tf2onnx.rewriter.rnn_utils import make_onnx_node, RNNUnitType, get_weights_from_const_node, \
+    is_tensor_array_read_op, is_tensor_array_scatter_op
 
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.grublock_rewriter")
 
+# pylint: disable=invalid-name,unused-argument,missing-docstring
 
 class GRUBlockUnitRewriter(GRUUnitRewriter):
     def __init__(self, g):
@@ -54,13 +58,13 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
         if not all([gate_kernel, gate_bias, hidden_kernel, hidden_bias]):
             log.error("rnn weights check failed, skip")
             sys.exit(-1)
-        else:
-            log.debug("find needed weights")
-            res = {'gate_kernel': gate_kernel,
-                   "gate_bias": gate_bias,
-                   "hidden_kernel": hidden_kernel,
-                   "hidden_bias": hidden_bias}
-            return res
+            return None
+        log.debug("find needed weights")
+        res = {"gate_kernel": gate_kernel,
+               "gate_bias": gate_bias,
+               "hidden_kernel": hidden_kernel,
+               "hidden_bias": hidden_bias}
+        return res
 
     def find_inputs(self, rnn_scope_name, rnn_props, match, input_blacklist=None):
         cell_node = match.get_op("GRUBlockCell")
@@ -86,10 +90,9 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
     def _state_switch_check(enter_target_node_input_id, identity_consumers, match):
         node = match.get_op("GRUBlockCell")
         if node == identity_consumers[0]:
-            log.debug("find state initializer value at " + enter_target_node_input_id)
+            log.debug("find state initializer value at %s", enter_target_node_input_id)
             return enter_target_node_input_id
-        else:
-            return None
+        return None
 
     @staticmethod
     def get_rnn_activation(match):
