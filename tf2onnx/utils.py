@@ -178,7 +178,7 @@ def get_shape(node):
         else:
             shape = node.get_attr("shape")
             dims = [d.size for d in shape.dim]
-        if shape[0] is not None or shape[0] == -1:
+        if shape[0] is None or shape[0] == -1:
             shape[0] = 1
     except:  # pylint: disable=bare-except
         pass
