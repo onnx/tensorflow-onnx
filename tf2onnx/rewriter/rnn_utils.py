@@ -6,12 +6,14 @@ tf2onnx.rewriter.rnn_utils - rnn support
 """
 
 import logging
-import numpy as np
 from enum import Enum
+import numpy as np
 from onnx import helper
 from tf2onnx import utils
 from tf2onnx.graph import Node
-from tf2onnx.graph_matcher import *
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher # pylint: disable=unused-import
+
+# pylint: disable=invalid-name,unused-argument,missing-docstring
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.rnn_utils")
@@ -72,9 +74,7 @@ class RnnProperties:
         if not self.input_node:
             log.error("no input node found for current rnn, skip")
             return False
-        else:
-            log.debug("input node with port id " + self.input_id)
-
+        log.debug("input node with port id %s", self.input_id)
         return True
 
 
@@ -197,36 +197,32 @@ def get_weights_from_const_node(node):
     if temp and temp.type == 'Const':
         val = temp.get_tensor_value()
         dtype = utils.ONNX_TO_NUMPY_DTYPE[temp.dtype]
-        log.debug("found weights " + temp.name)
+        log.debug("found weights %s", temp.name)
     else:
-        log.error("weight node seems not to be Const, skip, node name is " + temp.name)
-        return
+        log.error("weight node seems not to be Const, skip, node name is %s", temp.name)
+        return None
 
     return RnnWeight(node, val, dtype)
 
 
 def check_is_timemajor_transpose(node):
     # TensorFlow transpose node has perm as its second input
-    if node.type != "Transpose" :
-        return
+    if node.type != "Transpose":
+        return False
 
     perm_node = node.inputs[1]
     if perm_node.is_const():
-        if list(node.inputs[1].get_tensor_value()) == [1, 0, 2]:
-            return True
-        else:
-            return
-    elif check_is_unfolded_perm(perm_node):
+        return list(node.inputs[1].get_tensor_value()) == [1, 0, 2]
+    if check_is_unfolded_perm(perm_node):
         return True
-    else:
-        raise ValueError("Not supported yet")
+    raise ValueError("Not supported yet")
 
 
 # todo: fix this
 def check_is_unfolded_perm(perm_node):
     # For some case, like HallWay, the perm is a ConcatV2,
     # but it should be calculated when constant-fold. TODO: investigate why not constant fold.
-    # current workaround: use np to calculate the val explicitly. 
+    # current workaround: use np to calculate the val explicitly.
     if perm_node.type == "ConcatV2" and len(perm_node.inputs) == 3:
         const_node_val = perm_node.inputs[0].get_tensor_value()
         if list(const_node_val) != [1, 0]:
@@ -249,8 +245,8 @@ def make_onnx_node(g, op_type, inputs, attr=None, output_count=1, skip_conversio
     node_name = utils.make_name(op_type)
     outputs = [node_name + ":" + str(i) for i in np.arange(output_count)]
     node = Node(
-        helper.make_node(op_type, inputs, outputs, name = node_name, **attr),
-        g, skip_conversion = skip_conversion)
+        helper.make_node(op_type, inputs, outputs, name=node_name, **attr),
+        g, skip_conversion=skip_conversion)
 
     return node
 

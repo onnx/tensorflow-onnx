@@ -8,13 +8,21 @@ tf2onnx.rewriter.gru_rewriter - gru support
 from __future__ import division
 from __future__ import print_function
 
+import logging
 import sys
+import numpy as np
 
-from tf2onnx.rewriter.unit_rewriter_base import *
+from tf2onnx import utils
+from tf2onnx.rewriter.unit_rewriter_base import UnitRewriterBase
+from tf2onnx.rewriter.rnn_utils import get_weights_from_const_node, is_concat_op, is_tensor_array_read_op, \
+    is_tensor_array_scatter_op, is_tensor_array_write_op, is_tensor_array_op, is_tensor_array_gather_op, \
+    is_tensor_array_size_op, check_is_timemajor_transpose, RNNUnitType
+from tf2onnx.rewriter.rnn_utils import make_onnx_node
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.gru_rewriter")
 
+# pylint: disable=invalid-name,unused-argument,missing-docstring
 
 class GRUUnitRewriter(UnitRewriterBase):
     def __init__(self, g):
@@ -26,7 +34,7 @@ class GRUUnitRewriter(UnitRewriterBase):
             "output": (self._output_switch_check, self._connect_gru_output_to_graph, False),
         }
 
-    def run(self):
+    def run(self): # FIXME: pylint: disable=arguments-differ
         return super(GRUUnitRewriter, self).run(RNNUnitType.GRUCell)
 
     def run_with_unit_type(self, unit_type):
@@ -95,11 +103,10 @@ class GRUUnitRewriter(UnitRewriterBase):
     def _state_switch_check(enter_target_node_input_id, identity_consumers, match):
         concat_nodes = [c for c in identity_consumers if c == match.get_op("cell_inputs")]
         if len(concat_nodes) == 1:
-            log.debug("find state initializer value at " + enter_target_node_input_id)
+            log.debug("find state initializer value at %s", enter_target_node_input_id)
             return enter_target_node_input_id
-        else:
-            log.debug(str(len(concat_nodes)) + "Concat matching found, cannot identify state initializer")
-            return None
+        log.debug("%d Concat matching found, cannot identify state initializer", len(concat_nodes))
+        return None
 
     def _connect_gru_state_to_graph(self, gru_node, exit_node, rnn_props):
         # in tf, state output shape is: [batch, hidden]
@@ -120,19 +127,19 @@ class GRUUnitRewriter(UnitRewriterBase):
                 return enter_target_node_input_id
             log.debug("found enter target node is not ta node")
             return None
-        log.debug(str(len(ta_write_nodes)) + " TensorArrayWriteV3 matching found, cannot validate output switch")
+        log.debug("%d TensorArrayWriteV3 matching found, cannot validate output switch", len(ta_write_nodes))
         return None
 
     def _connect_gru_output_to_graph(self, gru_node, exit_node, rnn_props):
         exit_consumers = self.g.find_output_consumers(exit_node.output[0])
         gather_node = self._validate_output_exit_consumers(exit_consumers)
         if len(exit_consumers) != 2 or not gather_node:
-            log.debug("gru output exit node has " + str(len(exit_consumers)) + " consumers")
+            log.debug("gru output exit node has %d consumers", len(exit_consumers))
             raise ValueError("gru output exit node check failed")
 
         # gather output for sure has shape [time, batch, hidden]
         gather_output_id = gather_node.output[0]
-        log.debug("found output ta gather node " + gather_output_id)
+        log.debug("found output ta gather node %d", gather_output_id)
         # in tf batch major mode, output shape is : [batch, time, hidden]
         # in time major mode, output shape is: [time, batch, hidden]
         # in onnx, output shape is : [time, num_directions, batch, hidden]
@@ -264,11 +271,10 @@ class GRUUnitRewriter(UnitRewriterBase):
             new_val = np.expand_dims(val, axis=0)
             const_node = self.g.make_const(initial_name, new_val)
             return const_node.output[0]
-        else:
-            squeeze_node = make_onnx_node(self.g, "Unsqueeze", [initializer_input_id], attr={"axes": [0]})
-            self.g.replace_all_inputs(self.g.get_nodes(), initializer_input_id, squeeze_node.output[0])
-            self.all_nodes.append(squeeze_node)
-            return squeeze_node.output[0]
+        squeeze_node = make_onnx_node(self.g, "Unsqueeze", [initializer_input_id], attr={"axes": [0]})
+        self.g.replace_all_inputs(self.g.get_nodes(), initializer_input_id, squeeze_node.output[0])
+        self.all_nodes.append(squeeze_node)
+        return squeeze_node.output[0]
 
     @staticmethod
     def get_rnn_activation(match):
