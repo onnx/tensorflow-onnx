@@ -1414,12 +1414,12 @@ def erf_op(ctx, node, name, args):
     def outp(opname):
         return port_name(n + "__" + opname)
 
-    def mknode(type, inputs, opname, **kwargs):
-        return Node(helper.make_node(type, inputs, [outp(opname)], name=n + "__" + opname, **kwargs), ctx)
+    def mknode(op_type, inputs, opname, **kwargs):
+        return Node(helper.make_node(op_type, inputs, [outp(opname)], name=n + "__" + opname, **kwargs), ctx)
 
     try:
         _ = ctx.get_initializer("erf_a1")
-    except:
+    except: # pylint: disable=bare-except
         # insert the constants for erf once
         ctx.make_const(a1, np.array(0.254829592, dtype=np.float32))
         ctx.make_const(a2, np.array(-0.284496736, dtype=np.float32))
