@@ -1343,7 +1343,75 @@ def fill_op(ctx, node, name, args):
 
 
 def erf_op(ctx, node, name, args):
-    raise NotImplementedError("erf op not implemented")
+    """Error function."""
+
+    # constant names
+    a1 = "erf_a1"
+    a2 = "erf_a2"
+    a3 = "erf_a3"
+    a4 = "erf_a4"
+    a5 = "erf_a5"
+    p = "erf_p"
+    one = "erf_one"
+    null = "erf_null"
+
+    n = node.name
+    output_name = node.output[0]
+
+    def outp(opname):
+        return port_name(n + "__" + opname)
+
+    def mknode(type, inputs, opname, **kwargs):
+        return Node(helper.make_node(type, inputs, [outp(opname)], name=n + "__" + opname, **kwargs), ctx)
+
+    try:
+        _ = ctx.get_initializer("erf_a1")
+    except:
+        # insert the constants for erf once
+        ctx.make_const(a1, np.array(0.254829592, dtype=np.float32))
+        ctx.make_const(a2, np.array(-0.284496736, dtype=np.float32))
+        ctx.make_const(a3, np.array(1.421413741, dtype=np.float32))
+        ctx.make_const(a4, np.array(-1.453152027, dtype=np.float32))
+        ctx.make_const(a5, np.array(1.061405429, dtype=np.float32))
+        ctx.make_const(p, np.array(0.3275911, dtype=np.float32))
+        ctx.make_const(one, np.array(1., dtype=np.float32))
+        ctx.make_const(null, np.array(0., dtype=np.float32))
+
+    x = node.input[0]
+
+    # erf(x):
+    #  sign = 1 if x >= 0 else -1
+    #  x = abs(x)
+    #  # A&S formula 7.1.26
+    #  t = 1.0 / (1.0 + p * x)
+    #  y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) *  t * math.exp(-x * x)
+    #  return sign * y  # erf(-x) = -erf(x)
+
+    nodes = [
+        mknode("Abs", [x], "x"),
+        mknode("Sub", [null, x], "negx"),
+        mknode("Div", [x, outp("x")], "sign"), # FIXME: this might not work for x=0
+        mknode("Mul", [outp("x"), p], "4"),
+        mknode("Add", [outp("4"), one], "5"),
+        mknode("Div", [one, outp("5")], "t"),
+        mknode("Mul", [x, outp("negx")], "xsq"),
+        mknode("Exp", [outp("xsq")], "6"),
+        mknode("Mul", [outp("6"), outp("t")], "7"),
+        mknode("Mul", [outp("t"), a5], "8"),
+        mknode("Add", [outp("8"), a4], "9"),
+        mknode("Mul", [outp("9"), outp("t")], "10"),
+        mknode("Add", [outp("10"), a3], "11"),
+        mknode("Mul", [outp("11"), outp("t")], "12"),
+        mknode("Add", [outp("12"), a2], "13"),
+        mknode("Mul", [outp("13"), outp("t")], "14"),
+        mknode("Add", [outp("14"), a1], "15"),
+        mknode("Mul", [outp("15"), outp("7")], "16"),
+        mknode("Sub", [one, outp("16")], "17"),
+        mknode("Mul", [outp("17"), outp("sign")], "18"),
+    ]
+    # override output name
+    nodes[-1].output[0] = output_name
+    return nodes
 
 
 # map tensorflow ops to onnx ops. The format below is

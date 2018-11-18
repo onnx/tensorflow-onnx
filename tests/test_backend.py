@@ -998,6 +998,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
         assert output.op.type == "Div"
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    def test_erf(self):
+        x_shape = [2, 2]
+        x_val = np.random.sample(x_shape).astype(np.float32)
+        x_val = np.random.random(np.prod(x_shape)).astype(np.float32).reshape(x_shape)
+        x_val1 = np.array([[-1, -0.5], [1, 0.5]]).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+        x_ = tf.erf(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1}, rtol=1e-04)
+
 
 if __name__ == '__main__':
     Tf2OnnxBackendTestBase.trigger(BackendTests)
