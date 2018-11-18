@@ -1281,7 +1281,7 @@ def fill_op7(ctx, node, name, args):
     val_dtype = ctx.get_dtype(node.input[1])
     val_shape = ctx.get_shape(node.input[1])
 
-    need_cast = val_dtype != onnx_pb.TensorProto.FLOAT and ctx.opset < 8
+    need_cast = val_dtype != onnx_pb.TensorProto.FLOAT and ctx.opset < 9
     new_dtype = val_dtype
     if need_cast:
         new_dtype = onnx_pb.TensorProto.FLOAT
@@ -1340,6 +1340,59 @@ def fill_op(ctx, node, name, args):
     node.set_attr("dtype", dtype)
     del node.input[:]
     return node
+
+def reverse_op8(ctx, node, name, args):
+    # T output = ReverseSequence(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
+    # T output = Scan(int64 sequence_lens, variadic initial_state_and_scan_inputs, @graph body,
+    #                 @ints directions,@int num_scan_inputs)
+    nodes = [node]
+    seq_dim = node.get_attr("seq_dim")
+    batch_dim = node.get_attr("batch_dim")
+    if seq_dim.i == 1 and (batch_dim or batch_dim.i == 0):
+        node.type = "Scan"
+        node.set_attr("num_scan_inputs", 1)
+        input_dtype = ctx.get_dtype(node.input[0])
+        input_shape = ctx.get_shape(node.input[0])
+
+        # create one input (ValueInfoProto)
+        x = helper.make_tensor_value_info('X', input_dtype, input_shape[2:])
+
+        # create one output (ValueInfoProto)
+        y = helper.make_tensor_value_info('Y', input_dtype, input_shape[2:])
+
+        # create a node (NodeProto)
+        node_def = helper.make_node(
+            'Identity', # node name
+            ['X'], # inputs
+            ['Y'], # outputs
+        )
+
+        # create the graph (GraphProto)
+        graph_def = helper.make_graph(
+            [node_def],
+            'reverse_scan-body-graph',
+            [x],
+            [y],
+        )
+        node.set_attr("body", graph_def)
+        node.set_attr("directions", [1]) # reverse the scan input
+
+        seq_len_dtype = ctx.get_dtype(node.input[1])
+        if seq_len_dtype != onnx_pb.TensorProto.INT64:
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[1])
+            cast_node.set_attr("to", onnx_pb.TensorProto.INT64)
+            ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.INT64)
+            ctx.copy_shape(node.input[1], cast_node.output[0])
+            nodes.append(cast_node)
+
+        tmp = node.input[0]
+        node.input[0] = node.input[1]
+        node.input[1] = tmp
+
+    else:
+        error_msg = "unsupported attributes, seq_dim:{}, batch_dim:{}".format(seq_dim, batch_dim)
+        raise ValueError(error_msg)
+    return nodes
 
 
 def erf_op(ctx, node, name, args):
@@ -1550,6 +1603,7 @@ _OPSET_7 = {
 
 _OPSET_8 = {
     "Relu6": (relu6_op8, []),  # make use of min/max broadcast
+    "ReverseSequence": (reverse_op8, []), # make use of scan
 }
 
 _OPSET_9 = {
@@ -1941,7 +1995,7 @@ def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
-                     extra_opset=None, shape_override=None, inputs_as_nchw=None):
+                     extra_opset=None, shape_override=None, inputs_as_nchw=None, output_names=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -1954,6 +2008,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
             inputs_as_nchw: transpose inputs in list from nchw to nchw
+            output_names: name of output nodes in graph
         Return:
             onnx graph
     """
@@ -1976,7 +2031,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
 
-    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset)
+    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
     if inputs_as_nchw:
         transpose_inputs(g, inputs_as_nchw)
 

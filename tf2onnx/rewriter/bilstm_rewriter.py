@@ -9,18 +9,22 @@ This rewriter depends on tf2onnx.rewriter.lstm_rewriter's results.
 from __future__ import division
 from __future__ import print_function
 
+import logging
+import numpy as np
 from onnx import numpy_helper
-from tf2onnx.rewriter.rnn_utils import *
+from tf2onnx import utils
+from tf2onnx.rewriter.rnn_utils import is_reverse_op, make_onnx_node
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.bilstm_rewriter")
 
+# pylint: disable=invalid-name,unused-argument,missing-docstring
 
 def process_bilstm(g, bi_lstms):
     for fw, bw in bi_lstms:
         input_id = fw[0]
         log.debug("=========================")
-        log.debug("start handling potential bidirectional lstm " + input_id)
+        log.debug("start handling potential bidirectional lstm %s", input_id)
 
         lstm_fw = fw[1]
         lstm_bw = bw[1]
@@ -52,7 +56,7 @@ def process_bilstm(g, bi_lstms):
 
         b_name = utils.make_name("B")
         b_node = g.make_const(b_name, B, skip_conversion=True)
-        lstm_inputs= [lstm_fw.input[0], w_node.output[0], r_node.output[0], b_node.output[0]]
+        lstm_inputs = [lstm_fw.input[0], w_node.output[0], r_node.output[0], b_node.output[0]]
         if len(lstm_fw.inputs) > 4:
             lstm_inputs.extend([lstm_fw.input[4], h_node.output[0], c_node.output[0]])
 
@@ -68,8 +72,8 @@ def process_bilstm(g, bi_lstms):
         all_nodes.append(bi_lstm_node)
         log.debug("processing output nodes")
 
-        to_remove = [lstm_fw.name, lstm_fw.input[1], lstm_fw.input[2], lstm_fw.input[3], 
-            lstm_bw.name, lstm_bw.input[1], lstm_bw.input[2], lstm_bw.input[3]]
+        to_remove = [lstm_fw.name, lstm_fw.input[1], lstm_fw.input[2], lstm_fw.input[3],
+                     lstm_bw.name, lstm_bw.input[1], lstm_bw.input[2], lstm_bw.input[3]]
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 0, all_nodes, to_remove)
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 1, all_nodes, to_remove)
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 2, all_nodes, to_remove)
@@ -112,7 +116,7 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
         axis = 1
         # remove reverse op for lstm_bw
         # todo: figure out a better way to remove reverse op
-        squeeze_nodes = [c for c in bw_consumers if c.type == "Squeeze" ]
+        squeeze_nodes = [c for c in bw_consumers if c.type == "Squeeze"]
         s_cnt = len(squeeze_nodes)
         if s_cnt > 1:
             raise ValueError("unexpected number of squeeze following LSTM 1st output")
@@ -128,12 +132,12 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
                     raise ValueError("not found reverse op, unexpected")
 
                 for r_op in reverse_nodes:
-                    log.debug("remove reverse op called " + r_op.name)
+                    log.debug("remove reverse op called %s", r_op.name)
                     g.replace_all_inputs(all_nodes, r_op.output[0], r_op.input[0])
                     to_remove.append(r_op.name)
             else:
                 raise ValueError("unexpected number of transpose after LSTM 1st output")
-    elif lstm_output_index == 1 or lstm_output_index == 2:
+    elif lstm_output_index in [1, 2]:
         axis = 0
     else:
         raise ValueError("LSTM only should has 3 outputs.")
@@ -155,10 +159,9 @@ def check_const(g, input_id):
     node = g.get_node_by_name(input_id)
     if node and node.is_const():
         return (True, node.get_tensor_value())
-    elif g.is_initializer(input_id):
+    if g.is_initializer(input_id):
         tensor = g.get_initializer(input_id)
         return (True, numpy_helper.to_array(tensor))
-
     return (None, None)
 
 
@@ -174,9 +177,9 @@ def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
     if fw_init_is_const and bw_init_is_const:
         initial_val = np.concatenate((init_fw_val, init_bw_val), axis=0)
         init_name = utils.make_name("initial")
-        init_node = g.make_const(init_name, initial_val, skip_conversion = True)
+        init_node = g.make_const(init_name, initial_val, skip_conversion=True)
     else:
-        attr = {"axis" : 0}
+        attr = {"axis": 0}
         init_node = make_onnx_node(g, "Concat", [fw_init_input_id, bw_init_input_id], attr)
         to_append.append(init_node)
 
@@ -208,10 +211,10 @@ def rewrite_bidirectional_lstms(g, ops):
             is_backward_lstm = True
 
         if is_backward_lstm:
-            log.debug("find bw lstm" + input_id)
+            log.debug("find bw lstm %s", input_id)
             bw_lstm[input_id] = [input_id, n]
         else:
-            log.debug("find fw lstm" + input_id)
+            log.debug("find fw lstm %s", input_id)
             fw_lstm[input_id] = [input_id, n]
 
     bilstm_input = list(set(fw_lstm.keys()).intersection(bw_lstm.keys()))

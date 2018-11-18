@@ -88,7 +88,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         return results
 
     def _run_backend(self, g, outputs, input_dict):
-        model_proto = g.make_model("test", outputs)
+        model_proto = g.make_model("test")
         if type(self).BACKEND == "onnxmsrtnext":
             y = self.run_onnxmsrtnext(model_proto, input_dict, outputs, self._testMethodName)
         elif type(self).BACKEND == "onnxruntime":
@@ -127,13 +127,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 output_dict.append(sess.graph.get_tensor_by_name(out_name))
             expected = sess.run(output_dict, feed_dict=feed_dict)
 
-        if transform_tf_graph:
-            if self.debug_mode():
-                model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_before_tf_optimize.pb")
-                with open(model_path, "wb") as f:
-                    f.write(sess.graph_def.SerializeToString())
-                self.log.debug("created file %s", model_path)
+        if self.debug_mode():
+            model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_original.pb")
+            with open(model_path, "wb") as f:
+                f.write(sess.graph_def.SerializeToString())
+            self.log.debug("created file %s", model_path)
 
+        if transform_tf_graph:
             graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port, output_names_with_port,
                                                    sess.graph_def, True)
 
@@ -147,7 +147,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf.import_graph_def(graph_def, name='')
 
         with tf.Session() as sess:
-            g = process_tf_graph(sess.graph, opset=type(self).OPSET, **process_args)
+            g = process_tf_graph(sess.graph, opset=type(self).OPSET, output_names=output_names_with_port,
+                                 **process_args)
             actual = self._run_backend(g, output_names_with_port, onnx_feed_dict)
 
         for expected_val, actual_val in zip(expected, actual):
