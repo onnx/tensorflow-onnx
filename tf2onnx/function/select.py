@@ -2,16 +2,15 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.tf2onnx - rewrite tensorflow graph to onnx graph
+tf2onnx.tf2onnx - select op conversion
 """
-from onnx import helper, numpy_helper
+from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.graph import Node
 from tf2onnx.utils import port_name
 
-import onnx
-
+# pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
 
 def select_op(ctx, node, name, args):
     # T output = Select(bool condition, T x, T y)
@@ -126,7 +125,7 @@ def create_if_op(ctx, node, cur_cond_val_out_name):
 
     # output a scalar
     if_node = helper.make_node("If", [cur_cond_val_out_name], [out_name], name=op_name, 
-                     then_branch=true_graph, else_branch=false_graph)
+                               then_branch=true_graph, else_branch=false_graph)
     ctx.add_body_graph(out_name, true_graph)
     ctx.add_body_graph(out_name, false_graph)
     return if_node, out_name
@@ -143,7 +142,8 @@ def create_body_graph_for_if_branch(ctx, input_id):
 
     op_name = utils.make_name("Squeeze")
     true_squeeze_out_name = port_name(op_name)
-    cur_true_val_scalar_node = helper.make_node("Squeeze", [true_out_name], [true_squeeze_out_name], name=op_name, axes=[0])
+    cur_true_val_scalar_node = helper.make_node("Squeeze", [true_out_name], [true_squeeze_out_name],
+                                                name=op_name, axes=[0])
     nodes.append(cur_true_val_scalar_node)
 
     identity_node = helper.make_node(
@@ -163,8 +163,3 @@ def create_body_graph_for_if_branch(ctx, input_id):
         [y],
     )
     return graph_def
-
-
-
-
-
