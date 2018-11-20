@@ -1023,14 +1023,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
     def test_where(self):
-        x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0],
-                         dtype=np.int32)
+        x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
         true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
-                         dtype=np.int32)
+                               dtype=np.int32)
         false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
-                         dtype=np.int32)
+                                dtype=np.int32)
         x = tf.placeholder(tf.int32, [None], name=_TFINPUT)
-        picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)   
+        picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
         _ = tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 

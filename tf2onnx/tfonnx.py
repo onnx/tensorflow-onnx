@@ -1131,6 +1131,16 @@ def minmax_op(ctx, node, name, args):
 
 def pack_op(ctx, node, name, args):
     # hack to make up for the missing onnx pack op
+
+    pack_shape = ctx.get_shape(node.output[0])
+    if not pack_shape:
+        # sometimes Pack output shape is None (for example Pack is following control flow Exit op)
+        input_cnt = len(node.inputs)
+        input_shape = ctx.get_shape(node.input[0])
+        if input_shape and len(input_shape) > 0:
+            pack_shape = [input_cnt] + input_shape
+            ctx.set_shape(node.output[0], pack_shape)
+
     axis = node.get_attr("axis").i
     nodes = []
     inputs = []
