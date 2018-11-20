@@ -124,7 +124,7 @@ def create_if_op(ctx, node, cur_cond_val_out_name):
     out_name = port_name(op_name)
 
     # output a scalar
-    if_node = helper.make_node("If", [cur_cond_val_out_name], [out_name], name=op_name, 
+    if_node = helper.make_node("If", [cur_cond_val_out_name], [out_name], name=op_name,
                                then_branch=true_graph, else_branch=false_graph)
     ctx.add_body_graph(out_name, true_graph)
     ctx.add_body_graph(out_name, false_graph)
