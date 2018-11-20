@@ -272,6 +272,7 @@ class Graph(object):
         self._opset = find_opset(opset)
         self._extra_opset = extra_opset
         self.output_names = output_names
+        self._body_graphs = {}
 
     @property
     def opset(self):
@@ -413,6 +414,11 @@ class Graph(object):
         if shape:
             self.set_shape(output_name, shape)
 
+    def add_body_graph(self, owner_node_name, body_graph):
+        if owner_node_name not in self._body_graphs:
+            self._body_graphs[owner_node_name] = []
+        self._body_graphs[owner_node_name].append(body_graph)
+
     def topological_sort(self, ops):
         """Topological sort of graph."""
 
@@ -500,6 +506,12 @@ class Graph(object):
             all_inputs |= set(op.input)
             onnx_op = op.op
             ops.append(onnx_op)
+
+        for owner_name in self._body_graphs:
+            body_graphs = self._body_graphs[owner_name]
+            for body_graph in body_graphs:
+                for op in body_graph.node:
+                    all_inputs |= set(op.input)
 
         # create input_tensor_values, initializers
         # if initializer is not used as input by any node, then it will be ignored
