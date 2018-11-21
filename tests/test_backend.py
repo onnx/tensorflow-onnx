@@ -276,7 +276,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             process_args={"inputs_as_nchw": [_INPUT]},
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
 
-    @unittest.skip
+    @unittest.skip("")
     def test_lrn(self):
         # FIXME: numerical results are not correct
         x_shape = [1, 3, 4, 3]
@@ -668,7 +668,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skip
+    @unittest.skip("")
     def test_slice1(self):
         # FIXME: only 1 dimension supported by caffe2 and msrt
         x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]], [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
@@ -715,7 +715,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case([_OUTPUT], {}, check_value=False, check_shape=True)
 
-    @unittest.skip
+    @unittest.skip("")
     def test_randomuniform_int(self):
         shape = tf.constant([2, 3], name="shape")
         x_ = tf.random_uniform(shape, name="rand", dtype=tf.int32, maxval=10)
@@ -725,7 +725,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case([_OUTPUT], {}, check_value=False, check_shape=True)
 
-    @unittest.skip
+    @unittest.skip("")
     def test_argminmax(self):
         # TODO: fails on onnxmsrt caffe2
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
@@ -751,7 +751,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skip
+    @unittest.skip("")
     def test_onehot1(self):
         # only rank 1 is currently implemented
         x_val = np.array([[0, 2], [1, -1]], dtype=np.int32)
