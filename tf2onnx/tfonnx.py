@@ -21,7 +21,7 @@ from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
 from tf2onnx import utils
-from tf2onnx.function.select import select_op
+from tf2onnx.function.select import select_op8
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
@@ -1547,7 +1547,6 @@ _OPSET_4 = {
     "Relu6": (relu6_op, []),
     "Reshape": (reshape_op, ["Reshape"]),
     "Rsqrt": (rsqrt_op, []),
-    "Select": (select_op, []),
     "Shape": (direct_op, []),
     "Size": (direct_op, []),
     "Sigmoid": (direct_op, []),
@@ -1617,6 +1616,7 @@ _OPSET_7 = {
 _OPSET_8 = {
     "Relu6": (relu6_op8, []),  # make use of min/max broadcast
     "ReverseSequence": (reverse_op8, []), # make use of scan
+    "Select": (select_op8, []),
 }
 
 _OPSET_9 = {
