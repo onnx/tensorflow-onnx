@@ -2,10 +2,11 @@
 # Licensed under the MIT license.
 """Transpose Optimizer."""
 
+from __future__ import unicode_literals
+
 import logging
 
 import numpy as np
-
 from onnx import helper, numpy_helper
 
 from tf2onnx import utils
@@ -13,6 +14,7 @@ from tf2onnx.graph import Node
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.optimizer.transpose_optimizer")
+
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
 # FIXME:
@@ -89,10 +91,10 @@ class TransposeOptimizer(object):
                     continue
 
                 new_shape = []
-                 # when transpose is NHWC_TO_NCHW
+                # when transpose is NHWC_TO_NCHW
                 if is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1] == 1 and input_shape[2] == 1)):
                     new_shape = [input_shape[0], input_shape[3], input_shape[1], input_shape[2]]
-                 # when transpose is NCHW_TO_NHWC
+                # when transpose is NCHW_TO_NHWC
                 if is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2] == 1 and input_shape[3] == 1)):
                     new_shape = [input_shape[0], input_shape[2], input_shape[3], input_shape[1]]
                 if new_shape:

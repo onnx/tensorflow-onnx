@@ -7,6 +7,7 @@ tf2onnx.rewriter.rnn_unit_base - lstm support
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import logging
 import numpy as np
