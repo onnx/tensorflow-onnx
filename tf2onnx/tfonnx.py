@@ -1478,6 +1478,24 @@ def erf_op(ctx, node, name, args):
     return nodes
 
 
+def shape_op(ctx, node, name, args):
+    # out_type output = Shape(T input, @int32|int64 out_type), out_type by default int32
+    # int64 output = Shape(T input)
+    nodes = [node]
+    out_dtype = node.get_attr("out_type")
+    out_dtype = out_dtype.i if out_dtype else onnx_pb.TensorProto.INT32
+    dest_dtype = onnx_pb.TensorProto.INT64
+    if out_dtype != dest_dtype:
+        attr = {"to": out_dtype}
+        op_name = utils.make_name(node.name)
+        cast_out = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name, **attr)
+        nodes.insert(0, cast_out)
+        ctx.set_dtype(cast_out.output[0], out_dtype)
+        ctx.copy_shape(node.output[0], cast_out.output[0])
+
+    return nodes
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1547,7 +1565,7 @@ _OPSET_4 = {
     "Relu6": (relu6_op, []),
     "Reshape": (reshape_op, ["Reshape"]),
     "Rsqrt": (rsqrt_op, []),
-    "Shape": (direct_op, []),
+    "Shape": (shape_op, []),
     "Size": (direct_op, []),
     "Sigmoid": (direct_op, []),
     "Slice": (slice_op, []),
@@ -1655,9 +1673,9 @@ def rewrite_random_uniform(g, ops):
         out_name = port_name(op_name)
         ru_op = match.get_op('input1')
         if ru_op.inputs[0].type == "Shape":
-            shape_op = ru_op.inputs[0]
+            shape_node = ru_op.inputs[0]
             new_node = Node(helper.make_node("RandomUniformLike",
-                                             [shape_op.input[0]], [out_name], name=op_name,
+                                             [shape_node.input[0]], [out_name], name=op_name,
                                              low=tmin, high=tmax, dtype=dtype), g)
         else:
             shape = g.get_shape(output.output[0])
@@ -1711,8 +1729,8 @@ def rewrite_random_normal(g, ops):
 
         rn_op = match.get_op('input1')
         if rn_op.inputs[0].type == "Shape":
-            shape_op = rn_op.inputs[0]
-            new_node = Node(helper.make_node("RandomNormalLike", [shape_op.input[0]], [out_name],
+            shape_node = rn_op.inputs[0]
+            new_node = Node(helper.make_node("RandomNormalLike", [shape_node.input[0]], [out_name],
                                              name=op_name, mean=mean, scale=1.0,
                                              dtype=dtype), g)
             ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
