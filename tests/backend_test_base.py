@@ -27,7 +27,7 @@ from tf2onnx.tfonnx import process_tf_graph
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     # static variables
     TMPPATH = tempfile.mkdtemp()
-    BACKEND = "onnxruntime"
+    BACKEND = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
     OPSET = 7
     DEBUG = None
 
@@ -163,7 +163,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     @staticmethod
     def trigger(ut_class):
         parser = argparse.ArgumentParser()
-        parser.add_argument('--backend', default="onnxruntime",
+        parser.add_argument('--backend', default=Tf2OnnxBackendTestBase.BACKEND,
                             choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                             help="backend to test against")
         parser.add_argument('--opset', type=int, default=7, help="opset to test against")
