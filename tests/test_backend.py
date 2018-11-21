@@ -1037,8 +1037,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]], dtype=np.float32)
         x = tf.placeholder(tf.float32, shape=[None, 2, 3], name=_TFINPUT)
         x = tf.multiply(x, x)
-        axis = tf.constant(1, dtype=tf.int32, name='k')
-        x = tf.shape(x, out_type=tf.int32) 
+        x = tf.shape(x, out_type=tf.int32)
         _ = tf.identity(x, name=_TFOUTPUT)
         kwargs = {"check_dtype": True}
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, **kwargs)
@@ -1047,8 +1046,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]], dtype=np.float32)
         x = tf.placeholder(tf.float32, shape=[None, 2, 3], name=_TFINPUT)
         x = tf.multiply(x, x)
-        axis = tf.constant(1, dtype=tf.int32, name='k')
-        x = tf.shape(x, out_type=tf.int64) 
+        x = tf.shape(x, out_type=tf.int64)
         _ = tf.identity(x, name=_TFOUTPUT)
         kwargs = {"check_dtype": True}
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, **kwargs)
