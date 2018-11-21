@@ -20,7 +20,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 # we can override BACKEND and OPSET from the command line, but that is to late
 # to change the behavior of annotation. If need, pick the backend here.
 OPSET = 7
-BACKEND = "onnxruntime"
+BACKEND = Tf2OnnxBackendTestBase.BACKEND
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
