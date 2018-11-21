@@ -21,6 +21,7 @@ from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
 from tf2onnx import utils
+from tf2onnx.function.select import select_op8
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
@@ -1130,6 +1131,16 @@ def minmax_op(ctx, node, name, args):
 
 def pack_op(ctx, node, name, args):
     # hack to make up for the missing onnx pack op
+
+    pack_shape = ctx.get_shape(node.output[0])
+    if not pack_shape:
+        # sometimes Pack output shape is None (for example Pack is following control flow Exit op)
+        input_cnt = len(node.inputs)
+        input_shape = ctx.get_shape(node.input[0])
+        if input_shape:
+            pack_shape = [input_cnt] + input_shape
+            ctx.set_shape(node.output[0], pack_shape)
+
     axis = node.get_attr("axis").i
     nodes = []
     inputs = []
@@ -1540,8 +1551,8 @@ _OPSET_4 = {
     "Size": (direct_op, []),
     "Sigmoid": (direct_op, []),
     "Slice": (slice_op, []),
-    "SplitV": (splitv_op, ["Split"]),
     "Split": (split_op, ["Split"]),
+    "SplitV": (splitv_op, ["Split"]),
     "Squeeze": (squeeze_op, []),
     "Sqrt": (direct_op, []),
     "Square": (square_op, []),
@@ -1562,9 +1573,9 @@ _OPSET_4 = {
 }
 
 _OPSET_5 = {
-    "Reshape": (reshape_op5, []),
     "ExpandDims": (expanddims_op7, []),
     "OneHot": (onehot_op, []),
+    "Reshape": (reshape_op5, []),
 }
 
 _OPSET_6 = {
@@ -1572,38 +1583,40 @@ _OPSET_6 = {
 }
 
 _OPSET_7 = {
-    "Tile": (tile_op7, []),
-    "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),
-    "ResizeBilinear": (upsample_op7, ["Upsample", "linear"]),
-    "BiasAdd": (biasadd_op7, []),
-    "BiasAddV1": (biasadd_op7, []),
-    "Add": (broadcast_op7, []),
-    "Sub": (broadcast_op7, []),
-    "Mul": (broadcast_op7, []),
-    "RealDiv": (broadcast_op7, ["Div"]),
-    "Div": (broadcast_op7, ["Div"]),
-    "TruncateDiv": (broadcast_op7, ["Div"]),
-    "LogicalAnd": (broadcast_op7, ["And"]),
-    "LogicalOr": (broadcast_op7, ["Or"]),
-    "Greater": (broadcast_op7, []),
-    "Less": (broadcast_op7, []),
-    "Pow": (direct_op, []),
-    "Cast": (direct_op, []),
     "Acos": (direct_op, []),
+    "Add": (broadcast_op7, []),
     "Asin": (direct_op, []),
     "Atan": (direct_op, []),
+    "BiasAdd": (biasadd_op7, []),
+    "BiasAddV1": (biasadd_op7, []),
+    "Cast": (direct_op, []),
     "Cos": (direct_op, []),
-    "Sin": (direct_op, []),
-    "Tan": (direct_op, []),
-    "Multinomial": (multinomial_op, []),
+    "Div": (broadcast_op7, ["Div"]),
+    "Equal": (broadcast_op7, []),
     "Fill": (fill_op7, []),
     "FusedBatchNorm": (fused_batchnorm_op7, []),
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
+    "Greater": (broadcast_op7, []),
+    "Less": (broadcast_op7, []),
+    "LogicalAnd": (broadcast_op7, ["And"]),
+    "LogicalOr": (broadcast_op7, ["Or"]),
+    "Mul": (broadcast_op7, []),
+    "Multinomial": (multinomial_op, []),
+    "Pow": (direct_op, []),
+    "RealDiv": (broadcast_op7, ["Div"]),
+    "ResizeBilinear": (upsample_op7, ["Upsample", "linear"]),
+    "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),
+    "Sin": (direct_op, []),
+    "Sub": (broadcast_op7, []),
+    "Tan": (direct_op, []),
+    "Tile": (tile_op7, []),
+    "TruncateDiv": (broadcast_op7, ["Div"]),
 }
 
 _OPSET_8 = {
     "Relu6": (relu6_op8, []),  # make use of min/max broadcast
     "ReverseSequence": (reverse_op8, []), # make use of scan
+    "Select": (select_op8, []),
 }
 
 _OPSET_9 = {
@@ -1774,10 +1787,11 @@ def rewrite_constant_fold(g, ops):
     """
     func_map = {
         "Add": np.add,
-        "Sub": np.subtract,
         "Mul": np.multiply,
         "Pack": np.stack,
-        "Sqrt": np.sqrt}
+        "Sqrt": np.sqrt,
+        "Sub": np.subtract,
+        }
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
@@ -1823,6 +1837,46 @@ def rewrite_constant_fold(g, ops):
         # pylint: enable=too-many-nested-blocks
     return g.remove_deleted_nodes(ops)
 
+def rewrite_logical_compare_with_equal(g, ops):
+    pattern = OpTypePattern('GreaterEqual', name='greater_equal')
+    matcher = GraphMatcher(pattern)
+    match_results = list(matcher.match_ops(ops))
+    for match in match_results:
+        nodes_to_append = []
+        ge_op = match.get_op('greater_equal')
+        data_type = g.get_dtype(ge_op.input[0])
+        greater_input_ids = ge_op.input
+        need_cast = data_type not in (onnx_pb.TensorProto.FLOAT16,
+                                      onnx_pb.TensorProto.FLOAT,
+                                      onnx_pb.TensorProto.DOUBLE)
+        if need_cast:
+            greater_input_ids = []
+            for input_id in ge_op.input:
+                name = utils.make_name(ge_op.name)
+                new_output = port_name(name)
+                cast_node = Node(helper.make_node("Cast", [input_id], [new_output], name=name,
+                                                  to=onnx_pb.TensorProto.FLOAT), g)
+                greater_input_ids.append(new_output)
+                g.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
+                g.copy_shape(ge_op.input[0], cast_node.output[0])
+                nodes_to_append.append(cast_node)
+
+        op_name = utils.make_name("Greater")
+        out_name = port_name(op_name)
+        g_node = Node(helper.make_node("Greater", greater_input_ids, [out_name], name=op_name), g)
+        nodes_to_append.append(g_node)
+
+        op_name = utils.make_name("Equal")
+        out_name = port_name(op_name)
+        e_node = Node(helper.make_node("Equal", ge_op.input, [out_name], name=op_name), g)
+        nodes_to_append.append(e_node)
+
+        ge_op.type = "LogicalOr"
+        ge_op.input[0] = g_node.output[0]
+        ge_op.input[1] = e_node.output[0]
+
+        ops.extend(nodes_to_append)
+    return ops
 
 def rewrite_incomplete_type_support(g, ops):
     """
@@ -2041,7 +2095,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                  rewrite_random_normal, rewrite_dropout,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_single_direction_grublock,
-                 rewrite_bi_direction_gru]
+                 rewrite_bi_direction_gru, rewrite_logical_compare_with_equal
+                 ]
 
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
