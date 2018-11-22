@@ -15,14 +15,15 @@ import tempfile
 import time
 import zipfile
 
+import PIL.Image
 import numpy as np
 import requests
+import six
 import tensorflow as tf
+import yaml
 from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
-import yaml
-import PIL.Image
 
 import tf2onnx
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
@@ -71,7 +72,7 @@ _INPUT_FUNC_MAPPING = {
 
 def node_name(name):
     """Get node name without io#."""
-    assert isinstance(name, str)
+    assert isinstance(name, six.text_type)
     pos = name.find(":")
     if pos >= 0:
         return name[:pos]
@@ -271,7 +272,7 @@ class Test(object):
         # create the input data
         inputs = {}
         for k, v in self.input_names.items():
-            if isinstance(v, str) and v.startswith("np."):
+            if isinstance(v, six.text_type) and v.startswith("np."):
                 inputs[k] = eval(v)  # pylint: disable=eval-used
             else:
                 inputs[k] = self.make_input(v)
@@ -437,6 +438,7 @@ def main():
                 t = tests[test]
                 if t.perf:
                     f.write("{},{},{}\n".format(test, t.tf_runtime, t.onnx_runtime))
+
 
 if __name__ == "__main__":
     main()

@@ -21,6 +21,8 @@ from __future__ import unicode_literals
 
 import copy
 
+import six
+
 
 class OpTypePattern(object):
     """A tree pattern that matches TF expressions with certain op types."""
@@ -48,7 +50,7 @@ class OpTypePattern(object):
         self._inputs = [
             input_pattern if isinstance(input_pattern, OpTypePattern) else
             OpTypePattern(input_pattern) for input_pattern in inputs
-            ]
+        ]
 
     @property
     def op_type(self):
@@ -105,7 +107,7 @@ class MatchResult(object):
         if isinstance(pattern_or_name, OpTypePattern):
             return pattern_or_name
 
-        if isinstance(pattern_or_name, str):
+        if isinstance(pattern_or_name, six.text_type):
             return self._name_to_pattern[pattern_or_name]
 
         raise ValueError('pattern_or_name has type %s. Expect OpTypePattern or str.'

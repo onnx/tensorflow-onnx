@@ -10,8 +10,9 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import collections
-import numpy as np
 
+import numpy as np
+import six
 from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto
 
 from tf2onnx import utils, __version__
@@ -390,7 +391,7 @@ class Graph(object):
 
     def get_shape(self, name):
         """Get shape for node."""
-        assert isinstance(name, str)
+        assert isinstance(name, six.text_type)
         shape = self._output_shapes.get(name)
         if shape:
             for i, v in enumerate(shape):
@@ -588,7 +589,7 @@ class Graph(object):
             node: the node we expect the input on
             to_be_removed: the node name we want to remove
         """
-        assert isinstance(node, Node) and isinstance(to_be_removed, str)
+        assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
         for i, name in enumerate(node.input):
             if name == to_be_removed:
                 del node.input[i]
@@ -629,7 +630,7 @@ class Graph(object):
         Returns:
             node that was inserted
         """
-        assert isinstance(output_name, str) and isinstance(op_type, str)
+        assert isinstance(output_name, six.text_type) and isinstance(op_type, six.text_type)
         new_output = port_name(name)
         new_node = Node(helper.make_node(op_type, [output_name], [new_output], name=name, **kwargs), self)
         self.replace_all_inputs(self.get_nodes(), output_name, new_output)
@@ -654,7 +655,7 @@ class Graph(object):
     @staticmethod
     def replace_input(node, old_input, new_input):
         """Replace node."""
-        assert isinstance(node, Node) and isinstance(old_input, str) and isinstance(new_input, str)
+        assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
         is_replaced = False
         for i, input_name in enumerate(node.input):
             if input_name == old_input:
