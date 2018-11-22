@@ -17,8 +17,10 @@ import unittest
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
+
 import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph
+
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
@@ -48,7 +50,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf.logging.set_verbosity(tf.logging.WARN)
             self.log.setLevel(logging.INFO)
 
-
     @staticmethod
     def assertAllClose(expected, actual, **kwargs):
         np.testing.assert_allclose(expected, actual, **kwargs)
@@ -62,7 +63,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         import caffe2.python.onnx.backend
         prepared_backend = caffe2.python.onnx.backend.prepare(onnx_graph)
         results = prepared_backend.run(inputs)
-        return results[0]
+        return results
 
     def run_onnxmsrtnext(self, onnx_graph, inputs, output_names, test_name):
         """Run test against msrt-next backend."""
