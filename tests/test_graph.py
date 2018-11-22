@@ -11,9 +11,9 @@ import os
 import unittest
 from collections import namedtuple
 
-import graphviz as gv
 import numpy as np
 import six
+import graphviz as gv
 import tensorflow as tf
 from onnx import helper
 
@@ -30,6 +30,7 @@ def onnx_to_graphviz(g, include_attrs=False):
     """Return dot for graph."""
 
     def get_attribute_value(attr):
+        # pylint: disable=len-as-condition, no-else-return
         # For Python2:
         # - str(long) has 'L' as suffix, cast it to int
         # - always decode from utf-8 bytes to avoid 'b' prefix
@@ -338,7 +339,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
     def test_pad(self):
         with tf.Session() as sess:
             t = tf.constant([[1, 2, 3], [4, 5, 6]], name="input1")
-            paddings = tf.constant([[1, 1, ], [2, 2]], name="paddings")
+            paddings = tf.constant([[1, 1, ], [2, 2]], name="paddings")  # pylint: disable=bad-whitespace
             tf.pad(t, paddings, "CONSTANT", "const_no_val")
             tf.pad(t, paddings, "CONSTANT", "const_with_val", 999)
             tf.pad(t, paddings, "REFLECT", "reflect")

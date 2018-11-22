@@ -15,12 +15,12 @@ import tempfile
 import time
 import zipfile
 
-import PIL.Image
 import numpy as np
 import requests
 import six
-import tensorflow as tf
 import yaml
+import PIL.Image
+import tensorflow as tf
 from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
