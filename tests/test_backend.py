@@ -9,6 +9,7 @@ from __future__ import unicode_literals
 
 import unittest
 from itertools import product
+from distutils.version import LooseVersion
 
 import numpy as np
 import tensorflow as tf
@@ -217,6 +218,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
         self._conv_test(x_val, kernel_val, strides=strides, padding="VALID", rtol=1e-05)
 
+    @unittest.skipIf(LooseVersion(tf.VERSION) < LooseVersion('1.7'), "tf only support dilation is 1 for now")
     def test_conv2d_7(self):
         x_shape = [1, 35, 35, 288]  # out: [1, 17, 17, 384]
         kernel_shape = [3, 3, 288, 384]
