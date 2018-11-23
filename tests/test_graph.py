@@ -339,7 +339,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
     def test_pad(self):
         with tf.Session() as sess:
             t = tf.constant([[1, 2, 3], [4, 5, 6]], name="input1")
-            paddings = tf.constant([[1, 1, ], [2, 2]], name="paddings")  # pylint: disable=bad-whitespace
+            paddings = tf.constant([[1, 1,], [2, 2]], name="paddings")
             tf.pad(t, paddings, "CONSTANT", "const_no_val")
             tf.pad(t, paddings, "CONSTANT", "const_with_val", 999)
             tf.pad(t, paddings, "REFLECT", "reflect")

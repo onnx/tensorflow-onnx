@@ -739,7 +739,7 @@ def biasadd_op7(ctx, node, name, args):
         shape0 = ctx.get_shape(node.input[0])
         shape1 = ctx.get_shape(node.input[1])
         if node.inputs[1].type == 'Const' and len(shape1) == 1:
-            new_broadcast_shape = [shape1[0], ] + [1, ] * (len(shape0) - 2)  # pylint: disable=bad-whitespace
+            new_broadcast_shape = [shape1[0],] + [1,] * (len(shape0) - 2)
             shape_name = utils.make_name(node.name)
             ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
             op_name = node.input[1]
