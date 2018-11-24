@@ -7,6 +7,7 @@ tf2onnx.rewriter.rnn_unit_base - lstm support
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import logging
 import numpy as np
@@ -23,7 +24,7 @@ log = logging.getLogger("tf2onnx.rewriter.rnn_unit_writer_base")
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
 # dynamic_rnn or bidirectional_dynamic_rnn related logic will be mapped to this base class.
-class UnitRewriterBase:
+class UnitRewriterBase(object):
     def __init__(self, g):
         self.g = g
         self.all_nodes = self.g.get_nodes()

@@ -7,15 +7,15 @@ tf2onnx.utils - misc utilities for tf2onnx
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import re
+
 import numpy as np
-
-from onnx import helper, onnx_pb, defs, numpy_helper
-
+import six
 import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
-
+from onnx import helper, onnx_pb, defs, numpy_helper
 
 #
 #  mapping dtypes from tensorflow to onnx
@@ -35,7 +35,7 @@ TF_TO_ONNX_DTYPE = {
     types_pb2.DT_COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     types_pb2.DT_BOOL: onnx_pb.TensorProto.BOOL,
     types_pb2.DT_RESOURCE: onnx_pb.TensorProto.INT64,  # TODO: hack to allow processing on control flow
-    types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8, # TODO: map quint8 to  uint8 for now
+    types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8,  # TODO: map quint8 to  uint8 for now
 }
 
 #
@@ -87,7 +87,6 @@ ONNX_VALID_ATTRIBUTES = {
     'direction', 'max', 'clip', 'across_channels', 'value', 'strides', 'extra_shape', 'scales', 'k', 'sample_size',
     'blocksize', 'epsilon', 'momentum', 'body', 'directions', 'num_scan_inputs'
 }
-
 
 # index for internally generated names
 INTERNAL_NAME = 1
@@ -173,10 +172,10 @@ def get_shape(node):
     dims = None
     try:
         if node.type == "Const":
-            shape = node.get_attr("value").tensor_shape
+            shape = get_tf_node_attr(node, "value").tensor_shape
             dims = [int(d.size) for d in shape.dim]
         else:
-            shape = node.get_attr("shape")
+            shape = get_tf_node_attr(node, "shape")
             dims = [d.size for d in shape.dim]
         if shape[0] is None or shape[0] == -1:
             shape[0] = 1
@@ -219,3 +218,10 @@ def find_opset(opset):
             # if we use a newer onnx opset than most runtimes support, default to the one most supported
             opset = PREFERRED_OPSET
     return opset
+
+
+def get_tf_node_attr(node, name):
+    if six.PY2:
+        # For python2, TF get_attr does not accept unicode
+        name = str(name)
+    return node.get_attr(name)

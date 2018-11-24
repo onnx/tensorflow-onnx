@@ -6,6 +6,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import argparse
 import os
@@ -16,6 +17,7 @@ import zipfile
 
 import numpy as np
 import requests
+import six
 import tensorflow as tf
 from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
 from tensorflow.core.framework import graph_pb2
@@ -70,7 +72,7 @@ _INPUT_FUNC_MAPPING = {
 
 def node_name(name):
     """Get node name without io#."""
-    assert isinstance(name, str)
+    assert isinstance(name, six.text_type)
     pos = name.find(":")
     if pos >= 0:
         return name[:pos]
@@ -270,7 +272,7 @@ class Test(object):
         # create the input data
         inputs = {}
         for k, v in self.input_names.items():
-            if isinstance(v, str) and v.startswith("np."):
+            if isinstance(v, six.text_type) and v.startswith("np."):
                 inputs[k] = eval(v)  # pylint: disable=eval-used
             else:
                 inputs[k] = self.make_input(v)
@@ -436,6 +438,7 @@ def main():
                 t = tests[test]
                 if t.perf:
                     f.write("{},{},{}\n".format(test, t.tf_runtime, t.onnx_runtime))
+
 
 if __name__ == "__main__":
     main()
