@@ -980,6 +980,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_tf_div(self):
+        # pylint: disable=E0001
         from tensorflow.python.ops.gen_math_ops import div
         shape = 1000
         # test floating data
