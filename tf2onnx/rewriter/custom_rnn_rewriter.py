@@ -12,10 +12,10 @@ from onnx import helper
 import numpy as np
 from tf2onnx.graph import Graph, Node
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context, REWRITER_RESULT
+from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op, \
      is_placeholder_op, make_onnx_node
-from tf2onnx.rewriter.rnn_utils import BodyGraphDict, SubGraphMetadata
+from tf2onnx.rewriter.rnn_utils import BodyGraphDict, REWRITER_RESULT, SubGraphMetadata
 from tf2onnx.tfonnx import utils
 
 

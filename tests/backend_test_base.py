@@ -17,10 +17,9 @@ import unittest
 
 import numpy as np
 import tensorflow as tf
+import tf2onnx.utils
 from tensorflow.python.ops import variables as variables_lib
-
 from tf2onnx.tfonnx import process_tf_graph
-from tf2onnx import utils
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -153,7 +152,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def save_onnx_model(self, model_proto, feed_dict):
         save_path = os.path.join(type(self).TMPPATH, self._testMethodName)
-        target_path = utils.save_onnx_model(save_path, self._testMethodName, feed_dict,
+        target_path = tf2onnx.utils.save_onnx_model(save_path, self._testMethodName, feed_dict,
                                             model_proto, include_test_data=self.debug_mode())
 
         self.log.debug("create model file: %s", target_path)

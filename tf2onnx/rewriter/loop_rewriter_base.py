@@ -10,8 +10,8 @@ from __future__ import print_function
 import copy
 import logging
 from collections import deque
-from tf2onnx.rewriter.rnn_utils import is_loopcond_op, is_tensor_array_op, is_tensor_array_write_op, \
-     REWRITER_RESULT
+from tf2onnx.rewriter.rnn_utils import is_loopcond_op, is_tensor_array_op, is_tensor_array_write_op
+from tf2onnx.rewriter.rnn_utils import BodyGraphDict, REWRITER_RESULT
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.loop_rewriter_base")
