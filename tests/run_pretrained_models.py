@@ -10,6 +10,7 @@ from __future__ import unicode_literals
 
 import argparse
 import os
+import sys
 import tarfile
 import tempfile
 import time
@@ -407,7 +408,7 @@ def main():
     tests = tests_from_yaml(args.config)
     if args.list:
         print(sorted(tests.keys()))
-        return
+        return 0
     if args.tests:
         test_keys = args.tests.split(",")
     else:
@@ -438,7 +439,8 @@ def main():
                 t = tests[test]
                 if t.perf:
                     f.write("{},{},{}\n".format(test, t.tf_runtime, t.onnx_runtime))
+    return failed
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
