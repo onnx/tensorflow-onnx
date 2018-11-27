@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
-"""Unit Tests for lstm."""
+"""Unit Tests for custom rnns."""
 
 from __future__ import absolute_import
 from __future__ import division

@@ -466,12 +466,6 @@ class Graph(object):
 
     def topological_sort(self, ops):
         """Topological sort of graph."""
-        op_implicit_inputs = {}
-        for op in ops:
-            implicit_inputs = op.get_implicit_inputs()
-            if implicit_inputs:
-                op_implicit_inputs[op.name] = implicit_inputs
-
         def _push_stack(stack, node, in_stack):
             stack.append(node)
             if node in in_stack:
@@ -493,8 +487,8 @@ class Graph(object):
 
         for i, op in enumerate(ops):
             all_input = set(op.input)
-            if op.name in op_implicit_inputs:
-                all_input |= set(op_implicit_inputs[op.name])
+            implicit_inputs = op.get_implicit_inputs()
+            all_input |= set(implicit_inputs)
             for inp in all_input:
                 j = self.get_node_by_name(inp)
                 if j and j.type != "Const":

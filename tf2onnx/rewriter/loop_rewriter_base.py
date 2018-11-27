@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.rewriter.custom_rnn_rewriter - custom rnn support
+tf2onnx.rewriter.loop_rewriter_base
 """
 
 from __future__ import division

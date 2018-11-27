@@ -126,7 +126,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             self.log.debug("created file %s", model_path)
 
         graph_def = tf_optimize(input_names_with_port, output_names_with_port,
-                                               sess.graph_def, constant_fold)
+                                sess.graph_def, constant_fold)
 
         if self.debug_mode() and constant_fold:
             model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_after_tf_optimize.pb")
