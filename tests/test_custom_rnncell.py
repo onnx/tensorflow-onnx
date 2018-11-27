@@ -9,72 +9,18 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-import unittest
 
 from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
+# pylint: disable=abstract-method,arguments-differ
 
 class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
-    def test_single_dynamic_lstm(self, state_is_tuple=True):
-        units = 5
-        batch_size = 6
-        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
-        x_val = np.stack([x_val] * batch_size)
-
-        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
-
-        cell = rnn.LSTMCell(
-            units,
-            initializer=initializer,
-            state_is_tuple=state_is_tuple)
-        outputs, cell_state = tf.nn.dynamic_rnn(
-            cell,
-            x,
-            dtype=tf.float32)
-
-        _ = tf.identity(outputs, name="output")
-        _ = tf.identity(cell_state, name="cell_state")
-
-        input_names_with_port = ["input_1:0"]
-        feed_dict = {"input_1:0": x_val}
-
-        output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
-
-    def test_single_dynamic_lstm_consume_ch_only(self, state_is_tuple=True):
-        units = 5
-        batch_size = 6
-        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
-        x_val = np.stack([x_val] * batch_size)
-
-        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
-
-        cell = rnn.LSTMCell(
-            units,
-            initializer=initializer,
-            state_is_tuple=state_is_tuple)
-        outputs, cell_state = tf.nn.dynamic_rnn(
-            cell,
-            x,
-            dtype=tf.float32)
-
-        _ = tf.identity(cell_state, name="cell_state")
-
-        input_names_with_port = ["input_1:0"]
-        feed_dict = {"input_1:0": x_val}
-
-        output_names_with_port = ["cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
-
     def test_single_dynamic_custom_rnn(self):
-        size = 5 # size of each model layer.
+        size = 5  # size of each model layer.
         batch_size = 1
         cell = GatedGRUCell(size)
 
@@ -82,7 +28,6 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         xs, s = tf.nn.dynamic_rnn(cell=cell, dtype=tf.float32,
-                                  #sequence_length=sequence_length,
                                   inputs=x, time_major=False)
         _ = tf.identity(xs, name="output")
         _ = tf.identity(s, name="final_state")
@@ -100,20 +45,20 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
         batch_size = 9
         # shape  [batch size, time step, size]
-        # attention_state: usually the output of an RNN encoder. This tensor should be shaped `[batch_size, max_time, ...]`.
+        # attention_state: usually the output of an RNN encoder.
+        # This tensor should be shaped `[batch_size, max_time, ...]`.
         attention_states = np.random.randn(batch_size, time_step, attn_size).astype('f')
         attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
             attn_size,
             attention_states)
 
-        match_input_fn = lambda curr_input, state : tf.concat([curr_input, state], axis = -1)
+        match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
         cell = tf.nn.rnn_cell.LSTMCell(size)
-        match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(
-                                                    cell,
-                                                    attention_mechanism, 
-                                                    attention_layer_size=attn_size, 
-                                                    cell_input_fn = match_input_fn, 
-                                                    output_attention=False)
+        match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
+                                                            attention_mechanism,
+                                                            attention_layer_size=attn_size,
+                                                            cell_input_fn=match_input_fn,
+                                                            output_attention=False)
 
         decoder_time_step = 6
         x_val = np.random.randn(decoder_time_step, input_size).astype('f')
@@ -140,7 +85,8 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         batch_size = 9
 
         # shape  [batch size, time step, size]
-        # attention_state: usually the output of an RNN encoder. This tensor should be shaped `[batch_size, max_time, ...]
+        # attention_state: usually the output of an RNN encoder.
+        # This tensor should be shaped `[batch_size, max_time, ...]`
         encoder_time_step = time_step
         encoder_x_val = np.random.randn(encoder_time_step, input_size).astype('f')
         encoder_x_val = np.stack([encoder_x_val] * batch_size)
@@ -149,18 +95,16 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output, attr_state = tf.nn.dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
         _ = tf.identity(output, name="output_0")
         attention_states = output
-        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
-            attn_size,
-            attention_states)
+        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size,
+                                                                   attention_states)
 
-        match_input_fn = lambda curr_input, state : tf.concat([curr_input, state], axis = -1)
+        match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
         cell = tf.nn.rnn_cell.LSTMCell(size)
-        match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(
-                                                    cell,
-                                                    attention_mechanism, 
-                                                    attention_layer_size=attn_size, 
-                                                    cell_input_fn = match_input_fn, 
-                                                    output_attention=False)
+        match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
+                                                            attention_mechanism,
+                                                            attention_layer_size=attn_size,
+                                                            cell_input_fn=match_input_fn,
+                                                            output_attention=False)
 
         decoder_time_step = 6
         decoder_x_val = np.random.randn(decoder_time_step, input_size).astype('f')
@@ -172,7 +116,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(output, name="output")
         _ = tf.identity(attr_state.cell_state, name="final_state")
 
-        feed_dict = {"input_1:0": encoder_x_val , "input_2:0": decoder_x_val}
+        feed_dict = {"input_1:0": encoder_x_val, "input_2:0": decoder_x_val}
         input_names_with_port = ["input_1:0", "input_2:0"]
         output_names_with_port = ["output_0:0", "output:0", "final_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
@@ -186,7 +130,8 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         batch_size = 9
 
         # shape  [batch size, time step, size]
-        # attention_state: usually the output of an RNN encoder. This tensor should be shaped `[batch_size, max_time, ...]
+        # attention_state: usually the output of an RNN encoder.
+        # This tensor should be shaped `[batch_size, max_time, ...]`
         encoder_time_step = time_step
         encoder_x_val = np.random.randn(encoder_time_step, input_size).astype('f')
         encoder_x = tf.placeholder(tf.float32, (batch_size,) + encoder_x_val.shape, name="input_1")
@@ -195,18 +140,16 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output, attr_state = tf.nn.dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
         _ = tf.identity(output, name="output_0")
         attention_states = output
-        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
-            attn_size,
-            attention_states)
+        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size,
+                                                                   attention_states)
 
-        match_input_fn = lambda curr_input, state : tf.concat([curr_input, state], axis = -1)
+        match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
         cell = tf.nn.rnn_cell.LSTMCell(size)
-        match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(
-                                                    cell,
-                                                    attention_mechanism, 
-                                                    attention_layer_size=attn_size, 
-                                                    cell_input_fn = match_input_fn, 
-                                                    output_attention=False)
+        match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
+                                                            attention_mechanism,
+                                                            attention_layer_size=attn_size,
+                                                            cell_input_fn=match_input_fn,
+                                                            output_attention=False)
 
         decoder_time_step = 6
         decoder_x_val = np.random.randn(decoder_time_step, input_size).astype('f')
@@ -218,13 +161,13 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(output, name="output")
         _ = tf.identity(attr_state.cell_state, name="final_state")
 
-        feed_dict = {"input_1:0": encoder_x_val , "input_2:0": decoder_x_val}
+        feed_dict = {"input_1:0": encoder_x_val, "input_2:0": decoder_x_val}
         input_names_with_port = ["input_1:0", "input_2:0"]
         output_names_with_port = ["output_0:0", "output:0", "final_state:0"]
 
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
-    def test_multirnn_lstm(self, state_is_tuple = True):
+    def test_multi_rnn_lstm(self, state_is_tuple=True):
         units = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -233,26 +176,22 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        cell_0 = rnn.LSTMCell(
-            units,
-            initializer=initializer,
-            state_is_tuple=state_is_tuple)
+        cell_0 = rnn.LSTMCell(units,
+                              initializer=initializer,
+                              state_is_tuple=state_is_tuple)
 
-        cell_1 = rnn.LSTMCell(
-            units,
-            initializer=initializer,
-            state_is_tuple=state_is_tuple)
+        cell_1 = rnn.LSTMCell(units,
+                              initializer=initializer,
+                              state_is_tuple=state_is_tuple)
 
-        cell_2 = rnn.LSTMCell(
-            units,
-            initializer=initializer,
-            state_is_tuple=state_is_tuple)
+        cell_2 = rnn.LSTMCell(units,
+                              initializer=initializer,
+                              state_is_tuple=state_is_tuple)
 
         cells = rnn.MultiRNNCell([cell_0, cell_1, cell_2], state_is_tuple=state_is_tuple)
-        outputs, cell_state = tf.nn.dynamic_rnn(
-            cells,
-            x,
-            dtype=tf.float32)
+        outputs, cell_state = tf.nn.dynamic_rnn(cells,
+                                                x,
+                                                dtype=tf.float32)
 
         _ = tf.identity(outputs, name="output")
         _ = tf.identity(cell_state, name="cell_state")

@@ -4,11 +4,14 @@
 """
 tf2onnx.rewrite - rewrite tensorflow subgraph to onnx random_uniform op
 """
-from onnx import helper, onnx_pb, numpy_helper
-from tf2onnx.graph import Node, Graph
+from onnx import helper
+from tf2onnx.graph import Node
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx import utils
 from tf2onnx.utils import port_name
+
+# pylint: disable=missing-docstring
+
 
 def rewrite_random_uniform(g, ops):
     pattern = \
@@ -28,11 +31,12 @@ def rewrite_random_uniform(g, ops):
         # max is on input 0
         tmax = input2.inputs[0].get_tensor_value()[0]
         tmin = input2.inputs[1].get_tensor_value()[0]
-        dtype = output.dtype
+
         new_node = create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output)
         ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
 
     return ops
+
 
 # rewriter function when fold_const is enabled
 def rewrite_random_uniform_fold_const(g, ops):
@@ -60,6 +64,7 @@ def rewrite_random_uniform_fold_const(g, ops):
 
     return ops
 
+
 def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output):
     dtype = output.dtype
     op_name = utils.make_name("RandomUniform")
@@ -67,11 +72,11 @@ def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output):
     if ru_op.inputs[0].type == "Shape":
         shape_node = ru_op.inputs[0]
         new_node = Node(helper.make_node("RandomUniformLike",
-                                            [shape_node.input[0]], [out_name], name=op_name,
-                                            low=tmin, high=tmax, dtype=dtype), g)
+                                         [shape_node.input[0]], [out_name], name=op_name,
+                                         low=tmin, high=tmax, dtype=dtype), g)
     else:
         shape = g.get_shape(output.output[0])
         new_node = Node(helper.make_node("RandomUniform",
-                                            [], [out_name], name=op_name,
-                                            low=tmin, high=tmax, dtype=dtype, shape=shape), g)
+                                         [], [out_name], name=op_name,
+                                         low=tmin, high=tmax, dtype=dtype, shape=shape), g)
     return new_node

@@ -8,12 +8,16 @@ tf2onnx.rewriter.custom_rnn_rewriter - custom rnn support
 from __future__ import division
 from __future__ import print_function
 import copy
+import logging
 from collections import deque
-from tf2onnx.rewriter.rnn_utils import *
-from tf2onnx.graph import Graph
+from tf2onnx.rewriter.rnn_utils import is_loopcond_op, is_tensor_array_op, is_tensor_array_write_op, \
+     REWRITER_RESULT
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.loop_rewriter_base")
+
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
+
 
 class Context:
     def __init__(self):
@@ -22,22 +26,9 @@ class Context:
         self.loop_variables = {}
 
 
-# describe the body graph's input and output node
-class SubGraphMetadata(object):
-    def __init__(self, g, input_ids, output_ids, initial_input_ids=[]):
-        self.g = g
-        self.input_ids = input_ids
-        self.output_ids = output_ids
-
-        self.initial_input_ids = initial_input_ids
-
-        # sub-graph boundary
-        self.other_enter_input_ids = []
-
-
 class LoopVariable:
     def __init__(self, enter_name, enter_input_id, next_iteration_input_id,
-        switch_true_identity_output_id, exit_output_id, is_tensor_array):
+                 switch_true_identity_output_id, exit_output_id, is_tensor_array):
         self.enter_name = enter_name
         self.enter_input_id = enter_input_id
         self.next_iteration_input_id = next_iteration_input_id
@@ -88,7 +79,7 @@ class LoopRewriterBase:
     def _parse_loop_variables(self, loop_cond_op, context):
         parts = loop_cond_op.name.split('/')
         context.while_context_scope = '/'.join(parts[0:-1]) + "/"
-        log.debug("found while loop scope " + context.while_context_scope)
+        log.debug("found while loop scope %s", context.while_context_scope)
 
         switch_nodes = self.g.find_output_consumers(loop_cond_op.output[0])
         for s in switch_nodes:
@@ -124,7 +115,7 @@ class LoopRewriterBase:
         target_node_input_id = None
         enter_node = [n for n in merge_node.inputs if n.type == 'Enter'][0]
         target_node_input_id = enter_node.input[0]
-        log.debug("a Switch >> Merge >> Enter is found called " + enter_node.inputs[0].name)
+        log.debug("a Switch >> Merge >> Enter is found called %s", enter_node.inputs[0].name)
 
         next_iteration_node = [n for n in merge_node.inputs if n.type == 'NextIteration'][0]
         last_iteration_output_id = next_iteration_node.input[0]
@@ -163,7 +154,7 @@ class LoopRewriterBase:
             loop_var.ta_index_id = ta_write_node.input[1]
 
             log.debug("loop var [%s, %s] output shapes are inferred from TA element shape", loop_var.enter_name,
-                     loop_var.enter_input_id)
+                      loop_var.enter_input_id)
             enter_node = ta_write_node.inputs[0]
             output_ta_node = enter_node.inputs[0]
             log.debug(self.g.get_shape(output_ta_node.output[0]))
@@ -175,7 +166,7 @@ class LoopRewriterBase:
 
     def _tune_shape_for_loop_var(self, loop_var):
         log.debug("_tune_shape_for_loop_var for loop var [%s, %s, %s]", loop_var.enter_name,
-                 loop_var.enter_input_id, loop_var.next_iteration_input_id)
+                  loop_var.enter_input_id, loop_var.next_iteration_input_id)
         var_output_shape = self.g.get_shape(loop_var.enter_input_id)
         if var_output_shape is None:
             var_output_shape = self.g.get_shape(loop_var.next_iteration_input_id)
@@ -195,7 +186,7 @@ class LoopRewriterBase:
 
         input_ids = set(input_ids)
         output_ids = set(graph_meta.output_ids)
-        log.debug("input ids %s ",input_ids)
+        log.debug("input ids %s ", input_ids)
         log.debug("output ids %s ", output_ids)
         nodes = []
         q = deque()
@@ -204,7 +195,7 @@ class LoopRewriterBase:
         q.extend(output_nodes)
         nodes.extend(output_nodes)
         enter_nodes = set()
-        while len(q) > 0:
+        while q:
             n = q.popleft()
             if not n:
                 continue
@@ -219,7 +210,7 @@ class LoopRewriterBase:
                 if i in input_ids:
                     log.debug("terminate the input search at %s", i)
                 elif not input_node:
-                    if i in g._model_inputs:
+                    if i in g.model_inputs:
                         log.debug("find a model input, which might be a placeholder")
                     elif g.is_initializer(i):
                         log.debug("find an initializer, this might be generated during op conversion")

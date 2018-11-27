@@ -7,17 +7,24 @@ tf2onnx.rewriter.custom_rnn_rewriter - custom rnn support
 
 from __future__ import division
 from __future__ import print_function
-from collections import deque
-from tf2onnx.rewriter.rnn_utils import *
-from tf2onnx.rewriter.loop_rewriter_base import *
-from tf2onnx.graph import Graph
-from onnx import helper, onnx_pb, numpy_helper
+import logging
+from onnx import helper
+import numpy as np
+from tf2onnx.graph import Graph, Node
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context, REWRITER_RESULT
+from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op, \
+     is_placeholder_op, make_onnx_node
+from tf2onnx.rewriter.rnn_utils import BodyGraphDict, SubGraphMetadata
+from tf2onnx.tfonnx import utils
 
-import onnx
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.custom_rnn_rewriter")
 INVLAID_INPUT_ID = "invalid:0"
+
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,broad-except,protected-access
+
 
 class CustomRnnContext(Context):
     def __init__(self):
@@ -41,7 +48,7 @@ class TensorArrayProp(object):
 class ScanProperties(object):
     def __init__(self, initial_state_and_scan_inputs, loop_state_inputs,
                  loop_state_outputs, loop_scan_inputs, loop_scan_outputs):
-        self.initial_state_and_scan_inputs= initial_state_and_scan_inputs
+        self.initial_state_and_scan_inputs = initial_state_and_scan_inputs
         self.loop_state_inputs = loop_state_inputs
         self.loop_state_outputs = loop_state_outputs
         self.loop_scan_inputs = loop_scan_inputs
@@ -72,7 +79,7 @@ class CustomRnnRewriter(LoopRewriterBase):
     def _get_rnn_scope_name(self, while_scope_name):
         parts = while_scope_name.split('/')
         rnn_scope = '/'.join(parts[0:-2]) + "/"
-        log.debug("found rnn scope " + rnn_scope)
+        log.debug("found rnn scope %s", rnn_scope)
         return rnn_scope
 
     def _parse_rnn_loop(self, context):
@@ -85,7 +92,7 @@ class CustomRnnRewriter(LoopRewriterBase):
         #      time has name called "time"
         #      iteration_cnt is added by control flow.
 
-        # be noted: 
+        # be noted:
         # 1. iteration counter does not exist in tf1.4 or earlier versions
         # 2. if dynamic_rnn's first input is not consumed, output ta does not exist.
         time_name = context.rnn_scope + "time"
@@ -103,13 +110,14 @@ class CustomRnnRewriter(LoopRewriterBase):
             elif enter_input_node.name == time_name:
                 found_time = True
                 context.time_var = val
-            elif enter_input_node.name == iteration_counter_name: 
+            elif enter_input_node.name == iteration_counter_name:
                 context.iteration_var = val
             else:
                 context.other_loop_vars[enter_name] = val
 
         if not (found_time and is_rnn_out_ta):
-            log.debug("this should not be a dynamic_rnn loop, found_time: %s, is_rnn_out_ta: %s", found_time, is_rnn_out_ta)
+            log.debug("this should not be a dynamic_rnn loop, found_time: %s, is_rnn_out_ta: %s",
+                      found_time, is_rnn_out_ta)
             return False
 
         return True
@@ -167,8 +175,8 @@ class CustomRnnRewriter(LoopRewriterBase):
     def _parse_time_var(self, context):
         time_var = context.time_var
         log.debug("time var %s - enter input id (%s) shape: %s, output (%s) shape: %s", time_var.enter_name,
-                    time_var.enter_input_id, self.g.get_shape(time_var.enter_input_id),
-                    time_var.switch_true_identity_output_id, self.g.get_shape(time_var.switch_true_identity_output_id))
+                  time_var.enter_input_id, self.g.get_shape(time_var.enter_input_id),
+                  time_var.switch_true_identity_output_id, self.g.get_shape(time_var.switch_true_identity_output_id))
 
     def _parse_output_ta(self, context):
         for enter_name, loop_var in context.loop_variables.items():
@@ -186,8 +194,8 @@ class CustomRnnRewriter(LoopRewriterBase):
 
             context.output_tas.append(output_ta)
             log.debug("output ta %s - data input (%s) shape: %s, output (%s) shape: %s", enter_name,
-                     output_ta.data_input_id, self.g.get_shape(output_ta.data_input_id),
-                     output_ta.output_id, self.g.get_shape(output_ta.output_id))
+                      output_ta.data_input_id, self.g.get_shape(output_ta.data_input_id),
+                      output_ta.output_id, self.g.get_shape(output_ta.output_id))
 
     def _parse_input_ta(self, context):
         matcher = GraphMatcher(self.rnn_input_pattern, allow_reorder=True)
@@ -208,8 +216,8 @@ class CustomRnnRewriter(LoopRewriterBase):
             context.input_tas.append(input_ta)
 
             log.debug("input ta %s - data input (%s) shape: %s, output (%s) shape: %s", ta_read_node.name,
-                    input_ta.data_input_id, self.g.get_shape(input_ta.data_input_id), 
-                    input_ta.output_id, self.g.get_shape(input_ta.output_id))
+                      input_ta.data_input_id, self.g.get_shape(input_ta.data_input_id),
+                      input_ta.output_id, self.g.get_shape(input_ta.output_id))
 
     def _cut_off_connection_for_cell(self, context):
         nodes_to_remove = []
@@ -381,7 +389,7 @@ class CustomRnnRewriter(LoopRewriterBase):
 
             # if there is placeholder in the Enter's input graph, then we think we should consider the Enter's input
             # nodes as cell's input; otherwise, we think the input graph should be part of cell graph.
-            if has_placeholder == True:
+            if has_placeholder is True:
                 log.debug("Enter input id [%s] is a subgraph containing placeholder, so make it cell boundary",
                           enter_node.input[0])
                 other_enter_input_ids.append(enter_node.input[0])
@@ -413,8 +421,8 @@ class CustomRnnRewriter(LoopRewriterBase):
                 self.g.set_shape(reshape_node.output[0], new_shape)
                 nodes_to_append.append(reshape_node)
 
-                log.debug("create Reshape for scan state output %s, with output shape %s", 
-                         reshape_node.output[0], new_shape)
+                log.debug("create Reshape for scan state output %s, with output shape %s",
+                          reshape_node.output[0], new_shape)
                 self.g.replace_all_inputs(self.g.get_nodes(), var_output_id, reshape_node.output[0])
 
             index += 1
@@ -427,12 +435,15 @@ class CustomRnnRewriter(LoopRewriterBase):
                     raise ValueError("Scan output has no shape set")
                 new_shape = output_shape[1:]  # remove the fake batch size: 1, [time, real-batch, ...]
                 node_name = utils.make_name("scan_output_reshape")
-                shape_node = self.g.make_const(utils.make_name("scan_output_target_shape"), np.array(new_shape, dtype=np.int64))
-                reshape_node = Node(helper.make_node("Reshape", [scan_node.output[index], shape_node.output[0]], [utils.port_name(node_name)], name=node_name), self.g, skip_conversion=True)
+                shape_node = self.g.make_const(utils.make_name("scan_output_target_shape"),
+                                               np.array(new_shape, dtype=np.int64))
+                reshape_node = Node(helper.make_node("Reshape", [scan_node.output[index], shape_node.output[0]],
+                                                     [utils.port_name(node_name)], name=node_name),
+                                    self.g, skip_conversion=True)
                 self.g.set_shape(reshape_node.output[0], new_shape)
 
-                log.debug("create Reshape for scan scan output %s, with output shape %s", 
-                         reshape_node.output[0], new_shape)
+                log.debug("create Reshape for scan scan output %s, with output shape %s",
+                          reshape_node.output[0], new_shape)
                 nodes_to_append.append(reshape_node)
                 self.g.replace_all_inputs(self.g.get_nodes(), ta_final_output_id, reshape_node.output[0])
             index += 1
@@ -461,7 +472,7 @@ class CustomRnnRewriter(LoopRewriterBase):
         return var, nodes_to_append
 
     def _create_unsqueeze_node(self, target_name, input_id):
-        unsqueeze_node = make_onnx_node(self.g, "Unsqueeze", [input_id], attr={"axes":[0]},
+        unsqueeze_node = make_onnx_node(self.g, "Unsqueeze", [input_id], attr={"axes": [0]},
                                         skip_conversion=True, op_name_scope=target_name)
         input_shape = self.g.get_shape(input_id)
         if input_shape is None:
@@ -473,7 +484,7 @@ class CustomRnnRewriter(LoopRewriterBase):
         return unsqueeze_node
 
     def _create_squeeze_node(self, target_name, input_id):
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [input_id], attr={"axes":[0]},
+        squeeze_node = make_onnx_node(self.g, "Squeeze", [input_id], attr={"axes": [0]},
                                       skip_conversion=True, op_name_scope=target_name)
         input_shape = self.g.get_shape(input_id)
         if input_shape is None:
@@ -539,7 +550,7 @@ class CustomRnnLateRewriter(object):
                         loop_input_shape = list(shape)
                 else:
                     loop_input_shape = list(shape)
-                
+
                 onnx_input_shape = utils.make_onnx_shape(loop_input_shape)
                 val = helper.make_tensor_value_info(input_name, dtype, onnx_input_shape)
                 body_g.add_model_input(input_name, val)
@@ -577,5 +588,3 @@ class CustomRnnLateRewriter(object):
                 raise ValueError("error when removing nodes")
 
         return nodes
-
-

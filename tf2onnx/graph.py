@@ -255,7 +255,7 @@ class Node(object):
                 n = self.graph.get_node_by_name(input_id)
                 if n is None:
                     if not self.graph.is_initializer(input_id):
-                        if input_id not in self.graph._model_inputs:
+                        if input_id not in self.graph.model_inputs:
                             continue
                 implicit_inputs_in_current_graph.add(input_id)
             return implicit_inputs_in_current_graph
@@ -263,6 +263,7 @@ class Node(object):
 
     @staticmethod
     def _get_implicit_inputs(onnx_graph, recursive=True):
+        """Get implicit inputs for specified onnx graph."""
         node_map = set()
         for n in onnx_graph.node:
             node_map |= set(n.output)
@@ -326,6 +327,10 @@ class Graph(object):
     @property
     def initializers(self):
         return self._initializers
+
+    @property
+    def model_inputs(self):
+        return self._model_inputs
 
     def is_target(self, name):
         """Return True if target platform is name."""
@@ -581,7 +586,7 @@ class Graph(object):
         return graph
 
     def make_model(self, doc, optimize=True):
-        """ 
+        """
         Create final ModelProto for onnx from internal graph.
         Args:
             optimize: optimize graph via onnx
@@ -601,7 +606,7 @@ class Graph(object):
         model_proto = helper.make_model(graph, **kwargs)
 
         # optimize the model proto
-        if False:
+        if optimize:
             model_proto = optimizer.optimize(model_proto)
         return model_proto
 

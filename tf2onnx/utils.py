@@ -9,10 +9,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import re
-import numpy as np
 import os
+import re
 import six
+import numpy as np
 import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from onnx import helper, onnx_pb, defs, numpy_helper
@@ -212,6 +212,7 @@ PREFERRED_OPSET = 7
 
 
 def find_opset(opset):
+    """Find opset."""
     if opset is None or opset == 0:
         opset = defs.onnx_opset_version()
         if opset > PREFERRED_OPSET:
@@ -221,6 +222,7 @@ def find_opset(opset):
 
 
 def get_tf_node_attr(node, name):
+    """Parser TF node attribute."""
     if six.PY2:
         # For python2, TF get_attr does not accept unicode
         name = str(name)
@@ -228,6 +230,7 @@ def get_tf_node_attr(node, name):
 
 
 def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False):
+    """Save onnx model as file."""
     save_path = save_path_root
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -243,8 +246,8 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
             t = numpy_helper.from_array(data)
             t.name = data_key
             data_full_path = os.path.join(data_path, "input_"+ str(i) +".pb")
-            with open(data_full_path ,'wb') as f: 
-                f.write(t.SerializeToString()) 
+            with open(data_full_path, 'wb') as f:
+                f.write(t.SerializeToString())
             i += 1
 
     target_path = os.path.join(save_path, onnx_file_name + ".onnx")

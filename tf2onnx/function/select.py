@@ -4,7 +4,6 @@
 """
 tf2onnx.tf2onnx - select op conversion
 """
-import onnx
 from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
@@ -53,15 +52,16 @@ def create_loop_op(ctx, node, batch_val_input_id, data_type):
     fake_val_name = utils.make_name("fake_var")
     fake_var_init_val = helper.make_tensor(fake_val_name, TensorProto.FLOAT, (), [0.0])
     fake_var_init_node = Node(helper.make_node("Constant", [], [fake_val_name],
-                              value=fake_var_init_val, name=fake_val_name), ctx)
+                                               value=fake_var_init_val, name=fake_val_name), ctx)
     nodes.append(fake_var_init_node)
 
-    trip_cnt_name = utils.make_name("LoopGatherIndices")
+    trip_cnt_name = utils.make_name("loop_gather_indices")
     trip_cnt_output_id = utils.port_name(trip_cnt_name)
-    trip_cnt_cond = Node(helper.make_node("Unsqueeze", [batch_val_input_id], [trip_cnt_output_id], axes=[0], name=trip_cnt_name), ctx)
+    trip_cnt_cond = Node(helper.make_node("Unsqueeze", [batch_val_input_id], [trip_cnt_output_id],
+                                          axes=[0], name=trip_cnt_name), ctx)
     nodes.append(trip_cnt_cond)
 
-    op_name = utils.make_name("Loop")
+    op_name = utils.make_name("loop")
     out_name = port_name(op_name)
     loop_inputs = [trip_cnt_output_id,  # trip count
                    cond_var_name,  # termination condition
@@ -80,13 +80,13 @@ def get_hidden_size_best_effort(ctx, node):
         data_shape = ctx.get_shape(node.input[2])
         if data_shape is None:
             raise ValueError("data shape not found, so cannot create subgraph")
-    return data_shape 
+    return data_shape
 
 def create_loop_body_graph(ctx, node, select_condition_input_id, select_output_data_type):
     nodes = []
-    graph_inputs = [helper.make_tensor_value_info("i", TensorProto.INT64, (1,)), # iteration_num
-                    helper.make_tensor_value_info("cond", TensorProto.BOOL, ()), # condition
-                    helper.make_tensor_value_info("fake_var", TensorProto.FLOAT, ()) # loop-carried dependency
+    graph_inputs = [helper.make_tensor_value_info("i", TensorProto.INT64, (1,)),  # iteration_num
+                    helper.make_tensor_value_info("cond", TensorProto.BOOL, ()),  # condition
+                    helper.make_tensor_value_info("fake_var", TensorProto.FLOAT, ())  # loop-carried dependency
                    ]
 
     # get the i'th value of "Select"'s condition

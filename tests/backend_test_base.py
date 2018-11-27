@@ -14,15 +14,11 @@ import os
 import sys
 import tempfile
 import unittest
-from onnx import helper
-from onnx import numpy_helper 
-from onnx import utils 
 
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
 
-import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import utils
 

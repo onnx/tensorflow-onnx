@@ -281,7 +281,7 @@ class UnitRewriterBase(object):
 
         if len(consumers_in_rnn_scope) != 1:
             log.warning("RNN input node has %d onsumers in current rnn scope %s skip",
-                      len(consumers_in_rnn_scope), rnn_scope_name)
+                        len(consumers_in_rnn_scope), rnn_scope_name)
             return None
 
         possible_transpose_after_input = consumers_in_rnn_scope[0]

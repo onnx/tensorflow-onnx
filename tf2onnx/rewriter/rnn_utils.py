@@ -177,6 +177,19 @@ class RNNUnitType(Enum):
     GRUBlockCell = 2
 
 
+# describe the body graph's input and output node
+class SubGraphMetadata(object):
+    def __init__(self, g, input_ids, output_ids, initial_input_ids):
+        self.g = g
+        self.input_ids = input_ids
+        self.output_ids = output_ids
+
+        self.initial_input_ids = initial_input_ids
+
+        # sub-graph boundary
+        self.other_enter_input_ids = []
+
+
 class BodyGraphDict():
     BODY_GRAPH_DICT = {}
 
@@ -194,7 +207,7 @@ class BodyGraphDict():
     def pop_body_graph_info(body_owner_name):
         val = BodyGraphDict.BODY_GRAPH_DICT[body_owner_name]
         del BodyGraphDict.BODY_GRAPH_DICT[body_owner_name]
-        return val 
+        return val
 
     @staticmethod
     def has_body_graph_info(body_owner_name):
@@ -207,6 +220,7 @@ class BodyGraphDict():
             _output_names = BodyGraphDict.BODY_GRAPH_DICT[k].output_ids
             output_names.extend(_output_names)
         return set(output_names)
+
 
 rnn_cell_patterns = {
     RNNUnitType.LSTMCell: lstmcell_pattern,
