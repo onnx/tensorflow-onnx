@@ -6,6 +6,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import argparse
 import logging
@@ -20,16 +21,18 @@ from onnx import utils
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
+
 import tf2onnx.utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import utils
+
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     # static variables
     TMPPATH = tempfile.mkdtemp()
-    BACKEND = "onnxruntime"
+    BACKEND = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
     OPSET = 7
     DEBUG = None
 
@@ -52,7 +55,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf.logging.set_verbosity(tf.logging.WARN)
             self.log.setLevel(logging.INFO)
 
-
     @staticmethod
     def assertAllClose(expected, actual, **kwargs):
         np.testing.assert_allclose(expected, actual, **kwargs)
@@ -66,7 +68,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         import caffe2.python.onnx.backend
         prepared_backend = caffe2.python.onnx.backend.prepare(onnx_graph)
         results = prepared_backend.run(inputs)
-        return results[0]
+        return results
 
     def run_onnxmsrtnext(self, model_path, inputs, output_names):
         """Run test against msrt-next backend."""
@@ -164,7 +166,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     @staticmethod
     def trigger(ut_class):
         parser = argparse.ArgumentParser()
-        parser.add_argument('--backend', default="onnxruntime",
+        parser.add_argument('--backend', default=Tf2OnnxBackendTestBase.BACKEND,
                             choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                             help="backend to test against")
         parser.add_argument('--opset', type=int, default=7, help="opset to test against")

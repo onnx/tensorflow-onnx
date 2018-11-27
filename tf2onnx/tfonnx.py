@@ -7,6 +7,7 @@ tf2onnx.tf2onnx - rewrite tensorflow graph to onnx graph
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import collections
 import logging
@@ -15,7 +16,6 @@ import traceback
 
 import numpy as np
 from onnx import helper, onnx_pb, numpy_helper
-
 from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
@@ -25,13 +25,12 @@ from tf2onnx.function.select import select_op8
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
-from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
+from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
-from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
+from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
 from tf2onnx.rewriter.rnn import rewrite_custom_rnn_cell, rewrite_custom_rnn_body_graph
 from tf2onnx.rewriter.rnn_utils import is_tensor_array_op
-
 from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +44,7 @@ TARGET_RS5 = "rs5"
 TARGET_CAFFE2 = "caffe2"
 POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_CAFFE2]
 DEFAULT_TARGET = []
+
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
 # FIXME:
@@ -92,14 +92,14 @@ def tflist_to_onnx(node_list, shape_override):
         for a in node.node_def.attr:
             attr_cnt[a] += 1
             if a == "dtype":
-                attr[a] = utils.map_tf_dtype(node.get_attr("dtype"))
+                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "dtype"))
             elif a == "T":
-                dtype = node.get_attr("T")
+                dtype = utils.get_tf_node_attr(node, "T")
                 if dtype:
                     if not isinstance(dtype, list):
                         dtypes[node.name] = utils.map_tf_dtype(dtype)
             elif a in ["output_type", "output_dtype", "out_type"]:
-                attr[a] = utils.map_tf_dtype(node.get_attr(a))
+                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
             elif a == "shape":
                 attr[a] = utils.get_shape(node)
             elif a == "Tperm":
@@ -107,10 +107,10 @@ def tflist_to_onnx(node_list, shape_override):
             elif a == "_output_shapes":
                 attr[a] = utils.get_shape(node)
             elif a == "value":
-                onnx_tensor = utils.tf_to_onnx_tensor(node.get_attr(a), name=port_name(node.name))
+                onnx_tensor = utils.tf_to_onnx_tensor(utils.get_tf_node_attr(node, a), name=port_name(node.name))
                 attr[a] = onnx_tensor
             elif a == "DstT":
-                attr["to"] = utils.map_tf_dtype(node.get_attr("DstT"))
+                attr["to"] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "DstT"))
             elif a == "SrcT":
                 continue
             elif a == "element_shape":
@@ -127,7 +127,7 @@ def tflist_to_onnx(node_list, shape_override):
             elif a in ignored_attr:
                 continue
             else:
-                attr[a] = node.get_attr(a)
+                attr[a] = utils.get_tf_node_attr(node, a)
 
         if takeit:
             try:
@@ -832,7 +832,7 @@ def concat_op(ctx, node, name, args):
     ctx.remove_input(node, node.input[0])
 
     axis_val = axis[0]
-    if axis_val < 0: # onnxruntime does not support -1 axis, but TF supports.
+    if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
         input_shape = ctx.get_shape(node.input[0])
         axis_val = len(input_shape) + axis_val
     node.set_attr("axis", axis_val)
@@ -852,7 +852,7 @@ def concatv2_op(ctx, node, name, args):
     ctx.remove_input(node, node.input[-1])
 
     axis_val = axis[0]
-    if axis_val < 0: # onnxruntime does not support -1 axis, but TF supports.
+    if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
         input_shape = ctx.get_shape(node.input[0])
         axis_val = len(input_shape) + axis_val
     node.set_attr("axis", axis_val)
@@ -1314,6 +1314,7 @@ def matmul_op(ctx, node, name, args):
     nodes.append(node)
     return nodes
 
+
 def fill_op7(ctx, node, name, args):
     # T output = Fill(int32 dims, T value, @int32 index_type)
     # T outputs = Tile(T value, int64 repeats (e.g. dims))
@@ -1367,6 +1368,7 @@ def fill_op7(ctx, node, name, args):
 
     return nodes
 
+
 def fill_op(ctx, node, name, args):
     node.type = "ConstantLike"
     # both shape and value in tensorflow are passed as tensor.
@@ -1382,6 +1384,7 @@ def fill_op(ctx, node, name, args):
     node.set_attr("dtype", dtype)
     del node.input[:]
     return node
+
 
 def reverse_op8(ctx, node, name, args):
     # T output = ReverseSequence(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
@@ -1404,9 +1407,9 @@ def reverse_op8(ctx, node, name, args):
 
         # create a node (NodeProto)
         node_def = helper.make_node(
-            'Identity', # node name
-            ['X'], # inputs
-            ['Y'], # outputs
+            'Identity',  # node name
+            ['X'],  # inputs
+            ['Y'],  # outputs
         )
 
         # create the graph (GraphProto)
@@ -1417,7 +1420,7 @@ def reverse_op8(ctx, node, name, args):
             [y],
         )
         node.set_attr("body", graph_def)
-        node.set_attr("directions", [1]) # reverse the scan input
+        node.set_attr("directions", [1])  # reverse the scan input
 
         seq_len_dtype = ctx.get_dtype(node.input[1])
         if seq_len_dtype != onnx_pb.TensorProto.INT64:
@@ -1461,7 +1464,7 @@ def erf_op(ctx, node, name, args):
 
     try:
         _ = ctx.get_initializer("erf_a1")
-    except: # pylint: disable=bare-except
+    except:  # pylint: disable=bare-except
         # insert the constants for erf once
         ctx.make_const(a1, np.array(0.254829592, dtype=np.float32))
         ctx.make_const(a2, np.array(-0.284496736, dtype=np.float32))
@@ -1485,7 +1488,7 @@ def erf_op(ctx, node, name, args):
     nodes = [
         mknode("Abs", [x], "x"),
         mknode("Sub", [null, x], "negx"),
-        mknode("Div", [x, outp("x")], "sign"), # FIXME: this might not work for x=0
+        mknode("Div", [x, outp("x")], "sign"),  # FIXME: this might not work for x=0
         mknode("Mul", [outp("x"), p], "4"),
         mknode("Add", [outp("4"), one], "5"),
         mknode("Div", [one, outp("5")], "t"),
@@ -1664,7 +1667,7 @@ _OPSET_7 = {
 
 _OPSET_8 = {
     "Relu6": (relu6_op8, []),  # make use of min/max broadcast
-    "ReverseSequence": (reverse_op8, []), # make use of scan
+    "ReverseSequence": (reverse_op8, []),  # make use of scan
     "Select": (select_op8, []),
 }
 
@@ -1805,7 +1808,7 @@ def rewrite_constant_fold(g, ops):
         "Range": np.arange,
         "Sqrt": np.sqrt,
         "Sub": np.subtract,
-        }
+    }
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
@@ -1845,11 +1848,12 @@ def rewrite_constant_fold(g, ops):
                     # We keep the graph in topological order so if we folded,
                     # the result might help a following op.
                     keep_looking = True
-            except: # pylint: disable=bare-except
+            except:  # pylint: disable=bare-except
                 # ignore errors
                 pass
         # pylint: enable=too-many-nested-blocks
     return g.remove_deleted_nodes(ops)
+
 
 def rewrite_logical_compare_with_equal(g, ops):
     pattern = OpTypePattern('GreaterEqual', name='greater_equal')
@@ -1891,6 +1895,7 @@ def rewrite_logical_compare_with_equal(g, ops):
 
         ops.extend(nodes_to_append)
     return ops
+
 
 def rewrite_incomplete_type_support(g, ops):
     """
@@ -2048,7 +2053,7 @@ def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
     if fold_constant:
         transforms.extend([
             "fold_constants(ignore_errors=true)",
-            "remove_attribute(attribute_name=_class)", # remove node colocation attributes
+            "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
         ])
 
     transforms.extend([
@@ -2080,6 +2085,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
+
     def topological_sort(ops):
         if not continue_on_error:
             g.topological_sort(ops)
