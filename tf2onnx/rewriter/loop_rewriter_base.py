@@ -70,10 +70,10 @@ class LoopRewriterBase:
                         continue
                     elif _result == REWRITER_RESULT.FAIL:
                         raise ValueError("rewrite failed, so just fast fail it")
-
         all_output_name = copy.deepcopy(self.g.output_names)
-        all_output_name.extend(BodyGraphDict.get_body_graph_output_names())
-        self.g.delete_unused_nodes(all_output_name)
+        if all_output_name:
+            all_output_name.extend(BodyGraphDict.get_body_graph_output_names())
+            self.g.delete_unused_nodes(all_output_name)
         return self.g.get_nodes()
 
     def _parse_loop_variables(self, loop_cond_op, context):

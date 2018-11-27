@@ -30,5 +30,5 @@ install:
   - cd $TRAVIS_BUILD_DIR && export PYTHONPATH=pwd
 
 script:
-    - pylint --rcfile=tools/pylintrc --ignore=version.py --disable=cyclic-import tf2onnx tests/*.py tools
+    - pylint --rcfile=tools/pylintrc --ignore=version.py --ignore=tests/test_custom_rnncell.py --disable=cyclic-import tf2onnx tests/*.py tools
     - python -m pytest --cov=tf2onnx --cov-report=term  --disable-pytest-warnings tests

@@ -200,7 +200,10 @@ def node_name(name):
 
 def make_onnx_shape(shape):
     """shape with -1 is not valid in onnx ... make it a name."""
-    return [make_name("unk") if i == -1 else i for i in shape]
+    if shape:
+        # don't do this if input is a scalar
+        return [make_name("unk") if i == -1 else i for i in shape]
+    return shape
 
 
 def port_name(name, nr=0):

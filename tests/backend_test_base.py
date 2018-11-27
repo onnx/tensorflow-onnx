@@ -17,9 +17,9 @@ import unittest
 
 import numpy as np
 import tensorflow as tf
-import tf2onnx.utils
 from tensorflow.python.ops import variables as variables_lib
-from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx import utils
+from tf2onnx.tfonnx import process_tf_graph, tf_optimize
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -38,7 +38,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         self.maxDiff = None
         tf.reset_default_graph()
         # reset name generation on every test
-        tf2onnx.utils.INTERNAL_NAME = 1
+        utils.INTERNAL_NAME = 1
         np.random.seed(1)  # Make it reproducible.
 
         self.log = logging.getLogger("tf2onnx.unitest." + str(type(self)))
@@ -125,7 +125,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 f.write(sess.graph_def.SerializeToString())
             self.log.debug("created file %s", model_path)
 
-        graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port, output_names_with_port,
+        graph_def = tf_optimize(input_names_with_port, output_names_with_port,
                                                sess.graph_def, constant_fold)
 
         if self.debug_mode() and constant_fold:
@@ -152,7 +152,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def save_onnx_model(self, model_proto, feed_dict):
         save_path = os.path.join(type(self).TMPPATH, self._testMethodName)
-        target_path = tf2onnx.utils.save_onnx_model(save_path, self._testMethodName, feed_dict,
+        target_path = utils.save_onnx_model(save_path, self._testMethodName, feed_dict,
                                             model_proto, include_test_data=self.debug_mode())
 
         self.log.debug("create model file: %s", target_path)

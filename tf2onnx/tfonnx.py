@@ -283,9 +283,7 @@ def reduce_op(ctx, node, name, args):
 
 def placeholder_op(ctx, node, name, args):
     output_shape = ctx.get_shape(node.output[0])
-    if output_shape:
-        # don't do this if input is a scalar
-        output_shape = utils.make_onnx_shape(output_shape)
+    output_shape = utils.make_onnx_shape(output_shape)
     input_node = helper.make_tensor_value_info(node.output[0],
                                                node.dtype,
                                                output_shape)
