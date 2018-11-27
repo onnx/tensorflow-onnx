@@ -10,6 +10,7 @@ from __future__ import print_function
 
 import re
 import numpy as np
+import os
 
 from onnx import helper, onnx_pb, defs, numpy_helper
 
@@ -219,3 +220,29 @@ def find_opset(opset):
             # if we use a newer onnx opset than most runtimes support, default to the one most supported
             opset = PREFERRED_OPSET
     return opset
+
+
+def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False):
+    save_path = save_path_root
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    if include_test_data:
+        data_path = os.path.join(save_path, "test_data_set_0")
+        if not os.path.exists(data_path):
+            os.makedirs(data_path)
+
+        i = 0
+        for data_key in feed_dict:
+            data = feed_dict[data_key]
+            t = numpy_helper.from_array(data)
+            t.name = data_key
+            data_full_path = os.path.join(data_path, "input_"+ str(i) +".pb")
+            with open(data_full_path ,'wb') as f: 
+                f.write(t.SerializeToString()) 
+            i += 1
+
+    target_path = os.path.join(save_path, onnx_file_name + ".onnx")
+    with open(target_path, "wb") as f:
+        f.write(model_proto.SerializeToString())
+    return target_path

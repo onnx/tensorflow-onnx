@@ -90,8 +90,8 @@ def get_conv_getdata(kind=1):
 class BackendTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, output_names_with_port, feed_dict, **kwargs):
         kwargs["convert_var_to_const"] = False
-        kwargs["transform_tf_graph"] = False
-        self.run_test_case(feed_dict, None, output_names_with_port, **kwargs)
+        kwargs["constant_fold"] = False
+        self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
 
     def _test_expand_dims(self, idx):
         tf.reset_default_graph()
@@ -1031,6 +1031,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.int32, [None], name=_TFINPUT)
         picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
         _ = tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    def test_where_with_two_rank_input(self):
+        x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
+        true_result = np.array([[111, 111], [222, 222], [333, 333], [444, 444], [555, 555],
+                                [666, 666], [777, 777], [888, 888], [999, 999], [1000, 1000]],
+                               dtype=np.int32)
+        false_result = np.array([[-111, -111], [-222, -222], [-333, -333], [-444, -444],
+                                 [-555, -555], [-666, -666], [-777, -777], [-888, -888],
+                                 [-999, -999], [-1000, -1000]],
+                                dtype=np.int32)
+        x = tf.placeholder(tf.int32, [None], name=_TFINPUT)
+        picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
+        _ = tf.identity(picks, name=_TFOUTPUT)
+
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_shape_int32(self):

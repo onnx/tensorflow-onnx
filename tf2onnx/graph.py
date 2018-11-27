@@ -239,6 +239,50 @@ class Node(object):
             self._op.output.remove(node)
         self._op.output.extend(self.output)
 
+    def get_implicit_inputs(self, require_input_in_cur_graph=False):
+        """Get implicit inputs if the node has attributes being GraphProto."""
+        body_graphs = [attr.g for attr in self.op.attribute if attr.g]
+        outer_scope_node_input_ids = set()
+        for sub_g in body_graphs:
+            outer_scope_node_input_ids |= self._get_implicit_inputs(sub_g)
+
+        if require_input_in_cur_graph:
+            # only find referenced node in current graph
+            implicit_inputs_in_current_graph = set()
+            for input_id in outer_scope_node_input_ids:
+                n = self.graph.get_node_by_name(input_id)
+                if n is None:
+                    if not self.graph.is_initializer(input_id):
+                        if input_id not in self.graph._model_inputs:
+                            continue
+                implicit_inputs_in_current_graph.add(input_id)
+            return implicit_inputs_in_current_graph
+        return outer_scope_node_input_ids
+
+    @staticmethod
+    def _get_implicit_inputs(onnx_graph, recursive=True):
+        node_map = set()
+        for n in onnx_graph.node:
+            node_map |= set(n.output)
+
+        for n in onnx_graph.input:
+            node_map.add(n.name)
+
+        outer_scope_node_input_ids = set()
+        for n in onnx_graph.node:
+            for i in n.input:
+                if i not in node_map:
+                    outer_scope_node_input_ids.add(i)
+
+        if recursive:
+            for n in onnx_graph.node:
+                for attr in n.attribute:
+                    sub_g = attr.g
+                    if sub_g:
+                        outer_scope_node_input_ids |= Node._get_implicit_inputs(sub_g)
+
+        return outer_scope_node_input_ids
+
 
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
@@ -272,7 +316,6 @@ class Graph(object):
         self._opset = find_opset(opset)
         self._extra_opset = extra_opset
         self.output_names = output_names
-        self._body_graphs = {}
 
     @property
     def opset(self):
@@ -411,16 +454,16 @@ class Graph(object):
         """Copy shape from another node."""
         shape = self.get_shape(input_name)
         # assert shape is not None
-        if shape:
+        if shape is not None:
             self.set_shape(output_name, shape)
-
-    def add_body_graph(self, owner_node_name, body_graph):
-        if owner_node_name not in self._body_graphs:
-            self._body_graphs[owner_node_name] = []
-        self._body_graphs[owner_node_name].append(body_graph)
 
     def topological_sort(self, ops):
         """Topological sort of graph."""
+        op_implicit_inputs = {}
+        for op in ops:
+            implicit_inputs = op.get_implicit_inputs()
+            if implicit_inputs:
+                op_implicit_inputs[op.name] = implicit_inputs
 
         def _push_stack(stack, node, in_stack):
             stack.append(node)
@@ -442,7 +485,10 @@ class Graph(object):
             op_name_to_index[op.name] = i
 
         for i, op in enumerate(ops):
-            for inp in op.input:
+            all_input = set(op.input)
+            if op.name in op_implicit_inputs:
+                all_input |= set(op_implicit_inputs[op.name])
+            for inp in all_input:
                 j = self.get_node_by_name(inp)
                 if j and j.type != "Const":
                     g[op_name_to_index[j.name]].append(i)
@@ -471,9 +517,9 @@ class Graph(object):
         ret = [x for _, x in sorted(zip(label, ops))]
         self.set_nodes(ret)
 
-    def make_model(self, doc, optimize=True):
+    def make_graph(self, doc):
         """
-        Create final ModelProto for onnx from internal graph.
+        Create GraphProto for onnx from internal graph.
         Args:
             optimize: optimize graph via onnx
             doc: text for doc string of the model
@@ -504,14 +550,9 @@ class Graph(object):
         all_inputs = set()
         for op in self.get_nodes():
             all_inputs |= set(op.input)
+            all_inputs |= set(op.get_implicit_inputs())
             onnx_op = op.op
             ops.append(onnx_op)
-
-        for owner_name in self._body_graphs:
-            body_graphs = self._body_graphs[owner_name]
-            for body_graph in body_graphs:
-                for op in body_graph.node:
-                    all_inputs |= set(op.input)
 
         # create input_tensor_values, initializers
         # if initializer is not used as input by any node, then it will be ignored
@@ -535,6 +576,17 @@ class Graph(object):
                                   initializer=initializers,
                                   doc_string=doc)
 
+        return graph
+
+    def make_model(self, doc, optimize=True):
+        """ 
+        Create final ModelProto for onnx from internal graph.
+        Args:
+            optimize: optimize graph via onnx
+            doc: text for doc string of the model
+            output_names: list of model outputs
+        """
+        graph = self.make_graph(doc)
         kwargs = {"producer_name": "tf2onnx",
                   "producer_version": __version__}
         opsets = []
@@ -547,7 +599,7 @@ class Graph(object):
         model_proto = helper.make_model(graph, **kwargs)
 
         # optimize the model proto
-        if optimize:
+        if False:
             model_proto = optimizer.optimize(model_proto)
         return model_proto
 
@@ -702,6 +754,10 @@ class Graph(object):
             top_node = processing_set.pop()
             res_set.add(top_node)
             for node in top_node.inputs:
+                if not node:
+                    # some node (for example Scan) has optional inputs, which
+                    # might has empty input.
+                    continue
                 if node not in res_set:
                     processing_set.add(node)
         return res_set
