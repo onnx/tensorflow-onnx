@@ -286,6 +286,24 @@ def placeholder_op(ctx, node, name, args):
     return None
 
 
+def placeholder_with_default_op(ctx, node, name, args):
+    # Overriding initializer with input is not well supported for these targets
+    if ctx.is_target(TARGET_RS4, TARGET_RS5, TARGET_RS6):
+        log.warning("%s: placeholder_with_default_op, default value is not supported by target, ignore it" % node.name)
+        return placeholder_op(ctx, node, name, args)
+
+    default_value_node = ctx.get_node_by_output(node.input[0])
+    if not default_value_node.is_const():
+        log.warning("%s: placeholder_with_default_op, non const default value is not supported, ignore it" % node.name)
+        return placeholder_op(ctx, node, name, args)
+
+    # Copy the tensor value, set its name to current node's output, add as initializer
+    value = default_value_node.get_tensor_value(as_list=False)
+    tensor = numpy_helper.from_array(value, node.output[0])
+    ctx.add_initializer(tensor)
+    return None
+
+
 def square_op(ctx, node, name, args):
     node.type = "Mul"
     node.input.append(node.input[0])
@@ -1793,7 +1811,7 @@ _OPSET_4 = {
     "PadV2": (pad_op, ["Pad"]),
     "Placeholder": (placeholder_op, []),
     "PlaceholderV2": (placeholder_op, []),
-    "PlaceholderWithDefault": (placeholder_op, []),
+    "PlaceholderWithDefault": (placeholder_with_default_op, []),
     "Pow": (pow_op, []),
     "Prod": (reduce_op, ["ReduceProd"]),
     "RandomNormal": (direct_op, []),
