@@ -32,16 +32,16 @@ Basic:
     - action_probs:0
     - value_estimate:0
 
-Banana:
-  url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/BananaCollectors/TFModels/Banana.bytes
-  model: Banana.bytes
-  input_get: get_random256
-  inputs:
-    "vector_observation:0": [1, 159]
-  outputs:
-    - action:0
-    - action_probs:0
-    - value_estimate:0
+#Banana:
+#  url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/BananaCollectors/TFModels/Banana.bytes
+#  model: Banana.bytes
+#  input_get: get_random256
+#  inputs:
+#    "vector_observation:0": [1, 159]
+#  outputs:
+#    - action:0
+#    - action_probs:0
+#    - value_estimate:0
 
 Bouncer:
   check_only_shape: true # model uses RandomNormal
@@ -104,23 +104,23 @@ GridWorld_5x5:
     - value_estimate:0
     - action:0
 
-Hallway:
-  # needs: lstm
-  url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Hallway/TFModels/Hallway.bytes
-  model: Hallway.bytes
-  input_get: get_random
-  inputs:
-    "vector_observation:0": np.random.uniform(0.0, 0.4, (1, 36)) #[1, 36]
-    "recurrent_in:0": [1, 256]
-    "sequence_length:0": np.array(1)
-    "action_masks:0": np.array([[1, 1, 1, 1, 1]])
-    "prev_action:0": np.array([[1]]) # val must be in between 0 and 4 inclusively
-  outputs:
-    - action_probs:0
-    - value_estimate:0
-    # please change this to action:0 for real conversion.
-    - Log:0 #  use Log:0 to replace action:0, because mutinomial is random sample, so results won't usually be same.
-    - recurrent_out:0
+#Hallway:
+#  # needs: lstm
+#  url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Hallway/TFModels/Hallway.bytes
+#  model: Hallway.bytes
+#  input_get: get_random
+#  inputs:
+#    "vector_observation:0": np.random.uniform(0.0, 0.4, (1, 36)) #[1, 36]
+#    "recurrent_in:0": [1, 256]
+#    "sequence_length:0": np.array(1)
+#    "action_masks:0": np.array([[1, 1, 1, 1, 1]])
+#    "prev_action:0": np.array([[1]]) # val must be in between 0 and 4 inclusively
+#  outputs:
+#    - action_probs:0
+#    - value_estimate:0
+#    # please change this to action:0 for real conversion.
+#    - Log:0 #  use Log:0 to replace action:0, because mutinomial is random sample, so results won't usually be same.
+#    - recurrent_out:0
 
 Hallway-realdata:
   url: https://github.com/Unity-Technologies/ml-agents/raw/master/UnitySDK/Assets/ML-Agents/Examples/Hallway/TFModels/Hallway.bytes

@@ -28,7 +28,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     # static variables
     TMPPATH = tempfile.mkdtemp()
     BACKEND = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
-    OPSET = 7
+    OPSET = int(os.environ.get("TF2ONNX_TEST_OPSET", 7))
     DEBUG = None
 
     def debug_mode(self):
@@ -164,7 +164,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         parser.add_argument('--backend', default=Tf2OnnxBackendTestBase.BACKEND,
                             choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                             help="backend to test against")
-        parser.add_argument('--opset', type=int, default=7, help="opset to test against")
+        parser.add_argument('--opset', type=int, default=Tf2OnnxBackendTestBase.OPSET, help="opset to test against")
         parser.add_argument("--debug", help="output debugging information", action="store_true")
         parser.add_argument('unittest_args', nargs='*')
 

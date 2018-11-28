@@ -41,8 +41,9 @@ log = logging.getLogger("tf2onnx")
 # caffe2 = include some workarounds for caffe2 and winml
 TARGET_RS4 = "rs4"
 TARGET_RS5 = "rs5"
+TARGET_RS6 = "rs6"
 TARGET_CAFFE2 = "caffe2"
-POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_CAFFE2]
+POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_CAFFE2, TARGET_RS6]
 DEFAULT_TARGET = []
 
 
@@ -1017,12 +1018,17 @@ def stridedslice_op(ctx, node, name, args):
 
     # onnx slice as of opset 7 does only take float tensors ... cast if needed
     input_dtype = ctx.get_dtype(node.input[0])
-    if input_dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
-        cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+    if input_dtype != onnx_pb.TensorProto.FLOAT:
+        if node.inputs[0].type == "Cast":
+            # override the previous cast
+            cast_node = node.inputs[0]
+        else:
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+            nodes.insert(0, cast_node)
         cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
         ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
         ctx.copy_shape(node.input[0], cast_node.output[0])
-        nodes.insert(0, cast_node)
+        # undo the cast afer slice
         name = utils.make_name(node.name)
         cast_node = ctx.insert_new_node_on_output("Cast", nodes[-1].output[0], name)
         cast_node.set_attr("to", input_dtype)
@@ -1438,6 +1444,20 @@ def reverse_op8(ctx, node, name, args):
     return nodes
 
 
+def shape_op(ctx, node, name, args):
+    # out_type output = Shape(T input, @int32|int64 out_type), out_type by default int32
+    # int64 output = Shape(T input)
+    dtype = ctx.get_dtype(node.output[0])
+    if dtype == onnx_pb.TensorProto.INT64:
+        return node
+    op_name = utils.make_name(node.name)
+    output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
+    output_cast.set_attr("to", dtype)
+    ctx.set_dtype(output_cast.output[0], dtype)
+    ctx.copy_shape(node.output[0], output_cast.output[0])
+    return [node, output_cast]
+
+
 def erf_op(ctx, node, name, args):
     """Error function."""
 
@@ -1503,28 +1523,8 @@ def erf_op(ctx, node, name, args):
         mknode("Add", [outp("14"), a1], "15"),
         mknode("Mul", [outp("15"), outp("7")], "16"),
         mknode("Sub", [one, outp("16")], "17"),
-        mknode("Mul", [outp("17"), outp("sign")], "18"),
+        Node(helper.make_node("Mul", [outp("17"), outp("sign")], [output_name], name=n), ctx),
     ]
-    # override output name
-    nodes[-1].output[0] = output_name
-    return nodes
-
-
-def shape_op(ctx, node, name, args):
-    # out_type output = Shape(T input, @int32|int64 out_type), out_type by default int32
-    # int64 output = Shape(T input)
-    nodes = [node]
-    out_dtype = node.get_attr("out_type")
-    out_dtype = out_dtype.i if out_dtype else onnx_pb.TensorProto.INT32
-    dest_dtype = onnx_pb.TensorProto.INT64
-    if out_dtype != dest_dtype:
-        attr = {"to": out_dtype}
-        op_name = utils.make_name(node.name)
-        cast_out = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name, **attr)
-        nodes.insert(0, cast_out)
-        ctx.set_dtype(cast_out.output[0], out_dtype)
-        ctx.copy_shape(node.output[0], cast_out.output[0])
-
     return nodes
 
 
@@ -1895,26 +1895,25 @@ def rewrite_logical_compare_with_equal(g, ops):
     return ops
 
 
-def rewrite_incomplete_type_support(g, ops):
+def rewrite_incomplete_type_support(g, ops, impacted_ops):
     """
     for ops that have inclomplete type support, insert casts.
     This is needed for some tensor ops in opset7 and for some ops in winml-rs5.
     It is not helping performance but better than the model not working at all.
     """
     new_ops = []
-    needs_pass2 = False
     for op in ops:
-        if op.type in ["Unsqueeze", "Mul", "Concat"]:
+        if op.type in impacted_ops:
             cast_inserted = []
             output_dtype = None
             # insert casts on inputs if the runtime only supports float
-            for i, node in enumerate(op.inputs):
+            for i, input_node in enumerate(op.inputs):
                 input_name = op.input[i]
                 dtype = g.get_dtype(input_name)
                 if dtype != onnx_pb.TensorProto.FLOAT:
                     output_dtype = dtype
-                    if node.type == "Cast":
-                        node.set_attr("to", onnx_pb.TensorProto.FLOAT)
+                    if input_node.type == "Cast":
+                        input_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
                         g.set_dtype(input_name, onnx_pb.TensorProto.FLOAT)
                     else:
                         cast_node = g.insert_new_node_on_input(op, "Cast", input_name)
@@ -1931,33 +1930,19 @@ def rewrite_incomplete_type_support(g, ops):
                     g.set_dtype(output_cast.output[0], output_dtype)
                     g.copy_shape(output_name, output_cast.output[0])
                     cast_inserted.append(output_cast)
+
             if cast_inserted:
                 new_ops.extend(cast_inserted)
-                needs_pass2 = True
         new_ops.append(op)
-
-    if needs_pass2:
-        # possible that we inserted casts that don't annything ... get rid of them
-        ops = new_ops
-        new_ops = []
-        for op in ops:
-            if op.type != "Cast":
-                new_ops.append(op)
-                continue
-            dtype_in = g.get_dtype(op.input[0])
-            dtype_out = g.get_dtype(op.output[0])
-            if dtype_in != dtype_out:
-                new_ops.append(op)
-                continue
-
-            # input and output have the same dtype ... remove the cast
-            output_name = op.output[0]
-            for node in ops:
-                for i, input_name in enumerate(node.input):
-                    if output_name == input_name:
-                        node.input[i] = op.input[0]
-
     return new_ops
+
+
+def rewrite_incomplete_type_support_rs5(g, ops):
+    return rewrite_incomplete_type_support(g, ops, ["Unsqueeze", "Mul", "Concat", "Slice"])
+
+
+def rewrite_incomplete_type_support_rs6(g, ops):
+    return rewrite_incomplete_type_support(g, ops, ["Slice"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
@@ -2134,7 +2119,9 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     # post-processing rewriters
     late_rewriters = [rewrite_custom_rnn_body_graph]
     if TARGET_RS5 in target:
-        late_rewriters.append(rewrite_incomplete_type_support)
+        late_rewriters.append(rewrite_incomplete_type_support_rs5)
+    if TARGET_RS6 in target:
+        late_rewriters.append(rewrite_incomplete_type_support_rs6)
     if late_rewriters:
         topological_sort(g.get_nodes())
         ops = g.get_nodes()
