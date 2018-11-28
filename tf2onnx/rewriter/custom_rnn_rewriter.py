@@ -8,7 +8,8 @@ tf2onnx.rewriter.custom_rnn_rewriter - custom rnn support
 from __future__ import division
 from __future__ import print_function
 import logging
-from onnx import helper
+import sys
+from onnx import helper, onnx_pb
 import numpy as np
 from tf2onnx.graph import Graph, Node
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
@@ -242,30 +243,6 @@ class CustomRnnRewriter(LoopRewriterBase):
 
         return nodes_to_remove
 
-    def _create_reshape_node(self, new_shape, target_name, input_id):
-        shape_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
-                                       np.array(new_shape, dtype=np.int64))
-
-        reshape_node = make_onnx_node(self.g, "Reshape", [input_id, shape_node.output[0]],
-                                      skip_conversion=True, op_name_scope=target_name)
-        self.g.set_shape(reshape_node.output[0], new_shape)
-        self.g.set_dtype(reshape_node.output[0], self.g.get_dtype(input_id))
-
-        return reshape_node
-
-    def _adapt_state_var_with_fake_batch(self, var):
-        # enter_input_id is assumed in shape [batch, ...]
-        var_data_input_shape = self.g.get_shape(var.enter_input_id)
-        new_shape = []
-        if var_data_input_shape is not None:
-            new_shape = [1] + var_data_input_shape # add a fake batch size : 1
-        else:
-            raise ValueError("var " + var.enter_input_id + "input data input shape is not found")
-
-        reshape_node = self._create_reshape_node(new_shape, "input", var.enter_input_id)
-        var.enter_input_id = reshape_node.output[0]
-        return var, [reshape_node]
-
     def _compose_cell_inputs_and_outputs(self, context):
         log.debug("_compose_cell_inputs_and_outputs")
 
@@ -281,27 +258,20 @@ class CustomRnnRewriter(LoopRewriterBase):
         log.debug("prepare cell state inputs")
         vars_to_iterate = [time_var] + [val for _, val in context.other_loop_vars.items()]
         for var in vars_to_iterate:
-            val, to_append = self._adapt_state_var_with_fake_batch(var)
-            nodes_to_append.extend(to_append)
+            nodes = self._adapt_scan_sequence_input_or_output("input", var.enter_input_id, False)
+            var.enter_input_id = nodes[-1].output[0]
+            nodes_to_append.extend(nodes)
 
-            loop_state_inputs.append(val.switch_true_identity_output_id)
-            loop_state_outputs.append(val.next_iteration_input_id)
-            initial_state_and_scan_inputs.append(val.enter_input_id)
+            loop_state_inputs.append(var.switch_true_identity_output_id)
+            loop_state_outputs.append(var.next_iteration_input_id)
+            initial_state_and_scan_inputs.append(var.enter_input_id)
 
         log.debug("prepare cell scan inputs")
         loop_scan_inputs = []
         for input_ta in context.input_tas:
-            # input_ta.data_input_id is assumed in shape [time, batch, ...]
-            input_ta_data_input_shape = self.g.get_shape(input_ta.data_input_id)
-            new_shape = []
-            if input_ta_data_input_shape:
-                new_shape = [1] + input_ta_data_input_shape
-            else:
-                raise ValueError("input ta data input shape is not found")
-
-            reshape_node = self._create_reshape_node(new_shape, "input_ta", input_ta.data_input_id)
-            input_ta.data_input_id = reshape_node.output[0]
-            nodes_to_append.append(reshape_node)
+            nodes = self._adapt_scan_sequence_input_or_output("input_ta", input_ta.data_input_id, False)
+            input_ta.data_input_id = nodes[-1].output[0]
+            nodes_to_append.extend(nodes)
 
             loop_scan_inputs.append(input_ta.output_id)
             initial_state_and_scan_inputs.append(input_ta.data_input_id)
@@ -408,47 +378,75 @@ class CustomRnnRewriter(LoopRewriterBase):
         for _, val in context.other_loop_vars.items():
             var_output_id = val.exit_output_id
             if var_output_id:
-                output_shape = self.g.get_shape(scan_node.output[index])
-                if output_shape is None:
-                    raise ValueError("Scan output has no shape set")
-                new_shape = output_shape[1:]  # remove fake batch size : 1
-
-                shape_node = self.g.make_const(utils.make_name("state_output_shape"),
-                                               np.array(new_shape, dtype=np.int64))
-
-                reshape_node = make_onnx_node(self.g, "Reshape", [scan_node.output[index], shape_node.output[0]],
-                                              skip_conversion=True, op_name_scope="state_output_reshape")
-                self.g.set_shape(reshape_node.output[0], new_shape)
-                nodes_to_append.append(reshape_node)
-
-                log.debug("create Reshape for scan state output %s, with output shape %s",
-                          reshape_node.output[0], new_shape)
-                self.g.replace_all_inputs(self.g.get_nodes(), var_output_id, reshape_node.output[0])
+                nodes = self._adapt_scan_sequence_input_or_output("state_output_reshape",
+                                                                  scan_node.output[index], True)
+                nodes_to_append.extend(nodes)
+                self.g.replace_all_inputs(self.g.get_nodes(), var_output_id, nodes[-1].output[0])
 
             index += 1
 
         for output_ta in context.output_tas:
             ta_final_output_id = output_ta.output_id
             if ta_final_output_id:
-                output_shape = self.g.get_shape(scan_node.output[index])
-                if output_shape is None:
-                    raise ValueError("Scan output has no shape set")
-                new_shape = output_shape[1:]  # remove the fake batch size: 1, [time, real-batch, ...]
-                node_name = utils.make_name("scan_output_reshape")
-                shape_node = self.g.make_const(utils.make_name("scan_output_target_shape"),
-                                               np.array(new_shape, dtype=np.int64))
-                reshape_node = Node(helper.make_node("Reshape", [scan_node.output[index], shape_node.output[0]],
-                                                     [utils.port_name(node_name)], name=node_name),
-                                    self.g, skip_conversion=True)
-                self.g.set_shape(reshape_node.output[0], new_shape)
-
-                log.debug("create Reshape for scan scan output %s, with output shape %s",
-                          reshape_node.output[0], new_shape)
-                nodes_to_append.append(reshape_node)
-                self.g.replace_all_inputs(self.g.get_nodes(), ta_final_output_id, reshape_node.output[0])
+                nodes = self._adapt_scan_sequence_input_or_output("scan_output_reshape",
+                                                                  scan_node.output[index], True)
+                nodes_to_append.extend(nodes)
+                self.g.replace_all_inputs(self.g.get_nodes(), ta_final_output_id, nodes[-1].output[0])
             index += 1
 
         return nodes_to_append
+
+    def _adapt_scan_sequence_input_or_output(self, target_name, input_id, handle_output=False):
+        nodes_to_add = []
+        shape_node = make_onnx_node(self.g, "Shape", [input_id])
+        nodes_to_add.append(shape_node)
+        inferred_shape = self.g.get_shape(input_id)
+        if handle_output is True:
+            # handle output:
+            # if required dim values don't contain more than one -1,
+            # just use a const for Reshape's shape input.
+            if inferred_shape is not None and inferred_shape[1:].count(-1) <= 1:
+                new_shape_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
+                                                   np.array(inferred_shape[1:], dtype=np.int64))
+            else:
+                # otherwise, get the dim dynamically, e.g. remove the fake batch size (e.g.1)
+                # from [1, time, real-batch, ...]
+                origin_shape_node = make_onnx_node(self.g, "Cast", [shape_node.output[0]],
+                                                   {"to": onnx_pb.TensorProto.FLOAT})
+                nodes_to_add.append(origin_shape_node)
+
+                sliced_shape_node = make_onnx_node(self.g, "Slice", [origin_shape_node.output[0]],
+                                                   {"axes": [0], "starts": [1], "ends": [sys.maxsize]})
+                nodes_to_add.append(sliced_shape_node)
+
+                new_shape_node = make_onnx_node(self.g, "Cast", [sliced_shape_node.output[0]],
+                                                {"to": onnx_pb.TensorProto.INT64})
+                nodes_to_add.append(new_shape_node)
+
+            new_shape = inferred_shape[1:]
+        else:
+            # handle input:
+            if inferred_shape is not None and inferred_shape.count(-1) <= 1:
+                new_shape_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
+                                                   np.array([1] + inferred_shape, dtype=np.int64))
+            else:
+                # add a fake batch size : 1
+                fake_batch_size_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
+                                                         np.array([1,], dtype=np.int64))
+                new_shape_node = make_onnx_node(self.g, "Concat",
+                                                [fake_batch_size_node.output[0], shape_node.output[0]],
+                                                {"axis": 0})
+                nodes_to_add.append(new_shape_node)
+            new_shape = [1] + inferred_shape
+
+        reshape_node = make_onnx_node(self.g, "Reshape", [input_id, new_shape_node.output[0]],
+                                      skip_conversion=True, op_name_scope=target_name)
+        nodes_to_add.append(reshape_node)
+        self.g.set_shape(reshape_node.output[0], new_shape)
+        self.g.set_dtype(reshape_node.output[0], self.g.get_dtype(input_id))
+        log.debug("create Reshape for scan output %s, with output shape %s",
+                  reshape_node.output[0], new_shape)
+        return nodes_to_add
 
     # in theory, time var can be a scalar, but in current implementation of runtime, it could not be handled
     # correctly, so we unsqueeze it to a list containing a single element.
