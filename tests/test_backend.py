@@ -5,9 +5,11 @@
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import unittest
 from itertools import product
+from distutils.version import LooseVersion
 
 import numpy as np
 import tensorflow as tf
@@ -19,8 +21,8 @@ from backend_test_base import Tf2OnnxBackendTestBase
 
 # we can override BACKEND and OPSET from the command line, but that is to late
 # to change the behavior of annotation. If need, pick the backend here.
-OPSET = 7
-BACKEND = "onnxruntime"
+OPSET = Tf2OnnxBackendTestBase.OPSET
+BACKEND = Tf2OnnxBackendTestBase.BACKEND
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
@@ -216,6 +218,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
         self._conv_test(x_val, kernel_val, strides=strides, padding="VALID", rtol=1e-05)
 
+    @unittest.skipIf(LooseVersion(tf.VERSION) < LooseVersion('1.7'), "tf only support dilation is 1 for now")
     def test_conv2d_7(self):
         x_shape = [1, 35, 35, 288]  # out: [1, 17, 17, 384]
         kernel_shape = [3, 3, 288, 384]
@@ -276,7 +279,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             process_args={"inputs_as_nchw": [_INPUT]},
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
 
-    @unittest.skip
+    @unittest.skip("")
     def test_lrn(self):
         # FIXME: numerical results are not correct
         x_shape = [1, 3, 4, 3]
@@ -668,7 +671,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skip
+    @unittest.skip("")
     def test_slice1(self):
         # FIXME: only 1 dimension supported by caffe2 and msrt
         x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]], [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
@@ -715,7 +718,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case([_OUTPUT], {}, check_value=False, check_shape=True)
 
-    @unittest.skip
+    @unittest.skip("")
     def test_randomuniform_int(self):
         shape = tf.constant([2, 3], name="shape")
         x_ = tf.random_uniform(shape, name="rand", dtype=tf.int32, maxval=10)
@@ -725,7 +728,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case([_OUTPUT], {}, check_value=False, check_shape=True)
 
-    @unittest.skip
+    @unittest.skip("")
     def test_argminmax(self):
         # TODO: fails on onnxmsrt caffe2
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
@@ -751,7 +754,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skip
+    @unittest.skip("")
     def test_onehot1(self):
         # only rank 1 is currently implemented
         x_val = np.array([[0, 2], [1, -1]], dtype=np.int32)
@@ -977,6 +980,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_tf_div(self):
+        # pylint: disable=E0001
         from tensorflow.python.ops.gen_math_ops import div
         shape = 1000
         # test floating data
@@ -1010,7 +1014,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.01)
 
-    @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so scan op is not supported")
     def test_reverse_sequence(self):
         x_val = np.array([[[1, 2, 3], [4, 5, 6], [0, 0, 0]],
                           [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
@@ -1021,6 +1026,36 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so Select op is not supported")
+    def test_where(self):
+        x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
+        true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
+                               dtype=np.int32)
+        false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
+                                dtype=np.int32)
+        x = tf.placeholder(tf.int32, [None], name=_TFINPUT)
+        picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
+        _ = tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_shape_int32(self):
+        x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]], dtype=np.float32)
+        x = tf.placeholder(tf.float32, shape=[None, 2, 3], name=_TFINPUT)
+        x = tf.multiply(x, x)
+        x = tf.shape(x, out_type=tf.int32)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        kwargs = {"check_dtype": True}
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, **kwargs)
+
+    def test_shape_int64(self):
+        x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]], dtype=np.float32)
+        x = tf.placeholder(tf.float32, shape=[None, 2, 3], name=_TFINPUT)
+        x = tf.multiply(x, x)
+        x = tf.shape(x, out_type=tf.int64)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        kwargs = {"check_dtype": True}
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, **kwargs)
 
 if __name__ == '__main__':
     Tf2OnnxBackendTestBase.trigger(BackendTests)

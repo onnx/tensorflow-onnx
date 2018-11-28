@@ -5,39 +5,70 @@
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import os
 import unittest
 from collections import namedtuple
 
-import graphviz as gv
 import numpy as np
+import six
+import graphviz as gv
 import tensorflow as tf
 from onnx import helper
 
 import tf2onnx
-from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-
+from tf2onnx.tfonnx import process_tf_graph
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
+
 
 # pylint: disable=missing-docstring
 
 def onnx_to_graphviz(g, include_attrs=False):
     """Return dot for graph."""
+
+    def get_attribute_value(attr):
+        # pylint: disable=len-as-condition, no-else-return
+        # For Python2:
+        # - str(long) has 'L' as suffix, cast it to int
+        # - always decode from utf-8 bytes to avoid 'b' prefix
+        if attr.HasField('f'):
+            return attr.f
+        elif attr.HasField('i'):
+            return int(attr.i) if six.PY2 else attr.i
+        elif attr.HasField('s'):
+            return attr.s.decode("utf-8")
+        elif attr.HasField('t'):
+            return attr.t
+        elif attr.HasField('g'):
+            return attr.g
+        elif len(attr.floats):
+            return list(attr.floats)
+        elif len(attr.ints):
+            return [int(i) for i in attr.ints] if six.PY2 else list(attr.ints)
+        elif len(attr.strings):
+            return [s.decode("utf-8") for s in attr.strings]
+        elif len(attr.tensors):
+            return list(attr.tensors)
+        elif len(attr.graphs):
+            return list(attr.graphs)
+        else:
+            raise ValueError("Unsupported ONNX attribute: {}".format(attr))
+
     g2 = gv.Digraph()
     for node in g.get_nodes():
         kwarg = {}
         attr = node.attr
         if include_attrs:
             for a in attr:
-                kwarg[a] = str(helper.get_attribute_value(attr[a]))
+                kwarg[a] = "{}".format(get_attribute_value(attr[a]))
         else:
             if "shape" in attr:
-                kwarg["shape"] = str(attr["shape"].ints)
+                kwarg["shape"] = "{}".format([int(i) for i in attr["shape"].ints])
             if "broadcast" in attr:
-                kwarg["broadcast"] = str(attr["broadcast"].i)
+                kwarg["broadcast"] = "{}".format(int(attr["broadcast"].i))
 
         g2.node(node.name, op_type=node.type, **kwarg)
     for node in g.get_nodes():
@@ -55,6 +86,7 @@ def onnx_pretty(g, args=None):
 
 class Tf2OnnxGraphTests(unittest.TestCase):
     """Test cases."""
+    maxDiff = None
 
     def setUp(self):
         """Setup test."""
@@ -316,7 +348,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             self.assertEqual(
                 'digraph { const_no_val [op_type=Pad pads="[1, 2, 1, 2]"]'
                 ' const_with_val [op_type=Pad pads="[1, 2, 1, 2]" value=999]'
-                ' reflect [mode="b\'reflect\'" op_type=Pad pads="[1, 2, 1, 2]"]'
+                ' reflect [mode=reflect op_type=Pad pads="[1, 2, 1, 2]"]'
                 ' input1:0 -> const_no_val input1:0 -> const_with_val input1:0 -> reflect }',
                 onnx_to_graphviz(g, True))
 

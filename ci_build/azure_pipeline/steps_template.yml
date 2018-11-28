@@ -1,0 +1,63 @@
+parameters:
+  python_version: '3.5'
+  tensorflow_version: ''
+  opset_version: ''
+  onnx_version: ''
+  onnx_backend: 'onnxruntime'
+  onnx_backend_version: ''
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '${{ parameters.python_version }}'
+    architecture: 'x64'
+    displayName: 'Set python version'
+
+- bash: |
+
+    python -m pip install --upgrade pip setuptools wheel
+    pip install pytest pytest-cov pytest-runner graphviz pylint requests pyyaml Pillow
+
+    if [ "${{ parameters.tensorflow_version }}" == "" ]; then
+      pip install tensorflow
+    else
+      pip install tensorflow==${{ parameters.tensorflow_version }}
+    fi
+
+    if [ "${{ parameters.onnx_version }}" == "" ]; then
+      pip install onnx
+    else
+      pip install onnx==${{ parameters.onnx_version }}
+    fi
+
+    if [ "${{ parameters.onnx_backend_version }}" == "" ]; then
+      pip install ${{ parameters.onnx_backend }}
+    else
+      pip install ${{ parameters.onnx_backend }}==${{ parameters.onnx_backend_version }}
+    fi
+    echo "using ${{ parameters.onnx_backend }} as onnx backend"
+
+    # install onnx converter-"tf2onnx"
+    python setup.py install
+    pip list
+  displayName: 'Install dependencies'
+
+- bash: pylint --rcfile=tools/pylintrc --ignore=version.py --disable=cyclic-import tf2onnx tests/*.py tools
+  displayName: 'Pylint'
+
+- bash: |
+    # unit tests generated artifically
+    echo "running unit tests"
+    export TF2ONNX_TEST_OPSET=${{ parameters.opset_version }}
+    python -m pytest --cov=tf2onnx --cov-report=term  --disable-pytest-warnings -r s tests
+  condition: eq(variables['test_case'], 'unit_tests')
+  displayName: 'unit test'
+
+- bash: |
+    set -ex
+    # real model tests
+    echo "running pretrained model tests"
+    python tests/run_pretrained_models.py --config tests/unity.yaml --opset ${{ parameters.opset_version }}
+    python tests/run_pretrained_models.py --config tests/run_pretrained_models.yaml --opset ${{ parameters.opset_version }}
+  condition: eq(variables['test_case'], 'pretrained_models')
+  displayName: 'pretrained_model test'

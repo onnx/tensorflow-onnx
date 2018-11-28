@@ -5,6 +5,8 @@
 tf2onnx.rewriter.rnn_utils - rnn support
 """
 
+from __future__ import unicode_literals
+
 import logging
 from enum import Enum
 import numpy as np

@@ -7,6 +7,7 @@ tf2onnx.tf2onnx - rewrite tensorflow graph to onnx graph
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import collections
 import logging
@@ -15,19 +16,18 @@ import traceback
 
 import numpy as np
 from onnx import helper, onnx_pb, numpy_helper
-
 from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
 from tf2onnx import utils
+from tf2onnx.function.select import select_op8
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
+from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
-from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
-
+from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
 from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +42,7 @@ TARGET_RS6 = "rs6"
 TARGET_CAFFE2 = "caffe2"
 POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_CAFFE2, TARGET_RS6]
 DEFAULT_TARGET = []
+
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
 # FIXME:
@@ -89,14 +90,14 @@ def tflist_to_onnx(node_list, shape_override):
         for a in node.node_def.attr:
             attr_cnt[a] += 1
             if a == "dtype":
-                attr[a] = utils.map_tf_dtype(node.get_attr("dtype"))
+                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "dtype"))
             elif a == "T":
-                dtype = node.get_attr("T")
+                dtype = utils.get_tf_node_attr(node, "T")
                 if dtype:
                     if not isinstance(dtype, list):
                         dtypes[node.name] = utils.map_tf_dtype(dtype)
             elif a in ["output_type", "output_dtype", "out_type"]:
-                attr[a] = utils.map_tf_dtype(node.get_attr(a))
+                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
             elif a == "shape":
                 attr[a] = utils.get_shape(node)
             elif a == "Tperm":
@@ -104,16 +105,16 @@ def tflist_to_onnx(node_list, shape_override):
             elif a == "_output_shapes":
                 attr[a] = utils.get_shape(node)
             elif a == "value":
-                onnx_tensor = utils.tf_to_onnx_tensor(node.get_attr(a), name=port_name(node.name))
+                onnx_tensor = utils.tf_to_onnx_tensor(utils.get_tf_node_attr(node, a), name=port_name(node.name))
                 attr[a] = onnx_tensor
             elif a == "DstT":
-                attr["to"] = utils.map_tf_dtype(node.get_attr("DstT"))
+                attr["to"] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "DstT"))
             elif a == "SrcT":
                 continue
             elif a in ignored_attr:
                 continue
             else:
-                attr[a] = node.get_attr(a)
+                attr[a] = utils.get_tf_node_attr(node, a)
 
         if takeit:
             try:
@@ -807,7 +808,7 @@ def concat_op(ctx, node, name, args):
     ctx.remove_input(node, node.input[0])
 
     axis_val = axis[0]
-    if axis_val < 0: # onnxruntime does not support -1 axis, but TF supports.
+    if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
         input_shape = ctx.get_shape(node.input[0])
         axis_val = len(input_shape) + axis_val
     node.set_attr("axis", axis_val)
@@ -827,7 +828,7 @@ def concatv2_op(ctx, node, name, args):
     ctx.remove_input(node, node.input[-1])
 
     axis_val = axis[0]
-    if axis_val < 0: # onnxruntime does not support -1 axis, but TF supports.
+    if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
         input_shape = ctx.get_shape(node.input[0])
         axis_val = len(input_shape) + axis_val
     node.set_attr("axis", axis_val)
@@ -1136,6 +1137,16 @@ def minmax_op(ctx, node, name, args):
 
 def pack_op(ctx, node, name, args):
     # hack to make up for the missing onnx pack op
+
+    pack_shape = ctx.get_shape(node.output[0])
+    if not pack_shape:
+        # sometimes Pack output shape is None (for example Pack is following control flow Exit op)
+        input_cnt = len(node.inputs)
+        input_shape = ctx.get_shape(node.input[0])
+        if input_shape:
+            pack_shape = [input_cnt] + input_shape
+            ctx.set_shape(node.output[0], pack_shape)
+
     axis = node.get_attr("axis").i
     nodes = []
     inputs = []
@@ -1278,6 +1289,7 @@ def matmul_op(ctx, node, name, args):
     nodes.append(node)
     return nodes
 
+
 def fill_op7(ctx, node, name, args):
     # T output = Fill(int32 dims, T value, @int32 index_type)
     # T outputs = Tile(T value, int64 repeats (e.g. dims))
@@ -1331,6 +1343,7 @@ def fill_op7(ctx, node, name, args):
 
     return nodes
 
+
 def fill_op(ctx, node, name, args):
     node.type = "ConstantLike"
     # both shape and value in tensorflow are passed as tensor.
@@ -1346,6 +1359,7 @@ def fill_op(ctx, node, name, args):
     node.set_attr("dtype", dtype)
     del node.input[:]
     return node
+
 
 def reverse_op8(ctx, node, name, args):
     # T output = ReverseSequence(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
@@ -1368,9 +1382,9 @@ def reverse_op8(ctx, node, name, args):
 
         # create a node (NodeProto)
         node_def = helper.make_node(
-            'Identity', # node name
-            ['X'], # inputs
-            ['Y'], # outputs
+            'Identity',  # node name
+            ['X'],  # inputs
+            ['Y'],  # outputs
         )
 
         # create the graph (GraphProto)
@@ -1381,7 +1395,7 @@ def reverse_op8(ctx, node, name, args):
             [y],
         )
         node.set_attr("body", graph_def)
-        node.set_attr("directions", [1]) # reverse the scan input
+        node.set_attr("directions", [1])  # reverse the scan input
 
         seq_len_dtype = ctx.get_dtype(node.input[1])
         if seq_len_dtype != onnx_pb.TensorProto.INT64:
@@ -1402,7 +1416,8 @@ def reverse_op8(ctx, node, name, args):
 
 
 def shape_op(ctx, node, name, args):
-    # shape in onnx returns int64 - we might need to cast
+    # out_type output = Shape(T input, @int32|int64 out_type), out_type by default int32
+    # int64 output = Shape(T input)
     dtype = ctx.get_dtype(node.output[0])
     if dtype == onnx_pb.TensorProto.INT64:
         return node
@@ -1438,7 +1453,7 @@ def erf_op(ctx, node, name, args):
 
     try:
         _ = ctx.get_initializer("erf_a1")
-    except: # pylint: disable=bare-except
+    except:  # pylint: disable=bare-except
         # insert the constants for erf once
         ctx.make_const(a1, np.array(0.254829592, dtype=np.float32))
         ctx.make_const(a2, np.array(-0.284496736, dtype=np.float32))
@@ -1462,7 +1477,7 @@ def erf_op(ctx, node, name, args):
     nodes = [
         mknode("Abs", [x], "x"),
         mknode("Sub", [null, x], "negx"),
-        mknode("Div", [x, outp("x")], "sign"), # FIXME: this might not work for x=0
+        mknode("Div", [x, outp("x")], "sign"),  # FIXME: this might not work for x=0
         mknode("Mul", [outp("x"), p], "4"),
         mknode("Add", [outp("4"), one], "5"),
         mknode("Div", [one, outp("5")], "t"),
@@ -1557,8 +1572,8 @@ _OPSET_4 = {
     "Size": (direct_op, []),
     "Sigmoid": (direct_op, []),
     "Slice": (slice_op, []),
-    "SplitV": (splitv_op, ["Split"]),
     "Split": (split_op, ["Split"]),
+    "SplitV": (splitv_op, ["Split"]),
     "Squeeze": (squeeze_op, []),
     "Sqrt": (direct_op, []),
     "Square": (square_op, []),
@@ -1579,9 +1594,9 @@ _OPSET_4 = {
 }
 
 _OPSET_5 = {
-    "Reshape": (reshape_op5, []),
     "ExpandDims": (expanddims_op7, []),
     "OneHot": (onehot_op, []),
+    "Reshape": (reshape_op5, []),
 }
 
 _OPSET_6 = {
@@ -1589,38 +1604,40 @@ _OPSET_6 = {
 }
 
 _OPSET_7 = {
-    "Tile": (tile_op7, []),
-    "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),
-    "ResizeBilinear": (upsample_op7, ["Upsample", "linear"]),
-    "BiasAdd": (biasadd_op7, []),
-    "BiasAddV1": (biasadd_op7, []),
-    "Add": (broadcast_op7, []),
-    "Sub": (broadcast_op7, []),
-    "Mul": (broadcast_op7, []),
-    "RealDiv": (broadcast_op7, ["Div"]),
-    "Div": (broadcast_op7, ["Div"]),
-    "TruncateDiv": (broadcast_op7, ["Div"]),
-    "LogicalAnd": (broadcast_op7, ["And"]),
-    "LogicalOr": (broadcast_op7, ["Or"]),
-    "Greater": (broadcast_op7, []),
-    "Less": (broadcast_op7, []),
-    "Pow": (direct_op, []),
-    "Cast": (direct_op, []),
     "Acos": (direct_op, []),
+    "Add": (broadcast_op7, []),
     "Asin": (direct_op, []),
     "Atan": (direct_op, []),
+    "BiasAdd": (biasadd_op7, []),
+    "BiasAddV1": (biasadd_op7, []),
+    "Cast": (direct_op, []),
     "Cos": (direct_op, []),
-    "Sin": (direct_op, []),
-    "Tan": (direct_op, []),
-    "Multinomial": (multinomial_op, []),
+    "Div": (broadcast_op7, ["Div"]),
+    "Equal": (broadcast_op7, []),
     "Fill": (fill_op7, []),
     "FusedBatchNorm": (fused_batchnorm_op7, []),
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
+    "Greater": (broadcast_op7, []),
+    "Less": (broadcast_op7, []),
+    "LogicalAnd": (broadcast_op7, ["And"]),
+    "LogicalOr": (broadcast_op7, ["Or"]),
+    "Mul": (broadcast_op7, []),
+    "Multinomial": (multinomial_op, []),
+    "Pow": (direct_op, []),
+    "RealDiv": (broadcast_op7, ["Div"]),
+    "ResizeBilinear": (upsample_op7, ["Upsample", "linear"]),
+    "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),
+    "Sin": (direct_op, []),
+    "Sub": (broadcast_op7, []),
+    "Tan": (direct_op, []),
+    "Tile": (tile_op7, []),
+    "TruncateDiv": (broadcast_op7, ["Div"]),
 }
 
 _OPSET_8 = {
     "Relu6": (relu6_op8, []),  # make use of min/max broadcast
-    "ReverseSequence": (reverse_op8, []), # make use of scan
+    "ReverseSequence": (reverse_op8, []),  # make use of scan
+    "Select": (select_op8, []),
 }
 
 _OPSET_9 = {
@@ -1791,10 +1808,11 @@ def rewrite_constant_fold(g, ops):
     """
     func_map = {
         "Add": np.add,
-        "Sub": np.subtract,
         "Mul": np.multiply,
         "Pack": np.stack,
-        "Sqrt": np.sqrt}
+        "Sqrt": np.sqrt,
+        "Sub": np.subtract,
+    }
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
@@ -1834,11 +1852,53 @@ def rewrite_constant_fold(g, ops):
                     # We keep the graph in topological order so if we folded,
                     # the result might help a following op.
                     keep_looking = True
-            except: # pylint: disable=bare-except
+            except:  # pylint: disable=bare-except
                 # ignore errors
                 pass
         # pylint: enable=too-many-nested-blocks
     return g.remove_deleted_nodes(ops)
+
+
+def rewrite_logical_compare_with_equal(g, ops):
+    pattern = OpTypePattern('GreaterEqual', name='greater_equal')
+    matcher = GraphMatcher(pattern)
+    match_results = list(matcher.match_ops(ops))
+    for match in match_results:
+        nodes_to_append = []
+        ge_op = match.get_op('greater_equal')
+        data_type = g.get_dtype(ge_op.input[0])
+        greater_input_ids = ge_op.input
+        need_cast = data_type not in (onnx_pb.TensorProto.FLOAT16,
+                                      onnx_pb.TensorProto.FLOAT,
+                                      onnx_pb.TensorProto.DOUBLE)
+        if need_cast:
+            greater_input_ids = []
+            for input_id in ge_op.input:
+                name = utils.make_name(ge_op.name)
+                new_output = port_name(name)
+                cast_node = Node(helper.make_node("Cast", [input_id], [new_output], name=name,
+                                                  to=onnx_pb.TensorProto.FLOAT), g)
+                greater_input_ids.append(new_output)
+                g.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
+                g.copy_shape(ge_op.input[0], cast_node.output[0])
+                nodes_to_append.append(cast_node)
+
+        op_name = utils.make_name("Greater")
+        out_name = port_name(op_name)
+        g_node = Node(helper.make_node("Greater", greater_input_ids, [out_name], name=op_name), g)
+        nodes_to_append.append(g_node)
+
+        op_name = utils.make_name("Equal")
+        out_name = port_name(op_name)
+        e_node = Node(helper.make_node("Equal", ge_op.input, [out_name], name=op_name), g)
+        nodes_to_append.append(e_node)
+
+        ge_op.type = "LogicalOr"
+        ge_op.input[0] = g_node.output[0]
+        ge_op.input[1] = e_node.output[0]
+
+        ops.extend(nodes_to_append)
+    return ops
 
 
 def rewrite_incomplete_type_support(g, ops, impacted_ops):
@@ -1982,7 +2042,7 @@ def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
     if fold_constant:
         transforms.extend([
             "fold_constants(ignore_errors=true)",
-            "remove_attribute(attribute_name=_class)", # remove node colocation attributes
+            "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
         ])
 
     transforms.extend([
@@ -2014,6 +2074,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
+
     def topological_sort(ops):
         if not continue_on_error:
             g.topological_sort(ops)
@@ -2043,7 +2104,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                  rewrite_random_normal, rewrite_dropout,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_single_direction_grublock,
-                 rewrite_bi_direction_gru]
+                 rewrite_bi_direction_gru, rewrite_logical_compare_with_equal
+                 ]
 
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)

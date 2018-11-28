@@ -7,6 +7,7 @@ tf2onnx.rewriter.gruBlock_rewriter - gruBlock support
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import logging
 from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
