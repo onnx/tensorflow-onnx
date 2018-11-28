@@ -9,10 +9,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import os
 import re
-
-import numpy as np
 import six
+import numpy as np
 import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from onnx import helper, onnx_pb, defs, numpy_helper
@@ -200,7 +200,10 @@ def node_name(name):
 
 def make_onnx_shape(shape):
     """shape with -1 is not valid in onnx ... make it a name."""
-    return [make_name("unk") if i == -1 else i for i in shape]
+    if shape:
+        # don't do this if input is a scalar
+        return [make_name("unk") if i == -1 else i for i in shape]
+    return shape
 
 
 def port_name(name, nr=0):
@@ -212,6 +215,7 @@ PREFERRED_OPSET = 7
 
 
 def find_opset(opset):
+    """Find opset."""
     if opset is None or opset == 0:
         opset = defs.onnx_opset_version()
         if opset > PREFERRED_OPSET:
@@ -221,7 +225,35 @@ def find_opset(opset):
 
 
 def get_tf_node_attr(node, name):
+    """Parser TF node attribute."""
     if six.PY2:
         # For python2, TF get_attr does not accept unicode
         name = str(name)
     return node.get_attr(name)
+
+
+def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False):
+    """Save onnx model as file."""
+    save_path = save_path_root
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    if include_test_data:
+        data_path = os.path.join(save_path, "test_data_set_0")
+        if not os.path.exists(data_path):
+            os.makedirs(data_path)
+
+        i = 0
+        for data_key in feed_dict:
+            data = feed_dict[data_key]
+            t = numpy_helper.from_array(data)
+            t.name = data_key
+            data_full_path = os.path.join(data_path, "input_"+ str(i) +".pb")
+            with open(data_full_path, 'wb') as f:
+                f.write(t.SerializeToString())
+            i += 1
+
+    target_path = os.path.join(save_path, onnx_file_name + ".onnx")
+    with open(target_path, "wb") as f:
+        f.write(model_proto.SerializeToString())
+    return target_path

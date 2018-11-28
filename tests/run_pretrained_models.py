@@ -27,6 +27,7 @@ import yaml
 import PIL.Image
 
 import tf2onnx
+from tf2onnx import utils
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 from tf2onnx.tfonnx import process_tf_graph
 
@@ -195,9 +196,7 @@ class Test(object):
     def run_onnxmsrtnext(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import lotus
-        model_path = os.path.join(TMPPATH, name + ".pb")
-        with open(model_path, "wb") as f:
-            f.write(model_proto.SerializeToString())
+        model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto)
         m = lotus.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
         if self.perf:
@@ -210,9 +209,7 @@ class Test(object):
     def run_onnxruntime(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
-        model_path = os.path.join(TMPPATH, name + ".pb")
-        with open(model_path, "wb") as f:
-            f.write(model_proto.SerializeToString())
+        model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
         if self.perf:

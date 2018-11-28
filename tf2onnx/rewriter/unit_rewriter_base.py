@@ -92,20 +92,20 @@ class UnitRewriterBase(object):
         # and rnnxx can be assigned by users but not "fw", though maybe "FW" in another tf version
         rnn_scope_name = self.get_rnn_scope_name(match)
         if not rnn_scope_name:
-            log.error("unable to find rnn scope name, skip")
+            log.debug("unable to find rnn scope name, skip")
             return REWRITER_RESULT.SKIP
         log.debug("rnn scope name is %s", rnn_scope_name)
 
         self.print_step("get_weight_and_bias starts")
         rnn_weights = self.get_weight_and_bias(match)
         if not rnn_weights:
-            log.error("rnn weights check failed, skip")
+            log.debug("rnn weights check failed, skip")
             return REWRITER_RESULT.SKIP
 
         rnn_props = RnnProperties()
-        self.get_var_initializers(match, rnn_props, rnn_scope_name)
-        if not rnn_props.var_initializers.keys:
-            log.error("no cell variable initializers found, skip")
+        res = self.get_var_initializers(match, rnn_props, rnn_scope_name)
+        if not res or not rnn_props.var_initializers.keys:
+            log.debug("no cell variable initializers found, skip")
             return REWRITER_RESULT.SKIP
 
         seq_len_input_node = self.find_sequence_length_node(rnn_scope_name)
@@ -115,11 +115,11 @@ class UnitRewriterBase(object):
 
         self.find_inputs(rnn_scope_name, rnn_props, match, input_filter)
         if not rnn_props.is_valid():
-            log.error("rnn properties are not valid, skip")
+            log.debug("rnn properties are not valid, skip")
             return REWRITER_RESULT.SKIP
 
         if not self.process_input_x(rnn_props, rnn_scope_name):
-            log.error("rnn input x not found, skip")
+            log.debug("rnn input x not found, skip")
             return REWRITER_RESULT.SKIP
 
         self.print_step("process the weights/bias/ft_bias, to fit onnx weights/bias requirements")
@@ -170,10 +170,11 @@ class UnitRewriterBase(object):
                 if not loop_cond_op:
                     loop_cond_op = n
                 else:
-                    raise ValueError("only a LoopCond is expected to find in a dynamic run")
+                    log.error("only a LoopCond is expected, rnn scope name:%s", rnn_scope_name)
+                    return None
 
         if loop_cond_op is None:
-            log.error("No LoopCond op is found, skip")
+            log.debug("No LoopCond op is found, skip")
             return None
 
         switch_nodes = self.g.find_output_consumers(loop_cond_op.output[0])
@@ -190,7 +191,7 @@ class UnitRewriterBase(object):
                     log.debug("found initializer node for " + var_name + ": " + enter_target_input_id)
                     rnn_props.var_initializers[var_name] = enter_target_input_id
                     break
-        return None
+        return rnn_props.var_initializers
 
     def find_sequence_length_node(self, rnn_scope_name):
         # "sequence_length" under current rnn scope is the seq len node (if there is).
@@ -255,7 +256,7 @@ class UnitRewriterBase(object):
                             rnn_input_nodes.append([input_node, input_id])
 
         if len(rnn_input_nodes) != 1:
-            log.error("found %d inputs for the dynamic_run, unexpected. They are %s",
+            log.debug("found %d inputs for the dynamic_run, unexpected. They are %s",
                       len(rnn_input_nodes), rnn_input_nodes)
             return rnn_props
 
@@ -279,8 +280,8 @@ class UnitRewriterBase(object):
                 consumers_in_rnn_scope.append(consumer)
 
         if len(consumers_in_rnn_scope) != 1:
-            log.error("RNN input node has %d onsumers in current rnn scope %s skip",
-                      len(consumers_in_rnn_scope), rnn_scope_name)
+            log.warning("RNN input node has %d onsumers in current rnn scope %s skip",
+                        len(consumers_in_rnn_scope), rnn_scope_name)
             return None
 
         possible_transpose_after_input = consumers_in_rnn_scope[0]

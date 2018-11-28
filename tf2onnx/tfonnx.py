@@ -24,10 +24,13 @@ from tf2onnx import utils
 from tf2onnx.function.select import select_op8
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
 from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
+from tf2onnx.rewriter.rnn import rewrite_custom_rnn_cell, rewrite_custom_rnn_body_graph
+from tf2onnx.rewriter.rnn_utils import is_tensor_array_op
 from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
@@ -57,7 +60,7 @@ def tflist_to_onnx(node_list, shape_override):
 
     # ignore the following attributes
     ignored_attr = ["unknown_rank", "_class", "Tidx", "Tshape", "use_cudnn_on_gpu", "Index",
-                    "Tpaddings", "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "element_shape",
+                    "Tpaddings", "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size",
                     "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U",
                     "maxval", "Tout"]
     # some stats
@@ -78,7 +81,7 @@ def tflist_to_onnx(node_list, shape_override):
                 try:
                     shape = out.get_shape().as_list()
                 except Exception as ex:
-                    shape = []
+                    shape = None
             dtypes[out.name] = utils.map_tf_dtype(out.dtype)
             output_shapes[out.name] = shape
 
@@ -111,6 +114,17 @@ def tflist_to_onnx(node_list, shape_override):
                 attr["to"] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "DstT"))
             elif a == "SrcT":
                 continue
+            elif a == "element_shape":
+                if is_tensor_array_op(node):
+                    # this is for getting output shape for tensor array
+                    shape = node.get_attr("element_shape")
+                    dims = [d.size for d in shape.dim]
+                    output_name = node.outputs[0].name
+                    # override tf's ta output shape, which is [2], not reflecting
+                    # the shape stored in it at all.
+                    output_shapes[output_name] = dims
+                else:
+                    continue
             elif a in ignored_attr:
                 continue
             else:
@@ -243,8 +257,15 @@ def arg_minmax_op(ctx, node, name, args):
     # output_type output = ArgMin(T input, Tidx dimension, @type Tidx, @type output_type)
     # tensor(int32) reduced = ArgMin(T data, @INT axis, @INT keepdims)
     axis_node = node.inputs[1]
-    axis = axis_node.get_tensor_value()
-    node.set_attr("axis", axis[0])
+    axis = axis_node.get_tensor_value()[0]
+    if axis < 0:
+        # ArgMax|ArgMin in onnx don't necessary support negative axis(not in doc explicitly)
+        input_shape = ctx.get_shape(node.input[0])
+        dim_count = len(input_shape) if input_shape else 0
+        axis = dim_count + axis
+
+    node.set_attr("axis", axis)
+    node.set_attr("keepdims", 0)
     ctx.remove_input(node, node.input[1])
     return node
 
@@ -262,9 +283,11 @@ def reduce_op(ctx, node, name, args):
 
 
 def placeholder_op(ctx, node, name, args):
+    output_shape = ctx.get_shape(node.output[0])
+    output_shape = utils.make_onnx_shape(output_shape)
     input_node = helper.make_tensor_value_info(node.output[0],
                                                node.dtype,
-                                               utils.make_onnx_shape(ctx.get_shape(node.output[0])))
+                                               output_shape)
     ctx.add_model_input(input_node.name, input_node)
     return None
 
@@ -939,7 +962,7 @@ def stridedslice_op(ctx, node, name, args):
         attr = node.get_attr(attr_name)
         if attr is not None and attr.i != 0:
             raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
-
+    input_shape = ctx.get_shape(node.input[0])
     begin = node.inputs[1].get_tensor_value()
     end = node.inputs[2].get_tensor_value()
     strides = node.inputs[3].get_tensor_value()
@@ -952,23 +975,29 @@ def stridedslice_op(ctx, node, name, args):
     axes = []
     # onnx slice op can't remove a axis, track axis and add a squeeze op if needed
     needs_squeeze = []
-    for idx, item in enumerate(begin):
+    for idx, begin_item in enumerate(begin):
+        end_item = end[idx]
         if strides[idx] != 1:
             raise ValueError("StridedSlice: only strides=1 is supported")
         axes.append(idx)
+
+        # an implicit condition is stride == 1 (checked in above)
+        if begin_item < 0 and end_item == 0:
+            end_item = sys.maxsize
+
         mask = (shrink_axis_mask >> idx) & 1
         if mask != 0:
-            new_begin.append(item)
-            new_end.append(end[idx])
+            new_begin.append(begin_item)
+            new_end.append(end_item)
             needs_squeeze.append(idx)
             continue
 
-        new_begin.append(item)
+        new_begin.append(begin_item)
         mask = (end_mask >> idx) & 1
         if mask != 0:
             new_end.append(sys.maxsize)
         else:
-            new_end.append(end[idx])
+            new_end.append(end_item)
 
     node.set_attr("starts", new_begin)
     node.set_attr("ends", new_end)
@@ -1653,43 +1682,6 @@ _OPSETS = [
     (9, _OPSET_9),
 ]
 
-
-def rewrite_random_uniform(g, ops):
-    pattern = \
-        OpTypePattern('Add', name='output', inputs=[
-            OpTypePattern('Mul', inputs=[
-                OpTypePattern('RandomUniform', name='input1', inputs=["*"]),
-                OpTypePattern('Sub', name='input2', inputs=["*", "*"]),
-            ]), None
-        ])
-
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        input2 = match.get_op('input2')
-        output = match.get_op('output')
-        # max is on input 0
-        tmax = input2.inputs[0].get_tensor_value()[0]
-        tmin = input2.inputs[1].get_tensor_value()[0]
-        dtype = output.dtype
-        op_name = utils.make_name("RandomUniform")
-        out_name = port_name(op_name)
-        ru_op = match.get_op('input1')
-        if ru_op.inputs[0].type == "Shape":
-            shape_node = ru_op.inputs[0]
-            new_node = Node(helper.make_node("RandomUniformLike",
-                                             [shape_node.input[0]], [out_name], name=op_name,
-                                             low=tmin, high=tmax, dtype=dtype), g)
-        else:
-            shape = g.get_shape(output.output[0])
-            new_node = Node(helper.make_node("RandomUniform",
-                                             [], [out_name], name=op_name,
-                                             low=tmin, high=tmax, dtype=dtype, shape=shape), g)
-        ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
-
-    return ops
-
-
 def rewrite_transpose(g, ops):
     pattern = \
         OpTypePattern('Transpose', name='output', inputs=[
@@ -1808,8 +1800,10 @@ def rewrite_constant_fold(g, ops):
     """
     func_map = {
         "Add": np.add,
+        "ConcatV2": np.concatenate,
         "Mul": np.multiply,
         "Pack": np.stack,
+        "Range": np.arange,
         "Sqrt": np.sqrt,
         "Sub": np.subtract,
     }
@@ -2099,12 +2093,14 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         transpose_inputs(g, inputs_as_nchw)
 
     # pre-processing graph rewrites
-    # bi-directional re-writer should be place after single directional re-writer
-    rewriters = [rewrite_transpose, rewrite_flatten, rewrite_random_uniform,
+    # bi-directional re-writer should be placed after single directional re-writer
+    rewriters = [rewrite_transpose, rewrite_flatten,
+                 rewrite_random_uniform, rewrite_random_uniform_fold_const,
                  rewrite_random_normal, rewrite_dropout,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_single_direction_grublock,
-                 rewrite_bi_direction_gru, rewrite_logical_compare_with_equal
+                 rewrite_bi_direction_gru, rewrite_custom_rnn_cell,
+                 rewrite_logical_compare_with_equal
                  ]
 
     if custom_rewriter is not None:
@@ -2121,7 +2117,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers)
 
     # post-processing rewriters
-    late_rewriters = []
+    late_rewriters = [rewrite_custom_rnn_body_graph]
     if TARGET_RS5 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs5)
     if TARGET_RS6 in target:

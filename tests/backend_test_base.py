@@ -18,9 +18,8 @@ import unittest
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
-
-import tf2onnx.utils
-from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx import utils
+from tf2onnx.tfonnx import process_tf_graph, tf_optimize
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -39,7 +38,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         self.maxDiff = None
         tf.reset_default_graph()
         # reset name generation on every test
-        tf2onnx.utils.INTERNAL_NAME = 1
+        utils.INTERNAL_NAME = 1
         np.random.seed(1)  # Make it reproducible.
 
         self.log = logging.getLogger("tf2onnx.unitest." + str(type(self)))
@@ -66,44 +65,35 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = prepared_backend.run(inputs)
         return results
 
-    def run_onnxmsrtnext(self, onnx_graph, inputs, output_names, test_name):
+    def run_onnxmsrtnext(self, model_path, inputs, output_names):
         """Run test against msrt-next backend."""
         import lotus
-        model_path = os.path.join(type(self).TMPPATH, test_name + ".onnx")
-        self.log.debug("create model file: %s", model_path)
-        with open(model_path, "wb") as f:
-            f.write(onnx_graph.SerializeToString())
-
         m = lotus.InferenceSession(model_path)
         results = m.run(output_names, inputs)
         return results
 
-    def run_onnxruntime(self, onnx_graph, inputs, output_names, test_name):
+    def run_onnxruntime(self, model_path, inputs, output_names):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
-        model_path = os.path.join(type(self).TMPPATH, test_name + ".onnx")
-        self.log.debug("create model file: %s", model_path)
-        with open(model_path, "wb") as f:
-            f.write(onnx_graph.SerializeToString())
         m = rt.InferenceSession(model_path)
         results = m.run(output_names, inputs)
         return results
 
     def _run_backend(self, g, outputs, input_dict):
         model_proto = g.make_model("test")
+        model_path = self.save_onnx_model(model_proto, input_dict)
         if type(self).BACKEND == "onnxmsrtnext":
-            y = self.run_onnxmsrtnext(model_proto, input_dict, outputs, self._testMethodName)
+            y = self.run_onnxmsrtnext(model_path, input_dict, outputs)
         elif type(self).BACKEND == "onnxruntime":
-            y = self.run_onnxruntime(model_proto, input_dict, outputs, self._testMethodName)
+            y = self.run_onnxruntime(model_path, input_dict, outputs)
         elif type(self).BACKEND == "caffe2":
             y = self.run_onnxcaffe2(model_proto, input_dict)
         else:
             raise ValueError("unknown backend")
         return y
 
-    # only when transform_tf_graph is true, input_names_with_port is necessary.
     def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07,
-                      convert_var_to_const=True, transform_tf_graph=True, check_value=True, check_shape=False,
+                      convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=False,
                       check_dtype=False, process_args=None, onnx_feed_dict=None):
         # optional - passed to process_tf_graph
         if process_args is None:
@@ -135,18 +125,17 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 f.write(sess.graph_def.SerializeToString())
             self.log.debug("created file %s", model_path)
 
-        if transform_tf_graph:
-            graph_def = tf2onnx.tfonnx.tf_optimize(input_names_with_port, output_names_with_port,
-                                                   sess.graph_def, True)
+        graph_def = tf_optimize(input_names_with_port, output_names_with_port,
+                                sess.graph_def, constant_fold)
 
-            if self.debug_mode():
-                model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_after_tf_optimize.pb")
-                with open(model_path, "wb") as f:
-                    f.write(graph_def.SerializeToString())
-                self.log.debug("created file  %s", model_path)
+        if self.debug_mode() and constant_fold:
+            model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_after_tf_optimize.pb")
+            with open(model_path, "wb") as f:
+                f.write(graph_def.SerializeToString())
+            self.log.debug("created file  %s", model_path)
 
-            tf.reset_default_graph()
-            tf.import_graph_def(graph_def, name='')
+        tf.reset_default_graph()
+        tf.import_graph_def(graph_def, name='')
 
         with tf.Session() as sess:
             g = process_tf_graph(sess.graph, opset=type(self).OPSET, output_names=output_names_with_port,
@@ -160,6 +149,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 self.assertEqual(expected_val.dtype, actual_val.dtype)
             if check_shape:
                 self.assertEqual(expected_val.shape, actual_val.shape)
+
+    def save_onnx_model(self, model_proto, feed_dict):
+        save_path = os.path.join(type(self).TMPPATH, self._testMethodName)
+        target_path = utils.save_onnx_model(save_path, self._testMethodName, feed_dict,
+                                            model_proto, include_test_data=self.debug_mode())
+
+        self.log.debug("create model file: %s", target_path)
+        return target_path
 
     @staticmethod
     def trigger(ut_class):
