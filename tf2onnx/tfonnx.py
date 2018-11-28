@@ -1479,10 +1479,8 @@ def erf_op(ctx, node, name, args):
         mknode("Add", [outp("14"), a1], "15"),
         mknode("Mul", [outp("15"), outp("7")], "16"),
         mknode("Sub", [one, outp("16")], "17"),
-        mknode("Mul", [outp("17"), outp("sign")], "18"),
+        Node(helper.make_node("Mul", [outp("17"), outp("sign")], [output_name], name=n), ctx),
     ]
-    # override output name
-    nodes[-1].output[0] = output_name
     return nodes
 
 
