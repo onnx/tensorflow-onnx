@@ -1661,9 +1661,9 @@ def rewrite_random_uniform(g, ops):
         out_name = port_name(op_name)
         ru_op = match.get_op('input1')
         if ru_op.inputs[0].type == "Shape":
-            shape_op = ru_op.inputs[0]
+            shape_node = ru_op.inputs[0]
             new_node = Node(helper.make_node("RandomUniformLike",
-                                             [shape_op.input[0]], [out_name], name=op_name,
+                                             [shape_node.input[0]], [out_name], name=op_name,
                                              low=tmin, high=tmax, dtype=dtype), g)
         else:
             shape = g.get_shape(output.output[0])
@@ -1717,8 +1717,8 @@ def rewrite_random_normal(g, ops):
 
         rn_op = match.get_op('input1')
         if rn_op.inputs[0].type == "Shape":
-            shape_op = rn_op.inputs[0]
-            new_node = Node(helper.make_node("RandomNormalLike", [shape_op.input[0]], [out_name],
+            shape_node = rn_op.inputs[0]
+            new_node = Node(helper.make_node("RandomNormalLike", [shape_node.input[0]], [out_name],
                                              name=op_name, mean=mean, scale=1.0,
                                              dtype=dtype), g)
             ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
