@@ -251,10 +251,10 @@ class Tf2OnnxGraphTests(unittest.TestCase):
 
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Conv2D__2 [op_type=Transpose] kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] '
-                'Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] output [op_type=Identity] input1:0 -> '
-                'Conv2D__2 k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 Conv2D__2:0 -> Conv2D '
-                'Conv2D__3:0 -> Conv2D Conv2D:0 -> Conv2D__4 Conv2D__4:0 -> output }',
+                'digraph { kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] Conv2D__2 [op_type=Transpose] '
+                'Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] output [op_type=Identity] '
+                'k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 input1:0 -> Conv2D__2 '
+                'Conv2D__2:0 -> Conv2D Conv2D__3:0 -> Conv2D Conv2D:0 -> Conv2D__4 Conv2D__4:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_squeeze(self):
@@ -335,22 +335,6 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             self.assertEqual(
                 'digraph { Print [op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
                 onnx_to_graphviz(g))
-
-    def test_pad(self):
-        with tf.Session() as sess:
-            t = tf.constant([[1, 2, 3], [4, 5, 6]], name="input1")
-            paddings = tf.constant([[1, 1,], [2, 2]], name="paddings")
-            tf.pad(t, paddings, "CONSTANT", "const_no_val")
-            tf.pad(t, paddings, "CONSTANT", "const_with_val", 999)
-            tf.pad(t, paddings, "REFLECT", "reflect")
-            g = process_tf_graph(sess.graph)
-
-            self.assertEqual(
-                'digraph { const_no_val [op_type=Pad pads="[1, 2, 1, 2]"]'
-                ' const_with_val [op_type=Pad pads="[1, 2, 1, 2]" value=999]'
-                ' reflect [mode=reflect op_type=Pad pads="[1, 2, 1, 2]"]'
-                ' input1:0 -> const_no_val input1:0 -> const_with_val input1:0 -> reflect }',
-                onnx_to_graphviz(g, True))
 
 
 if __name__ == '__main__':

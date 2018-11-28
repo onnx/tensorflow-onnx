@@ -690,7 +690,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @unittest.skipIf(BACKEND == "caffe2", "not supported correctly in caffe2")
-    def test_pad(self):
+    def test_pad_const_default_val(self):
         params = [
             ("CONSTANT", [[1, 1], [2, 2]], [[1.0, 1.2], [2.3, 3.4], [4.5, 5.7]]),
             ("CONSTANT", [[0, 0], [3, 3], [3, 3], [0, 0]], np.random.randn(1, 3, 4, 5).astype(np.float32)),
@@ -705,6 +705,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(op, name=_TFOUTPUT)
             self.log.debug(str(p))
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(BACKEND == "caffe2", "not supported correctly in caffe2")
+    def test_pad_const(self):
+        x_val = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        paddings = tf.constant([[1, 1,], [2, 2]], name="paddings")
+        op = tf.pad(x, paddings, mode="CONSTANT", name="const_with_val", constant_values=999)
+
+        _ = tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(BACKEND == "caffe2", "not supported correctly in caffe2")
+    def test_pad_reflect(self):
+        x_val = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        paddings = tf.constant([[1, 1,], [2, 2]], name="paddings")
+        op = tf.pad(x, paddings, mode="REFLECT", name="reflect")
+
+        _ = tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
     def test_randomuniform(self):
