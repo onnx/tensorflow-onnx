@@ -266,6 +266,11 @@ class Test(object):
                     outputs_tensor_info = signature_def_utils.get_signature_def_by_key(meta_graph_def, k).outputs
                     for _, output_tensor in sorted(outputs_tensor_info.items()):
                         outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
+                # freeze uses the node name derived from output:0 so only pass in output:0;
+                # it will provide all outputs of that node.
+                for o in list(outputs.keys()):
+                    if not o.endswith(":0"):
+                        del outputs[o]
                 frozen_graph = freeze_session(sess, output_names=list(outputs.keys()))
                 tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
             model_path = os.path.join(dir_name, "frozen.pb")

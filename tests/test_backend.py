@@ -1005,14 +1005,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @unittest.skipIf(OPSET < 7, "supported with opset 7 or better")
     def test_erf(self):
         x_shape = [2, 2]
-        x_val = np.random.sample(x_shape).astype(np.float32)
-        x_val = np.random.random(np.prod(x_shape)).astype(np.float32).reshape(x_shape)
+        x_val0 = np.random.random(np.prod(x_shape)).astype(np.float32).reshape(x_shape)
         x_val1 = np.array([[-1, -0.5], [1, 0.5]]).astype(np.float32)
-        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
-        x_ = tf.erf(x)
-        _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val1}, rtol=1e-04)
+        for x_val in [x_val0, x_val1]:
+            tf.reset_default_graph()
+            x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            x_ = tf.erf(x)
+            _ = tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.01)
 
     # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
     @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so scan op is not supported")
