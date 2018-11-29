@@ -115,7 +115,7 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
 
     if lstm_output_index == 0:
         axis = 1
-
+        # remove reverse op for lstm_bw
         reverse_nodes = get_reverse_nodes_after_y_output(g, lstm_bw)
         if not reverse_nodes:
             raise ValueError("should not happen y_output is not followed with reverse node")
@@ -215,7 +215,6 @@ def rewrite_bidirectional_lstms(g, ops):
 def get_reverse_nodes_after_y_output(g, lstm_bw):
     bw_consumers = g.find_output_consumers(lstm_bw.output[0])
 
-    # remove reverse op for lstm_bw
     # todo: figure out a better way to remove reverse op
     squeeze_nodes = [c for c in bw_consumers if c.type == "Squeeze"]
     s_cnt = len(squeeze_nodes)
