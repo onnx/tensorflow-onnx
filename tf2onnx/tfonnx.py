@@ -185,14 +185,16 @@ def direct_op(ctx, node, name, args):
 def identity_op(ctx, node, name, args):
     """Identity."""
     if node.inputs[0].is_const():
-        # if identity has a const as input, remove it
+        # if identity has a const as input, remove it if it is not an model output
         input_name = node.input[0]
         output_name = node.output[0]
         for n in ctx.get_nodes():
             for i, parent_name in enumerate(n.input):
                 if parent_name == output_name:
                     n.input[i] = input_name
-        return None
+        if not ctx.is_model_output(node.name):
+            return None
+
     ctx.copy_shape(node.input[0], node.output[0])
     return node
 
@@ -1681,6 +1683,7 @@ _OPSETS = [
     (8, _OPSET_8),
     (9, _OPSET_9),
 ]
+
 
 def rewrite_transpose(g, ops):
     pattern = \
