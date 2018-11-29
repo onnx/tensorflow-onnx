@@ -14,6 +14,7 @@ import re
 import six
 import numpy as np
 import tensorflow as tf
+from google.protobuf import text_format
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from onnx import helper, onnx_pb, defs, numpy_helper
 
@@ -232,8 +233,8 @@ def get_tf_node_attr(node, name):
     return node.get_attr(name)
 
 
-def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False):
-    """Save onnx model as file."""
+def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False):
+    """Save onnx model as file. Save a pbtxt file as well if as_text is True"""
     save_path = save_path_root
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -248,7 +249,7 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
             data = feed_dict[data_key]
             t = numpy_helper.from_array(data)
             t.name = data_key
-            data_full_path = os.path.join(data_path, "input_"+ str(i) +".pb")
+            data_full_path = os.path.join(data_path, "input_" + str(i) + ".pb")
             with open(data_full_path, 'wb') as f:
                 f.write(t.SerializeToString())
             i += 1
@@ -256,4 +257,9 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
     target_path = os.path.join(save_path, onnx_file_name + ".onnx")
     with open(target_path, "wb") as f:
         f.write(model_proto.SerializeToString())
+
+    if as_text:
+        with open(target_path + ".pbtxt", "w") as f:
+            f.write(text_format.MessageToString(model_proto))
+
     return target_path
