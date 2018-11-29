@@ -10,7 +10,6 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 import logging
-import sys
 import numpy as np
 
 from tf2onnx import utils
@@ -70,15 +69,15 @@ class GRUUnitRewriter(UnitRewriterBase):
         hidden_kernel = get_weights_from_const_node(match.get_op("hidden_kernel"))
         hidden_bias = get_weights_from_const_node(match.get_op("hidden_bias"))
         if not all([gate_kernel, gate_bias, hidden_kernel, hidden_bias]):
-            log.error("rnn weights check failed, skip")
-            sys.exit(-1)
-        else:
-            log.debug("find needed weights")
-            res = {'gate_kernel': gate_kernel,
-                   "gate_bias": gate_bias,
-                   "hidden_kernel": hidden_kernel,
-                   "hidden_bias": hidden_bias}
-            return res
+            log.debug("rnn weights check failed, skip")
+            return None
+
+        log.debug("find needed weights")
+        res = {"gate_kernel": gate_kernel,
+               "gate_bias": gate_bias,
+               "hidden_kernel": hidden_kernel,
+               "hidden_bias": hidden_bias}
+        return res
 
     def find_inputs(self, rnn_scope_name, rnn_props, match, input_blacklist=None):
         concat_node = match.get_op("cell_inputs")

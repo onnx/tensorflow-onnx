@@ -57,8 +57,7 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
         hidden_kernel = get_weights_from_const_node(node.inputs[3].inputs[0])
         hidden_bias = get_weights_from_const_node(node.inputs[5].inputs[0])
         if not all([gate_kernel, gate_bias, hidden_kernel, hidden_bias]):
-            log.error("rnn weights check failed, skip")
-            sys.exit(-1)
+            log.debug("rnn weights check failed, skip")
             return None
         log.debug("find needed weights")
         res = {"gate_kernel": gate_kernel,
