@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-python -m tf2onnx.convert : tool to convert a frozen tensorflow to onnx
+python -m tf2onnx.convert : tool to convert a frozen tensorflow graph to onnx
 """
 
 from __future__ import division
@@ -10,8 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
-import sys
-
 import onnx
 from onnx import helper
 import tensorflow as tf
@@ -115,4 +113,5 @@ def main():
             f.write(model_proto.SerializeToString())
 
 
-main()
+if __name__ == "__main__":
+    main()
