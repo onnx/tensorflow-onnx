@@ -88,7 +88,7 @@ def main():
         extra_opset = None
 
     graph_def = tf.GraphDef()
-    with tf.gfile.FastGFile(args.input, 'rb') as f:
+    with tf.gfile.GFile(args.input, 'rb') as f:
         graph_def.ParseFromString(f.read())
 
     # todo: consider to enable const folding by default?
