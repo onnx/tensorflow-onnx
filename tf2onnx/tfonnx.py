@@ -1946,11 +1946,11 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
 
 
 def rewrite_incomplete_type_support_rs5(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Unsqueeze", "Mul", "Concat", "Slice"])
+    return rewrite_incomplete_type_support(g, ops, ["Unsqueeze", "Mul", "Concat", "Slice", "Transpose"])
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Slice"])
+    return rewrite_incomplete_type_support(g, ops, ["Slice", "Transpose"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
