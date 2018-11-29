@@ -15,7 +15,7 @@ from tf2onnx.graph import Graph, Node
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op, \
-     is_placeholder_op, make_onnx_node
+     make_onnx_node
 from tf2onnx.rewriter.rnn_utils import BodyGraphDict, REWRITER_RESULT, SubGraphMetadata
 from tf2onnx.tfonnx import utils
 
@@ -350,19 +350,7 @@ class CustomRnnRewriter(LoopRewriterBase):
 
             nodes = self.g._extract_sub_graph_nodes(self.g.get_node_by_name(enter_node.input[0]))
 
-            # if the enter target subgraph contains planeholder, then we keep record that as cell boundary.
-            has_placeholder = None
-            for n in nodes:
-                if is_placeholder_op(n):
-                    has_placeholder = True
-                    break
-
-            # if there is placeholder in the Enter's input graph, then we think we should consider the Enter's input
-            # nodes as cell's input; otherwise, we think the input graph should be part of cell graph.
-            if has_placeholder is True:
-                log.debug("Enter input id [%s] is a subgraph containing placeholder, so make it cell boundary",
-                          enter_node.input[0])
-                other_enter_input_ids.append(enter_node.input[0])
+            other_enter_input_ids.append(enter_node.input[0])
 
         body_graph_meta.other_enter_input_ids = other_enter_input_ids
 

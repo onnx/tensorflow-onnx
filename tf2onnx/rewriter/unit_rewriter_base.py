@@ -170,7 +170,7 @@ class UnitRewriterBase(object):
                 if not loop_cond_op:
                     loop_cond_op = n
                 else:
-                    log.error("only a LoopCond is expected, rnn scope name:%s", rnn_scope_name)
+                    log.debug("only a LoopCond is expected, rnn scope name:%s", rnn_scope_name)
                     return None
 
         if loop_cond_op is None:

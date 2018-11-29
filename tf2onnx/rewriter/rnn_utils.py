@@ -74,7 +74,7 @@ class RnnProperties:
 
     def is_valid(self):
         if not self.input_node:
-            log.error("no input node found for current rnn, skip")
+            log.debug("no input node found for current rnn, skip")
             return False
         log.debug("input node with port id %s", self.input_id)
         return True
@@ -246,7 +246,7 @@ def get_weights_from_const_node(node):
         dtype = utils.ONNX_TO_NUMPY_DTYPE[temp.dtype]
         log.debug("found weights %s", temp.name)
     else:
-        log.error("weight node seems not to be Const, skip, node name is %s", temp.name)
+        log.debug("weight node seems not to be Const, skip, node name is %s", temp.name)
         return None
 
     return RnnWeight(node, val, dtype)
