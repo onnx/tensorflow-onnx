@@ -19,7 +19,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
 from tf2onnx import utils
-from tf2onnx.tfonnx import process_tf_graph, tf_optimize
+from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -29,6 +29,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     TMPPATH = tempfile.mkdtemp()
     BACKEND = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
     OPSET = int(os.environ.get("TF2ONNX_TEST_OPSET", 7))
+    TARGET = os.environ.get("TF2ONNX_TEST_TARGET", "").split(",")
     DEBUG = None
 
     def debug_mode(self):
@@ -139,7 +140,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         with tf.Session() as sess:
             g = process_tf_graph(sess.graph, opset=type(self).OPSET, output_names=output_names_with_port,
-                                 **process_args)
+                                 target=type(self).TARGET, **process_args)
             actual = self._run_backend(g, output_names_with_port, onnx_feed_dict)
 
         for expected_val, actual_val in zip(expected, actual):
@@ -165,6 +166,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                             choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                             help="backend to test against")
         parser.add_argument('--opset', type=int, default=Tf2OnnxBackendTestBase.OPSET, help="opset to test against")
+        parser.add_argument("--target", default=",".join(DEFAULT_TARGET), choices=POSSIBLE_TARGETS,
+                            help="target platform")
         parser.add_argument("--debug", help="output debugging information", action="store_true")
         parser.add_argument('unittest_args', nargs='*')
 
@@ -173,6 +176,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         ut_class.BACKEND = args.backend
         ut_class.OPSET = args.opset
         ut_class.DEBUG = args.debug
+        ut_class.TARGET = args.target
 
         # Now set the sys.argv to the unittest_args (leaving sys.argv[0] alone)
         sys.argv[1:] = args.unittest_args
