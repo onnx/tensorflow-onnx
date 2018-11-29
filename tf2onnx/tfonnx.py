@@ -43,7 +43,7 @@ TARGET_RS4 = "rs4"
 TARGET_RS5 = "rs5"
 TARGET_RS6 = "rs6"
 TARGET_CAFFE2 = "caffe2"
-POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_CAFFE2, TARGET_RS6]
+POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2]
 DEFAULT_TARGET = []
 
 
@@ -1304,11 +1304,19 @@ def matmul_op(ctx, node, name, args):
 
     nodes = []
     if transpose_a != 0:
-        transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[0])
-        nodes.insert(0, transpose)
+        shape = ctx.get_shape(node.input[0])
+        if shape:
+            perm = list(range(0, len(shape)))
+            tmp = perm[-1]; perm[-1] = perm[-2]; perm[-2] = tmp
+            transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm)
+            nodes.insert(0, transpose)
     if transpose_b != 0:
-        transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
-        nodes.insert(0, transpose)
+        shape = ctx.get_shape(node.input[1])
+        if shape:
+            perm = list(range(0, len(shape)))
+            tmp = perm[-1]; perm[-1] = perm[-2]; perm[-2] = tmp
+            transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[1], perm=perm)
+            nodes.insert(0, transpose)
 
     unsupported = ["a_is_sparse", "b_is_sparse"]
     for i in unsupported:

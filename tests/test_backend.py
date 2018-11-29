@@ -366,6 +366,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    def test_matmul3(self):
+        x_shape = [1, 12, 256, 64]
+        x_val = np.arange(np.prod(x_shape)).astype("float32").reshape((x_shape))
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+        y = tf.placeholder(tf.float32, x_shape, name=_TFINPUT1)
+        x_ = tf.matmul(x, y, transpose_b=True)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=1e-6)
+
     def test_sub(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
