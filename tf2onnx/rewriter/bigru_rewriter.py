@@ -14,8 +14,8 @@ import logging
 import numpy as np
 from tf2onnx import utils
 from tf2onnx.rewriter.rnn_utils import is_reverse_op, make_onnx_node
-from tf2onnx.rewriter.bilstm_rewriter import slice_bilstm_for_original_lstm_consumers
-from tf2onnx.rewriter.bilstm_rewriter import get_np_val_for_const, _process_single_init_node
+from tf2onnx.rewriter.bilstm_rewriter import slice_bilstm_for_original_lstm_consumers \
+     get_reverse_nodes_after_y_output, get_np_val_for_const, _process_single_init_node
 
 
 logging.basicConfig(level=logging.INFO)
@@ -151,8 +151,10 @@ def rewrite_bidirectional_grus(g, ops):
             is_backward_gru = True
 
         if is_backward_gru:
-            log.debug("find bw gru %s", input_id)
-            bw_gru[input_id] = [input_id, n]
+            # make sure reverse gru output will be reversed back
+            if get_reverse_nodes_after_y_output(g, n):
+                log.debug("find bw gru %s", input_id)
+                bw_gru[input_id] = [input_id, n]
         else:
             log.debug("find fw gru %s", input_id)
             fw_gru[input_id] = [input_id, n]
