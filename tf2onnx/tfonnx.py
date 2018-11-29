@@ -26,10 +26,10 @@ from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
 from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
+from tf2onnx.rewriter.rnn import rewrite_custom_rnn_cell, rewrite_custom_rnn_body_graph
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
-from tf2onnx.rewriter.rnn import rewrite_custom_rnn_cell, rewrite_custom_rnn_body_graph
 from tf2onnx.rewriter.rnn_utils import is_tensor_array_op
 from tf2onnx.utils import port_name
 
@@ -59,7 +59,7 @@ def tflist_to_onnx(node_list, shape_override):
     """
 
     # ignore the following attributes
-    ignored_attr = ["unknown_rank", "_class", "Tidx", "Tshape", "use_cudnn_on_gpu", "Index",
+    ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index",
                     "Tpaddings", "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size",
                     "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U",
                     "maxval", "Tout"]
@@ -99,6 +99,8 @@ def tflist_to_onnx(node_list, shape_override):
                 if dtype:
                     if not isinstance(dtype, list):
                         dtypes[node.name] = utils.map_tf_dtype(dtype)
+            elif a == "Tidx":
+                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "Tidx"))
             elif a in ["output_type", "output_dtype", "out_type"]:
                 attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
             elif a == "shape":
@@ -192,11 +194,96 @@ def identity_op(ctx, node, name, args):
             for i, parent_name in enumerate(n.input):
                 if parent_name == output_name:
                     n.input[i] = input_name
-        if not ctx.is_model_output(node.name):
+        if not ctx.is_model_output(output_name):
             return None
 
     ctx.copy_shape(node.input[0], node.output[0])
     return node
+
+
+def range_op(ctx, node, name, args):
+    """Range."""
+    start_node = node.inputs[0]
+    limit_node = node.inputs[1]
+    delta_node = node.inputs[2]
+
+    output_name = node.output[0]
+    base_name = utils.make_name(node.name)
+
+    if all(i.is_const() for i in node.inputs):
+        # Generate range as const if possible, start/limit/delta are all scalars with same type
+        start = start_node.get_tensor()
+        limit = limit_node.get_tensor()
+        delta = delta_node.get_tensor()
+        val = np.arange(start, limit, delta, dtype=start.dtype)
+        const_range = ctx.make_const(base_name, val)
+        ctx.replace_all_inputs(ctx.get_nodes(), output_name, const_range.name)
+        return None
+
+    nodes = []
+
+    start_name = start_node.output[0]
+    limit_name = limit_node.output[0]
+    delta_name = delta_node.output[0]
+
+    # trip_count
+    diff_name = "{}_diff".format(base_name)
+    nodes.append(Node(helper.make_node("Sub", [limit_name, start_name], [diff_name], name=diff_name), ctx))
+
+    dtype = node.get_attr_int("Tidx")
+    if dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
+        cast_diff_name = "{}_cast_diff".format(base_name)
+        nodes.append(Node(
+            helper.make_node("Cast", [diff_name], [cast_diff_name], name=cast_diff_name, to=onnx_pb.TensorProto.FLOAT),
+            ctx))
+        diff_name = cast_diff_name
+
+        cast_delta_name = "{}_cast_delta".format(base_name)
+        nodes.append(Node(helper.make_node("Cast", [delta_name], [cast_delta_name], name=cast_delta_name,
+                                           to=onnx_pb.TensorProto.FLOAT), ctx))
+        delta_name = cast_delta_name
+
+    div_name = "{}_div".format(base_name)
+    nodes.append(Node(helper.make_node("Div", [diff_name, delta_name], [div_name], name=div_name), ctx))
+
+    ceil_name = "{}_ceil".format(base_name)
+    nodes.append(Node(helper.make_node("Ceil", [div_name], [ceil_name], name=ceil_name), ctx))
+
+    trip_count_name = "{}_trip_cnt".format(base_name)
+    nodes.append(Node(
+        helper.make_node("Cast", [ceil_name], [trip_count_name], name=trip_count_name, to=onnx_pb.TensorProto.INT64),
+        ctx))
+
+    # cond
+    # Use initializer here since Constant OP before opset 9 does not support bool type
+    cond_name = "{}_cond".format(base_name)
+    ctx.make_const(cond_name, np.ones((), dtype=bool))
+
+    # body
+    body_inputs = [helper.make_tensor_value_info("i", onnx_pb.TensorProto.INT64, []),
+                   helper.make_tensor_value_info("cond", onnx_pb.TensorProto.BOOL, []),
+                   helper.make_tensor_value_info("prev", dtype, [])]
+    body_outputs = [helper.make_tensor_value_info("cond_out", onnx_pb.TensorProto.BOOL, []),
+                    helper.make_tensor_value_info("current", dtype, []),
+                    helper.make_tensor_value_info("range", dtype, [])]
+    body_nodes = []
+    body_nodes.append(utils.make_onnx_identity("cond", "cond_out"))
+    body_nodes.append(helper.make_node("Add", ["prev", delta_node.output[0]], ["current"], name=utils.make_name("add")))
+    body_nodes.append(utils.make_onnx_identity("prev", "range"))
+    body_graph = helper.make_graph(body_nodes, utils.make_name("{}_body".format(base_name)), body_inputs, body_outputs)
+
+    # loop
+    loop_name = "{}_loop".format(base_name)
+    current_name = "{}_cur".format(base_name)
+    range_name = "{}_range".format(base_name)
+    loop_inputs = [trip_count_name, cond_name, start_name]
+    loop_outputs = [current_name, range_name]
+    nodes.append(Node(helper.make_node("Loop", loop_inputs, loop_outputs, name=loop_name, body=body_graph), ctx))
+
+    nodes.append(Node(utils.make_onnx_identity(range_name, base_name, name=base_name), ctx))
+    ctx.replace_all_inputs(ctx.get_nodes(), output_name, base_name)
+
+    return nodes
 
 
 def broadcast_op(ctx, node, name, args):
@@ -765,7 +852,7 @@ def biasadd_op7(ctx, node, name, args):
         shape0 = ctx.get_shape(node.input[0])
         shape1 = ctx.get_shape(node.input[1])
         if node.inputs[1].type == 'Const' and len(shape1) == 1:
-            new_broadcast_shape = [shape1[0],] + [1,] * (len(shape0) - 2)
+            new_broadcast_shape = [shape1[0], ] + [1, ] * (len(shape0) - 2)
             shape_name = utils.make_name(node.name)
             ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
             op_name = node.input[1]
@@ -1593,6 +1680,7 @@ _OPSET_4 = {
     "RandomUniform": (direct_op, []),
     "RandomNormalLike": (direct_op, []),
     "RandomUniformLike": (direct_op, []),
+    "Range": (range_op, []),
     "RealDiv": (broadcast_op, ["Div"]),
     "Reciprocal": (direct_op, []),
     "Relu": (direct_op, ["Relu"]),

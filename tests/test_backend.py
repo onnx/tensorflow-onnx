@@ -634,6 +634,60 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    def test_range_const(self):
+        x = tf.range(5)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+        tf.reset_default_graph()
+
+        x = tf.range(3, 3, 5)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+        tf.reset_default_graph()
+
+        x = tf.range(0, -5, -2)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+        tf.reset_default_graph()
+
+        x = tf.range(-5.0, 5.0, 1.5)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+        tf.reset_default_graph()
+
+        x = tf.range(2.5, 5.0, 10.0)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+
+    def test_range_non_const(self):
+        x = tf.range(5.0)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+        tf.reset_default_graph()
+
+        x = tf.range(0, -5.0, -2)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+        tf.reset_default_graph()
+
+        x = tf.range(3.0, 3.0, 5)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+        tf.reset_default_graph()
+
+        delta_val = np.array(1.5, dtype=np.float32)
+        delta = tf.placeholder(tf.float32, shape=(), name=_TFINPUT)
+        x = tf.range(-5.0, 5.0, delta)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: delta_val})
+        tf.reset_default_graph()
+
+        start_val = np.array(2.5, dtype=np.float32)
+        start = tf.placeholder(tf.float32, shape=(), name=_TFINPUT)
+        x = tf.range(start, 5.0, 10.0)
+        _ = tf.identity(x, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: start_val})
+
     def test_rsqrt(self):
         x_val = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)

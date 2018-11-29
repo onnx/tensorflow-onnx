@@ -212,6 +212,12 @@ def port_name(name, nr=0):
     return name + ":" + str(nr)
 
 
+def make_onnx_identity(input, output, name=None):
+    if name is None:
+        name = make_name("identity")
+    return helper.make_node("Identity", [input], [output], name=name)
+
+
 PREFERRED_OPSET = 7
 
 

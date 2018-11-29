@@ -343,7 +343,7 @@ class Graph(object):
     def is_model_output(self, name):
         if name in self.output_names:
             return True
-        return utils.port_name(name) in self.output_names
+        return utils.node_name(name) in self.output_names
 
     def set_initializer(self, name, val):
         """Set initializer."""
