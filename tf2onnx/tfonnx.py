@@ -194,7 +194,7 @@ def identity_op(ctx, node, name, args):
             for i, parent_name in enumerate(n.input):
                 if parent_name == output_name:
                     n.input[i] = input_name
-        if not ctx.is_model_output(output_name):
+        if not output_name in ctx.output_names:
             return None
 
     ctx.copy_shape(node.input[0], node.output[0])
@@ -203,6 +203,8 @@ def identity_op(ctx, node, name, args):
 
 def range_op(ctx, node, name, args):
     """Range."""
+    # T range = Range(T start, T limit, T delta)
+    # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
     start_node = node.inputs[0]
     limit_node = node.inputs[1]
     delta_node = node.inputs[2]
@@ -222,37 +224,41 @@ def range_op(ctx, node, name, args):
 
     nodes = []
 
-    start_name = start_node.output[0]
-    limit_name = limit_node.output[0]
-    delta_name = delta_node.output[0]
+    start_output = start_node.output[0]
+    limit_output = limit_node.output[0]
+    delta_output = delta_node.output[0]
 
     # trip_count
     diff_name = "{}_diff".format(base_name)
-    nodes.append(Node(helper.make_node("Sub", [limit_name, start_name], [diff_name], name=diff_name), ctx))
+    diff_output = utils.port_name(diff_name)
+    nodes.append(Node(helper.make_node("Sub", [limit_output, start_output], [diff_output], name=diff_name), ctx))
 
     dtype = node.get_attr_int("Tidx")
     if dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
         cast_diff_name = "{}_cast_diff".format(base_name)
-        nodes.append(Node(
-            helper.make_node("Cast", [diff_name], [cast_diff_name], name=cast_diff_name, to=onnx_pb.TensorProto.FLOAT),
-            ctx))
-        diff_name = cast_diff_name
+        cast_diff_output = utils.port_name(cast_diff_name)
+        nodes.append(Node(helper.make_node("Cast", [diff_output], [cast_diff_output], name=cast_diff_name,
+                                           to=onnx_pb.TensorProto.FLOAT), ctx))
+        diff_output = cast_diff_output
 
         cast_delta_name = "{}_cast_delta".format(base_name)
-        nodes.append(Node(helper.make_node("Cast", [delta_name], [cast_delta_name], name=cast_delta_name,
+        cast_delta_output = utils.port_name(cast_delta_name)
+        nodes.append(Node(helper.make_node("Cast", [delta_output], [cast_delta_output], name=cast_delta_name,
                                            to=onnx_pb.TensorProto.FLOAT), ctx))
-        delta_name = cast_delta_name
+        delta_output = cast_delta_output
 
     div_name = "{}_div".format(base_name)
-    nodes.append(Node(helper.make_node("Div", [diff_name, delta_name], [div_name], name=div_name), ctx))
+    div_output = utils.port_name(div_name)
+    nodes.append(Node(helper.make_node("Div", [diff_output, delta_output], [div_output], name=div_name), ctx))
 
     ceil_name = "{}_ceil".format(base_name)
-    nodes.append(Node(helper.make_node("Ceil", [div_name], [ceil_name], name=ceil_name), ctx))
+    ceil_output = utils.port_name(ceil_name)
+    nodes.append(Node(helper.make_node("Ceil", [div_output], [ceil_output], name=ceil_name), ctx))
 
     trip_count_name = "{}_trip_cnt".format(base_name)
-    nodes.append(Node(
-        helper.make_node("Cast", [ceil_name], [trip_count_name], name=trip_count_name, to=onnx_pb.TensorProto.INT64),
-        ctx))
+    trip_count_output = utils.port_name(trip_count_name)
+    nodes.append(Node(helper.make_node("Cast", [ceil_output], [trip_count_output], name=trip_count_name,
+                                       to=onnx_pb.TensorProto.INT64), ctx))
 
     # cond
     # Use initializer here since Constant OP before opset 9 does not support bool type
@@ -274,14 +280,13 @@ def range_op(ctx, node, name, args):
 
     # loop
     loop_name = "{}_loop".format(base_name)
-    current_name = "{}_cur".format(base_name)
-    range_name = "{}_range".format(base_name)
-    loop_inputs = [trip_count_name, cond_name, start_name]
-    loop_outputs = [current_name, range_name]
+    loop_inputs = [trip_count_output, cond_name, start_output]
+    loop_outputs = [utils.port_name(loop_name, i) for i in range(2)]
     nodes.append(Node(helper.make_node("Loop", loop_inputs, loop_outputs, name=loop_name, body=body_graph), ctx))
 
-    nodes.append(Node(utils.make_onnx_identity(range_name, base_name, name=base_name), ctx))
-    ctx.replace_all_inputs(ctx.get_nodes(), output_name, base_name)
+    range_output = utils.port_name(base_name)
+    nodes.append(Node(utils.make_onnx_identity(loop_outputs[1], range_output, name=base_name), ctx))
+    ctx.replace_all_inputs(ctx.get_nodes(), output_name, range_output)
 
     return nodes
 
@@ -1680,7 +1685,6 @@ _OPSET_4 = {
     "RandomUniform": (direct_op, []),
     "RandomNormalLike": (direct_op, []),
     "RandomUniformLike": (direct_op, []),
-    "Range": (range_op, []),
     "RealDiv": (broadcast_op, ["Div"]),
     "Reciprocal": (direct_op, []),
     "Relu": (direct_op, ["Relu"]),
@@ -1743,6 +1747,7 @@ _OPSET_7 = {
     "Mul": (broadcast_op7, []),
     "Multinomial": (multinomial_op, []),
     "Pow": (direct_op, []),
+    "Range": (range_op, []),
     "RealDiv": (broadcast_op7, ["Div"]),
     "ResizeBilinear": (upsample_op7, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),

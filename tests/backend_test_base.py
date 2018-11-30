@@ -104,7 +104,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         graph_def = None
         save_dir = os.path.join(type(self).TMPPATH, self._testMethodName)
-        
+
         if convert_var_to_const:
             with tf.Session() as sess:
                 variables_lib.global_variables_initializer().run()

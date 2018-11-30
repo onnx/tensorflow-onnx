@@ -14,8 +14,8 @@ import re
 import six
 import numpy as np
 import tensorflow as tf
-from google.protobuf import text_format
 from tensorflow.core.framework import types_pb2, tensor_pb2
+from google.protobuf import text_format
 from onnx import helper, onnx_pb, defs, numpy_helper
 
 #
@@ -212,10 +212,10 @@ def port_name(name, nr=0):
     return name + ":" + str(nr)
 
 
-def make_onnx_identity(input, output, name=None):
+def make_onnx_identity(node_input, node_output, name=None):
     if name is None:
         name = make_name("identity")
-    return helper.make_node("Identity", [input], [output], name=name)
+    return helper.make_node("Identity", [node_input], [node_output], name=name)
 
 
 PREFERRED_OPSET = 7
