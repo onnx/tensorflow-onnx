@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 import logging
 import sys
+import traceback
 from onnx import helper, onnx_pb
 import numpy as np
 from tf2onnx.graph import Graph, Node
@@ -167,10 +168,11 @@ class CustomRnnRewriter(LoopRewriterBase):
 
             return REWRITER_RESULT.OK
         except Exception as ex:
+            tb = traceback.format_exc()
             if scan_node and BodyGraphDict.has_body_graph_info(scan_node.name):
                 BodyGraphDict.pop_body_graph_info(scan_node.name)
                 log.error("remove scan node body graph from dict")
-            log.error("rewrite failed, due to exception: %s", ex)
+            log.error("rewrite failed, due to exception: %s, details:%s", ex, tb)
             return REWRITER_RESULT.FAIL
 
     def _parse_time_var(self, context):
@@ -322,9 +324,10 @@ class CustomRnnRewriter(LoopRewriterBase):
         time = last_scan_input_shape[1]
         for i in range(len(scan_props.loop_scan_outputs)):
             scan_out_dtype = self.g.get_dtype(scan_props.loop_scan_outputs[i])
-            scan_output_shape = [batch, time] + self.g.get_shape(scan_props.loop_scan_outputs[i])
-            log.debug("scan output [%s] has shape %s, batch:%s, time: %s",
-                      scan_props.loop_scan_outputs[i], scan_output_shape, batch, time)
+            output_shape = self.g.get_shape(scan_props.loop_scan_outputs[i])
+            scan_output_shape = [batch, time] + output_shape
+            log.debug("scan output [%s] has shape %s, batch:%s, time: %s, cell output shape: %s",
+                      scan_props.loop_scan_outputs[i], scan_output_shape, batch, time, output_shape)
             log.debug("_create_scan_node - set scan scan_output shape for %s[%s]:%s",
                       scan_node.name, index, scan_output_shape)
             self.g.set_shape(scan_node.output[index], scan_output_shape)
