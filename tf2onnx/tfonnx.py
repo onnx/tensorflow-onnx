@@ -59,10 +59,10 @@ def tflist_to_onnx(node_list, shape_override):
     """
 
     # ignore the following attributes
-    ignored_attr = ["unknown_rank", "_class", "Tidx", "Tshape", "use_cudnn_on_gpu", "Index",
-                    "Tpaddings", "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size",
-                    "Tmultiples", "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U",
-                    "maxval", "Tout"]
+    ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
+                    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
+                    "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
+                    "Tout"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -99,7 +99,9 @@ def tflist_to_onnx(node_list, shape_override):
                 if dtype:
                     if not isinstance(dtype, list):
                         dtypes[node.name] = utils.map_tf_dtype(dtype)
-            elif a in ["output_type", "output_dtype", "out_type"]:
+            elif a in ["output_type", "output_dtype", "out_type", "Tidx", "out_idx"]:
+                # Tidx is used by Range
+                # out_idx is used by ListDiff
                 attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
             elif a == "shape":
                 attr[a] = utils.get_shape(node)
@@ -185,6 +187,9 @@ def direct_op(ctx, node, name, args):
 def identity_op(ctx, node, name, args):
     """Identity."""
     if node.inputs[0].is_const():
+        # should not remove the identity node if it is output of the graph
+        if node.output[0] in ctx.output_names:
+            return node
         # if identity has a const as input, remove it
         input_name = node.input[0]
         output_name = node.output[0]
@@ -1397,50 +1402,70 @@ def reverse_op8(ctx, node, name, args):
     nodes = [node]
     seq_dim = node.get_attr("seq_dim")
     batch_dim = node.get_attr("batch_dim")
-    if seq_dim.i == 1 and (batch_dim or batch_dim.i == 0):
-        node.type = "Scan"
-        node.set_attr("num_scan_inputs", 1)
-        input_dtype = ctx.get_dtype(node.input[0])
-        input_shape = ctx.get_shape(node.input[0])
+    batch_major = seq_dim.i == 1 and (batch_dim or batch_dim.i == 0)
+    time_major = batch_dim.i == 1 and (seq_dim or seq_dim.i == 0)
 
-        # create one input (ValueInfoProto)
-        x = helper.make_tensor_value_info('X', input_dtype, input_shape[2:])
-
-        # create one output (ValueInfoProto)
-        y = helper.make_tensor_value_info('Y', input_dtype, input_shape[2:])
-
-        # create a node (NodeProto)
-        node_def = helper.make_node(
-            'Identity',  # node name
-            ['X'],  # inputs
-            ['Y'],  # outputs
-        )
-
-        # create the graph (GraphProto)
-        graph_def = helper.make_graph(
-            [node_def],
-            'reverse_scan-body-graph',
-            [x],
-            [y],
-        )
-        node.set_attr("body", graph_def)
-        node.set_attr("directions", [1])  # reverse the scan input
-
-        seq_len_dtype = ctx.get_dtype(node.input[1])
-        if seq_len_dtype != onnx_pb.TensorProto.INT64:
-            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[1])
-            cast_node.set_attr("to", onnx_pb.TensorProto.INT64)
-            ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.INT64)
-            ctx.copy_shape(node.input[1], cast_node.output[0])
-            nodes.append(cast_node)
-
-        tmp = node.input[0]
-        node.input[0] = node.input[1]
-        node.input[1] = tmp
-
-    else:
+    if not batch_major and not time_major:
         error_msg = "unsupported attributes, seq_dim:{}, batch_dim:{}".format(seq_dim, batch_dim)
         raise ValueError(error_msg)
+
+    if time_major:
+        old_shape = ctx.get_shape(node.input[0])
+        old_dtype = ctx.get_dtype(node.input[0])
+        perm_val = [1, 0, 2]
+        trans_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm_val)
+        new_shape = spatial_map(old_shape, perm_val)
+        ctx.set_shape(trans_node.output[0], new_shape)
+        ctx.set_dtype(trans_node.output[0], old_dtype)
+        nodes.insert(0, trans_node)
+
+    # handle batch_major input
+    node.type = "Scan"
+    node.set_attr("num_scan_inputs", 1)
+    input_dtype = ctx.get_dtype(node.input[0])
+    input_shape = ctx.get_shape(node.input[0])
+
+    # create one input (ValueInfoProto)
+    x = helper.make_tensor_value_info('X', input_dtype, input_shape[2:])
+
+    # create one output (ValueInfoProto)
+    y = helper.make_tensor_value_info('Y', input_dtype, input_shape[2:])
+
+    # create a node (NodeProto)
+    node_def = helper.make_node(
+        'Identity',  # node name
+        ['X'],  # inputs
+        ['Y'],  # outputs
+    )
+
+    # create the graph (GraphProto)
+    graph_def = helper.make_graph(
+        [node_def],
+        'reverse_scan-body-graph',
+        [x],
+        [y],
+    )
+    node.set_attr("body", graph_def)
+    node.set_attr("directions", [1])  # reverse the scan input
+
+    seq_len_dtype = ctx.get_dtype(node.input[1])
+    if seq_len_dtype != onnx_pb.TensorProto.INT64:
+        cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[1])
+        cast_node.set_attr("to", onnx_pb.TensorProto.INT64)
+        ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.INT64)
+        ctx.copy_shape(node.input[1], cast_node.output[0])
+        nodes.insert(0, cast_node)
+
+    if time_major:
+        # get back to time_major
+        op_name = utils.make_name(node.name)
+        trans_back_node = ctx.insert_new_node_on_output("Transpose", node.output[0],
+                                                        name=op_name, perm=[1, 0, 2])
+        nodes.insert(0, trans_back_node)
+
+    tmp = node.input[0]
+    node.input[0] = node.input[1]
+    node.input[1] = tmp
     return nodes
 
 
@@ -1800,13 +1825,23 @@ def rewrite_constant_fold(g, ops):
     """
     func_map = {
         "Add": np.add,
+        "GreaterEqual": np.greater_equal,
+        "Cast": np.cast,
         "ConcatV2": np.concatenate,
+        "Less": np.less,
+        "ListDiff": np.setdiff1d,
         "Mul": np.multiply,
         "Pack": np.stack,
         "Range": np.arange,
         "Sqrt": np.sqrt,
         "Sub": np.subtract,
     }
+    ref_cnt_per_node = {}
+    for idx, op in enumerate(ops):
+        for op_input in op.inputs:
+            if op_input.name not in ref_cnt_per_node:
+                ref_cnt_per_node[op_input.name] = 0
+            ref_cnt_per_node[op_input.name] += 1
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
@@ -1824,31 +1859,61 @@ def rewrite_constant_fold(g, ops):
                     if not node.is_const():
                         break
                     inputs.append(node.get_tensor())
+
+                log.debug("op name %s, %s, %s", op.name, len(op.input), len(inputs))
                 if inputs and len(op.input) == len(inputs):
                     log.info("folding node type=%s, name=%s" % (op.type, op.name))
-                    if op.type in ["Pack"]:
+                    if op.type == "Cast":
+                        dst = op.get_attr("to").i
+                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[dst]
+                        val = np.cast[np_type](*inputs)
+                    elif op.type == "ConcatV2":
+                        axis = inputs[-1]
+                        values = inputs[:-1]
+                        val = func(tuple(values), axis)
+                    elif op.type == "ListDiff":
+                        out_type = op.get_attr("out_idx")
+                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[out_type.i]
+                        val = func(*inputs)
+                        val = val.astype(np_type)
+                    elif op.type in ["Pack"]:
                         # handle ops that need input array and axis
                         axis = op.get_attr_int("axis")
                         val = func(inputs, axis=axis)
+                    elif op.type == "Range":
+                        dtype = op.get_attr("Tidx")
+                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[dtype.i]
+                        val = func(*inputs, dtype=np_type)
                     else:
                         val = func(*inputs)
-                    ops[idx] = g.make_const(op.name, val)
+
+                    new_node_name = utils.make_name(op.name)
+                    new_output_name = new_node_name
                     old_output_name = op.output[0]
-                    new_output_name = op.name
+                    old_node_name = op.name
+                    log.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
+                    ops[idx] = g.make_const(new_node_name, val)
+                    ref_cnt_per_node[new_node_name] = ref_cnt_per_node[old_node_name]
+
+                    log.debug("replace old output [%s] with new output [%s]", old_output_name, new_output_name)
                     # need to re-write the consumers input name to use the const name
                     consumers = g.find_output_consumers(old_output_name)
                     if consumers:
                         for consumer in consumers:
                             g.replace_input(consumer, old_output_name, new_output_name)
                     for node in op.inputs:
-                        node.set_deleted()
+                        ref_cnt_per_node[node.name] -= 1
+                        if ref_cnt_per_node[node.name] == 0:
+                            node.set_deleted()
                     # keep looking until there is nothing we can fold.
                     # We keep the graph in topological order so if we folded,
                     # the result might help a following op.
                     keep_looking = True
-            except:  # pylint: disable=bare-except
+            except Exception as ex:
+                tb = traceback.format_exc()  # pylint: disable=bare-except
+                log.info("exception: %s, details: %s", ex, tb)
                 # ignore errors
-                pass
+
         # pylint: enable=too-many-nested-blocks
     return g.remove_deleted_nodes(ops)
 
