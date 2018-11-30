@@ -153,18 +153,29 @@ class LoopRewriterBase:
             loop_var.next_iteration_input_id = ta_write_node.input[2]
             loop_var.ta_index_id = ta_write_node.input[1]
 
-            log.debug("loop var [%s, %s] output shapes are inferred from TA element shape", loop_var.enter_name,
-                      loop_var.enter_input_id)
-            enter_node = ta_write_node.inputs[0]
-            output_ta_node = enter_node.inputs[0]
-            log.debug(self.g.get_shape(output_ta_node.output[0]))
-            self.g.copy_shape(output_ta_node.output[0], loop_var.next_iteration_input_id)
-            self.g.copy_shape(output_ta_node.output[0], loop_var.switch_true_identity_output_id)
-            self.g.copy_shape(output_ta_node.output[0], loop_var.exit_output_id)
+            ta_output_shape = None
+            next_iteration_shape = self.g.get_shape(loop_var.next_iteration_input_id)
+            if next_iteration_shape is None:
+                enter_node = ta_write_node.inputs[0]
+                ta_node_output = enter_node.input[0]
+                ta_element_shape = self.g.get_shape(ta_node_output)
+                ta_output_shape = ta_element_shape
+                log.debug("loop var [%s, %s] output shapes are inferred from TA element shape", loop_var.enter_name,
+                          loop_var.enter_input_id)
+            else:
+                log.debug("loop var [%s, %s] output shapes are inferred from cell output %s", loop_var.enter_name,
+                          loop_var.enter_input_id, loop_var.next_iteration_input_id)
+                ta_output_shape = next_iteration_shape
+
+            self.g.set_shape(loop_var.next_iteration_input_id, ta_output_shape)
+            self.g.set_shape(loop_var.switch_true_identity_output_id, ta_output_shape)
+            self.g.set_shape(loop_var.exit_output_id, ta_output_shape)
 
         return loop_var
 
     def _tune_shape_for_loop_var(self, loop_var):
+        if loop_var.is_tensor_array:
+            return loop_var
         log.debug("_tune_shape_for_loop_var for loop var [%s, %s, %s]", loop_var.enter_name,
                   loop_var.enter_input_id, loop_var.next_iteration_input_id)
         var_output_shape = self.g.get_shape(loop_var.enter_input_id)
@@ -174,7 +185,7 @@ class LoopRewriterBase:
         self.g.set_shape(loop_var.next_iteration_input_id, var_output_shape)
         self.g.set_shape(loop_var.switch_true_identity_output_id, var_output_shape)
         self.g.set_shape(loop_var.exit_output_id, var_output_shape)
-        log.debug("_tune_shape_for_loop_var for loop var %s", var_output_shape)
+        log.debug("_tune_shape_for_loop_var new shape is %s", var_output_shape)
 
         return loop_var
 

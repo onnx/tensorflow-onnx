@@ -1092,13 +1092,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
     @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so scan op is not supported")
-    def test_reverse_sequence(self):
+    def test_reverse_sequence_batch_major(self):
         x_val = np.array([[[1, 2, 3], [4, 5, 6], [0, 0, 0]],
                           [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                           [[1, 2, 3], [0, 0, 0], [0, 0, 0]]],
                          dtype=np.float32)
         x = tf.placeholder(tf.float32, [None, 3, 3], name=_TFINPUT)
         x_ = tf.reverse_sequence(x, seq_axis=1, batch_axis=0, seq_lengths=[2, 3, 1])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so scan op is not supported")
+    def test_reverse_sequence_time_major(self):
+        x_val = np.array([[[1, 2, 3], [1, 2, 3], [1, 2, 3]],
+                          [[4, 5, 6], [4, 5, 6], [0, 0, 0]],
+                          [[0, 0, 0], [7, 8, 9], [0, 0, 0]]
+                         ],
+                         dtype=np.float32)
+        x = tf.placeholder(tf.float32, [3, None, 3], name=_TFINPUT)
+        x_ = tf.reverse_sequence(x, seq_axis=0, batch_axis=1, seq_lengths=[2, 3, 1])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
