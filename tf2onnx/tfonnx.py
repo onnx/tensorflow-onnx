@@ -1864,7 +1864,7 @@ def rewrite_constant_fold(g, ops):
                 if inputs and len(op.input) == len(inputs):
                     log.info("folding node type=%s, name=%s" % (op.type, op.name))
                     if op.type == "Cast":
-                        dst = op.get_attr("to").i
+                        dst = op.get_attr_int("to")
                         np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[dst]
                         val = np.cast[np_type](*inputs)
                     elif op.type == "ConcatV2":
@@ -1872,8 +1872,8 @@ def rewrite_constant_fold(g, ops):
                         values = inputs[:-1]
                         val = func(tuple(values), axis)
                     elif op.type == "ListDiff":
-                        out_type = op.get_attr("out_idx")
-                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[out_type.i]
+                        out_type = op.get_attr_int("out_idx")
+                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[out_type]
                         val = func(*inputs)
                         val = val.astype(np_type)
                     elif op.type in ["Pack"]:
@@ -1881,8 +1881,8 @@ def rewrite_constant_fold(g, ops):
                         axis = op.get_attr_int("axis")
                         val = func(inputs, axis=axis)
                     elif op.type == "Range":
-                        dtype = op.get_attr("Tidx")
-                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[dtype.i]
+                        dtype = op.get_attr_int("Tidx")
+                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[dtype]
                         val = func(*inputs, dtype=np_type)
                     else:
                         val = func(*inputs)

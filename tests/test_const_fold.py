@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
-"""Unit tests using onnx basic rewriters."""
+"""Unit tests using onnx constant folding rewriters."""
 
 from __future__ import division
 from __future__ import print_function
@@ -12,13 +12,13 @@ from backend_test_base import Tf2OnnxBackendTestBase
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 
 # pylint: disable=C0111
-class BasicRewriterTests(Tf2OnnxBackendTestBase):
+class ConstantFoldingTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, output_names_with_port, feed_dict, **kwargs):
         kwargs["convert_var_to_const"] = False
         kwargs["constant_fold"] = False
         self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
 
-    def test_constant_fold_concat(self):
+    def test_concat(self):
         t1 = [[1, 2, 3], [4, 5, 6]]
         t2 = [[7, 8, 9], [10, 11, 12]]
         x_ = tf.concat([t1, t2], 0)  # [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]
@@ -30,7 +30,7 @@ class BasicRewriterTests(Tf2OnnxBackendTestBase):
         self._run_test_case(["output_0:0", "output_1:0", "output_2:0"], {})
         tf.reset_default_graph()
 
-    def test_constant_fold_range(self):
+    def test_range(self):
         start = tf.constant(3, dtype=tf.float32, name='start')
         limit = tf.constant(18, dtype=tf.float32, name='limit')
         delta = tf.constant(3, dtype=tf.float32, name='delta')
@@ -77,4 +77,4 @@ class BasicRewriterTests(Tf2OnnxBackendTestBase):
         self._run_test_case(["output_0:0"], {})
 
 if __name__ == '__main__':
-    Tf2OnnxBackendTestBase.trigger(BasicRewriterTests)
+    Tf2OnnxBackendTestBase.trigger(ConstantFoldingTests)
