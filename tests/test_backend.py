@@ -366,6 +366,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    def test_matmul3(self):
+        x_shape = [1, 12, 256, 64]
+        x_val = np.arange(np.prod(x_shape)).astype("float32").reshape((x_shape))
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+        y = tf.placeholder(tf.float32, x_shape, name=_TFINPUT1)
+        x_ = tf.matmul(x, y, transpose_b=True)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=1e-6)
+
     def test_sub(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
@@ -504,11 +513,12 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @unittest.skipIf(OPSET < 5 or BACKEND in ["onnxmsrtnext"], "since opset 5, broken in msrtnext")
     def test_reshape_dynamic(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
-        x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
-        shape = tf.constant([4, 1])
-        x_ = tf.reshape(x, tf.transpose(shape))
+        shape_val = np.array([4, 1], dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        shape = tf.placeholder(tf.int32, shape_val.shape, name=_TFINPUT1)
+        x_ = tf.reshape(x, shape)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val}, check_shape=True)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: shape_val}, check_shape=True)
 
     def test_relu(self):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))

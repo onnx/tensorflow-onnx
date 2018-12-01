@@ -143,15 +143,16 @@ class Node(object):
         return self._skip_conversion
 
     @property
-    def shape(self):
-        """Get shape for now."""
-        shape = self.get_attr("shape")
-        if shape:
-            shape = shape.ints
-            # TODO: this is what we want ?
-            if shape and shape[0] == -1:
-                shape[0] = utils.ONNX_UNKNOWN_DIMENSION
-        return shape
+    def output_shapes(self):
+        """Get output shapes, mostly for debugging."""
+        val = [self.graph.get_shape(n) for n in self._output]
+        return val
+
+    @property
+    def output_dtypes(self):
+        """Get output dtypes, mostly for debugging."""
+        val = [self.graph.get_dtype(n) for n in self._output]
+        return val
 
     def get_tensor_type(self):
         """Get the onnx data type of a tensor."""
@@ -579,7 +580,7 @@ class Graph(object):
 
         return graph
 
-    def make_model(self, doc, optimize=True):
+    def make_model(self, doc, optimize=False):
         """
         Create final ModelProto for onnx from internal graph.
         Args:
@@ -599,7 +600,8 @@ class Graph(object):
         kwargs["opset_imports"] = opsets
         model_proto = helper.make_model(graph, **kwargs)
 
-        # optimize the model proto
+        # optimize the model proto.
+        # TODO: this is disabled by default because of bugs in fuse_consecutive_transposes
         if optimize:
             model_proto = optimizer.optimize(model_proto)
         return model_proto
