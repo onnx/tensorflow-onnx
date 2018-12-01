@@ -1900,7 +1900,7 @@ def rewrite_flatten(g, ops):
                 "*",
             ]),
         ])
-    pattern_non_fixed_shape_input  = \
+    pattern_non_fixed_shape_input = \
         OpTypePattern('Reshape', name='reshape', inputs=[
             OpTypePattern("*", name="input"),
             OpTypePattern('Pack', name="pack", inputs=[
@@ -1936,14 +1936,16 @@ def rewrite_flatten(g, ops):
                 continue
 
             if check_fixed_input_shape:
-                need_rewrite = slice_node.inputs[0].is_const() and np.array_equal(list(input_shape), list(slice_node.inputs[0].get_tensor_value()))
+                need_rewrite = slice_node.inputs[0].is_const() and \
+                               np.array_equal(list(input_shape), list(slice_node.inputs[0].get_tensor_value()))
                 if not need_rewrite:
                     continue
 
             begin = slice_node.inputs[1].get_tensor_value()
             end = slice_node.inputs[2].get_tensor_value()
             strides = slice_node.inputs[3].get_tensor_value()
-            need_rewrite = np.array_equal(begin, [0]) and len(end) == 1 and np.array_equal(strides,[1]) and end[0] - begin[0] == len(input_shape) - 2
+            need_rewrite = np.array_equal(begin, [0]) and len(end) == 1 and \
+                           np.array_equal(strides, [1]) and end[0] - begin[0] == len(input_shape) - 2
             if not need_rewrite:
                 continue
 
