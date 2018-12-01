@@ -1890,30 +1890,86 @@ def rewrite_dropout(g, ops):
 
 
 def rewrite_flatten(g, ops):
-    pattern = \
-        OpTypePattern('Reshape', name='outputs', inputs=[
-            OpTypePattern("*", name="input2"),
-            OpTypePattern('Pack', inputs=[
-                OpTypePattern('StridedSlice', inputs=[
+    pattern_fixed_shape_input = \
+        OpTypePattern('Reshape', name='reshape', inputs=[
+            OpTypePattern("*", name="input"),
+            OpTypePattern('Pack', name="pack", inputs=[
+                OpTypePattern('StridedSlice', name="slice", inputs=[
                     "*", "*", "*", "*",
                 ]),
                 "*",
             ]),
         ])
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        inputs2 = match.get_op('input2')
-        outputs = match.get_op('outputs')
-        op_name = utils.make_name("Flatten")
-        out_name = port_name(op_name)
-        new_node = Node(helper.make_node("Flatten", [inputs2.output[0]], [out_name], name=op_name), g)
-        g.replace_all_inputs(ops, outputs.output[0], out_name)
-        to_be_removed = [node for node in match.get_nodes() if node != inputs2]
-        for i in range(len(ops) - 1, -1, -1):
-            if ops[i] in to_be_removed:
-                del ops[i]
-        ops.append(new_node)
+    pattern_non_fixed_shape_input  = \
+        OpTypePattern('Reshape', name='reshape', inputs=[
+            OpTypePattern("*", name="input"),
+            OpTypePattern('Pack', name="pack", inputs=[
+                OpTypePattern('StridedSlice', name="slice", inputs=[
+                    OpTypePattern('Shape', inputs=[
+                        OpTypePattern("*", name="input2")
+                    ]),
+                    "*", "*", "*",
+                ]),
+                "*",
+            ]),
+        ])
+    matcher = GraphMatcher(pattern_fixed_shape_input)
+    match_results_1 = list(matcher.match_ops(ops))
+
+    matcher = GraphMatcher(pattern_non_fixed_shape_input)
+    match_results_2 = list(matcher.match_ops(ops))
+
+    match_results = [(match_results_1, True), (match_results_2, False)]
+    for match_results, check_fixed_input_shape in match_results:
+        for match in match_results:
+            input_node = match.get_op('input')
+            reshape_node = match.get_op('reshape')
+            pack_node = match.get_op('pack')
+            slice_node = match.get_op('slice')
+            need_rewrite = pack_node.inputs[1].is_const() and pack_node.inputs[1].get_tensor_value()[0] == -1
+            if not need_rewrite:
+                continue
+
+            input_shape = g.get_shape(reshape_node.input[0])
+            need_rewrite = input_shape is not None
+            if not need_rewrite:
+                continue
+
+            if check_fixed_input_shape:
+                need_rewrite = slice_node.inputs[0].is_const() and np.array_equal(list(input_shape), list(slice_node.inputs[0].get_tensor_value()))
+                if not need_rewrite:
+                    continue
+
+            begin = slice_node.inputs[1].get_tensor_value()
+            end = slice_node.inputs[2].get_tensor_value()
+            strides = slice_node.inputs[3].get_tensor_value()
+            need_rewrite = np.array_equal(begin, [0]) and len(end) == 1 and np.array_equal(strides,[1]) and end[0] - begin[0] == len(input_shape) - 2
+            if not need_rewrite:
+                continue
+
+            op_name = utils.make_name("Flatten")
+            out_name = port_name(op_name)
+            new_node = Node(helper.make_node("Flatten", [reshape_node.input[0]], [out_name], name=op_name), g)
+
+            last_dim = input_shape[-1]
+            sec_last_dim = input_shape[-2]
+            new_dim = None
+            if last_dim > 0 and sec_last_dim > 0:
+                new_dim = last_dim * sec_last_dim
+            else:
+                new_dim = -1
+
+            g.set_shape(out_name, input_shape[:-2] + [new_dim])
+            g.replace_all_inputs(ops, reshape_node.output[0], out_name)
+            to_be_removed = [node for node in match.get_nodes() if node != input_node]
+
+            new_ops = []
+            for op in ops:
+                if op not in to_be_removed:
+                    new_ops.append(op)
+            new_ops.append(new_node)
+            ops = new_ops
+
     return ops
 
 
@@ -2272,10 +2328,20 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
 
-    ops = g.get_nodes()
-    for rewrite in rewriters:
-        ops = rewrite(g, ops)
-        g.set_nodes(ops)
+    try:
+        ops = g.get_nodes()
+        for rewrite in rewriters:
+            ops = rewrite(g, ops)
+            g.set_nodes(ops)
+    except Exception as ex:
+        type_, value_, traceback_ = sys.exc_info()
+        log.error("node %s: exception %s" % (rewrite, ex))
+        ex_ext = traceback.format_exception(type_, value_, traceback_)
+        if continue_on_error:
+            log.info(ex_ext)
+        else:
+            raise ex
+
     topological_sort(g.get_nodes())
 
     if custom_op_handlers is None:

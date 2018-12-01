@@ -450,5 +450,6 @@ class UnitRewriterBase(object):
         new_trans = make_onnx_node(self.g, "Transpose", [node.input[0]], attr)
 
         self.g.copy_shape(node.output[0], new_trans.output[0])
+        self.g.set_dtype(new_trans.output[0], self.g.get_dtype(node.input[0]))
         self.g.replace_all_inputs(self.g.get_nodes(), node.output[0], new_trans.output[0])
         return new_trans
