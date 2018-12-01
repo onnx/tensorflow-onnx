@@ -102,7 +102,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # optional - pass distinct feed_dict to onnx runtime
         if onnx_feed_dict is None:
             onnx_feed_dict = feed_dict
+
         graph_def = None
+        save_dir = os.path.join(type(self).TMPPATH, self._testMethodName)
+
         if convert_var_to_const:
             with tf.Session() as sess:
                 variables_lib.global_variables_initializer().run()
@@ -121,7 +124,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             expected = sess.run(output_dict, feed_dict=feed_dict)
 
         if self.debug_mode():
-            model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_original.pb")
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            model_path = os.path.join(save_dir, self._testMethodName + "_original.pb")
             with open(model_path, "wb") as f:
                 f.write(sess.graph_def.SerializeToString())
             self.log.debug("created file %s", model_path)
@@ -130,7 +135,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                 sess.graph_def, constant_fold)
 
         if self.debug_mode() and constant_fold:
-            model_path = os.path.join(type(self).TMPPATH, self._testMethodName + "_after_tf_optimize.pb")
+            model_path = os.path.join(save_dir, self._testMethodName + "_after_tf_optimize.pb")
             with open(model_path, "wb") as f:
                 f.write(graph_def.SerializeToString())
             self.log.debug("created file  %s", model_path)
@@ -153,8 +158,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def save_onnx_model(self, model_proto, feed_dict):
         save_path = os.path.join(type(self).TMPPATH, self._testMethodName)
-        target_path = utils.save_onnx_model(save_path, self._testMethodName, feed_dict,
-                                            model_proto, include_test_data=self.debug_mode())
+        target_path = utils.save_onnx_model(save_path, self._testMethodName, feed_dict, model_proto,
+                                            include_test_data=self.debug_mode(), as_text=self.debug_mode())
 
         self.log.debug("create model file: %s", target_path)
         return target_path
