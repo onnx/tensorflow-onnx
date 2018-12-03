@@ -148,6 +148,7 @@ class GRUUnitRewriter(UnitRewriterBase):
         squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [1]})
         gru_output_shape = self.g.get_shape(output_id)
         self.g.set_shape(squeeze_node.output[0], [gru_output_shape[0], gru_output_shape[2], gru_output_shape[3]])
+        self.g.set_dtype(squeeze_node.output[0], self.g.get_dtype(output_id))
 
         if not rnn_props.time_major:
             gather_consumers = self.g.find_output_consumers(gather_output_id)
@@ -163,6 +164,7 @@ class GRUUnitRewriter(UnitRewriterBase):
             trans_input_shape = self.g.get_shape(squeeze_node.output[0])
             self.g.replace_all_inputs(self.all_nodes, trans.output[0], new_trans.output[0])
             self.g.set_shape(new_trans.output[0], [trans_input_shape[1], trans_input_shape[0], trans_input_shape[2]])
+            self.g.set_dtype(new_trans.output[0], self.g.get_dtype(squeeze_node.output[0]))
             self.all_nodes.extend([new_trans])
 
         self.g.replace_all_inputs(self.all_nodes, gather_output_id, squeeze_node.output[0])
@@ -301,6 +303,9 @@ class GRUUnitRewriter(UnitRewriterBase):
         x_shape = self.g.get_shape(gru_node.input[0])
         x_seq_length = x_shape[0]
         x_batch_size = x_shape[1]
+        out_dtype = self.g.get_dtype(inputs["X"])
         self.g.set_shape(gru_node.output[0], [x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size])
+        self.g.set_dtype(gru_node.output[0], out_dtype)
         self.g.set_shape(gru_node.output[1], [num_direction, x_batch_size, rnn_props.hidden_size])
+        self.g.set_dtype(gru_node.output[1], out_dtype)
         return gru_node
