@@ -337,8 +337,6 @@ class Test(object):
                             np.testing.assert_array_equal(tf_res.shape, onnx_res.shape)
                     else:
                         for tf_res, onnx_res in zip(tf_results, onnx_results):
-                            print(tf_res)
-                            print(onnx_res)
                             np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
                     print("\tResults: OK")
                 return True

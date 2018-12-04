@@ -39,6 +39,8 @@ def select_op8(ctx, node, name, args):
                             shapes=[shape_node_output_shape], dtypes=[onnx_pb.TensorProto.INT64])
     nodes.append(shape_node)
 
+    # todo(pengwa), move those leveraging rewrite_incomplete_type_support_onnxruntime after shap inferencing
+    # bug is fixed.
     # workaround: onnxruntime does not support Split-2, add cases before and after.
     target_dtype = onnx_pb.TensorProto.FLOAT
     shape_f_node = _make_node(ctx, "Cast", [shape_node.output[0]], attr={"to": target_dtype}, op_name_scope=node.name,

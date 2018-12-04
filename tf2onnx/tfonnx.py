@@ -43,7 +43,8 @@ TARGET_RS4 = "rs4"
 TARGET_RS5 = "rs5"
 TARGET_RS6 = "rs6"
 TARGET_CAFFE2 = "caffe2"
-POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2]
+TARGET_ONNXRUNTIME = "onnxruntime"
+POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2, TARGET_ONNXRUNTIME]
 DEFAULT_TARGET = []
 
 
@@ -1274,30 +1275,7 @@ def topk_op(ctx, node, name, args):
 
 def tile_op7(ctx, node, name, args):
     # onnx wants shape input to be int64
-    nodes = _convert_shapenode_to_int64(ctx, node, 1)
-
-    # onnxruntime only support float input
-    input_dtype = ctx.get_dtype(node.input[0])
-    target_dtype = onnx_pb.TensorProto.FLOAT
-    need_cast = input_dtype != target_dtype
-    if need_cast:
-        new_nodes = []
-        input1_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
-        input1_cast.set_attr("to", target_dtype)
-        ctx.copy_shape(node.output[0], input1_cast.output[0])
-        ctx.set_shape(input1_cast.output[0], target_dtype)
-        new_nodes.append(input1_cast)
-
-        utils.make_sure(input_dtype is not None, "tile input shape is unknown")
-        op_name = utils.make_name(node.name)
-        output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
-        output_cast.set_attr("to", input_dtype)
-        ctx.set_dtype(output_cast.output[0], input_dtype)
-        ctx.copy_shape(node.output[0], output_cast.output[0])
-        new_nodes.append(output_cast)
-
-        nodes = new_nodes + nodes
-    return nodes
+    return _convert_shapenode_to_int64(ctx, node, 1)
 
 
 def reorganize_data_op(ctx, node, name, args):
@@ -2210,13 +2188,20 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
     This is needed for some tensor ops in opset7 and for some ops in winml-rs5.
     It is not helping performance but better than the model not working at all.
     """
+    ignored_input_index = {
+        "Tile": [1],  # Tile's second input can only be int64
+    }
     new_ops = []
     for op in ops:
         if op.type in impacted_ops:
             cast_inserted = []
             output_dtype = None
+            ignored_inputs = ignored_input_index.get(op.type)
             # insert casts on inputs if the runtime only supports float
             for i, input_node in enumerate(op.inputs):
+                if ignored_inputs and i in ignored_inputs:
+                    continue
+
                 input_name = op.input[i]
                 dtype = g.get_dtype(input_name)
                 if dtype != onnx_pb.TensorProto.FLOAT:
@@ -2252,6 +2237,10 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, ["Slice", "Transpose"])
+
+
+def rewrite_incomplete_type_support_onnxruntime(g, ops):
+    return rewrite_incomplete_type_support(g, ops, ["Tile"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
@@ -2441,6 +2430,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         late_rewriters.append(rewrite_incomplete_type_support_rs5)
     if TARGET_RS6 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs6)
+    if TARGET_ONNXRUNTIME in target:
+        late_rewriters.append(rewrite_incomplete_type_support_onnxruntime)
     if late_rewriters:
         topological_sort(g.get_nodes())
         ops = g.get_nodes()
