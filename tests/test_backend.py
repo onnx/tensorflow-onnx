@@ -107,6 +107,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
         for i in [-1, 0, 1, -2]:
             self._test_expand_dims(i)
 
+    def test_expand_dims_dynamic_inputs(self):
+        x_val = make_xval([3, 4])
+        x = tf.placeholder(tf.float32, shape=[None, None], name=_TFINPUT)
+        op = tf.expand_dims(x, 0)
+        _ = tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def test_trig_ops(self):
         for op in [tf.sin, tf.cos, tf.tan, tf.asin, tf.acos, tf.atan]:
             tf.reset_default_graph()
@@ -1149,6 +1156,32 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                  [-999, -999], [-1000, -1000]],
                                 dtype=np.int32)
         x = tf.placeholder(tf.int32, [None], name=_TFINPUT)
+        picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
+        _ = tf.identity(picks, name=_TFOUTPUT)
+
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    def test_where_with_two_rank_condition(self):
+        x_val = np.array([[1, 2, -3, 4, -5, -6, -7, 8, 9, 0]], dtype=np.int32)
+        true_result = np.array([[111, 222, 333, 444, 555, 666, 777, 888, 999, 1000]],
+                               dtype=np.int32)
+        false_result = np.array([[-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000]],
+                                dtype=np.int32)
+        x = tf.placeholder(tf.int32, [1, 10], name=_TFINPUT)
+        picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
+        _ = tf.identity(picks, name=_TFOUTPUT)
+
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    def test_where_with_three_rank_condition(self):
+        x_val = np.array([[[1, 2, -3, 4, -5, -6, -7, 8, 9, 0]]], dtype=np.int32)
+        true_result = np.array([[[111, 222, 333, 444, 555, 666, 777, 888, 999, 1000]]],
+                               dtype=np.int32)
+        false_result = np.array([[[-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000]]],
+                                dtype=np.int32)
+        x = tf.placeholder(tf.int32, [1, 1, 10], name=_TFINPUT)
         picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
         _ = tf.identity(picks, name=_TFOUTPUT)
 

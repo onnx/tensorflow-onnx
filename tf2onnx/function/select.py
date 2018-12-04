@@ -4,95 +4,124 @@
 """
 tf2onnx.tf2onnx - select op conversion
 """
-from onnx import helper
+import numpy as np
+from onnx import helper, onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.graph import Node
-from tf2onnx.utils import port_name
+from tf2onnx.utils import port_name, make_sure
+
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
+
 
 def select_op8(ctx, node, name, args):
     # T output = Select(bool condition, T x, T y)
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
-    if len(node.input) == 1:
-        raise ValueError("Select with only condition is not supported.")
+    utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
+
     nodes = []
-    data_type = ctx.get_dtype(node.input[1])
+    true_data_type = ctx.get_dtype(node.input[1])
+    false_data_type = ctx.get_dtype(node.input[2])
+    true_data_shape = ctx.get_shape(node.input[1])
+    false_data_shape = ctx.get_shape(node.input[2])
+    make_sure(true_data_type == false_data_type, "select true val and false val have different data types.")
+    make_sure(np.array_equal(true_data_shape, false_data_shape),
+              "select true val and false val have different output shapes.")
 
-    op_name = utils.make_name("Size")
-    out_name = port_name(op_name)
-    batch_size_node = Node(helper.make_node("Size", [node.input[0]], [out_name], name=op_name), ctx)
-    nodes.append(batch_size_node)
+    condition_shape = ctx.get_shape(node.input[0])
+    utils.make_sure(condition_shape is not None, "condition shape is None")
+    rank = len(condition_shape)
 
-    nodes_to_append = create_loop_op(ctx, node, batch_size_node.output[0], data_type)
-    nodes.extend(nodes_to_append)
+    # create nodes getting shape of condition
+    shape_node_output_shape = [rank]
+    shape_node = _make_node(ctx, "Shape", [node.input[0]], op_name_scope=node.name,
+                            shapes=[shape_node_output_shape], dtypes=[onnx_pb.TensorProto.INT64])
+    nodes.append(shape_node)
 
-    loop_scan_output_id = nodes[-1].output[1]
+    # workaround: onnxruntime does not support Split-2, add cases before and after.
+    target_dtype = onnx_pb.TensorProto.FLOAT
+    shape_f_node = _make_node(ctx, "Cast", [shape_node.output[0]], attr={"to": target_dtype}, op_name_scope=node.name,
+                              shapes=[shape_node_output_shape], dtypes=[target_dtype])
+    nodes.append(shape_f_node)
+
+    split_attr = [1 for i in range(rank)]
+    output_shapes = [[1] for i in range(rank)]
+    output_dtypes = [target_dtype for i in range(rank)]
+    split_node = _make_node(ctx, "Split", [shape_f_node.output[0]], output_count=rank, attr={"split": split_attr},
+                            op_name_scope=node.name, shapes=output_shapes, dtypes=output_dtypes)
+    nodes.append(split_node)
+
+    trip_cnts = []
+    for i in range(rank):
+        output_id = split_node.output[i]
+        output_shape = ctx.get_shape(output_id)
+        target_dtype = onnx_pb.TensorProto.INT64
+        shape_i_node = _make_node(ctx, "Cast", [output_id], attr={"to": target_dtype}, op_name_scope=node.name,
+                                  shapes=[output_shape], dtypes=[target_dtype])
+        trip_cnts.append(shape_i_node.output[0])
+        nodes.append(shape_i_node)
+    # workaround ends
+
+    onnx_nodes = create_loop_op(node.input, true_data_type, true_data_shape, trip_cnts, rank)
+    new_nodes = [Node(n, ctx) for n in onnx_nodes]
+    loop_node = new_nodes[-1]
+    loop_scan_output_id = loop_node.output[1]
     ctx.copy_shape(node.output[0], loop_scan_output_id)
-    ctx.set_dtype(node.output[0], data_type)
+    ctx.set_dtype(node.output[0], true_data_type)
 
-    op_name = node.name
-    out_name = port_name(op_name)
-    output_node = Node(helper.make_node("Identity", [loop_scan_output_id], [out_name], name=op_name), ctx)
+    nodes.extend(new_nodes)
+
+    output_node = _make_node(ctx, "Identity", [loop_scan_output_id], name=node.name,
+                             shapes=[ctx.get_shape(loop_scan_output_id)], dtypes=[true_data_type])
     nodes.append(output_node)
 
     return nodes
 
 
-def create_loop_op(ctx, node, batch_val_input_id, data_type):
+# gather_input_ids is 1-D tensor, containing 3 elements:
+# 0: condition data to gather on
+# 1: true result to gather on
+# 2: false result to father on
+def create_loop_op(gather_input_ids, output_type, output_shape, trip_count_input_ids, rank):
     nodes = []
 
     cond_var_name = utils.make_name("condition")
     true = helper.make_tensor(cond_var_name, TensorProto.BOOL, (), [True])
-    init_cond = Node(helper.make_node("Constant", [], [cond_var_name], value=true, name=cond_var_name), ctx)
+    init_cond = helper.make_node("Constant", [], [cond_var_name], value=true, name=cond_var_name)
     nodes.append(init_cond)
 
     # Loop requires at least a variable, add a useless fake variable.
     fake_val_name = utils.make_name("fake_var")
     fake_var_init_val = helper.make_tensor(fake_val_name, TensorProto.FLOAT, (), [0.0])
-    fake_var_init_node = Node(helper.make_node("Constant", [], [fake_val_name],
-                                               value=fake_var_init_val, name=fake_val_name), ctx)
+    fake_var_init_node = helper.make_node("Constant", [], [fake_val_name],
+                                          value=fake_var_init_val, name=fake_val_name)
     nodes.append(fake_var_init_node)
 
-    trip_cnt_name = utils.make_name("loop_gather_indices")
-    trip_cnt_output_id = utils.port_name(trip_cnt_name)
-    trip_cnt_cond = Node(helper.make_node("Unsqueeze", [batch_val_input_id], [trip_cnt_output_id],
-                                          axes=[0], name=trip_cnt_name), ctx)
-    nodes.append(trip_cnt_cond)
+    if rank < 1:
+        raise ValueError("rank is < 1")
+    trip_count_input_id = trip_count_input_ids[-1 * rank]
 
     op_name = utils.make_name("loop")
-    out_name = port_name(op_name)
-    loop_inputs = [trip_cnt_output_id,  # trip count
+    fake_var_output_id = port_name(op_name)
+    loop_inputs = [trip_count_input_id,  # trip count
                    cond_var_name,  # termination condition
                    fake_val_name  # initial value of loop-carried dependencies
                   ]
     loop_scan_output_id = port_name(op_name, 1)
-    loop_node = Node(helper.make_node("Loop", loop_inputs, [out_name, loop_scan_output_id], name=op_name), ctx)
-    loop_body = create_loop_body_graph(ctx, node, node.input[0], data_type)
-    loop_node.set_attr("body", loop_body)
+
+    loop_body = create_loop_body_graph(gather_input_ids, output_type, output_shape, trip_count_input_ids, rank)
+    loop_node = helper.make_node("Loop", loop_inputs, [fake_var_output_id, loop_scan_output_id],
+                                 name=op_name, body=loop_body)
     nodes.append(loop_node)
     return nodes
 
-def get_hidden_size_best_effort(ctx, node):
-    data_shape = ctx.get_shape(node.input[1])
-    if data_shape is None:
-        data_shape = ctx.get_shape(node.input[2])
-        if data_shape is None:
-            raise ValueError("data shape not found, so cannot create subgraph")
-    return data_shape
 
-def create_loop_body_graph(ctx, node, select_condition_input_id, select_output_data_type):
+def get_inputs_for_current_iteration(input_id, iter_index):
     nodes = []
-    graph_inputs = [helper.make_tensor_value_info("i", TensorProto.INT64, (1,)),  # iteration_num
-                    helper.make_tensor_value_info("cond", TensorProto.BOOL, ()),  # condition
-                    helper.make_tensor_value_info("fake_var", TensorProto.FLOAT, ())  # loop-carried dependency
-                   ]
-
-    # get the i'th value of "Select"'s condition
     op_name = utils.make_name("Gather")
     cond_gather_out_name = port_name(op_name)
-    cond_gather_node = helper.make_node("Gather", [select_condition_input_id, "i"], [cond_gather_out_name],
+    cond_gather_node = helper.make_node("Gather", [input_id, iter_index], [cond_gather_out_name],
                                         name=op_name)
     nodes.append(cond_gather_node)
 
@@ -102,81 +131,115 @@ def create_loop_body_graph(ctx, node, select_condition_input_id, select_output_d
                                                 name=op_name, axes=[0])
     nodes.append(cur_cond_val_scalar_node)
 
-    if_node, if_node_output_id = create_if_op(ctx, node, cur_cond_val_out_name)
-    nodes.append(if_node)
+    return nodes, cur_cond_val_out_name
 
+
+def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, trip_count_input_ids, rank):
+    nodes = []
+    iter_name = utils.make_name("i")
+    cond_name = utils.make_name("cond")
+    fake_var_name = utils.make_name("fake_var")
+    graph_inputs = [helper.make_tensor_value_info(iter_name, TensorProto.INT64, (1,)),  # iteration_num
+                    helper.make_tensor_value_info(cond_name, TensorProto.BOOL, ()),  # condition
+                    helper.make_tensor_value_info(fake_var_name, TensorProto.FLOAT, ())  # loop-carried dependency
+                   ]
+
+    # get the i'th value of condition
+    cond_input_id = gather_input_ids[0]
+    new_nodes, cond_input_id_for_current_iter = get_inputs_for_current_iteration(cond_input_id, iter_name)
+    nodes.extend(new_nodes)
+
+    # get the i'th value of true values
+    true_input_id = gather_input_ids[1]
+    new_nodes, true_input_id_for_current_iter = get_inputs_for_current_iteration(true_input_id, iter_name)
+    nodes.extend(new_nodes)
+
+
+    # get the i'th value of false values
+    false_input_id = gather_input_ids[2]
+    new_nodes, false_input_id_for_current_iter = get_inputs_for_current_iteration(false_input_id, iter_name)
+    nodes.extend(new_nodes)
+
+    input_ids_for_current_iter = [cond_input_id_for_current_iter, true_input_id_for_current_iter,
+                                  false_input_id_for_current_iter]
+    output_id = None
+    rank = rank - 1
+    if rank >= 1:
+        nodes_1 = create_loop_op(input_ids_for_current_iter, output_data_type, output_shape[1:],
+                                 trip_count_input_ids, rank)
+        loop_1 = nodes_1[-1]
+        output_id = loop_1.output[1]
+        nodes.extend(nodes_1)
+    elif rank == 0:
+        if_node, if_node_output_id = create_if_op(input_ids_for_current_iter, output_data_type, output_shape[1:],
+                                                  trip_count_input_ids)
+        output_id = if_node_output_id
+        nodes.append(if_node)
+
+    output_identity_name = utils.make_name("loop_output")
+    loop_output_id = utils.port_name(output_identity_name)
+    loop_output_node = helper.make_node(
+        'Identity',
+        [output_id],
+        [loop_output_id],
+        name=output_identity_name
+    )
+    nodes.append(loop_output_node)
+
+    cond_identity_name = utils.make_name("cond_output")
+    cond_output_id = utils.port_name(cond_identity_name)
     identity_node = helper.make_node(
         'Identity',
-        [if_node_output_id],
-        ['output'],
-        name=utils.make_name("Identity")
+        [cond_name],
+        [cond_output_id],
+        name=cond_identity_name
     )
     nodes.append(identity_node)
 
+    fake_var_identity_name = utils.make_name("fake_var_output")
+    fake_var_output_id = utils.port_name(fake_var_identity_name)
     identity_node = helper.make_node(
         'Identity',
-        ["cond"],
-        ['cond_output'],
-        name=utils.make_name("Identity")
+        [fake_var_name],
+        [fake_var_output_id],
+        name=fake_var_identity_name
     )
     nodes.append(identity_node)
 
-    identity_node = helper.make_node(
-        'Identity',
-        ["fake_var"],
-        ['fake_var_output'],
-        name=utils.make_name("Identity")
-    )
-    nodes.append(identity_node)
-
-    output_shape = get_hidden_size_best_effort(ctx, node)
-    graph_outputs = [helper.make_tensor_value_info("cond_output", TensorProto.BOOL, ()),
-                     helper.make_tensor_value_info("fake_var_output", TensorProto.FLOAT, ()),
-                     helper.make_tensor_value_info("output", select_output_data_type, output_shape[1:])]
+    graph_outputs = [helper.make_tensor_value_info(cond_output_id, TensorProto.BOOL, ()),
+                     helper.make_tensor_value_info(fake_var_output_id, TensorProto.FLOAT, ()),
+                     helper.make_tensor_value_info(loop_output_id, output_data_type, output_shape[1:])]
 
     body_graph = helper.make_graph(nodes, "loop-body-graph", graph_inputs, graph_outputs)
     return body_graph
 
 
-def create_if_op(ctx, node, cur_cond_val_out_name):
-    data_shape = get_hidden_size_best_effort(ctx, node)
-    true_graph = create_body_graph_for_if_branch(ctx, node.input[1], data_shape)
-    false_graph = create_body_graph_for_if_branch(ctx, node.input[2], data_shape)
+def create_if_op(input_ids, output_data_type, output_shape, trip_count_input_ids):
+    true_graph = create_body_graph_for_if_branch(output_data_type, output_shape, trip_count_input_ids, input_ids[1])
+    false_graph = create_body_graph_for_if_branch(output_data_type, output_shape, trip_count_input_ids, input_ids[2])
 
     op_name = utils.make_name("If")
     out_name = port_name(op_name)
 
     # output a scalar
-    if_node = helper.make_node("If", [cur_cond_val_out_name], [out_name], name=op_name,
-                               then_branch=true_graph, else_branch=false_graph)
+    if_node = helper.make_node("If", [input_ids[0]], [out_name], name=op_name, then_branch=true_graph,
+                               else_branch=false_graph)
     return if_node, out_name
 
 
-def create_body_graph_for_if_branch(ctx, input_id, data_shape):
-    data_type = ctx.get_dtype(input_id)
+def create_body_graph_for_if_branch(data_type, output_shape, trip_count_input_ids, chosen_cur_cond_val_out_name):
     nodes = []
-
-    op_name = utils.make_name("Gather")
-    true_out_name = port_name(op_name)
-    true_gather_node = helper.make_node("Gather", [input_id, "i"], [true_out_name], name=op_name)
-    nodes.append(true_gather_node)
-
-    op_name = utils.make_name("Squeeze")
-    true_squeeze_out_name = port_name(op_name)
-    cur_true_val_scalar_node = helper.make_node("Squeeze", [true_out_name], [true_squeeze_out_name],
-                                                name=op_name, axes=[0])
-    nodes.append(cur_true_val_scalar_node)
 
     identity_node = helper.make_node(
         'Identity',
-        [true_squeeze_out_name],
+        [chosen_cur_cond_val_out_name],
         ['y'],
         name=utils.make_name("Identity")
     )
     nodes.append(identity_node)
 
     # create one output
-    y = helper.make_tensor_value_info('y', data_type, tuple(data_shape[1:]))
+    y = helper.make_tensor_value_info('y', data_type, output_shape)
 
     graph_def = helper.make_graph(
         nodes,
@@ -185,3 +248,39 @@ def create_body_graph_for_if_branch(ctx, input_id, data_shape):
         [y],
     )
     return graph_def
+
+
+# todo: move this to utils, and merge with existing similar functions.
+def _make_node(g, op_type, inputs, name=None, attr=None, output_count=1, skip_conversion=True, op_name_scope=None,
+               shapes=None, dtypes=None):
+    if attr is None:
+        attr = {}
+    if shapes is None:
+        shapes = []
+    if dtypes is None:
+        dtypes = []
+
+    op_name_basis = op_type
+    if op_name_scope:
+        op_name_basis = "_".join([op_name_scope, op_type])
+
+    if name is None:
+        node_name = utils.make_name(op_name_basis)
+    else:
+        node_name = name
+
+    outputs = [node_name + ":" + str(i) for i in range(output_count)]
+    onnx_node = helper.make_node(op_type, inputs, outputs, name=node_name, **attr)
+    node = Node(onnx_node, g, skip_conversion=skip_conversion)
+
+    if shapes:
+        make_sure(len(shapes) == output_count, "output shape count not equal to output count")
+        for i in range(output_count):
+            g.set_shape(node.output[i], shapes[i])
+
+    if dtypes:
+        make_sure(len(dtypes) == output_count, "output dtypes count not equal to output count")
+        for i in range(output_count):
+            g.set_dtype(node.output[i], dtypes[i])
+
+    return node

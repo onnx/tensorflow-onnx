@@ -203,7 +203,7 @@ def identity_op(ctx, node, name, args):
     return node
 
 
-def range_op(ctx, node, name, args):
+def range_op7(ctx, node, name, args):
     """Range."""
     # T range = Range(T start, T limit, T delta)
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
@@ -288,6 +288,7 @@ def range_op(ctx, node, name, args):
 
     range_output = utils.port_name(base_name)
     nodes.append(Node(utils.make_onnx_identity(loop_outputs[1], range_output, name=base_name), ctx))
+    ctx.set_dtype(range_output, dtype)
     ctx.replace_all_inputs(ctx.get_nodes(), output_name, range_output)
 
     return nodes
@@ -453,6 +454,37 @@ def reshape_op5(ctx, node, name, args):
         ctx.copy_shape(node.output[0], output_cast.output[0])
         nodes.append(output_cast)
     return [input_cast] + nodes
+
+
+def less_op7(ctx, node, name, args):
+    """Elementwise Ops with Less-7 flag."""
+    nodes = [node]
+    input1_dtype = ctx.get_dtype(node.input[0])
+    input2_dtype = ctx.get_dtype(node.input[1])
+    utils.make_sure(input1_dtype == input2_dtype, "less inputs not having same dtype")
+    target_dtype = onnx_pb.TensorProto.FLOAT
+    need_case_1 = input1_dtype != target_dtype
+    if need_case_1:
+        input1_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+        input1_cast.set_attr("to", target_dtype)
+        ctx.copy_shape(node.output[0], input1_cast.output[0])
+        ctx.set_shape(input1_cast.output[0], target_dtype)
+        nodes.insert(0, input1_cast)
+
+        input2_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[1])
+        input2_cast.set_attr("to", target_dtype)
+        ctx.copy_shape(node.output[0], input2_cast.output[0])
+        ctx.set_shape(input2_cast.output[0], target_dtype)
+        nodes.insert(0, input2_cast)
+
+        op_name = utils.make_name(node.name)
+        output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
+        output_cast.set_attr("to", input1_dtype)
+        ctx.set_dtype(output_cast.output[0], input1_dtype)
+        ctx.copy_shape(node.output[0], output_cast.output[0])
+        nodes.insert(0, output_cast)
+
+    return nodes
 
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -1034,21 +1066,49 @@ def rsqrt_op(ctx, node, name, args):
 
 def expanddims_op(ctx, node, name, args):
     # T output = ExpandDims(T input, Tdim dim, @type Tdim)
-    # tensorflow already infers the output shape so we can just take it
+    # T reshaped = Reshape-1(T data, @ints consumed_inputs, @int64 shape)
+    # T expanded = Unsqueeze-1(T data, @ints axes)
     shape = ctx.get_shape(node.output[0])
-    node.type = "Reshape"
-    ctx.remove_input(node, node.input[1])
-    node.set_attr("shape", shape)
-    return node
+    if shape is not None and shape.count(-1) < 2:
+        # tensorflow already infers the output shape so we can just take it
+        shape = ctx.get_shape(node.output[0])
+        node.type = "Reshape"
+        ctx.remove_input(node, node.input[1])
+        node.set_attr("shape", shape)
+
+    # if there is more than one -1 in the shape, Reshape won't support.
+    dim_node = node.inputs[1]
+    if dim_node.is_const():
+        node.type = "Unsqueeze"
+        dim = dim_node.get_tensor_value()[0]
+        node.set_attr("axes", [dim])
+        ctx.remove_input(node, node.input[1])
+        return node
+    raise ValueError("non-const dim is not supported")
 
 
 def expanddims_op7(ctx, node, name, args):
+    # T output = ExpandDims(T input, Tdim dim, @type Tdim), dim is 0-D scalar.
+    # T reshaped = Reshape-5(T data, int64 shape)
+    # T expanded = Unsqueeze-1(T data, @ints axes)
     shape = ctx.get_shape(node.output[0])
-    shape_name = utils.make_name(node.name)
-    ctx.make_const(shape_name, np.array(shape, dtype=np.int64))
-    node.type = "Reshape"
-    node.input[1] = shape_name
-    return node
+    if shape is not None and shape.count(-1) < 2:
+        # tensorflow already infers the output shape so we can just take it
+        shape_name = utils.make_name(node.name)
+        ctx.make_const(shape_name, np.array(shape, dtype=np.int64))
+        node.type = "Reshape"
+        node.input[1] = shape_name
+        return node
+
+    # if there is more than one -1 in the shape, Reshape won't support.
+    dim_node = node.inputs[1]
+    if dim_node.is_const():
+        node.type = "Unsqueeze"
+        dim = dim_node.get_tensor_value()[0]
+        node.set_attr("axes", [dim])
+        ctx.remove_input(node, node.input[1])
+        return node
+    raise ValueError("non-const dim is not supported")
 
 
 def stridedslice_op(ctx, node, name, args):
@@ -1200,6 +1260,8 @@ def multinomial_op(ctx, node, name, args):
 
 
 def topk_op(ctx, node, name, args):
+    # T values, int32 indices = TopKV2(T input, int32 k, @bool sorted=true, @realnumbertype T)
+    # T values, I indices = TopK(T x, @int axis=-1, @int k). I: int64
     k = node.inputs[1].get_tensor_value()
     node.set_attr("k", k[0])
     node.type = "TopK"
@@ -1212,7 +1274,30 @@ def topk_op(ctx, node, name, args):
 
 def tile_op7(ctx, node, name, args):
     # onnx wants shape input to be int64
-    return _convert_shapenode_to_int64(ctx, node, 1)
+    nodes = _convert_shapenode_to_int64(ctx, node, 1)
+
+    # onnxruntime only support float input
+    input_dtype = ctx.get_dtype(node.input[0])
+    target_dtype = onnx_pb.TensorProto.FLOAT
+    need_cast = input_dtype != target_dtype
+    if need_cast:
+        new_nodes = []
+        input1_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+        input1_cast.set_attr("to", target_dtype)
+        ctx.copy_shape(node.output[0], input1_cast.output[0])
+        ctx.set_shape(input1_cast.output[0], target_dtype)
+        new_nodes.append(input1_cast)
+
+        utils.make_sure(input_dtype is not None, "tile input shape is unknown")
+        op_name = utils.make_name(node.name)
+        output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
+        output_cast.set_attr("to", input_dtype)
+        ctx.set_dtype(output_cast.output[0], input_dtype)
+        ctx.copy_shape(node.output[0], output_cast.output[0])
+        new_nodes.append(output_cast)
+
+        nodes = new_nodes + nodes
+    return nodes
 
 
 def reorganize_data_op(ctx, node, name, args):
@@ -1771,13 +1856,13 @@ _OPSET_7 = {
     "FusedBatchNorm": (fused_batchnorm_op7, []),
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
     "Greater": (broadcast_op7, []),
-    "Less": (broadcast_op7, []),
+    "Less": (less_op7, []),
     "LogicalAnd": (broadcast_op7, ["And"]),
     "LogicalOr": (broadcast_op7, ["Or"]),
     "Mul": (broadcast_op7, []),
     "Multinomial": (multinomial_op, []),
     "Pow": (direct_op, []),
-    "Range": (range_op, []),
+    "Range": (range_op7, []),
     "RealDiv": (broadcast_op7, ["Div"]),
     "ResizeBilinear": (upsample_op7, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),
