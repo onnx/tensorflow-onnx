@@ -269,3 +269,8 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
             f.write(text_format.MessageToString(model_proto))
 
     return target_path
+
+
+def make_sure(bool_val, error_msg):
+    if not bool_val:
+        raise ValueError("make_sure failure:" + error_msg)

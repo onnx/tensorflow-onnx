@@ -72,15 +72,6 @@ _INPUT_FUNC_MAPPING = {
 }
 
 
-def node_name(name):
-    """Get node name without io#."""
-    assert isinstance(name, six.text_type)
-    pos = name.find(":")
-    if pos >= 0:
-        return name[:pos]
-    return name
-
-
 def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=True):
     """Freezes the state of a session into a pruned computation graph."""
     output_names = [i.replace(":0", "") for i in output_names]
@@ -209,7 +200,8 @@ class Test(object):
     def run_onnxruntime(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
-        model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto)
+        model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto, include_test_data=True)
+        print(model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
         if self.perf:
