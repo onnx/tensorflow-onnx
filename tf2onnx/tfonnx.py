@@ -43,8 +43,7 @@ TARGET_RS4 = "rs4"
 TARGET_RS5 = "rs5"
 TARGET_RS6 = "rs6"
 TARGET_CAFFE2 = "caffe2"
-TARGET_ONNXRUNTIME = "onnxruntime"
-POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2, TARGET_ONNXRUNTIME]
+POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2]
 DEFAULT_TARGET = []
 
 
@@ -2236,11 +2235,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Slice", "Transpose"])
-
-
-def rewrite_incomplete_type_support_onnxruntime(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Tile"])
+    return rewrite_incomplete_type_support(g, ops, ["Slice", "Tile", "Transpose"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
@@ -2430,8 +2425,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         late_rewriters.append(rewrite_incomplete_type_support_rs5)
     if TARGET_RS6 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs6)
-    if TARGET_ONNXRUNTIME in target:
-        late_rewriters.append(rewrite_incomplete_type_support_onnxruntime)
     if late_rewriters:
         topological_sort(g.get_nodes())
         ops = g.get_nodes()
