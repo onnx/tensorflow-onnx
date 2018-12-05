@@ -477,13 +477,6 @@ def less_op7(ctx, node, name, args):
         ctx.set_shape(input2_cast.output[0], target_dtype)
         nodes.insert(0, input2_cast)
 
-        op_name = utils.make_name(node.name)
-        output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
-        output_cast.set_attr("to", input1_dtype)
-        ctx.set_dtype(output_cast.output[0], input1_dtype)
-        ctx.copy_shape(node.output[0], output_cast.output[0])
-        nodes.insert(0, output_cast)
-
     return nodes
 
 
