@@ -8,8 +8,8 @@ tf2onnx.shape_inference - shape inference function for tf2onnx
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
-from onnx import onnx_pb
 import logging
+from onnx import onnx_pb
 
 
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
