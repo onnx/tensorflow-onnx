@@ -31,6 +31,7 @@ from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
 from tf2onnx.rewriter.rnn_utils import is_tensor_array_op
+from tf2onnx.shape_inference import infer_shape_for_graph, set_shape_from_inputs_broadcast
 from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
@@ -397,7 +398,7 @@ def square_op(ctx, node, name, args):
 
 def squeeze_op(ctx, node, name, args):
     # T output = Squeeze(T input, @list(int) squeeze_dims)
-    # T squeezed = Squeeze(T data, @AttrType.INTS axes)
+    # T squeezed = Squeeze(T data, @AttrType.INTS axes), axes are list of positive integers.
     axis = node.get_attr("axis")
     if not axis:
         axis = node.get_attr("squeeze_dims")
@@ -407,8 +408,11 @@ def squeeze_op(ctx, node, name, args):
         del node.attr["axis"]
 
     shape = ctx.get_shape(node.input[0])
+    utils.make_sure(shape is not None, "squeeze input shape cannot be None")
+    shape_len = len(shape)
     if axis and axis.ints:
         axis = axis.ints
+        axis = [a + shape_len if a < 0 else a for a in axis]
     else:
         axis = [i for i, j in enumerate(shape) if j == 1]
     node.set_attr("axes", axis)
@@ -1255,14 +1259,26 @@ def multinomial_op(ctx, node, name, args):
 def topk_op(ctx, node, name, args):
     # T values, int32 indices = TopKV2(T input, int32 k, @bool sorted=true, @realnumbertype T)
     # T values, I indices = TopK(T x, @int axis=-1, @int k). I: int64
-    k = node.inputs[1].get_tensor_value()
-    node.set_attr("k", k[0])
-    node.type = "TopK"
-    ctx.remove_input(node, node.input[1])
+    # todo (pengwa): need change get_node_by_name to better handle cases where node output name is
+    # not strictly aligned with node name.
+    nodes = []
+    topk_node_name = node.name
+    topk_output1 = node.output[0]
+    topk_output2 = node.output[1]
 
-    # the second of TopK operator must be INT64 per ONNX requires
-    ctx.override_dtype(port_name(name, 1), onnx_pb.TensorProto.INT64)
-    return node
+    new_topk_name = utils.make_name(topk_node_name)
+    k = node.inputs[1].get_tensor_value()[0]
+    new_topk_node = Node(helper.make_node("TopK", [node.input[0]],
+                                          [topk_output1, utils.port_name(new_topk_name, 1)],
+                                          name=new_topk_name, k=k), ctx)
+    nodes.append(new_topk_node)
+
+    new_cast_name = utils.make_name(topk_node_name)
+    cast_to_int32 = Node(helper.make_node("Cast", [new_topk_node.output[1]],
+                                          [topk_output2], name=new_cast_name, to=onnx_pb.TensorProto.INT32),
+                         ctx)
+    nodes.append(cast_to_int32)
+    return nodes
 
 
 def tile_op7(ctx, node, name, args):
@@ -2153,23 +2169,29 @@ def rewrite_logical_compare_with_equal(g, ops):
                                                   to=onnx_pb.TensorProto.FLOAT), g)
                 greater_input_ids.append(new_output)
                 g.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
-                g.copy_shape(ge_op.input[0], cast_node.output[0])
+                g.copy_shape(input_id, cast_node.output[0])
                 nodes_to_append.append(cast_node)
 
         op_name = utils.make_name("Greater")
         out_name = port_name(op_name)
         g_node = Node(helper.make_node("Greater", greater_input_ids, [out_name], name=op_name), g)
+        g.set_dtype(out_name, onnx_pb.TensorProto.BOOL)
+        set_shape_from_inputs_broadcast(g, greater_input_ids, out_name)
+        new_shape = g.get_shape(out_name)
         nodes_to_append.append(g_node)
 
         op_name = utils.make_name("Equal")
         out_name = port_name(op_name)
         e_node = Node(helper.make_node("Equal", ge_op.input, [out_name], name=op_name), g)
+        g.set_dtype(out_name, onnx_pb.TensorProto.BOOL)
+        g.set_shape(out_name, new_shape)
         nodes_to_append.append(e_node)
 
         ge_op.type = "LogicalOr"
         ge_op.input[0] = g_node.output[0]
         ge_op.input[1] = e_node.output[0]
-
+        g.set_dtype(ge_op.output[0], onnx_pb.TensorProto.BOOL)
+        g.set_shape(ge_op.output[0], new_shape)
         ops.extend(nodes_to_append)
     return ops
 
@@ -2375,6 +2397,9 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
+
+    infer_shape_for_graph(g)
+
     if inputs_as_nchw:
         transpose_inputs(g, inputs_as_nchw)
 
