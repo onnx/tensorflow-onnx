@@ -487,10 +487,31 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
-    def test_sequeeze(self):
+    def test_sequeeze_no_axis_specified(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2, 1))
         x = tf.placeholder(tf.float32, [2, 2, 1], name=_TFINPUT)
         x_ = tf.squeeze(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_sequeeze_positive_axis(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2, 1))
+        x = tf.placeholder(tf.float32, [2, 2, 1], name=_TFINPUT)
+        x_ = tf.squeeze(x, [2])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_sequeeze_negative_axis(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2, 1))
+        x = tf.placeholder(tf.float32, [2, 2, 1], name=_TFINPUT)
+        x_ = tf.squeeze(x, [-1])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_sequeeze_mixed_axis(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((1, 2, 2, 1))
+        x = tf.placeholder(tf.float32, [1, 2, 2, 1], name=_TFINPUT)
+        x_ = tf.squeeze(x, [0, -1])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 

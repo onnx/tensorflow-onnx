@@ -216,6 +216,11 @@ class CustomRnnRewriter(LoopRewriterBase):
             input_ta.index_input_id = ta_read_node.input[1]
             input_ta.output_id = match.get_op("ta_read").output[0]
 
+            input_shape = self.g.get_shape(input_ta.data_input_id)
+            output_shape = self.g.get_shape(input_ta.output_id)
+            if output_shape is None and input_shape is not None:
+                self.g.set_shape(input_ta.output_id, input_shape[1:])
+
             context.input_tas.append(input_ta)
 
             log.debug("input ta %s - data input (%s) shape: %s, output (%s) shape: %s", ta_read_node.name,
@@ -534,7 +539,7 @@ class CustomRnnLateRewriter(object):
                 if shape is None:
                     shape = self.g.get_shape(init_input_id)
                     if i >= input_count - num_scan_inputs:
-                        loop_input_shape = list(shape)[2:] # delete [1, time,]
+                        loop_input_shape = list(shape)[2:]  # delete [1, time,]
                     else:
                         loop_input_shape = list(shape)
                 else:
