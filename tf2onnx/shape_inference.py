@@ -8,21 +8,15 @@ tf2onnx.shape_inference - shape inference function for tf2onnx
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
-
-import os
-import re
-import six
+from onnx import onnx_pb
 import logging
-import numpy as np
-import tensorflow as tf
-from tf2onnx import utils
-from tensorflow.core.framework import types_pb2, tensor_pb2
-from google.protobuf import text_format
-from onnx import helper, onnx_pb, defs, numpy_helper
+
+
+# pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
 
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx")
+log = logging.getLogger("tf2onnx.shape_inference")
 
 
 def infer_shape_for_graph(g):
@@ -65,9 +59,11 @@ def infer_shape_for_node(g, node):
 
     if node.type in ["Cast", "Enter", "Floor", "ReverseSequence", "Sigmoid", "Tanh", "Identity"]:
         return set_shape_from_input(g, node.input[0], node.output[0])
+
     if node.type in ["Add", "GreaterEqual", "Mul", "RealDiv", "Sub"]:
         return set_shape_from_inputs_broadcast(g, node.input, node.output[0])
-    elif node.type == "Placeholder":
+
+    if node.type == "Placeholder":
         # if placeholder shape is not found, try to get it from "shape" attribute.
         shape_attr = node.get_attr("shape")
         new_shape = None
@@ -85,7 +81,9 @@ def infer_shape_for_node(g, node):
             g.set_shape(node.output[0], new_shape)
             log.debug("set placeholder node [%s] with new shape %s", node.output[0], new_shape)
             return True
-    elif node.type == "RandomUniform":
+        return False
+
+    if node.type == "RandomUniform":
         shape_node = node.inputs[0]
         if not shape_node or shape_node.type != "Shape":
             return False
@@ -109,7 +107,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
             log.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
-    elif node.type == "Switch":
+    if node.type == "Switch":
         new_shape = g.get_shape(node.input[0])
         if new_shape is not None:
             g.set_shape(node.output[0], new_shape)
@@ -118,7 +116,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
             log.debug("set [%s] with new shape %s", node.output[1], new_shape)
             return True
         return False
-    elif node.type == "Select":
+    if node.type == "Select":
         new_shape = g.get_shape(node.input[1])
         if new_shape is None:
             new_shape = g.get_shape(node.input[2])
@@ -167,8 +165,8 @@ def broadcast_shape_inference(shape_0, shape_1):
 
     new_shape = shape_1
     l = len(shape_0)
-    if len(shape_1) == 0:
-        return shape_0
+    if l == 0:
+        return new_shape
 
     i = l - 1
     while i >= 0:
@@ -182,9 +180,9 @@ def broadcast_shape_inference(shape_0, shape_1):
             new_shape[i] = shape_0[i]
         # maybe one of them is -1, we can use the other one as real shape.
         elif shape_0[i] == -1:
-            new_shape == shape_1[i]
+            pass
         elif shape_1[i] == -1:
-            new_shape == shape_0[i]
+            new_shape[i] = shape_0[i]
         else:
             log.warning("two shapes not possible to broadcast, %s, %s", shape_0, shape_1)
             return None

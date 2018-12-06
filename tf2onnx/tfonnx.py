@@ -1259,6 +1259,8 @@ def multinomial_op(ctx, node, name, args):
 def topk_op(ctx, node, name, args):
     # T values, int32 indices = TopKV2(T input, int32 k, @bool sorted=true, @realnumbertype T)
     # T values, I indices = TopK(T x, @int axis=-1, @int k). I: int64
+    # todo (pengwa): need change get_node_by_name to better handle cases where node output name is
+    # not strictly aligned with node name.
     nodes = []
     topk_node_name = node.name
     topk_output1 = node.output[0]
@@ -1273,10 +1275,8 @@ def topk_op(ctx, node, name, args):
 
     new_cast_name = utils.make_name(topk_node_name)
     cast_to_int32 = Node(helper.make_node("Cast", [new_topk_node.output[1]],
-                                     [topk_output2],
-                                     name=new_cast_name,
-                                     to=onnx_pb.TensorProto.INT32,
-                                     ), ctx)
+                                          [topk_output2], name=new_cast_name, to=onnx_pb.TensorProto.INT32),
+                         ctx)
     nodes.append(cast_to_int32)
     return nodes
 
