@@ -6,7 +6,7 @@ Tool to find common patterns in onnx graphs.
 """
 
 # don't want to rename the tool
-# pylint: disable=invalid-name,missing-docstring
+# pylint: disable=invalid-name,missing-docstring,too-many-nested-blocks
 
 from __future__ import division
 from __future__ import print_function
@@ -135,6 +135,7 @@ def get_args():
     parser.add_argument("--summary", help="write combined to csv")
     parser.add_argument("--fold", action="store_true", help="fold smaller sub graphs")
     parser.add_argument("--max-nodes", type=int, default=6, help="number of max nodes in a pattern")
+    parser.add_argument("--min-frequency", type=int, default=2, help="show patterns number seen at least this")
     parser.add_argument("infile", nargs="*", help='event files')
     args = parser.parse_args()
     return args
@@ -155,11 +156,13 @@ def main():
                 summary_sorted = sorted(summary.items(), key=lambda x: x[1], reverse=True)
                 name = os.path.basename(fname)
                 for k, v in summary_sorted:
-                    print("{},{},{}".format(name, v, k))
+                    if v > args.min_frequency:
+                        print("{},{},{}".format(name, v, k))
                 if args.output:
                     for k, v in summary_sorted:
-                        l = len(k.split(","))
-                        fp.write("{},{},{},{},\"{}\"\n".format(name, v, n, l, k))
+                        if v > args.min_frequency:
+                            l = len(k.split(","))
+                            fp.write("{},{},{},{},\"{}\"\n".format(name, v, n, l, k))
             else:
                 read_csv(fname, summary)
 
@@ -172,11 +175,13 @@ def main():
     if args.summary:
         summary_sorted = sorted(summary_combined.items(), key=lambda x: x[1], reverse=True)
         for k, v in summary_sorted:
-            print("combined,{},{}".format(v, k))
+            if v > args.min_frequency:
+                print("combined,{},{}".format(v, k))
         with open(args.summary, "w") as fp:
             for k, v in summary_sorted:
-                l = len(k.split(","))
-                fp.write("{},{},{},{},\"{}\"\n".format("combined", v, 0, l, k))
+                if v > args.min_frequency:
+                    l = len(k.split(","))
+                    fp.write("{},{},{},{},\"{}\"\n".format("combined", v, 0, l, k))
 
 
 if __name__ == "__main__":

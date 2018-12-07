@@ -1866,6 +1866,7 @@ _OPSET_8 = {
 }
 
 _OPSET_9 = {
+    "Erf": (direct_op, []),
     "Fill": (fill_op, []),
 }
 
