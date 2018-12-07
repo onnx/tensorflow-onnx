@@ -178,8 +178,6 @@ def get_shape(node):
         else:
             shape = get_tf_node_attr(node, "shape")
             dims = [d.size for d in shape.dim]
-        if shape[0] is None or shape[0] == -1:
-            shape[0] = 1
     except:  # pylint: disable=bare-except
         pass
     return dims
