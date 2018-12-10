@@ -2150,50 +2150,54 @@ def rewrite_constant_fold(g, ops):
 
 
 def rewrite_logical_compare_with_equal(g, ops):
-    pattern = OpTypePattern('GreaterEqual', name='greater_equal')
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        nodes_to_append = []
-        ge_op = match.get_op('greater_equal')
-        data_type = g.get_dtype(ge_op.input[0])
-        greater_input_ids = ge_op.input
-        need_cast = data_type not in (onnx_pb.TensorProto.FLOAT16,
-                                      onnx_pb.TensorProto.FLOAT,
-                                      onnx_pb.TensorProto.DOUBLE)
-        if need_cast:
-            greater_input_ids = []
-            for input_id in ge_op.input:
-                name = utils.make_name(ge_op.name)
-                new_output = port_name(name)
-                cast_node = Node(helper.make_node("Cast", [input_id], [new_output], name=name,
-                                                  to=onnx_pb.TensorProto.FLOAT), g)
-                greater_input_ids.append(new_output)
-                g.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
-                g.copy_shape(input_id, cast_node.output[0])
-                nodes_to_append.append(cast_node)
+    patterns = {"GreaterEqual": "Greater",
+                "LessEqual": "Less"}
+    for p in patterns:
+        pattern = OpTypePattern(p, name='compare_with_equal')
+        compare_name = patterns[p]
+        matcher = GraphMatcher(pattern)
+        match_results = list(matcher.match_ops(ops))
+        for match in match_results:
+            nodes_to_append = []
+            compare_e_op = match.get_op('compare_with_equal')
+            data_type = g.get_dtype(compare_e_op.input[0])
+            compare_input_ids = compare_e_op.input
+            need_cast = data_type not in (onnx_pb.TensorProto.FLOAT16,
+                                          onnx_pb.TensorProto.FLOAT,
+                                          onnx_pb.TensorProto.DOUBLE)
+            if need_cast:
+                compare_input_ids = []
+                for input_id in compare_e_op.input:
+                    name = utils.make_name(compare_e_op.name)
+                    new_output = port_name(name)
+                    cast_node = Node(helper.make_node("Cast", [input_id], [new_output], name=name,
+                                                      to=onnx_pb.TensorProto.FLOAT), g)
+                    compare_input_ids.append(new_output)
+                    g.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
+                    g.copy_shape(input_id, cast_node.output[0])
+                    nodes_to_append.append(cast_node)
 
-        op_name = utils.make_name("Greater")
-        out_name = port_name(op_name)
-        g_node = Node(helper.make_node("Greater", greater_input_ids, [out_name], name=op_name), g)
-        g.set_dtype(out_name, onnx_pb.TensorProto.BOOL)
-        set_shape_from_inputs_broadcast(g, greater_input_ids, out_name)
-        new_shape = g.get_shape(out_name)
-        nodes_to_append.append(g_node)
+            op_name = utils.make_name(compare_name)
+            out_name = port_name(op_name)
+            g_node = Node(helper.make_node(compare_name, compare_input_ids, [out_name], name=op_name), g)
+            g.set_dtype(out_name, onnx_pb.TensorProto.BOOL)
+            set_shape_from_inputs_broadcast(g, compare_input_ids, out_name)
+            new_shape = g.get_shape(out_name)
+            nodes_to_append.append(g_node)
 
-        op_name = utils.make_name("Equal")
-        out_name = port_name(op_name)
-        e_node = Node(helper.make_node("Equal", ge_op.input, [out_name], name=op_name), g)
-        g.set_dtype(out_name, onnx_pb.TensorProto.BOOL)
-        g.set_shape(out_name, new_shape)
-        nodes_to_append.append(e_node)
+            op_name = utils.make_name("Equal")
+            out_name = port_name(op_name)
+            e_node = Node(helper.make_node("Equal", compare_e_op.input, [out_name], name=op_name), g)
+            g.set_dtype(out_name, onnx_pb.TensorProto.BOOL)
+            g.set_shape(out_name, new_shape)
+            nodes_to_append.append(e_node)
 
-        ge_op.type = "LogicalOr"
-        ge_op.input[0] = g_node.output[0]
-        ge_op.input[1] = e_node.output[0]
-        g.set_dtype(ge_op.output[0], onnx_pb.TensorProto.BOOL)
-        g.set_shape(ge_op.output[0], new_shape)
-        ops.extend(nodes_to_append)
+            compare_e_op.type = "LogicalOr"
+            compare_e_op.input[0] = g_node.output[0]
+            compare_e_op.input[1] = e_node.output[0]
+            g.set_dtype(compare_e_op.output[0], onnx_pb.TensorProto.BOOL)
+            g.set_shape(compare_e_op.output[0], new_shape)
+            ops.extend(nodes_to_append)
     return ops
 
 

@@ -509,17 +509,15 @@ class CustomRnnLateRewriter(object):
 
             body_graph_meta = BodyGraphDict.pop_body_graph_info(scan_node.name)
             onnx_nodes, _ = LoopRewriterBase.find_subgraph(body_graph_meta, self.g)
-            nodes_to_remove.extend(onnx_nodes)
 
             log.debug("start creating body graph for scan node %s ", scan_node.name)
-            body_graph_initializers = {}
             const_nodes = [n for n in onnx_nodes if n.type in ("Const", "ConstV2")]
             for n in const_nodes:
                 # when set nodes, Const should be removed, they need be replaced as initializers.
-                body_graph_initializers[n.output[0]] = self.g.initializers[n.output[0]]
                 onnx_nodes.remove(n)
 
             onnx_nodes = set(onnx_nodes)
+            nodes_to_remove.extend(onnx_nodes)
 
             ops = []
             for op in onnx_nodes:
@@ -527,7 +525,6 @@ class CustomRnnLateRewriter(object):
                 ops.append(onnx_op)
 
             body_g = Graph(ops, output_shapes=self.g._output_shapes, dtypes=self.g._dtypes)
-            body_g._initializers = body_graph_initializers
 
             log.debug("start preparing body graph inputs nodes")
             temp_nodes = body_g.get_nodes()
@@ -569,16 +566,12 @@ class CustomRnnLateRewriter(object):
 
             log.debug("start make graph based on body graph nodes")
             body_g.output_names = new_output_names
-            graph = body_g.make_graph("scan body graph")
+            graph = body_g.make_graph("scan body graph", graph_name=scan_node.name + "_body_graph")
             scan_node.set_attr("body", graph)
 
         # remove nodes in body graph from g
         for n in set(nodes_to_remove):
             if n in nodes:
                 nodes.remove(n)
-            elif self.g.is_initializer(n.output[0]):
-                del self.g.initializers[n.output[0]]
-            else:
-                raise ValueError("error when removing nodes")
 
         return nodes

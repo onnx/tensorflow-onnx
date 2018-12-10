@@ -1208,6 +1208,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    def test_where_scalar(self):
+        x_val = np.array(6, dtype=np.int32)
+        true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
+                               dtype=np.int32)
+        false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
+                                dtype=np.int32)
+        x = tf.placeholder(tf.int32, [], name=_TFINPUT)
+        picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
+        _ = tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def test_shape_int32(self):
         x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]], dtype=np.float32)
         x = tf.placeholder(tf.float32, shape=[None, 2, 3], name=_TFINPUT)
