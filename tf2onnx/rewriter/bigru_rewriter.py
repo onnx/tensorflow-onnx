@@ -104,7 +104,7 @@ def process_bigru(g, bi_grus):
             n for n in old_x_consumers if n.type == "GRU"]
         if not old_x_has_gru_as_consumer:
             log.debug("plan to remove useless reverse op in bw")
-            reverse_node = g.get_node_by_name(gru_bw_old_x)
+            reverse_node = g.get_node_by_output(gru_bw_old_x)
 
             if reverse_node.type == "Transpose":
                 reverse_node = reverse_node.inputs[0]

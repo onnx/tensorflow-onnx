@@ -121,7 +121,7 @@ class GRUUnitRewriter(UnitRewriterBase):
     def _output_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         ta_write_nodes = [c for c in identity_consumers if is_tensor_array_write_op(c)]
         if len(ta_write_nodes) == 1:
-            enter_target_node = self.g.get_node_by_name(enter_target_node_input_id)
+            enter_target_node = self.g.get_node_by_output(enter_target_node_input_id)
             if is_tensor_array_op(enter_target_node):
                 log.debug("found output switch node")
                 return enter_target_node_input_id
@@ -188,7 +188,7 @@ class GRUUnitRewriter(UnitRewriterBase):
     def get_rnn_input_blacklist(self, rnn_weights, rnn_props):
         var_init_nodes = []
         for _, init_input_id in rnn_props.var_initializers.items():
-            init_node = self.g.get_node_by_name(init_input_id)
+            init_node = self.g.get_node_by_output(init_input_id)
             var_init_nodes.append(init_node)
         blacklist_inputs = []
         blacklist_inputs.extend(var_init_nodes)
@@ -266,7 +266,7 @@ class GRUUnitRewriter(UnitRewriterBase):
         if fill_ch_init_node:
             return fill_ch_init_node.output[0]
 
-        node = self.g.get_node_by_name(initializer_input_id)
+        node = self.g.get_node_by_output(initializer_input_id)
         if node.is_const():
             val = node.get_tensor_value()
             initial_name = utils.make_name("Const")
