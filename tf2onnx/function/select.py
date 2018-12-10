@@ -33,49 +33,56 @@ def select_op8(ctx, node, name, args):
     utils.make_sure(condition_shape is not None, "condition shape is None")
     rank = len(condition_shape)
 
-    # create nodes getting shape of condition
-    shape_node_output_shape = [rank]
-    shape_node = _make_node(ctx, "Shape", [node.input[0]], op_name_scope=node.name,
-                            shapes=[shape_node_output_shape], dtypes=[onnx_pb.TensorProto.INT64])
-    nodes.append(shape_node)
+    utils.make_sure(rank >= 0, "rank should be >= 0")
+    val_output_id = None
+    if rank > 0:
+        # create nodes getting shape of condition
+        shape_node_output_shape = [rank]
+        shape_node = _make_node(ctx, "Shape", [node.input[0]], op_name_scope=node.name,
+                                shapes=[shape_node_output_shape], dtypes=[onnx_pb.TensorProto.INT64])
+        nodes.append(shape_node)
 
-    # todo(pengwa), move those leveraging rewrite_incomplete_type_support_onnxruntime after shape inferencing
-    # bug is fixed.
-    # workaround: onnxruntime does not support Split-2, add cases before and after.
-    target_dtype = onnx_pb.TensorProto.FLOAT
-    shape_f_node = _make_node(ctx, "Cast", [shape_node.output[0]], attr={"to": target_dtype}, op_name_scope=node.name,
-                              shapes=[shape_node_output_shape], dtypes=[target_dtype])
-    nodes.append(shape_f_node)
+        # todo(pengwa), move those leveraging rewrite_incomplete_type_support_onnxruntime after shape inferencing
+        # bug is fixed.
+        # workaround: onnxruntime does not support Split-2, add cases before and after.
+        target_dtype = onnx_pb.TensorProto.FLOAT
+        shape_f_node = _make_node(ctx, "Cast", [shape_node.output[0]], attr={"to": target_dtype},
+                                  op_name_scope=node.name, shapes=[shape_node_output_shape], dtypes=[target_dtype])
+        nodes.append(shape_f_node)
 
-    split_attr = [1 for i in range(rank)]
-    output_shapes = [[1] for i in range(rank)]
-    output_dtypes = [target_dtype for i in range(rank)]
-    split_node = _make_node(ctx, "Split", [shape_f_node.output[0]], output_count=rank, attr={"split": split_attr},
-                            op_name_scope=node.name, shapes=output_shapes, dtypes=output_dtypes)
-    nodes.append(split_node)
+        split_attr = [1 for i in range(rank)]
+        output_shapes = [[1] for i in range(rank)]
+        output_dtypes = [target_dtype for i in range(rank)]
+        split_node = _make_node(ctx, "Split", [shape_f_node.output[0]], output_count=rank, attr={"split": split_attr},
+                                op_name_scope=node.name, shapes=output_shapes, dtypes=output_dtypes)
+        nodes.append(split_node)
 
-    trip_cnts = []
-    for i in range(rank):
-        output_id = split_node.output[i]
-        output_shape = ctx.get_shape(output_id)
-        target_dtype = onnx_pb.TensorProto.INT64
-        shape_i_node = _make_node(ctx, "Cast", [output_id], attr={"to": target_dtype}, op_name_scope=node.name,
-                                  shapes=[output_shape], dtypes=[target_dtype])
-        trip_cnts.append(shape_i_node.output[0])
-        nodes.append(shape_i_node)
-    # workaround ends
+        trip_cnts = []
+        for i in range(rank):
+            output_id = split_node.output[i]
+            output_shape = ctx.get_shape(output_id)
+            target_dtype = onnx_pb.TensorProto.INT64
+            shape_i_node = _make_node(ctx, "Cast", [output_id], attr={"to": target_dtype}, op_name_scope=node.name,
+                                      shapes=[output_shape], dtypes=[target_dtype])
+            trip_cnts.append(shape_i_node.output[0])
+            nodes.append(shape_i_node)
+        # workaround ends
 
-    onnx_nodes = create_loop_op(node.input, true_data_type, true_data_shape, trip_cnts, rank)
-    new_nodes = [Node(n, ctx) for n in onnx_nodes]
-    loop_node = new_nodes[-1]
-    loop_scan_output_id = loop_node.output[1]
-    ctx.copy_shape(node.output[0], loop_scan_output_id)
+        onnx_nodes = create_loop_op(node.input, true_data_type, true_data_shape, trip_cnts, rank)
+        new_nodes = [Node(n, ctx, skip_conversion=True) for n in onnx_nodes]
+        nodes.extend(new_nodes)
+        loop_node = new_nodes[-1]
+        val_output_id = loop_node.output[1]
+    elif rank == 0:
+        if_onnx_node, val_output_id = create_if_op(node.input, true_data_type, true_data_shape)
+        if_node = Node(if_onnx_node, ctx, skip_conversion=True)
+        nodes.append(if_node)
+
+    ctx.copy_shape(node.output[0], val_output_id)
     ctx.set_dtype(node.output[0], true_data_type)
 
-    nodes.extend(new_nodes)
-
-    output_node = _make_node(ctx, "Identity", [loop_scan_output_id], name=node.name,
-                             shapes=[ctx.get_shape(loop_scan_output_id)], dtypes=[true_data_type])
+    output_node = _make_node(ctx, "Identity", [val_output_id], name=node.name,
+                             shapes=[ctx.get_shape(val_output_id)], dtypes=[true_data_type])
     nodes.append(output_node)
 
     return nodes
@@ -112,7 +119,7 @@ def create_loop_op(gather_input_ids, output_type, output_shape, trip_count_input
                   ]
     loop_scan_output_id = port_name(op_name, 1)
 
-    loop_body = create_loop_body_graph(gather_input_ids, output_type, output_shape, trip_count_input_ids, rank)
+    loop_body = create_loop_body_graph(gather_input_ids, output_type, output_shape, trip_count_input_ids, rank, op_name)
     loop_node = helper.make_node("Loop", loop_inputs, [fake_var_output_id, loop_scan_output_id],
                                  name=op_name, body=loop_body)
     nodes.append(loop_node)
@@ -136,7 +143,7 @@ def get_inputs_for_current_iteration(input_id, iter_index):
     return nodes, cur_cond_val_out_name
 
 
-def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, trip_count_input_ids, rank):
+def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, trip_count_input_ids, rank, loop_name):
     nodes = []
     iter_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
@@ -173,8 +180,7 @@ def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, tri
         output_id = loop_1.output[1]
         nodes.extend(nodes_1)
     elif rank == 0:
-        if_node, if_node_output_id = create_if_op(input_ids_for_current_iter, output_data_type, output_shape[1:],
-                                                  trip_count_input_ids)
+        if_node, if_node_output_id = create_if_op(input_ids_for_current_iter, output_data_type, output_shape[1:])
         output_id = if_node_output_id
         nodes.append(if_node)
 
@@ -212,15 +218,15 @@ def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, tri
                      helper.make_tensor_value_info(fake_var_output_id, TensorProto.FLOAT, ()),
                      helper.make_tensor_value_info(loop_output_id, output_data_type, output_shape[1:])]
 
-    body_graph = helper.make_graph(nodes, "loop-body-graph", graph_inputs, graph_outputs)
+    body_graph = helper.make_graph(nodes, utils.make_name(loop_name + "-body-graph"), graph_inputs,
+                                   graph_outputs)
     return body_graph
 
 
-def create_if_op(input_ids, output_data_type, output_shape, trip_count_input_ids):
-    true_graph = create_body_graph_for_if_branch(output_data_type, output_shape, trip_count_input_ids, input_ids[1])
-    false_graph = create_body_graph_for_if_branch(output_data_type, output_shape, trip_count_input_ids, input_ids[2])
-
+def create_if_op(input_ids, output_data_type, output_shape):
     op_name = utils.make_name("If")
+    true_graph = create_body_graph_for_if_branch(output_data_type, output_shape, input_ids[1], op_name)
+    false_graph = create_body_graph_for_if_branch(output_data_type, output_shape, input_ids[2], op_name)
     out_name = port_name(op_name)
 
     # output a scalar
@@ -229,14 +235,15 @@ def create_if_op(input_ids, output_data_type, output_shape, trip_count_input_ids
     return if_node, out_name
 
 
-def create_body_graph_for_if_branch(data_type, output_shape, trip_count_input_ids, chosen_cur_cond_val_out_name):
+def create_body_graph_for_if_branch(data_type, output_shape, chosen_cur_cond_val_out_name, op_name):
     nodes = []
 
+    name = utils.make_name("Identity")
     identity_node = helper.make_node(
         'Identity',
         [chosen_cur_cond_val_out_name],
         ['y'],
-        name=utils.make_name("Identity")
+        name=name
     )
     nodes.append(identity_node)
 
@@ -245,7 +252,7 @@ def create_body_graph_for_if_branch(data_type, output_shape, trip_count_input_id
 
     graph_def = helper.make_graph(
         nodes,
-        'if-body-graph',
+        utils.make_name(op_name +'-body-graph'),
         [],
         [y],
     )

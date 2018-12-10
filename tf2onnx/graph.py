@@ -510,7 +510,7 @@ class Graph(object):
         ret = [x for _, x in sorted(zip(label, ops))]
         self.set_nodes(ret)
 
-    def make_graph(self, doc):
+    def make_graph(self, doc, graph_name="tf2onnx"):
         """
         Create GraphProto for onnx from internal graph.
         Args:
@@ -560,7 +560,7 @@ class Graph(object):
         input_with_initializers.extend(list(self._model_inputs.values()))
 
         # create model proto
-        graph = helper.make_graph(ops, "tf2onnx",
+        graph = helper.make_graph(ops, graph_name,
                                   input_with_initializers,
                                   output_tensor_values,
                                   initializer=initializers,
@@ -568,7 +568,7 @@ class Graph(object):
 
         return graph
 
-    def make_model(self, doc, optimize=False):
+    def make_model(self, doc, optimize=False, graph_name="tf2onnx"):
         """
         Create final ModelProto for onnx from internal graph.
         Args:
@@ -576,7 +576,7 @@ class Graph(object):
             doc: text for doc string of the model
             output_names: list of model outputs
         """
-        graph = self.make_graph(doc)
+        graph = self.make_graph(doc, graph_name)
         kwargs = {"producer_name": "tf2onnx",
                   "producer_version": __version__}
         opsets = []
