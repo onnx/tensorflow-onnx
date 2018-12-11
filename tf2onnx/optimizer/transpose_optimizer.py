@@ -112,7 +112,7 @@ class TransposeOptimizer(object):
                     else:
                         self._remove_useless_tranpose(op)
         self._g.update_proto()
-        #self._g.topological_sort(self._g.get_nodes())
+        self._g.topological_sort(self._g.get_nodes())
 
     def optimize(self):
         previous_counter = self._g.dump_node_statistics()

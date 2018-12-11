@@ -388,7 +388,7 @@ class Graph(object):
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **raw_attr)
         node = Node(onnx_node, self, skip_conversion=skip_conversion)
         if onnx_attrs:
-            [node.set_attr_onnx(a) for a in onnx_attrs]
+            _ = [node.set_attr_onnx(a) for a in onnx_attrs]
 
         if shapes:
             utils.make_sure(len(shapes) == output_count, "output shape count not equal to output count")
