@@ -166,8 +166,7 @@ def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
         init_name = utils.make_name("initial")
         init_node = g.make_const(init_name, initial_val, skip_conversion=True)
     else:
-        init_node = g.make_node("Concat", [fw_init_input_id, bw_init_input_id],
-                                attr={"axis": 0})
+        init_node = g.make_node("Concat", [fw_init_input_id, bw_init_input_id], attr={"axis": 0})
         to_append.append(init_node)
 
     return init_node

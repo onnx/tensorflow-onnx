@@ -112,7 +112,7 @@ class TransposeOptimizer(object):
                     else:
                         self._remove_useless_tranpose(op)
         self._g.update_proto()
-        self._g.topological_sort(self._g.get_nodes())
+        #self._g.topological_sort(self._g.get_nodes())
 
     def optimize(self):
         previous_counter = self._g.dump_node_statistics()
@@ -253,7 +253,7 @@ class TransposeOptimizer(object):
         # move transpose into branches to let Transposes can be "handled" in each branch
         to_append = []
         for n in out_nodes:
-            branch_trans = self._g.make_node("Transpose", [trans.input[0]], attr=trans.op.attribute)
+            branch_trans = self._g.make_node("Transpose", [trans.input[0]], attr=trans.attr_onnx)
             self._g.replace_input(n, trans.output[0], branch_trans.output[0])
 
             to_append.append(branch_trans)
@@ -309,7 +309,7 @@ class TransposeOptimizer(object):
         added_node = []
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nhwc_trans_consumers
         for input_id, n in non_nhwc_trans_inputs:
-            nchw_node = self._g.make_node("Transpose", [node.output[0]], attr={"perm": [0, 3, 1, 2]})
+            nchw_node = self._g.make_node("Transpose", [input_id], attr={"perm": [0, 3, 1, 2]})
             nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
             self._g.replace_input(node, input_id, nhwc_node.output[0])
             added_node.extend([nchw_node, nhwc_node])
@@ -325,8 +325,7 @@ class TransposeOptimizer(object):
                 # if Conv or ConvTranspose's bias input is not set, then we set, otherwise, we don't set
                 # todo: maybe we can add already set bias with the input??? try later
                 conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
-                conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.op.attribute)
-
+                conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.attr_onnx)
                 ops = self._g.get_nodes()
                 trans.input[0] = utils.port_name(conv_node.name)
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])

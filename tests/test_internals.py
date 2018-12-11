@@ -19,6 +19,7 @@ import tensorflow as tf
 import tf2onnx
 import tf2onnx.utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.graph import Graph
 
 # pylint: disable=missing-docstring
 

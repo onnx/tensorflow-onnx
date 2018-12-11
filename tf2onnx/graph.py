@@ -13,7 +13,7 @@ import collections
 
 import numpy as np
 import six
-from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto
+from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto, AttributeProto
 
 from tf2onnx import utils, __version__
 from tf2onnx.utils import node_name, port_name, find_opset
@@ -68,6 +68,14 @@ class Node(object):
     @property
     def attr(self):
         return self._attr
+
+    @property
+    def attr_onnx(self):
+        onnx_attrs = {}
+        for a in self._attr.values():
+            if a.name in utils.ONNX_VALID_ATTRIBUTES:
+                onnx_attrs[a.name] = a
+        return onnx_attrs
 
     @property
     def name(self):
@@ -131,6 +139,9 @@ class Node(object):
 
     def set_attr(self, name, value):
         self.attr[name] = helper.make_attribute(name, value)
+
+    def set_attr_onnx(self, value):
+        self.attr[value.name] = value
 
     def set_deleted(self):
         self.type = "@@DELETED@@"
@@ -366,8 +377,18 @@ class Graph(object):
 
         if outputs is None:
             outputs = [name + ":" + str(i) for i in range(output_count)]
-        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **attr)
+
+        raw_attr = {}
+        onnx_attrs = []
+        for a, v in attr.items():
+            if isinstance(v, AttributeProto):
+                onnx_attrs.append(v)
+            else:
+                raw_attr[a] = v
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **raw_attr)
         node = Node(onnx_node, self, skip_conversion=skip_conversion)
+        if onnx_attrs:
+            [node.set_attr_onnx(a) for a in onnx_attrs]
 
         if shapes:
             utils.make_sure(len(shapes) == output_count, "output shape count not equal to output count")
@@ -395,10 +416,7 @@ class Graph(object):
         for op in self.get_nodes():
             onnx_op = op.op
             del onnx_op.attribute[:]
-            attr = []
-            for a in op.attr.values():
-                if a.name in utils.ONNX_VALID_ATTRIBUTES:
-                    attr.append(a)
+            attr = [a for a in op.attr_onnx.values()]
             if attr:
                 onnx_op.attribute.extend(attr)
 
