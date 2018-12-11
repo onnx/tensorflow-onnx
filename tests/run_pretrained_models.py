@@ -14,6 +14,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import traceback
 import zipfile
 
 import numpy as np
@@ -201,7 +202,7 @@ class Test(object):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
         model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto, include_test_data=True)
-        print(model_path)
+        print("\t\t" + model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
         if self.perf:
@@ -314,7 +315,8 @@ class Test(object):
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
             except Exception as ex:
-                print("\tto_onnx", "FAIL", ex)
+                tb = traceback.format_exc()
+                print("\tto_onnx", "FAIL", ex, tb)
 
         try:
             onnx_results = None

@@ -12,11 +12,10 @@ import sys
 import traceback
 from onnx import helper, onnx_pb
 import numpy as np
-from tf2onnx.graph import Graph, Node
+from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
-from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op, \
-     make_onnx_node
+from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op
 from tf2onnx.rewriter.rnn_utils import BodyGraphDict, REWRITER_RESULT, SubGraphMetadata
 from tf2onnx.tfonnx import utils
 
@@ -216,6 +215,11 @@ class CustomRnnRewriter(LoopRewriterBase):
             input_ta.index_input_id = ta_read_node.input[1]
             input_ta.output_id = match.get_op("ta_read").output[0]
 
+            input_shape = self.g.get_shape(input_ta.data_input_id)
+            output_shape = self.g.get_shape(input_ta.output_id)
+            if output_shape is None and input_shape is not None:
+                self.g.set_shape(input_ta.output_id, input_shape[1:])
+
             context.input_tas.append(input_ta)
 
             log.debug("input ta %s - data input (%s) shape: %s, output (%s) shape: %s", ta_read_node.name,
@@ -293,10 +297,10 @@ class CustomRnnRewriter(LoopRewriterBase):
         # here we did not give the sequence_length, because
         # current batch size is 1, not original batch size
         # original seq_length will be used by the loop body of Scan op.
-        scan_node = make_onnx_node(self.g, "Scan", [""] + scan_props.initial_state_and_scan_inputs,
-                                   attr={"num_scan_inputs": len(scan_props.loop_scan_inputs)},
-                                   output_count=len(scan_props.loop_state_outputs + scan_props.loop_scan_outputs),
-                                   skip_conversion=True)
+        scan_node = self.g.make_node("Scan", [""] + scan_props.initial_state_and_scan_inputs,
+                                     attr={"num_scan_inputs": len(scan_props.loop_scan_inputs)},
+                                     output_count=len(scan_props.loop_state_outputs + scan_props.loop_scan_outputs),
+                                     skip_conversion=True)
 
         # the first state var is time-iterator.
         index = 0
@@ -389,7 +393,7 @@ class CustomRnnRewriter(LoopRewriterBase):
 
     def _adapt_scan_sequence_input_or_output(self, target_name, input_id, handle_output=False):
         nodes_to_add = []
-        shape_node = make_onnx_node(self.g, "Shape", [input_id])
+        shape_node = self.g.make_node("Shape", [input_id])
         nodes_to_add.append(shape_node)
         inferred_shape = self.g.get_shape(input_id)
         if handle_output is True:
@@ -402,16 +406,16 @@ class CustomRnnRewriter(LoopRewriterBase):
             else:
                 # otherwise, get the dim dynamically, e.g. remove the fake batch size (e.g.1)
                 # from [1, time, real-batch, ...]
-                origin_shape_node = make_onnx_node(self.g, "Cast", [shape_node.output[0]],
-                                                   {"to": onnx_pb.TensorProto.FLOAT})
+                origin_shape_node = self.g.make_node("Cast", [shape_node.output[0]],
+                                                     {"to": onnx_pb.TensorProto.FLOAT})
                 nodes_to_add.append(origin_shape_node)
 
-                sliced_shape_node = make_onnx_node(self.g, "Slice", [origin_shape_node.output[0]],
-                                                   {"axes": [0], "starts": [1], "ends": [sys.maxsize]})
+                sliced_shape_node = self.g.make_node("Slice", [origin_shape_node.output[0]],
+                                                     {"axes": [0], "starts": [1], "ends": [sys.maxsize]})
                 nodes_to_add.append(sliced_shape_node)
 
-                new_shape_node = make_onnx_node(self.g, "Cast", [sliced_shape_node.output[0]],
-                                                {"to": onnx_pb.TensorProto.INT64})
+                new_shape_node = self.g.make_node("Cast", [sliced_shape_node.output[0]],
+                                                  {"to": onnx_pb.TensorProto.INT64})
                 nodes_to_add.append(new_shape_node)
 
             new_shape = inferred_shape[1:]
@@ -424,17 +428,17 @@ class CustomRnnRewriter(LoopRewriterBase):
                 # add a fake batch size : 1
                 fake_batch_size_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
                                                          np.array([1,], dtype=np.int64))
-                new_shape_node = make_onnx_node(self.g, "Concat",
-                                                [fake_batch_size_node.output[0], shape_node.output[0]],
-                                                {"axis": 0})
+                new_shape_node = self.g.make_node("Concat",
+                                                  [fake_batch_size_node.output[0], shape_node.output[0]],
+                                                  attr={"axis": 0})
                 nodes_to_add.append(new_shape_node)
             new_shape = [1] + inferred_shape
 
-        reshape_node = make_onnx_node(self.g, "Reshape", [input_id, new_shape_node.output[0]],
-                                      skip_conversion=True, op_name_scope=target_name)
+        reshape_node = self.g.make_node("Reshape", [input_id, new_shape_node.output[0]],
+                                        shapes=[new_shape],
+                                        dtypes=[self.g.get_dtype(input_id)],
+                                        op_name_scope=target_name)
         nodes_to_add.append(reshape_node)
-        self.g.set_shape(reshape_node.output[0], new_shape)
-        self.g.set_dtype(reshape_node.output[0], self.g.get_dtype(input_id))
         log.debug("create Reshape for scan output %s, with output shape %s",
                   reshape_node.output[0], new_shape)
         return nodes_to_add
@@ -461,26 +465,22 @@ class CustomRnnRewriter(LoopRewriterBase):
         return var, nodes_to_append
 
     def _create_unsqueeze_node(self, target_name, input_id):
-        unsqueeze_node = make_onnx_node(self.g, "Unsqueeze", [input_id], attr={"axes": [0]},
-                                        skip_conversion=True, op_name_scope=target_name)
         input_shape = self.g.get_shape(input_id)
-        if input_shape is None:
-            raise ValueError(input_id + " is none")
-        input_shape = [1] + input_shape
-        self.g.set_shape(unsqueeze_node.output[0], input_shape)
-        self.g.set_dtype(unsqueeze_node.output[0], self.g.get_dtype(input_id))
+        utils.make_sure(input_shape is not None, input_id + "'s shape is none")
+        output_shape = [1] + input_shape
+        unsqueeze_node = self.g.make_node("Unsqueeze", [input_id], attr={"axes": [0]},
+                                          shapes=[output_shape], dtypes=[self.g.get_dtype(input_id)],
+                                          op_name_scope=target_name)
 
         return unsqueeze_node
 
     def _create_squeeze_node(self, target_name, input_id):
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [input_id], attr={"axes": [0]},
-                                      skip_conversion=True, op_name_scope=target_name)
         input_shape = self.g.get_shape(input_id)
-        if input_shape is None:
-            raise ValueError(input_id + " is none")
-        input_shape = list(input_shape)[1:]
-        self.g.set_shape(squeeze_node.output[0], input_shape)
-        self.g.set_dtype(squeeze_node.output[0], self.g.get_dtype(input_id))
+        utils.make_sure(input_shape is not None, input_id + "'s shape is none")
+        output_shape = list(input_shape)[1:]
+        squeeze_node = self.g.make_node("Squeeze", [input_id], attr={"axes": [0]},
+                                        shapes=[output_shape], dtypes=[self.g.get_dtype(input_id)],
+                                        op_name_scope=target_name)
 
         return squeeze_node
     # end of time var workaround
@@ -504,17 +504,15 @@ class CustomRnnLateRewriter(object):
 
             body_graph_meta = BodyGraphDict.pop_body_graph_info(scan_node.name)
             onnx_nodes, _ = LoopRewriterBase.find_subgraph(body_graph_meta, self.g)
-            nodes_to_remove.extend(onnx_nodes)
 
             log.debug("start creating body graph for scan node %s ", scan_node.name)
-            body_graph_initializers = {}
             const_nodes = [n for n in onnx_nodes if n.type in ("Const", "ConstV2")]
             for n in const_nodes:
                 # when set nodes, Const should be removed, they need be replaced as initializers.
-                body_graph_initializers[n.output[0]] = self.g.initializers[n.output[0]]
                 onnx_nodes.remove(n)
 
             onnx_nodes = set(onnx_nodes)
+            nodes_to_remove.extend(onnx_nodes)
 
             ops = []
             for op in onnx_nodes:
@@ -522,7 +520,6 @@ class CustomRnnLateRewriter(object):
                 ops.append(onnx_op)
 
             body_g = Graph(ops, output_shapes=self.g._output_shapes, dtypes=self.g._dtypes)
-            body_g._initializers = body_graph_initializers
 
             log.debug("start preparing body graph inputs nodes")
             temp_nodes = body_g.get_nodes()
@@ -534,7 +531,7 @@ class CustomRnnLateRewriter(object):
                 if shape is None:
                     shape = self.g.get_shape(init_input_id)
                     if i >= input_count - num_scan_inputs:
-                        loop_input_shape = list(shape)[2:] # delete [1, time,]
+                        loop_input_shape = list(shape)[2:]  # delete [1, time,]
                     else:
                         loop_input_shape = list(shape)
                 else:
@@ -551,12 +548,9 @@ class CustomRnnLateRewriter(object):
                 # insert identity node, since sometimes we need output same output_id as state_output
                 # and scan_out, but ONNX don't allow the same output_id appeared more than once as
                 # output node.
-                identity_name = utils.make_name("Identity")
-                identity_output = utils.port_name(identity_name)
-                node = Node(helper.make_node("Identity", [o], [identity_output], name=identity_name), body_g)
-                body_g.set_dtype(identity_output, body_g.get_dtype(o))
-                body_g.copy_shape(o, identity_output)
-                new_output_names.append(identity_output)
+                node = body_g.make_node("Identity", inputs=[o], shapes=[body_g.get_shape(o)],
+                                        dtypes=[body_g.get_dtype(o)])
+                new_output_names.append(node.output[0])
                 temp_nodes.append(node)
 
             body_g.set_nodes(temp_nodes)
@@ -564,16 +558,12 @@ class CustomRnnLateRewriter(object):
 
             log.debug("start make graph based on body graph nodes")
             body_g.output_names = new_output_names
-            graph = body_g.make_graph("scan body graph")
+            graph = body_g.make_graph("scan body graph", graph_name=scan_node.name + "_body_graph")
             scan_node.set_attr("body", graph)
 
         # remove nodes in body graph from g
         for n in set(nodes_to_remove):
             if n in nodes:
                 nodes.remove(n)
-            elif self.g.is_initializer(n.output[0]):
-                del self.g.initializers[n.output[0]]
-            else:
-                raise ValueError("error when removing nodes")
 
         return nodes

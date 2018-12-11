@@ -37,6 +37,73 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "final_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
+    def test_single_dynamic_custom_rnn_time_major(self):
+        size = 5  # size of each model layer.
+        batch_size = 1
+        cell = GatedGRUCell(size)
+
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        xs, s = tf.nn.dynamic_rnn(cell=cell, dtype=tf.float32,
+                                  inputs=x, time_major=True)
+        _ = tf.identity(xs, name="output")
+        _ = tf.identity(s, name="final_state")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0", "final_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
+
+    def test_single_dynamic_custom_rnn_with_seq_length(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+
+        # no scope
+        cell = GatedGRUCell(units)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            dtype=tf.float32,
+            sequence_length=[4, 3, 4, 5, 2, 1])
+
+        _ = tf.identity(outputs, name="output")
+        _ = tf.identity(cell_state, name="cell_state")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0", "cell_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+
+    def test_single_dynamic_custom_rnn_with_non_const_seq_length(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+
+        y_val = np.array([4, 3, 4, 5, 2, 1], dtype=np.int32)
+        seq_length = tf.placeholder(tf.int32, y_val.shape, name="input_2")
+
+        # no scope
+        cell = GatedGRUCell(units)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            dtype=tf.float32,
+            sequence_length=tf.identity(seq_length))
+
+        _ = tf.identity(outputs, name="output")
+        _ = tf.identity(cell_state, name="cell_state")
+
+        feed_dict = {"input_1:0": x_val, "input_2:0": y_val}
+        input_names_with_port = ["input_1:0", "input_2:0"]
+        output_names_with_port = ["output:0", "cell_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+
     def test_attention_wrapper_const_encoder(self):
         size = 5
         time_step = 3
@@ -202,6 +269,63 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "cell_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    def test_bidrectional_attention_wrapper_lstm_encoder(self):
+        size = 30
+        time_step = 3
+        input_size = 4
+        attn_size = size
+        batch_size = 9
+
+        # shape  [batch size, time step, size]
+        # attention_state: usually the output of an RNN encoder.
+        # This tensor should be shaped `[batch_size, max_time, ...]`
+        encoder_time_step = time_step
+        encoder_x_val = np.random.randn(encoder_time_step, input_size).astype('f')
+        encoder_x_val = np.stack([encoder_x_val] * batch_size)
+        encoder_x = tf.placeholder(tf.float32, encoder_x_val.shape, name="input_1")
+        encoder_cell = tf.nn.rnn_cell.LSTMCell(size)
+        attention_states, _ = tf.nn.dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
+        # [9, 3, 30], [9, 30]
+        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size,
+                                                                   attention_states)
+
+        match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
+        cell = tf.nn.rnn_cell.LSTMCell(size)
+        match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
+                                                            attention_mechanism,
+                                                            attention_layer_size=attn_size,
+                                                            cell_input_fn=match_input_fn,
+                                                            output_attention=False)
+        match_cell_bk = tf.contrib.seq2seq.AttentionWrapper(cell,
+                                                            attention_mechanism,
+                                                            attention_layer_size=attn_size,
+                                                            cell_input_fn=match_input_fn,
+                                                            output_attention=False)
+
+        decoder_time_step = 6
+        decoder_x_val = np.random.randn(decoder_time_step, batch_size, input_size).astype('f')
+
+        decoder_x = tf.placeholder(tf.float32, decoder_x_val.shape, name="input_2")
+        seq_length = tf.placeholder(tf.int32, (batch_size), name="input_3")
+        (match_output_fw, match_output_bk), (match_state_fw, match_state_bk) = \
+            tf.nn.bidirectional_dynamic_rnn(cell_fw=match_cell_fw,
+                                            cell_bw=match_cell_bk,
+                                            inputs=decoder_x,
+                                            sequence_length=tf.identity(seq_length),
+                                            dtype=tf.float32,
+                                            time_major=True)
+
+        matched_output = tf.concat([match_output_fw, match_output_bk], axis=-1)
+        matched_state = tf.concat([match_state_fw.cell_state, match_state_bk.cell_state], -1)
+
+        _ = tf.identity(matched_output, name="output_0")
+        _ = tf.identity(matched_state, name="final_state")
+
+        feed_dict = {"input_1:0": encoder_x_val, "input_2:0": decoder_x_val,
+                     "input_3:0": np.array([6, 5, 4, 3, 2, 1, 2, 3, 6])}
+        input_names_with_port = ["input_1:0", "input_2:0", "input_3:0"]
+        output_names_with_port = ["output_0:0", "final_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
 class GatedGRUCell(tf.nn.rnn_cell.RNNCell):
     def __init__(self, hidden_dim, reuse=None):

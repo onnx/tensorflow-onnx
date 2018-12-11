@@ -7,7 +7,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 
-__all__ = ["utils", "graph_matcher", "graph", "tfonnx"]
+__all__ = ["utils", "graph_matcher", "graph", "tfonnx", "shape_inference"]
 
 from .version import version as __version__
-from tf2onnx import tfonnx, utils, graph, graph_matcher  # pylint: disable=wrong-import-order
+from tf2onnx import tfonnx, utils, graph, graph_matcher, shape_inference  # pylint: disable=wrong-import-order
