@@ -45,6 +45,11 @@ def load_graph(fname):
         onnx_nodes = model_proto.graph.node
         output_names = []
 
+        # some pytorch model had empty names - make one up
+        for node in onnx_nodes:
+            if not node.name:
+                node.name = tf2onnx.utils.make_name("was_empty")
+
         g = Graph(onnx_nodes, output_shapes={}, dtypes={}, output_names=output_names)
         for i in model_proto.graph.initializer:
             v = numpy_helper.to_array(i)
@@ -86,7 +91,11 @@ def sample_rewrite(g, ops):
 
 
 def rewrite_constant_fold(g, ops):
+
     func_map = {
+        "Transpose": not None,
+        "Unsqueeze": not None,
+        "Slice": not None,
         "Add": np.add,
         "Cast": np.cast,
         "Mul": np.multiply,
@@ -113,28 +122,44 @@ def rewrite_constant_fold(g, ops):
                     log.info("can fold but don't know how, type=%s, name=%s", op.type, op.name)
                     continue
                 try:
-                    if inputs and len(op.input) == len(inputs):
-                        log.info("folding node type=%s, name=%s", op.type, op.name)
-                        if op.type == "Cast":
-                            dst = op.get_attr_int("to")
-                            np_type = dst
-                            val = np.cast[np_type](*inputs)
+                    log.info("folding node type=%s, name=%s", op.type, op.name)
+                    if op.type == "Cast":
+                        dst = op.get_attr_int("to")
+                        np_type = dst
+                        val = np.cast[np_type](*inputs)
+                    elif op.type == "Transpose":
+                        perm = op.get_attr("perm").ints
+                        val = np.transpose(inputs[0], perm)
+                    elif op.type == "Unsqueeze":
+                        axis = op.get_attr_int("axis")
+                        val = np.expand_dims(inputs[0], axis=axis)
+                    elif op.type == "Slice":
+                        axis = op.get_attr_int("axis")
+                        if axis != 0:
+                            log.info("can fold slice with axis!=0, type=%s, name=%s", op.type, op.name)
+                            continue
+                        starts = op.get_attr_int("starts")
+                        ends = op.get_attr_int("ends")
+                        if starts == 0 and ends == 0:
+                            val = inputs[0][starts:ends]
                         else:
-                            val = func(*inputs)
+                            val = inputs[0]
+                    else:
+                        val = func(*inputs)
 
-                        new_node_name = tf2onnx.utils.make_name(op.name)
-                        new_output_name = new_node_name
-                        old_output_name = op.output[0]
-                        old_node_name = op.name
-                        log.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
-                        ops[idx] = g.make_const(new_node_name, val)
-                        consumers = g.find_output_consumers(old_output_name)
-                        if consumers:
-                            for consumer in consumers:
-                                g.replace_input(consumer, old_output_name, new_output_name)
-                        for node in op.inputs:
-                            node.set_deleted()
-                        keep_looking = True
+                    new_node_name = tf2onnx.utils.make_name(op.name)
+                    new_output_name = new_node_name
+                    old_output_name = op.output[0]
+                    old_node_name = op.name
+                    log.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
+                    ops[idx] = g.make_const(new_node_name, val)
+                    consumers = g.find_output_consumers(old_output_name)
+                    if consumers:
+                        for consumer in consumers:
+                            g.replace_input(consumer, old_output_name, new_output_name)
+                    for node in op.inputs:
+                        node.set_deleted()
+                    keep_looking = True
                 except Exception as ex:  # pylint: disable=broad-except
                     tb = traceback.format_exc()
                     log.info("exception: %s, details: %s", ex, tb)
@@ -150,6 +175,8 @@ def main():
     rewriters = [sample_rewrite,
                  rewrite_constant_fold]
     ops = g.get_nodes()
+    stats = g.dump_node_statistics()
+
     for rewrite in rewriters:
         ops = rewrite(g, ops)
 
@@ -159,6 +186,10 @@ def main():
         log.error("graph has cycles, ignored ...")
 
     model_proto = g.make_model(producer_name)
+
+    print("before:", stats)
+    stats.subtract(g.dump_node_statistics())
+    print("removed:", stats)
 
     # write onnx graph
     if args.output:
