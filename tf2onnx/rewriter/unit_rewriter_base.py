@@ -13,7 +13,7 @@ import logging
 import numpy as np
 from onnx import onnx_pb
 from tf2onnx import utils
-from tf2onnx.rewriter.rnn_utils import make_onnx_node, get_pattern, RnnProperties, \
+from tf2onnx.rewriter.rnn_utils import get_pattern, RnnProperties, \
      check_is_timemajor_transpose, REWRITER_RESULT
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher # pylint: disable=unused-import
 
@@ -314,31 +314,32 @@ class UnitRewriterBase(object):
 
     def process_seq_length(self, rnn_props, seq_length_node):
         # output: [time step, batch size, input size]
-        shape_node = make_onnx_node(self.g, "Shape", [rnn_props.x_input_id])
+        shape_node = self.g.make_node("Shape", [rnn_props.x_input_id])
 
         # LSTMCell only allow inputs of [batch size, input_size], so we assume dynamic_rnn has 3 dims.
         # Slice cannot support Int64 in OPSET 7, so we cast here.
-        attr = {"to": onnx_pb.TensorProto.FLOAT}
-        cast_shape_node = make_onnx_node(self.g, "Cast", [shape_node.output[0]], attr)
-        self.g.copy_shape(shape_node.output[0], cast_shape_node.output[0])
+        cast_shape_node = self.g.make_node("Cast", [shape_node.output[0]],
+                                           attr={"to": onnx_pb.TensorProto.FLOAT},
+                                           shapes=[self.g.get_shape(shape_node.output[0])])
 
-        attr = {"axes": [0], "starts": [1], "ends": [2]}
-        batchsize_node = make_onnx_node(self.g, "Slice", [cast_shape_node.output[0]], attr)
+        batchsize_node = self.g.make_node("Slice", [cast_shape_node.output[0]],
+                                          attr={"axes": [0], "starts": [1], "ends": [2]})
 
         # Tile's repeats must be INT64
-        attr = {"to": onnx_pb.TensorProto.INT64}
-        repeat_node = make_onnx_node(self.g, 'Cast', [batchsize_node.output[0]], attr)
+        repeat_node = self.g.make_node("Cast", [batchsize_node.output[0]],
+                                       attr={"to": onnx_pb.TensorProto.INT64})
 
         self.all_nodes.extend([shape_node, cast_shape_node, batchsize_node, repeat_node])
 
         if not seq_length_node:
-            attr = {"axes": [0], "starts": [0], "ends": [1]}
-            timestep_node = make_onnx_node(self.g, 'Slice', [cast_shape_node.output[0]], attr)
+            timestep_node = self.g.make_node("Slice", [cast_shape_node.output[0]],
+                                             attr={"axes": [0], "starts": [0], "ends": [1]})
 
-            tile_node = make_onnx_node(self.g, 'Tile', [timestep_node.output[0], repeat_node.output[0]])
+            tile_node = self.g.make_node("Tile", [timestep_node.output[0], repeat_node.output[0]])
 
-            attr = {"to": onnx_pb.TensorProto.INT32}  # LSTM sequence_lens needs to be int32
-            seq_length_node = make_onnx_node(self.g, 'Cast', [tile_node.output[0]], attr)
+            # LSTM sequence_lens needs to be int32
+            seq_length_node = self.g.make_node('Cast', [tile_node.output[0]],
+                                               attr={"to": onnx_pb.TensorProto.INT32})
 
             self.all_nodes.extend([timestep_node, tile_node, seq_length_node])
 
@@ -426,16 +427,15 @@ class UnitRewriterBase(object):
         h_node = self.g.make_const(utils.make_name("Const"), np.array([rnn_props.hidden_size], dtype=np.float32))
         b_node = rnn_props.batch_size_node
         # Concat in OPSET7 does not support int64.
-        tile_shape = make_onnx_node(self.g, "Concat",
-                                    [num_direction_node.output[0], b_node.output[0], h_node.output[0]],
-                                    attr={"axis": 0})
+        tile_shape = self.g.make_node("Concat", [num_direction_node.output[0], b_node.output[0], h_node.output[0]],
+                                      attr={"axis": 0})
 
         # Tile's repeats must be INT64
         attr = {"to": onnx_pb.TensorProto.INT64}
-        tile_shape_int64 = make_onnx_node(self.g, 'Cast', [tile_shape.output[0]], attr)
+        tile_shape_int64 = self.g.make_node("Cast", [tile_shape.output[0]], attr)
 
         const_node = self.g.make_const(utils.make_name("Const"), np.array([[[fill_val]]], dtype=fill_val_dtype))
-        tile_node = make_onnx_node(self.g, 'Tile', [const_node.output[0], tile_shape_int64.output[0]])
+        tile_node = self.g.make_node("Tile", [const_node.output[0], tile_shape_int64.output[0]])
         self.all_nodes.extend([tile_shape, tile_shape_int64, tile_node])
         return tile_node
 
@@ -447,9 +447,8 @@ class UnitRewriterBase(object):
         log.debug("found timemajor transpose")
 
         attr = {"perm": np.array([1, 0, 2], dtype=np.int64)}
-        new_trans = make_onnx_node(self.g, "Transpose", [node.input[0]], attr)
-
-        self.g.copy_shape(node.output[0], new_trans.output[0])
-        self.g.set_dtype(new_trans.output[0], self.g.get_dtype(node.input[0]))
+        new_trans = self.g.make_node("Transpose", [node.input[0]], attr=attr,
+                                     shapes=[self.g.get_shape(node.output[0])],
+                                     dtypes=[self.g.get_dtype(node.input[0])])
         self.g.replace_all_inputs(self.g.get_nodes(), node.output[0], new_trans.output[0])
         return new_trans

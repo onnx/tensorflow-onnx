@@ -13,7 +13,7 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
-from tf2onnx.rewriter.rnn_utils import is_reverse_op, make_onnx_node
+from tf2onnx.rewriter.rnn_utils import is_reverse_op
 from tf2onnx.rewriter.bilstm_rewriter import slice_bilstm_for_original_lstm_consumers,\
      get_reverse_nodes_after_y_output, get_np_val_for_const, _process_single_init_node
 
@@ -71,15 +71,14 @@ def process_bigru(g, bi_grus):
             log.error("fw and bw has different hidden_size, skip")
             continue
         # activation has to be took care
-        # attr here is proto, and make_onnx_node needs dict
+        # attr here is proto
         activations = [act.decode("utf-8")
                        for act in gru_fw.get_attr("activations").strings]
         activations += [act.decode("utf-8")
                         for act in gru_bw.get_attr("activations").strings]
         attr = {"direction": direction, "hidden_size": hidden_size,
                 "activations": activations}
-        bi_gru_node = make_onnx_node(
-            g, "GRU", gru_inputs, attr=attr, output_count=2)
+        bi_gru_node = g.make_node("GRU", gru_inputs, attr=attr, output_count=2)
         all_nodes.append(bi_gru_node)
         log.debug("processing output nodes")
 

@@ -18,8 +18,8 @@ from onnx import helper
 import tensorflow as tf
 import tf2onnx
 import tf2onnx.utils
-from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.graph import Graph
 
 # pylint: disable=missing-docstring
 
@@ -139,7 +139,7 @@ class Tf2OnnxInternalTests(unittest.TestCase):
             output_node = match.get_op('output')
             op_name = tf2onnx.utils.make_name("ReplacedOp")
             out_name = tf2onnx.utils.port_name(op_name)
-            new_node = Node(helper.make_node("Sub", input_node.input, [out_name], name=op_name), g)
+            new_node = g.make_node("Sub", inputs=input_node.input, outputs=[out_name], name=op_name)
             ops = g.replace_subgraph(ops, match, [], [output_node], [], [new_node])
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)

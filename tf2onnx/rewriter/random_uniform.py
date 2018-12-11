@@ -4,11 +4,9 @@
 """
 tf2onnx.rewrite - rewrite tensorflow subgraph to onnx random_uniform op
 """
-from onnx import helper
-from tf2onnx.graph import Node
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx import utils
-from tf2onnx.utils import port_name
+
 
 # pylint: disable=missing-docstring
 
@@ -68,15 +66,12 @@ def rewrite_random_uniform_fold_const(g, ops):
 def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output):
     dtype = output.dtype
     op_name = utils.make_name("RandomUniform")
-    out_name = port_name(op_name)
     if ru_op.inputs[0].type == "Shape":
         shape_node = ru_op.inputs[0]
-        new_node = Node(helper.make_node("RandomUniformLike",
-                                         [shape_node.input[0]], [out_name], name=op_name,
-                                         low=tmin, high=tmax, dtype=dtype), g)
+        new_node = g.make_node("RandomUniformLike", inputs=[shape_node.input[0]], name=op_name,
+                               attr={"low": tmin, "high": tmax, "dtype": dtype})
     else:
         shape = g.get_shape(output.output[0])
-        new_node = Node(helper.make_node("RandomUniform",
-                                         [], [out_name], name=op_name,
-                                         low=tmin, high=tmax, dtype=dtype, shape=shape), g)
+        new_node = g.make_node("RandomUniform", [], name=op_name,
+                               attr={"low": tmin, "high": tmax, "dtype": dtype, "shape": shape})
     return new_node

@@ -13,7 +13,7 @@ import collections
 
 import numpy as np
 import six
-from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto
+from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto, AttributeProto
 
 from tf2onnx import utils, __version__
 from tf2onnx.utils import node_name, port_name, find_opset
@@ -68,6 +68,14 @@ class Node(object):
     @property
     def attr(self):
         return self._attr
+
+    @property
+    def attr_onnx(self):
+        onnx_attrs = {}
+        for a in self._attr.values():
+            if a.name in utils.ONNX_VALID_ATTRIBUTES:
+                onnx_attrs[a.name] = a
+        return onnx_attrs
 
     @property
     def name(self):
@@ -131,6 +139,9 @@ class Node(object):
 
     def set_attr(self, name, value):
         self.attr[name] = helper.make_attribute(name, value)
+
+    def set_attr_onnx(self, value):
+        self.attr[value.name] = value
 
     def set_deleted(self):
         self.type = "@@DELETED@@"
@@ -348,6 +359,50 @@ class Graph(object):
         node = Node(helper.make_node("Const", [], [name], name=name, value=onnx_tensor), self, skip_conversion)
         return node
 
+    def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
+                  op_name_scope=None, name=None, shapes=None, dtypes=None):
+        """Make a new onnx node in the graph"""
+        if attr is None:
+            attr = {}
+        if shapes is None:
+            shapes = []
+        if dtypes is None:
+            dtypes = []
+
+        op_name_basis = op_type
+        if op_name_scope:
+            op_name_basis = "_".join([op_name_scope, op_type])
+
+        if name is None:
+            name = utils.make_name(op_name_basis)
+
+        if outputs is None:
+            outputs = [name + ":" + str(i) for i in range(output_count)]
+
+        raw_attr = {}
+        onnx_attrs = []
+        for a, v in attr.items():
+            if isinstance(v, AttributeProto):
+                onnx_attrs.append(v)
+            else:
+                raw_attr[a] = v
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **raw_attr)
+        node = Node(onnx_node, self, skip_conversion=skip_conversion)
+        if onnx_attrs:
+            _ = [node.set_attr_onnx(a) for a in onnx_attrs]
+
+        if shapes:
+            utils.make_sure(len(shapes) == output_count, "output shape count not equal to output count")
+            for i in range(output_count):
+                self.set_shape(node.output[i], shapes[i])
+
+        if dtypes:
+            utils.make_sure(len(dtypes) == output_count, "output dtypes count not equal to output count")
+            for i in range(output_count):
+                self.set_dtype(node.output[i], dtypes[i])
+
+        return node
+
     def set_nodes(self, ops):
         """Set new node list."""
         self._nodes = ops
@@ -366,10 +421,7 @@ class Graph(object):
         for op in self.get_nodes():
             onnx_op = op.op
             del onnx_op.attribute[:]
-            attr = []
-            for a in op.attr.values():
-                if a.name in utils.ONNX_VALID_ATTRIBUTES:
-                    attr.append(a)
+            attr = [a for a in op.attr_onnx.values()]
             if attr:
                 onnx_op.attribute.extend(attr)
 
@@ -395,9 +447,9 @@ class Graph(object):
             # as the common data structure. To avoid special casing lots of code for initializers
             # we create a dummy 'Const' Node here.
             initializer = self._initializers.get(name)
-            if initializer:
-                ret = Node(helper.make_node("Const", [], [name], name=name, value=initializer),
-                           self, skip_conversion=True)
+            if initializer is not None:
+                ret = self.make_node("Const", inputs=[], outputs=[name], name=name,
+                                     attr={"value": initializer})
         return ret
 
     def set_node_by_name(self, node):
