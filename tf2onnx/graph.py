@@ -435,7 +435,7 @@ class Graph(object):
             # as the common data structure. To avoid special casing lots of code for initializers
             # we create a dummy 'Const' Node here.
             initializer = self._initializers.get(name)
-            if initializer:
+            if initializer is not None:
                 ret = self.make_node("Const", inputs=[], outputs=[name], name=name,
                                      attr={"value": initializer})
         return ret
