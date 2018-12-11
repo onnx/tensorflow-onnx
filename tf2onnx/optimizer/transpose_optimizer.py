@@ -144,8 +144,6 @@ class TransposeOptimizer(object):
         log.debug("finish after " + str(iteration_cnt) + " iteration(s)")
         self.post_optimize_action()
 
-        self._g.topological_sort(self._g.get_nodes())
-
         current_counter = self._g.dump_node_statistics()
         transpose_cnt = current_counter["Transpose"]
         current_counter.subtract(previous_counter)
@@ -241,11 +239,8 @@ class TransposeOptimizer(object):
         # otherwise, reshape added in post_optimize_action may not work correctly
         shape = self._g.get_shape(node.output[0])
         if shape:
-            if is_nhwc_transpose(trans):
-                mapping = [0, 3, 1, 2]
-            else:
-                mapping = [0, 2, 3, 1]
-            new_shape = [shape[i] for i in mapping]
+            # only nhwc transpose can reach here
+            new_shape = [shape[i] for i in [0, 3, 1, 2]]
             self._g.set_shape(node.output[0], new_shape)
 
         self._g.set_nodes(ops)
