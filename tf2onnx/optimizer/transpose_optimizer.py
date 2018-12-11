@@ -233,6 +233,15 @@ class TransposeOptimizer(object):
         self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
         node.input[input_index] = trans.input[0]
         trans.input[0] = utils.port_name(node.name)
+
+        # need to transpose node shape in backward direction as well after switch
+        # otherwise, reshape added in post_optimize_action may not work correctly
+        shape = self._g.get_shape(node.output[0])
+        if shape:
+            # only nhwc transpose can reach here
+            new_shape = [shape[i] for i in [0, 3, 1, 2]]
+            self._g.set_shape(node.output[0], new_shape)
+
         self._g.set_nodes(ops)
         return True
 
