@@ -14,10 +14,9 @@ import numpy as np
 
 from tf2onnx import utils
 from tf2onnx.rewriter.unit_rewriter_base import UnitRewriterBase
-from tf2onnx.rewriter.rnn_utils import get_weights_from_const_node, is_concat_op, is_tensor_array_read_op, \
+from tf2onnx.rewriter.rnn_utils import get_weights_from_const_node, is_tensor_array_read_op, \
     is_tensor_array_scatter_op, is_tensor_array_write_op, is_tensor_array_op, is_tensor_array_gather_op, \
     is_tensor_array_size_op, check_is_timemajor_transpose, RNNUnitType
-from tf2onnx.rewriter.rnn_utils import make_onnx_node
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.gru_rewriter")
@@ -81,13 +80,12 @@ class GRUUnitRewriter(UnitRewriterBase):
 
     def find_inputs(self, rnn_scope_name, rnn_props, match, input_blacklist=None):
         concat_node = match.get_op("cell_inputs")
-        assert is_concat_op(concat_node)
         read_node = concat_node.inputs[0]
-        assert is_tensor_array_read_op(read_node)
+        utils.make_sure(is_tensor_array_read_op(read_node), "ta read check fail")
         enter_node = read_node.inputs[2]
-        assert enter_node.type == "Enter"
+        utils.make_sure(enter_node.type == "Enter", "enter check fail")
         scatter_node = enter_node.inputs[0]
-        assert is_tensor_array_scatter_op(scatter_node)
+        utils.make_sure(is_tensor_array_scatter_op(scatter_node), "ta scatter check fail")
         node = scatter_node.inputs[2]
         node_id = scatter_node.input[2]
         # dynamic_rnn may insert transpose op if input data format is [B, T, D]
@@ -112,9 +110,11 @@ class GRUUnitRewriter(UnitRewriterBase):
         # in tf, state output shape is: [batch, hidden]
         # in onnx, output shape is: [number_directions, batch, hidden]
         output_id = gru_node.output[1]
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [0]})
         gru_state_shape = self.g.get_shape(output_id)
-        self.g.set_shape(squeeze_node.output[0], [gru_state_shape[1], gru_state_shape[2]])
+        output_shape = [gru_state_shape[1], gru_state_shape[2]]
+        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
+                                        shapes=[output_shape], dtypes=[self.g.get_dtype(output_id)])
+
         self.all_nodes.extend([squeeze_node])
         self.g.replace_all_inputs(self.all_nodes, exit_node.output[0], squeeze_node.output[0])
 
@@ -145,10 +145,11 @@ class GRUUnitRewriter(UnitRewriterBase):
         # in onnx, output shape is : [time, num_directions, batch, hidden]
 
         output_id = gru_node.output[0]
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [1]})
         gru_output_shape = self.g.get_shape(output_id)
-        self.g.set_shape(squeeze_node.output[0], [gru_output_shape[0], gru_output_shape[2], gru_output_shape[3]])
-        self.g.set_dtype(squeeze_node.output[0], self.g.get_dtype(output_id))
+        squeeze_output_shape = [gru_output_shape[0], gru_output_shape[2], gru_output_shape[3]]
+        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
+                                        shapes=[squeeze_output_shape],
+                                        dtypes=[self.g.get_dtype(output_id)])
 
         if not rnn_props.time_major:
             gather_consumers = self.g.find_output_consumers(gather_output_id)
@@ -160,11 +161,12 @@ class GRUUnitRewriter(UnitRewriterBase):
             # we just check the transpose here, but will not re-use it, because
             # it may hold non-const perms. so we re-create a new transpose to replace it
             attr = {"perm": np.array([1, 0, 2], dtype=np.int64)}
-            new_trans = make_onnx_node(self.g, "Transpose", [squeeze_node.output[0]], attr)
             trans_input_shape = self.g.get_shape(squeeze_node.output[0])
+            trans_output_shape = [trans_input_shape[1], trans_input_shape[0], trans_input_shape[2]]
+            new_trans = self.g.make_node("Transpose", [squeeze_node.output[0]], attr=attr,
+                                         shapes=[trans_output_shape],
+                                         dtypes=[self.g.get_dtype(squeeze_node.output[0])])
             self.g.replace_all_inputs(self.all_nodes, trans.output[0], new_trans.output[0])
-            self.g.set_shape(new_trans.output[0], [trans_input_shape[1], trans_input_shape[0], trans_input_shape[2]])
-            self.g.set_dtype(new_trans.output[0], self.g.get_dtype(squeeze_node.output[0]))
             self.all_nodes.extend([new_trans])
 
         self.g.replace_all_inputs(self.all_nodes, gather_output_id, squeeze_node.output[0])
@@ -273,7 +275,8 @@ class GRUUnitRewriter(UnitRewriterBase):
             new_val = np.expand_dims(val, axis=0)
             const_node = self.g.make_const(initial_name, new_val)
             return const_node.output[0]
-        squeeze_node = make_onnx_node(self.g, "Unsqueeze", [initializer_input_id], attr={"axes": [0]})
+
+        squeeze_node = self.g.make_node("Unsqueeze", [initializer_input_id], attr={"axes": [0]})
         self.g.replace_all_inputs(self.g.get_nodes(), initializer_input_id, squeeze_node.output[0])
         self.all_nodes.append(squeeze_node)
         return squeeze_node.output[0]
@@ -298,14 +301,12 @@ class GRUUnitRewriter(UnitRewriterBase):
         gru_inputs = [
             inputs["X"], inputs["W"], inputs["R"], inputs["B"],
             inputs["sequence_lens"], inputs["initial_state"]]
-        gru_node = make_onnx_node(self.g, "GRU", gru_inputs, attr, 2)
-
-        x_shape = self.g.get_shape(gru_node.input[0])
+        x_shape = self.g.get_shape(gru_inputs[0])
         x_seq_length = x_shape[0]
         x_batch_size = x_shape[1]
-        out_dtype = self.g.get_dtype(inputs["X"])
-        self.g.set_shape(gru_node.output[0], [x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size])
-        self.g.set_dtype(gru_node.output[0], out_dtype)
-        self.g.set_shape(gru_node.output[1], [num_direction, x_batch_size, rnn_props.hidden_size])
-        self.g.set_dtype(gru_node.output[1], out_dtype)
+        out_dtype = self.g.get_dtype(gru_inputs[0])
+        gru_node = self.g.make_node("GRU", gru_inputs, attr=attr, output_count=2,
+                                    shapes=[[x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size],
+                                            [num_direction, x_batch_size, rnn_props.hidden_size]],
+                                    dtypes=[out_dtype, out_dtype])
         return gru_node

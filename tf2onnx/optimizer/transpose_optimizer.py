@@ -7,10 +7,9 @@ from __future__ import unicode_literals
 import logging
 
 import numpy as np
-from onnx import helper, numpy_helper
+from onnx import numpy_helper
 
 from tf2onnx import utils
-from tf2onnx.graph import Node
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.optimizer.transpose_optimizer")
@@ -107,8 +106,8 @@ class TransposeOptimizer(object):
                         op_name = utils.make_name("reshape")
                         shape_name = utils.make_name(op_name)
                         self._g.make_const(shape_name, np.array(new_shape, dtype=np.int64))
-                        reshape = helper.make_node("Reshape", [op.input[0], shape_name], op.output, name=op_name)
-                        reshape_node = Node(reshape, self._g)
+                        reshape_node = self._g.make_node("Reshape", inputs=[op.input[0], shape_name], outputs=op.output,
+                                                         name=op_name)
                         self._update_graph_nodes([reshape_node], [op], True)
                     else:
                         self._remove_useless_tranpose(op)
@@ -254,7 +253,7 @@ class TransposeOptimizer(object):
         # move transpose into branches to let Transposes can be "handled" in each branch
         to_append = []
         for n in out_nodes:
-            branch_trans = self._make_onnx_node("Transpose", [trans.input[0]], trans.op.attribute, 1)
+            branch_trans = self._g.make_node("Transpose", [trans.input[0]], attr=trans.op.attribute)
             self._g.replace_input(n, trans.output[0], branch_trans.output[0])
 
             to_append.append(branch_trans)
@@ -274,18 +273,6 @@ class TransposeOptimizer(object):
                 return False
         return True
 
-    def _make_onnx_node(self, operation_type, input_names_with_output_id, attribute=None, output_num=1):
-        op_name = utils.make_name(operation_type)
-        out_names = []
-        for i in range(output_num):
-            out_names.append(op_name + ":" + str(i))
-
-        n = helper.make_node(operation_type, input_names_with_output_id, out_names, name=op_name)
-        if attribute:
-            n.attribute.extend(attribute)
-
-        return Node(n, self._g)
-
     def _get_non_nchw_transpose_output_nodes(self, node):
         # we just support node having 1 output, we need consider cases where node has more than 1 outputs
         assert len(node.output) == 1
@@ -302,20 +289,9 @@ class TransposeOptimizer(object):
         added_node = []
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nchw_trans_consumers
         for consumer in non_nchw_trans_consumers:
-            nchw_op_name = utils.make_name("Transpose")
-            nchw_out_name = utils.port_name(nchw_op_name)
-
-            kwargs = {"perm": [0, 3, 1, 2]}
-            nchw = helper.make_node("Transpose", [node.output[0]], [nchw_out_name], name=nchw_op_name, **kwargs)
-
-            nhwc_op_name = utils.make_name("Transpose")
-            nhwc_out_name = utils.port_name(nhwc_op_name)
-
-            kwargs = {"perm": [0, 2, 3, 1]}
-            nhwc = helper.make_node("Transpose", [nchw_out_name], [nhwc_out_name], name=nhwc_op_name, **kwargs)
-            nchw_node = Node(nchw, self._g)
-            nhwc_node = Node(nhwc, self._g)
-            self._g.replace_input(consumer, node.output[0], nhwc_out_name)
+            nchw_node = self._g.make_node("Transpose", [node.output[0]], attr={"perm": [0, 3, 1, 2]})
+            nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
+            self._g.replace_input(consumer, node.output[0], nhwc_node.output[0])
             added_node.extend([nchw_node, nhwc_node])
 
         if added_node:
@@ -333,21 +309,9 @@ class TransposeOptimizer(object):
         added_node = []
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nhwc_trans_consumers
         for input_id, n in non_nhwc_trans_inputs:
-            nchw_op_name = utils.make_name("Transpose")
-            nchw_out_name = utils.port_name(nchw_op_name)
-
-            kwargs = {"perm": [0, 3, 1, 2]}
-            nchw = helper.make_node("Transpose", [input_id], [nchw_out_name], name=nchw_op_name, **kwargs)
-
-            nhwc_op_name = utils.make_name("Transpose")
-            nhwc_out_name = utils.port_name(nhwc_op_name)
-
-            kwargs = {"perm": [0, 2, 3, 1]}
-            nhwc = helper.make_node("Transpose", [nchw_out_name], [nhwc_out_name], name=nhwc_op_name, **kwargs)
-
-            nchw_node = Node(nchw, self._g)
-            nhwc_node = Node(nhwc, self._g)
-            self._g.replace_input(node, input_id, nhwc_out_name)
+            nchw_node = self._g.make_node("Transpose", [node.output[0]], attr={"perm": [0, 3, 1, 2]})
+            nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
+            self._g.replace_input(node, input_id, nhwc_node.output[0])
             added_node.extend([nchw_node, nhwc_node])
 
         if added_node:
@@ -361,7 +325,7 @@ class TransposeOptimizer(object):
                 # if Conv or ConvTranspose's bias input is not set, then we set, otherwise, we don't set
                 # todo: maybe we can add already set bias with the input??? try later
                 conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
-                conv_node = self._make_onnx_node(t_p.type, conv_inputs, t_p.op.attribute)
+                conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.op.attribute)
 
                 ops = self._g.get_nodes()
                 trans.input[0] = utils.port_name(conv_node.name)

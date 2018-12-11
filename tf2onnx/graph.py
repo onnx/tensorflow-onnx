@@ -347,6 +347,40 @@ class Graph(object):
         node = Node(helper.make_node("Const", [], [name], name=name, value=onnx_tensor), self, skip_conversion)
         return node
 
+    def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
+                  op_name_scope=None, name=None, shapes=None, dtypes=None):
+        """Make a new onnx node in the graph"""
+        if attr is None:
+            attr = {}
+        if shapes is None:
+            shapes = []
+        if dtypes is None:
+            dtypes = []
+
+        op_name_basis = op_type
+        if op_name_scope:
+            op_name_basis = "_".join([op_name_scope, op_type])
+
+        if name is None:
+            name = utils.make_name(op_name_basis)
+
+        if outputs is None:
+            outputs = [name + ":" + str(i) for i in range(output_count)]
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **attr)
+        node = Node(onnx_node, self, skip_conversion=skip_conversion)
+
+        if shapes:
+            utils.make_sure(len(shapes) == output_count, "output shape count not equal to output count")
+            for i in range(output_count):
+                self.set_shape(node.output[i], shapes[i])
+
+        if dtypes:
+            utils.make_sure(len(dtypes) == output_count, "output dtypes count not equal to output count")
+            for i in range(output_count):
+                self.set_dtype(node.output[i], dtypes[i])
+
+        return node
+
     def set_nodes(self, ops):
         """Set new node list."""
         self._nodes = ops
@@ -384,8 +418,8 @@ class Graph(object):
             # we create a dummy 'Const' Node here.
             initializer = self._initializers.get(name)
             if initializer:
-                ret = Node(helper.make_node("Const", [], [name], name=name, value=initializer),
-                           self, skip_conversion=True)
+                ret = self.make_node("Const", inputs=[], outputs=[name], name=name,
+                                     attr={"value": initializer})
         return ret
 
     def set_node_by_name(self, node):

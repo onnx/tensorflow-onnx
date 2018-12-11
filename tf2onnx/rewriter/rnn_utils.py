@@ -9,16 +9,16 @@ from __future__ import unicode_literals
 
 import logging
 from enum import Enum
-import numpy as np
-from onnx import helper
 from tf2onnx import utils
-from tf2onnx.graph import Node
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher # pylint: disable=unused-import
+
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.rnn_utils")
+
 
 class REWRITER_RESULT(Enum):
     SKIP = 1
@@ -284,23 +284,6 @@ def check_is_unfolded_perm(perm_node):
             # todo: refine this
             return True
     return False
-
-
-def make_onnx_node(g, op_type, inputs, attr=None, output_count=1, skip_conversion=True, op_name_scope=None):
-    if attr is None:
-        attr = {}
-
-    op_name_basis = op_type
-    if op_name_scope:
-        op_name_basis = "_".join([op_name_scope, op_type])
-
-    node_name = utils.make_name(op_name_basis)
-    outputs = [node_name + ":" + str(i) for i in np.arange(output_count)]
-    node = Node(
-        helper.make_node(op_type, inputs, outputs, name=node_name, **attr),
-        g, skip_conversion=skip_conversion)
-
-    return node
 
 
 def is_reverse_op(op):

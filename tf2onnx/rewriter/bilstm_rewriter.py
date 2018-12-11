@@ -14,7 +14,7 @@ import logging
 import numpy as np
 from onnx import numpy_helper
 from tf2onnx import utils
-from tf2onnx.rewriter.rnn_utils import is_reverse_op, make_onnx_node
+from tf2onnx.rewriter.rnn_utils import is_reverse_op
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.bilstm_rewriter")
@@ -69,7 +69,7 @@ def process_bilstm(g, bi_lstms):
             continue
 
         attr = {"direction": direction, "hidden_size": hidden_size}
-        bi_lstm_node = make_onnx_node(g, "LSTM", lstm_inputs, attr=attr, output_count=3)
+        bi_lstm_node = g.make_node("LSTM", lstm_inputs, attr=attr, output_count=3)
         all_nodes.append(bi_lstm_node)
         log.debug("processing output nodes")
 
@@ -131,13 +131,13 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
 
     if fw_consumers:
         attr = {"axes": [axis], "starts": [0], "ends": [1]}
-        slice_node_fw = make_onnx_node(g, "Slice", [bi_lstm.output[lstm_output_index]], attr)
+        slice_node_fw = g.make_node("Slice", [bi_lstm.output[lstm_output_index]], attr=attr)
         all_nodes.append(slice_node_fw)
         g.replace_all_inputs(fw_consumers, lstm_fw.output[lstm_output_index], slice_node_fw.output[0])
 
     if bw_consumers:
         attr = {"axes": [axis], "starts": [1], "ends": [2]}
-        slice_node_bw = make_onnx_node(g, "Slice", [bi_lstm.output[lstm_output_index]], attr)
+        slice_node_bw = g.make_node("Slice", [bi_lstm.output[lstm_output_index]], attr=attr)
         all_nodes.append(slice_node_bw)
         g.replace_all_inputs(bw_consumers, lstm_bw.output[lstm_output_index], slice_node_bw.output[0])
 
@@ -166,8 +166,8 @@ def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
         init_name = utils.make_name("initial")
         init_node = g.make_const(init_name, initial_val, skip_conversion=True)
     else:
-        attr = {"axis": 0}
-        init_node = make_onnx_node(g, "Concat", [fw_init_input_id, bw_init_input_id], attr)
+        init_node = g.make_node("Concat", [fw_init_input_id, bw_init_input_id],
+                                attr={"axis": 0})
         to_append.append(init_node)
 
     return init_node

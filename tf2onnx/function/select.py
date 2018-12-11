@@ -38,23 +38,25 @@ def select_op8(ctx, node, name, args):
     if rank > 0:
         # create nodes getting shape of condition
         shape_node_output_shape = [rank]
-        shape_node = _make_node(ctx, "Shape", [node.input[0]], op_name_scope=node.name,
-                                shapes=[shape_node_output_shape], dtypes=[onnx_pb.TensorProto.INT64])
+        shape_node = ctx.make_node("Shape", [node.input[0]], op_name_scope=node.name,
+                                   shapes=[shape_node_output_shape], dtypes=[onnx_pb.TensorProto.INT64])
         nodes.append(shape_node)
 
         # todo(pengwa), move those leveraging rewrite_incomplete_type_support_onnxruntime after shape inferencing
         # bug is fixed.
         # workaround: onnxruntime does not support Split-2, add cases before and after.
         target_dtype = onnx_pb.TensorProto.FLOAT
-        shape_f_node = _make_node(ctx, "Cast", [shape_node.output[0]], attr={"to": target_dtype},
-                                  op_name_scope=node.name, shapes=[shape_node_output_shape], dtypes=[target_dtype])
+        shape_f_node = ctx.make_node("Cast", [shape_node.output[0]], attr={"to": target_dtype},
+                                     shapes=[shape_node_output_shape], dtypes=[target_dtype],
+                                     op_name_scope=node.name)
         nodes.append(shape_f_node)
 
         split_attr = [1 for i in range(rank)]
         output_shapes = [[1] for i in range(rank)]
         output_dtypes = [target_dtype for i in range(rank)]
-        split_node = _make_node(ctx, "Split", [shape_f_node.output[0]], output_count=rank, attr={"split": split_attr},
-                                op_name_scope=node.name, shapes=output_shapes, dtypes=output_dtypes)
+        split_node = ctx.make_node("Split", [shape_f_node.output[0]], output_count=rank,
+                                   attr={"split": split_attr}, shapes=output_shapes,
+                                   dtypes=output_dtypes, op_name_scope=node.name)
         nodes.append(split_node)
 
         trip_cnts = []
@@ -62,8 +64,9 @@ def select_op8(ctx, node, name, args):
             output_id = split_node.output[i]
             output_shape = ctx.get_shape(output_id)
             target_dtype = onnx_pb.TensorProto.INT64
-            shape_i_node = _make_node(ctx, "Cast", [output_id], attr={"to": target_dtype}, op_name_scope=node.name,
-                                      shapes=[output_shape], dtypes=[target_dtype])
+            shape_i_node = ctx.make_node("Cast", [output_id], attr={"to": target_dtype},
+                                         shapes=[output_shape], dtypes=[target_dtype],
+                                         op_name_scope=node.name)
             trip_cnts.append(shape_i_node.output[0])
             nodes.append(shape_i_node)
         # workaround ends
@@ -81,8 +84,8 @@ def select_op8(ctx, node, name, args):
     ctx.copy_shape(node.output[0], val_output_id)
     ctx.set_dtype(node.output[0], true_data_type)
 
-    output_node = _make_node(ctx, "Identity", [val_output_id], name=node.name,
-                             shapes=[ctx.get_shape(val_output_id)], dtypes=[true_data_type])
+    output_node = ctx.make_node("Identity", [val_output_id], name=node.name,
+                                shapes=[ctx.get_shape(val_output_id)], dtypes=[true_data_type])
     nodes.append(output_node)
 
     return nodes
@@ -257,39 +260,3 @@ def create_body_graph_for_if_branch(data_type, output_shape, chosen_cur_cond_val
         [y],
     )
     return graph_def
-
-
-# todo: move this to utils, and merge with existing similar functions.
-def _make_node(g, op_type, inputs, name=None, attr=None, output_count=1, skip_conversion=True, op_name_scope=None,
-               shapes=None, dtypes=None):
-    if attr is None:
-        attr = {}
-    if shapes is None:
-        shapes = []
-    if dtypes is None:
-        dtypes = []
-
-    op_name_basis = op_type
-    if op_name_scope:
-        op_name_basis = "_".join([op_name_scope, op_type])
-
-    if name is None:
-        node_name = utils.make_name(op_name_basis)
-    else:
-        node_name = name
-
-    outputs = [node_name + ":" + str(i) for i in range(output_count)]
-    onnx_node = helper.make_node(op_type, inputs, outputs, name=node_name, **attr)
-    node = Node(onnx_node, g, skip_conversion=skip_conversion)
-
-    if shapes:
-        make_sure(len(shapes) == output_count, "output shape count not equal to output count")
-        for i in range(output_count):
-            g.set_shape(node.output[i], shapes[i])
-
-    if dtypes:
-        make_sure(len(dtypes) == output_count, "output dtypes count not equal to output count")
-        for i in range(output_count):
-            g.set_dtype(node.output[i], dtypes[i])
-
-    return node

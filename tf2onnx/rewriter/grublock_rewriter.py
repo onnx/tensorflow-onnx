@@ -10,8 +10,9 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import logging
+from tf2onnx import utils
 from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
-from tf2onnx.rewriter.rnn_utils import make_onnx_node, RNNUnitType, get_weights_from_const_node, \
+from tf2onnx.rewriter.rnn_utils import RNNUnitType, get_weights_from_const_node, \
     is_tensor_array_read_op, is_tensor_array_scatter_op
 
 
@@ -68,13 +69,13 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
 
     def find_inputs(self, rnn_scope_name, rnn_props, match, input_blacklist=None):
         cell_node = match.get_op("GRUBlockCell")
-        assert cell_node.type == "GRUBlockCell"
         read_node = cell_node.inputs[0]
-        assert is_tensor_array_read_op(read_node)
+        utils.make_sure(is_tensor_array_read_op(read_node), "ta read op check fail")
         enter_node = read_node.inputs[2]
-        assert enter_node.type == "Enter"
+        utils.make_sure(enter_node.type == "Enter", "enter check fail")
         scatter_node = enter_node.inputs[0]
-        assert is_tensor_array_scatter_op(scatter_node)
+        utils.make_sure(is_tensor_array_scatter_op(scatter_node), "ta scatter check fail")
+
         node = scatter_node.inputs[2]
         node_id = scatter_node.input[2]
         # dynamic_rnn may insert transpose op if input data format is [B, T, D]
@@ -82,7 +83,7 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
             node_id = node.input[0]
             node = node.inputs[0]
 
-        assert not node.name.startswith(rnn_scope_name)
+        utils.make_sure(not node.name.startswith(rnn_scope_name), "rnn input should not has rnn scope name")
         rnn_props.input_node = node
         rnn_props.input_id = node_id
 
@@ -112,11 +113,13 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
         gru_inputs = [
             inputs["X"], inputs["W"], inputs["R"], inputs["B"],
             inputs["sequence_lens"], inputs["initial_state"]]
-        gru_node = make_onnx_node(self.g, "GRU", gru_inputs, attr, 2)
 
-        x_shape = self.g.get_shape(gru_node.input[0])
+        x_shape = self.g.get_shape(gru_inputs[0])
+        x_dtype = self.g.get_dtype(gru_inputs[0])
         x_seq_length = x_shape[0]
         x_batch_size = x_shape[1]
-        self.g.set_shape(gru_node.output[0], [x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size])
-        self.g.set_shape(gru_node.output[1], [num_direction, x_batch_size, rnn_props.hidden_size])
+        gru_node = self.g.make_node("GRU", gru_inputs, attr=attr, output_count=2,
+                                    shapes=[[x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size],
+                                            [num_direction, x_batch_size, rnn_props.hidden_size]],
+                                    dtypes=[x_dtype, x_dtype])
         return gru_node
