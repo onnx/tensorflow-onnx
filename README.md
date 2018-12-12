@@ -13,8 +13,12 @@ By default we use opset 7 for the resulting onnx graph since most runtimes will 
 With the release of onnx-1.3 there is now opset 8 - to create an onnx graph for opset 8 use in the command line ```--opset 8```.
 
 # Status
-We support many TensorFlow models. Support for Fully Connected and Convolutional networks is mature. Dynamic LSTM networks should work but the code for this is evolving. 
+We support many TensorFlow models. Support for Fully Connected and Convolutional networks is mature. Dynamic LSTM/GRU/Attention networks should work but the code for this is evolving. 
 A list of models that we use for testing can be found [here](tests/run_pretrained_models.yaml)
+
+Supported RNN classes and APIs: LSTMCell, BasicLSTMCell, GRUCell, GRUBlockCell, MultiRNNCell, and user defined RNN cells inheriting rnn_cell_impl.RNNCell, used along with DropoutWrapper, BahdanauAttention, AttentionWrapper.
+Check [tips](examples/rnn_tips.md) when converting RNN models.
+
 
 # Prerequisites
 
