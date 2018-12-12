@@ -103,7 +103,7 @@ class CustomRnnRewriter(LoopRewriterBase):
         found_time = False
         is_rnn_out_ta = True
         for enter_name, val in context.loop_variables.items():
-            enter_input_node = self.g.get_node_by_name(val.enter_input_id)
+            enter_input_node = self.g.get_node_by_output(val.enter_input_id)
             if val.is_tensor_array:
                 ta_name = enter_input_node.get_attr("tensor_array_name").s.decode("utf-8")
                 if not ta_name.startswith(ta_array_name_prefix):
@@ -232,7 +232,7 @@ class CustomRnnRewriter(LoopRewriterBase):
         all_vars += [val for _, val in context.other_loop_vars.items()]
         for val in all_vars:
             # remove the node to cut off a starting node of the cell (e.g. loop body).
-            nodes_to_remove.append(self.g.get_node_by_name(val.switch_true_identity_output_id))
+            nodes_to_remove.append(self.g.get_node_by_output(val.switch_true_identity_output_id))
 
             # connect NextIteration to an invalid node, to cut off a ending node of the cell.
             next_iter_nodes = [n for n in self.g.get_nodes() if n.type == "NextIteration"]
@@ -240,7 +240,7 @@ class CustomRnnRewriter(LoopRewriterBase):
 
         for input_ta in context.input_tas:
             # remove the node to cut off connection between scan_input and the cell.
-            nodes_to_remove.append(self.g.get_node_by_name(input_ta.output_id))
+            nodes_to_remove.append(self.g.get_node_by_output(input_ta.output_id))
 
         for output_ta in context.output_tas:
             # remove the node to cut off connection between scan_output and the cell.
@@ -355,7 +355,7 @@ class CustomRnnRewriter(LoopRewriterBase):
             # connect Enter's output to Enter's input
             self.g.replace_all_inputs(self.g.get_nodes(), enter_node.output[0], enter_node.input[0])
 
-            nodes = self.g._extract_sub_graph_nodes(self.g.get_node_by_name(enter_node.input[0]))
+            nodes = self.g._extract_sub_graph_nodes(self.g.get_node_by_output(enter_node.input[0]))
 
             other_enter_input_ids.append(enter_node.input[0])
 

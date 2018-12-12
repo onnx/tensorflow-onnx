@@ -62,7 +62,7 @@ class Node(object):
     @property
     def inputs(self):
         """Input node objects."""
-        val = [self.graph.get_node_by_name(n) for n in self._input]
+        val = [self.graph.get_node_by_output(n) for n in self._input]
         return val
 
     @property
@@ -264,7 +264,7 @@ class Node(object):
             # only find referenced node in current graph
             implicit_inputs_in_current_graph = set()
             for input_id in outer_scope_node_input_ids:
-                n = self.graph.get_node_by_name(input_id)
+                n = self.graph.get_node_by_output(input_id)
                 if n is None:
                     if not self.graph.is_initializer(input_id):
                         if input_id not in self.graph.model_inputs:
@@ -315,6 +315,7 @@ class Graph(object):
         self._nodes = []
         self._initializers = {}
         self._nodes_by_name = {}
+        self._output_to_node_name = {}
         self.shapes = {}
         self._model_inputs = {}
         self._target = set(target)
@@ -406,6 +407,10 @@ class Graph(object):
         """Set new node list."""
         self._nodes = ops
         self._nodes_by_name = {op.name: op for op in ops}
+        self._output_to_node_name = {}
+        for op in ops:
+            for op_output in op.output:
+                self._output_to_node_name[op_output] = op.name
 
     def update_proto(self):
         """Update the onnx protobuf from out internal Node structure."""
@@ -423,6 +428,13 @@ class Graph(object):
     def get_nodes(self):
         """Get node list."""
         return self._nodes
+
+    def get_node_by_output(self, output):
+        """Get node by node output id"""
+        name = self._output_to_node_name.get(output)
+        if name:
+            return self.get_node_by_name(name)
+        return None
 
     def get_node_by_name(self, name):
         """Get node by name."""
@@ -443,6 +455,8 @@ class Graph(object):
     def set_node_by_name(self, node):
         """Set node by name."""
         self._nodes_by_name[node.name] = node
+        for op_output in node.output:
+            self._output_to_node_name[op_output] = node.name
 
     def add_model_input(self, name, tensor_value_info):
         """Add placeholder node as model's input"""
@@ -534,7 +548,7 @@ class Graph(object):
             implicit_inputs = op.get_implicit_inputs()
             all_input |= set(implicit_inputs)
             for inp in all_input:
-                j = self.get_node_by_name(inp)
+                j = self.get_node_by_output(inp)
                 if j and j.type != "Const":
                     g[op_name_to_index[j.name]].append(i)
 
@@ -805,13 +819,13 @@ class Graph(object):
                     processing_set.add(node)
         return res_set
 
-    def extract_sub_graph_nodes(self, nodes_name):
+    def extract_sub_graph_nodes(self, outputs_name):
         """
         find related nodes of specified list of nodes
         """
         res_set = set()
-        for name in nodes_name:
-            node = self.get_node_by_name(name)
+        for output in outputs_name:
+            node = self.get_node_by_output(output)
             res_set = res_set.union(self._extract_sub_graph_nodes(node))
 
         # const nodes made at conversion stage are not needed, because ONNX will use initializer automatically

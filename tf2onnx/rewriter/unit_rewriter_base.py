@@ -235,7 +235,7 @@ class UnitRewriterBase(object):
     def get_rnn_input_blacklist(self, rnn_weights, rnn_props):
         var_init_nodes = []
         for _, init_input_id in rnn_props.var_initializers.items():
-            init_node = self.g.get_node_by_name(init_input_id)
+            init_node = self.g.get_node_by_output(init_input_id)
             var_init_nodes.append(init_node)
 
         # weight/bias inputs, and c/h initializers are dynamic_rnn/LSTMCell's parameters.
@@ -415,7 +415,7 @@ class UnitRewriterBase(object):
         log.debug(level_1 + " >> " + level_2)
 
     def _workaround_fill_ch_init_node(self, initializer_input_id, rnn_props):
-        node = self.g.get_node_by_name(initializer_input_id)
+        node = self.g.get_node_by_output(initializer_input_id)
         if node.type != "Fill":
             return None
 

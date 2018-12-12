@@ -92,7 +92,7 @@ def process_bilstm(g, bi_lstms):
         old_x_has_lstm_as_consumer = [n for n in old_x_consumers if n.type == "LSTM"]
         if not old_x_has_lstm_as_consumer:
             log.debug("plan to remove useless reverse op in bw")
-            reverse_node = g.get_node_by_name(lstm_bw_old_x)
+            reverse_node = g.get_node_by_output(lstm_bw_old_x)
 
             if reverse_node.type == "Transpose":
                 reverse_node = reverse_node.inputs[0]
@@ -143,7 +143,7 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
 
 
 def check_const(g, input_id):
-    node = g.get_node_by_name(input_id)
+    node = g.get_node_by_output(input_id)
     if node and node.is_const():
         return (True, node.get_tensor_value())
     if g.is_initializer(input_id):

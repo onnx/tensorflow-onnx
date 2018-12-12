@@ -135,7 +135,7 @@ class LoopRewriterBase:
             raise ValueError("unexpected number of switch false consumers")
 
         is_ta = False
-        if is_tensor_array_op(self.g.get_node_by_name(target_node_input_id)):
+        if is_tensor_array_op(self.g.get_node_by_output(target_node_input_id)):
             is_ta = True
 
         loop_var = LoopVariable(enter_node.name, target_node_input_id, last_iteration_output_id,
@@ -146,7 +146,7 @@ class LoopRewriterBase:
 
     def _tune_shape_for_loop_ta_var(self, loop_var):
         if loop_var.is_tensor_array:
-            ta_write_node = self.g.get_node_by_name(loop_var.next_iteration_input_id)
+            ta_write_node = self.g.get_node_by_output(loop_var.next_iteration_input_id)
             if not is_tensor_array_write_op(ta_write_node):
                 raise ValueError("ta var nextiteration is not following ta write op")
 
@@ -201,7 +201,7 @@ class LoopRewriterBase:
         log.debug("output ids %s ", output_ids)
         nodes = []
         q = deque()
-        output_nodes = [g.get_node_by_name(output_id) for output_id in output_ids]
+        output_nodes = [g.get_node_by_output(output_id) for output_id in output_ids]
         handled_nodes = []
         q.extend(output_nodes)
         nodes.extend(output_nodes)
@@ -217,7 +217,7 @@ class LoopRewriterBase:
 
             n_inputs = set(n.input)
             for i in n_inputs:
-                input_node = g.get_node_by_name(i)
+                input_node = g.get_node_by_output(i)
                 if i in input_ids:
                     log.debug("terminate the input search at %s", i)
                 elif not input_node:
@@ -240,7 +240,7 @@ class LoopRewriterBase:
             implicit_inputs = n.get_implicit_inputs(require_input_in_cur_graph=True)
             n_inputs = set(implicit_inputs)
             for i in n_inputs:
-                input_node = g.get_node_by_name(i)
+                input_node = g.get_node_by_output(i)
                 if i in input_ids:
                     log.debug("terminate the input search at %s", i)
                 elif not input_node:
