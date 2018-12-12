@@ -7,14 +7,16 @@ tf2onnx.graph - class to manage graph manipulation on top of onnx
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import collections
-import numpy as np
 
-from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto
+import numpy as np
+import six
+from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto, AttributeProto
 
 from tf2onnx import utils, __version__
-from tf2onnx.utils import node_name, port_name, find_opset
+from tf2onnx.utils import port_name, find_opset
 
 
 class Node(object):
@@ -60,12 +62,20 @@ class Node(object):
     @property
     def inputs(self):
         """Input node objects."""
-        val = [self.graph.get_node_by_name(n) for n in self._input]
+        val = [self.graph.get_node_by_output(n) for n in self._input]
         return val
 
     @property
     def attr(self):
         return self._attr
+
+    @property
+    def attr_onnx(self):
+        onnx_attrs = {}
+        for a in self._attr.values():
+            if a.name in utils.ONNX_VALID_ATTRIBUTES:
+                onnx_attrs[a.name] = a
+        return onnx_attrs
 
     @property
     def name(self):
@@ -118,8 +128,20 @@ class Node(object):
         attr = self.attr.get(name, default)
         return attr
 
+    def get_attr_int(self, name):
+        """Get attribute map."""
+        attr = self.attr.get(name)
+        if attr is not None:
+            attr = attr.i
+        else:
+            attr = 0
+        return attr
+
     def set_attr(self, name, value):
         self.attr[name] = helper.make_attribute(name, value)
+
+    def set_attr_onnx(self, value):
+        self.attr[value.name] = value
 
     def set_deleted(self):
         self.type = "@@DELETED@@"
@@ -132,15 +154,16 @@ class Node(object):
         return self._skip_conversion
 
     @property
-    def shape(self):
-        """Get shape for now."""
-        shape = self.get_attr("shape")
-        if shape:
-            shape = shape.ints
-            # TODO: this is what we want ?
-            if shape and shape[0] == -1:
-                shape[0] = utils.ONNX_UNKNOWN_DIMENSION
-        return shape
+    def output_shapes(self):
+        """Get output shapes, mostly for debugging."""
+        val = [self.graph.get_shape(n) for n in self._output]
+        return val
+
+    @property
+    def output_dtypes(self):
+        """Get output dtypes, mostly for debugging."""
+        val = [self.graph.get_dtype(n) for n in self._output]
+        return val
 
     def get_tensor_type(self):
         """Get the onnx data type of a tensor."""
@@ -230,11 +253,57 @@ class Node(object):
             self._op.output.remove(node)
         self._op.output.extend(self.output)
 
+    def get_implicit_inputs(self, require_input_in_cur_graph=False):
+        """Get implicit inputs if the node has attributes being GraphProto."""
+        body_graphs = [attr.g for attr in self.op.attribute if attr.g]
+        outer_scope_node_input_ids = set()
+        for sub_g in body_graphs:
+            outer_scope_node_input_ids |= self._get_implicit_inputs(sub_g)
+
+        if require_input_in_cur_graph:
+            # only find referenced node in current graph
+            implicit_inputs_in_current_graph = set()
+            for input_id in outer_scope_node_input_ids:
+                n = self.graph.get_node_by_output(input_id)
+                if n is None:
+                    if not self.graph.is_initializer(input_id):
+                        if input_id not in self.graph.model_inputs:
+                            continue
+                implicit_inputs_in_current_graph.add(input_id)
+            return implicit_inputs_in_current_graph
+        return outer_scope_node_input_ids
+
+    @staticmethod
+    def _get_implicit_inputs(onnx_graph, recursive=True):
+        """Get implicit inputs for specified onnx graph."""
+        node_map = set()
+        for n in onnx_graph.node:
+            node_map |= set(n.output)
+
+        for n in onnx_graph.input:
+            node_map.add(n.name)
+
+        outer_scope_node_input_ids = set()
+        for n in onnx_graph.node:
+            for i in n.input:
+                if i not in node_map:
+                    outer_scope_node_input_ids.add(i)
+
+        if recursive:
+            for n in onnx_graph.node:
+                for attr in n.attribute:
+                    sub_g = attr.g
+                    if sub_g:
+                        outer_scope_node_input_ids |= Node._get_implicit_inputs(sub_g)
+
+        return outer_scope_node_input_ids
+
 
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
 
-    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=None, extra_opset=None):
+    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=None, extra_opset=None,
+                 output_names=None):
         """Create Graph.
         Args:
             nodes: list of Node()
@@ -246,21 +315,18 @@ class Graph(object):
         self._nodes = []
         self._initializers = {}
         self._nodes_by_name = {}
+        self._output_to_node_name = {}
         self.shapes = {}
         self._model_inputs = {}
         self._target = set(target)
         self._dtypes = dtypes
-
-        # override tf original output type, only used in make_model.
-        # for some ops such as TopK, the 2nd output must be int64 in onnx
-        # but has type int32 in tf
-        self._dtypes_override = {}
 
         self._output_shapes = output_shapes
         ops = [Node(node, self) for node in nodes]
         self.set_nodes(ops)
         self._opset = find_opset(opset)
         self._extra_opset = extra_opset
+        self.output_names = output_names
 
     @property
     def opset(self):
@@ -269,6 +335,10 @@ class Graph(object):
     @property
     def initializers(self):
         return self._initializers
+
+    @property
+    def model_inputs(self):
+        return self._model_inputs
 
     def is_target(self, name):
         """Return True if target platform is name."""
@@ -289,10 +359,58 @@ class Graph(object):
         node = Node(helper.make_node("Const", [], [name], name=name, value=onnx_tensor), self, skip_conversion)
         return node
 
+    def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
+                  op_name_scope=None, name=None, shapes=None, dtypes=None):
+        """Make a new onnx node in the graph"""
+        if attr is None:
+            attr = {}
+        if shapes is None:
+            shapes = []
+        if dtypes is None:
+            dtypes = []
+
+        op_name_basis = op_type
+        if op_name_scope:
+            op_name_basis = "_".join([op_name_scope, op_type])
+
+        if name is None:
+            name = utils.make_name(op_name_basis)
+
+        if outputs is None:
+            outputs = [name + ":" + str(i) for i in range(output_count)]
+
+        raw_attr = {}
+        onnx_attrs = []
+        for a, v in attr.items():
+            if isinstance(v, AttributeProto):
+                onnx_attrs.append(v)
+            else:
+                raw_attr[a] = v
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **raw_attr)
+        node = Node(onnx_node, self, skip_conversion=skip_conversion)
+        if onnx_attrs:
+            _ = [node.set_attr_onnx(a) for a in onnx_attrs]
+
+        if shapes:
+            utils.make_sure(len(shapes) == output_count, "output shape count not equal to output count")
+            for i in range(output_count):
+                self.set_shape(node.output[i], shapes[i])
+
+        if dtypes:
+            utils.make_sure(len(dtypes) == output_count, "output dtypes count not equal to output count")
+            for i in range(output_count):
+                self.set_dtype(node.output[i], dtypes[i])
+
+        return node
+
     def set_nodes(self, ops):
         """Set new node list."""
         self._nodes = ops
         self._nodes_by_name = {op.name: op for op in ops}
+        self._output_to_node_name = {}
+        for op in ops:
+            for op_output in op.output:
+                self._output_to_node_name[op_output] = op.name
 
     def update_proto(self):
         """Update the onnx protobuf from out internal Node structure."""
@@ -303,10 +421,7 @@ class Graph(object):
         for op in self.get_nodes():
             onnx_op = op.op
             del onnx_op.attribute[:]
-            attr = []
-            for a in op.attr.values():
-                if a.name in utils.ONNX_VALID_ATTRIBUTES:
-                    attr.append(a)
+            attr = [a for a in op.attr_onnx.values()]
             if attr:
                 onnx_op.attribute.extend(attr)
 
@@ -314,25 +429,42 @@ class Graph(object):
         """Get node list."""
         return self._nodes
 
+    def get_node_by_output(self, output):
+        """Get node by node output id"""
+        name = self._output_to_node_name.get(output)
+        ret = None
+        if name:
+            ret = self._nodes_by_name.get(name)
+        else:
+            ret = self._get_initializer_as_const_node(output)
+
+        return ret
+
     def get_node_by_name(self, name):
         """Get node by name."""
         ret = self._nodes_by_name.get(name)
         if not ret:
-            ret = self._nodes_by_name.get(node_name(name))
-        if not ret:
-            # if we processed the graph fully, set_nodes() the graph has no longer const nodes
-            # since we moved them to be initializers. But all graph processing code uses Node
-            # as the common data structure. To avoid special casing lots of code for initializers
-            # we create a dummy 'Const' Node here.
-            initializer = self._initializers.get(name)
-            if initializer:
-                ret = Node(helper.make_node("Const", [], [name], name=name, value=initializer),
-                           self, skip_conversion=True)
+            ret = self._get_initializer_as_const_node(name)
+        return ret
+
+    def _get_initializer_as_const_node(self, name):
+        """Create dummy const node representing initializers for easier node manipulation"""
+        ret = None
+        # if we processed the graph fully, set_nodes() the graph has no longer const nodes
+        # since we moved them to be initializers. But all graph processing code uses Node
+        # as the common data structure. To avoid special casing lots of code for initializers
+        # we create a dummy 'Const' Node here.
+        initializer = self._initializers.get(name)
+        if initializer is not None:
+            ret = self.make_node("Const", inputs=[], outputs=[name], name=name,
+                                 attr={"value": initializer})
         return ret
 
     def set_node_by_name(self, node):
         """Set node by name."""
         self._nodes_by_name[node.name] = node
+        for op_output in node.output:
+            self._output_to_node_name[op_output] = node.name
 
     def add_model_input(self, name, tensor_value_info):
         """Add placeholder node as model's input"""
@@ -371,13 +503,9 @@ class Graph(object):
         """Set dtype for node."""
         self._dtypes[name] = dtype
 
-    def override_dtype(self, name, val):
-        """Override dtype for node, the val will be used when build final model"""
-        self._dtypes_override[name] = val
-
     def get_shape(self, name):
         """Get shape for node."""
-        assert isinstance(name, str)
+        assert isinstance(name, six.text_type)
         shape = self._output_shapes.get(name)
         if shape:
             for i, v in enumerate(shape):
@@ -399,12 +527,11 @@ class Graph(object):
         """Copy shape from another node."""
         shape = self.get_shape(input_name)
         # assert shape is not None
-        if shape:
+        if shape is not None:
             self.set_shape(output_name, shape)
 
     def topological_sort(self, ops):
         """Topological sort of graph."""
-
         def _push_stack(stack, node, in_stack):
             stack.append(node)
             if node in in_stack:
@@ -425,8 +552,11 @@ class Graph(object):
             op_name_to_index[op.name] = i
 
         for i, op in enumerate(ops):
-            for inp in op.input:
-                j = self.get_node_by_name(inp)
+            all_input = set(op.input)
+            implicit_inputs = op.get_implicit_inputs()
+            all_input |= set(implicit_inputs)
+            for inp in all_input:
+                j = self.get_node_by_output(inp)
                 if j and j.type != "Const":
                     g[op_name_to_index[j.name]].append(i)
 
@@ -454,13 +584,12 @@ class Graph(object):
         ret = [x for _, x in sorted(zip(label, ops))]
         self.set_nodes(ret)
 
-    def make_model(self, doc, output_names, optimize=True):
+    def make_graph(self, doc, graph_name="tf2onnx"):
         """
-        Create final ModelProto for onnx from internal graph.
+        Create GraphProto for onnx from internal graph.
         Args:
             optimize: optimize graph via onnx
             doc: text for doc string of the model
-            output_names: list of model outputs
         """
         self.update_proto()
 
@@ -473,11 +602,8 @@ class Graph(object):
 
         # create output_tensor_values
         output_tensor_values = []
-        for name in output_names:
-            if name in self._dtypes_override:
-                dtype = self._dtypes_override[name]
-            else:
-                dtype = self.get_dtype(name)
+        for name in self.output_names:
+            dtype = self.get_dtype(name)
             if not dtype:
                 raise ValueError("cannot found the output dtype for " + name)
             v = helper.make_tensor_value_info(name, dtype, utils.make_onnx_shape(self.get_shape(name)))
@@ -488,6 +614,7 @@ class Graph(object):
         all_inputs = set()
         for op in self.get_nodes():
             all_inputs |= set(op.input)
+            all_inputs |= set(op.get_implicit_inputs())
             onnx_op = op.op
             ops.append(onnx_op)
 
@@ -507,12 +634,23 @@ class Graph(object):
         input_with_initializers.extend(list(self._model_inputs.values()))
 
         # create model proto
-        graph = helper.make_graph(ops, "tf2onnx",
+        graph = helper.make_graph(ops, graph_name,
                                   input_with_initializers,
                                   output_tensor_values,
                                   initializer=initializers,
                                   doc_string=doc)
 
+        return graph
+
+    def make_model(self, doc, optimize=False, graph_name="tf2onnx"):
+        """
+        Create final ModelProto for onnx from internal graph.
+        Args:
+            optimize: optimize graph via onnx
+            doc: text for doc string of the model
+            output_names: list of model outputs
+        """
+        graph = self.make_graph(doc, graph_name)
         kwargs = {"producer_name": "tf2onnx",
                   "producer_version": __version__}
         opsets = []
@@ -524,7 +662,8 @@ class Graph(object):
         kwargs["opset_imports"] = opsets
         model_proto = helper.make_model(graph, **kwargs)
 
-        # optimize the model proto
+        # optimize the model proto.
+        # TODO: this is disabled by default because of bugs in fuse_consecutive_transposes
         if optimize:
             model_proto = optimizer.optimize(model_proto)
         return model_proto
@@ -551,11 +690,12 @@ class Graph(object):
             return []
         return val
 
-    def dump_node_statistics(self, description):
+    def dump_node_statistics(self):
         op_cnt = collections.Counter()
         for n in self.get_nodes():
             op_cnt[n.type] += 1
-        print(description + ": ops statistics: {}".format(op_cnt))
+
+        return op_cnt
 
     @staticmethod
     def remove_input(node, to_be_removed):
@@ -564,7 +704,7 @@ class Graph(object):
             node: the node we expect the input on
             to_be_removed: the node name we want to remove
         """
-        assert isinstance(node, Node) and isinstance(to_be_removed, str)
+        assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
         for i, name in enumerate(node.input):
             if name == to_be_removed:
                 del node.input[i]
@@ -605,7 +745,7 @@ class Graph(object):
         Returns:
             node that was inserted
         """
-        assert isinstance(output_name, str) and isinstance(op_type, str)
+        assert isinstance(output_name, six.text_type) and isinstance(op_type, six.text_type)
         new_output = port_name(name)
         new_node = Node(helper.make_node(op_type, [output_name], [new_output], name=name, **kwargs), self)
         self.replace_all_inputs(self.get_nodes(), output_name, new_output)
@@ -630,7 +770,7 @@ class Graph(object):
     @staticmethod
     def replace_input(node, old_input, new_input):
         """Replace node."""
-        assert isinstance(node, Node) and isinstance(old_input, str) and isinstance(new_input, str)
+        assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
         is_replaced = False
         for i, input_name in enumerate(node.input):
             if input_name == old_input:
@@ -665,3 +805,49 @@ class Graph(object):
     @staticmethod
     def remove_deleted_nodes(ops):
         return [node for node in ops if not node.is_deleted()]
+
+    @staticmethod
+    def _extract_sub_graph_nodes(dest_node):
+        """
+        return related nodes of specified node
+        :param dest_node: the specified node
+        :return: set of related nodes
+        """
+        res_set = set()
+        processing_set = set([dest_node])
+        while processing_set:
+            top_node = processing_set.pop()
+            res_set.add(top_node)
+            for node in top_node.inputs:
+                if not node:
+                    # some node (for example Scan) has optional inputs, which
+                    # might has empty input.
+                    continue
+                if node not in res_set:
+                    processing_set.add(node)
+        return res_set
+
+    def extract_sub_graph_nodes(self, outputs_name):
+        """
+        find related nodes of specified list of nodes
+        """
+        res_set = set()
+        for output in outputs_name:
+            node = self.get_node_by_output(output)
+            res_set = res_set.union(self._extract_sub_graph_nodes(node))
+
+        # const nodes made at conversion stage are not needed, because ONNX will use initializer automatically
+        not_need_const = set()
+        for node in res_set:
+            if self.is_initializer(node.name):
+                not_need_const.add(node)
+
+        res_set = res_set - not_need_const
+        return list(res_set)
+
+    def delete_unused_nodes(self, outputs_name):
+        """
+        example of unused nodes: loop nodes generated by tensorflow rnn such as switch, loop_cond
+        """
+        related_nodes = self.extract_sub_graph_nodes(outputs_name)
+        self.set_nodes(related_nodes)

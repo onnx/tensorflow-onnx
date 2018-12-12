@@ -2,15 +2,14 @@
 # Licensed under the MIT license.
 
 """
-python -m tf2onnx.convert : tool to convert a frozen tensorflow to onnx
+python -m tf2onnx.convert : tool to convert a frozen tensorflow graph to onnx
 """
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import argparse
-import sys
-
 import onnx
 from onnx import helper
 import tensorflow as tf
@@ -33,7 +32,7 @@ def get_args():
     parser.add_argument("--outputs", required=True, help="model output_names")
     parser.add_argument("--opset", type=int, default=None, help="highest opset to use")
     parser.add_argument("--custom-ops", help="list of custom ops")
-    parser.add_argument("--target", default=",".join(DEFAULT_TARGET), help="target platform")
+    parser.add_argument("--target", default=",".join(DEFAULT_TARGET), choices=POSSIBLE_TARGETS, help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
@@ -53,10 +52,6 @@ def get_args():
         args.inputs_as_nchw = args.inputs_as_nchw.split(",")
     if args.target:
         args.target = args.target.split(",")
-        for target in args.target:
-            if target not in POSSIBLE_TARGETS:
-                print("unknown target ", target)
-                sys.exit(1)
 
     return args
 
@@ -87,7 +82,7 @@ def main():
         extra_opset = None
 
     graph_def = tf.GraphDef()
-    with tf.gfile.FastGFile(args.input, 'rb') as f:
+    with tf.gfile.GFile(args.input, 'rb') as f:
         graph_def.ParseFromString(f.read())
 
     # todo: consider to enable const folding by default?
@@ -102,13 +97,15 @@ def main():
                              opset=args.opset,
                              custom_op_handlers=custom_ops,
                              extra_opset=extra_opset,
-                             shape_override=args.shape_override)
+                             shape_override=args.shape_override,
+                             output_names=args.outputs,
+                             inputs_as_nchw=args.inputs_as_nchw)
 
-    optimizer = TransposeOptimizer(g, args.verbose is not None)
+    optimizer = TransposeOptimizer(g, args.outputs, args.verbose is not None)
     optimizer.optimize()
 
     model_proto = g.make_model(
-        "converted from {}".format(args.input), args.outputs,
+        "converted from {}".format(args.input),
         optimize=not args.continue_on_error)
 
     # write onnx graph
@@ -117,4 +114,5 @@ def main():
             f.write(model_proto.SerializeToString())
 
 
-main()
+if __name__ == "__main__":
+    main()

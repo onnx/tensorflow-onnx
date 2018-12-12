@@ -7,8 +7,18 @@ tf2onnx.rewriter.lstm_rewriter - lstm support
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
-from tf2onnx.rewriter.unit_rewriter_base import *
+import logging
+import numpy as np
+from tf2onnx import utils
+from tf2onnx.rewriter.rnn_utils import RnnWeights, RNNUnitType, get_weights_from_const_node, \
+    is_tensor_array_write_op, is_tensor_array_op, is_tensor_array_gather_op, is_tensor_array_size_op, \
+    check_is_timemajor_transpose
+
+from tf2onnx.rewriter.unit_rewriter_base import UnitRewriterBase
+
+# pylint: disable=invalid-name,unused-argument,missing-docstring
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.lstm_rewriter")
@@ -25,13 +35,13 @@ class LSTMUnitRewriter(UnitRewriterBase):
             "output": (self._output_switch_check, self._connect_lstm_output_to_graph, False),
         }
 
-    def run(self):
+    def run(self): # FIXME: pylint: disable=arguments-differ
         return super(LSTMUnitRewriter, self).run(RNNUnitType.LSTMCell)
 
     def get_rnn_scope_name(self, match):
         # take the cell output and go up 3 levels to find the scope:
         # name of h is like root/while/lstm_cell/mul_2
-        # root is the dynamic rnn's scope name. 
+        # root is the dynamic rnn's scope name.
         # root/while/lstm_cell is cell's scope name
         h_node = match.get_op("ht")
         parts = h_node.name.split('/')
@@ -43,51 +53,50 @@ class LSTMUnitRewriter(UnitRewriterBase):
         w_e = match.get_op("cell_kernel")
         w = get_weights_from_const_node(w_e)
         if not w:
-            return
+            return None
 
         # check https://www.tensorflow.org/versions/r1.8/api_docs/cc/class/tensorflow/ops/bias-add
         # for bias_add data format
         bias_add = match.get_op("bias_add")
         if bias_add.data_format != "NHWC":
             log.debug("BiasAdd data_format is not NHWC, SKIP")
-            return
+            return None
 
         b_e = match.get_op("cell_bias")
         b = get_weights_from_const_node(b_e)
         if not b or b.value.shape[0] != w.value.shape[1]:
             log.warning("cell_kernel and cell_bias's dimensions does not match, skip")
-            return 
+            return None
 
         ft_bias = match.get_op("ft_bias")
         ft = get_weights_from_const_node(ft_bias)
         if not ft:
-            return
+            return None
 
         if not (len(ft.value) == 1 and b_e.dtype == ft_bias.dtype):
-            return
+            return None
 
         return RnnWeights(w, b, ft)
 
     def _ct_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         # original we use c.inputs[0] == match.get_op("ft") to check c initializer for LSTMCell
-        # but in BasicLSTMCell, c.inputs[1] is "ft", that's because BasicLSTMCell and LSTMCell's call 
-        # function are defining the multiplication with different order. So we change to match.get_op("ft") in c.inputs
+        # but in BasicLSTMCell, c.inputs[1] is "ft", that's because BasicLSTMCell and LSTMCell's call
+        # function are defining the multiplication with different order.
+        # So we change to match.get_op("ft") in c.inputs
         mul_nodes = [c for c in identity_consumers if c.type == "Mul" and match.get_op("ft") in c.inputs]
         if len(mul_nodes) == 1:
-            log.debug("find c initializer value at " + enter_target_node_input_id)
+            log.debug("find c initializer value at %s", enter_target_node_input_id)
             return enter_target_node_input_id
-        else:
-            log.debug("multiple Mul matching found, cannot identify c initializer")
-            return None
+        log.debug("multiple Mul matching found, cannot identify c initializer")
+        return None
 
     def _ht_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         concat_nodes = [c for c in identity_consumers if c == match.get_op("xh")]
         if len(concat_nodes) == 1:
-            log.debug("find h initializer value at " + enter_target_node_input_id)
+            log.debug("find h initializer value at %s", enter_target_node_input_id)
             return enter_target_node_input_id
-        else:
-            log.debug(str(len(concat_nodes)) + "Concat matching found, cannot identify h initializer")
-            return None
+        log.debug("%d Concat matching found, cannot identify h initializer", len(concat_nodes))
+        return None
 
     # when state is not tuple, ct and ht may share same switch.
     def _ct_ht_shared_switch_check(self, enter_target_node_input_id, identity_consumers, match):
@@ -113,20 +122,20 @@ class LSTMUnitRewriter(UnitRewriterBase):
                 h_slice = s
 
         if c_slice and h_slice:
-            log.debug("find c_h shared initializer value at " + enter_target_node_input_id) 
+            log.debug("find c_h shared initializer value at %s", enter_target_node_input_id)
             return enter_target_node_input_id
         return None
 
     def _output_switch_check(self, enter_target_node_input_id, identity_consumers, match):
         ta_write_nodes = [c for c in identity_consumers if is_tensor_array_write_op(c)]
         if len(ta_write_nodes) == 1:
-            enter_target_node = self.g.get_node_by_name(enter_target_node_input_id)
+            enter_target_node = self.g.get_node_by_output(enter_target_node_input_id)
             if is_tensor_array_op(enter_target_node):
                 log.debug("found output switch node")
                 return enter_target_node_input_id
             log.debug("found enter target node is not ta node")
             return None
-        log.debug(str(len(ta_write_nodes)) + " TensorArrayWrite matching found, cannot validate output switch")
+        log.debug("%d TensorArrayWrite matching found, cannot validate output switch", len(ta_write_nodes))
         return None
 
     def process_weights_and_bias(self, rnn_weights, rnn_props):
@@ -196,26 +205,24 @@ class LSTMUnitRewriter(UnitRewriterBase):
         rnn_props.onnx_input_ids["initial_h"] = init_h_id
         rnn_props.onnx_input_ids["initial_c"] = init_c_id
 
-    # todo: refine when implementing GRU
     def _process_non_tuple_ch_init_nodes(self, rnn_props):
         input_id = rnn_props.var_initializers["ct_ht"]
         hidden_size = rnn_props.hidden_size
 
-        # todo: remove this once Fill ops is supported 
+        # todo: remove this once Fill ops is supported
         fill_ch_init_node = self._workaround_fill_ch_init_node(input_id, rnn_props)
-        if fill_ch_init_node: 
+        if fill_ch_init_node:
             return fill_ch_init_node.output[0], fill_ch_init_node.output[0]
 
         attr = {"axes": [1], "starts": [0], "ends": [hidden_size]}
-        slice_node1 = make_onnx_node(self.g, "Slice", [input_id], attr)
-        unsqueeze_node_1 = make_onnx_node(self.g, "Unsqueeze", [slice_node1.output[0]], attr={"axes": [0]})
+        slice_node1 = self.g.make_node("Slice", [input_id], attr)
+        unsqueeze_node_1 = self.g.make_node("Unsqueeze", [slice_node1.output[0]], attr={"axes": [0]})
 
         attr = {"axes": [1], "starts": [hidden_size], "ends": [hidden_size*2]}
-        slice_node2 = make_onnx_node(self.g, "Slice", [input_id], attr)
-        unsqueeze_node_2 = make_onnx_node(self.g, "Unsqueeze", [slice_node2.output[0]], attr={"axes": [0]})
+        slice_node2 = self.g.make_node("Slice", [input_id], attr)
+        unsqueeze_node_2 = self.g.make_node("Unsqueeze", [slice_node2.output[0]], attr={"axes": [0]})
 
         self.all_nodes.extend([slice_node1, slice_node2, unsqueeze_node_1, unsqueeze_node_2])
-        self.must_keep_nodes.append(self.g.get_node_by_name(input_id))
         return unsqueeze_node_1.output[0], unsqueeze_node_2.output[0]
 
     def _process_tuple_ch_init_nodes(self, rnn_props):
@@ -227,29 +234,28 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
     def _process_c_or_h_init_nodes(self, initializer_input_id, rnn_props):
         # todo: remove this once Fill ops is supported
-        fill_ch_init_node = self._workaround_fill_ch_init_node(initializer_input_id, rnn_props) 
-        if fill_ch_init_node: 
+        fill_ch_init_node = self._workaround_fill_ch_init_node(initializer_input_id, rnn_props)
+        if fill_ch_init_node:
             return fill_ch_init_node.output[0]
 
-        node = self.g.get_node_by_name(initializer_input_id)
-        self.must_keep_nodes.append(node)
+        node = self.g.get_node_by_output(initializer_input_id)
         if node.is_const():
             val = node.get_tensor_value()
             initial_name = utils.make_name("Const")
             new_val = np.expand_dims(val, axis=0)
             const_node = self.g.make_const(initial_name, new_val)
             return const_node.output[0]
-        else:
-            squeeze_node = make_onnx_node(self.g, "Unsqueeze", [initializer_input_id], attr={"axes": [0]})
-            self.g.replace_all_inputs(self.g.get_nodes(), initializer_input_id, squeeze_node.output[0])
-            self.all_nodes.append(squeeze_node)
-            return squeeze_node.output[0]
+        squeeze_node = self.g.make_node("Unsqueeze", [initializer_input_id], attr={"axes": [0]})
+        self.g.replace_all_inputs(self.g.get_nodes(), initializer_input_id, squeeze_node.output[0])
+        self.all_nodes.append(squeeze_node)
+        return squeeze_node.output[0]
 
     def create_rnn_node(self, rnn_props):
         # specify if the RNN is forward, reverse, or bidirectional.
         # Must be one of forward (default), reverse, or bidirectional.
-        # Here we won't mark bidirectional/reverse, we will have another rewriter running after this one, which will based 
-        # on patterns to combine a forward LSTM and a backward LSTM into a bidirectional one.
+        # Here we won't mark bidirectional/reverse, we will have another rewriter running
+        # after this one, which will based on patterns to combine a forward LSTM and a
+        # backward LSTM into a bidirectional one.
         direction = "forward"
         num_direction = 1
         # todo: input_forget
@@ -258,23 +264,28 @@ class LSTMUnitRewriter(UnitRewriterBase):
         lstm_inputs = [
             inputs["X"], inputs["W"], inputs["R"], inputs["B"],
             inputs["sequence_lens"], inputs["initial_h"], inputs["initial_c"]]
-        lstm_node = make_onnx_node(self.g, "LSTM", lstm_inputs, attr, 3)
 
-        x_shape = self.g.get_shape(lstm_node.input[0])
-        x_seq_length = x_shape[0] 
-        x_batch_size = x_shape[1] 
-        self.g.set_shape(lstm_node.output[0], [x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size]) 
-        self.g.set_shape(lstm_node.output[1], [num_direction, x_batch_size, rnn_props.hidden_size]) 
-        self.g.copy_shape(lstm_node.output[1], lstm_node.output[2])
+        x_shape = self.g.get_shape(lstm_inputs[0])
+        x_seq_length = x_shape[0]
+        x_batch_size = x_shape[1]
+        out_dtype = self.g.get_dtype(lstm_inputs[0])
+
+        lstm_node = self.g.make_node("LSTM", lstm_inputs, attr=attr, output_count=3,
+                                     shapes=[[x_seq_length, num_direction, x_batch_size, rnn_props.hidden_size],
+                                             [num_direction, x_batch_size, rnn_props.hidden_size],
+                                             [num_direction, x_batch_size, rnn_props.hidden_size]],
+                                     dtypes=[out_dtype, out_dtype, out_dtype])
         return lstm_node
 
     def _connect_lstm_yh_to_graph(self, lstm_node, exit_node, rnn_props):
         # in tf, y_h output shape is: [batch, hidden]
         # in onnx, output shape is: [number_directions, batch, hidden]
         output_id = lstm_node.output[1]
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [0]})
         lstm_yh_shape = self.g.get_shape(output_id)
-        self.g.set_shape(squeeze_node.output[0], [lstm_yh_shape[1], lstm_yh_shape[2]])
+        squeeze_output_shape = [lstm_yh_shape[1], lstm_yh_shape[2]]
+        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
+                                        shapes=[squeeze_output_shape])
+
         self.all_nodes.extend([squeeze_node])
         self.g.replace_all_inputs(self.all_nodes, exit_node.output[0], squeeze_node.output[0])
 
@@ -282,45 +293,50 @@ class LSTMUnitRewriter(UnitRewriterBase):
         # in tf, y_c output shape is: [batch, hidden]
         # in onnx, output shape is: [number_directions, batch, hidden]
         output_id = lstm_node.output[2]
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [0]})
         lstm_yc_shape = self.g.get_shape(output_id)
-        self.g.set_shape(squeeze_node.output[0], [lstm_yc_shape[1], lstm_yc_shape[2]])
+        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
+                                        shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
+                                        dtypes=[self.g.get_dtype(output_id)])
         self.all_nodes.extend([squeeze_node])
         self.g.replace_all_inputs(self.all_nodes, exit_node.output[0], squeeze_node.output[0])
 
     def _connect_lstm_ych_to_graph(self, lstm_node, exit_node, rnn_props):
         # in tf, concat of y_c and y_h output shape is: [batch, hidden *2]
         # in onnx, y_c/y_h output shape is: [number_directions, batch, hidden]
-
-        concat = make_onnx_node(self.g, "Concat", [lstm_node.output[2], lstm_node.output[1]], attr={"axis": 2})
         yc_shape = self.g.get_shape(lstm_node.output[2])
-        self.g.set_shape(concat.output[0], [yc_shape[0], yc_shape[1], yc_shape[2] * 2])
+        concat_output_shape = [yc_shape[0], yc_shape[1], yc_shape[2] * 2]
+        concat = self.g.make_node("Concat", [lstm_node.output[2], lstm_node.output[1]],
+                                  attr={"axis": 2}, shapes=[concat_output_shape],
+                                  dtypes=[self.g.get_dtype(lstm_node.output[2])])
 
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [concat.output[0]], attr={"axes": [0]})
-        concat_shape = self.g.get_shape(concat.output[0])
-        self.g.set_shape(squeeze_node.output[0], [concat_shape[1], concat_shape[2]])
+        squeeze_output_shape = [concat_output_shape[1], concat_output_shape[2]]
+        squeeze_node = self.g.make_node("Squeeze", [concat.output[0]], attr={"axes": [0]},
+                                        shapes=[squeeze_output_shape],
+                                        dtypes=[self.g.get_dtype(concat.output[0])])
+
         self.all_nodes.extend([concat, squeeze_node])
-
         self.g.replace_all_inputs(self.all_nodes, exit_node.output[0], squeeze_node.output[0])
 
     def _connect_lstm_output_to_graph(self, lstm_node, exit_node, rnn_props):
         exit_consumers = self.g.find_output_consumers(exit_node.output[0])
         gather_node = self._validate_output_exit_consumers(exit_consumers)
         if len(exit_consumers) != 2 or not gather_node:
-            log.debug("lstm output exit node has " + str(len(exit_consumers)) + " consumers")
+            log.debug("lstm output exit node has %d consumers", len(exit_consumers))
             raise ValueError("lstm output exit node check failed")
 
         # gather output for sure has shape [time, batch, hidden]
         gather_output_id = gather_node.output[0]
-        log.debug("found output ta gather node " + gather_output_id)
+        log.debug("found output ta gather node %s", gather_output_id)
         # in tf batch major mode, output shape is : [batch, time, hidden]
         # in time major mode, output shape is: [time, batch, hidden]
         # in onnx, output shape is : [time, num_directions, batch, hidden]
 
         output_id = lstm_node.output[0]
-        squeeze_node = make_onnx_node(self.g, "Squeeze", [output_id], attr={"axes": [1]})
         lstm_output_shape = self.g.get_shape(output_id)
-        self.g.set_shape(squeeze_node.output[0], [lstm_output_shape[0], lstm_output_shape[2], lstm_output_shape[3]])
+        squeeze_output_shape = [lstm_output_shape[0], lstm_output_shape[2], lstm_output_shape[3]]
+        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
+                                        shapes=[squeeze_output_shape],
+                                        dtypes=[self.g.get_dtype(output_id)])
 
         if not rnn_props.time_major:
             gather_consumers = self.g.find_output_consumers(gather_output_id)
@@ -331,11 +347,13 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
             # we just check the transpose here, but will not re-use it, because
             # it may hold non-const perms. so we re-create a new transpose to replace it
-            attr = { "perm": np.array([1, 0, 2], dtype=np.int64) }
-            new_trans = make_onnx_node(self.g, "Transpose", [squeeze_node.output[0]], attr)
-            trans_input_shape = self.g.get_shape(squeeze_node.output[0])
+            attr = {"perm": np.array([1, 0, 2], dtype=np.int64)}
+            trans_output_shape = [squeeze_output_shape[1], squeeze_output_shape[0], squeeze_output_shape[2]]
+            new_trans = self.g.make_node("Transpose", [squeeze_node.output[0]], attr,
+                                         shapes=[trans_output_shape],
+                                         dtypes=[self.g.get_dtype(squeeze_node.output[0])])
+
             self.g.replace_all_inputs(self.all_nodes, trans.output[0], new_trans.output[0])
-            self.g.set_shape(new_trans.output[0], [trans_input_shape[1], trans_input_shape[0], trans_input_shape[2]])
             self.all_nodes.extend([new_trans])
 
         self.g.replace_all_inputs(self.all_nodes, gather_output_id, squeeze_node.output[0])
@@ -344,7 +362,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
     def _validate_output_exit_consumers(self, exit_consumers):
         if len(exit_consumers) != 2:
             return None
-        
+
         gather_node = None
         for n in exit_consumers:
             if is_tensor_array_gather_op(n):

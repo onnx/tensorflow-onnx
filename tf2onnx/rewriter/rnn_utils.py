@@ -5,16 +5,20 @@
 tf2onnx.rewriter.rnn_utils - rnn support
 """
 
+from __future__ import unicode_literals
+
 import logging
-import numpy as np
 from enum import Enum
-from onnx import helper
 from tf2onnx import utils
-from tf2onnx.graph import Node
-from tf2onnx.graph_matcher import *
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher # pylint: disable=unused-import
+
+
+# pylint: disable=invalid-name,unused-argument,missing-docstring
+
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.rnn_utils")
+
 
 class REWRITER_RESULT(Enum):
     SKIP = 1
@@ -70,11 +74,9 @@ class RnnProperties:
 
     def is_valid(self):
         if not self.input_node:
-            log.error("no input node found for current rnn, skip")
+            log.debug("no input node found for current rnn, skip")
             return False
-        else:
-            log.debug("input node with port id " + self.input_id)
-
+        log.debug("input node with port id %s", self.input_id)
         return True
 
 
@@ -175,6 +177,51 @@ class RNNUnitType(Enum):
     GRUBlockCell = 2
 
 
+# describe the body graph's input and output node
+class SubGraphMetadata(object):
+    def __init__(self, g, input_ids, output_ids, initial_input_ids):
+        self.g = g
+        self.input_ids = input_ids
+        self.output_ids = output_ids
+
+        self.initial_input_ids = initial_input_ids
+
+        # sub-graph boundary
+        self.other_enter_input_ids = []
+
+
+class BodyGraphDict():
+    BODY_GRAPH_DICT = {}
+
+    def __init__(self, g):
+        self.g = g
+
+    @staticmethod
+    def add_body_graph_info(body_owner_name, body_graph):
+        if body_owner_name not in BodyGraphDict.BODY_GRAPH_DICT:
+            BodyGraphDict.BODY_GRAPH_DICT[body_owner_name] = body_graph
+        else:
+            raise ValueError("body_owner_name " + body_owner_name + " already exists as a key")
+
+    @staticmethod
+    def pop_body_graph_info(body_owner_name):
+        val = BodyGraphDict.BODY_GRAPH_DICT[body_owner_name]
+        del BodyGraphDict.BODY_GRAPH_DICT[body_owner_name]
+        return val
+
+    @staticmethod
+    def has_body_graph_info(body_owner_name):
+        return body_owner_name in BodyGraphDict.BODY_GRAPH_DICT
+
+    @staticmethod
+    def get_body_graph_output_names():
+        output_names = []
+        for k in BodyGraphDict.BODY_GRAPH_DICT:
+            _output_names = BodyGraphDict.BODY_GRAPH_DICT[k].output_ids
+            output_names.extend(_output_names)
+        return set(output_names)
+
+
 rnn_cell_patterns = {
     RNNUnitType.LSTMCell: lstmcell_pattern,
     RNNUnitType.GRUCell: grucell_pattern,
@@ -197,36 +244,32 @@ def get_weights_from_const_node(node):
     if temp and temp.type == 'Const':
         val = temp.get_tensor_value()
         dtype = utils.ONNX_TO_NUMPY_DTYPE[temp.dtype]
-        log.debug("found weights " + temp.name)
+        log.debug("found weights %s", temp.name)
     else:
-        log.error("weight node seems not to be Const, skip, node name is " + temp.name)
-        return
+        log.debug("weight node seems not to be Const, skip, node name is %s", temp.name)
+        return None
 
     return RnnWeight(node, val, dtype)
 
 
 def check_is_timemajor_transpose(node):
     # TensorFlow transpose node has perm as its second input
-    if node.type != "Transpose" :
-        return
+    if node.type != "Transpose":
+        return False
 
     perm_node = node.inputs[1]
     if perm_node.is_const():
-        if list(node.inputs[1].get_tensor_value()) == [1, 0, 2]:
-            return True
-        else:
-            return
-    elif check_is_unfolded_perm(perm_node):
+        return list(node.inputs[1].get_tensor_value()) == [1, 0, 2]
+    if check_is_unfolded_perm(perm_node):
         return True
-    else:
-        raise ValueError("Not supported yet")
+    raise ValueError("Not supported yet")
 
 
 # todo: fix this
 def check_is_unfolded_perm(perm_node):
     # For some case, like HallWay, the perm is a ConcatV2,
     # but it should be calculated when constant-fold. TODO: investigate why not constant fold.
-    # current workaround: use np to calculate the val explicitly. 
+    # current workaround: use np to calculate the val explicitly.
     if perm_node.type == "ConcatV2" and len(perm_node.inputs) == 3:
         const_node_val = perm_node.inputs[0].get_tensor_value()
         if list(const_node_val) != [1, 0]:
@@ -241,18 +284,6 @@ def check_is_unfolded_perm(perm_node):
             # todo: refine this
             return True
     return False
-
-
-def make_onnx_node(g, op_type, inputs, attr=None, output_count=1, skip_conversion=True):
-    if attr is None:
-        attr = {}
-    node_name = utils.make_name(op_type)
-    outputs = [node_name + ":" + str(i) for i in np.arange(output_count)]
-    node = Node(
-        helper.make_node(op_type, inputs, outputs, name = node_name, **attr),
-        g, skip_conversion = skip_conversion)
-
-    return node
 
 
 def is_reverse_op(op):
@@ -286,3 +317,10 @@ def is_tensor_array_op(op):
 def is_tensor_array_size_op(op):
     return op.type in ("TensorArraySizeV2", "TensorArraySizeV3")
 
+
+def is_placeholder_op(op):
+    return op.type == "Placeholder"
+
+
+def is_loopcond_op(op):
+    return op.type == "LoopCond"

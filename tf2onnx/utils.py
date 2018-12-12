@@ -7,15 +7,16 @@ tf2onnx.utils - misc utilities for tf2onnx
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
+import os
 import re
+import six
 import numpy as np
-
-from onnx import helper, onnx_pb, defs, numpy_helper
-
 import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
-
+from google.protobuf import text_format
+from onnx import helper, onnx_pb, defs, numpy_helper
 
 #
 #  mapping dtypes from tensorflow to onnx
@@ -35,7 +36,7 @@ TF_TO_ONNX_DTYPE = {
     types_pb2.DT_COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     types_pb2.DT_BOOL: onnx_pb.TensorProto.BOOL,
     types_pb2.DT_RESOURCE: onnx_pb.TensorProto.INT64,  # TODO: hack to allow processing on control flow
-    types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8, # TODO: map quint8 to  uint8 for now
+    types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8,  # TODO: map quint8 to  uint8 for now
 }
 
 #
@@ -85,9 +86,8 @@ ONNX_VALID_ATTRIBUTES = {
     'dtype', 'output_shape', 'spatial', 'split', 'input_forget', 'keepdims', 'transA', 'auto_pad', 'border', 'low',
     'linear_before_reset', 'height_scale', 'output_padding', 'shape', 'kernel_shape', 'epsilon', 'size', 'starts',
     'direction', 'max', 'clip', 'across_channels', 'value', 'strides', 'extra_shape', 'scales', 'k', 'sample_size',
-    'blocksize', 'epsilon', 'momentum'
+    'blocksize', 'epsilon', 'momentum', 'body', 'directions', 'num_scan_inputs', 'then_branch', 'else_branch'
 }
-
 
 # index for internally generated names
 INTERNAL_NAME = 1
@@ -173,12 +173,12 @@ def get_shape(node):
     dims = None
     try:
         if node.type == "Const":
-            shape = node.get_attr("value").tensor_shape
+            shape = get_tf_node_attr(node, "value").tensor_shape
             dims = [int(d.size) for d in shape.dim]
         else:
-            shape = node.get_attr("shape")
+            shape = get_tf_node_attr(node, "shape")
             dims = [d.size for d in shape.dim]
-        if shape[0] is not None or shape[0] == -1:
+        if shape[0] is None or shape[0] == -1:
             shape[0] = 1
     except:  # pylint: disable=bare-except
         pass
@@ -201,7 +201,10 @@ def node_name(name):
 
 def make_onnx_shape(shape):
     """shape with -1 is not valid in onnx ... make it a name."""
-    return [make_name("unk") if i == -1 else i for i in shape]
+    if shape:
+        # don't do this if input is a scalar
+        return [make_name("unk") if i == -1 else i for i in shape]
+    return shape
 
 
 def port_name(name, nr=0):
@@ -209,13 +212,65 @@ def port_name(name, nr=0):
     return name + ":" + str(nr)
 
 
+def make_onnx_identity(node_input, node_output, name=None):
+    if name is None:
+        name = make_name("identity")
+    return helper.make_node("Identity", [node_input], [node_output], name=name)
+
+
 PREFERRED_OPSET = 7
 
 
 def find_opset(opset):
+    """Find opset."""
     if opset is None or opset == 0:
         opset = defs.onnx_opset_version()
         if opset > PREFERRED_OPSET:
             # if we use a newer onnx opset than most runtimes support, default to the one most supported
             opset = PREFERRED_OPSET
     return opset
+
+
+def get_tf_node_attr(node, name):
+    """Parser TF node attribute."""
+    if six.PY2:
+        # For python2, TF get_attr does not accept unicode
+        name = str(name)
+    return node.get_attr(name)
+
+
+def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False):
+    """Save onnx model as file. Save a pbtxt file as well if as_text is True"""
+    save_path = save_path_root
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    if include_test_data:
+        data_path = os.path.join(save_path, "test_data_set_0")
+        if not os.path.exists(data_path):
+            os.makedirs(data_path)
+
+        i = 0
+        for data_key in feed_dict:
+            data = feed_dict[data_key]
+            t = numpy_helper.from_array(data)
+            t.name = data_key
+            data_full_path = os.path.join(data_path, "input_" + str(i) + ".pb")
+            with open(data_full_path, 'wb') as f:
+                f.write(t.SerializeToString())
+            i += 1
+
+    target_path = os.path.join(save_path, onnx_file_name + ".onnx")
+    with open(target_path, "wb") as f:
+        f.write(model_proto.SerializeToString())
+
+    if as_text:
+        with open(target_path + ".pbtxt", "w") as f:
+            f.write(text_format.MessageToString(model_proto))
+
+    return target_path
+
+
+def make_sure(bool_val, error_msg):
+    if not bool_val:
+        raise ValueError("make_sure failure:" + error_msg)

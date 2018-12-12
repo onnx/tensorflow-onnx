@@ -8,19 +8,24 @@ This rewriter depends on tf2onnx.rewriter.lstm_rewriter's results.
 
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
+import logging
+import numpy as np
 from onnx import numpy_helper
-from tf2onnx.rewriter.rnn_utils import *
+from tf2onnx import utils
+from tf2onnx.rewriter.rnn_utils import is_reverse_op
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.bilstm_rewriter")
 
+# pylint: disable=invalid-name,unused-argument,missing-docstring
 
 def process_bilstm(g, bi_lstms):
     for fw, bw in bi_lstms:
         input_id = fw[0]
         log.debug("=========================")
-        log.debug("start handling potential bidirectional lstm " + input_id)
+        log.debug("start handling potential bidirectional lstm %s", input_id)
 
         lstm_fw = fw[1]
         lstm_bw = bw[1]
@@ -52,7 +57,7 @@ def process_bilstm(g, bi_lstms):
 
         b_name = utils.make_name("B")
         b_node = g.make_const(b_name, B, skip_conversion=True)
-        lstm_inputs= [lstm_fw.input[0], w_node.output[0], r_node.output[0], b_node.output[0]]
+        lstm_inputs = [lstm_fw.input[0], w_node.output[0], r_node.output[0], b_node.output[0]]
         if len(lstm_fw.inputs) > 4:
             lstm_inputs.extend([lstm_fw.input[4], h_node.output[0], c_node.output[0]])
 
@@ -64,12 +69,12 @@ def process_bilstm(g, bi_lstms):
             continue
 
         attr = {"direction": direction, "hidden_size": hidden_size}
-        bi_lstm_node = make_onnx_node(g, "LSTM", lstm_inputs, attr=attr, output_count=3)
+        bi_lstm_node = g.make_node("LSTM", lstm_inputs, attr=attr, output_count=3)
         all_nodes.append(bi_lstm_node)
         log.debug("processing output nodes")
 
-        to_remove = [lstm_fw.name, lstm_fw.input[1], lstm_fw.input[2], lstm_fw.input[3], 
-            lstm_bw.name, lstm_bw.input[1], lstm_bw.input[2], lstm_bw.input[3]]
+        to_remove = [lstm_fw.name, lstm_fw.input[1], lstm_fw.input[2], lstm_fw.input[3],
+                     lstm_bw.name, lstm_bw.input[1], lstm_bw.input[2], lstm_bw.input[3]]
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 0, all_nodes, to_remove)
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 1, all_nodes, to_remove)
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 2, all_nodes, to_remove)
@@ -87,7 +92,7 @@ def process_bilstm(g, bi_lstms):
         old_x_has_lstm_as_consumer = [n for n in old_x_consumers if n.type == "LSTM"]
         if not old_x_has_lstm_as_consumer:
             log.debug("plan to remove useless reverse op in bw")
-            reverse_node = g.get_node_by_name(lstm_bw_old_x)
+            reverse_node = g.get_node_by_output(lstm_bw_old_x)
 
             if reverse_node.type == "Transpose":
                 reverse_node = reverse_node.inputs[0]
@@ -111,54 +116,39 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
     if lstm_output_index == 0:
         axis = 1
         # remove reverse op for lstm_bw
-        # todo: figure out a better way to remove reverse op
-        squeeze_nodes = [c for c in bw_consumers if c.type == "Squeeze" ]
-        s_cnt = len(squeeze_nodes)
-        if s_cnt > 1:
-            raise ValueError("unexpected number of squeeze following LSTM 1st output")
-        elif s_cnt == 1:
-            s = squeeze_nodes[0]
-            trans_nodes = g.find_output_consumers(s.output[0])
-            if len(trans_nodes) == 1:
-                if trans_nodes[0].type == "Transpose":
-                    reverse_nodes = g.find_output_consumers(trans_nodes[0].output[0])
-                elif is_reverse_op(trans_nodes[0]):
-                    reverse_nodes = trans_nodes
-                else:
-                    raise ValueError("not found reverse op, unexpected")
+        reverse_nodes = get_reverse_nodes_after_y_output(g, lstm_bw)
+        if not reverse_nodes:
+            raise ValueError("should not happen y_output is not followed with reverse node")
 
-                for r_op in reverse_nodes:
-                    log.debug("remove reverse op called " + r_op.name)
-                    g.replace_all_inputs(all_nodes, r_op.output[0], r_op.input[0])
-                    to_remove.append(r_op.name)
-            else:
-                raise ValueError("unexpected number of transpose after LSTM 1st output")
-    elif lstm_output_index == 1 or lstm_output_index == 2:
+        for r_op in reverse_nodes:
+            log.debug("remove reverse op called %s", r_op.name)
+            g.replace_all_inputs(all_nodes, r_op.output[0], r_op.input[0])
+            to_remove.append(r_op.name)
+    elif lstm_output_index in [1, 2]:
         axis = 0
     else:
         raise ValueError("LSTM only should has 3 outputs.")
 
     if fw_consumers:
         attr = {"axes": [axis], "starts": [0], "ends": [1]}
-        slice_node_fw = make_onnx_node(g, "Slice", [bi_lstm.output[lstm_output_index]], attr)
+        slice_node_fw = g.make_node("Slice", [bi_lstm.output[lstm_output_index]], attr=attr)
         all_nodes.append(slice_node_fw)
         g.replace_all_inputs(fw_consumers, lstm_fw.output[lstm_output_index], slice_node_fw.output[0])
 
     if bw_consumers:
         attr = {"axes": [axis], "starts": [1], "ends": [2]}
-        slice_node_bw = make_onnx_node(g, "Slice", [bi_lstm.output[lstm_output_index]], attr)
+        slice_node_bw = g.make_node("Slice", [bi_lstm.output[lstm_output_index]], attr=attr)
         all_nodes.append(slice_node_bw)
         g.replace_all_inputs(bw_consumers, lstm_bw.output[lstm_output_index], slice_node_bw.output[0])
 
 
 def check_const(g, input_id):
-    node = g.get_node_by_name(input_id)
+    node = g.get_node_by_output(input_id)
     if node and node.is_const():
         return (True, node.get_tensor_value())
-    elif g.is_initializer(input_id):
+    if g.is_initializer(input_id):
         tensor = g.get_initializer(input_id)
         return (True, numpy_helper.to_array(tensor))
-
     return (None, None)
 
 
@@ -174,10 +164,9 @@ def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
     if fw_init_is_const and bw_init_is_const:
         initial_val = np.concatenate((init_fw_val, init_bw_val), axis=0)
         init_name = utils.make_name("initial")
-        init_node = g.make_const(init_name, initial_val, skip_conversion = True)
+        init_node = g.make_const(init_name, initial_val, skip_conversion=True)
     else:
-        attr = {"axis" : 0}
-        init_node = make_onnx_node(g, "Concat", [fw_init_input_id, bw_init_input_id], attr)
+        init_node = g.make_node("Concat", [fw_init_input_id, bw_init_input_id], attr={"axis": 0})
         to_append.append(init_node)
 
     return init_node
@@ -208,13 +197,47 @@ def rewrite_bidirectional_lstms(g, ops):
             is_backward_lstm = True
 
         if is_backward_lstm:
-            log.debug("find bw lstm" + input_id)
-            bw_lstm[input_id] = [input_id, n]
+            # make sure reverse lstm output will be reversed back
+            if get_reverse_nodes_after_y_output(g, n):
+                log.debug("find bw lstm %s", input_id)
+                bw_lstm[input_id] = [input_id, n]
         else:
-            log.debug("find fw lstm" + input_id)
+            log.debug("find fw lstm %s", input_id)
             fw_lstm[input_id] = [input_id, n]
 
     bilstm_input = list(set(fw_lstm.keys()).intersection(bw_lstm.keys()))
     bi_lstms = [(fw_lstm[input_id], bw_lstm[input_id]) for input_id in bilstm_input]
 
     return process_bilstm(g, bi_lstms)
+
+
+def get_reverse_nodes_after_y_output(g, lstm_bw):
+    bw_consumers = g.find_output_consumers(lstm_bw.output[0])
+
+    # todo: figure out a better way to remove reverse op
+    squeeze_nodes = [c for c in bw_consumers if c.type == "Squeeze"]
+    s_cnt = len(squeeze_nodes)
+    if s_cnt == 1:
+        s = squeeze_nodes[0]
+        trans_nodes = g.find_output_consumers(s.output[0])
+        if len(trans_nodes) == 1:
+            if trans_nodes[0].type == "Transpose":
+                reverse_nodes = g.find_output_consumers(trans_nodes[0].output[0])
+            elif is_reverse_op(trans_nodes[0]):
+                reverse_nodes = trans_nodes
+            else:
+                log.debug("not found reverse op, unexpected")
+                return None
+
+            are_all_reverse = all([is_reverse_op(r_op) for r_op in reverse_nodes])
+            if are_all_reverse:
+                return reverse_nodes
+
+            log.debug("bw y output is used followed by reverse node")
+            return None
+
+        log.debug("unexpected number of transpose after LSTM 1st output:%s", s_cnt)
+        return None
+
+    log.debug("unexpected number of squeeze following LSTM 1st output:%s", s_cnt)
+    return None

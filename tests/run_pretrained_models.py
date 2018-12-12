@@ -6,16 +6,20 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import argparse
 import os
+import sys
 import tarfile
 import tempfile
 import time
+import traceback
 import zipfile
 
 import numpy as np
 import requests
+import six
 import tensorflow as tf
 from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
 from tensorflow.core.framework import graph_pb2
@@ -24,6 +28,7 @@ import yaml
 import PIL.Image
 
 import tf2onnx
+from tf2onnx import utils
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 from tf2onnx.tfonnx import process_tf_graph
 
@@ -66,15 +71,6 @@ _INPUT_FUNC_MAPPING = {
     "get_random256": get_random256,
     "get_ramp": get_ramp
 }
-
-
-def node_name(name):
-    """Get node name without io#."""
-    assert isinstance(name, str)
-    pos = name.find(":")
-    if pos >= 0:
-        return name[:pos]
-    return name
 
 
 def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=True):
@@ -172,11 +168,10 @@ class Test(object):
             self.tf_runtime = time.time() - start
         return result
 
-    @staticmethod
-    def to_onnx(tf_graph, opset=None, shape_override=None):
+    def to_onnx(self, tf_graph, opset=None, shape_override=None):
         """Convert graph to tensorflow."""
         return process_tf_graph(tf_graph, continue_on_error=True, verbose=True, opset=opset,
-                                target=Test.target, shape_override=shape_override)
+                                target=Test.target, shape_override=shape_override, output_names=self.output_names)
 
     def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
@@ -193,9 +188,7 @@ class Test(object):
     def run_onnxmsrtnext(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import lotus
-        model_path = os.path.join(TMPPATH, name + ".pb")
-        with open(model_path, "wb") as f:
-            f.write(model_proto.SerializeToString())
+        model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto)
         m = lotus.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
         if self.perf:
@@ -208,9 +201,8 @@ class Test(object):
     def run_onnxruntime(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
-        model_path = os.path.join(TMPPATH, name + ".pb")
-        with open(model_path, "wb") as f:
-            f.write(model_proto.SerializeToString())
+        model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto, include_test_data=True)
+        print("\t\t" + model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
         if self.perf:
@@ -264,6 +256,11 @@ class Test(object):
                     outputs_tensor_info = signature_def_utils.get_signature_def_by_key(meta_graph_def, k).outputs
                     for _, output_tensor in sorted(outputs_tensor_info.items()):
                         outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
+                # freeze uses the node name derived from output:0 so only pass in output:0;
+                # it will provide all outputs of that node.
+                for o in list(outputs.keys()):
+                    if not o.endswith(":0"):
+                        del outputs[o]
                 frozen_graph = freeze_session(sess, output_names=list(outputs.keys()))
                 tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
             model_path = os.path.join(dir_name, "frozen.pb")
@@ -271,7 +268,7 @@ class Test(object):
         # create the input data
         inputs = {}
         for k, v in self.input_names.items():
-            if isinstance(v, str) and v.startswith("np."):
+            if isinstance(v, six.text_type) and v.startswith("np."):
                 inputs[k] = eval(v)  # pylint: disable=eval-used
             else:
                 inputs[k] = self.make_input(v)
@@ -308,17 +305,18 @@ class Test(object):
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
-                optimizer = TransposeOptimizer(onnx_graph, debug)
+                optimizer = TransposeOptimizer(onnx_graph, self.output_names, debug)
                 optimizer.optimize()
 
-                model_proto = onnx_graph.make_model("test", self.output_names)
+                model_proto = onnx_graph.make_model("test")
                 print("\tto_onnx", "OK")
                 if debug:
-                    model_proto.dump_graph()
+                    onnx_graph.dump_graph()
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
             except Exception as ex:
-                print("\tto_onnx", "FAIL", ex)
+                tb = traceback.format_exc()
+                print("\tto_onnx", "FAIL", ex, tb)
 
         try:
             onnx_results = None
@@ -406,7 +404,7 @@ def main():
     tests = tests_from_yaml(args.config)
     if args.list:
         print(sorted(tests.keys()))
-        return
+        return 0
     if args.tests:
         test_keys = args.tests.split(",")
     else:
@@ -437,6 +435,8 @@ def main():
                 t = tests[test]
                 if t.perf:
                     f.write("{},{},{}\n".format(test, t.tf_runtime, t.onnx_runtime))
+    return failed
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
