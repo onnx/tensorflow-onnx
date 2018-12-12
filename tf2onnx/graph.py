@@ -16,7 +16,7 @@ import six
 from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto, AttributeProto
 
 from tf2onnx import utils, __version__
-from tf2onnx.utils import node_name, port_name, find_opset
+from tf2onnx.utils import port_name, find_opset
 
 
 class Node(object):
@@ -432,24 +432,32 @@ class Graph(object):
     def get_node_by_output(self, output):
         """Get node by node output id"""
         name = self._output_to_node_name.get(output)
+        ret = None
         if name:
-            return self.get_node_by_name(name)
-        return None
+            ret = self._nodes_by_name.get(name)
+        else:
+            ret = self._get_initializer_as_const_node(output)
+
+        return ret
 
     def get_node_by_name(self, name):
         """Get node by name."""
         ret = self._nodes_by_name.get(name)
         if not ret:
-            ret = self._nodes_by_name.get(node_name(name))
-        if not ret:
-            # if we processed the graph fully, set_nodes() the graph has no longer const nodes
-            # since we moved them to be initializers. But all graph processing code uses Node
-            # as the common data structure. To avoid special casing lots of code for initializers
-            # we create a dummy 'Const' Node here.
-            initializer = self._initializers.get(name)
-            if initializer is not None:
-                ret = self.make_node("Const", inputs=[], outputs=[name], name=name,
-                                     attr={"value": initializer})
+            ret = self._get_initializer_as_const_node(name)
+        return ret
+
+    def _get_initializer_as_const_node(self, name):
+        """Create dummy const node representing initializers for easier node manipulation"""
+        ret = None
+        # if we processed the graph fully, set_nodes() the graph has no longer const nodes
+        # since we moved them to be initializers. But all graph processing code uses Node
+        # as the common data structure. To avoid special casing lots of code for initializers
+        # we create a dummy 'Const' Node here.
+        initializer = self._initializers.get(name)
+        if initializer is not None:
+            ret = self.make_node("Const", inputs=[], outputs=[name], name=name,
+                                 attr={"value": initializer})
         return ret
 
     def set_node_by_name(self, node):

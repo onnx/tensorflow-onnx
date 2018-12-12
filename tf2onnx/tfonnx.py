@@ -2216,6 +2216,9 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
             ignored_inputs = ignored_input_index.get(op.type)
             # insert casts on inputs if the runtime only supports float
             for i, input_node in enumerate(op.inputs):
+                #print(op.input[i])
+                #print(g.get_node_by_name(op.input[i]))
+                #print(g.get_node_by_output(op.input[i]))
                 if ignored_inputs and i in ignored_inputs:
                     continue
 
