@@ -114,6 +114,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(op, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    def test_expand_dims_one_unknown_rank(self):
+        tf.reset_default_graph()
+        x_val = make_xval([3, 4])
+        x = tf.placeholder(tf.float32, shape=[None, 4], name=_TFINPUT)
+        op = tf.expand_dims(x, 0)
+        _ = tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_expand_dims_more_unknown_rank(self):
+        tf.reset_default_graph()
+        x_val = make_xval([3, 4])
+        x = tf.placeholder(tf.float32, shape=[None, None], name=_TFINPUT)
+        op = tf.expand_dims(x, 0)
+        _ = tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def test_trig_ops(self):
         for op in [tf.sin, tf.cos, tf.tan, tf.asin, tf.acos, tf.atan]:
             tf.reset_default_graph()

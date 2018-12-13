@@ -1072,6 +1072,7 @@ def expanddims_op(ctx, node, name, args):
         node.type = "Reshape"
         ctx.remove_input(node, node.input[1])
         node.set_attr("shape", shape)
+        return node
 
     # if there is more than one -1 in the shape, Reshape won't support.
     dim_node = node.inputs[1]
