@@ -322,11 +322,36 @@ class Graph(object):
         self._dtypes = dtypes
 
         self._output_shapes = output_shapes
-        ops = [Node(node, self) for node in nodes]
-        self.set_nodes(ops)
         self._opset = find_opset(opset)
         self._extra_opset = extra_opset
         self.output_names = output_names
+        ops = [Node(node, self) for node in nodes]
+
+        # add identity node after each output, in case it is renamed during conversion.
+        if self.output_names:
+            to_append = []
+            for n in ops:
+                raw_outputs = n.output
+                new_output_base_name = None
+                index_out = 0
+                for i, o in enumerate(raw_outputs):
+                    if o in output_names:
+                        if not new_output_base_name:
+                            new_output_base_name = utils.make_name("raw_output_")
+                        new_out = port_name(new_output_base_name, index_out)
+                        self.replace_all_inputs(nodes, o, new_out)
+                        n.output[i] = new_out
+                        index_out += 1
+                        new_output_node = self.make_node("Identity", [new_out], outputs=[o])
+                        to_append.append(new_output_node)
+
+                        self.copy_shape(o, new_out)
+                        self.set_dtype(new_out, self.get_dtype(o))
+
+                self.set_node_by_name(n)
+            ops.extend(to_append)
+
+        self.set_nodes(ops)
 
     @property
     def opset(self):
@@ -356,7 +381,8 @@ class Graph(object):
         """Make a new constant in the graph"""
         onnx_tensor = numpy_helper.from_array(np_val, name)
         self.add_initializer(onnx_tensor)
-        node = Node(helper.make_node("Const", [], [name], name=name, value=onnx_tensor), self, skip_conversion)
+        node = self.make_node("Const", [], outputs=[name], name=name, attr={"value": onnx_tensor},
+                              skip_conversion=skip_conversion)
         return node
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
@@ -369,12 +395,11 @@ class Graph(object):
         if dtypes is None:
             dtypes = []
 
-        op_name_basis = op_type
-        if op_name_scope:
-            op_name_basis = "_".join([op_name_scope, op_type])
-
         if name is None:
-            name = utils.make_name(op_name_basis)
+            name = utils.make_name(op_type)
+
+        if op_name_scope:
+            name = "_".join([op_name_scope, name])
 
         if outputs is None:
             outputs = [name + ":" + str(i) for i in range(output_count)]

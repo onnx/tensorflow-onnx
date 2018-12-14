@@ -232,36 +232,31 @@ def range_op7(ctx, node, name, args):
     delta_output = delta_node.output[0]
 
     # trip_count
-    diff_name = "{}_diff".format(base_name)
-    diff_output = utils.port_name(diff_name)
-    nodes.append(Node(helper.make_node("Sub", [limit_output, start_output], [diff_output], name=diff_name), ctx))
+    diff_node = ctx.make_node("Sub", [limit_output, start_output], op_name_scope=base_name, name="diff")
+    diff_output = diff_node.output[0]
+    nodes.append(diff_node)
 
     dtype = node.get_attr_int("Tidx")
     if dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
-        cast_diff_name = "{}_cast_diff".format(base_name)
-        cast_diff_output = utils.port_name(cast_diff_name)
-        nodes.append(Node(helper.make_node("Cast", [diff_output], [cast_diff_output], name=cast_diff_name,
-                                           to=onnx_pb.TensorProto.FLOAT), ctx))
-        diff_output = cast_diff_output
+        cast_node = ctx.make_node("Cast", [diff_output], op_name_scope=base_name,
+                                  name="cast_diff", attr={"to": onnx_pb.TensorProto.FLOAT})
+        nodes.append(cast_node)
+        diff_output = cast_node.output[0]
 
-        cast_delta_name = "{}_cast_delta".format(base_name)
-        cast_delta_output = utils.port_name(cast_delta_name)
-        nodes.append(Node(helper.make_node("Cast", [delta_output], [cast_delta_output], name=cast_delta_name,
-                                           to=onnx_pb.TensorProto.FLOAT), ctx))
-        delta_output = cast_delta_output
+        cast_node = ctx.make_node("Cast", [delta_output], op_name_scope=base_name, name="cast_delta",
+                                  attr={"to": onnx_pb.TensorProto.FLOAT})
+        nodes.append(cast_node)
+        delta_output = cast_node.output[0]
 
-    div_name = "{}_div".format(base_name)
-    div_output = utils.port_name(div_name)
-    nodes.append(Node(helper.make_node("Div", [diff_output, delta_output], [div_output], name=div_name), ctx))
+    div_node = ctx.make_node("Div", [diff_output, delta_output], op_name_scope=base_name, name="div")
+    nodes.append(div_node)
 
-    ceil_name = "{}_ceil".format(base_name)
-    ceil_output = utils.port_name(ceil_name)
-    nodes.append(Node(helper.make_node("Ceil", [div_output], [ceil_output], name=ceil_name), ctx))
+    ceil_node = ctx.make_node("Ceil", [div_node.output[0]], op_name_scope=base_name, name="ceil")
+    nodes.append(ceil_node)
 
-    trip_count_name = "{}_trip_cnt".format(base_name)
-    trip_count_output = utils.port_name(trip_count_name)
-    nodes.append(Node(helper.make_node("Cast", [ceil_output], [trip_count_output], name=trip_count_name,
-                                       to=onnx_pb.TensorProto.INT64), ctx))
+    trip_count_node = ctx.make_node("Cast", [ceil_node.output[0]], op_name_scope=base_name, name="trip_cnt",
+                                    attr={"to": onnx_pb.TensorProto.INT64})
+    nodes.append(trip_count_node)
 
     # cond
     # Use initializer here since Constant OP before opset 9 does not support bool type
@@ -282,15 +277,14 @@ def range_op7(ctx, node, name, args):
     body_graph = helper.make_graph(body_nodes, utils.make_name("{}_body".format(base_name)), body_inputs, body_outputs)
 
     # loop
-    loop_name = "{}_loop".format(base_name)
-    loop_inputs = [trip_count_output, cond_name, start_output]
-    loop_outputs = [utils.port_name(loop_name, i) for i in range(2)]
-    nodes.append(Node(helper.make_node("Loop", loop_inputs, loop_outputs, name=loop_name, body=body_graph), ctx))
+    loop_inputs = [trip_count_node.output[0], cond_name, start_output]
+    loop_node = ctx.make_node("Loop", loop_inputs, output_count=2, op_name_scope=base_name, name="loop",
+                              attr={"body": body_graph})
+    nodes.append(loop_node)
 
-    range_output = utils.port_name(base_name)
-    nodes.append(Node(utils.make_onnx_identity(loop_outputs[1], range_output, name=base_name), ctx))
-    ctx.set_dtype(range_output, dtype)
-    ctx.replace_all_inputs(ctx.get_nodes(), output_name, range_output)
+    identity_node = ctx.make_node("Identity", [loop_node.output[1]], name=base_name, dtypes=[dtype])
+    nodes.append(identity_node)
+    ctx.replace_all_inputs(ctx.get_nodes(), output_name, identity_node.output[0])
 
     return nodes
 
@@ -794,21 +788,15 @@ def relu6_op(ctx, node, name, args):
         ctx.make_const(six_name, np.array([6.], dtype=dtype))
 
         # get a tensor of input shape with zeros
-        sub_name = utils.make_name(input_node.name)
-        sub_output = utils.port_name(sub_name)
-        sub_node = Node(helper.make_node("Sub", [node.input[0], node.input[0]],
-                                         [sub_output], name=sub_name), ctx)
-        node.input.append(sub_output)
+        sub_node = ctx.make_node("Sub", [node.input[0], node.input[0]], op_name_scope=input_node.name)
+        node.input.append(sub_node.output[0])
 
         # get a tensor of input shape with 6
-        add_name = utils.make_name(input_node.name)
-        add_output = utils.port_name(add_name)
-        add_node = Node(helper.make_node("Add", [six_name, sub_output],
-                                         [add_output], name=add_name), ctx)
+        add_node = ctx.make_node("Add", [six_name, sub_node.output[0]], op_name_scope=input_node.name)
 
         min_name = utils.make_name(node.name)
         min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
-        min_node.input.append(add_output)
+        min_node.input.append(add_node.output[0])
         ctx.copy_shape(old_output, min_node.output[0])
         return [sub_node, add_node, node, min_node]
 
@@ -1267,15 +1255,14 @@ def topk_op(ctx, node, name, args):
 
     new_topk_name = utils.make_name(topk_node_name)
     k = node.inputs[1].get_tensor_value()[0]
-    new_topk_node = Node(helper.make_node("TopK", [node.input[0]],
-                                          [topk_output1, utils.port_name(new_topk_name, 1)],
-                                          name=new_topk_name, k=k), ctx)
+    new_topk_node = ctx.make_node("TopK", [node.input[0]],
+                                  outputs=[topk_output1, utils.port_name(new_topk_name, 1)],
+                                  name=new_topk_name, attr={"k": k})
     nodes.append(new_topk_node)
 
     new_cast_name = utils.make_name(topk_node_name)
-    cast_to_int32 = Node(helper.make_node("Cast", [new_topk_node.output[1]],
-                                          [topk_output2], name=new_cast_name, to=onnx_pb.TensorProto.INT32),
-                         ctx)
+    cast_to_int32 = ctx.make_node("Cast", [new_topk_node.output[1]], outputs=[topk_output2],
+                                  name=new_cast_name, attr={"to": onnx_pb.TensorProto.INT32})
     nodes.append(cast_to_int32)
     return nodes
 
@@ -1311,17 +1298,14 @@ def minmax_op(ctx, node, name, args):
         has_correct_shape = has_correct_shape[0]
         for i in needs_broadcast_op:
             input_node = node.inputs[i]
-            sub_name = utils.make_name(input_node.name)
-            sub_output = utils.port_name(sub_name)
             # get a tensor with zeros (since there is no Fill op as of opset8)
-            sub_node = Node(helper.make_node("Sub", [has_correct_shape, has_correct_shape],
-                                             [sub_output], name=sub_name), ctx)
-            add_name = utils.make_name(input_node.name)
-            add_output = utils.port_name(add_name)
+            sub_node = ctx.make_node("Sub", [has_correct_shape, has_correct_shape],
+                                     op_name_scope=input_node.name)
+
             # use add as 'broadcast' op
-            add_node = Node(helper.make_node("Add", [input_node.output[0], sub_output],
-                                             [add_output], name=add_name), ctx)
-            node.input[i] = add_output
+            add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
+                                     op_name_scope=input_node.name)
+            node.input[i] = add_node.output[0]
             new_nodes.append(sub_node)
             new_nodes.append(add_node)
         new_nodes.append(node)
@@ -1348,23 +1332,19 @@ def pack_op(ctx, node, name, args):
     dtype = None
     # insert Unsqueeze on each input
     for i, n in enumerate(node.inputs):
-        op_name = utils.make_name(node.name)
-        output_name = port_name(op_name)
         dtype = ctx.get_dtype(node.input[i])
         shape = ctx.get_shape(node.input[i])
-        new_node = Node(helper.make_node("Unsqueeze", [node.input[i]], [output_name], name=op_name, axes=[axis]), ctx)
+        new_node = ctx.make_node("Unsqueeze", [node.input[i]], op_name_scope=node.name, attr={"axes": [axis]},
+                                 shapes=[shape], dtypes=[dtype])
+        output_name = new_node.output[0]
         node.input[i] = output_name
-        ctx.set_dtype(output_name, dtype)
-        ctx.set_shape(output_name, shape)
         nodes.append(new_node)
         inputs.append(output_name)
+
     # concat all unqueezes
-    op_name = utils.make_name(node.name)
-    output_name = port_name(op_name)
-    concat = Node(helper.make_node("Concat", inputs, [output_name], name=op_name, axis=axis), ctx)
-    ctx.copy_shape(node.output[0], concat.output[0])
-    ctx.set_dtype(concat.output[0], dtype)
-    ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], output_name)
+    concat = ctx.make_node("Concat", inputs, op_name_scope=node.name, attr={"axis": axis},
+                           shapes=[ctx.get_shape(node.output[0])], dtypes=[dtype])
+    ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], concat.output[0])
     return [concat] + nodes
 
 
@@ -1378,10 +1358,8 @@ def unpack_op(ctx, node, name, args):
     for i, n in enumerate(node.output):
         op_name = utils.make_name(node.name)
         output_name = port_name(op_name, i)
-        dtype = ctx.get_dtype(n)
-        new_node = Node(helper.make_node("Squeeze", [n], [output_name], name=op_name, axes=[axis]), ctx)
-        ctx.set_dtype(output_name, dtype)
-        ctx.copy_shape(n, output_name)
+        new_node = ctx.make_node("Squeeze", [n], outputs=[output_name], name=op_name, attr={"axes": [axis]},
+                                 shapes=[ctx.get_shape(n)], dtypes=[ctx.get_dtype(n)])
         nodes.append(new_node)
         ctx.replace_all_inputs(ctx.get_nodes(), n, output_name)
     return nodes
@@ -1922,15 +1900,13 @@ def rewrite_random_normal(g, ops):
         rn_op = match.get_op('input1')
         if rn_op.inputs[0].type == "Shape":
             shape_node = rn_op.inputs[0]
-            new_node = Node(helper.make_node("RandomNormalLike", [shape_node.input[0]], [out_name],
-                                             name=op_name, mean=mean, scale=1.0,
-                                             dtype=dtype), g)
+            new_node = g.make_node("RandomNormalLike", [shape_node.input[0]], outputs=[out_name], name=op_name,
+                                   attr={"mean": mean, "scale": 1.0, "dtype": dtype})
             ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
         else:
             shape = g.get_shape(output.output[0])
-            new_node = Node(helper.make_node("RandomNormal", [], [out_name],
-                                             name=op_name, shape=shape, mean=mean, scale=1.0,
-                                             dtype=dtype), g)
+            new_node = g.make_node("RandomNormal", [], outputs=[out_name], name=op_name,
+                                   attr={"shape": shape, "mean": mean, "scale": 1.0, "dtype": dtype})
             ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
 
     return ops
@@ -1954,7 +1930,7 @@ def rewrite_dropout(g, ops):
         outputs = match.get_op('outputs')
         op_name = utils.make_name("Dropout")
         out_name = port_name(op_name)
-        new_node = Node(helper.make_node("Dropout", [inputs2.input[0]], [out_name], name=op_name, ratio=1.0), g)
+        new_node = g.make_node("Dropout", [inputs2.input[0]], outputs=[out_name], name=op_name, attr={"ratio": 1.0})
         ops = g.replace_subgraph(ops, match, [inputs2], [outputs], [new_node], [new_node])
 
     return ops
@@ -2022,7 +1998,7 @@ def rewrite_flatten(g, ops):
 
             op_name = utils.make_name("Flatten")
             out_name = port_name(op_name)
-            new_node = Node(helper.make_node("Flatten", [reshape_node.input[0]], [out_name], name=op_name), g)
+            new_node = g.make_node("Flatten", [reshape_node.input[0]], outputs=[out_name], name=op_name)
 
             last_dim = input_shape[-1]
             sec_last_dim = input_shape[-2]
@@ -2167,28 +2143,20 @@ def rewrite_logical_compare_with_equal(g, ops):
             if need_cast:
                 compare_input_ids = []
                 for input_id in compare_e_op.input:
-                    name = utils.make_name(compare_e_op.name)
-                    new_output = port_name(name)
-                    cast_node = Node(helper.make_node("Cast", [input_id], [new_output], name=name,
-                                                      to=onnx_pb.TensorProto.FLOAT), g)
-                    compare_input_ids.append(new_output)
-                    g.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
-                    g.copy_shape(input_id, cast_node.output[0])
+                    cast_node = g.make_node("Cast", [input_id], op_name_scope=compare_e_op.name,
+                                            attr={"to": onnx_pb.TensorProto.FLOAT}, shapes=[g.get_shape(input_id)],
+                                            dtypes=[onnx_pb.TensorProto.FLOAT])
+                    compare_input_ids.append(cast_node.output[0])
                     nodes_to_append.append(cast_node)
 
-            op_name = utils.make_name(compare_name)
-            out_name = port_name(op_name)
-            g_node = Node(helper.make_node(compare_name, compare_input_ids, [out_name], name=op_name), g)
-            g.set_dtype(out_name, onnx_pb.TensorProto.BOOL)
-            set_shape_from_inputs_broadcast(g, compare_input_ids, out_name)
-            new_shape = g.get_shape(out_name)
+            g_node = g.make_node(compare_name, compare_input_ids, op_name_scope=compare_e_op.name,
+                                 dtypes=[onnx_pb.TensorProto.BOOL])
+            set_shape_from_inputs_broadcast(g, compare_input_ids, g_node.output[0])
+            new_shape = g.get_shape(g_node.output[0])
             nodes_to_append.append(g_node)
 
-            op_name = utils.make_name("Equal")
-            out_name = port_name(op_name)
-            e_node = Node(helper.make_node("Equal", compare_e_op.input, [out_name], name=op_name), g)
-            g.set_dtype(out_name, onnx_pb.TensorProto.BOOL)
-            g.set_shape(out_name, new_shape)
+            e_node = g.make_node("Equal", compare_e_op.input, op_name_scope=compare_e_op.name,
+                                 shapes=[new_shape], dtypes=[onnx_pb.TensorProto.BOOL])
             nodes_to_append.append(e_node)
 
             compare_e_op.type = "LogicalOr"
