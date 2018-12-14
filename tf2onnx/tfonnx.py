@@ -866,6 +866,26 @@ def cast_op(ctx, node, name, args):
     return node
 
 
+def sign_op(ctx, node, name, args):
+    """Sign op."""
+    # T sign = Sign(T Input)
+    nodes = []
+    node_dtype = node.dtype
+    utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
+    if node_dtype in [onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
+        raise ValueError("dtype " + node.dtype + " is not supported in onnx for now")
+    input_tensor_type = utils.ONNX_TO_NUMPY_DTYPE[node_dtype]
+    zero_name = utils.make_name("{}_zero".format(node.name))
+    ctx.make_const(zero_name, np.array(0, dtype=input_tensor_type))
+    greater_node = ctx.make_node("Greater", [node.input[0], zero_name])
+    less_node = ctx.make_node("Less", [node.input[0], zero_name])
+    cast_node_1 = ctx.make_node("Cast", [greater_node.output[0]], {"to": node_dtype})
+    cast_node_2 = ctx.make_node("Cast", [less_node.output[0]], {"to": node_dtype})
+    sub_node = ctx.make_node("Sub", [cast_node_1.output[0], cast_node_2.output[0]], outputs=[node.output[0]])
+    nodes.extend([greater_node, less_node, cast_node_1, cast_node_2, sub_node])
+    return nodes
+
+
 def biasadd_op(ctx, node, name, args):
     # T output = BiasAdd(T value, T bias, @string data_format)
     # T output = BiasAddV1(T value, T bias)
@@ -1813,6 +1833,7 @@ _OPSET_4 = {
     "Pack": (pack_op, []),
     "Unpack": (unpack_op, []),
     "Erf": (erf_op, []),
+    "Sign": (sign_op, [])
 }
 
 _OPSET_5 = {
