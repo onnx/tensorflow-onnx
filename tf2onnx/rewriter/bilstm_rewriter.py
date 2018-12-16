@@ -112,6 +112,8 @@ def process_bilstm(g, bi_lstms):
 def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_output_index, all_nodes, to_remove):
     fw_consumers = g.find_output_consumers(lstm_fw.output[lstm_output_index])
     bw_consumers = g.find_output_consumers(lstm_bw.output[lstm_output_index])
+    if not fw_consumers and not bw_consumers:
+        return
 
     if lstm_output_index == 0:
         axis = 1
@@ -197,10 +199,13 @@ def rewrite_bidirectional_lstms(g, ops):
             is_backward_lstm = True
 
         if is_backward_lstm:
-            # make sure reverse lstm output will be reversed back
-            if get_reverse_nodes_after_y_output(g, n):
-                log.debug("find bw lstm %s", input_id)
-                bw_lstm[input_id] = [input_id, n]
+            # if output 0 is consumed, and there is no reverse after the lstm output.
+            # it's not reversed lstm
+            if g.find_output_consumers(n.output[0]) and not get_reverse_nodes_after_y_output(g, n):
+                continue
+
+            log.debug("find bw lstm %s", input_id)
+            bw_lstm[input_id] = [input_id, n]
         else:
             log.debug("find fw lstm %s", input_id)
             fw_lstm[input_id] = [input_id, n]

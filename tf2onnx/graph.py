@@ -255,7 +255,7 @@ class Node(object):
 
     def get_implicit_inputs(self, require_input_in_cur_graph=False):
         """Get implicit inputs if the node has attributes being GraphProto."""
-        body_graphs = [attr.g for attr in self.op.attribute if attr.g]
+        body_graphs = [a.g for a in self.attr_onnx.values() if a.HasField('g')]
         outer_scope_node_input_ids = set()
         for sub_g in body_graphs:
             outer_scope_node_input_ids |= self._get_implicit_inputs(sub_g)
@@ -339,7 +339,7 @@ class Graph(object):
                         if not new_output_base_name:
                             new_output_base_name = utils.make_name("raw_output_")
                         new_out = port_name(new_output_base_name, index_out)
-                        self.replace_all_inputs(nodes, o, new_out)
+                        self.replace_all_inputs(ops, o, new_out)
                         n.output[i] = new_out
                         index_out += 1
                         new_output_node = self.make_node("Identity", [new_out], outputs=[o])
