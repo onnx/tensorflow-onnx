@@ -1,0 +1,18 @@
+# Pre-trained model test
+
+jobs:
+- template: 'templates/job_generator.yml'
+  parameters:
+    tf_versions: ['1.11']
+    onnx_opsets: ['7']
+    onnx_backends: {onnxruntime: ['']}
+    job:
+      steps:
+      - bash: |
+          set -x
+          status=0
+          # TODO: fix unity model path
+          # python tests/run_pretrained_models.py --config tests/unity.yaml --opset $(CI_ONNX_OPSET) || status=$?
+          python tests/run_pretrained_models.py --config tests/run_pretrained_models.yaml --opset $(CI_ONNX_OPSET) || status=$?
+          exit $status
+        displayName: 'Test Pre-trained Model'
