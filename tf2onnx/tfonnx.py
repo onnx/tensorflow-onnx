@@ -2213,7 +2213,7 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                 dtype = g.get_dtype(input_name)
                 if dtype != onnx_pb.TensorProto.FLOAT:
                     output_dtype = dtype
-                    if input_node.type == "Cast":
+                    if input_node and input_node.type == "Cast":
                         input_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
                         g.set_dtype(input_name, onnx_pb.TensorProto.FLOAT)
                     else:
@@ -2243,7 +2243,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Slice", "Tile", "Transpose"])
+    return rewrite_incomplete_type_support(g, ops, ["Slice", "Split", "Tile", "Transpose"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
