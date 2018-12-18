@@ -327,6 +327,7 @@ class Graph(object):
         self._opset = find_opset(opset)
         self._extra_opset = extra_opset
         self.output_names = output_names
+        self._debug_output_names = []
         ops = [Node(node, self) for node in nodes]
 
         # add identity node after each output, in case it is renamed during conversion.
@@ -557,6 +558,21 @@ class Graph(object):
         if shape is not None:
             self.set_shape(output_name, shape)
 
+    @property
+    def debug_output_names(self):
+        return self._debug_output_names
+
+    @debug_output_names.setter
+    def debug_output_names(self, output_info):
+        """
+        ONNX requires to specify shape and dtype info of output, so define a property to force user to
+        specify these info detail of shape is not necessary while at least the dims info should be offered,
+        e.g. when shape is two dimensions then (-1, -1) is ok, while (-1) or (-1, -1, -1) is wrong.
+        """
+        self.set_shape(output_info["name"], output_info["shape"])
+        self.set_dtype(output_info["name"], output_info["dtype"])
+        self._debug_output_names.append(output_info["name"])
+
     def topological_sort(self, ops):
         """Topological sort of graph."""
         def _push_stack(stack, node, in_stack):
@@ -631,7 +647,7 @@ class Graph(object):
 
         # create output_tensor_values
         output_tensor_values = []
-        for name in self.output_names:
+        for name in self.output_names + self.debug_output_names:
             dtype = self.get_dtype(name)
             if not dtype:
                 raise ValueError("cannot found the output dtype for " + name)
