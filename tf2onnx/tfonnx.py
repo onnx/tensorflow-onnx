@@ -63,7 +63,7 @@ def tflist_to_onnx(node_list, shape_override):
     ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
                     "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout"]
+                    "Tout", "Tlabels"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -1720,6 +1720,32 @@ def erf_op(ctx, node, name, args):
     return nodes
 
 
+def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
+    # make subgraph to implement one_hot, idea comes from onehot_op
+    indices_name = node.input[1]
+    indices_shape = ctx.get_shape(indices_name)
+    if len(indices_shape) != 1:
+        # TODO: this works for rank=1 but tensorflow supports more than this.
+        # Same principle should work but we need to implement our own eye.
+        raise ValueError("onehot op: only rank1 is supported")
+    logit_name = node.input[0]
+    depth = ctx.get_shape(logit_name)[-1]
+    dtype = utils.ONNX_TO_NUMPY_DTYPE[ctx.get_dtype(logit_name)]
+    eye = np.eye(depth).astype(dtype)
+    const_name = utils.make_name("const_eye")
+    const_eye = ctx.make_const(name=const_name, np_val=eye)
+    onehot = ctx.make_node(op_type="Gather", inputs=[const_eye.output[0], indices_name], attr={"axis": 0})
+    log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=[logit_name])
+    # implement tf.multiply(np.float32(-1.0), tf.reduce_sum(tf.multiply(one_hot, log_softmax), axis=1))
+    mul1 = ctx.make_node(op_type="Mul", inputs=[onehot.output[0], log_softmax.output[0]])
+    reduce_sum = ctx.make_node(op_type="ReduceSum", inputs=[mul1.output[0]], attr={"axes": [1]})
+    const_name = utils.make_name("const_negative_one")
+    const_negative_one = ctx.make_const(name=const_name, np_val=np.array(-1).astype(dtype))
+    mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum.output[0]])
+    res = ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], outputs=[node.output[0]], attr={"axes": [1]})
+
+    return [onehot, log_softmax, mul1, reduce_sum, mul2, res]
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1755,6 +1781,7 @@ _OPSET_4 = {
     "Identity": (identity_op, ["Identity"]),
     "Less": (broadcast_op, []),
     "Log": (direct_op, []),
+    "LogSoftmax": (direct_op, ["LogSoftmax"]),
     "LRN": (lrn_op, []),
     "LogicalAnd": (broadcast_op, ["And"]),
     "LogicalOr": (broadcast_op, ["Or"]),
@@ -1819,6 +1846,7 @@ _OPSET_5 = {
     "ExpandDims": (expanddims_op7, []),
     "OneHot": (onehot_op, []),
     "Reshape": (reshape_op5, []),
+    "SparseSoftmaxCrossEntropyWithLogits": (sparse_softmax_cross_entropy_with_logits_op, [])
 }
 
 _OPSET_6 = {
