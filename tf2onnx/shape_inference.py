@@ -57,7 +57,7 @@ def infer_shape_for_node(g, node):
         log.debug("node %s has inputs don't have shape specified, they are: %s", node.name, no_shape)
         return False
 
-    if node.type in ["Cast", "Enter", "Floor", "ReverseSequence", "Sigmoid", "Tanh", "Identity"]:
+    if node.type in ["Cast", "Enter", "Exit", "Floor", "ReverseSequence", "Sigmoid", "Tanh", "Identity"]:
         return set_shape_from_input(g, node.input[0], node.output[0])
 
     if node.type in ["Add", "GreaterEqual", "Mul", "RealDiv", "Sub"]:
@@ -88,6 +88,33 @@ def infer_shape_for_node(g, node):
         if not shape_node or shape_node.type != "Shape":
             return False
         return set_shape_from_input(g, shape_node.input[0], node.output[0])
+
+    if node.type == "ConcatV2":
+        axis_node = node.inputs[-1]
+        if not axis_node.is_const():
+            return False
+
+        axis = axis_node.get_tensor_value()[0]
+        val = 0
+        data_inputs = node.input[:-1]
+        for i in data_inputs:
+            s = g.get_shape(i)
+            if s is None:
+                return False
+
+            if s[axis] == -1:
+                val = -1
+                break
+            val += s[axis]
+
+        s1 = g.get_shape(node.input[0])
+        new_shape = s1[:axis] + [val]
+        if axis < len(s1) - 1:
+            new_shape += s1[axis+1:]
+
+        g.set_shape(node.output[0], new_shape)
+        log.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
+        return True
 
     return False
 

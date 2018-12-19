@@ -155,6 +155,7 @@ class TransposeOptimizer(object):
             "Add": self._add_handler,
             "Concat": self._concat_handler,
             "Identity": self._identity_handler,
+            "LeakyRelu": self._relu_handler,
             "Max": self._maxmin_handler,
             "Min": self._maxmin_handler,
             "Mul": self._mul_handler,

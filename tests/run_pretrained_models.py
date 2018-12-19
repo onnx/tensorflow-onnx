@@ -28,7 +28,7 @@ import PIL.Image
 
 import tf2onnx
 from tf2onnx import utils
-from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
@@ -312,10 +312,9 @@ class Test(object):
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
-                optimizer = TransposeOptimizer(onnx_graph, self.output_names, debug)
-                optimizer.optimize()
-
                 model_proto = onnx_graph.make_model("test")
+                model_proto = GraphUtil.opt_transposes_with_model_proto(model_proto, output_names=self.output_names,
+                                                                        debug=debug)
                 print("\tto_onnx", "OK")
                 if debug:
                     onnx_graph.dump_graph()
