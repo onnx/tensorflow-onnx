@@ -377,8 +377,8 @@ def reduce_op(ctx, node, name, args):
 def placeholder_op(ctx, node, name, args):
     output_shape = ctx.get_shape(node.output[0])
     input_node = utils.make_onnx_inputs_outputs(node.output[0],
-                                               node.dtype,
-                                               output_shape)
+                                                node.dtype,
+                                                output_shape)
     ctx.add_model_input(input_node.name, input_node)
     return None
 

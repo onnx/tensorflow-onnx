@@ -222,7 +222,7 @@ def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
        elem_type,  # type: TensorProto.DataType
        shape,  # type: Optional[Sequence[int]]
     """
-    return helper.make_tensor_value_info(name, elem_type, make_onnx_shape(shape))
+    return helper.make_tensor_value_info(name, elem_type, make_onnx_shape(shape), **kwargs)
 
 
 PREFERRED_OPSET = 7

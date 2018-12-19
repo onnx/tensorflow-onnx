@@ -654,8 +654,8 @@ class Graph(object):
             if shape and list(shape) != initializer.dims:
                 raise ValueError("initializer shape is inconsistent for " + initializer.name)
             val = utils.make_onnx_inputs_outputs(initializer.name,
-                                                initializer.data_type,
-                                                initializer.dims)
+                                                 initializer.data_type,
+                                                 initializer.dims)
             input_with_initializers.append(val)
 
         input_with_initializers.extend(list(self._model_inputs.values()))

@@ -10,7 +10,7 @@ from __future__ import print_function
 import logging
 import sys
 import traceback
-from onnx import helper, onnx_pb
+from onnx import onnx_pb
 import numpy as np
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
