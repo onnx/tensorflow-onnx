@@ -21,7 +21,6 @@ import numpy as np
 import requests
 import six
 import tensorflow as tf
-from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
 import yaml
@@ -32,7 +31,7 @@ from tf2onnx import utils
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 from tf2onnx.tfonnx import process_tf_graph
 
-# pylint: disable=broad-except,logging-not-lazy,unused-argument
+# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 
 TMPPATH = tempfile.mkdtemp()
 PERFITER = 1000
@@ -244,16 +243,24 @@ class Test(object):
                 tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
             model_path = os.path.join(dir_name, "frozen.pb")
         elif self.model_type in ["saved_model"]:
+            try:
+                from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
+                get_signature_def = lambda meta_graph_def, k: \
+                    signature_def_utils.get_signature_def_by_key(meta_graph_def, k)
+            except ImportError:
+                # TF1.12 changed the api
+                get_signature_def = lambda meta_graph_def, k: meta_graph_def.signature_def[k]
+
             # saved_model format - convert to checkpoint
             with tf.Session() as sess:
                 meta_graph_def = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
                 inputs = {}
                 outputs = {}
                 for k in meta_graph_def.signature_def.keys():
-                    inputs_tensor_info = signature_def_utils.get_signature_def_by_key(meta_graph_def, k).inputs
+                    inputs_tensor_info = get_signature_def(meta_graph_def, k).inputs
                     for _, input_tensor in sorted(inputs_tensor_info.items()):
                         inputs[input_tensor.name] = sess.graph.get_tensor_by_name(input_tensor.name)
-                    outputs_tensor_info = signature_def_utils.get_signature_def_by_key(meta_graph_def, k).outputs
+                    outputs_tensor_info = get_signature_def(meta_graph_def, k).outputs
                     for _, output_tensor in sorted(outputs_tensor_info.items()):
                         outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
                 # freeze uses the node name derived from output:0 so only pass in output:0;
