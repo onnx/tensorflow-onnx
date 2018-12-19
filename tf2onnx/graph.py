@@ -317,7 +317,9 @@ class Graph(object):
         self._nodes_by_name = {}
         self._output_to_node_name = {}
         self.shapes = {}
-        self._model_inputs = {}
+
+        # use explicit ordered dict because model input for body graph is sensitive to input order.
+        self._model_inputs = collections.OrderedDict()
         self._target = set(target)
         self._dtypes = dtypes
 
