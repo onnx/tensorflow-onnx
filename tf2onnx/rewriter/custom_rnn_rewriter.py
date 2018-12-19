@@ -537,8 +537,7 @@ class CustomRnnLateRewriter(object):
                 else:
                     loop_input_shape = list(shape)
 
-                onnx_input_shape = utils.make_onnx_shape(loop_input_shape)
-                val = helper.make_tensor_value_info(input_name, dtype, onnx_input_shape)
+                val = utils.make_onnx_inputs_outputs(input_name, dtype, loop_input_shape)
                 body_g.add_model_input(input_name, val)
                 i += 1
 

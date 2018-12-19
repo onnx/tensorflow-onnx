@@ -264,12 +264,12 @@ def range_op7(ctx, node, name, args):
     ctx.make_const(cond_name, np.ones((), dtype=bool))
 
     # body
-    body_inputs = [helper.make_tensor_value_info("i", onnx_pb.TensorProto.INT64, []),
-                   helper.make_tensor_value_info("cond", onnx_pb.TensorProto.BOOL, []),
-                   helper.make_tensor_value_info("prev", dtype, [])]
-    body_outputs = [helper.make_tensor_value_info("cond_out", onnx_pb.TensorProto.BOOL, []),
-                    helper.make_tensor_value_info("current", dtype, []),
-                    helper.make_tensor_value_info("range", dtype, [])]
+    body_inputs = [utils.make_onnx_inputs_outputs("i", onnx_pb.TensorProto.INT64, []),
+                   utils.make_onnx_inputs_outputs("cond", onnx_pb.TensorProto.BOOL, []),
+                   utils.make_onnx_inputs_outputs("prev", dtype, [])]
+    body_outputs = [utils.make_onnx_inputs_outputs("cond_out", onnx_pb.TensorProto.BOOL, []),
+                    utils.make_onnx_inputs_outputs("current", dtype, []),
+                    utils.make_onnx_inputs_outputs("range", dtype, [])]
     body_nodes = []
     body_nodes.append(utils.make_onnx_identity("cond", "cond_out"))
     body_nodes.append(helper.make_node("Add", ["prev", delta_node.output[0]], ["current"], name=utils.make_name("add")))
@@ -376,8 +376,7 @@ def reduce_op(ctx, node, name, args):
 
 def placeholder_op(ctx, node, name, args):
     output_shape = ctx.get_shape(node.output[0])
-    output_shape = utils.make_onnx_shape(output_shape)
-    input_node = helper.make_tensor_value_info(node.output[0],
+    input_node = utils.make_onnx_inputs_outputs(node.output[0],
                                                node.dtype,
                                                output_shape)
     ctx.add_model_input(input_node.name, input_node)
@@ -1593,10 +1592,10 @@ def reverse_op8(ctx, node, name, args):
     input_shape = ctx.get_shape(node.input[0])
 
     # create one input (ValueInfoProto)
-    x = helper.make_tensor_value_info('X', input_dtype, input_shape[2:])
+    x = utils.make_onnx_inputs_outputs('X', input_dtype, input_shape[2:])
 
     # create one output (ValueInfoProto)
-    y = helper.make_tensor_value_info('Y', input_dtype, input_shape[2:])
+    y = utils.make_onnx_inputs_outputs('Y', input_dtype, input_shape[2:])
 
     # create a node (NodeProto)
     node_def = helper.make_node(

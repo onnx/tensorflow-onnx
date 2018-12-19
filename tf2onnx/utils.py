@@ -216,6 +216,15 @@ def make_onnx_identity(node_input, node_output, name=None):
     return helper.make_node("Identity", [node_input], [node_output], name=name)
 
 
+def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
+    """Wrapper for creating onnx graph inputs or outputs
+       name,  # type: Text
+       elem_type,  # type: TensorProto.DataType
+       shape,  # type: Optional[Sequence[int]]
+    """
+    return helper.make_tensor_value_info(name, elem_type, make_onnx_shape(shape))
+
+
 PREFERRED_OPSET = 7
 
 

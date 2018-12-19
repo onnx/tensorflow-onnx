@@ -151,10 +151,11 @@ def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, tri
     iter_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
     fake_var_name = utils.make_name("fake_var")
-    graph_inputs = [helper.make_tensor_value_info(iter_name, TensorProto.INT64, (1,)),  # iteration_num
-                    helper.make_tensor_value_info(cond_name, TensorProto.BOOL, ()),  # condition
-                    helper.make_tensor_value_info(fake_var_name, TensorProto.FLOAT, ())  # loop-carried dependency
-                   ]
+    graph_inputs = [
+        utils.make_onnx_inputs_outputs(iter_name, TensorProto.INT64, (1,)),  # iteration_num
+        utils.make_onnx_inputs_outputs(cond_name, TensorProto.BOOL, ()),  # condition
+        utils.make_onnx_inputs_outputs(fake_var_name, TensorProto.FLOAT, ())  # loop-carried dependency
+        ]
 
     # get the i'th value of condition
     cond_input_id = gather_input_ids[0]
@@ -217,9 +218,9 @@ def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, tri
     )
     nodes.append(identity_node)
 
-    graph_outputs = [helper.make_tensor_value_info(cond_output_id, TensorProto.BOOL, ()),
-                     helper.make_tensor_value_info(fake_var_output_id, TensorProto.FLOAT, ()),
-                     helper.make_tensor_value_info(loop_output_id, output_data_type, output_shape[1:])]
+    graph_outputs = [utils.make_onnx_inputs_outputs(cond_output_id, TensorProto.BOOL, ()),
+                     utils.make_onnx_inputs_outputs(fake_var_output_id, TensorProto.FLOAT, ()),
+                     utils.make_onnx_inputs_outputs(loop_output_id, output_data_type, output_shape[1:])]
 
     body_graph = helper.make_graph(nodes, utils.make_name(loop_name + "-body-graph"), graph_inputs,
                                    graph_outputs)
@@ -251,7 +252,7 @@ def create_body_graph_for_if_branch(data_type, output_shape, chosen_cur_cond_val
     nodes.append(identity_node)
 
     # create one output
-    y = helper.make_tensor_value_info('y', data_type, output_shape)
+    y = utils.make_onnx_inputs_outputs('y', data_type, output_shape)
 
     graph_def = helper.make_graph(
         nodes,

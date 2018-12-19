@@ -633,7 +633,7 @@ class Graph(object):
             dtype = self.get_dtype(name)
             if not dtype:
                 raise ValueError("cannot found the output dtype for " + name)
-            v = helper.make_tensor_value_info(name, dtype, utils.make_onnx_shape(self.get_shape(name)))
+            v = utils.make_onnx_inputs_outputs(name, dtype, self.get_shape(name))
             output_tensor_values.append(v)
 
         # update attributes
@@ -653,9 +653,9 @@ class Graph(object):
             shape = self.get_shape(initializer.name)
             if shape and list(shape) != initializer.dims:
                 raise ValueError("initializer shape is inconsistent for " + initializer.name)
-            val = helper.make_tensor_value_info(initializer.name,
+            val = utils.make_onnx_inputs_outputs(initializer.name,
                                                 initializer.data_type,
-                                                utils.make_onnx_shape(initializer.dims))
+                                                initializer.dims)
             input_with_initializers.append(val)
 
         input_with_initializers.extend(list(self._model_inputs.values()))
