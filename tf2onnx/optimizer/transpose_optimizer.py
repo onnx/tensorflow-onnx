@@ -238,7 +238,7 @@ class TransposeOptimizer(object):
         ops = self._g.get_nodes()
         self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
         node.input[input_index] = trans.input[0]
-        trans.input[0] = utils.port_name(node.name)
+        trans.input[0] = node.output[0]
 
         # need to transpose node shape in backward direction as well after switch
         # otherwise, reshape added in post_optimize_action may not work correctly
@@ -362,23 +362,23 @@ class TransposeOptimizer(object):
 
     def _maxmin_handler(self, trans, node):
         input_index = self._get_input_index_for_trans(node, trans)
-        all_other_inputs_const = all([node.inputs[i].is_const() for i, input_id \
-                                    in enumerate(node.input) if i != input_index])
+        all_other_inputs = [input_id for i, input_id in enumerate(node.input) if i != input_index]
 
+        all_other_inputs_const = all([self._g.is_initializer(i) for i in all_other_inputs])
         if all_other_inputs_const is False:
             return False
 
-        shapes = [len(self._g.get_shape(input_id)) for i, input_id in enumerate(node.input) if i != input_index]
+        shapes = [len(self._g.get_shape(i)) for i in all_other_inputs]
         shapes_not_one_and_four = [s for s in shapes if s not in [1, 4]]
         if shapes_not_one_and_four:
             return False
 
-        for i, input_name in enumerate(node.input):
-            numpy_val = numpy_helper.to_array(self._g.get_initializer(input_name))
+        for i in all_other_inputs:
+            numpy_val = numpy_helper.to_array(self._g.get_initializer(i))
             rank = np.rank(numpy_val)
             if rank == 4:
                 transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
-                self._g.update_initializer(input_name, transposed_val)
+                self._g.update_initializer(i, transposed_val)
             elif rank == 1:  #  scalar
                 # do nothing
                 pass

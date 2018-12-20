@@ -15,7 +15,7 @@ import traceback
 import six
 import numpy as np
 
-from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetIdProto, AttributeProto
+from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
@@ -964,11 +964,33 @@ class GraphUtil(object):
         output_shapes.update(shapes)
         output_dtypes.update(dtypes)
 
-        onnx_nodes = graph_proto.node
-        g = Graph(onnx_nodes, output_shapes, output_dtypes, None, None, None, output_names)
-        GraphUtil._parse_graph_initializer(g, graph_proto)
-        GraphUtil._parse_graph_input(g, graph_proto)
+        non_const_nodes = []
+        const_nodes = []
+        for n in graph_proto.node:
+            if n.op_type == "Constant":
+                const_nodes.append(n)
+                continue
+            non_const_nodes.append(n)
 
+        g = Graph(non_const_nodes, output_shapes, output_dtypes, None, None, None, output_names)
+        GraphUtil._parse_graph_initializer(g, graph_proto)
+
+        for n in const_nodes:
+            name = n.output[0]
+            tensor = None
+            for a in n.attribute:
+                if a.name == "value":
+                    tensor = helper.get_attribute_value(a)
+                    if not isinstance(tensor, TensorProto):
+                        raise ValueError("Constant value is not a tensor, unexpected.")
+                    break
+
+            if tensor:
+                g.set_initializer(name, tensor)
+            else:
+                raise ValueError("failed to parse tensor value from Constant node")
+
+        GraphUtil._parse_graph_input(g, graph_proto)
         return g
 
     @staticmethod

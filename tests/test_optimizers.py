@@ -18,7 +18,8 @@ from backend_test_base import Tf2OnnxBackendTestBase
 
 
 class OptimizerTests(Tf2OnnxBackendTestBase):
-    """Test cases."""
+    """Run original model proto and modified model proto with onnxruntime, compare the results."""
+
     def run_and_compare(self, output_names_with_port, onnx_feed_dict, origin_proto, debug=False, rtol=1e-07):
         origin_model_path = self.save_onnx_model(origin_proto, onnx_feed_dict, postfix="_origin")
 
@@ -45,38 +46,64 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             self.assertEqual(expected_val.shape, actual_val.shape)
 
     def test_relu(self):
-        # Preprocessing: create a model with two nodes, Y's shape is unknown
-        node1 = helper.make_node('Transpose', ['X'], ['Y'], perm=[0, 2, 3, 1])
-        node2 = helper.make_node('Relu', ['Y'], ['Z'])
-        node3 = helper.make_node('Transpose', ['Z'], ['Z1'], perm=[0, 3, 1, 2])
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1])
+        node2 = helper.make_node("Relu", ["Y"], ["Z"])
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2])
 
         graph = helper.make_graph(
             [node1, node2, node3],
-            'relu-test',
-            [helper.make_tensor_value_info('X', TensorProto.FLOAT, (2, 3, 4, 5))],
-            [helper.make_tensor_value_info('Z1', TensorProto.FLOAT, (2, 3, 4, 5))],
+            "relu-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5))],
+            [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, (2, 3, 4, 5))],
         )
 
-        model_proto = helper.make_model(graph, producer_name='onnx-tests')
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                              model_proto)
 
     def test_leaky_relu(self):
-        # Preprocessing: create a model with two nodes, Y's shape is unknown
-        node1 = helper.make_node('Transpose', ['X'], ['Y'], perm=[0, 2, 3, 1])
-        node2 = helper.make_node('LeakyRelu', ['Y'], ['Z'], alpha=0.02)
-        node3 = helper.make_node('Transpose', ['Z'], ['Z1'], perm=[0, 3, 1, 2])
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1])
+        node2 = helper.make_node("LeakyRelu", ["Y"], ["Z"], alpha=0.02)
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2])
 
         graph = helper.make_graph(
             [node1, node2, node3],
-            'LeakyRelu-test',
-            [helper.make_tensor_value_info('X', TensorProto.FLOAT, (2, 3, 4, 5))],
-            [helper.make_tensor_value_info('Z1', TensorProto.FLOAT, (2, 3, 4, 5))],
+            "LeakyRelu-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5))],
+            [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, (2, 3, 4, 5))],
         )
 
-        model_proto = helper.make_model(graph, producer_name='onnx-tests')
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                              model_proto)
 
-if __name__ == '__main__':
+    def test_max(self):
+        const_1_val = [2.0]
+        const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), const_1_val)
+        const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
+
+        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32).reshape(120).tolist()
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val)
+        const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
+
+        const_3_val = np.random.randn(2, 4, 5, 3).astype(np.float32).reshape(120).tolist()
+        const_3 = helper.make_tensor("const_3", TensorProto.FLOAT, (2, 4, 5, 3), const_3_val)
+        const_3_node = helper.make_node("Constant", [], ["const_3"], value=const_3, name="const_3")
+
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1])
+        node2 = helper.make_node("Max", ["Y", "const_3", "const_2", "const_1"], ["Z"])
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2])
+
+        graph = helper.make_graph(
+            [const_1_node, const_2_node, const_3_node, node1, node2, node3],
+            "Max-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5))],
+            [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, (2, 3, 4, 5))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
+                             model_proto)
+
+if __name__ == "__main__":
     Tf2OnnxBackendTestBase.trigger(OptimizerTests)
