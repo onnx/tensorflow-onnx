@@ -618,6 +618,8 @@ class Graph(object):
             optimize: optimize graph via onnx
             doc: text for doc string of the model
         """
+        self.delete_unused_nodes(self.output_names)
+        self.topological_sort(self.get_nodes())
         self.update_proto()
 
         # TODO: we'd want to do something like this so that transpose optimizer is active
@@ -833,8 +835,7 @@ class Graph(object):
     def remove_deleted_nodes(ops):
         return [node for node in ops if not node.is_deleted()]
 
-    @staticmethod
-    def _extract_sub_graph_nodes(dest_node):
+    def _extract_sub_graph_nodes(self, dest_node):
         """
         return related nodes of specified node
         :param dest_node: the specified node
@@ -845,7 +846,8 @@ class Graph(object):
         while processing_set:
             top_node = processing_set.pop()
             res_set.add(top_node)
-            for node in top_node.inputs:
+            implicit_inputs = [self.get_node_by_output(node_output) for node_output in top_node.get_implicit_inputs()]
+            for node in top_node.inputs + implicit_inputs:
                 if not node:
                     # some node (for example Scan) has optional inputs, which
                     # might has empty input.
