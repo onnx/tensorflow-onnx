@@ -218,17 +218,22 @@ class TransposeOptimizer(object):
         log.debug("input transpose does not have single consumer, skipping...")
         return False
 
-    # the assumption is: both node and trans have only 1 output
-    def _switch_transpose_and_node(self, node, trans):
-        if not self._transpose_has_single_consumer_node([trans]):
-            return False
-
+    # get the input index of transpose op in node's inputs.
+    def _get_input_index_for_trans(self, node, trans):
         input_index = 0
         for i in node.input:
             if i == trans.output[0]:
                 break
             else:
                 input_index += 1
+        return input_index
+
+    # the assumption is: both node and trans have only 1 output
+    def _switch_transpose_and_node(self, node, trans):
+        if not self._transpose_has_single_consumer_node([trans]):
+            return False
+
+        input_index = self._get_input_index_for_trans(node, trans)
 
         ops = self._g.get_nodes()
         self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
@@ -345,10 +350,7 @@ class TransposeOptimizer(object):
         return self._handle_node_having_branches(node)
 
     def _relu_handler(self, trans, node):
-        self._g.replace_all_inputs(self._g.get_nodes(), node.output[0], trans.output[0])
-        node.input[0] = trans.input[0]
-        trans.input[0] = node.output[0]
-        return True
+        return self._switch_transpose_and_node(node, trans)
 
     def _transpose_handler(self, trans, node):
         if is_nchw_transpose(node):
@@ -359,13 +361,30 @@ class TransposeOptimizer(object):
         return False
 
     def _maxmin_handler(self, trans, node):
-        input_name = node.input[1]
-        if self._g.is_initializer(input_name):
+        input_index = self._get_input_index_for_trans(node, trans)
+        all_other_inputs_const = all([node.inputs[i].is_const() for i, input_id \
+                                    in enumerate(node.input) if i != input_index])
+
+        if all_other_inputs_const is False:
+            return False
+
+        shapes = [len(self._g.get_shape(input_id)) for i, input_id in enumerate(node.input) if i != input_index]
+        shapes_not_one_and_four = [s for s in shapes if s not in [1, 4]]
+        if shapes_not_one_and_four:
+            return False
+
+        for i, input_name in enumerate(node.input):
             numpy_val = numpy_helper.to_array(self._g.get_initializer(input_name))
-            transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
-            self._g.update_initializer(input_name, transposed_val)
-            return self._switch_transpose_and_node(node, trans)
-        return False
+            rank = np.rank(numpy_val)
+            if rank == 4:
+                transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
+                self._g.update_initializer(input_name, transposed_val)
+            elif rank == 1:  #  scalar
+                # do nothing
+                pass
+            else:
+                raise ValueError("find rank !=1 and rank !=4, should not go here.")
+        return self._switch_transpose_and_node(node, trans)
 
     def _mul_handler(self, trans, node):
         multiplier_input_id = None

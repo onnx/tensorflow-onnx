@@ -105,7 +105,11 @@ def main():
         "converted from {}".format(args.input),
         optimize=not args.continue_on_error)
 
-    model_proto = GraphUtil.opt_transposes_with_model_proto(model_proto, output_names=args.outputs)
+    new_model_proto = GraphUtil.opt_transposes_with_model_proto(model_proto, output_names=args.outputs)
+    if new_model_proto:
+        model_proto = new_model_proto
+    else:
+        print("NON-CRITICAL, optimizers are not applied successfully")
 
     # write onnx graph
     if args.output:

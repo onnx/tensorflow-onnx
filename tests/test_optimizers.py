@@ -23,6 +23,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         origin_model_path = self.save_onnx_model(origin_proto, onnx_feed_dict, postfix="_origin")
 
         new_proto = GraphUtil.opt_transposes_with_model_proto(origin_proto, output_names=output_names_with_port)
+
+        self.assertTrue(new_proto, msg="model proto after optimizer should not be None")
+
         new_model_path = self.save_onnx_model(new_proto, onnx_feed_dict, postfix="_opt")
 
         previous = GraphUtil.get_node_count_from_onnx_graph(origin_proto.graph)

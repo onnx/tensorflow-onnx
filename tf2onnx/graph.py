@@ -21,6 +21,9 @@ from tf2onnx.utils import port_name, find_opset
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
 
+# pylint: disable=broad-except
+
+
 class Node(object):
     """A Node - wrapper around onnx nodes that we use for graph manipulations."""
 
@@ -891,7 +894,12 @@ class GraphUtil(object):
 
     @staticmethod
     def opt_transposes_with_model_proto(onnx_model_proto, output_names, debug=False):
-        """Optimizer the model proto, eliminating all useless Transpose pairs."""
+        """Optimizer the model proto, eliminating all useless Transpose pairs.
+
+        Returns:
+            modelproto after optimization, if optimizer run successfully
+            or None, if exceptions happens
+        """
         try:
             kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
 
@@ -906,15 +914,13 @@ class GraphUtil(object):
                 metadata_props = {p.key: p.value for p in onnx_model_proto.metadata_props}
                 helper.set_model_props(model_proto, metadata_props)
             return model_proto
-        except RuntimeError:
+        except Exception:
             # sometimes, onnx shape inference will fail for some reason, in this case,
             # we just log the error, and skip the transpose optimizer.
             type_, value_, traceback_ = sys.exc_info()
             ex_ext = traceback.format_exception(type_, value_, traceback_)
-            print("non-critical failure: error happens during transpose optimizer")
-            if debug:
-                print("detailed error message: ", ex_ext)
-            return onnx_model_proto
+            print("NON-CRITICAL error in optimizer: ", ex_ext)
+            return None
 
     @staticmethod
     def get_onnx_model_properties(onnx_model_proto):
@@ -943,23 +949,18 @@ class GraphUtil(object):
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
         graph_proto = inferred_model.graph
 
-        # todo: remove this once bug is fixed in shape inference.
-        original_graph_proto = onnx_model_proto.graph
-
         output_shapes = {}
         output_dtypes = {}
 
-        # only used inferred model to get shape of non-input & output node.
-        # there is a bug for inference on the existing output shape, will investigate later.
         shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.value_info)
         output_shapes.update(shapes)
         output_dtypes.update(dtypes)
 
-        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(original_graph_proto.output)
+        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.output)
         output_shapes.update(shapes)
         output_dtypes.update(dtypes)
 
-        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(original_graph_proto.input)
+        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.input)
         output_shapes.update(shapes)
         output_dtypes.update(dtypes)
 
@@ -992,7 +993,9 @@ class GraphUtil(object):
                     tuned_shape.append(-1)
                 elif d.HasField('dim_value'):
                     tuned_shape.append(d.dim_value)
-
+                else:
+                    # it is found, some unknown dims is missing after inference.
+                    tuned_shape.append(-1)
             output_shapes[shape_info.name] = tuned_shape
             output_dtypes[shape_info.name] = elem_type
 
