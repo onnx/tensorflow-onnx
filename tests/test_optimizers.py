@@ -23,7 +23,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
     def run_and_compare(self, output_names_with_port, onnx_feed_dict, origin_proto, debug=False, rtol=1e-07):
         origin_model_path = self.save_onnx_model(origin_proto, onnx_feed_dict, postfix="_origin")
 
-        new_proto = GraphUtil.opt_transposes_with_model_proto(origin_proto, output_names=output_names_with_port)
+        new_proto = GraphUtil.opt_transposes_with_model_proto(origin_proto)
 
         self.assertTrue(new_proto, msg="model proto after optimizer should not be None")
 

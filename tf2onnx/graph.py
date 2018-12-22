@@ -893,7 +893,7 @@ class GraphUtil(object):
     """Utilities to construct Graph loading from existing model file"""
 
     @staticmethod
-    def opt_transposes_with_model_proto(onnx_model_proto, output_names, debug=False):
+    def opt_transposes_with_model_proto(onnx_model_proto, debug=False):
         """Optimizer the model proto, eliminating all useless Transpose pairs.
 
         Returns:
@@ -903,8 +903,8 @@ class GraphUtil(object):
         try:
             kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
 
-            g = GraphUtil.create_graph_from_onnx_model(onnx_model_proto, output_names=output_names)
-            opt = TransposeOptimizer(g, output_names=output_names, debug=debug)
+            g = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
+            opt = TransposeOptimizer(g, output_names=g.output_names, debug=debug)
             opt.optimize()
 
             model_proto = g.make_model(onnx_model_proto.graph.doc_string,
@@ -943,7 +943,7 @@ class GraphUtil(object):
         return kwargs
 
     @staticmethod
-    def create_graph_from_onnx_model(onnx_model_proto, output_names):
+    def create_graph_from_onnx_model(onnx_model_proto):
         """Create Graph loading onnx model proto"""
         # apply shape inference on the model
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
@@ -971,6 +971,10 @@ class GraphUtil(object):
                 const_nodes.append(n)
                 continue
             non_const_nodes.append(n)
+
+        output_names = []
+        for n in graph_proto.output:
+            output_names.append(n.name)
 
         g = Graph(non_const_nodes, output_shapes, output_dtypes, None, None, None, output_names)
         GraphUtil._parse_graph_initializer(g, graph_proto)
