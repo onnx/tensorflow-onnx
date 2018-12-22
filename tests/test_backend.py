@@ -95,6 +95,14 @@ def support_op_conversion_since(opset, op):
 
 
 def onnxruntime_check(op):
+    if BACKEND not in ["onnxruntime"]:
+        return (False, "")
+
+    if op == "AveragePool":
+        import onnxruntime as ort
+        if ort.__version__ == "0.1.4":
+            return (True, "Skip AveragePool for onnxruntime 0.1.4")
+
     support_since = {
         "Abs": 6, #  Abs-1
         "Add": 7, #  Add-1, Add-6
@@ -118,7 +126,7 @@ def onnxruntime_check(op):
     if op not in support_since:
         return (False, "")
 
-    cond = BACKEND in ["onnxruntime"] and OPSET < support_since[op]
+    cond = OPSET < support_since[op]
     message = op + " is supported by onnxruntime since opset " + str(support_since[op])
 
     return (cond, message)
