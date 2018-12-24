@@ -2241,7 +2241,7 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                 if dtype != onnx_pb.TensorProto.FLOAT:
                     output_dtype = dtype
                     if input_node and input_node.type == "Cast" \
-                            and g.find_output_consumers(input_node.output[0]) == 1:
+                            and len(g.find_output_consumers(input_node.output[0])) == 1:
                         input_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
                         g.set_dtype(input_name, onnx_pb.TensorProto.FLOAT)
                     else:
