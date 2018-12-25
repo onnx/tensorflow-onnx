@@ -215,6 +215,7 @@ def range_op7(ctx, node, name, args):
 
     output_name = node.output[0]
     base_name = utils.make_name(node.name)
+    dtype = node.get_attr_int("Tidx")
 
     if all(i.is_const() for i in node.inputs):
         # Generate range as const if possible, start/limit/delta are all scalars with same type
@@ -223,8 +224,7 @@ def range_op7(ctx, node, name, args):
         delta = delta_node.get_tensor()
         val = np.arange(start, limit, delta, dtype=start.dtype)
         const_range = ctx.make_const(base_name, val)
-        ctx.replace_all_inputs(ctx.get_nodes(), output_name, const_range.name)
-        return None
+        return ctx.make_node("Identity", [const_range.output[0]], name=base_name, dtypes=[dtype], outputs=[output_name])
 
     nodes = []
 
@@ -233,11 +233,13 @@ def range_op7(ctx, node, name, args):
     delta_output = delta_node.output[0]
 
     # trip_count
-    diff_node = ctx.make_node("Sub", [limit_output, start_output], op_name_scope=base_name, name="diff")
+    diff_node = ctx.make_node("Sub",
+                              [limit_output, start_output],
+                              op_name_scope=base_name,
+                              name=utils.make_name("diff"))
     diff_output = diff_node.output[0]
     nodes.append(diff_node)
 
-    dtype = node.get_attr_int("Tidx")
     if dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
         cast_node = ctx.make_node("Cast", [diff_output], op_name_scope=base_name,
                                   name="cast_diff", attr={"to": onnx_pb.TensorProto.FLOAT})
@@ -283,9 +285,8 @@ def range_op7(ctx, node, name, args):
                               attr={"body": body_graph})
     nodes.append(loop_node)
 
-    identity_node = ctx.make_node("Identity", [loop_node.output[1]], name=base_name, dtypes=[dtype])
+    identity_node = ctx.make_node("Identity", [loop_node.output[1]], name=base_name, dtypes=[dtype], outputs=[output_name])
     nodes.append(identity_node)
-    ctx.replace_all_inputs(ctx.get_nodes(), output_name, identity_node.output[0])
 
     return nodes
 
