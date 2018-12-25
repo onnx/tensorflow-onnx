@@ -5,7 +5,7 @@
 tf2onnx.tf2onnx - select op conversion
 """
 import numpy as np
-from onnx import helper, onnx_pb
+from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.graph import Node
@@ -39,13 +39,13 @@ def select_op8(ctx, node, name, args):
         # create nodes getting shape of condition
         shape_node_output_shape = [rank]
         shape_node = ctx.make_node("Shape", [node.input[0]], op_name_scope=node.name,
-                                   shapes=[shape_node_output_shape], dtypes=[onnx_pb.TensorProto.INT64])
+                                   shapes=[shape_node_output_shape], dtypes=[TensorProto.INT64])
         nodes.append(shape_node)
 
         # todo(pengwa), move those leveraging rewrite_incomplete_type_support_onnxruntime after shape inferencing
         # bug is fixed.
         # workaround: onnxruntime does not support Split-2, add cases before and after.
-        target_dtype = onnx_pb.TensorProto.FLOAT
+        target_dtype = TensorProto.FLOAT
         shape_f_node = ctx.make_node("Cast", [shape_node.output[0]], attr={"to": target_dtype},
                                      shapes=[shape_node_output_shape], dtypes=[target_dtype],
                                      op_name_scope=node.name)
@@ -63,7 +63,7 @@ def select_op8(ctx, node, name, args):
         for i in range(rank):
             output_id = split_node.output[i]
             output_shape = ctx.get_shape(output_id)
-            target_dtype = onnx_pb.TensorProto.INT64
+            target_dtype = TensorProto.INT64
             shape_i_node = ctx.make_node("Cast", [output_id], attr={"to": target_dtype},
                                          shapes=[output_shape], dtypes=[target_dtype],
                                          op_name_scope=node.name)
