@@ -29,26 +29,6 @@ def infer_shape_for_graph(g):
                 no_shape_updated = True
 
 
-def infer_shape_from_outputs(g, node):
-    # if all inputs have shape, no more effort needed
-    are_all_input_shape_ready = True
-    for i in node.input:
-        if g.get_shape(i) is None:
-            are_all_input_shape_ready = False
-    if are_all_input_shape_ready:
-        return False
-    if node.type == "Select":
-        new_shape = g.get_shape(node.input[1])
-        if new_shape is None:
-            new_shape = g.get_shape(node.input[2])
-        if new_shape is not None:
-            g.set_shape(node.input[1], new_shape)
-            g.set_shape(node.input[2], new_shape)
-            log.debug("set [%s, %s] with new shape %s", node.input[1], node.input[2], new_shape)
-            return True
-    return False
-
-
 def infer_shape_for_node(g, node):
     has_unknown_output_shape = False
     for out in node.output:
@@ -109,6 +89,26 @@ def infer_shape_for_node(g, node):
             return False
         return set_shape_from_input(g, shape_node.input[0], node.output[0])
 
+    return False
+
+
+def infer_shape_from_outputs(g, node):
+    # if all inputs have shape, no more effort needed
+    are_all_input_shape_ready = True
+    for i in node.input:
+        if g.get_shape(i) is None:
+            are_all_input_shape_ready = False
+    if are_all_input_shape_ready:
+        return False
+    if node.type == "Select":
+        new_shape = g.get_shape(node.input[1])
+        if new_shape is None:
+            new_shape = g.get_shape(node.input[2])
+        if new_shape is not None:
+            g.set_shape(node.input[1], new_shape)
+            g.set_shape(node.input[2], new_shape)
+            log.debug("set [%s, %s] with new shape %s", node.input[1], node.input[2], new_shape)
+            return True
     return False
 
 
