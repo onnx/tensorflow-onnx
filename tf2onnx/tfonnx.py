@@ -22,6 +22,7 @@ from tensorflow.tools.graph_transforms import TransformGraph
 import tf2onnx
 from tf2onnx import utils
 from tf2onnx.function.select import select_op8
+from tf2onnx.function.gathernd import gathernd_op
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
@@ -1745,6 +1746,7 @@ def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
 
     return [onehot, log_softmax, mul1, reduce_sum, mul2, res]
 
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1776,6 +1778,7 @@ _OPSET_4 = {
     "Flatten": (direct_op, []),
     "Gather": (direct_op, ["Gather"]),
     "GatherV2": (gatherv2_op, ["Gather"]),
+    "GatherNd": (gathernd_op, ["GatherNd"]),
     "Greater": (broadcast_op, []),
     "Identity": (identity_op, ["Identity"]),
     "Less": (broadcast_op, []),
@@ -2271,7 +2274,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Slice", "Split", "Tile", "Transpose"])
+    return rewrite_incomplete_type_support(g, ops, ["ReduceSum", "Slice", "Split", "Tile", "Transpose"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
