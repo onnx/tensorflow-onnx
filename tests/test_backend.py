@@ -96,7 +96,7 @@ def support_op_conversion_since(opset, op):
 
 
 def support_op_with_target(target, op):
-    return [TARGET != target, op + " conversion is only supported with target " + str(target)]
+    return [target not in TARGET, op + " conversion is only supported with target " + str(target)]
 
 
 def onnxruntime_check(op):
@@ -512,11 +512,28 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.gather_nd(x, tf.constant(indices))
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=np.float32)
+        indices = np.array([[0], [2], [4], [7]], dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.gather_nd(x, tf.constant(indices))
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @unittest.skipIf(*support_op_with_target('rs6', 'GatherNd'))
     def test_gathernd_less_index(self):
         x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
         indices = np.array([[[0], [1]], [[2], [0]]], dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.gather_nd(x, tf.constant(indices))
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        # shape: 2*2*2
+        x_val = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float32)
+        indices = np.array([[[0, 0], [0, 1]], [[1, 0], [1, 1]]], dtype=np.int32)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.gather_nd(x, tf.constant(indices))
         _ = tf.identity(x_, name=_TFOUTPUT)
