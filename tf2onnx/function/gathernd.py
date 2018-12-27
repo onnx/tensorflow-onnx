@@ -9,6 +9,7 @@ import numpy as np
 from onnx import helper, onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
+from tf2onnx.utils import make_onnx_inputs_outputs
 
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
@@ -25,17 +26,17 @@ def make_gathernd_inner_loop(ctx, params, index, dtype):
     cond_out_name = utils.make_name("cond_out")
     cur_name = utils.make_name("gather_cur")
     result_name = utils.make_name("res")
-    body_inputs = [helper.make_tensor_value_info(trip_name, onnx_pb.TensorProto.INT64, []),
-                   helper.make_tensor_value_info(cond_name, onnx_pb.TensorProto.BOOL, []),
-                   helper.make_tensor_value_info(cur_name, dtype, [])]
-    body_outputs = [helper.make_tensor_value_info(cond_out_name, onnx_pb.TensorProto.BOOL, [],),
-                    helper.make_tensor_value_info(result_name, dtype, [])]
+    body_inputs = [make_onnx_inputs_outputs(trip_name, onnx_pb.TensorProto.INT64, []),
+                   make_onnx_inputs_outputs(cond_name, onnx_pb.TensorProto.BOOL, []),
+                   make_onnx_inputs_outputs(cur_name, dtype, [])]
+    body_outputs = [make_onnx_inputs_outputs(cond_out_name, onnx_pb.TensorProto.BOOL, [],),
+                    make_onnx_inputs_outputs(result_name, dtype, [])]
     body_nodes = []
     index_i = ctx.make_node("Gather", [index.output[0], trip_name], attr={"axis": 0})
     gather = ctx.make_node("Gather", [cur_name, index_i.output[0]], attr={"axis": 0})
     squeeze = ctx.make_node("Squeeze", [gather.output[0]], attr={"axes": [0]}, outputs=[result_name])
-    body_nodes.extend([index_i.op, gather.op, squeeze.op])
-    body_nodes.append(utils.make_onnx_identity(cond_name, cond_out_name))
+    body_nodes.extend([index_i.op, gather.op, squeeze.op,
+                       utils.make_onnx_identity(cond_name, cond_out_name)])
     body_graph = helper.make_graph(body_nodes, utils.make_name("gathernd_inner_body"), body_inputs, body_outputs)
     inner_loop = ctx.make_node("Loop", [trip_node.output[0],
                                         cond_const.output[0],
@@ -83,21 +84,21 @@ def gathernd_op(ctx, node, name, args):
     dummy_name = utils.make_name("dummy")
     dummy_out_name = utils.make_name("dummy_out")
     result_name = utils.make_name("res")
-    body_inputs = [helper.make_tensor_value_info(trip_name, onnx_pb.TensorProto.INT64, []),
-                   helper.make_tensor_value_info(cond_name, onnx_pb.TensorProto.BOOL, []),
-                   helper.make_tensor_value_info(dummy_name, node_dtype, [])]
-    body_outputs = [helper.make_tensor_value_info(cond_out_name, onnx_pb.TensorProto.BOOL, [],),
-                    helper.make_tensor_value_info(dummy_out_name, node_dtype, []),
-                    helper.make_tensor_value_info(result_name, node_dtype, [])]
+    body_inputs = [make_onnx_inputs_outputs(trip_name, onnx_pb.TensorProto.INT64, []),
+                   make_onnx_inputs_outputs(cond_name, onnx_pb.TensorProto.BOOL, []),
+                   make_onnx_inputs_outputs(dummy_name, node_dtype, [])]
+    body_outputs = [make_onnx_inputs_outputs(cond_out_name, onnx_pb.TensorProto.BOOL, [],),
+                    make_onnx_inputs_outputs(dummy_out_name, node_dtype, []),
+                    make_onnx_inputs_outputs(result_name, node_dtype, [])]
     body_nodes = []
     index = ctx.make_node("Gather", [flatten_indices.output[0], trip_name], attr={"axis": 0})
     index_squeeze = ctx.make_node("Squeeze", [index.output[0]], attr={"axes": [0]})
     # inner loop to gather result
     inner_loop_nodes, inner_loop = make_gathernd_inner_loop(ctx, params, index_squeeze, node_dtype)
-    body_nodes.extend([index.op, index_squeeze.op] + inner_loop_nodes)
-    body_nodes.append(utils.make_onnx_identity(cond_name, cond_out_name))
-    body_nodes.append(utils.make_onnx_identity(dummy_name, dummy_out_name))
-    body_nodes.append(utils.make_onnx_identity(inner_loop.output[0], result_name))
+    body_nodes.extend([index.op, index_squeeze.op] + inner_loop_nodes +
+                      [utils.make_onnx_identity(cond_name, cond_out_name),
+                       utils.make_onnx_identity(dummy_name, dummy_out_name),
+                       utils.make_onnx_identity(inner_loop.output[0], result_name)])
     body_graph = helper.make_graph(body_nodes, utils.make_name("gathernd_body"), body_inputs, body_outputs)
     gathernd_loop = ctx.make_node("Loop",
                                   [outter_shape_sum.output[0], cond_const.output[0], params],
