@@ -928,3 +928,7 @@ class GraphBuilder(object):
     def add_const(self, name, np_val, skip_conversion=False):
         """ add new const node, always make unique name """
         return self.ctx.make_const(self.make_name(name), np_val, skip_conversion)
+
+    def add_identity(self, src, dest, name=None, dtype=None):
+        """ add new identity node, always make unique name """
+        return self.add_node("Identity", [src], outputs=[dest], name=name, dtypes=[dtype])

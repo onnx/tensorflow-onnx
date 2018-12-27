@@ -22,7 +22,7 @@ from tensorflow.tools.graph_transforms import TransformGraph
 import tf2onnx
 from tf2onnx import utils
 from tf2onnx.function.select import select_op8
-from tf2onnx.graph import Node, Graph
+from tf2onnx.graph import Node, Graph, GraphBuilder
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
 from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
@@ -208,12 +208,13 @@ def range_op7(ctx, node, name, args):
     """Range."""
     # T range = Range(T start, T limit, T delta)
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
+    builder = GraphBuilder(ctx, node.name)
+
     start_node = node.inputs[0]
     limit_node = node.inputs[1]
     delta_node = node.inputs[2]
-
     output_name = node.output[0]
-    base_name = utils.make_name(node.name)
+    dtype = node.get_attr_int("Tidx")
 
     if all(i.is_const() for i in node.inputs):
         # Generate range as const if possible, start/limit/delta are all scalars with same type
@@ -221,47 +222,26 @@ def range_op7(ctx, node, name, args):
         limit = limit_node.get_tensor()
         delta = delta_node.get_tensor()
         val = np.arange(start, limit, delta, dtype=start.dtype)
-        const_range = ctx.make_const(base_name, val)
-        ctx.replace_all_inputs(ctx.get_nodes(), output_name, const_range.name)
-        return None
-
-    nodes = []
-
-    start_output = start_node.output[0]
-    limit_output = limit_node.output[0]
-    delta_output = delta_node.output[0]
+        const_range = builder.add_const("const_range", val)
+        builder.add_identity(const_range, output_name, dtype=dtype)
+        return builder.nodes
 
     # trip_count
-    diff_node = ctx.make_node("Sub", [limit_output, start_output], op_name_scope=base_name, name="diff")
-    diff_output = diff_node.output[0]
-    nodes.append(diff_node)
-
-    dtype = node.get_attr_int("Tidx")
+    diff_node = builder.add_node("Sub", [limit_node, start_node], name="diff")
     if dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
-        cast_node = ctx.make_node("Cast", [diff_output], op_name_scope=base_name,
-                                  name="cast_diff", attr={"to": onnx_pb.TensorProto.FLOAT})
-        nodes.append(cast_node)
-        diff_output = cast_node.output[0]
+        cast_diff_node = builder.add_node("Cast", [diff_node], name="cast_diff", attr={"to": onnx_pb.TensorProto.FLOAT})
+        cast_delta_node = builder.add_node("Cast", [delta_node], name="cast_delta",
+                                           attr={"to": onnx_pb.TensorProto.FLOAT})
+        div_node = builder.add_node("Div", [cast_diff_node, cast_delta_node], name="div")
+    else:
+        div_node = builder.add_node("Div", [diff_node, delta_node], name="div")
 
-        cast_node = ctx.make_node("Cast", [delta_output], op_name_scope=base_name, name="cast_delta",
-                                  attr={"to": onnx_pb.TensorProto.FLOAT})
-        nodes.append(cast_node)
-        delta_output = cast_node.output[0]
-
-    div_node = ctx.make_node("Div", [diff_output, delta_output], op_name_scope=base_name, name="div")
-    nodes.append(div_node)
-
-    ceil_node = ctx.make_node("Ceil", [div_node.output[0]], op_name_scope=base_name, name="ceil")
-    nodes.append(ceil_node)
-
-    trip_count_node = ctx.make_node("Cast", [ceil_node.output[0]], op_name_scope=base_name, name="trip_cnt",
-                                    attr={"to": onnx_pb.TensorProto.INT64})
-    nodes.append(trip_count_node)
+    ceil_node = builder.add_node("Ceil", [div_node], name="ceil")
+    trip_count_node = builder.add_node("Cast", [ceil_node], name="trip_cnt", attr={"to": onnx_pb.TensorProto.INT64})
 
     # cond
     # Use initializer here since Constant OP before opset 9 does not support bool type
-    cond_name = "{}_cond".format(base_name)
-    ctx.make_const(cond_name, np.ones((), dtype=bool))
+    cond_node = builder.add_const("cond", np.ones((), dtype=bool))
 
     # body
     body_inputs = [utils.make_onnx_inputs_outputs("i", onnx_pb.TensorProto.INT64, []),
@@ -274,19 +254,14 @@ def range_op7(ctx, node, name, args):
     body_nodes.append(utils.make_onnx_identity("cond", "cond_out"))
     body_nodes.append(helper.make_node("Add", ["prev", delta_node.output[0]], ["current"], name=utils.make_name("add")))
     body_nodes.append(utils.make_onnx_identity("prev", "range"))
-    body_graph = helper.make_graph(body_nodes, utils.make_name("{}_body".format(base_name)), body_inputs, body_outputs)
+    body_graph = helper.make_graph(body_nodes, builder.make_name("body"), body_inputs, body_outputs)
 
     # loop
-    loop_inputs = [trip_count_node.output[0], cond_name, start_output]
-    loop_node = ctx.make_node("Loop", loop_inputs, output_count=2, op_name_scope=base_name, name="loop",
-                              attr={"body": body_graph})
-    nodes.append(loop_node)
+    loop_inputs = [trip_count_node.output[0], cond_node, start_node]
+    loop_node = builder.add_node("Loop", loop_inputs, output_count=2, name="loop", attr={"body": body_graph})
+    builder.add_identity(loop_node.output[1], output_name, dtype=dtype)
 
-    identity_node = ctx.make_node("Identity", [loop_node.output[1]], name=base_name, dtypes=[dtype])
-    nodes.append(identity_node)
-    ctx.replace_all_inputs(ctx.get_nodes(), output_name, identity_node.output[0])
-
-    return nodes
+    return builder.nodes
 
 
 def broadcast_op(ctx, node, name, args):
@@ -1744,6 +1719,7 @@ def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
     res = ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], outputs=[node.output[0]], attr={"axes": [1]})
 
     return [onehot, log_softmax, mul1, reduce_sum, mul2, res]
+
 
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
