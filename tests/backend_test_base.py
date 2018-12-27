@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 import unittest
+from distutils.version import LooseVersion
 
 import numpy as np
 import tensorflow as tf
@@ -186,3 +187,30 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # Now set the sys.argv to the unittest_args (leaving sys.argv[0] alone)
         sys.argv[1:] = args.unittest_args
         unittest.main()
+
+
+def check_onnxruntime_version(excludes, reason=None):
+    backend = "onnxruntime"
+    if backend.lower() != Tf2OnnxBackendTestBase.BACKEND.lower():
+        return False, None
+
+    import onnxruntime as ort
+    version = LooseVersion(ort.__version__)
+    message = "Test is disabled for {} {}.".format(backend, version)
+    if reason:
+        message = " ".join([message, reason])
+
+    if isinstance(excludes, str):
+        if version == LooseVersion(excludes):
+            return True, message
+    else:
+        for exclude in excludes:
+            if isinstance(excludes, str):
+                if version == LooseVersion(exclude):
+                    return True, message
+            else:
+                min_version, max_version = exclude
+                if LooseVersion(min_version) <= version <= LooseVersion(max_version):
+                    return True, message
+
+    return False, None

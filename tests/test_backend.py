@@ -14,7 +14,7 @@ from distutils.version import LooseVersion
 import numpy as np
 import tensorflow as tf
 
-from backend_test_base import Tf2OnnxBackendTestBase
+from backend_test_base import Tf2OnnxBackendTestBase, check_onnxruntime_version
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 
@@ -97,11 +97,6 @@ def support_op_conversion_since(opset, op):
 def onnxruntime_check(op):
     if BACKEND not in ["onnxruntime"]:
         return (False, "")
-
-    if op == "AveragePool":
-        import onnxruntime as ort
-        if ort.__version__ == "0.1.4":
-            return (True, "Skip AveragePool for onnxruntime 0.1.4")
 
     support_since = {
         "Abs": 6, #  Abs-1
@@ -220,7 +215,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.log.debug(str(p))
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skipIf(*onnxruntime_check("AveragePool"))
+    @unittest.skipIf(*check_onnxruntime_version("0.1.4", "AveragePool has bug with AVX2"))
     def test_avgpool(self):
         for p in get_conv_getdata(kind=0):
             _, padding, x_shape, ksize, strides = p
@@ -789,8 +784,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {})
 
-    # TODO: enable it later
-    @unittest.skip("onnxruntime 0.1.3 has bug, this can pass with current latest onnxruntime")
+    @unittest.skipIf(*support_op_conversion_since(7, "cast"))
+    @unittest.skipIf(*check_onnxruntime_version("0.1.3"))
     def test_range_non_const(self):
         x = tf.range(5.0)
         _ = tf.identity(x, name=_TFOUTPUT)
