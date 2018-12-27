@@ -388,7 +388,7 @@ class Graph(object):
         return node
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
-                  op_name_scope=None, name=None, shapes=None, dtypes=None):
+                  op_name_scope=None, name=None, shapes=None, dtypes=None, domain=None):
         """Make a new onnx node in the graph"""
         if attr is None:
             attr = {}
@@ -403,8 +403,13 @@ class Graph(object):
         if op_name_scope:
             name = "_".join([op_name_scope, name])
 
+        # if input is a Node, use node's first output as input name
+        for i, input in enumerate(inputs):
+            if isinstance(input, Node):
+                inputs[i] = input.output[0]
+
         if outputs is None:
-            outputs = [name + ":" + str(i) for i in range(output_count)]
+            outputs = [utils.port_name(name, i) for i in range(output_count)]
 
         raw_attr = {}
         onnx_attrs = []
@@ -427,6 +432,9 @@ class Graph(object):
             utils.make_sure(len(dtypes) == output_count, "output dtypes count not equal to output count")
             for i in range(output_count):
                 self.set_dtype(node.output[i], dtypes[i])
+
+        if domain:
+            node.domain = domain
 
         return node
 
@@ -559,6 +567,7 @@ class Graph(object):
 
     def topological_sort(self, ops):
         """Topological sort of graph."""
+
         def _push_stack(stack, node, in_stack):
             stack.append(node)
             if node in in_stack:
