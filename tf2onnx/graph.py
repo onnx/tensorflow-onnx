@@ -889,3 +889,42 @@ class Graph(object):
         """
         related_nodes = self.extract_sub_graph_nodes(outputs_name)
         self.set_nodes(related_nodes)
+
+
+class GraphBuilder(object):
+    def __init__(self, ctx, scope=None):
+        self._ctx = ctx
+        self._nodes = []
+        self._scope = scope
+
+    @property
+    def ctx(self):
+        return self._ctx
+
+    @property
+    def nodes(self):
+        return self._nodes
+
+    @property
+    def scope(self):
+        return self._scope
+
+    @scope.setter
+    def scope(self, val):
+        self._scope = val
+
+    def make_name(self, name):
+        if self.scope:
+            name = "{}_{}".format(self.scope, name)
+        return utils.make_name(name)
+
+    def add_node(self, op_type, inputs, name=None, **kwargs):
+        """ add new node, always make unique name """
+        name = self.make_name(name or op_type)
+        node = self.ctx.make_node(op_type, inputs, name=name, **kwargs)
+        self._nodes.append(node)
+        return node
+
+    def add_const(self, name, np_val, skip_conversion=False):
+        """ add new const node, always make unique name """
+        return self.ctx.make_const(self.make_name(name), np_val, skip_conversion)
