@@ -404,9 +404,9 @@ class Graph(object):
             name = "_".join([op_name_scope, name])
 
         # if input is a Node, use node's first output as input name
-        for i, input in enumerate(inputs):
-            if isinstance(input, Node):
-                inputs[i] = input.output[0]
+        for i, node_input in enumerate(inputs):
+            if isinstance(node_input, Node):
+                inputs[i] = node_input.output[0]
 
         if outputs is None:
             outputs = [utils.port_name(name, i) for i in range(output_count)]
@@ -892,6 +892,8 @@ class Graph(object):
 
 
 class GraphBuilder(object):
+    """ utility to build complex sub-graph """
+
     def __init__(self, ctx, scope=None):
         self._ctx = ctx
         self._nodes = []
