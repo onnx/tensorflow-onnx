@@ -12,7 +12,7 @@ from tf2onnx.utils import make_onnx_inputs_outputs
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
 
-INT64_MAX = np.iinfo(np.int64)
+INT64_MAX = np.iinfo(np.int64).max
 
 def make_gathernd_inner_loop(ctx, params, index, dtype):
     """create the inner loop for GatherNd."""
