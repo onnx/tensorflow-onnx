@@ -38,7 +38,7 @@ def make_gathernd_inner_loop(ctx, params, index, dtype):
     gather = ctx.make_node("Gather", [cur_name, index_i.output[0]], attr={"axis": 0})
     squeeze = ctx.make_node("Squeeze", [gather.output[0]], attr={"axes": [0]}, outputs=[result_name])
     body_nodes.extend([index_i.op, gather.op, squeeze.op,
-                       utils.make_onnx_identity(cond_name, cond_out_name)])
+                       utils.make_onnx_identity(cond_name, cond_out_name)]
     body_graph = helper.make_graph(body_nodes, utils.make_name("gathernd_inner_body"), body_inputs, body_outputs)
     inner_loop = ctx.make_node("Loop", [trip_node.output[0],
                                         cond_const.output[0],
