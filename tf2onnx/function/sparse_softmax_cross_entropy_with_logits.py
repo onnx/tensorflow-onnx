@@ -5,14 +5,12 @@
 tf2onnx.tf2onnx - sparse_softmax_cross_entropy_with_logits op conversion
 """
 import numpy as np
-from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
-from tf2onnx.function.range import make_range_subgraph
-from tf2onnx.function.gathernd import make_gathernd_subgraph
-from tf2onnx.utils import make_onnx_inputs_outputs
+from tf2onnx.function.range import make_range
+from tf2onnx.function.gathernd import make_gathernd
 
-# pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
+# pylint: disable=unused-argument,missing-docstring
 
 def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
     # make subgraph to implement one_hot, idea comes from onehot_op
@@ -70,13 +68,13 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
     one_const = ctx.make_const(utils.make_name("one"), np.array(1, dtype=np.int64))
     id_name = utils.make_name("sparse_softmax_id")
     id_output = utils.port_name(id_name)
-    nodes.extend(make_range_subgraph(ctx,
-                                     zero_const.output[0],
-                                     indices_size.output[0],
-                                     one_const.output[0],
-                                     id_output,
-                                     id_name,
-                                     TensorProto.INT64))
+    nodes.extend(make_range(ctx,
+                            zero_const.output[0],
+                            indices_size.output[0],
+                            one_const.output[0],
+                            id_output,
+                            id_name,
+                            TensorProto.INT64))
     id_unsqueeze = ctx.make_node("Unsqueeze", [id_output], attr={"axes": [1]})
     indices_with_id = ctx.make_node("Concat",
                                     [id_unsqueeze.output[0], indices_unsqueeze.output[0]],
@@ -84,12 +82,12 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
     log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=[logit_name], dtypes=[logit_dtype])
     gathernd_name = utils.make_name("sparse_softmax_gathernd")
     gathernd_output = utils.port_name(gathernd_name)
-    nodes.extend(make_gathernd_subgraph(ctx,
-                                        log_softmax.output[0],
-                                        indices_with_id.output[0],
-                                        gathernd_output,
-                                        gathernd_name,
-                                        logit_dtype))
+    nodes.extend(make_gathernd(ctx,
+                               log_softmax.output[0],
+                               indices_with_id.output[0],
+                               gathernd_output,
+                               gathernd_name,
+                               logit_dtype))
     const_name = utils.make_name("const_negative_one")
     const_negative_one = ctx.make_const(const_name, np.array(-1).astype(utils.ONNX_TO_NUMPY_DTYPE[logit_dtype]))
     mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], gathernd_output])

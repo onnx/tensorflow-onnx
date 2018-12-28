@@ -10,15 +10,16 @@ from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.utils import make_onnx_inputs_outputs
 
-# pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
+# pylint: disable=unused-argument,missing-docstring
 
 INT64_MAX = np.iinfo(np.int64).max
 
-def make_gathernd_inner_loop(ctx, params, index, name, dtype):
+def _make_gathernd_inner_loop(ctx, params, index, dtype):
     """create the inner loop for GatherNd."""
     # gather_cur = params
     # for (int i=0; i<size(index); i++)
     #   gather_res = gather(gather_cur, index[i])
+    scope_name = utils.make_name("gathernd_inner_loop")
     nodes = []
     trip_node = ctx.make_node("Size", [index.output[0]])
     nodes.append(trip_node.op)
@@ -43,15 +44,16 @@ def make_gathernd_inner_loop(ctx, params, index, name, dtype):
     inner_loop = ctx.make_node("Loop", [trip_node.output[0],
                                         cond_const.output[0],
                                         params],
-                               name=name,
+                               op_name_scope=scope_name,
                                attr={"body": body_graph})
     nodes.append(inner_loop.op)
     return nodes, inner_loop
 
 
-def make_gathernd_subgraph(ctx, params, indices, output, name, t_params):
+def make_gathernd(ctx, params, indices, output, scope_name, t_params):
     """make GatherNd op."""
     # Tparams output = GatherNd(Tparams params, Tidx indices)
+    scope_name = utils.make_name(scope_name)
     nodes = []
     # reshape indices into [sum(indices[:-1]), indices[-1]]
     indices_shape = ctx.make_node("Shape", [indices], dtypes=[TensorProto.INT64])
@@ -93,11 +95,10 @@ def make_gathernd_subgraph(ctx, params, indices, output, name, t_params):
     index = ctx.make_node("Gather", [flatten_indices.output[0], trip_name], attr={"axis": 0})
     index_squeeze = ctx.make_node("Squeeze", [index.output[0]], attr={"axes": [0]})
     # inner loop to gather result
-    inner_loop_nodes, inner_loop = make_gathernd_inner_loop(ctx,
-                                                            params,
-                                                            index_squeeze,
-                                                            "{}_inner_loop".format(name),
-                                                            t_params)
+    inner_loop_nodes, inner_loop = _make_gathernd_inner_loop(ctx,
+                                                             params,
+                                                             index_squeeze,
+                                                             t_params)
     body_nodes.extend([index.op, index_squeeze.op] + inner_loop_nodes +
                       [utils.make_onnx_identity(cond_name, cond_out_name),
                        utils.make_onnx_identity(dummy_name, dummy_out_name),
@@ -106,7 +107,7 @@ def make_gathernd_subgraph(ctx, params, indices, output, name, t_params):
     gathernd_loop = ctx.make_node("Loop",
                                   [outter_shape_sum.output[0], cond_const.output[0], params],
                                   output_count=2,
-                                  name="{}_loop".format(name),
+                                  op_name_scope=scope_name,
                                   attr={"body": body_graph})
     nodes.append(gathernd_loop)
     # reshape to target shape
@@ -141,6 +142,7 @@ def make_gathernd_subgraph(ctx, params, indices, output, name, t_params):
                   output_reshape])
     return nodes
 
+
 def gathernd_op(ctx, node, name, args):
     """GatherNd op."""
     # Tparams output = GatherNd(Tparams params, Tidx indices)
@@ -150,4 +152,4 @@ def gathernd_op(ctx, node, name, args):
     # same as the attr Tparams
     t_params = ctx.get_dtype(params)
     utils.make_sure(t_params, "Dtype of {} is None".format(indices))
-    return make_gathernd_subgraph(ctx, params, indices, output, name, t_params)
+    return make_gathernd(ctx, params, indices, output, name, t_params)

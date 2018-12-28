@@ -21,10 +21,7 @@ from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
 from tf2onnx import utils
-from tf2onnx.function.gathernd import gathernd_op
-from tf2onnx.function.range import range_op7
-from tf2onnx.function.select import select_op8
-from tf2onnx.function.sparse_softmax_cross_entropy_with_logits import sparse_softmax_cross_entropy_with_logits_op
+from tf2onnx.function import *  # pylint: disable=wildcard-import
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const

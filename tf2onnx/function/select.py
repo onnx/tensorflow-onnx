@@ -12,7 +12,7 @@ from tf2onnx.graph import Node
 from tf2onnx.utils import port_name, make_sure
 
 
-# pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
+# pylint: disable=unused-argument,missing-docstring
 
 
 def select_op8(ctx, node, name, args):

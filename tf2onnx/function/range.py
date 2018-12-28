@@ -5,34 +5,29 @@
 tf2onnx.tf2onnx - range op conversion
 """
 import numpy as np
-from onnx import helper, onnx_pb
+from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 
-# pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
-def make_range_const(ctx,
-                     start_node,
-                     limit_node,
-                     delta_node,
-                     output,
-                     name,
-                     dtype):
+# pylint: disable=unused-argument,missing-docstring
+def make_range_const(ctx, start, limit, delta, output, scope_name, dtype):
     """make Range subgraph if all inputs are const."""
     # T range = Range(T start, T limit, T delta)
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
-    base_name = utils.make_name(name)
-    start = start_node.get_tensor()
-    limit = limit_node.get_tensor()
-    delta = delta_node.get_tensor()
+    base_name = utils.make_name(scope_name)
+    start = ctx.get_node_by_output(start).get_tensor()
+    limit = ctx.get_node_by_output(limit).get_tensor()
+    delta = ctx.get_node_by_output(delta).get_tensor()
     val = np.arange(start, limit, delta, dtype=start.dtype)
     const_range = ctx.make_const(base_name, val)
     return ctx.make_node("Identity", [const_range.output[0]], dtypes=[dtype], outputs=[output])
 
-def make_range_subgraph(ctx, start, limit, delta, output, name, dtype):
+
+def make_range_non_const(ctx, start, limit, delta, output, scope_name, dtype):
     """make Range subgraph."""
     # T range = Range(T start, T limit, T delta)
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
-    base_name = utils.make_name(name)
+    base_name = utils.make_name(scope_name)
 
     nodes = []
 
@@ -45,14 +40,14 @@ def make_range_subgraph(ctx, start, limit, delta, output, name, dtype):
     nodes.append(diff_node)
 
     delta_cast = delta
-    if dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
+    if dtype in [TensorProto.INT32, TensorProto.INT64]:
         cast_node = ctx.make_node("Cast", [diff_output], op_name_scope=base_name,
-                                  name="cast_diff", attr={"to": onnx_pb.TensorProto.FLOAT})
+                                  name="cast_diff", attr={"to": TensorProto.FLOAT})
         nodes.append(cast_node)
         diff_output = cast_node.output[0]
 
         cast_node = ctx.make_node("Cast", [delta], op_name_scope=base_name, name="cast_delta",
-                                  attr={"to": onnx_pb.TensorProto.FLOAT})
+                                  attr={"to": TensorProto.FLOAT})
         nodes.append(cast_node)
         delta_cast = cast_node.output[0]
 
@@ -63,7 +58,7 @@ def make_range_subgraph(ctx, start, limit, delta, output, name, dtype):
     nodes.append(ceil_node)
 
     trip_count_node = ctx.make_node("Cast", [ceil_node.output[0]], op_name_scope=base_name, name="trip_cnt",
-                                    attr={"to": onnx_pb.TensorProto.INT64})
+                                    attr={"to": TensorProto.INT64})
     nodes.append(trip_count_node)
 
     # cond
@@ -72,10 +67,10 @@ def make_range_subgraph(ctx, start, limit, delta, output, name, dtype):
     ctx.make_const(cond_name, np.ones((), dtype=bool))
 
     # body
-    body_inputs = [utils.make_onnx_inputs_outputs("i", onnx_pb.TensorProto.INT64, []),
-                   utils.make_onnx_inputs_outputs("cond", onnx_pb.TensorProto.BOOL, []),
+    body_inputs = [utils.make_onnx_inputs_outputs("i", TensorProto.INT64, []),
+                   utils.make_onnx_inputs_outputs("cond", TensorProto.BOOL, []),
                    utils.make_onnx_inputs_outputs("prev", dtype, [])]
-    body_outputs = [utils.make_onnx_inputs_outputs("cond_out", onnx_pb.TensorProto.BOOL, []),
+    body_outputs = [utils.make_onnx_inputs_outputs("cond_out", TensorProto.BOOL, []),
                     utils.make_onnx_inputs_outputs("current", dtype, []),
                     utils.make_onnx_inputs_outputs("range", dtype, [])]
     body_nodes = []
@@ -95,28 +90,18 @@ def make_range_subgraph(ctx, start, limit, delta, output, name, dtype):
 
     return nodes
 
+
+def make_range(ctx, start, limit, delta, output, scope_name, dtype):
+    if all(ctx.get_node_by_output(n).is_const() for n in [start, limit, delta]):
+        return make_range_const(ctx, start, limit, delta, output, scope_name, dtype)
+    return make_range_non_const(ctx, start, limit, delta, output, scope_name, dtype)
+
+
 def range_op7(ctx, node, name, args):
     """Range."""
     # T range = Range(T start, T limit, T delta)
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
-    start_node = node.inputs[0]
-    limit_node = node.inputs[1]
-    delta_node = node.inputs[2]
-
-    output_name = node.output[0]
     dtype = node.get_attr_int("Tidx")
-    if start_node.is_const() and limit_node.is_const() and delta_node.is_const():
-        return make_range_const(ctx,
-                                start_node,
-                                limit_node,
-                                delta_node,
-                                output_name,
-                                name,
-                                dtype)
-    return make_range_subgraph(ctx,
-                               start_node.output[0],
-                               limit_node.output[0],
-                               delta_node.output[0],
-                               output_name,
-                               name,
-                               dtype)
+    utils.make_sure(dtype, "Tidx of {} is None".format(node.name))
+    return make_range(ctx, node.input[0], node.input[1], node.input[2],
+                      node.output[0], name, dtype)
