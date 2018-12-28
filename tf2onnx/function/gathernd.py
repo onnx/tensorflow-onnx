@@ -4,16 +4,18 @@
 """
 tf2onnx.tf2onnx - gathernd op conversion
 """
-import sys
 import numpy as np
 from onnx import helper, onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.utils import make_onnx_inputs_outputs
 
-
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
+
+INT64_MAX = np.iinfo(np.int64)
+
 def make_gathernd_inner_loop(ctx, params, index, dtype):
+    """create the inner loop for GatherNd."""
     # gather_cur = params
     # for (int i=0; i<size(index); i++)
     #   gather_res = gather(gather_cur, index[i])
@@ -62,7 +64,7 @@ def gathernd_op(ctx, node, name, args):
                                  dtypes=[TensorProto.INT64])
     inner_shape = ctx.make_node("Slice",
                                 [indices_shape.output[0]],
-                                attr={"axes": [0], "ends": [sys.maxsize], "starts": [-1]},
+                                attr={"axes": [0], "ends": [INT64_MAX], "starts": [-1]},
                                 dtypes=[TensorProto.INT64])
     outter_shape_sum = ctx.make_node("ReduceSum",
                                      [outter_shape.output[0]],
@@ -116,7 +118,7 @@ def gathernd_op(ctx, node, name, args):
                                       dtypes=[TensorProto.INT64])
     output_inner_shape = ctx.make_node("Slice",
                                        [inner_loop_shape_.output[0]],
-                                       attr={"axes": [0], "ends": [sys.maxsize], "starts": [1]},
+                                       attr={"axes": [0], "ends": [INT64_MAX], "starts": [1]},
                                        dtypes=[TensorProto.INT64])
     output_shape_ = ctx.make_node("Concat",
                                   [outter_shape.output[0], output_inner_shape.output[0]],
