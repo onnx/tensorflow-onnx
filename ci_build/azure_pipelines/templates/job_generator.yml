@@ -1,4 +1,4 @@
-# This template generate multiple jobs based on input parameters
+# This template generates multiple jobs based on input parameters
 
 parameters:
   platforms: ['linux']
