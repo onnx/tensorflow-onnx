@@ -1681,6 +1681,24 @@ def all_op(ctx, node, name, args):
     return [cast, reduce_min, res]
 
 
+def any_op(ctx, node, name, args):
+    # T output = reduce_any(T x, list(int) reduce_indices, @bool keepdims)
+    reduce_dim = node.inputs[1].get_tensor_value()
+    if isinstance(reduce_dim, np.ndarray):
+        reduce_dim = reduce_dim.tolist()
+    else:
+        reduce_dim = [reduce_dim[0]]
+    for i in reduce_dim:
+        utils.make_sure(i >= 0, "negative reduce axis is not supported in onnx for now")
+
+    cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.INT32})
+    keepdims = helper.get_attribute_value(node.get_attr("keep_dims"))
+    reduce_min = ctx.make_node(op_type="ReduceSum", inputs=cast.output, attr={"axes": reduce_dim, "keepdims": keepdims})
+    res = ctx.make_node(op_type="Cast", inputs=reduce_min.output, attr={"to": onnx_pb.TensorProto.BOOL},
+                        name=node.name, outputs=node.output)
+    return [cast, reduce_min, res]
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1789,6 +1807,7 @@ _OPSET_5 = {
 _OPSET_6 = {
     "AddN": (direct_op, ["Sum"]),
     "All": (all_op, []),
+    "Any": (any_op, []),
     "FloorDiv": (floordiv_op, []),
 }
 
