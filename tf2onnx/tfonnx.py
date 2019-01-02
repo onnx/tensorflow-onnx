@@ -1684,6 +1684,17 @@ def reduce_logic_op(ctx, node, name, args):
     return [cast, reduce_node, res]
 
 
+def zeroslike_op(ctx, node, name, args):
+    # T output = zeros_like(T x)
+    # when params "dtype" used, tf will call another op "Fill" instead, so Cast is not needed here.
+    input_dtype = ctx.get_dtype(node.input[0])
+    node_name = utils.make_name("zero")
+    const_zero = ctx.make_const(node_name, np.array(0).astype(utils.ONNX_TO_NUMPY_DTYPE[input_dtype]))
+    mul_op = ctx.make_node(op_type="Mul", inputs=[node.input[0], const_zero.output[0]],
+                           name=node.name, outputs=node.output)
+    return mul_op
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1780,6 +1791,7 @@ _OPSET_4 = {
     "Unpack": (unpack_op, []),
     "Erf": (erf_op, []),
     "Sign": (sign_op, []),
+    "ZerosLike": (zeroslike_op, []),
 }
 
 _OPSET_5 = {
