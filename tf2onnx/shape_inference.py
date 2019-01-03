@@ -11,7 +11,6 @@ from __future__ import unicode_literals
 import logging
 from onnx import onnx_pb
 
-
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
 
 
@@ -30,15 +29,17 @@ def infer_shape_for_graph(g):
 
 
 def infer_shape_for_node(g, node):
-    has_unknown_output_shape = False
-    for out in node.output:
-        out_dtype = g.get_shape(out)
-        if out_dtype is None:
-            has_unknown_output_shape = True
-            break
+    has_unknown_input_shape = any(g.get_shape(i) is None for i in node.input)
+    has_unknown_output_shape = any(g.get_shape(o) is None for o in node.output)
+
+    # an input shape may be inferred from node output or other input shapes
+    # try to infer it first
+    if has_unknown_input_shape:
+        if infer_input_shapes(g, node):
+            return True
 
     if not has_unknown_output_shape:
-        return infer_shape_from_outputs(g, node)
+        return False
 
     # for those ops, we don't expect all input shapes available to infer output shapes.
     ret = infer_output_shapes_with_partial_inputs(g, node)
@@ -119,23 +120,18 @@ def infer_shape_for_node(g, node):
     return False
 
 
-def infer_shape_from_outputs(g, node):
-    # if all inputs have shape, no more effort needed
-    are_all_input_shape_ready = True
-    for i in node.input:
-        if g.get_shape(i) is None:
-            are_all_input_shape_ready = False
-    if are_all_input_shape_ready:
-        return False
+def infer_input_shapes(g, node):
     if node.type == "Select":
-        new_shape = g.get_shape(node.input[1])
-        if new_shape is None:
-            new_shape = g.get_shape(node.input[2])
-        if new_shape is not None:
-            g.set_shape(node.input[1], new_shape)
-            g.set_shape(node.input[2], new_shape)
-            log.debug("set [%s, %s] with new shape %s", node.input[1], node.input[2], new_shape)
-            return True
+        shape_t = g.get_shape(node.input[1])
+        shape_e = g.get_shape(node.input[2])
+        # copy shape if t OR e does not have a shape, no update if t AND e both have shapes
+        if shape_t is None or shape_e is None:
+            new_shape = shape_t or shape_e
+            if new_shape is not None:
+                g.set_shape(node.input[1], new_shape)
+                g.set_shape(node.input[2], new_shape)
+                log.debug("set [%s, %s] with new shape %s", node.input[1], node.input[2], new_shape)
+                return True
     return False
 
 
