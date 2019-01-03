@@ -156,9 +156,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if check_shape:
                 self.assertEqual(expected_val.shape, actual_val.shape)
 
-    def save_onnx_model(self, model_proto, feed_dict):
+    def save_onnx_model(self, model_proto, feed_dict, postfix=""):
         save_path = os.path.join(type(self).TMPPATH, self._testMethodName)
-        target_path = utils.save_onnx_model(save_path, self._testMethodName, feed_dict, model_proto,
+        target_path = utils.save_onnx_model(save_path, self._testMethodName + postfix, feed_dict, model_proto,
                                             include_test_data=self.debug_mode(), as_text=self.debug_mode())
 
         self.log.debug("create model file: %s", target_path)

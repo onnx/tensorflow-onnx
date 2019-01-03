@@ -10,13 +10,18 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import collections
-
-import numpy as np
+import sys
+import traceback
 import six
-from onnx import helper, numpy_helper, optimizer, OperatorSetIdProto, AttributeProto
+import numpy as np
 
+from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
+from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+
+
+# pylint: disable=broad-except
 
 
 class Node(object):
@@ -616,7 +621,7 @@ class Graph(object):
         Create GraphProto for onnx from internal graph.
         Args:
             optimize: optimize graph via onnx
-            doc: text for doc string of the model
+            doc: text for doc string of the graph
         """
         self.delete_unused_nodes(self.output_names)
         self.topological_sort(self.get_nodes())
@@ -671,7 +676,7 @@ class Graph(object):
 
         return graph
 
-    def make_model(self, doc, optimize=False, graph_name="tf2onnx"):
+    def make_model(self, graph_doc, optimize=False, graph_name="tf2onnx", **kwargs):
         """
         Create final ModelProto for onnx from internal graph.
         Args:
@@ -679,16 +684,20 @@ class Graph(object):
             doc: text for doc string of the model
             output_names: list of model outputs
         """
-        graph = self.make_graph(doc, graph_name)
-        kwargs = {"producer_name": "tf2onnx",
-                  "producer_version": __version__}
-        opsets = []
-        imp = OperatorSetIdProto()
-        imp.version = self._opset
-        opsets.append(imp)
-        if self._extra_opset is not None:
-            opsets.extend(self._extra_opset)
-        kwargs["opset_imports"] = opsets
+        graph = self.make_graph(graph_doc, graph_name)
+
+        if "producer_name" not in kwargs:
+            kwargs = {"producer_name": "tf2onnx",
+                      "producer_version": __version__}
+
+        if "opset_imports" not in kwargs:
+            opsets = []
+            imp = OperatorSetIdProto()
+            imp.version = self._opset
+            opsets.append(imp)
+            if self._extra_opset is not None:
+                opsets.extend(self._extra_opset)
+            kwargs["opset_imports"] = opsets
         model_proto = helper.make_model(graph, **kwargs)
 
         # optimize the model proto.
@@ -880,3 +889,156 @@ class Graph(object):
         """
         related_nodes = self.extract_sub_graph_nodes(outputs_name)
         self.set_nodes(related_nodes)
+
+
+class GraphUtil(object):
+    """Utilities to construct Graph loading from existing model file"""
+
+    @staticmethod
+    def opt_transposes_with_model_proto(onnx_model_proto, debug=False):
+        """Optimizer the model proto, eliminating all useless Transpose pairs.
+
+        Returns:
+            modelproto after optimization, if optimizer run successfully
+            or None, if exceptions happens
+        """
+        try:
+            kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
+
+            g = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
+            opt = TransposeOptimizer(g, output_names=g.output_names, debug=debug)
+            opt.optimize()
+
+            model_proto = g.make_model(onnx_model_proto.graph.doc_string,
+                                       graph_name=onnx_model_proto.graph.name, **kwargs)
+
+            if onnx_model_proto.metadata_props:
+                metadata_props = {p.key: p.value for p in onnx_model_proto.metadata_props}
+                helper.set_model_props(model_proto, metadata_props)
+            return model_proto
+        except Exception:
+            # sometimes, onnx shape inference will fail for some reason, in this case,
+            # we just log the error, and skip the transpose optimizer.
+            type_, value_, traceback_ = sys.exc_info()
+            ex_ext = traceback.format_exception(type_, value_, traceback_)
+            print("NON-CRITICAL error in optimizer: ", ex_ext)
+            return None
+
+    @staticmethod
+    def get_onnx_model_properties(onnx_model_proto):
+        """Get ModelProto properties"""
+        kwargs = {}
+        if onnx_model_proto.HasField('ir_version'):
+            kwargs["ir_version"] = onnx_model_proto.ir_version
+        if onnx_model_proto.HasField('producer_name'):
+            kwargs["producer_name"] = onnx_model_proto.producer_name
+        if onnx_model_proto.HasField('producer_version'):
+            kwargs["producer_version"] = onnx_model_proto.producer_version
+        if onnx_model_proto.HasField('domain'):
+            kwargs["domain"] = onnx_model_proto.domain
+        if onnx_model_proto.HasField('model_version'):
+            kwargs["model_version"] = onnx_model_proto.model_version
+        if onnx_model_proto.HasField('doc_string'):
+            kwargs["doc_string"] = onnx_model_proto.doc_string
+        kwargs["opset_imports"] = onnx_model_proto.opset_import
+
+        return kwargs
+
+    @staticmethod
+    def create_graph_from_onnx_model(onnx_model_proto):
+        """Create Graph loading onnx model proto"""
+        # apply shape inference on the model
+        inferred_model = shape_inference.infer_shapes(onnx_model_proto)
+        graph_proto = inferred_model.graph
+
+        output_shapes = {}
+        output_dtypes = {}
+
+        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.value_info)
+        output_shapes.update(shapes)
+        output_dtypes.update(dtypes)
+
+        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.output)
+        output_shapes.update(shapes)
+        output_dtypes.update(dtypes)
+
+        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.input)
+        output_shapes.update(shapes)
+        output_dtypes.update(dtypes)
+
+        non_const_nodes = []
+        const_nodes = []
+        for n in graph_proto.node:
+            if n.op_type == "Constant":
+                const_nodes.append(n)
+                continue
+            non_const_nodes.append(n)
+
+        output_names = []
+        for n in graph_proto.output:
+            output_names.append(n.name)
+
+        g = Graph(non_const_nodes, output_shapes, output_dtypes, None, None, None, output_names)
+        GraphUtil._parse_graph_initializer(g, graph_proto)
+
+        for n in const_nodes:
+            name = n.output[0]
+            tensor = None
+            for a in n.attribute:
+                if a.name == "value":
+                    tensor = helper.get_attribute_value(a)
+                    if not isinstance(tensor, TensorProto):
+                        raise ValueError("Constant value is not a tensor, unexpected.")
+                    break
+
+            if tensor:
+                g.set_initializer(name, tensor)
+            else:
+                raise ValueError("failed to parse tensor value from Constant node")
+
+        GraphUtil._parse_graph_input(g, graph_proto)
+        return g
+
+    @staticmethod
+    def get_node_count_from_onnx_graph(graph_proto):
+        op_cnt = collections.Counter()
+        for n in graph_proto.node:
+            op_cnt[n.op_type] += 1
+        return op_cnt
+
+    @staticmethod
+    def _parse_shape_and_type_from_value_infos(value_infos):
+        """Get nodes output shapes and types from value infos."""
+        output_shapes = {}
+        output_dtypes = {}
+        for shape_info in value_infos:
+            type_proto = shape_info.type
+            elem_type = type_proto.tensor_type.elem_type
+            shape = type_proto.tensor_type.shape
+            tuned_shape = []
+            for d in shape.dim:
+                if d.HasField('dim_param'):
+                    tuned_shape.append(-1)
+                elif d.HasField('dim_value'):
+                    tuned_shape.append(d.dim_value)
+                else:
+                    # it is found, some unknown dims is missing after inference.
+                    tuned_shape.append(-1)
+            output_shapes[shape_info.name] = tuned_shape
+            output_dtypes[shape_info.name] = elem_type
+
+        return output_shapes, output_dtypes
+
+    @staticmethod
+    def _parse_graph_initializer(g, graph_proto):
+        """Get graph initializers and put into Graph object."""
+        for initializer in graph_proto.initializer:
+            g.add_initializer(initializer)
+
+    @staticmethod
+    def _parse_graph_input(g, graph_proto):
+        """Get graph inputs not defined as initializers and put into Graph object."""
+        for input_value_info in graph_proto.input:
+            if g.is_initializer(input_value_info.name):
+                continue
+            g.add_model_input(input_value_info.name, input_value_info)

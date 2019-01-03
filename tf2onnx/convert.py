@@ -15,7 +15,7 @@ from onnx import helper
 import tensorflow as tf
 
 import tf2onnx.utils
-from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
@@ -101,12 +101,15 @@ def main():
                              output_names=args.outputs,
                              inputs_as_nchw=args.inputs_as_nchw)
 
-    optimizer = TransposeOptimizer(g, args.outputs, args.verbose is not None)
-    optimizer.optimize()
-
     model_proto = g.make_model(
         "converted from {}".format(args.input),
         optimize=not args.continue_on_error)
+
+    new_model_proto = GraphUtil.opt_transposes_with_model_proto(model_proto)
+    if new_model_proto:
+        model_proto = new_model_proto
+    else:
+        print("NON-CRITICAL, optimizers are not applied successfully")
 
     # write onnx graph
     if args.output:
