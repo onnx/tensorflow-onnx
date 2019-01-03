@@ -1664,25 +1664,9 @@ def floormod_op(ctx, node, name, args):
     return nodes
 
 
-def all_op(ctx, node, name, args):
+def reduce_logic_op(ctx, node, name, args):
     # T output = All(T x, list(int) reduce_indices, @bool keepdims)
-    reduce_dim = node.inputs[1].get_tensor_value()
-    if isinstance(reduce_dim, np.ndarray):
-        reduce_dim = reduce_dim.tolist()
-    else:
-        reduce_dim = [reduce_dim[0]]
-
-    utils.make_sure(all(i >= 0 for i in reduce_dim), "negative axis is not supported in onnx")
-    cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.INT32})
-    keepdims = helper.get_attribute_value(node.get_attr("keep_dims"))
-    reduce_min = ctx.make_node(op_type="ReduceMin", inputs=cast.output, attr={"axes": reduce_dim, "keepdims": keepdims})
-    res = ctx.make_node(op_type="Cast", inputs=reduce_min.output, attr={"to": onnx_pb.TensorProto.BOOL},
-                        name=node.name, outputs=node.output)
-    return [cast, reduce_min, res]
-
-
-def any_op(ctx, node, name, args):
-    # T output = reduce_any(T x, list(int) reduce_indices, @bool keepdims)
+    # T output = Any(T x, list(int) reduce_indices, @bool keepdims)
     reduce_dim = node.inputs[1].get_tensor_value()
     if isinstance(reduce_dim, np.ndarray):
         reduce_dim = reduce_dim.tolist()
@@ -1693,10 +1677,11 @@ def any_op(ctx, node, name, args):
 
     cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.INT32})
     keepdims = helper.get_attribute_value(node.get_attr("keep_dims"))
-    reduce_min = ctx.make_node(op_type="ReduceSum", inputs=cast.output, attr={"axes": reduce_dim, "keepdims": keepdims})
-    res = ctx.make_node(op_type="Cast", inputs=reduce_min.output, attr={"to": onnx_pb.TensorProto.BOOL},
+    op_type = "ReduceMin" if node.type == "All" else "ReduceSum"
+    reduce_node = ctx.make_node(op_type=op_type, inputs=cast.output, attr={"axes": reduce_dim, "keepdims": keepdims})
+    res = ctx.make_node(op_type="Cast", inputs=reduce_node.output, attr={"to": onnx_pb.TensorProto.BOOL},
                         name=node.name, outputs=node.output)
-    return [cast, reduce_min, res]
+    return [cast, reduce_node, res]
 
 
 # map tensorflow ops to onnx ops. The format below is
@@ -1806,8 +1791,8 @@ _OPSET_5 = {
 
 _OPSET_6 = {
     "AddN": (direct_op, ["Sum"]),
-    "All": (all_op, []),
-    "Any": (any_op, []),
+    "All": (reduce_logic_op, []),
+    "Any": (reduce_logic_op, []),
     "FloorDiv": (floordiv_op, []),
 }
 
