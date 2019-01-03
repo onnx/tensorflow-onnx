@@ -23,6 +23,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 # to change the behavior of annotation. If need, pick the backend here.
 OPSET = Tf2OnnxBackendTestBase.OPSET
 BACKEND = Tf2OnnxBackendTestBase.BACKEND
+TARGET = Tf2OnnxBackendTestBase.TARGET
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
@@ -94,7 +95,19 @@ def support_op_conversion_since(opset, op):
     return [OPSET < opset, op + " conversion is covered since opset " + str(opset)]
 
 
+def support_op_with_target(target, op):
+    return [target not in TARGET, op + " conversion is only supported with target " + str(target)]
+
+
 def onnxruntime_check(op):
+    if BACKEND not in ["onnxruntime"]:
+        return (False, "")
+
+    if op == "AveragePool":
+        import onnxruntime as ort
+        if ort.__version__ == "0.1.4":
+            return (True, "Skip AveragePool for onnxruntime 0.1.4")
+
     support_since = {
         "Abs": 6, #  Abs-1
         "Add": 7, #  Add-1, Add-6
@@ -118,7 +131,7 @@ def onnxruntime_check(op):
     if op not in support_since:
         return (False, "")
 
-    cond = BACKEND in ["onnxruntime"] and OPSET < support_since[op]
+    cond = OPSET < support_since[op]
     message = op + " is supported by onnxruntime since opset " + str(support_since[op])
 
     return (cond, message)
@@ -488,6 +501,41 @@ class BackendTests(Tf2OnnxBackendTestBase):
         idx_flattened = np.array([i * x_val.shape[1] + idx for i in range(0, x_val.shape[0])])
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.gather(tf.reshape(x, [-1]), tf.constant(idx_flattened))
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(*support_op_with_target('rs6', 'GatherNd'))
+    def test_gathernd(self):
+        x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
+        indices = np.array([[[0, 1], [1, 1]], [[1, 2], [0, 2]]], dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.gather_nd(x, tf.constant(indices))
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=np.float32)
+        indices = np.array([[0], [2], [4], [7]], dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.gather_nd(x, tf.constant(indices))
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(*support_op_with_target('rs6', 'GatherNd'))
+    def test_gathernd_less_index(self):
+        x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
+        indices = np.array([[[0], [1]], [[2], [0]]], dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.gather_nd(x, tf.constant(indices))
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        # shape: 2*2*2
+        x_val = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float32)
+        indices = np.array([[[0, 0], [0, 1]], [[1, 0], [1, 1]]], dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.gather_nd(x, tf.constant(indices))
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 

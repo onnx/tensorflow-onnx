@@ -1,4 +1,4 @@
-# Install all dependencies
+# Run unit test
 
 steps:
 - bash: |
