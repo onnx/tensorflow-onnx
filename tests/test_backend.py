@@ -1424,6 +1424,100 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val})
 
+    @unittest.skip("TODO: add a common utility for onnxruntime version check in another PR")
+    def test_matrix_band_part(self):
+        input_val = np.random.randint(0, 666, (10, 15)).astype(np.int32)
+        input_x = tf.placeholder(dtype=tf.int32, shape=[None, None], name=_TFINPUT)
+        res = tf.matrix_band_part(input_x, -1, 0)
+        res1 = tf.matrix_band_part(input_x, 0, -1)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        _ = tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+    def test_floordiv(self):
+        input_val_1 = np.random.random_sample(100).astype(np.int32)
+        input_val_2 = (np.random.random_sample(100) + 1).astype(np.int32)
+        input_1 = tf.placeholder(dtype=tf.int32, shape=[None], name=_TFINPUT)
+        input_2 = tf.placeholder(dtype=tf.int32, shape=[None], name=_TFINPUT1)
+        res = tf.floordiv(input_1, input_2)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2})
+
+        tf.reset_default_graph()
+
+        input_val_1 = np.random.random_sample(100).astype(np.float32)
+        input_val_2 = (np.random.random_sample(100) + 1).astype(np.float32)
+        input_1 = tf.placeholder(dtype=tf.float32, shape=[None], name=_TFINPUT)
+        input_2 = tf.placeholder(dtype=tf.float32, shape=[None], name=_TFINPUT1)
+        res = tf.floordiv(input_1, input_2)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2})
+
+        tf.reset_default_graph()
+        # test broadcasting
+        input_val_1 = np.random.random_sample((10, 50)).astype(np.float32)
+        input_val_2 = (np.random.random_sample(50) + 1).astype(np.float32)
+        input_1 = tf.placeholder(dtype=tf.float32, shape=[None]*input_val_1.ndim, name=_TFINPUT)
+        input_2 = tf.placeholder(dtype=tf.float32, shape=[None], name=_TFINPUT1)
+        res = tf.floordiv(input_1, input_2)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2})
+
+    def test_floormod(self):
+        input_val_1 = 100*np.random.random_sample(100).astype(np.int32)
+        input_val_2 = (100*np.random.random_sample(100) + 1).astype(np.int32)
+        input_1 = tf.placeholder(dtype=tf.int32, shape=[None]*input_val_1.ndim, name=_TFINPUT)
+        input_2 = tf.placeholder(dtype=tf.int32, shape=[None]*input_val_2.ndim, name=_TFINPUT1)
+        res = tf.floormod(input_1, input_2)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2})
+
+        tf.reset_default_graph()
+
+        input_val_1 = 100*np.random.random_sample(100).astype(np.float32)
+        input_val_2 = (100*np.random.random_sample(100) + 1).astype(np.float32)
+        input_1 = tf.placeholder(dtype=tf.float32, shape=[None]*input_val_1.ndim, name=_TFINPUT)
+        input_2 = tf.placeholder(dtype=tf.float32, shape=[None]*input_val_2.ndim, name=_TFINPUT1)
+        res = tf.floormod(input_1, input_2)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2}, rtol=1e-5)
+
+        tf.reset_default_graph()
+        # test broadcasting case
+        input_val_1 = (50*np.random.random_sample((10, 50)) + 1).astype(np.float32)
+        input_val_2 = (50*np.random.random_sample(50) + 1).astype(np.float32)
+        input_1 = tf.placeholder(dtype=tf.float32, shape=[None]*input_val_1.ndim, name=_TFINPUT)
+        input_2 = tf.placeholder(dtype=tf.float32, shape=[None]*input_val_2.ndim, name=_TFINPUT1)
+        res = tf.floormod(input_1, input_2)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2}, rtol=1e-4)
+
+    def test_logical_not(self):
+        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_x = tf.placeholder(dtype=tf.bool, shape=[None, None], name=_TFINPUT)
+        res = tf.logical_not(input_x)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val})
+
+    def test_reduce_all(self):
+        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_x = tf.placeholder(dtype=tf.bool, shape=[None]*input_val.ndim, name=_TFINPUT)
+        res = tf.reduce_all(input_tensor=input_x, keepdims=False)
+        res1 = tf.reduce_all(input_tensor=input_x, axis=[0], keepdims=False)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        _ = tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+        tf.reset_default_graph()
+
+        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_x = tf.placeholder(dtype=tf.bool, shape=[None] * input_val.ndim, name=_TFINPUT)
+        res = tf.reduce_all(input_tensor=input_x, keepdims=True)
+        res1 = tf.reduce_all(input_tensor=input_x, axis=[0], keepdims=True)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        _ = tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
 
 if __name__ == '__main__':
     Tf2OnnxBackendTestBase.trigger(BackendTests)

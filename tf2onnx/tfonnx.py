@@ -63,7 +63,7 @@ def tflist_to_onnx(node_list, shape_override):
     ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
                     "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels"]
+                    "Tout", "Tlabels", "Tindex"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -1465,6 +1465,7 @@ def fill_op(ctx, node, name, args):
     # In onnx the value is an attribute so we need to fetch the value as const which
     # sooner or later will be a problem for tensorflow-onnx.
     shape = ctx.get_shape(node.output[0])
+    utils.make_sure(all(i >= 0 for i in shape), "shape attr should not be less than zero")
     value = node.inputs[1].get_tensor_value()
     value_proto = numpy_helper.from_array(node.inputs[1].get_tensor())
     dtype = value_proto.data_type
@@ -1633,6 +1634,56 @@ def erf_op(ctx, node, name, args):
     ]
     return nodes
 
+
+def floordiv_op(ctx, node, name, args):
+    # T output = FloorDiv(T x, T y)
+    res = [node]
+    node.type = "Div"
+    dtype = ctx.get_dtype(node.input[0])
+    if dtype in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
+        new_node_name = utils.make_name("floor_div_res")
+        floor_res = ctx.insert_new_node_on_output(op_type="Floor", output_name=node.output[0],
+                                                  name=new_node_name)
+        ctx.copy_dtype(node.output[0], floor_res.output[0])
+        ctx.copy_shape(node.output[0], floor_res.output[0])
+        res.append(floor_res)
+    return res
+
+
+def floormod_op(ctx, node, name, args):
+    # T output = FloorMod(T x, T y)
+    nodes = []
+    div = ctx.make_node(op_type="Div", inputs=node.input)
+    nodes.append(div)
+    dtype = ctx.get_dtype(node.input[0])
+    if dtype in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
+        div = ctx.make_node(op_type="Floor", inputs=div.output)
+        nodes.append(div)
+    mul = ctx.make_node(op_type="Mul", inputs=[div.output[0], node.input[1]])
+    # res node will take over shape&dtype&output connection info of original "node"
+    res = ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
+                        name=node.name, outputs=node.output)
+    nodes.extend([mul, res])
+    return nodes
+
+
+def all_op(ctx, node, name, args):
+    # T output = All(T x, list(int) reduce_indices, @bool keepdims)
+    reduce_dim = node.inputs[1].get_tensor_value()
+    if isinstance(reduce_dim, np.ndarray):
+        reduce_dim = reduce_dim.tolist()
+    else:
+        reduce_dim = [reduce_dim[0]]
+
+    utils.make_sure(all(i >= 0 for i in reduce_dim), "negative axis is not supported in onnx")
+    cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.INT32})
+    keepdims = helper.get_attribute_value(node.get_attr("keep_dims"))
+    reduce_min = ctx.make_node(op_type="ReduceMin", inputs=cast.output, attr={"axes": reduce_dim, "keepdims": keepdims})
+    res = ctx.make_node(op_type="Cast", inputs=reduce_min.output, attr={"to": onnx_pb.TensorProto.BOOL},
+                        name=node.name, outputs=node.output)
+    return [cast, reduce_min, res]
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1672,6 +1723,7 @@ _OPSET_4 = {
     "LogSoftmax": (direct_op, ["LogSoftmax"]),
     "LRN": (lrn_op, []),
     "LogicalAnd": (broadcast_op, ["And"]),
+    "LogicalNot": (direct_op, ["Not"]),
     "LogicalOr": (broadcast_op, ["Or"]),
     "Max": (reduce_op, ["ReduceMax"]),
     "MatMul": (matmul_op, ["MatMul"]),
@@ -1727,7 +1779,7 @@ _OPSET_4 = {
     "Pack": (pack_op, []),
     "Unpack": (unpack_op, []),
     "Erf": (erf_op, []),
-    "Sign": (sign_op, [])
+    "Sign": (sign_op, []),
 }
 
 _OPSET_5 = {
@@ -1739,6 +1791,8 @@ _OPSET_5 = {
 
 _OPSET_6 = {
     "AddN": (direct_op, ["Sum"]),
+    "All": (all_op, []),
+    "FloorDiv": (floordiv_op, []),
 }
 
 _OPSET_7 = {
@@ -1753,12 +1807,14 @@ _OPSET_7 = {
     "Div": (broadcast_op7, ["Div"]),
     "Equal": (broadcast_op7, []),
     "Fill": (fill_op7, []),
+    "FloorMod": (floormod_op, []),
     "FusedBatchNorm": (fused_batchnorm_op7, []),
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
     "Greater": (broadcast_op7, []),
     "Less": (less_op7, []),
     "LogicalAnd": (broadcast_op7, ["And"]),
     "LogicalOr": (broadcast_op7, ["Or"]),
+    "MatrixBandPart": (matrixbandpart_op, []),
     "Mul": (broadcast_op7, []),
     "Multinomial": (multinomial_op, []),
     "Pow": (direct_op, []),

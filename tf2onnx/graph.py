@@ -535,6 +535,11 @@ class Graph(object):
         """Set dtype for node."""
         self._dtypes[name] = dtype
 
+    def copy_dtype(self, src_name, dst_name):
+        """Copy dtype from another node."""
+        dtype = self.get_dtype(src_name)
+        self.set_dtype(dst_name, dtype)
+
     def get_shape(self, name):
         """Get shape for node."""
         assert isinstance(name, six.text_type)

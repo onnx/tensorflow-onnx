@@ -150,6 +150,8 @@ def get_tf_tensor_data(tensor):
         data = tensor.dcomplex_val
     elif tensor.int_val:
         data = tensor.int_val
+    elif tensor.int64_val:
+        data = tensor.int64_val
     elif tensor.bool_val:
         data = tensor.bool_val
     elif tensor.dtype == tf.int32:
