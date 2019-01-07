@@ -174,6 +174,24 @@ def infer_output_shapes_with_partial_inputs(g, node):
             log.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
+    if node.type == "Pack":
+        axis = node.get_attr("axis").i
+        input_shape = None
+        for i in node.input:
+            s = g.get_shape(i)
+            if s is not None:
+                input_shape = s
+                break
+        if input_shape is None:
+            return False
+        for i in node.input:
+            if not g.get_shape(i):
+                g.set_shape(i, input_shape)
+                log.debug("set [%s] with new shape %s", i, input_shape)
+        new_shape = input_shape[:axis] + [len(node.input)] + input_shape[axis:]
+        g.set_shape(node.output[0], new_shape)
+        log.debug("set Pack node [%s] with new shape %s", node.output[0], new_shape)
+        return True
     return None
 
 
