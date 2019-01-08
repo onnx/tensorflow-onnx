@@ -109,6 +109,8 @@ def infer_shape_for_node(g, node):
             val += s[axis]
 
         s1 = g.get_shape(node.input[0])
+        if axis < 0:
+            axis += len(s1)
         new_shape = s1[:axis] + [val]
         if axis < len(s1) - 1:
             new_shape += s1[axis+1:]
@@ -150,6 +152,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
             log.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
+
     if node.type == "Switch":
         new_shape = g.get_shape(node.input[0])
         if new_shape is not None:
@@ -159,6 +162,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
             log.debug("set [%s] with new shape %s", node.output[1], new_shape)
             return True
         return False
+
     if node.type == "Select":
         new_shape = g.get_shape(node.input[1])
         if new_shape is None:
@@ -170,6 +174,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
             log.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
+
     if node.type == "Pack":
         axis = node.get_attr("axis").i
         input_shape = None
@@ -180,6 +185,8 @@ def infer_output_shapes_with_partial_inputs(g, node):
                 break
         if input_shape is None:
             return False
+        if axis < 0:
+            axis += len(input_shape)
         for i in node.input:
             if not g.get_shape(i):
                 g.set_shape(i, input_shape)
@@ -188,6 +195,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
         g.set_shape(node.output[0], new_shape)
         log.debug("set Pack node [%s] with new shape %s", node.output[0], new_shape)
         return True
+
     return None
 
 
