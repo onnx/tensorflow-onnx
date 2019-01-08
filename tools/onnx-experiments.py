@@ -63,12 +63,12 @@ def load_graph(fname):
             if name in g.initializers:
                 # ignore if it is not a model input
                 continue
-            g.add_model_input(name, i)
             shape = [j.dim_value if hasattr(i.type.tensor_type, "dim_value") else -1
                      for j in i.type.tensor_type.shape.dim]
             dtype = i.type.tensor_type.elem_type
             g.set_dtype(name, dtype)
             g.set_shape(name, shape)
+            g.add_graph_input(name, dtype, shape)
         for i in model_proto.graph.output:
             name = i.name
             shape = [j.dim_value if hasattr(i.type.tensor_type, "dim_value") else -1

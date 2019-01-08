@@ -537,8 +537,7 @@ class CustomRnnLateRewriter(object):
                 else:
                     loop_input_shape = list(shape)
 
-                val = utils.make_onnx_inputs_outputs(input_name, dtype, loop_input_shape)
-                body_g.add_model_input(input_name, val)
+                body_g.add_graph_input(input_name, dtype, loop_input_shape)
                 i += 1
 
             log.debug("start preparing body graph outputs nodes")
@@ -556,7 +555,7 @@ class CustomRnnLateRewriter(object):
             body_g.topological_sort(body_g.get_nodes())
 
             log.debug("start make graph based on body graph nodes")
-            body_g.output_names = new_output_names
+            body_g.outputs = new_output_names
             graph = body_g.make_graph("scan body graph", graph_name=scan_node.name + "_body_graph")
             scan_node.set_attr("body", graph)
 

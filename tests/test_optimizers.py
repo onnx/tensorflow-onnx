@@ -46,9 +46,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             self.assertEqual(expected_val.shape, actual_val.shape)
 
     def test_relu(self):
-        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1])
-        node2 = helper.make_node("Relu", ["Y"], ["Z"])
-        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2])
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node2 = helper.make_node("Relu", ["Y"], ["Z"], name="relu")
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2], name="trans_2")
 
         graph = helper.make_graph(
             [node1, node2, node3],
@@ -62,9 +62,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                              model_proto)
 
     def test_leaky_relu(self):
-        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1])
-        node2 = helper.make_node("LeakyRelu", ["Y"], ["Z"], alpha=0.02)
-        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2])
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node2 = helper.make_node("LeakyRelu", ["Y"], ["Z"], alpha=0.02, name="relu")
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2], name="trans_2")
 
         graph = helper.make_graph(
             [node1, node2, node3],
@@ -90,9 +90,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_3 = helper.make_tensor("const_3", TensorProto.FLOAT, (2, 4, 5, 3), const_3_val)
         const_3_node = helper.make_node("Constant", [], ["const_3"], value=const_3, name="const_3")
 
-        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1])
-        node2 = helper.make_node("Max", ["Y", "const_3", "const_2", "const_1"], ["Z"])
-        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2])
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node2 = helper.make_node("Max", ["Y", "const_3", "const_2", "const_1"], ["Z"], name="max")
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2], name="trans_2")
 
         graph = helper.make_graph(
             [const_1_node, const_2_node, const_3_node, node1, node2, node3],

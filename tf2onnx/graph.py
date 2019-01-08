@@ -247,6 +247,16 @@ class Node(object):
         """Set dtype."""
         self._dtype = val
 
+    def get_body_graphs(self):
+        return self.graph.contained_graphs.get(self.name, None)
+
+    def set_body_graph_as_attr(self, attr_name, graph):
+        if self.name not in self.graph.contained_graphs:
+            self.graph.contained_graphs[self.name] = {}
+
+        self.graph.contained_graphs[self.name].update({attr_name: graph})
+        graph.parent_graph = self.graph
+
     def update_proto(self):
         """Update protobuf from internal structure."""
         nodes = [n for n in self._op.input]
@@ -257,6 +267,12 @@ class Node(object):
         for node in nodes:
             self._op.output.remove(node)
         self._op.output.extend(self.output)
+
+        # update attributes to proto
+        del self._op.attribute[:]
+        attr = [a for a in self.attr_onnx.values()]
+        if attr:
+            self._op.attribute.extend(attr)
 
     def get_implicit_inputs(self, require_input_in_cur_graph=False):
         """Get implicit inputs if the node has attributes being GraphProto."""
@@ -272,7 +288,7 @@ class Node(object):
                 n = self.graph.get_node_by_output(input_id)
                 if n is None:
                     if not self.graph.is_initializer(input_id):
-                        if input_id not in self.graph.model_inputs:
+                        if input_id not in self.graph.inputs:
                             continue
                 implicit_inputs_in_current_graph.add(input_id)
             return implicit_inputs_in_current_graph
@@ -323,19 +339,23 @@ class Graph(object):
         self._output_to_node_name = {}
         self.shapes = {}
 
-        # use explicit ordered dict because model input for body graph is sensitive to input order.
-        self._model_inputs = collections.OrderedDict()
         self._target = set(target)
         self._dtypes = dtypes
 
         self._output_shapes = output_shapes
         self._opset = find_opset(opset)
         self._extra_opset = extra_opset
-        self.output_names = output_names
+
+        self.inputs = []
+        self.outputs = output_names
+
+        self.parent_graph = None
+        self.contained_graphs = {}  # {node_name: {node_attribute_name: Graph}}
+
         ops = [Node(node, self) for node in nodes]
 
         # add identity node after each output, in case it is renamed during conversion.
-        if self.output_names:
+        if self.outputs:
             to_append = []
             for n in ops:
                 raw_outputs = n.output
@@ -367,10 +387,6 @@ class Graph(object):
     @property
     def initializers(self):
         return self._initializers
-
-    @property
-    def model_inputs(self):
-        return self._model_inputs
 
     def is_target(self, name):
         """Return True if target platform is name."""
@@ -449,20 +465,29 @@ class Graph(object):
         for node in self._nodes:
             node.update_proto()
 
-        # update attributes to proto
-        for op in self.get_nodes():
-            onnx_op = op.op
-            del onnx_op.attribute[:]
-            attr = [a for a in op.attr_onnx.values()]
-            if attr:
-                onnx_op.attribute.extend(attr)
-
     def get_nodes(self):
         """Get node list."""
         return self._nodes
 
-    def get_node_by_output(self, output):
-        """Get node by node output id"""
+    def get_node_by_output(self, output, search_in_parent_graphs=False):
+        """Get node by node output id recursively going through nested graphs.
+        Args:
+            search_in_parent_graphs: search in all parent graphs
+        """
+        ret = None
+        g = self
+        while not ret and g:
+            ret = g.get_node_by_output_in_current_graph(output)
+            if ret:
+                return ret
+
+            if not search_in_parent_graphs:
+                break
+            g = g.parent_graph
+        return ret
+
+    def get_node_by_output_in_current_graph(self, output):
+        """Get node by node output id."""
         name = self._output_to_node_name.get(output)
         ret = None
         if name:
@@ -480,7 +505,7 @@ class Graph(object):
         return ret
 
     def _get_initializer_as_const_node(self, name):
-        """Create dummy const node representing initializers for easier node manipulation"""
+        """Create dummy const node representing initializers for easier node manipulation."""
         ret = None
         # if we processed the graph fully, set_nodes() the graph has no longer const nodes
         # since we moved them to be initializers. But all graph processing code uses Node
@@ -498,10 +523,12 @@ class Graph(object):
         for op_output in node.output:
             self._output_to_node_name[op_output] = node.name
 
-    def add_model_input(self, name, tensor_value_info):
-        """Add placeholder node as model's input"""
-        if name not in self._model_inputs:
-            self._model_inputs[name] = tensor_value_info
+    def add_graph_input(self, name, dtype, shape):
+        """Add placeholder node as graph's input"""
+        if name not in self.inputs:
+            self.set_shape(name, shape)
+            self.set_dtype(name, dtype)
+            self.inputs.append(name)
         else:
             raise ValueError("model input already exists")
 
@@ -628,7 +655,7 @@ class Graph(object):
             optimize: optimize graph via onnx
             doc: text for doc string of the graph
         """
-        self.delete_unused_nodes(self.output_names)
+        self.delete_unused_nodes(self.outputs)
         self.topological_sort(self.get_nodes())
         self.update_proto()
 
@@ -638,15 +665,6 @@ class Graph(object):
         #    from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
         #    optimizer = TransposeOptimizer(self, False)
         #    optimizer.optimize()
-
-        # create output_tensor_values
-        output_tensor_values = []
-        for name in self.output_names:
-            dtype = self.get_dtype(name)
-            if not dtype:
-                raise ValueError("cannot found the output dtype for " + name)
-            v = utils.make_onnx_inputs_outputs(name, dtype, self.get_shape(name))
-            output_tensor_values.append(v)
 
         # update attributes
         ops = []
@@ -670,8 +688,14 @@ class Graph(object):
                                                  initializer.dims)
             input_with_initializers.append(val)
 
-        input_with_initializers.extend(list(self._model_inputs.values()))
 
+        # todo(pengwa): clean up initializer related code.
+        # create input_tensor_values
+        input_tensor_values = self.make_onnx_graph_io(self.inputs)
+        input_with_initializers.extend(input_tensor_values)
+
+        # create output_tensor_values
+        output_tensor_values = self.make_onnx_graph_io(self.outputs)
         # create model proto
         graph = helper.make_graph(ops, graph_name,
                                   input_with_initializers,
@@ -687,7 +711,6 @@ class Graph(object):
         Args:
             optimize: optimize graph via onnx
             doc: text for doc string of the model
-            output_names: list of model outputs
         """
         graph = self.make_graph(graph_doc, graph_name)
 
@@ -710,6 +733,20 @@ class Graph(object):
         if optimize:
             model_proto = optimizer.optimize(model_proto)
         return model_proto
+
+    def make_onnx_graph_io(self, ids):
+        """Create tensor_value_info for passed input/output ids."""
+        tensor_value_infos = []
+        for name in ids:
+            dtype = self.get_dtype(name)
+            shape = self.get_shape(name)
+
+            utils.make_sure(dtype is not None, "missing output dtype for " + name)
+            utils.make_sure(shape is not None, "missing output shape for " + name)
+
+            v = utils.make_onnx_inputs_outputs(name, dtype, shape)
+            tensor_value_infos.append(v)
+        return tensor_value_infos
 
     def dump_graph(self):
         """Dump graph with shapes (helpful for debugging)."""
@@ -911,7 +948,7 @@ class GraphUtil(object):
             kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
 
             g = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
-            opt = TransposeOptimizer(g, output_names=g.output_names, debug=debug)
+            opt = TransposeOptimizer(g, output_names=g.outputs, debug=debug)
             opt.optimize()
 
             model_proto = g.make_model(onnx_model_proto.graph.doc_string,
@@ -1046,4 +1083,6 @@ class GraphUtil(object):
         for input_value_info in graph_proto.input:
             if g.is_initializer(input_value_info.name):
                 continue
-            g.add_model_input(input_value_info.name, input_value_info)
+            shape = g.get_shape(input_value_info.name)
+            dtype = g.get_dtype(input_value_info.name)
+            g.add_graph_input(input_value_info.name, dtype, shape)
