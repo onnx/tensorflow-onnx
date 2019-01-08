@@ -270,6 +270,14 @@ class Node(object):
 
         # update attributes to proto
         del self._op.attribute[:]
+
+        # check attribute of type GraphProto
+        attr_graphs = self.get_body_graphs()
+        if attr_graphs:
+            for attr_name, sub_graph in attr_graphs.items():
+                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name)
+                self.set_attr(attr_name, graph_proto)
+
         attr = [a for a in self.attr_onnx.values()]
         if attr:
             self._op.attribute.extend(attr)
