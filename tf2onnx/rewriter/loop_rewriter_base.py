@@ -70,7 +70,7 @@ class LoopRewriterBase:
                         continue
                     elif _result == REWRITER_RESULT.FAIL:
                         raise ValueError("rewrite failed, so just fast fail it")
-        all_output_name = copy.deepcopy(self.g.output_names)
+        all_output_name = copy.deepcopy(self.g.outputs)
         if all_output_name:
             all_output_name.extend(BodyGraphDict.get_body_graph_output_names())
             self.g.delete_unused_nodes(all_output_name)
@@ -221,7 +221,7 @@ class LoopRewriterBase:
                 if i in input_ids:
                     log.debug("terminate the input search at %s", i)
                 elif not input_node:
-                    if i in g.model_inputs:
+                    if i in g.inputs:
                         log.debug("find a model input, which might be a placeholder")
                     elif g.is_initializer(i):
                         log.debug("find an initializer, this might be generated during op conversion")

@@ -60,7 +60,7 @@ class UnitRewriterBase(object):
             for match in match_results:
                 self.run_single_match(match)
 
-            self.g.delete_unused_nodes(self.g.output_names)
+            self.g.delete_unused_nodes(self.g.outputs)
             self.g.update_proto()
             self.print_step("finish handling")
 

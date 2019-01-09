@@ -189,7 +189,7 @@ def identity_op(ctx, node, name, args):
     """Identity."""
     if node.inputs[0].is_const():
         # should not remove the identity node if it is output of the graph
-        if node.output[0] in ctx.output_names:
+        if node.output[0] in ctx.outputs:
             return node
         # if identity has a const as input, remove it
         input_name = node.input[0]
@@ -290,11 +290,8 @@ def reduce_op(ctx, node, name, args):
 
 
 def placeholder_op(ctx, node, name, args):
-    output_shape = ctx.get_shape(node.output[0])
-    input_node = utils.make_onnx_inputs_outputs(node.output[0],
-                                                node.dtype,
-                                                output_shape)
-    ctx.add_model_input(input_node.name, input_node)
+    input_name = node.output[0]
+    ctx.add_graph_input(input_name, node.dtype, ctx.get_shape(input_name))
     return None
 
 
