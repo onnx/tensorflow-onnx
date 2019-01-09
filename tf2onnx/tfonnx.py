@@ -1176,6 +1176,31 @@ def upsample_op7(ctx, node, name, args):
     return nodes
 
 
+def upsample_op9(ctx, node, name, args):
+    # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
+    # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
+    # wants the input to be NHWC - adjust target_shape to this.
+    ori_shape = ctx.make_node("Shape", [node.input[0]])
+    ori_shape_hw = ctx.make_node("Slice", ori_shape.output, {"axes": [0], "starts": [1], "ends": [3]})
+    ori_shape_hw_float = ctx.make_node("Cast", ori_shape_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
+
+    target_hw = node.inputs[1]
+    target_hw_float = ctx.make_node("Cast", target_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
+
+    scales_hw = ctx.make_node("Div", [target_hw_float.output[0], ori_shape_hw_float.output[0]])
+
+    const_one_array = ctx.make_const(utils.make_name("one"), np.array([1.0, 1.0]).astype(np.float32))
+    # scaler is nchw
+    scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
+    input_nhwc = node.inputs[0]
+    input_nchw = ctx.make_node("Transpose", input_nhwc.output, {"perm": [0, 3, 1, 2]})
+    upsample = ctx.make_node("Upsample", [input_nchw.output[0], scales.output[0]], attr={"mode": args[0]})
+    res = ctx.make_node("Transpose", upsample.output, {"perm": [0, 2, 3, 1]},
+                        name=node.name, outputs=node.output)
+    return [ori_shape, ori_shape_hw, ori_shape_hw_float, target_hw_float, scales_hw,
+            scales, input_nchw, upsample, res]
+
+
 def multinomial_op(ctx, node, name, args):
     # output_dtype output = Multinomial(T logits, int32 num_samples, @int seed, @int seed2, @type output_dtype)
     sample_size = node.inputs[1].get_tensor_value()
@@ -1877,6 +1902,8 @@ _OPSET_9 = {
     "Asinh": (direct_op, []),
     "Acosh": (direct_op, []),
     "Atanh": (direct_op, []),
+    "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
+    "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
 }
 
 _OPSETS = [

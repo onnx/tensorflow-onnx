@@ -1216,6 +1216,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @unittest.skipIf(*support_op_conversion_since(9, "resize_nearest_neighbor"))
+    def test_resize_nearest_neighbor_with_non_const(self):
+        x_shape = [3, 10, 8, 5]
+        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+
+        x_new_size = np.array([20, 16]).astype(np.int32)
+        x_new_size_ = tf.placeholder(shape=[None], dtype=tf.int32, name=_TFINPUT1)
+
+        x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
+
     @unittest.skipIf(BACKEND in ["caffe2"], "not correctly supported")
     @unittest.skipIf(*support_op_conversion_since(7, "resize_bilinear"))
     def test_resize_bilinear(self):
@@ -1227,6 +1240,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.image.resize_bilinear(x, x_new_size_)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @unittest.skipIf(*support_op_conversion_since(9, "resize_bilinear"))
+    def test_resize_bilinear_with_non_const(self):
+        x_shape = [3, 10, 8, 5]
+        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+
+        x_new_size = np.array([20, 16]).astype(np.int32)
+        x_new_size_ = tf.placeholder(shape=[None], dtype=tf.int32, name=_TFINPUT1)
+
+        x_ = tf.image.resize_bilinear(x, x_new_size_)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
     @unittest.skipIf(*support_op_conversion_since(9, "fill"))
     def test_fill_float32(self):
