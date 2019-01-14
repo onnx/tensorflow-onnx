@@ -1672,8 +1672,8 @@ def reduce_logic_op(ctx, node, name, args):
         reduce_dim = reduce_dim.tolist()
     else:
         reduce_dim = [reduce_dim[0]]
-    for i in reduce_dim:
-        utils.make_sure(i >= 0, "negative reduce axis is not supported in onnx for now")
+
+    utils.make_sure(all(i >= 0 for i in reduce_dim), "negative reduce axis is not supported in onnx for now")
 
     cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.INT32})
     keepdims = helper.get_attribute_value(node.get_attr("keep_dims"))
@@ -1685,7 +1685,7 @@ def reduce_logic_op(ctx, node, name, args):
 
 
 def zeroslike_op(ctx, node, name, args):
-    # T output = zeros_like(T x)
+    # T output = ZerosLike(T x)
     # when params "dtype" used, tf will call another op "Fill" instead, so Cast is not needed here.
     input_dtype = ctx.get_dtype(node.input[0])
     node_name = utils.make_name("zero")
