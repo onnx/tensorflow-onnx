@@ -148,9 +148,6 @@ def check_const(g, input_id):
     node = g.get_node_by_output(input_id)
     if node and node.is_const():
         return (True, node.get_tensor_value())
-    if g.is_initializer(input_id):
-        tensor = g.get_initializer(input_id)
-        return (True, numpy_helper.to_array(tensor))
     return (None, None)
 
 

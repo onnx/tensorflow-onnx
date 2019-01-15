@@ -92,6 +92,8 @@ ONNX_VALID_ATTRIBUTES = {
 # index for internally generated names
 INTERNAL_NAME = 1
 
+# Fake onnx op type which is used for Graph input.
+GRAPH_INPUT_TYPE = "NON_EXISTENT_ONNX_TYPE"
 
 def make_name(name):
     """Make op name for inserted ops."""

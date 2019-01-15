@@ -58,8 +58,8 @@ class TransposeOptimizer(object):
         ops = self.nodes
         constable_reshape_ops = [n for n in ops
                                  if (n.type == "Reshape"
-                                     and self._g.is_initializer(n.input[0])
-                                     and self._g.is_initializer(n.input[1]))]
+                                     and n.inputs[0].is_const()
+                                     and n.inputs[1].is_const())]
         for reshape_op in constable_reshape_ops:
             target_t = numpy_helper.to_array(self._g.get_initializer(reshape_op.input[0]))
             target_shape = numpy_helper.to_array(self._g.get_initializer(reshape_op.input[1]))
@@ -334,7 +334,7 @@ class TransposeOptimizer(object):
         return added_node
 
     def _add_handler(self, trans, node):
-        if self._g.is_initializer(node.input[1]):
+        if node.inputs[1].is_const():
             t_p = trans.inputs[0]
             if t_p.type in ("Conv", "ConvTranspose") and len(t_p.input) == 2:
                 # if Conv or ConvTranspose's bias input is not set, then we set, otherwise, we don't set
@@ -364,7 +364,7 @@ class TransposeOptimizer(object):
         input_index = self._get_input_index_for_trans(node, trans)
         all_other_inputs = [input_id for i, input_id in enumerate(node.input) if i != input_index]
 
-        all_other_inputs_const = all([self._g.is_initializer(i) for i in all_other_inputs])
+        all_other_inputs_const = all([self._g.get_node_by_output(i).is_const() for i in all_other_inputs])
         if all_other_inputs_const is False:
             return False
 
@@ -400,7 +400,7 @@ class TransposeOptimizer(object):
         if multiplier_input_id == node.input[1]:
             t_p = trans.inputs[0]
             # make sure conv don't have bias set
-            if t_p.type == "Conv" and self._g.is_initializer(t_p.input[1]) and len(t_p.input) == 2:
+            if t_p.type == "Conv" and t_p.inputs[1].is_const() and len(t_p.input) == 2:
                 conv = t_p
                 numpy_val = numpy_helper.to_array(self._g.get_initializer(conv.input[1]))
                 transposed_val = np.transpose(numpy_val, (2, 3, 1, 0))

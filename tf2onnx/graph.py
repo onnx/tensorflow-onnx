@@ -122,6 +122,9 @@ class Node(object):
         """Return True if node is a constant."""
         return self.type in ["Const", "ConstV2"]
 
+    def is_graph_input(self):
+        return self.type == utils.GRAPH_INPUT_TYPE
+
     def __str__(self):
         return str(self._op)
 
@@ -502,6 +505,9 @@ class Graph(object):
         else:
             ret = self._get_initializer_as_const_node(output)
 
+        if not ret:
+            ret = self._get_graph_input_as_dummy_node(output)
+
         return ret
 
     def get_node_by_name(self, name):
@@ -509,6 +515,9 @@ class Graph(object):
         ret = self._nodes_by_name.get(name)
         if not ret:
             ret = self._get_initializer_as_const_node(name)
+
+        if not ret:
+            ret = self._get_graph_input_as_dummy_node(name)
         return ret
 
     def _get_initializer_as_const_node(self, name):
@@ -522,6 +531,13 @@ class Graph(object):
         if initializer is not None:
             ret = self.make_node("Const", inputs=[], outputs=[name], name=name,
                                  attr={"value": initializer})
+        return ret
+
+    def _get_graph_input_as_dummy_node(self, name):
+        """Create dummy node representing graph inputs for easier node manipulation."""
+        ret = None
+        if name in self.inputs:
+            ret = self.make_node(utils.GRAPH_INPUT_TYPE, inputs=[], outputs=[name], name=name)
         return ret
 
     def set_node_by_name(self, node):
@@ -654,7 +670,8 @@ class Graph(object):
             all_input |= set(implicit_inputs)
             for inp in all_input:
                 j = self.get_node_by_output(inp)
-                if j and j.type != "Const":
+                # todo(pengwa): remove j None check here once Loop conversion logic is added.
+                if j and not j.is_const() and not j.is_graph_input():
                     if self.parent_graph and j.name not in op_name_to_index:
                         # there might be some outer-scoped inputs for an inner Graph.
                         pass
@@ -976,7 +993,8 @@ class Graph(object):
         # const nodes made at conversion stage are not needed, because ONNX will use initializer automatically
         not_need_const = set()
         for node in res_set:
-            if self.is_initializer(node.name):
+            # before Const is mapped to initializer, we should NOT remove it.
+            if self.is_initializer(node.name) or node.is_graph_input():
                 not_need_const.add(node)
 
         res_set = res_set - not_need_const
