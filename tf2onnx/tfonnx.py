@@ -1004,6 +1004,23 @@ def expanddims_op(ctx, node, name, args):
     raise ValueError("non-const dim is not supported")
 
 
+def greater_op7(ctx, node, name, args):
+    nodes = []
+    supported_types = [
+        onnx_pb.TensorProto.FLOAT,
+        onnx_pb.TensorProto.FLOAT16,
+        onnx_pb.TensorProto.DOUBLE
+    ]
+    for inp in node.input:
+        if ctx.get_dtype(inp) not in supported_types:
+            inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=onnx_pb.TensorProto.FLOAT)
+            ctx.copy_shape(inp, inp_cast.output[0])
+            ctx.set_dtype(inp_cast.output[0], onnx_pb.TensorProto.FLOAT)
+            nodes.append(inp_cast)
+    nodes.append(broadcast_op7(ctx, node, name, args))
+    return nodes
+
+
 def expanddims_op7(ctx, node, name, args):
     # T output = ExpandDims(T input, Tdim dim, @type Tdim), dim is 0-D scalar.
     # T reshaped = Reshape-5(T data, int64 shape)
@@ -1811,7 +1828,7 @@ _OPSET_7 = {
     "FloorMod": (floormod_op, []),
     "FusedBatchNorm": (fused_batchnorm_op7, []),
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
-    "Greater": (broadcast_op7, []),
+    "Greater": (greater_op7, []),
     "Less": (less_op7, []),
     "LogicalAnd": (broadcast_op7, ["And"]),
     "LogicalOr": (broadcast_op7, ["Or"]),
