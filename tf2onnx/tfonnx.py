@@ -2376,9 +2376,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
-
-
-
     if shape_override is None:
         shape_override = {}
     if inputs_as_nchw is None:
@@ -2387,6 +2384,14 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         target = DEFAULT_TARGET
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
+
+    if output_names:
+        # check output existence in case user passed in wrong output ids
+        non_exists = set(output_names) - set(output_shapes.keys())
+        if non_exists:
+            print("\nFailed to convert: outputs specified do not exist, make sure your passed" \
+                  "in format: placeholder_name:output_port_id. Outputs: ", non_exists)
+            raise ValueError("Outputs Not Found")
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
 
