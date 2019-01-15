@@ -160,13 +160,13 @@ class Node(object):
 
     @property
     def output_shapes(self):
-        """Get output shapes, mostly for debugging."""
+        """Get output shapes."""
         val = [self.graph.get_shape(n) for n in self._output]
         return val
 
     @property
     def output_dtypes(self):
-        """Get output dtypes, mostly for debugging."""
+        """Get output dtypes."""
         val = [self.graph.get_dtype(n) for n in self._output]
         return val
 
@@ -377,7 +377,7 @@ class Graph(object):
                         self.replace_all_inputs(ops, o, new_out)
                         n.output[i] = new_out
                         index_out += 1
-                        new_output_node = self.make_node("Identity", [new_out], outputs=[o])
+                        new_output_node = self.make_node("Identity", [new_out], outputs=[o], op_name_scope="graph_outputs")
                         to_append.append(new_output_node)
 
                         self.copy_shape(o, new_out)
@@ -531,14 +531,40 @@ class Graph(object):
         for op_output in node.output:
             self._output_to_node_name[op_output] = node.name
 
-    def add_graph_input(self, name, dtype, shape):
-        """Add placeholder node as graph's input"""
+    def add_graph_input(self, name, dtype=None, shape=None):
+        """Add placeholder node as graph's input."""
+        if not dtype:
+            dtype = self.get_dtype(name)
+
+        if not shape:
+            shape = self.get_shape(name)
+
         if name not in self.inputs:
+            utils.make_sure(dtype is not None, "input dtype should not be None")
+            utils.make_sure(shape is not None, "input shape should not be None")
             self.set_shape(name, shape)
             self.set_dtype(name, dtype)
             self.inputs.append(name)
         else:
-            raise ValueError("model input already exists")
+            raise ValueError("graph input " + name + " already exists")
+
+    def add_graph_output(self, name, dtype=None, shape=None):
+        """Add node output as graph's output."""
+        if not dtype:
+            dtype = self.get_dtype(name)
+
+        if not shape:
+            shape = self.get_shape(name)
+
+        if name not in self.outputs:
+            utils.make_sure(shape is not None, "output shape should not be None")
+            utils.make_sure(dtype is not None, "output dtype should not be None")
+
+            self.set_shape(name, shape)
+            self.set_dtype(name, dtype)
+            self.outputs.append(name)
+        else:
+            raise ValueError("graph output " + name + " already exists")
 
     def add_initializer(self, tensor):
         """Add tensor to initializers."""
@@ -630,7 +656,11 @@ class Graph(object):
             for inp in all_input:
                 j = self.get_node_by_output(inp)
                 if j and j.type != "Const":
-                    g[op_name_to_index[j.name]].append(i)
+                    if self.parent_graph and j.name not in op_name_to_index:
+                        # there might be some outer-scoped inputs for an inner Graph.
+                        pass
+                    else:
+                        g[op_name_to_index[j.name]].append(i)
 
         # label for each op. highest = sink nodes.
         label = [-1 for _ in range(n)]
@@ -673,8 +703,6 @@ class Graph(object):
         #    from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
         #    optimizer = TransposeOptimizer(self, False)
         #    optimizer.optimize()
-
-        # update attributes
         ops = []
         all_inputs = set()
         for op in self.get_nodes():
@@ -845,6 +873,12 @@ class Graph(object):
         for node in self.get_nodes():
             if output_name in node.input:
                 nodes.append(node)
+
+            # find consumers in sub graphs
+            body_graphs = node.get_body_graphs()
+            if body_graphs:
+                for g in body_graphs.values():
+                    nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
     @staticmethod
@@ -854,6 +888,12 @@ class Graph(object):
             for i, input_name in enumerate(node.input):
                 if input_name == old_input:
                     node.input[i] = new_input
+
+            # modify references in sub graphs
+            body_graphs = node.get_body_graphs()
+            if body_graphs:
+                for g in body_graphs.values():
+                    g.replace_all_inputs(g.get_nodes(), old_input, new_input)
 
     @staticmethod
     def replace_input(node, old_input, new_input):
