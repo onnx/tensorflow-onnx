@@ -2297,7 +2297,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["ReduceSum", "Slice", "Split", "Tile", "Transpose"])
+    return rewrite_incomplete_type_support(g, ops, ["Div", "Greater", "ReduceSum", "Slice", "Split", "Tile", "Transpose"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
