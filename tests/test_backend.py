@@ -188,6 +188,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(op_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-06)
 
+    @unittest.skipIf(*support_op_conversion_since(9, "trigh"))
+    def test_atrig_ops(self):
+        for op in [tf.sinh, tf.cosh, tf.atanh, tf.asinh, tf.acosh]:
+            tf.reset_default_graph()
+            x_val = make_xval([3, 4])
+            x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+            op_ = op(x)
+            _ = tf.identity(op_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
     @unittest.skipIf(*support_op_conversion_since(7, "multinomial"))
     def test_multinomial(self):
