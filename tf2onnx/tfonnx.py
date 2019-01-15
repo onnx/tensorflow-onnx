@@ -1092,7 +1092,7 @@ def stridedslice_op(ctx, node, name, args):
     # onnx slice as of opset 7 does only take float tensors ... cast if needed
     input_dtype = ctx.get_dtype(node.input[0])
     if input_dtype != onnx_pb.TensorProto.FLOAT:
-        if node.inputs[0].type == "Cast":
+        if node.inputs[0].type == "Cast" and len(ctx.find_output_consumers(node.inputs[0].output[0])) == 1:
             # override the previous cast
             cast_node = node.inputs[0]
         else:
@@ -2333,6 +2333,30 @@ def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
     return graph_def
 
 
+def topological_sort(g, continue_on_error):
+    ops = g.get_nodes()
+    if not continue_on_error:
+        g.topological_sort(ops)
+    else:
+        try:
+            g.topological_sort(ops)
+        except:  # pylint: disable=bare-except
+            # if we continue on error, ignore graph cycles so we can report all missing ops
+            pass
+
+
+def run_late_rewriters(g, funcs, continue_on_error):
+    if g.contained_graphs:
+        for dict_val in g.contained_graphs.values():
+            for attr_name, b_g in dict_val.items():
+                run_late_rewriters(b_g, funcs, attr_name)
+
+    topological_sort(g, continue_on_error)
+    for func in funcs:
+        ops = func(g, g.get_nodes())
+        g.set_nodes(ops)
+
+
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
                      extra_opset=None, shape_override=None, inputs_as_nchw=None, output_names=None):
@@ -2353,15 +2377,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             onnx graph
     """
 
-    def topological_sort(ops):
-        if not continue_on_error:
-            g.topological_sort(ops)
-        else:
-            try:
-                g.topological_sort(ops)
-            except:  # pylint: disable=bare-except
-                # if we continue on error, ignore graph cycles so we can report all missing ops
-                pass
+
 
     if shape_override is None:
         shape_override = {}
@@ -2407,7 +2423,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         else:
             raise ex
 
-    topological_sort(g.get_nodes())
+    topological_sort(g, continue_on_error)
 
     if custom_op_handlers is None:
         custom_op_handlers = {}
@@ -2420,14 +2436,10 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if TARGET_RS6 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs6)
     if late_rewriters:
-        topological_sort(g.get_nodes())
-        ops = g.get_nodes()
-        for rewrite in late_rewriters:
-            ops = rewrite(g, ops)
-            g.set_nodes(ops)
+        run_late_rewriters(g, late_rewriters, continue_on_error)
 
     # onnx requires topological sorting
-    topological_sort(g.get_nodes())
+    topological_sort(g, continue_on_error)
 
     g.update_proto()
 
