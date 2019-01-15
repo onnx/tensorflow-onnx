@@ -279,7 +279,9 @@ def arg_minmax_op(ctx, node, name, args):
 
 def reduce_op(ctx, node, name, args):
     axes_node = node.inputs[1]
+    input_rank = len(ctx.get_shape(node.input[0]))
     axis = axes_node.get_tensor_value()
+    axis = [val + input_rank if val < 0 else val for val in axis]
     node.set_attr("axes", axis)
     ctx.remove_input(node, node.input[1])
     keep_dims = node.get_attr("keep_dims")
@@ -1011,7 +1013,9 @@ def expanddims_op(ctx, node, name, args):
     dim_node = node.inputs[1]
     if dim_node.is_const():
         node.type = "Unsqueeze"
+        input_rank = len(ctx.get_shape(node.input[0]))
         dim = dim_node.get_tensor_value()[0]
+        dim = dim + input_rank + 1 if dim < 0 else dim
         node.set_attr("axes", [dim])
         ctx.remove_input(node, node.input[1])
         return node
@@ -1052,7 +1056,9 @@ def expanddims_op7(ctx, node, name, args):
     dim_node = node.inputs[1]
     if dim_node.is_const():
         node.type = "Unsqueeze"
+        input_rank = len(ctx.get_shape(node.input[0]))
         dim = dim_node.get_tensor_value()[0]
+        dim = dim + input_rank + 1 if dim < 0 else dim
         node.set_attr("axes", [dim])
         ctx.remove_input(node, node.input[1])
         return node
