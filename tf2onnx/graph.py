@@ -375,7 +375,8 @@ class Graph(object):
                         self.replace_all_inputs(ops, o, new_out)
                         n.output[i] = new_out
                         index_out += 1
-                        new_output_node = self.make_node("Identity", [new_out], outputs=[o], op_name_scope="graph_outputs")
+                        new_output_node = self.make_node("Identity", [new_out], outputs=[o],
+                                                         op_name_scope="graph_outputs")
                         to_append.append(new_output_node)
 
                         self.copy_shape(o, new_out)
