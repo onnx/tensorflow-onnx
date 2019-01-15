@@ -1511,7 +1511,7 @@ def reverse_op8(ctx, node, name, args):
         old_dtype = ctx.get_dtype(node.input[0])
         perm_val = [1, 0]
         rank = len(old_shape)
-        utils.make_sure(rank>=2, "rank of reverse_sequence input {} is at least 2".format(node.input[0]))
+        utils.make_sure(rank >= 2, "rank of reverse_sequence input {} is at least 2".format(node.input[0]))
         perm_val += list(range(2, rank))
         trans_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm_val)
         new_shape = spatial_map(old_shape, perm_val)
