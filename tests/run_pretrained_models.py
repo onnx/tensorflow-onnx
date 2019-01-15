@@ -312,8 +312,7 @@ class Test(object):
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
-                model_proto = onnx_graph.make_model("test")
-                new_model_proto = GraphUtil.opt_transposes_with_model_proto(model_proto, debug=debug)
+                new_model_proto = GraphUtil.opt_transposes_with_graph(onnx_graph, "test", debug=debug)
                 if new_model_proto:
                     model_proto = new_model_proto
                 else:

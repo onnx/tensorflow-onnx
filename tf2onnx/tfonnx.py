@@ -2255,6 +2255,19 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
             node.type = args[0]
             args = args[1:]
         try:
+            body_graphs = node.get_body_graphs()
+            if body_graphs:
+                for attr, b_g in body_graphs.items():
+                    log.debug("start handling subgraph of %s's attribute %s", node.name, attr)
+                    b_g.topological_sort(b_g.get_nodes())
+                    # we assume only ONNX nodes have subgraph defined in pre-rewriters.
+                    # that means, if we create node having subgraphs in this step, the
+                    # created subgraphs' nodes won't be mapped.
+                    m_ops, unm_ops = tensorflow_onnx_mapping(b_g, continue_on_error, custom_op_handlers)
+                    mapped_op += m_ops
+                    unmapped_op += unm_ops
+                    log.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
+
             onnx_node = func(g, node, node.name, args)
         except Exception as ex:
             type_, value_, traceback_ = sys.exc_info()

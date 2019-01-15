@@ -982,14 +982,34 @@ class Graph(object):
 
 
 class GraphUtil(object):
-    """Utilities to construct Graph loading from existing model file"""
+    """Utilities for Graph manipulation."""
+
+    @staticmethod
+    def opt_transposes_with_graph(graph, doc_string, optimize=None, debug=False):
+        """Optimize the graph, eliminating all useless Transpose pairs.
+
+        Returns:
+            model proto after optimization, if optimizer run successfully
+            or None, if exceptions happen
+        """
+        try:
+            opt = TransposeOptimizer(graph, output_names=graph.outputs, debug=debug)
+            opt.optimize()
+            model_proto = graph.make_model(doc_string, optimize=optimize)
+            return model_proto
+        except Exception:
+            # degradation to non-optimized model proto
+            type_, value_, traceback_ = sys.exc_info()
+            ex_ext = traceback.format_exception(type_, value_, traceback_)
+            print("NON-CRITICAL error in optimizer: ", ex_ext)
+            return None
 
     @staticmethod
     def opt_transposes_with_model_proto(onnx_model_proto, debug=False):
-        """Optimizer the model proto, eliminating all useless Transpose pairs.
+        """Optimize the model proto, eliminating all useless Transpose pairs.
 
         Returns:
-            modelproto after optimization, if optimizer run successfully
+            model proto after optimization, if optimizer run successfully
             or None, if exceptions happens
         """
         try:
@@ -1036,11 +1056,16 @@ class GraphUtil(object):
 
     @staticmethod
     def create_graph_from_onnx_model(onnx_model_proto):
-        """Create Graph loading onnx model proto"""
+        """Create Graph loading onnx model proto."""
         # apply shape inference on the model
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
         graph_proto = inferred_model.graph
+        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto)
+        return main_graph
 
+    @staticmethod
+    def create_graph_from_onnx_graph(graph_proto):
+        """Create Graph loading onnx graph proto."""
         output_shapes = {}
         output_dtypes = {}
 

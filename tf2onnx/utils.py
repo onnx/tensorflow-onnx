@@ -280,6 +280,6 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
     return target_path
 
 
-def make_sure(bool_val, error_msg):
+def make_sure(bool_val, error_msg, *args):
     if not bool_val:
-        raise ValueError("make_sure failure:" + error_msg)
+        raise ValueError("make_sure failure: " + error_msg % args)
