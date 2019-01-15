@@ -101,11 +101,8 @@ def main():
                              output_names=args.outputs,
                              inputs_as_nchw=args.inputs_as_nchw)
 
-    model_proto = g.make_model(
-        "converted from {}".format(args.input),
-        optimize=not args.continue_on_error)
-
-    new_model_proto = GraphUtil.opt_transposes_with_model_proto(model_proto)
+    new_model_proto = GraphUtil.opt_transposes_with_graph(g, "converted from {}".format(args.input),
+                                                          optimize=not args.continue_on_error)
     if new_model_proto:
         model_proto = new_model_proto
     else:
@@ -115,6 +112,7 @@ def main():
     if args.output:
         with open(args.output, "wb") as f:
             f.write(model_proto.SerializeToString())
+            print("\nComplete successfully, the onnx model is generated at " + args.output)
 
 
 if __name__ == "__main__":

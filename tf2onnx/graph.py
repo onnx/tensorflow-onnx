@@ -136,10 +136,8 @@ class Node(object):
     def get_attr_int(self, name):
         """Get attribute map."""
         attr = self.attr.get(name)
-        if attr is not None:
-            attr = attr.i
-        else:
-            attr = 0
+        utils.make_sure(attr is not None, "attribute %s is None", name)
+        attr = attr.i
         return attr
 
     def set_attr(self, name, value):
@@ -160,13 +158,13 @@ class Node(object):
 
     @property
     def output_shapes(self):
-        """Get output shapes, mostly for debugging."""
+        """Get output shapes."""
         val = [self.graph.get_shape(n) for n in self._output]
         return val
 
     @property
     def output_dtypes(self):
-        """Get output dtypes, mostly for debugging."""
+        """Get output dtypes."""
         val = [self.graph.get_dtype(n) for n in self._output]
         return val
 
@@ -377,7 +375,8 @@ class Graph(object):
                         self.replace_all_inputs(ops, o, new_out)
                         n.output[i] = new_out
                         index_out += 1
-                        new_output_node = self.make_node("Identity", [new_out], outputs=[o])
+                        new_output_node = self.make_node("Identity", [new_out], outputs=[o],
+                                                         op_name_scope="graph_outputs")
                         to_append.append(new_output_node)
 
                         self.copy_shape(o, new_out)
@@ -531,14 +530,40 @@ class Graph(object):
         for op_output in node.output:
             self._output_to_node_name[op_output] = node.name
 
-    def add_graph_input(self, name, dtype, shape):
-        """Add placeholder node as graph's input"""
+    def add_graph_input(self, name, dtype=None, shape=None):
+        """Add placeholder node as graph's input."""
+        if not dtype:
+            dtype = self.get_dtype(name)
+
+        if not shape:
+            shape = self.get_shape(name)
+
         if name not in self.inputs:
+            utils.make_sure(dtype is not None, "input dtype should not be None")
+            utils.make_sure(shape is not None, "input shape should not be None")
             self.set_shape(name, shape)
             self.set_dtype(name, dtype)
             self.inputs.append(name)
         else:
-            raise ValueError("model input already exists")
+            raise ValueError("graph input " + name + " already exists")
+
+    def add_graph_output(self, name, dtype=None, shape=None):
+        """Add node output as graph's output."""
+        if not dtype:
+            dtype = self.get_dtype(name)
+
+        if not shape:
+            shape = self.get_shape(name)
+
+        if name not in self.outputs:
+            utils.make_sure(shape is not None, "output shape should not be None")
+            utils.make_sure(dtype is not None, "output dtype should not be None")
+
+            self.set_shape(name, shape)
+            self.set_dtype(name, dtype)
+            self.outputs.append(name)
+        else:
+            raise ValueError("graph output " + name + " already exists")
 
     def add_initializer(self, tensor):
         """Add tensor to initializers."""
@@ -630,7 +655,11 @@ class Graph(object):
             for inp in all_input:
                 j = self.get_node_by_output(inp)
                 if j and j.type != "Const":
-                    g[op_name_to_index[j.name]].append(i)
+                    if self.parent_graph and j.name not in op_name_to_index:
+                        # there might be some outer-scoped inputs for an inner Graph.
+                        pass
+                    else:
+                        g[op_name_to_index[j.name]].append(i)
 
         # label for each op. highest = sink nodes.
         label = [-1 for _ in range(n)]
@@ -673,8 +702,6 @@ class Graph(object):
         #    from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
         #    optimizer = TransposeOptimizer(self, False)
         #    optimizer.optimize()
-
-        # update attributes
         ops = []
         all_inputs = set()
         for op in self.get_nodes():
@@ -845,6 +872,12 @@ class Graph(object):
         for node in self.get_nodes():
             if output_name in node.input:
                 nodes.append(node)
+
+            # find consumers in sub graphs
+            body_graphs = node.get_body_graphs()
+            if body_graphs:
+                for g in body_graphs.values():
+                    nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
     @staticmethod
@@ -854,6 +887,12 @@ class Graph(object):
             for i, input_name in enumerate(node.input):
                 if input_name == old_input:
                     node.input[i] = new_input
+
+            # modify references in sub graphs
+            body_graphs = node.get_body_graphs()
+            if body_graphs:
+                for g in body_graphs.values():
+                    g.replace_all_inputs(g.get_nodes(), old_input, new_input)
 
     @staticmethod
     def replace_input(node, old_input, new_input):
@@ -894,11 +933,14 @@ class Graph(object):
     def remove_deleted_nodes(ops):
         return [node for node in ops if not node.is_deleted()]
 
-    def _extract_sub_graph_nodes(self, dest_node):
-        """
-        return related nodes of specified node
-        :param dest_node: the specified node
-        :return: set of related nodes
+    def _extract_sub_graph_nodes(self, dest_node, input_checker=None):
+        """Return nodes of subgraph ending with dest_node.
+        Args:
+            dest_node: output node of the subgraph to find
+            input_checker: customized input check function: bool func(node)
+
+        Return:
+            a set of nodes
         """
         res_set = set()
         processing_set = set([dest_node])
@@ -912,17 +954,24 @@ class Graph(object):
                     # might has empty input.
                     continue
                 if node not in res_set:
+                    if input_checker and input_checker(node) is False:
+                        continue
                     processing_set.add(node)
         return res_set
 
-    def extract_sub_graph_nodes(self, outputs_name):
-        """
-        find related nodes of specified list of nodes
+    def extract_sub_graph_nodes(self, outputs_name, input_checker=None):
+        """Return nodes of subgraph having output_ids as outputs.
+        Args:
+            output_ids: output node output id of the subgraph to find
+            input_checker: customized input check function: bool func(node)
+
+        Return:
+            a list of nodes
         """
         res_set = set()
         for output in outputs_name:
             node = self.get_node_by_output(output)
-            res_set = res_set.union(self._extract_sub_graph_nodes(node))
+            res_set = res_set.union(self._extract_sub_graph_nodes(node, input_checker))
 
         # const nodes made at conversion stage are not needed, because ONNX will use initializer automatically
         not_need_const = set()
@@ -934,22 +983,40 @@ class Graph(object):
         return list(res_set)
 
     def delete_unused_nodes(self, outputs_name):
-        """
-        example of unused nodes: loop nodes generated by tensorflow rnn such as switch, loop_cond
-        """
+        """Delete nodes not in subgraph ending with output_names."""
         related_nodes = self.extract_sub_graph_nodes(outputs_name)
         self.set_nodes(related_nodes)
 
 
 class GraphUtil(object):
-    """Utilities to construct Graph loading from existing model file"""
+    """Utilities for Graph manipulation."""
+
+    @staticmethod
+    def opt_transposes_with_graph(graph, doc_string, optimize=None, debug=False):
+        """Optimize the graph, eliminating all useless Transpose pairs.
+
+        Returns:
+            model proto after optimization, if optimizer run successfully
+            or None, if exceptions happen
+        """
+        try:
+            opt = TransposeOptimizer(graph, output_names=graph.outputs, debug=debug)
+            opt.optimize()
+            model_proto = graph.make_model(doc_string, optimize=optimize)
+            return model_proto
+        except Exception:
+            # degradation to non-optimized model proto
+            type_, value_, traceback_ = sys.exc_info()
+            ex_ext = traceback.format_exception(type_, value_, traceback_)
+            print("NON-CRITICAL error in optimizer: ", ex_ext)
+            return None
 
     @staticmethod
     def opt_transposes_with_model_proto(onnx_model_proto, debug=False):
-        """Optimizer the model proto, eliminating all useless Transpose pairs.
+        """Optimize the model proto, eliminating all useless Transpose pairs.
 
         Returns:
-            modelproto after optimization, if optimizer run successfully
+            model proto after optimization, if optimizer run successfully
             or None, if exceptions happens
         """
         try:
@@ -996,11 +1063,16 @@ class GraphUtil(object):
 
     @staticmethod
     def create_graph_from_onnx_model(onnx_model_proto):
-        """Create Graph loading onnx model proto"""
+        """Create Graph loading onnx model proto."""
         # apply shape inference on the model
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
         graph_proto = inferred_model.graph
+        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto)
+        return main_graph
 
+    @staticmethod
+    def create_graph_from_onnx_graph(graph_proto):
+        """Create Graph loading onnx graph proto."""
         output_shapes = {}
         output_dtypes = {}
 
