@@ -63,10 +63,10 @@ class GRUUnitRewriter(UnitRewriterBase):
         return cell_node.name[:cell_node.name.rfind("/")]
 
     def get_weight_and_bias(self, match):
-        gate_kernel = get_weights_from_const_node(match.get_op("gate_kernel"))
-        gate_bias = get_weights_from_const_node(match.get_op("gate_bias"))
-        hidden_kernel = get_weights_from_const_node(match.get_op("hidden_kernel"))
-        hidden_bias = get_weights_from_const_node(match.get_op("hidden_bias"))
+        gate_kernel = get_weights_from_const_node(self.g, match.get_op("gate_kernel"))
+        gate_bias = get_weights_from_const_node(self.g, match.get_op("gate_bias"))
+        hidden_kernel = get_weights_from_const_node(self.g, match.get_op("hidden_kernel"))
+        hidden_bias = get_weights_from_const_node(self.g, match.get_op("hidden_bias"))
         if not all([gate_kernel, gate_bias, hidden_kernel, hidden_bias]):
             log.debug("rnn weights check failed, skip")
             return None

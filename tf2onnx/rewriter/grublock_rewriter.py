@@ -53,10 +53,10 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
         node = match.get_op("GRUBlockCell")
         # from tf, it can be known that, the inputs index and meaning of input data is:
         # 0-input, 1-state, 2-gate_kernel, 3-hidden_kernel, 4-gate_bias, 5-hidden_bias
-        gate_kernel = get_weights_from_const_node(node.inputs[2].inputs[0])
-        gate_bias = get_weights_from_const_node(node.inputs[4].inputs[0])
-        hidden_kernel = get_weights_from_const_node(node.inputs[3].inputs[0])
-        hidden_bias = get_weights_from_const_node(node.inputs[5].inputs[0])
+        gate_kernel = get_weights_from_const_node(self.g, node.inputs[2].inputs[0])
+        gate_bias = get_weights_from_const_node(self.g, node.inputs[4].inputs[0])
+        hidden_kernel = get_weights_from_const_node(self.g, node.inputs[3].inputs[0])
+        hidden_bias = get_weights_from_const_node(self.g, node.inputs[5].inputs[0])
         if not all([gate_kernel, gate_bias, hidden_kernel, hidden_bias]):
             log.debug("rnn weights check failed, skip")
             return None
