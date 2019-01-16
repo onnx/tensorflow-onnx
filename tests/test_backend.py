@@ -617,6 +617,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
+    @unittest.skipIf(*onnxruntime_check("Greater"))
+    def test_greater_unsupport_type(self):
+        x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
+        x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
+        x1 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT)
+        x2 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT1)
+        mi = tf.greater(x1, x2)
+        _ = tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
     def test_sequeeze_no_axis_specified(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2, 1))
         x = tf.placeholder(tf.float32, [2, 2, 1], name=_TFINPUT)
@@ -1305,6 +1315,25 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.reverse_sequence(x, seq_axis=1, batch_axis=0, seq_lengths=[2, 3, 1])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3],
+                          [4, 5, 6], [4, 5, 6], [1, 1, 1],
+                          [0, 0, 0], [7, 8, 9], [0, 0, 0]
+                         ],
+                         dtype=np.float32)
+        x = tf.placeholder(tf.float32, [None, 3], name=_TFINPUT)
+        x_ = tf.reverse_sequence(x, seq_axis=1, batch_axis=0, seq_lengths=[3]*9)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val_shape = [5, 5, 7, 8, 9]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, [None, 5, 7, 8, 9], name=_TFINPUT)
+        x_ = tf.reverse_sequence(x, seq_axis=1, batch_axis=0, seq_lengths=[5, 5, 5, 5, 5])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
     @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so scan op is not supported")
@@ -1316,6 +1345,25 @@ class BackendTests(Tf2OnnxBackendTestBase):
                          dtype=np.float32)
         x = tf.placeholder(tf.float32, [3, None, 3], name=_TFINPUT)
         x_ = tf.reverse_sequence(x, seq_axis=0, batch_axis=1, seq_lengths=[2, 3, 1])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3],
+                          [4, 5, 6], [4, 5, 6], [1, 1, 1],
+                          [0, 0, 0], [7, 8, 9], [0, 0, 0]
+                         ],
+                         dtype=np.float32)
+        x = tf.placeholder(tf.float32, [9, None], name=_TFINPUT)
+        x_ = tf.reverse_sequence(x, seq_axis=0, batch_axis=1, seq_lengths=[9, 9, 9])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val_shape = [5, 5, 7, 8, 9]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, [5, None, 7, 8, 9], name=_TFINPUT)
+        x_ = tf.reverse_sequence(x, seq_axis=0, batch_axis=1, seq_lengths=[5, 5, 5, 5, 5])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 

@@ -1004,6 +1004,23 @@ def expanddims_op(ctx, node, name, args):
     raise ValueError("non-const dim is not supported")
 
 
+def greater_op7(ctx, node, name, args):
+    nodes = []
+    supported_types = [
+        onnx_pb.TensorProto.FLOAT,
+        onnx_pb.TensorProto.FLOAT16,
+        onnx_pb.TensorProto.DOUBLE
+    ]
+    for inp in node.input:
+        if ctx.get_dtype(inp) not in supported_types:
+            inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=onnx_pb.TensorProto.FLOAT)
+            ctx.copy_shape(inp, inp_cast.output[0])
+            ctx.set_dtype(inp_cast.output[0], onnx_pb.TensorProto.FLOAT)
+            nodes.append(inp_cast)
+    nodes.append(broadcast_op7(ctx, node, name, args))
+    return nodes
+
+
 def expanddims_op7(ctx, node, name, args):
     # T output = ExpandDims(T input, Tdim dim, @type Tdim), dim is 0-D scalar.
     # T reshaped = Reshape-5(T data, int64 shape)
@@ -1483,6 +1500,7 @@ def reverse_op8(ctx, node, name, args):
     batch_dim = node.get_attr("batch_dim")
     batch_major = seq_dim.i == 1 and (batch_dim or batch_dim.i == 0)
     time_major = batch_dim.i == 1 and (seq_dim or seq_dim.i == 0)
+    perm_val = None
 
     if not batch_major and not time_major:
         error_msg = "unsupported attributes, seq_dim:{}, batch_dim:{}".format(seq_dim, batch_dim)
@@ -1491,7 +1509,10 @@ def reverse_op8(ctx, node, name, args):
     if time_major:
         old_shape = ctx.get_shape(node.input[0])
         old_dtype = ctx.get_dtype(node.input[0])
-        perm_val = [1, 0, 2]
+        perm_val = [1, 0]
+        rank = len(old_shape)
+        utils.make_sure(rank >= 2, "rank of reverse_sequence input {} is at least 2".format(node.input[0]))
+        perm_val += list(range(2, rank))
         trans_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm_val)
         new_shape = spatial_map(old_shape, perm_val)
         ctx.set_shape(trans_node.output[0], new_shape)
@@ -1539,7 +1560,7 @@ def reverse_op8(ctx, node, name, args):
         # get back to time_major
         op_name = utils.make_name(node.name)
         trans_back_node = ctx.insert_new_node_on_output("Transpose", node.output[0],
-                                                        name=op_name, perm=[1, 0, 2])
+                                                        name=op_name, perm=perm_val)
         nodes.insert(0, trans_back_node)
 
     tmp = node.input[0]
@@ -1807,7 +1828,7 @@ _OPSET_7 = {
     "FloorMod": (floormod_op, []),
     "FusedBatchNorm": (fused_batchnorm_op7, []),
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
-    "Greater": (broadcast_op7, []),
+    "Greater": (greater_op7, []),
     "Less": (less_op7, []),
     "LogicalAnd": (broadcast_op7, ["And"]),
     "LogicalOr": (broadcast_op7, ["Or"]),
