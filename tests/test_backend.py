@@ -1576,6 +1576,44 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
+    def test_reduce_any(self):
+        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_x = tf.placeholder(dtype=tf.bool, shape=[None]*input_val.ndim, name=_TFINPUT)
+        res = tf.reduce_any(input_tensor=input_x, keepdims=False)
+        res1 = tf.reduce_any(input_tensor=input_x, axis=[0], keepdims=False)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        _ = tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+        tf.reset_default_graph()
+
+        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_x = tf.placeholder(dtype=tf.bool, shape=[None] * input_val.ndim, name=_TFINPUT)
+        res = tf.reduce_any(input_tensor=input_x, keepdims=True)
+        res1 = tf.reduce_any(input_tensor=input_x, axis=[0], keepdims=True)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        _ = tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+    def test_zeros_like(self):
+        input_val = np.random.random_sample([10, 20]).astype(np.float32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=[None] * input_val.ndim, name=_TFINPUT)
+        res = tf.zeros_like(tensor=input_x)
+        res1 = tf.zeros_like(tensor=input_x, dtype=tf.int32)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        _ = tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+        tf.reset_default_graph()
+
+        input_val = np.random.random_sample([10, 20]).astype(np.int32)
+        input_x = tf.placeholder(dtype=tf.int32, shape=[None] * input_val.ndim, name=_TFINPUT)
+        res = tf.zeros_like(tensor=input_x)
+        res1 = tf.zeros_like(tensor=input_x, dtype=tf.float32)
+        _ = tf.identity(res, name=_TFOUTPUT)
+        _ = tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
 
 if __name__ == '__main__':
     Tf2OnnxBackendTestBase.trigger(BackendTests)

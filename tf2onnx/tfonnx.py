@@ -1685,21 +1685,35 @@ def floormod_op(ctx, node, name, args):
     return nodes
 
 
-def all_op(ctx, node, name, args):
+def reduce_logic_op(ctx, node, name, args):
     # T output = All(T x, list(int) reduce_indices, @bool keepdims)
+    # T output = Any(T x, list(int) reduce_indices, @bool keepdims)
     reduce_dim = node.inputs[1].get_tensor_value()
     if isinstance(reduce_dim, np.ndarray):
         reduce_dim = reduce_dim.tolist()
     else:
         reduce_dim = [reduce_dim[0]]
 
-    utils.make_sure(all(i >= 0 for i in reduce_dim), "negative axis is not supported in onnx")
+    utils.make_sure(all(i >= 0 for i in reduce_dim), "negative reduce axis is not supported in onnx for now")
+
     cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.INT32})
     keepdims = helper.get_attribute_value(node.get_attr("keep_dims"))
-    reduce_min = ctx.make_node(op_type="ReduceMin", inputs=cast.output, attr={"axes": reduce_dim, "keepdims": keepdims})
-    res = ctx.make_node(op_type="Cast", inputs=reduce_min.output, attr={"to": onnx_pb.TensorProto.BOOL},
+    op_type = "ReduceMin" if node.type == "All" else "ReduceSum"
+    reduce_node = ctx.make_node(op_type=op_type, inputs=cast.output, attr={"axes": reduce_dim, "keepdims": keepdims})
+    res = ctx.make_node(op_type="Cast", inputs=reduce_node.output, attr={"to": onnx_pb.TensorProto.BOOL},
                         name=node.name, outputs=node.output)
-    return [cast, reduce_min, res]
+    return [cast, reduce_node, res]
+
+
+def zeroslike_op(ctx, node, name, args):
+    # T output = ZerosLike(T x)
+    # when params "dtype" used, tf will call another op "Fill" instead, so Cast is not needed here.
+    input_dtype = ctx.get_dtype(node.input[0])
+    node_name = utils.make_name("zero")
+    const_zero = ctx.make_const(node_name, np.array(0).astype(utils.ONNX_TO_NUMPY_DTYPE[input_dtype]))
+    mul_op = ctx.make_node(op_type="Mul", inputs=[node.input[0], const_zero.output[0]],
+                           name=node.name, outputs=node.output)
+    return mul_op
 
 
 # map tensorflow ops to onnx ops. The format below is
@@ -1798,6 +1812,7 @@ _OPSET_4 = {
     "Unpack": (unpack_op, []),
     "Erf": (erf_op, []),
     "Sign": (sign_op, []),
+    "ZerosLike": (zeroslike_op, []),
 }
 
 _OPSET_5 = {
@@ -1809,7 +1824,8 @@ _OPSET_5 = {
 
 _OPSET_6 = {
     "AddN": (direct_op, ["Sum"]),
-    "All": (all_op, []),
+    "All": (reduce_logic_op, []),
+    "Any": (reduce_logic_op, []),
     "FloorDiv": (floordiv_op, []),
 }
 
