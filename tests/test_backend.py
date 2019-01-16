@@ -1306,6 +1306,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
         tf.reset_default_graph()
+
         x_val = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3],
                           [4, 5, 6], [4, 5, 6], [1, 1, 1],
                           [0, 0, 0], [7, 8, 9], [0, 0, 0]
@@ -1316,6 +1317,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
         tf.reset_default_graph()
+
         x_val_shape = [5, 5, 7, 8, 9]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         x = tf.placeholder(tf.float32, [None, 5, 7, 8, 9], name=_TFINPUT)
@@ -1336,6 +1338,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
         tf.reset_default_graph()
+
         x_val = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3],
                           [4, 5, 6], [4, 5, 6], [1, 1, 1],
                           [0, 0, 0], [7, 8, 9], [0, 0, 0]
@@ -1346,6 +1349,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
         tf.reset_default_graph()
+
         x_val_shape = [5, 5, 7, 8, 9]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         x = tf.placeholder(tf.float32, [5, None, 7, 8, 9], name=_TFINPUT)
