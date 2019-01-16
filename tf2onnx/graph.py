@@ -978,6 +978,9 @@ class Graph(object):
             a list of nodes
         """
         res_set = set()
+        if not outputs_name:
+            return list(res_set)
+
         for output in outputs_name:
             node = self.get_node_by_output(output)
             res_set = res_set.union(self._extract_sub_graph_nodes(node, input_checker))
@@ -994,8 +997,11 @@ class Graph(object):
 
     def delete_unused_nodes(self, outputs_name):
         """Delete nodes not in subgraph ending with output_names."""
-        related_nodes = self.extract_sub_graph_nodes(outputs_name)
-        self.set_nodes(related_nodes)
+        if outputs_name:
+            related_nodes = self.extract_sub_graph_nodes(outputs_name)
+            self.set_nodes(related_nodes)
+        else:
+            print("WARINING: outputs not specified, delete_unused_nodes not taking effect.")
 
 
 class GraphUtil(object):

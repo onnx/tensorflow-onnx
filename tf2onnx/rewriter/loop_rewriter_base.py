@@ -226,8 +226,9 @@ class LoopRewriterBase(object):
                 elif _result == REWRITER_RESULT.FAIL:
                     raise ValueError("rewrite failed, so just fast fail it")
 
-        # clean the graph based on output names.
-        self.g.delete_unused_nodes(self.g.outputs)
+        if self.g.outputs:
+            # clean the graph based on output names.
+            self.g.delete_unused_nodes(self.g.outputs)
         return self.g.get_nodes()
 
     def _check_in_read_only_mode(self, context):
