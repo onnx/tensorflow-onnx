@@ -221,13 +221,10 @@ class LoopRewriterBase:
                 if i in input_ids:
                     log.debug("terminate the input search at %s", i)
                 elif not input_node:
-                    if i in g.inputs:
-                        log.debug("find a model input, which might be a placeholder")
-                    elif g.is_initializer(i):
-                        log.debug("find an initializer, this might be generated during op conversion")
-                    else:
-                        log.error("input node does not exist, node name is: [%s] ", i)
-                        raise ValueError("failed to get input")
+                    log.error("input node does not exist, node name is: [%s] ", i)
+                    raise ValueError("failed to get input")
+                elif input_node.is_const() or input_node.is_graph_input():
+                    pass
                 elif input_node.type == "Enter":
                     enter_nodes.add(input_node)
                     log.debug("terminate the input search at %s", i)
