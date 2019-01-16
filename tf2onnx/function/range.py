@@ -8,6 +8,7 @@ import numpy as np
 from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
+from tf2onnx.graph import Graph
 
 # pylint: disable=unused-argument,missing-docstring
 def make_range_const(ctx, start, limit, delta, output, scope_name, dtype):
@@ -67,22 +68,23 @@ def make_range_non_const(ctx, start, limit, delta, output, scope_name, dtype):
     ctx.make_const(cond_name, np.ones((), dtype=bool))
 
     # body
-    body_inputs = [utils.make_onnx_inputs_outputs("i", TensorProto.INT64, []),
-                   utils.make_onnx_inputs_outputs("cond", TensorProto.BOOL, []),
-                   utils.make_onnx_inputs_outputs("prev", dtype, [])]
-    body_outputs = [utils.make_onnx_inputs_outputs("cond_out", TensorProto.BOOL, []),
-                    utils.make_onnx_inputs_outputs("current", dtype, []),
-                    utils.make_onnx_inputs_outputs("range", dtype, [])]
-    body_nodes = []
-    body_nodes.append(utils.make_onnx_identity("cond", "cond_out"))
-    body_nodes.append(helper.make_node("Add", ["prev", delta], ["current"], name=utils.make_name("add")))
-    body_nodes.append(utils.make_onnx_identity("prev", "range"))
-    body_graph = helper.make_graph(body_nodes, utils.make_name("{}_body".format(base_name)), body_inputs, body_outputs)
+    g = Graph([], output_shapes={}, dtypes={}, target=ctx._target, opset=ctx._opset, extra_opset=ctx._extra_opset, output_names=[])
+    body_nodes = [g.make_node("Identity", ["cond"], outputs=["cond_out"]),
+                  g.make_node("Add", ["prev", delta], outputs=["current"], name=utils.make_name("add")),
+                  g.make_node("Identity", ["prev"], outputs=["range"])]
+    g.set_nodes(body_nodes)
+    g.add_graph_input("i", TensorProto.INT64, [])
+    g.add_graph_input("cond", TensorProto.BOOL, [])
+    g.add_graph_input("prev", dtype, [])
+
+    g.add_graph_output("cond_out", TensorProto.BOOL, [])
+    g.add_graph_output("current", dtype, [])
+    g.add_graph_output("range", dtype, [])
 
     # loop
     loop_inputs = [trip_count_node.output[0], cond_name, start]
-    loop_node = ctx.make_node("Loop", loop_inputs, output_count=2, op_name_scope=base_name, name="loop",
-                              attr={"body": body_graph})
+    loop_node = ctx.make_node("Loop", loop_inputs, output_count=2, op_name_scope=base_name, name="loop")
+    loop_node.set_body_graph_as_attr("body", g)
     nodes.append(loop_node)
 
     identity_node = ctx.make_node("Identity", [loop_node.output[1]], name=base_name, dtypes=[dtype], outputs=[output])
@@ -102,6 +104,6 @@ def range_op7(ctx, node, name, args):
     # T range = Range(T start, T limit, T delta)
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
     dtype = node.get_attr_int("Tidx")
-    utils.make_sure(dtype, "Tidx of {} is None".format(node.name))
+    utils.make_sure(dtype is not None, "Tidx of %s is None", node.name)
     return make_range(ctx, node.input[0], node.input[1], node.input[2],
                       node.output[0], name, dtype)
