@@ -1100,10 +1100,6 @@ class GraphUtil(object):
         output_shapes.update(shapes)
         output_dtypes.update(dtypes)
 
-        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.input)
-        output_shapes.update(shapes)
-        output_dtypes.update(dtypes)
-
         non_const_nodes = []
         const_nodes = []
         for n in graph_proto.node:
@@ -1183,9 +1179,8 @@ class GraphUtil(object):
     @staticmethod
     def _parse_graph_input(g, graph_proto):
         """Get graph inputs not defined as initializers and put into Graph object."""
-        for input_value_info in graph_proto.input:
-            if g.is_initializer(input_value_info.name):
-                continue
-            shape = g.get_shape(input_value_info.name)
-            dtype = g.get_dtype(input_value_info.name)
-            g.add_graph_input(input_value_info.name, dtype, shape)
+        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.input)
+        for name in shapes:
+            shape = shapes[name]
+            dtype = dtypes[name]
+            g.add_graph_input(name, dtype, shape)
