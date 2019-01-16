@@ -58,10 +58,10 @@ def infer_shape_for_node(g, node):
         log.debug("node %s has inputs don't have shape specified, they are: %s", node.name, no_shape)
         return False
 
-    if node.type in ["Cast", "Enter", "Exit", "Floor", "ReverseSequence", "Sigmoid", "Tanh", "Identity"]:
+    if node.type in ["Cast", "Enter", "Exit", "Floor", "LogicalNot", "ReverseSequence", "Sigmoid", "Tanh", "Identity"]:
         return set_shape_from_input(g, node.input[0], node.output[0])
 
-    if node.type in ["Add", "GreaterEqual", "Mul", "RealDiv", "Sub"]:
+    if node.type in ["Add", "Greater", "GreaterEqual", "Less", "LogicalAnd", "Mul", "RealDiv", "Sub"]:
         return set_shape_from_inputs_broadcast(g, node.input, node.output[0])
 
     if node.type == "Placeholder":
@@ -117,6 +117,25 @@ def infer_shape_for_node(g, node):
 
         g.set_shape(node.output[0], new_shape)
         log.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
+        return True
+
+    if node.type in ["All", "Any", "Min"]:
+        axis_node = node.inputs[1]
+        axis = axis_node.get_tensor_value()[0]
+        keep_dims = node.get_attr_int("keep_dims")
+        shape = node.input_shape_at(0)
+        if axis < 0 :
+            axis += len(shape)
+
+        new_shape = shape[:axis]
+        if keep_dims:
+            new_shape += [1]
+        if axis < len(shape) - 1:
+            new_shape += shape[axis+1:]
+
+        g.set_shape(node.output[0], new_shape)
+        log.debug("set %s node [%s] with new shape %s", node.type, node.output[0], new_shape)
+
         return True
 
     return False
@@ -195,6 +214,53 @@ def infer_output_shapes_with_partial_inputs(g, node):
         g.set_shape(node.output[0], new_shape)
         log.debug("set Pack node [%s] with new shape %s", node.output[0], new_shape)
         return True
+
+    if node.type == "TensorArrayGatherV3":
+        # TensorArrayGatherV3's output: all of the elements in the TensorArray,
+        # concatenated along a new axis (the new dimension 0)
+        flow_in_node = node.inputs[2]
+        if flow_in_node.type != "Exit":
+            return False
+
+        shape = g.get_shape(flow_in_node.output[0])
+        if shape is not None:
+            new_shape = [-1] + shape
+            g.set_shape(node.output[0], new_shape)
+            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            return True
+        return False
+
+    if node.type == "TensorArrayReadV3":
+        # Read an element from the TensorArray into output value. 
+        flow_in_node = node.inputs[2]
+        if flow_in_node.type != "Enter":
+            return False
+
+        scatter_node = flow_in_node.inputs[0]
+        if scatter_node.type != "TensorArrayScatterV3":
+            return False
+
+        value_shape_before_scatter = g.get_shape(scatter_node.input[2])
+        if value_shape_before_scatter is None:
+            return False
+
+        new_shape = value_shape_before_scatter[1:]
+        if new_shape is not None:
+            g.set_shape(node.output[0], new_shape)
+            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            return True
+        return False
+
+    if node.type == "Pow":
+        # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/pow
+        new_shape = g.get_shape(node.input[0])
+        if new_shape is None:
+            new_shape = g.get_shape(node.input[1])
+        if new_shape is not None:
+            g.set_shape(node.output[0], new_shape)
+            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            return True
+        return False
 
     return None
 
