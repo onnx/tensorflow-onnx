@@ -10,13 +10,10 @@ from __future__ import print_function
 import logging
 import sys
 import traceback
-from onnx import onnx_pb, TensorProto
+from onnx import TensorProto
 import numpy as np
-from tf2onnx.graph import Graph
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
-from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op
-from tf2onnx.rewriter.rnn_utils import BodyGraphDict, REWRITER_RESULT, SubGraphMetadata
+from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.tfonnx import utils
 
 
@@ -28,8 +25,6 @@ log = logging.getLogger("tf2onnx.rewriter.loop_rewriter")
 
 
 class LoopRewriter(LoopRewriterBase):
-    def __init__(self, g):
-        super(LoopRewriter, self).__init__(g)
 
     def create_context(self):
         return Context()
@@ -84,9 +79,9 @@ class LoopRewriter(LoopRewriterBase):
             body_nodes_to_append = []
             for input_ta in loop_props.tensor_array_inputs:
                 # Loop does not have scan inputs, so we use Gather to get data for each iteration.
-                unsqueezed_index_node = loop_body_g.make_node("Unsqueeze", [input_ta.index_input_id], attr={"axes": [0]})
-                body_nodes_to_append.append(unsqueezed_index_node)
-                gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, unsqueezed_index_node.output[0]])
+                index_node = loop_body_g.make_node("Unsqueeze", [input_ta.index_input_id], attr={"axes": [0]})
+                body_nodes_to_append.append(index_node)
+                gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, index_node.output[0]])
                 body_nodes_to_append.append(gather_node)
                 data_node = loop_body_g.make_node("Squeeze", [gather_node.output[0]], attr={"axes": [0]})
                 body_nodes_to_append.append(data_node)

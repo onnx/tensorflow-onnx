@@ -31,7 +31,6 @@ from tf2onnx.rewriter.rnn import rewrite_generic_loop
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
-from tf2onnx.rewriter.rnn_utils import is_tensor_array_op
 from tf2onnx.shape_inference import infer_shape_for_graph, set_shape_from_inputs_broadcast
 from tf2onnx.utils import port_name
 
@@ -331,8 +330,8 @@ def reshape_op(ctx, node, name, args):
 def reshape_op5(ctx, node, name, args):
     dtype = ctx.get_dtype(node.output[0])
     need_casting = dtype in [onnx_pb.TensorProto.INT32,
-                                  onnx_pb.TensorProto.INT16,
-                                  onnx_pb.TensorProto.INT64]
+                             onnx_pb.TensorProto.INT16,
+                             onnx_pb.TensorProto.INT64]
     # onnx wants reshape.input[1] to have the value be int64 which is not the case for tensorflow.
     nodes = _convert_shapenode_to_int64(ctx, node, 1)
     if ctx.opset >= 8 or not need_casting:
@@ -1494,8 +1493,7 @@ def reverse_op8(ctx, node, name, args):
     input_dtype = ctx.get_dtype(node.input[0])
     input_shape = ctx.get_shape(node.input[0])
 
-    g = Graph([], output_shapes={}, dtypes={}, target=ctx._target, opset=ctx._opset,
-              extra_opset=ctx._extra_opset, output_names=[])
+    g = ctx.create_new_graph_with_same_config()
     g.set_nodes([g.make_node('Identity', ['X'], outputs=['Y'])])
     g.add_graph_input('X', input_dtype, input_shape[2:])
     g.add_graph_output('Y', input_dtype, input_shape[2:])

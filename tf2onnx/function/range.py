@@ -5,12 +5,12 @@
 tf2onnx.tf2onnx - range op conversion
 """
 import numpy as np
-from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
-from tf2onnx.graph import Graph
 
 # pylint: disable=unused-argument,missing-docstring
+
+
 def make_range_const(ctx, start, limit, delta, output, scope_name, dtype):
     """make Range subgraph if all inputs are const."""
     # T range = Range(T start, T limit, T delta)
@@ -68,7 +68,7 @@ def make_range_non_const(ctx, start, limit, delta, output, scope_name, dtype):
     ctx.make_const(cond_name, np.ones((), dtype=bool))
 
     # body
-    g = Graph([], output_shapes={}, dtypes={}, target=ctx._target, opset=ctx._opset, extra_opset=ctx._extra_opset, output_names=[])
+    g = ctx.create_new_graph_with_same_config()
     body_nodes = [g.make_node("Identity", ["cond"], outputs=["cond_out"]),
                   g.make_node("Add", ["prev", delta], outputs=["current"], name=utils.make_name("add")),
                   g.make_node("Identity", ["prev"], outputs=["range"])]

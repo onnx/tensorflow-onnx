@@ -5,15 +5,13 @@
 tf2onnx.tf2onnx - gathernd op conversion
 """
 import numpy as np
-from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
-from tf2onnx.graph import Graph
-from tf2onnx.utils import make_onnx_inputs_outputs
 
 # pylint: disable=unused-argument,missing-docstring
 
 INT64_MAX = np.iinfo(np.int64).max
+
 
 def _make_gathernd_inner_loop(ctx, params, index, dtype):
     """create the inner loop for GatherNd."""
@@ -32,8 +30,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
     result_name = utils.make_name("res")
 
     # body graph creation
-    g = Graph([], output_shapes={}, dtypes={}, target=ctx._target, opset=ctx._opset, extra_opset=ctx._extra_opset, output_names=[])
-
+    g = ctx.create_new_graph_with_same_config()
     index_i = g.make_node("Gather", [index.output[0], trip_name], attr={"axis": 0})
     gather = g.make_node("Gather", [cur_name, index_i.output[0]], attr={"axis": 0})
     squeeze = g.make_node("Squeeze", [gather.output[0]], attr={"axes": [0]}, outputs=[result_name])
@@ -87,7 +84,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
     dummy_const = ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
 
     # body graph creation
-    g = Graph([], output_shapes={}, dtypes={}, target=ctx._target, opset=ctx._opset, extra_opset=ctx._extra_opset, output_names=[])
+    g = ctx.create_new_graph_with_same_config()
     trip_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
     cond_out_name = utils.make_name("cond_out")
@@ -98,22 +95,19 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
     index = g.make_node("Gather", [flatten_indices.output[0], trip_name], attr={"axis": 0})
     index_squeeze = g.make_node("Squeeze", [index.output[0]], attr={"axes": [0]})
     # inner loop to gather result
-    nodes_to_append, inner_loop = _make_gathernd_inner_loop(g,
-                                                             params,
-                                                             index_squeeze,
-                                                             t_params)
+    nodes_to_append, inner_loop = _make_gathernd_inner_loop(g, params, index_squeeze, t_params)
     g.set_nodes(nodes_to_append +
-                      [index, index_squeeze,
-                       g.make_node("Identity", [cond_name], outputs=[cond_out_name]),
-                       g.make_node("Identity", [dummy_name], outputs=[dummy_out_name]),
-                       g.make_node("Identity", [inner_loop.output[0]], outputs=[result_name])])
+                [index, index_squeeze,
+                 g.make_node("Identity", [cond_name], outputs=[cond_out_name]),
+                 g.make_node("Identity", [dummy_name], outputs=[dummy_out_name]),
+                 g.make_node("Identity", [inner_loop.output[0]], outputs=[result_name])])
 
     g.add_graph_input(trip_name, TensorProto.INT64, [])
     g.add_graph_input(cond_name, TensorProto.BOOL, [])
     g.add_graph_input(dummy_name, t_params, [])
 
     g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
-    g.add_graph_output(dummy_out_name, t_params, []),
+    g.add_graph_output(dummy_out_name, t_params, [])
     g.add_graph_output(result_name, t_params, [])
 
     gathernd_loop = ctx.make_node("Loop",

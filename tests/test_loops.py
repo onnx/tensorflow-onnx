@@ -12,9 +12,6 @@ import unittest
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.contrib import rnn
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test

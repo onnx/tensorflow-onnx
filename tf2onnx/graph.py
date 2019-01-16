@@ -21,7 +21,8 @@ from tf2onnx.utils import port_name, find_opset
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
 
-# pylint: disable=broad-except
+# todo(pengwa): remove protected-access later
+# pylint: disable=broad-except,protected-access
 
 
 class Node(object):
@@ -357,6 +358,11 @@ class Graph(object):
             ops.extend(to_append)
 
         self.set_nodes(ops)
+
+    def create_new_graph_with_same_config(self):
+        """Create a clean graph inheriting current graph's configuration."""
+        return Graph([], output_shapes={}, dtypes={}, target=self._target, opset=self._opset,
+                     extra_opset=self._extra_opset, output_names=[])
 
     @property
     def opset(self):

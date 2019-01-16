@@ -7,21 +7,20 @@ tf2onnx.rewriter.loop_rewriter_base
 
 from __future__ import division
 from __future__ import print_function
-import copy
+
 import logging
-from collections import deque
 from tf2onnx import utils
-from tf2onnx.graph import Node, Graph, GraphUtil
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.rewriter.rnn_utils import is_loopcond_op, is_tensor_array_op, is_tensor_array_write_op
+from tf2onnx.rewriter.rnn_utils import is_loopcond_op, is_tensor_array_op
 from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op
-from tf2onnx.rewriter.rnn_utils import BodyGraphDict, REWRITER_RESULT, SubGraphMetadata
+from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.loop_rewriter_base")
 INVALID_INPUT_ID = utils.make_name("invalid_input_id")
 
-# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
+# todo(pengwa) remove protected-access with changes to Graph/Node later.
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,protected-access
 
 
 class Context(object):
@@ -68,7 +67,7 @@ class LoopProperties(object):
         items.update(self.scan_variables)
         return items
 
-    # state inputs and outputs are in pairs, even though some outputs are not depending on corresponding input, 
+    # state inputs and outputs are in pairs, even though some outputs are not depending on corresponding input,
     # we leave the input id be None.
     @property
     def state_inputs(self):
@@ -109,23 +108,23 @@ class LoopProperties(object):
         return [i.data_input_id for i in self.tensor_array_inputs]
 
 class LoopVariable(object):
-    """In TensorFlow loop, all loop variables will be listed as iteration body graph's inputs, and outputs.
+    """In TensorFlow loop, all loop variables are listed both in iteration body graph's inputs, and outputs.
        Loop (state variable 1, state variable 2) {
            # do the calculation
-           # updated state variable 1 not necessarily only depends on state variable 1, it might depends
-           # on 0, 1, or 2 state variables. 
-           # So if it depends on 0 state variable, then switch_true_identity_output_id is None. For this case,
+           # updated state variable 1 not necessarily only depends on state variable 1, it might depend
+           # on 0, 1 or more state variables.
+           # So if it depends on 0 state variable, then switch_true_identity_output.id is None. For this case,
            # during conversion, a fake input for ONNX Loop body graph is created, but not consumed by any node.
-           return (updated) state variable 1, (updated) state variable 2, scan variable 1, scan variable 2 
+           return (updated) state variable 1, (updated) state variable 2, scan variable 1, scan variable 2
        }
 
        Here we take the perspective of body graph's outputs:
-           1. start from the iteration body graph's output (e.g. next_iteration_input_id)
+           1. start from the iteration body graph's output (e.g. next_iteration_input.id)
            2. find body graph generating it (those node between NextIteration and Switch)
            3. find the variable initial value (e.g. enter_input_id)
            4. check whether it is a tensor array
            5. the body graph output might go to next iteration as corresponding input
-              (e.g. switch_true_identity_output_id).
+              (e.g. switch_true_identity_output.id).
     """
     def __init__(self, enter_name, enter_input_id, next_iteration_input_id,
                  switch_true_identity_output_id, exit_output_id, is_tensor_array, ta_index_id, g):
@@ -140,7 +139,7 @@ class LoopVariable(object):
         # the starting point of iteration body graph,
         # might be None when this variable value (either initial value or last iteration output value)
         # is not consumed iteration body graph nodes.
-        self.switch_true_identity_output= TensorValueInfo(switch_true_identity_output_id, g)
+        self.switch_true_identity_output = TensorValueInfo(switch_true_identity_output_id, g)
 
         # the switch_false branch is ended with Exit, which is a boundary for the loop,
         # might be None when no consumers for the variable output.
@@ -148,7 +147,7 @@ class LoopVariable(object):
 
         # only applicable for tensor array variable
         self.is_tensor_array = is_tensor_array
-        # todo: need check ta's index variable is a scalar starting from 1, and increase by 1 each iteration. 
+        # todo: need check ta's index variable is a scalar starting from 1, and increase by 1 each iteration.
         # then we can be sure this is equivalent to scan output behavior.
         self.ta_index_id = ta_index_id
 
@@ -222,7 +221,7 @@ class LoopRewriterBase(object):
                 if _result == REWRITER_RESULT.OK:
                     log.debug("rewrite successfully")
                 elif _result == REWRITER_RESULT.SKIP:
-                    log.debug("rewrite skipped for LoopCond called %s", n.name)
+                    log.debug("rewrite skipped for LoopCond called %s", op.name)
                     continue
                 elif _result == REWRITER_RESULT.FAIL:
                     raise ValueError("rewrite failed, so just fast fail it")
@@ -250,18 +249,18 @@ class LoopRewriterBase(object):
             context.loop_properties.add_variable(loop_var)
 
     def _parse_input_ta(self, context):
-        loop_body_graph_inputs = [v.switch_true_identity_output.id for v in context.loop_properties.all_variables.values()
-                                  if v.switch_true_identity_output.id]
+        graph_inputs = [v.switch_true_identity_output.id for v in context.loop_properties.all_variables.values()
+                        if v.switch_true_identity_output.id]
         matcher = GraphMatcher(self.ta_read_input_pattern, allow_reorder=False)
         match_results = matcher.match_ops(self.g.get_nodes())
-        match_results = [r for r in match_results if r.get_op("ta_index").output[0] in loop_body_graph_inputs]
+        match_results = [r for r in match_results if r.get_op("ta_index").output[0] in graph_inputs]
         for match in match_results:
             ta_input_scatter = match.get_op("ta_input_scatter")
             # the 3rd input of scatter is the value
             data_input_id = ta_input_scatter.input[2]
             ta_read_node = match.get_op("ta_read")
 
-            # todo: need check ta's index variable is a scalar starting from 1, and increase by 1 each iteration. 
+            # todo: need check ta's index variable is a scalar starting from 1, and increase by 1 each iteration.
             # then we can be sure this is equivalent to scan input behavior.
             index_input_id = ta_read_node.input[1]
             unstacked_ta_consumer = match.get_op("ta_read").output[0]
@@ -305,7 +304,8 @@ class LoopRewriterBase(object):
 
             # cut off connection between condition graph and Merge node.
             non_switch_consumers = [n for n in self.g.find_output_consumers(merge_node.output[0]) if n.type != "Switch"]
-            self.g.replace_all_inputs(non_switch_consumers, merge_node.output[0], loop_var.switch_true_identity_output.id)
+            self.g.replace_all_inputs(non_switch_consumers, merge_node.output[0],
+                                      loop_var.switch_true_identity_output.id)
             dependent_vars.append(loop_var)
 
         # cut off connection between condition graph and LoopCond node.
@@ -358,7 +358,8 @@ class LoopRewriterBase(object):
                 raise ValueError("switch has consumer that is not Identity")
             switch_true_identity_output = switch_consumers[0].output[0]
         else:
-            raise ValueError("switch_true " + switch_node.name + " has unexpected count of consumers:", [n.name for n in switch_consumers])
+            raise ValueError("switch_true " + switch_node.name + " has unexpected count of consumers:",
+                             [n.name for n in switch_consumers])
 
         target_node_input_id = None
         enter_node = [n for n in merge_node.inputs if n.type == 'Enter'][0]
@@ -389,11 +390,11 @@ class LoopRewriterBase(object):
             is_ta = True
 
             ta_write_node = self.g.get_node_by_output(last_iteration_output_id)
-            utils.make_sure(is_tensor_array_write_op(ta_write_node), "ta var nextiteration is not following ta write op")
+            utils.make_sure(is_tensor_array_write_op(ta_write_node), "ta nextiteration is not following ta write op")
             last_iteration_output_id = ta_write_node.input[2]
             ta_index_id = ta_write_node.input[1]
 
-            # here we parse patterns generated by 
+            # here we parse patterns generated by
             # ta.write(), then ta.stack(), because this is the most frequent usage pattern.
             if exit_output_id:
                 exit_consumers = self.g.find_output_consumers(exit_output_id)
@@ -420,11 +421,13 @@ class LoopRewriterBase(object):
                 enter_nodes.add(node)
                 log.debug("terminate the input search at %s", node.name)
                 return False
-            elif merge_as_end is True and node.type == "Merge":
+
+            if merge_as_end is True and node.type == "Merge":
                 merge_nodes.add(node)
                 log.debug("terminate the input search at %s", node.name)
                 return False
-            elif node.is_const():
+
+            if node.is_const():
                 log.debug("terminate search at const node %s", node.name)
                 return False
 
@@ -434,22 +437,20 @@ class LoopRewriterBase(object):
             return True
 
         nodes = g.extract_sub_graph_nodes(output_ids, input_checker=find_input_boundary)
-
         return nodes, enter_nodes, merge_nodes
 
     @staticmethod
     def construct_graph_from_nodes(parent_g, nodes, outputs):
         log.debug("construct_graph_from_nodes")
-
-        g = Graph([], output_shapes={}, dtypes={}, target=parent_g._target, opset=parent_g._opset,
-                  extra_opset=parent_g._extra_opset, output_names=[])
+        g = parent_g.create_new_graph_with_same_config()
         g.parent_graph = parent_g
         nodes = set(nodes)
         all_inputs_and_outputs = set()
         ops = []
         for op in nodes:
             all_inputs_and_outputs |= set(op.input)
-            all_inputs_and_outputs |= set(op.get_implicit_inputs(False))  # we assume original graph won't have nested graphs
+            # we assume original graph won't have nested graphs here
+            all_inputs_and_outputs |= set(op.get_implicit_inputs(False))
             all_inputs_and_outputs |= set(op.output)
 
             new_node = g.make_node(op.type, op.input, outputs=op.output, attr=op.attr, name=op.name,
@@ -467,14 +468,14 @@ class LoopRewriterBase(object):
 
         g.set_nodes(ops)
 
-        # handle cell graph: insert identity node, since sometimes we need output same output_id 
+        # handle cell graph: insert identity node, since sometimes we need output same output_id
         # as state_output and scan_out, but ONNX don't allow the same output_id to appear more
         # than once as output node.
         cell_body_nodes = []
         new_output_names = []
         for out_tensor_value_info in outputs:
             node = g.make_node("Identity", inputs=[out_tensor_value_info.id], op_name_scope="sub_graph_ending_node",
-                                shapes=[out_tensor_value_info.shape], dtypes=[out_tensor_value_info.dtype])
+                               shapes=[out_tensor_value_info.shape], dtypes=[out_tensor_value_info.dtype])
             new_output_names.append(node.output[0])
             cell_body_nodes.append(node)
 

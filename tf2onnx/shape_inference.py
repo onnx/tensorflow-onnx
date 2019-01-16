@@ -124,7 +124,7 @@ def infer_shape_for_node(g, node):
         axis = axis_node.get_tensor_value()[0]
         keep_dims = node.get_attr_int("keep_dims")
         shape = node.input_shape_at(0)
-        if axis < 0 :
+        if axis < 0:
             axis += len(shape)
 
         new_shape = shape[:axis]
@@ -231,7 +231,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
         return False
 
     if node.type == "TensorArrayReadV3":
-        # Read an element from the TensorArray into output value. 
+        # Read an element from the TensorArray into output value.
         flow_in_node = node.inputs[2]
         if flow_in_node.type != "Enter":
             return False

@@ -5,10 +5,8 @@
 tf2onnx.tf2onnx - select op conversion
 """
 import numpy as np
-from onnx import helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
-from tf2onnx.graph import Node, Graph
 from tf2onnx.utils import port_name, make_sure
 
 
@@ -109,8 +107,10 @@ def create_loop_op(g, gather_input_ids, output_type, output_shape, trip_count_in
                    fake_val_name  # initial value of loop-carried dependencies
                   ]
     # define an extra scan output
-    loop_node = g.make_node("Loop", loop_inputs, output_count=2, op_name_scope="select_loop", skip_conversion=False)
-    loop_body = create_loop_body_graph(gather_input_ids, output_type, output_shape, trip_count_input_ids, rank, loop_node.name)
+    loop_node = g.make_node("Loop", loop_inputs, output_count=2, op_name_scope="select_loop",
+                            skip_conversion=False)
+    loop_body = create_loop_body_graph(g, gather_input_ids, output_type, output_shape, trip_count_input_ids,
+                                       rank, loop_node.name)
     loop_node.set_body_graph_as_attr("body", loop_body)
     nodes.append(loop_node)
     return nodes
@@ -127,15 +127,16 @@ def get_inputs_for_current_iteration(g, input_id, iter_index):
     return nodes, cur_cond_val_scalar_node.output[0]
 
 
-def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, trip_count_input_ids, rank, loop_name):
-    g = Graph([], output_shapes={}, dtypes={}, target=None, opset=None, extra_opset=None, output_names=[])
+def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_shape, trip_count_input_ids,
+                           rank, loop_name):
+    g = parent_g.create_new_graph_with_same_config()
     nodes = []
     iter_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
     fake_var_name = utils.make_name("fake_var")
 
     g.add_graph_input(iter_name, TensorProto.INT64, (1,))  # iteration_num
-    g.add_graph_input(cond_name, TensorProto.BOOL, ()),  # condition
+    g.add_graph_input(cond_name, TensorProto.BOOL, ())  # condition
     g.add_graph_input(fake_var_name, TensorProto.FLOAT, ())  # loop-carried dependency
 
     # get the i'th value of condition
@@ -200,21 +201,18 @@ def create_loop_body_graph(gather_input_ids, output_data_type, output_shape, tri
     nodes.append(identity_node)
 
     g.set_nodes(nodes)
-    g.outputs = [cond_output_id, fake_var_output_id, loop_output_id]
-    g.set_dtype(cond_output_id, TensorProto.BOOL)
-    g.set_shape(cond_output_id, ())
-    g.set_dtype(fake_var_output_id, TensorProto.FLOAT)
-    g.set_shape(fake_var_output_id, ())
-    g.set_dtype(loop_output_id, output_data_type)
-    g.set_shape(loop_output_id, output_shape[1:])
+
+    g.add_graph_output(cond_output_id, TensorProto.BOOL, ())
+    g.add_graph_output(fake_var_output_id, TensorProto.FLOAT, ())
+    g.add_graph_output(loop_output_id, output_data_type, output_shape[1:])
 
     return g
 
 
 def create_if_op(g, input_ids, output_data_type, output_shape):
     op_name = utils.make_name("If")
-    true_graph = create_body_graph_for_if_branch(output_data_type, output_shape, input_ids[1], op_name)
-    false_graph = create_body_graph_for_if_branch(output_data_type, output_shape, input_ids[2], op_name)
+    true_graph = create_body_graph_for_if_branch(g, output_data_type, output_shape, input_ids[1], op_name)
+    false_graph = create_body_graph_for_if_branch(g, output_data_type, output_shape, input_ids[2], op_name)
     out_name = port_name(op_name)
 
     # output a scalar
@@ -224,8 +222,8 @@ def create_if_op(g, input_ids, output_data_type, output_shape):
     return if_node, out_name
 
 
-def create_body_graph_for_if_branch(data_type, output_shape, chosen_cur_cond_val_out_name, op_name):
-    g = Graph([], output_shapes={}, dtypes={}, target=None, opset=None, extra_opset=None, output_names=[])
+def create_body_graph_for_if_branch(parent_g, data_type, output_shape, chosen_cur_cond_val_out_name, op_name):
+    g = parent_g.create_new_graph_with_same_config()
     nodes = []
     name = utils.make_name("Identity")
     identity_node = g.make_node(
@@ -235,11 +233,6 @@ def create_body_graph_for_if_branch(data_type, output_shape, chosen_cur_cond_val
         name=name
     )
     nodes.append(identity_node)
-
-    g.outputs = ["y"]
-    g.set_dtype("y", data_type)
-    g.set_shape("y", output_shape)
-
     g.set_nodes(nodes)
-
+    g.add_graph_output("y", data_type, output_shape)
     return g

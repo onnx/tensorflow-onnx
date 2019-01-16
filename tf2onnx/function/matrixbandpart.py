@@ -2,9 +2,8 @@
 tf2onnx.tf2onnx - matrixbandpart op conversion
 """
 import numpy as np
-from onnx import helper, onnx_pb
+from onnx import onnx_pb
 from tf2onnx import utils
-from tf2onnx.graph import Graph
 from tf2onnx.utils import make_sure
 
 
@@ -39,13 +38,13 @@ def matrixbandpart_op(ctx, node, name, args):
     nodes.append(one_line)
 
     # 2: "loop" to generate mask matrix: generate col or row of matrix one by one
-    g = Graph([], output_shapes={}, dtypes={}, target=ctx._target, opset=ctx._opset, extra_opset=ctx._extra_opset, output_names=[])
+    g = ctx.create_new_graph_with_same_config()
     node_name = utils.make_name("const_zero_bool")
     const_zero_bool = ctx.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
     slice_node = g.make_node(op_type="Slice", inputs=["line"],
-                               attr={"axes": [counter_axis], "starts": [0], "ends": [-1]})
+                             attr={"axes": [counter_axis], "starts": [0], "ends": [-1]})
     new_line = g.make_node(op_type="Concat", inputs=[const_zero_bool.output[0], slice_node.output[0]],
-                             outputs=["line_out"], attr={"axis": counter_axis})
+                           outputs=["line_out"], attr={"axis": counter_axis})
     body_nodes = [slice_node, new_line,
                   g.make_node("Identity", ["cond"], outputs=["cond_out"]),
                   g.make_node("Identity", ["line"], outputs=["res"])]

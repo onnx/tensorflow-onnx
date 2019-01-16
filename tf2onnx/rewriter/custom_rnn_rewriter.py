@@ -12,11 +12,8 @@ import sys
 import traceback
 from onnx import onnx_pb
 import numpy as np
-from tf2onnx.graph import Graph
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
-from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op
-from tf2onnx.rewriter.rnn_utils import BodyGraphDict, REWRITER_RESULT, SubGraphMetadata
+from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.tfonnx import utils
 
 
@@ -35,9 +32,6 @@ class CustomRnnContext(Context):
 
 
 class CustomRnnRewriter(LoopRewriterBase):
-    def __init__(self, g):
-        super(CustomRnnRewriter, self).__init__(g)
-
     def create_context(self):
         return CustomRnnContext()
 
@@ -130,7 +124,8 @@ class CustomRnnRewriter(LoopRewriterBase):
             for input_tensor_info in scan_props.scan_inputs:
                 scan_body_g.add_graph_input(input_tensor_info.id, input_tensor_info.dtype, input_tensor_info.shape)
 
-            scan_node = self._create_scan_node(context, scan_props, state_inputs_initial_values + scan_inputs_initial_values)
+            scan_node = self._create_scan_node(context, scan_props,
+                                               state_inputs_initial_values + scan_inputs_initial_values)
             if not scan_node:
                 log.error("failed to create scan node during rewrite")
                 return REWRITER_RESULT.FAIL
