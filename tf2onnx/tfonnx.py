@@ -268,7 +268,9 @@ def arg_minmax_op(ctx, node, name, args):
 
 def reduce_op(ctx, node, name, args):
     axes_node = node.inputs[1]
+    input_rank = len(ctx.get_shape(node.input[0]))
     axis = axes_node.get_tensor_value()
+    axis = [val + input_rank if val < 0 else val for val in axis]
     node.set_attr("axes", axis)
     ctx.remove_input(node, node.input[1])
     keep_dims = node.get_attr("keep_dims")
@@ -895,6 +897,18 @@ def concatv2_op(ctx, node, name, args):
     return node
 
 
+def dynamic_slice_op(ctx, node, name, args):
+    # tf op, T output = Slice(T input, Index begin, Index size, @type Index)
+    # onnx op, T output = DynamicSlice(T input, Tind starts, Tind ends, (optional)Tind axes), ends are exclusive
+
+    starts = node.inputs[1]
+    size = node.inputs[2]
+    ends = ctx.make_node("Add", [starts.output[0], size.output[0]])
+    new_slice = ctx.make_node("DynamicSlice", [*node.input[0:2], ends.output[0]],
+                              name=node.name, outputs=node.output)
+    return [ends, new_slice]
+
+
 def slice_op(ctx, node, name, args):
     # T output = Slice(T input, Index begin, Index size, @type Index)
     # T output = Slice(T data, @INTS axes, @INTS ends, @INTS starts)
@@ -985,7 +999,9 @@ def expanddims_op(ctx, node, name, args):
     dim_node = node.inputs[1]
     if dim_node.is_const():
         node.type = "Unsqueeze"
+        input_rank = len(ctx.get_shape(node.input[0]))
         dim = dim_node.get_tensor_value()[0]
+        dim = dim + input_rank + 1 if dim < 0 else dim
         node.set_attr("axes", [dim])
         ctx.remove_input(node, node.input[1])
         return node
@@ -1026,7 +1042,9 @@ def expanddims_op7(ctx, node, name, args):
     dim_node = node.inputs[1]
     if dim_node.is_const():
         node.type = "Unsqueeze"
+        input_rank = len(ctx.get_shape(node.input[0]))
         dim = dim_node.get_tensor_value()[0]
+        dim = dim + input_rank + 1 if dim < 0 else dim
         node.set_attr("axes", [dim])
         ctx.remove_input(node, node.input[1])
         return node
@@ -1162,6 +1180,30 @@ def upsample_op7(ctx, node, name, args):
     node.data_format = "NHWC"
     nodes = conv_convert_inputs(ctx, node, with_kernel=False)
     return nodes
+
+
+def upsample_op9(ctx, node, name, args):
+    # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
+    # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
+    # wants the input to be NHWC - adjust target_shape to this.
+    ori_shape = ctx.make_node("Shape", [node.input[0]])
+    ori_shape_hw = ctx.make_node("Slice", ori_shape.output, {"axes": [0], "starts": [1], "ends": [3]})
+    ori_shape_hw_float = ctx.make_node("Cast", ori_shape_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
+
+    target_hw = node.inputs[1]
+    target_hw_float = ctx.make_node("Cast", target_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
+
+    scales_hw = ctx.make_node("Div", [target_hw_float.output[0], ori_shape_hw_float.output[0]])
+
+    const_one_array = ctx.make_const(utils.make_name("one"), np.array([1.0, 1.0]).astype(np.float32))
+    # scaler is nchw
+    scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
+    input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": [0, 3, 1, 2]})
+    upsample = ctx.make_node("Upsample", [input_nchw.output[0], scales.output[0]], attr={"mode": args[0]})
+    res = ctx.make_node("Transpose", upsample.output, {"perm": [0, 2, 3, 1]},
+                        name=node.name, outputs=node.output)
+    return [ori_shape, ori_shape_hw, ori_shape_hw_float, target_hw_float, scales_hw,
+            scales, input_nchw, upsample, res]
 
 
 def multinomial_op(ctx, node, name, args):
@@ -1857,6 +1899,9 @@ _OPSET_9 = {
     "Asinh": (direct_op, []),
     "Acosh": (direct_op, []),
     "Atanh": (direct_op, []),
+    "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
+    "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
+    "Slice": (dynamic_slice_op, []),
 }
 
 _OPSETS = [
@@ -2235,7 +2280,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["ReduceSum", "Slice", "Split", "Tile", "Transpose"])
+    return rewrite_incomplete_type_support(g, ops, ["Div", "ReduceSum", "Slice", "Split", "Tile", "Transpose"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
