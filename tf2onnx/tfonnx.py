@@ -910,11 +910,9 @@ def concatv2_op(ctx, node, name, args):
 
 
 def dynamic_slice_op(ctx, node, name, args):
-    # T output = Slice(T input, Index begin, Index size, @type Index)
-    """
-    in tf, args of op is input, starts, size;
-    in onnx, args are input, starts, ends; and ends are exclusive
-    """
+    # tf op, T output = Slice(T input, Index begin, Index size, @type Index)
+    # onnx op, T output = DynamicSlice(T input, Tind starts, Tind ends, (optional)Tind axes), ends are exclusive
+
     starts = node.inputs[1]
     size = node.inputs[2]
     ends = ctx.make_node("Add", [starts.output[0], size.output[0]])
@@ -1212,8 +1210,7 @@ def upsample_op9(ctx, node, name, args):
     const_one_array = ctx.make_const(utils.make_name("one"), np.array([1.0, 1.0]).astype(np.float32))
     # scaler is nchw
     scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
-    input_nhwc = node.inputs[0]
-    input_nchw = ctx.make_node("Transpose", input_nhwc.output, {"perm": [0, 3, 1, 2]})
+    input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": [0, 3, 1, 2]})
     upsample = ctx.make_node("Upsample", [input_nchw.output[0], scales.output[0]], attr={"mode": args[0]})
     res = ctx.make_node("Transpose", upsample.output, {"perm": [0, 2, 3, 1]},
                         name=node.name, outputs=node.output)
@@ -2303,7 +2300,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Div", "Greater", "ReduceSum", "Slice", "Split", "Tile", "Transpose"])
+    return rewrite_incomplete_type_support(g, ops, ["Div", "ReduceSum", "Slice", "Split", "Tile", "Transpose"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
