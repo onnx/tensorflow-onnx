@@ -9,6 +9,7 @@ from __future__ import unicode_literals
 __all__ = [
     "custom_rnn_rewriter",
     "gru_rewriter",
+    "loop_rewriter",
     "loop_rewriter_base",
     "lstm_rewriter",
     "random_uniform",

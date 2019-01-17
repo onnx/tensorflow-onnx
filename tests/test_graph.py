@@ -251,9 +251,9 @@ class Tf2OnnxGraphTests(unittest.TestCase):
 
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] Conv2D__2 [op_type=Transpose] '
+                'digraph { Conv2D__2 [op_type=Transpose] kernel [op_type=Reshape] Conv2D__3 [op_type=Transpose] '
                 'Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] output [op_type=Identity] '
-                'k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 input1:0 -> Conv2D__2 '
+                'input1:0 -> Conv2D__2 k:0 -> kernel "kernel/shape":0 -> kernel kernel:0 -> Conv2D__3 '
                 'Conv2D__2:0 -> Conv2D Conv2D__3:0 -> Conv2D Conv2D:0 -> Conv2D__4 Conv2D__4:0 -> output }',
                 onnx_to_graphviz(g))
 

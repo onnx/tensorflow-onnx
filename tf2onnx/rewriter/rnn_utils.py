@@ -177,51 +177,6 @@ class RNNUnitType(Enum):
     GRUBlockCell = 2
 
 
-# describe the body graph's input and output node
-class SubGraphMetadata(object):
-    def __init__(self, g, input_ids, output_ids, initial_input_ids):
-        self.g = g
-        self.input_ids = input_ids
-        self.output_ids = output_ids
-
-        self.initial_input_ids = initial_input_ids
-
-        # sub-graph boundary
-        self.other_enter_input_ids = []
-
-
-class BodyGraphDict():
-    BODY_GRAPH_DICT = {}
-
-    def __init__(self, g):
-        self.g = g
-
-    @staticmethod
-    def add_body_graph_info(body_owner_name, body_graph):
-        if body_owner_name not in BodyGraphDict.BODY_GRAPH_DICT:
-            BodyGraphDict.BODY_GRAPH_DICT[body_owner_name] = body_graph
-        else:
-            raise ValueError("body_owner_name " + body_owner_name + " already exists as a key")
-
-    @staticmethod
-    def pop_body_graph_info(body_owner_name):
-        val = BodyGraphDict.BODY_GRAPH_DICT[body_owner_name]
-        del BodyGraphDict.BODY_GRAPH_DICT[body_owner_name]
-        return val
-
-    @staticmethod
-    def has_body_graph_info(body_owner_name):
-        return body_owner_name in BodyGraphDict.BODY_GRAPH_DICT
-
-    @staticmethod
-    def get_body_graph_output_names():
-        output_names = []
-        for k in BodyGraphDict.BODY_GRAPH_DICT:
-            _output_names = BodyGraphDict.BODY_GRAPH_DICT[k].output_ids
-            output_names.extend(_output_names)
-        return set(output_names)
-
-
 rnn_cell_patterns = {
     RNNUnitType.LSTMCell: lstmcell_pattern,
     RNNUnitType.GRUCell: grucell_pattern,
@@ -233,7 +188,7 @@ def get_pattern(cell_type_name):
     return rnn_cell_patterns[cell_type_name]
 
 
-def get_weights_from_const_node(node):
+def get_weights_from_const_node(g, node):
     temp = node
     val = None
     dtype = None
@@ -243,7 +198,7 @@ def get_weights_from_const_node(node):
 
     if temp and temp.type == 'Const':
         val = temp.get_tensor_value()
-        dtype = utils.ONNX_TO_NUMPY_DTYPE[temp.dtype]
+        dtype = utils.ONNX_TO_NUMPY_DTYPE[g.get_dtype(temp.output[0])]
         log.debug("found weights %s", temp.name)
     else:
         log.debug("weight node seems not to be Const, skip, node name is %s", temp.name)

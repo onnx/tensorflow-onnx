@@ -2,7 +2,7 @@
 tf2onnx.tf2onnx - matrixbandpart op conversion
 """
 import numpy as np
-from onnx import helper, onnx_pb
+from onnx import onnx_pb
 from tf2onnx import utils
 from tf2onnx.utils import make_sure
 
@@ -38,23 +38,25 @@ def matrixbandpart_op(ctx, node, name, args):
     nodes.append(one_line)
 
     # 2: "loop" to generate mask matrix: generate col or row of matrix one by one
-    body_ins = [utils.make_onnx_inputs_outputs("trip", onnx_pb.TensorProto.INT64, []),
-                utils.make_onnx_inputs_outputs("cond", onnx_pb.TensorProto.BOOL, []),
-                utils.make_onnx_inputs_outputs("line", onnx_pb.TensorProto.BOOL, [-1, -1])]
-    body_outs = [utils.make_onnx_inputs_outputs("cond_out", onnx_pb.TensorProto.BOOL, []),
-                 utils.make_onnx_inputs_outputs("line_out", onnx_pb.TensorProto.BOOL, [-1, -1]),
-                 utils.make_onnx_inputs_outputs("res", onnx_pb.TensorProto.BOOL, [-1, -1])]
-    # body graph
+    g = ctx.create_new_graph_with_same_config()
     node_name = utils.make_name("const_zero_bool")
     const_zero_bool = ctx.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
-    slice_node = ctx.make_node(op_type="Slice", inputs=["line"],
-                               attr={"axes": [counter_axis], "starts": [0], "ends": [-1]})
-    new_line = ctx.make_node(op_type="Concat", inputs=[const_zero_bool.output[0], slice_node.output[0]],
-                             outputs=["line_out"], attr={"axis": counter_axis})
-    body_nodes = [slice_node.op, new_line.op,
-                  utils.make_onnx_identity("cond", "cond_out"),
-                  utils.make_onnx_identity("line", "res")]
-    body_graph = helper.make_graph(body_nodes, utils.make_name("MatrixBandPart_body"), body_ins, body_outs)
+    slice_node = g.make_node(op_type="Slice", inputs=["line"],
+                             attr={"axes": [counter_axis], "starts": [0], "ends": [-1]})
+    new_line = g.make_node(op_type="Concat", inputs=[const_zero_bool.output[0], slice_node.output[0]],
+                           outputs=["line_out"], attr={"axis": counter_axis})
+    body_nodes = [slice_node, new_line,
+                  g.make_node("Identity", ["cond"], outputs=["cond_out"]),
+                  g.make_node("Identity", ["line"], outputs=["res"])]
+    g.set_nodes(body_nodes)
+    g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
+    g.add_graph_input("cond", onnx_pb.TensorProto.BOOL, [])
+    g.add_graph_input("line", onnx_pb.TensorProto.BOOL, [-1, -1])
+
+    g.add_graph_output("cond_out", onnx_pb.TensorProto.BOOL, [])
+    g.add_graph_output("line_out", onnx_pb.TensorProto.BOOL, [-1, -1])
+    g.add_graph_output("res", onnx_pb.TensorProto.BOOL, [-1, -1])
+
     # initial value of body vars
     shape = ctx.make_node(op_type="Shape", inputs=[node.input[0]])  # dtype of result is int64
     nodes.append(shape)
@@ -67,8 +69,8 @@ def matrixbandpart_op(ctx, node, name, args):
     cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(np.bool)).output[0]
     col_init = one_line.output[0]
 
-    loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond, col_init], output_count=2,
-                              attr={"body": body_graph})
+    loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond, col_init], output_count=2)
+    loop_node.set_body_graph_as_attr("body", g)
     nodes.append(loop_node)
     # convert generated mask matrix from bool to right shape and data type
     squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})

@@ -21,7 +21,8 @@ from tf2onnx.utils import port_name, find_opset
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
 
-# pylint: disable=broad-except
+# todo(pengwa): remove protected-access later
+# pylint: disable=broad-except,protected-access
 
 
 class Node(object):
@@ -44,13 +45,7 @@ class Node(object):
         # dict to original attributes
         for a in node.attribute:
             self._attr[a.name] = a
-        # try to find a dtype for this node
-        dtype = graph.get_dtype(node.name)
-        if not dtype:
-            dtype = self._attr.get("dtype")
-            if dtype:
-                dtype = dtype.i
-        self._dtype = dtype
+
         self.data_format = self.get_attr("data_format")
         if self.data_format:
             self.data_format = self.data_format.s.decode("utf-8")
@@ -238,15 +233,6 @@ class Node(object):
         # track shapes in _output_shapes
         self.graph.set_shape(t.name, t.dims)
 
-    @property
-    def dtype(self):
-        """Return dtype."""
-        return self._dtype
-
-    @dtype.setter
-    def dtype(self, val):
-        """Set dtype."""
-        self._dtype = val
 
     def get_body_graphs(self):
         return self.graph.contained_graphs.get(self.name, None)
@@ -283,49 +269,33 @@ class Node(object):
         if attr:
             self._op.attribute.extend(attr)
 
-    def get_implicit_inputs(self, require_input_in_cur_graph=False):
+    def get_implicit_inputs(self, recursive=True):
         """Get implicit inputs if the node has attributes being GraphProto."""
-        body_graphs = [a.g for a in self.attr_onnx.values() if a.HasField('g')]
-        outer_scope_node_input_ids = set()
-        for sub_g in body_graphs:
-            outer_scope_node_input_ids |= self._get_implicit_inputs(sub_g)
+        output_available_in_cur_graph = set()
+        all_node_inputs = set()
 
-        if require_input_in_cur_graph:
-            # only find referenced node in current graph
-            implicit_inputs_in_current_graph = set()
-            for input_id in outer_scope_node_input_ids:
-                n = self.graph.get_node_by_output(input_id)
-                if n is None:
-                    if not self.graph.is_initializer(input_id):
-                        if input_id not in self.graph.inputs:
-                            continue
-                implicit_inputs_in_current_graph.add(input_id)
-            return implicit_inputs_in_current_graph
-        return outer_scope_node_input_ids
+        graphs = []
+        body_graphs = self.get_body_graphs()
+        if body_graphs:
+            graphs.extend(body_graphs.values())
 
-    @staticmethod
-    def _get_implicit_inputs(onnx_graph, recursive=True):
-        """Get implicit inputs for specified onnx graph."""
-        node_map = set()
-        for n in onnx_graph.node:
-            node_map |= set(n.output)
+        while graphs:
+            graph = graphs.pop()
+            for n in graph.get_nodes():
+                output_available_in_cur_graph |= set(n.output)
+                for i in n.input:
+                    all_node_inputs.add(i)
 
-        for n in onnx_graph.input:
-            node_map.add(n.name)
+                if recursive:
+                    b_graphs = n.get_body_graphs()
+                    if b_graphs:
+                        graphs.extend(b_graphs.values())
 
-        outer_scope_node_input_ids = set()
-        for n in onnx_graph.node:
-            for i in n.input:
-                if i not in node_map:
-                    outer_scope_node_input_ids.add(i)
+            # exclude graph inputs
+            for n in graph.inputs:
+                output_available_in_cur_graph.add(n)
 
-        if recursive:
-            for n in onnx_graph.node:
-                for attr in n.attribute:
-                    sub_g = attr.g
-                    if sub_g:
-                        outer_scope_node_input_ids |= Node._get_implicit_inputs(sub_g)
-
+        outer_scope_node_input_ids = all_node_inputs - output_available_in_cur_graph
         return outer_scope_node_input_ids
 
 
@@ -381,14 +351,18 @@ class Graph(object):
                         new_output_node = self.make_node("Identity", [new_out], outputs=[o],
                                                          op_name_scope="graph_outputs")
                         to_append.append(new_output_node)
-
+                        self.set_node_by_name(n)
                         self.copy_shape(o, new_out)
-                        self.set_dtype(new_out, self.get_dtype(o))
+                        self.copy_dtype(o, new_out)
 
-                self.set_node_by_name(n)
             ops.extend(to_append)
 
         self.set_nodes(ops)
+
+    def create_new_graph_with_same_config(self):
+        """Create a clean graph inheriting current graph's configuration."""
+        return Graph([], output_shapes={}, dtypes={}, target=self._target, opset=self._opset,
+                     extra_opset=self._extra_opset, output_names=[])
 
     @property
     def opset(self):
@@ -445,6 +419,11 @@ class Graph(object):
             else:
                 raw_attr[a] = v
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **raw_attr)
+
+        if op_type in ["If", "Loop", "Scan"]:
+            # we force the op containing inner graphs not skipped during conversion.
+            skip_conversion = False
+
         node = Node(onnx_node, self, skip_conversion=skip_conversion)
         if onnx_attrs:
             _ = [node.set_attr_onnx(a) for a in onnx_attrs]
@@ -479,7 +458,7 @@ class Graph(object):
         """Get node list."""
         return self._nodes
 
-    def get_node_by_output(self, output, search_in_parent_graphs=False):
+    def get_node_by_output(self, output, search_in_parent_graphs=True):
         """Get node by node output id recursively going through nested graphs.
         Args:
             search_in_parent_graphs: search in all parent graphs
@@ -548,36 +527,38 @@ class Graph(object):
 
     def add_graph_input(self, name, dtype=None, shape=None):
         """Add placeholder node as graph's input."""
-        if not dtype:
+        if dtype is None:
             dtype = self.get_dtype(name)
 
-        if not shape:
+        if shape is None:
             shape = self.get_shape(name)
 
         if name not in self.inputs:
-            utils.make_sure(dtype is not None, "input dtype should not be None")
-            utils.make_sure(shape is not None, "input shape should not be None")
+            utils.make_sure(shape is not None, "shape for input %s should not be None", name)
+            utils.make_sure(dtype is not None, "dtype for input %s should not be None", name)
+            # append firstly then the input can be retrieved
+            # to get/set shape/dtype.
+            self.inputs.append(name)
             self.set_shape(name, shape)
             self.set_dtype(name, dtype)
-            self.inputs.append(name)
         else:
             raise ValueError("graph input " + name + " already exists")
 
     def add_graph_output(self, name, dtype=None, shape=None):
         """Add node output as graph's output."""
-        if not dtype:
+        # todo(pengwa): check output existence
+        if dtype is None:
             dtype = self.get_dtype(name)
 
-        if not shape:
+        if shape is None:
             shape = self.get_shape(name)
 
         if name not in self.outputs:
-            utils.make_sure(shape is not None, "output shape should not be None")
-            utils.make_sure(dtype is not None, "output dtype should not be None")
-
+            utils.make_sure(shape is not None, "shape for output %s should not be None", name)
+            utils.make_sure(dtype is not None, "dtype for output %s should not be None", name)
+            self.outputs.append(name)
             self.set_shape(name, shape)
             self.set_dtype(name, dtype)
-            self.outputs.append(name)
         else:
             raise ValueError("graph output " + name + " already exists")
 
@@ -605,11 +586,13 @@ class Graph(object):
 
     def get_dtype(self, name):
         """Get dtype for node."""
-        return self._dtypes.get(name)
+        node = self.get_node_by_output(name, search_in_parent_graphs=True)
+        return node.graph._dtypes.get(name) if node else None
 
     def set_dtype(self, name, dtype):
         """Set dtype for node."""
-        self._dtypes[name] = dtype
+        node = self.get_node_by_output(name, search_in_parent_graphs=True)
+        node.graph._dtypes[name] = dtype
 
     def copy_dtype(self, src_name, dst_name):
         """Copy dtype from another node."""
@@ -618,8 +601,9 @@ class Graph(object):
 
     def get_shape(self, name):
         """Get shape for node."""
-        assert isinstance(name, six.text_type)
-        shape = self._output_shapes.get(name)
+        utils.make_sure(isinstance(name, six.text_type), "get_shape name is invalid type: %s", name)
+        node = self.get_node_by_output(name, search_in_parent_graphs=True)
+        shape = node.graph._output_shapes.get(name) if node else None
         if shape:
             for i, v in enumerate(shape):
                 if v is None:
@@ -628,13 +612,15 @@ class Graph(object):
             # default is -1.
             if shape[0] == -1:
                 shape[0] = utils.ONNX_UNKNOWN_DIMENSION
+            return shape
         return shape
 
     def set_shape(self, name, val):
         """Set new shape of node."""
         if isinstance(val, np.ndarray):
             val = val.tolist()
-        self._output_shapes[name] = val
+        node = self.get_node_by_output(name, search_in_parent_graphs=True)
+        node.graph._output_shapes[name] = val
 
     def copy_shape(self, input_name, output_name):
         """Copy shape from another node."""
@@ -960,15 +946,21 @@ class Graph(object):
             a set of nodes
         """
         res_set = set()
+        if not dest_node:
+            return res_set
+
         processing_set = set([dest_node])
         while processing_set:
             top_node = processing_set.pop()
             res_set.add(top_node)
-            implicit_inputs = [self.get_node_by_output(node_output) for node_output in top_node.get_implicit_inputs()]
-            for node in top_node.inputs + implicit_inputs:
+            all_inputs = top_node.input + list(top_node.get_implicit_inputs())
+            for input_id in all_inputs:
+                # we don't care about nested graph here, just handle current graph cropping.
+                node = self.get_node_by_output(input_id, search_in_parent_graphs=False)
                 if not node:
                     # some node (for example Scan) has optional inputs, which
                     # might has empty input.
+                    # subgraph might has input defined in outer graph
                     continue
                 if node not in res_set:
                     if input_checker and input_checker(node) is False:
@@ -986,6 +978,9 @@ class Graph(object):
             a list of nodes
         """
         res_set = set()
+        if not outputs_name:
+            return list(res_set)
+
         for output in outputs_name:
             node = self.get_node_by_output(output)
             res_set = res_set.union(self._extract_sub_graph_nodes(node, input_checker))
@@ -1002,8 +997,11 @@ class Graph(object):
 
     def delete_unused_nodes(self, outputs_name):
         """Delete nodes not in subgraph ending with output_names."""
-        related_nodes = self.extract_sub_graph_nodes(outputs_name)
-        self.set_nodes(related_nodes)
+        if outputs_name:
+            related_nodes = self.extract_sub_graph_nodes(outputs_name)
+            self.set_nodes(related_nodes)
+        else:
+            print("WARINING: outputs not specified, delete_unused_nodes not taking effect.")
 
 
 class GraphUtil(object):
@@ -1102,10 +1100,6 @@ class GraphUtil(object):
         output_shapes.update(shapes)
         output_dtypes.update(dtypes)
 
-        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.input)
-        output_shapes.update(shapes)
-        output_dtypes.update(dtypes)
-
         non_const_nodes = []
         const_nodes = []
         for n in graph_proto.node:
@@ -1137,6 +1131,13 @@ class GraphUtil(object):
                 raise ValueError("failed to parse tensor value from Constant node")
 
         GraphUtil._parse_graph_input(g, graph_proto)
+
+        for n in g.get_nodes():
+            for attr_name, attr_val in n.attr.items():
+                if attr_val.HasField('g'):
+                    # it was assumed that the a.g has inferred shapes/dtypes.
+                    sub_g = GraphUtil.create_graph_from_onnx_graph(attr_val.g)
+                    n.set_body_graph_as_attr(attr_name, sub_g)
         return g
 
     @staticmethod
@@ -1178,9 +1179,8 @@ class GraphUtil(object):
     @staticmethod
     def _parse_graph_input(g, graph_proto):
         """Get graph inputs not defined as initializers and put into Graph object."""
-        for input_value_info in graph_proto.input:
-            if g.is_initializer(input_value_info.name):
-                continue
-            shape = g.get_shape(input_value_info.name)
-            dtype = g.get_dtype(input_value_info.name)
-            g.add_graph_input(input_value_info.name, dtype, shape)
+        shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.input)
+        for name in shapes:
+            shape = shapes[name]
+            dtype = dtypes[name]
+            g.add_graph_input(name, dtype, shape)

@@ -26,11 +26,11 @@ from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
 from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
-from tf2onnx.rewriter.rnn import rewrite_custom_rnn_cell, rewrite_custom_rnn_body_graph
+from tf2onnx.rewriter.rnn import rewrite_custom_rnn_cell
+from tf2onnx.rewriter.rnn import rewrite_generic_loop
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
-from tf2onnx.rewriter.rnn_utils import is_tensor_array_op
 from tf2onnx.shape_inference import infer_shape_for_graph, set_shape_from_inputs_broadcast
 from tf2onnx.utils import port_name
 
@@ -63,7 +63,7 @@ def tflist_to_onnx(node_list, shape_override):
     ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
                     "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels", "Tindex"]
+                    "Tout", "Tlabels", "Tindex", "element_shape"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -117,17 +117,6 @@ def tflist_to_onnx(node_list, shape_override):
                 attr["to"] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "DstT"))
             elif a == "SrcT":
                 continue
-            elif a == "element_shape":
-                if is_tensor_array_op(node):
-                    # this is for getting output shape for tensor array
-                    shape = node.get_attr("element_shape")
-                    dims = [d.size for d in shape.dim]
-                    output_name = node.outputs[0].name
-                    # override tf's ta output shape, which is [2], not reflecting
-                    # the shape stored in it at all.
-                    output_shapes[output_name] = dims
-                else:
-                    continue
             elif a in ignored_attr:
                 continue
             else:
@@ -291,7 +280,7 @@ def reduce_op(ctx, node, name, args):
 
 def placeholder_op(ctx, node, name, args):
     input_name = node.output[0]
-    ctx.add_graph_input(input_name, node.dtype, ctx.get_shape(input_name))
+    ctx.add_graph_input(input_name, ctx.get_dtype(input_name), ctx.get_shape(input_name))
     return None
 
 
@@ -339,9 +328,10 @@ def reshape_op(ctx, node, name, args):
 
 
 def reshape_op5(ctx, node, name, args):
-    need_casting = node.dtype in [onnx_pb.TensorProto.INT32,
-                                  onnx_pb.TensorProto.INT16,
-                                  onnx_pb.TensorProto.INT64]
+    dtype = ctx.get_dtype(node.output[0])
+    need_casting = dtype in [onnx_pb.TensorProto.INT32,
+                             onnx_pb.TensorProto.INT16,
+                             onnx_pb.TensorProto.INT64]
     # onnx wants reshape.input[1] to have the value be int64 which is not the case for tensorflow.
     nodes = _convert_shapenode_to_int64(ctx, node, 1)
     if ctx.opset >= 8 or not need_casting:
@@ -358,8 +348,8 @@ def reshape_op5(ctx, node, name, args):
     if len(next_nodes) != 1 or next_nodes[0].type != "Cast":
         op_name = utils.make_name(node.name)
         output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
-        output_cast.set_attr("to", node.dtype)
-        ctx.set_dtype(output_cast.output[0], node.dtype)
+        output_cast.set_attr("to", dtype)
+        ctx.set_dtype(output_cast.output[0], dtype)
         ctx.copy_shape(node.output[0], output_cast.output[0])
         nodes.append(output_cast)
     return [input_cast] + nodes
@@ -370,7 +360,6 @@ def less_op7(ctx, node, name, args):
     nodes = [node]
     input1_dtype = ctx.get_dtype(node.input[0])
     input2_dtype = ctx.get_dtype(node.input[1])
-    utils.make_sure(input1_dtype == input2_dtype, "less inputs not having same dtype")
     target_dtype = onnx_pb.TensorProto.FLOAT
     need_case_1 = input1_dtype != target_dtype
     if need_case_1:
@@ -769,10 +758,10 @@ def sign_op(ctx, node, name, args):
     """Sign op."""
     # T sign = Sign(T Input)
     nodes = []
-    node_dtype = node.dtype
+    node_dtype = ctx.get_dtype(node.output[0])
     utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
     if node_dtype in [onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
-        raise ValueError("dtype " + node.dtype + " is not supported in onnx for now")
+        raise ValueError("dtype " + node_dtype + " is not supported in onnx for now")
     input_tensor_type = utils.ONNX_TO_NUMPY_DTYPE[node_dtype]
     zero_name = utils.make_name("{}_zero".format(node.name))
     ctx.make_const(zero_name, np.array(0, dtype=input_tensor_type))
@@ -841,7 +830,7 @@ def transpose_op(ctx, node, name, args):
 def _wrap_concat_with_cast(ctx, node):
     """wrap concat in casts for opset < 8 since it only supports."""
     supported_types = [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16]
-    dtype = node.dtype
+    dtype = ctx.get_dtype(node.output[0])
     need_casting = dtype not in supported_types
     nodes = []
     if need_casting:
@@ -859,7 +848,6 @@ def _wrap_concat_with_cast(ctx, node):
             op_name = utils.make_name(node.name)
             output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=op_name)
             output_cast.set_attr("to", dtype)
-            output_cast.dtype = dtype
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(output_name, output_cast.output[0])
             nodes.append(output_cast)
@@ -1362,7 +1350,7 @@ def fused_batchnorm_op7(ctx, node, name, args):
     scale_shape = ctx.get_shape(node.input[1])
     mean_shape = ctx.get_shape(node.input[3])
     var_shape = ctx.get_shape(node.input[4])
-    val_type = utils.ONNX_TO_NUMPY_DTYPE[node.inputs[1].dtype]
+    val_type = utils.ONNX_TO_NUMPY_DTYPE[ctx.get_dtype(node.input[1])]
 
     if mean_shape != scale_shape:
         new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(), scale_shape), dtype=val_type)
@@ -1386,10 +1374,11 @@ def matmul_op(ctx, node, name, args):
     attrs_val = [node.get_attr(attr) for attr in attrs]
     attrs_val = [0 if val is None else val.i for val in attrs_val]
 
+    dtype = ctx.get_dtype(node.output[0])
     if any(attrs_val[2:]):
         # conjugation operation on complex data not supported in onnx for now, so if it's complex than raise exception
-        if node.dtype not in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
-            raise ValueError("dtype " + node.dtype + " is not supported in onnx matmul for now")
+        if dtype not in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
+            raise ValueError("dtype " + dtype + " is not supported in onnx matmul for now")
 
     transpose_a = (attrs_val[0] + attrs_val[2] + attrs_val[4]) % 2
     transpose_b = (attrs_val[1] + attrs_val[3] + attrs_val[5]) % 2
@@ -1525,27 +1514,12 @@ def reverse_op8(ctx, node, name, args):
     input_dtype = ctx.get_dtype(node.input[0])
     input_shape = ctx.get_shape(node.input[0])
 
-    # create one input (ValueInfoProto)
-    x = utils.make_onnx_inputs_outputs('X', input_dtype, input_shape[2:])
+    g = ctx.create_new_graph_with_same_config()
+    g.set_nodes([g.make_node('Identity', ['X'], outputs=['Y'])])
+    g.add_graph_input('X', input_dtype, input_shape[2:])
+    g.add_graph_output('Y', input_dtype, input_shape[2:])
 
-    # create one output (ValueInfoProto)
-    y = utils.make_onnx_inputs_outputs('Y', input_dtype, input_shape[2:])
-
-    # create a node (NodeProto)
-    node_def = helper.make_node(
-        'Identity',  # node name
-        ['X'],  # inputs
-        ['Y'],  # outputs
-    )
-
-    # create the graph (GraphProto)
-    graph_def = helper.make_graph(
-        [node_def],
-        'reverse_scan-body-graph',
-        [x],
-        [y],
-    )
-    node.set_attr("body", graph_def)
+    node.set_body_graph_as_attr("body", g)
     node.set_attr("directions", [1])  # reverse the scan input
 
     seq_len_dtype = ctx.get_dtype(node.input[1])
@@ -1861,6 +1835,12 @@ _OPSET_7 = {
     "Tan": (direct_op, []),
     "Tile": (tile_op7, []),
     "TruncateDiv": (broadcast_op7, ["Div"]),
+
+    # workaround created ONNX node in pre-rewriters to make sure those ops
+    # is handled especially on their contained subgraphs.
+    "If": (direct_op, []),
+    "Loop": (direct_op, []),
+    "Scan": (direct_op, []),
 }
 
 _OPSET_8 = {
@@ -1925,7 +1905,7 @@ def rewrite_random_normal(g, ops):
     for match in match_results:
         output = match.get_op('output')
         mean = output.inputs[1].get_tensor_value()[0]
-        dtype = output.dtype
+        dtype = g.get_dtype(output.output[0])
         op_name = utils.make_name("RandomNormal")
         out_name = port_name(op_name)
 
@@ -2449,8 +2429,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                  rewrite_random_normal, rewrite_dropout,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_single_direction_grublock,
-                 rewrite_bi_direction_gru, rewrite_custom_rnn_cell,
-                 rewrite_logical_compare_with_equal
+                 rewrite_bi_direction_gru, rewrite_logical_compare_with_equal,
+                 rewrite_custom_rnn_cell, rewrite_generic_loop,
                  ]
 
     if custom_rewriter is not None:
@@ -2470,6 +2450,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         else:
             raise ex
 
+    # some nodes may already copied into inner Graph, so remove them from main Graph.
+    g.delete_unused_nodes(output_names)
     topological_sort(g, continue_on_error)
 
     if custom_op_handlers is None:
@@ -2477,7 +2459,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers)
 
     # post-processing rewriters
-    late_rewriters = [rewrite_custom_rnn_body_graph]
+    late_rewriters = []
     if TARGET_RS5 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs5)
     if TARGET_RS6 in target:

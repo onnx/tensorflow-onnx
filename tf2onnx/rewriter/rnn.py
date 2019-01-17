@@ -15,7 +15,8 @@ from tf2onnx.rewriter.bilstm_rewriter import rewrite_bidirectional_lstms
 from tf2onnx.rewriter.lstm_rewriter import LSTMUnitRewriter
 from tf2onnx.rewriter.grublock_rewriter import GRUUnitRewriter, GRUBlockUnitRewriter
 from tf2onnx.rewriter.bigru_rewriter import rewrite_bidirectional_grus
-from tf2onnx.rewriter.custom_rnn_rewriter import CustomRnnRewriter, CustomRnnLateRewriter
+from tf2onnx.rewriter.custom_rnn_rewriter import CustomRnnRewriter
+from tf2onnx.rewriter.loop_rewriter import LoopRewriter
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
@@ -50,6 +51,5 @@ def rewrite_custom_rnn_cell(g, ops):
     return  CustomRnnRewriter(g).run()
 
 
-def rewrite_custom_rnn_body_graph(g, ops):
-    g.update_proto()
-    return CustomRnnLateRewriter(g).rewrite()
+def rewrite_generic_loop(g, ops):
+    return LoopRewriter(g).run()

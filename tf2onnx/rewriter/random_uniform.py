@@ -64,7 +64,7 @@ def rewrite_random_uniform_fold_const(g, ops):
 
 
 def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output):
-    dtype = output.dtype
+    dtype = g.get_dtype(output.output[0])
     op_name = utils.make_name("RandomUniform")
     if ru_op.inputs[0].type == "Shape":
         shape_node = ru_op.inputs[0]

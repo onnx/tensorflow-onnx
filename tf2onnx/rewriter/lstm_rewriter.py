@@ -51,7 +51,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
     def get_weight_and_bias(self, match):
         # if one of them is not match, just return
         w_e = match.get_op("cell_kernel")
-        w = get_weights_from_const_node(w_e)
+        w = get_weights_from_const_node(self.g, w_e)
         if not w:
             return None
 
@@ -63,17 +63,17 @@ class LSTMUnitRewriter(UnitRewriterBase):
             return None
 
         b_e = match.get_op("cell_bias")
-        b = get_weights_from_const_node(b_e)
+        b = get_weights_from_const_node(self.g, b_e)
         if not b or b.value.shape[0] != w.value.shape[1]:
             log.warning("cell_kernel and cell_bias's dimensions does not match, skip")
             return None
 
         ft_bias = match.get_op("ft_bias")
-        ft = get_weights_from_const_node(ft_bias)
+        ft = get_weights_from_const_node(self.g, ft_bias)
         if not ft:
             return None
 
-        if not (len(ft.value) == 1 and b_e.dtype == ft_bias.dtype):
+        if not (len(ft.value) == 1 and self.g.get_dtype(b_e.output[0]) == self.g.get_dtype(ft_bias.output[0])):
             return None
 
         return RnnWeights(w, b, ft)
