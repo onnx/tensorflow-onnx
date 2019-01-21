@@ -30,6 +30,7 @@ import tf2onnx
 from tf2onnx import utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph
+from tensorflow.contrib.rnn import GRUBlockCell  # pylint: disable=unused-import
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 
