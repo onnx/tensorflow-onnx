@@ -24,6 +24,7 @@ from tf2onnx import utils
 from tf2onnx.function import *  # pylint: disable=wildcard-import
 from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.rewriter.cond_rewriter import rewrite_cond
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
 from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_custom_rnn_cell
@@ -183,10 +184,7 @@ def identity_op(ctx, node, name, args):
         # if identity has a const as input, remove it
         input_name = node.input[0]
         output_name = node.output[0]
-        for n in ctx.get_nodes():
-            for i, parent_name in enumerate(n.input):
-                if parent_name == output_name:
-                    n.input[i] = input_name
+        ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name)
         return None
 
     ctx.copy_shape(node.input[0], node.output[0])
@@ -2475,7 +2473,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_single_direction_grublock,
                  rewrite_bi_direction_gru, rewrite_logical_compare_with_equal,
-                 rewrite_custom_rnn_cell, rewrite_generic_loop,
+                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond
                  ]
 
     if custom_rewriter is not None:

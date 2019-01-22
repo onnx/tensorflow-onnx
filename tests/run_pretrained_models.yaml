@@ -183,7 +183,7 @@ vgg-16:
   outputs:
     - output:0
 
-resnet50_v2_nchw:
+resnet50_v2_nchw: # NOTE: Tensorflow 1.9.0 fails
   skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
   model_type: saved_model
   url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NCHW.tar.gz

@@ -322,7 +322,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(matched_state, name="final_state")
 
         feed_dict = {"input_1:0": encoder_x_val, "input_2:0": decoder_x_val,
-                     "input_3:0": np.array([6, 5, 4, 3, 2, 1, 2, 3, 6])}
+                     "input_3:0": np.array([6, 5, 4, 3, 2, 1, 2, 3, 6], dtype=np.int32)}
         input_names_with_port = ["input_1:0", "input_2:0", "input_3:0"]
         output_names_with_port = ["output_0:0", "final_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
