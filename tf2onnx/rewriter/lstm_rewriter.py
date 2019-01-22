@@ -73,7 +73,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
         if not ft:
             return None
 
-        if not (len(ft.value) == 1 and self.g.get_dtype(b_e.output[0]) == self.g.get_dtype(ft_bias.output[0])):
+        if not (ft.value.tolist() == 1 and self.g.get_dtype(b_e.output[0]) == self.g.get_dtype(ft_bias.output[0])):
             return None
 
         return RnnWeights(w, b, ft)
@@ -113,8 +113,8 @@ class LSTMUnitRewriter(UnitRewriterBase):
             if len(slice_consumers) != 1:
                 continue
 
-            s_begin = s.inputs[1].get_tensor_value()
-            s_size = s.inputs[2].get_tensor_value()
+            s_begin = s.inputs[1].get_tensor_value(as_list=False)
+            s_size = s.inputs[2].get_tensor_value(as_list=False)
             hidden_size = s_size[1]
             if list(s_begin) == [0, 0]:
                 c_slice = s
@@ -151,7 +151,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
         hidden_size = int(bias_dim/4)
         b_r_icfo = np.reshape(b_r_icfo, (1, bias_dim))
         bias_gates = np.split(b_r_icfo, 4, axis=1)
-        ft_bias = np.add(bias_gates[2], ft_bias_scalar[0])
+        ft_bias = np.add(bias_gates[2], ft_bias_scalar)
         wb_bias_iofc = np.concatenate((bias_gates[0], bias_gates[3], ft_bias, bias_gates[1]), axis=1)
 
         # fill Rb with empty since in TF, we have only one bias.
@@ -240,7 +240,7 @@ class LSTMUnitRewriter(UnitRewriterBase):
 
         node = self.g.get_node_by_output(initializer_input_id)
         if node.is_const():
-            val = node.get_tensor_value()
+            val = node.get_tensor_value(as_list=False)
             initial_name = utils.make_name("Const")
             new_val = np.expand_dims(val, axis=0)
             const_node = self.g.make_const(initial_name, new_val)

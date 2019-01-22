@@ -418,7 +418,7 @@ class UnitRewriterBase(object):
         if node.type != "Fill":
             return None
 
-        fill_val = node.inputs[1].get_tensor_value()[0]
+        fill_val = node.inputs[1].get_tensor_value()
         fill_val_dtype = utils.ONNX_TO_NUMPY_DTYPE[self.g.get_dtype(node.input[1])]
 
         # this must be int64, since Concat's input data type must be consistent.

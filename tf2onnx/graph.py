@@ -166,43 +166,22 @@ class Node(object):
         val = [self.graph.get_dtype(n) for n in self._output]
         return val
 
-    def get_tensor_type(self):
-        """Get the onnx data type of a tensor."""
-        t = self.get_attr("value")
-        if t:
-            t = helper.get_attribute_value(t)
-            if t:
-                return utils.ONNX_TO_NUMPY_DTYPE[t.data_type]
-        return onnx_pb.TensorProto.FLOAT
-
-    def get_tensor_value(self):
-        """Get value for onnx tensor."""
+    def get_tensor_value(self, as_list=True):
+        """Get value for onnx tensor.
+        Args:
+            as_list: whether result numpy ndarray in list.
+        Returns:
+             If as_list=True, return the array as a (possibly nested) list.
+             Otherwise, return data of type np.ndarray.
+        """
         if not self.is_const():
             raise ValueError("get tensor value: {} must be Const".format(self.name))
 
         t = self.get_attr("value")
         if t:
-            t = helper.get_attribute_value(t)
-            if t.raw_data:
-                buf = np.frombuffer(t.raw_data,
-                                    dtype=utils.ONNX_TO_NUMPY_DTYPE[t.data_type]).reshape(t.dims)
-                return buf
-            if t.int32_data:
-                return t.int32_data
-            if t.int64_data:
-                return t.int64_data
-            if t.float_data:
-                return t.float_data
-        raise ValueError("tensor data_type not handled in get_tensor_value")
-
-    def get_tensor(self):
-        if not self.is_const():
-            if self.type == "Identity":
-                return self.inputs[0].get_tensor()
-            raise ValueError("get tensor: {} must be Const".format(self.name))
-        t = self.get_attr("value")
-        if t:
             t = numpy_helper.to_array(helper.get_attribute_value(t))
+            if as_list is True:
+                t = t.tolist()  # t might be scalar after tolist()
         return t
 
     def scalar_to_dim1(self):

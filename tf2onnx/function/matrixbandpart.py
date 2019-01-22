@@ -15,7 +15,7 @@ def matrixbandpart_op(ctx, node, name, args):
     # data-flow: first generate mask matrix and then use element-wise mul op
     input_rank = len(ctx.get_shape(node.input[0]))
     make_sure(input_rank == 2, error_msg="MatrixBandPart op: only rank 2 is supported")
-    bandpart = [node.inputs[ind].get_tensor_value()[0] for ind in [1, 2]]
+    bandpart = [node.inputs[ind].get_tensor_value() for ind in [1, 2]]
     utils.make_sure(bandpart in [[-1, 0], [0, -1]], "only support Lower/Upper triangular for now")
     # methods to generate mask matrix: if lower triangular is needed, then generate column one by one
     # otherwise row is generated one by one.

@@ -253,7 +253,7 @@ def arg_minmax_op(ctx, node, name, args):
     # output_type output = ArgMin(T input, Tidx dimension, @type Tidx, @type output_type)
     # tensor(int32) reduced = ArgMin(T data, @INT axis, @INT keepdims)
     axis_node = node.inputs[1]
-    axis = axis_node.get_tensor_value()[0]
+    axis = axis_node.get_tensor_value()
     if axis < 0:
         # ArgMax|ArgMin in onnx don't necessary support negative axis(not in doc explicitly)
         input_shape = ctx.get_shape(node.input[0])
@@ -269,9 +269,11 @@ def arg_minmax_op(ctx, node, name, args):
 def reduce_op(ctx, node, name, args):
     axes_node = node.inputs[1]
     input_rank = len(ctx.get_shape(node.input[0]))
-    axis = axes_node.get_tensor_value()
-    axis = [val + input_rank if val < 0 else val for val in axis]
-    node.set_attr("axes", axis)
+    axes = axes_node.get_tensor_value()
+    if np.isscalar(axes):
+        axes = [axes]
+    axes = [val + input_rank if val < 0 else val for val in axes]
+    node.set_attr("axes", axes)
     ctx.remove_input(node, node.input[1])
     keep_dims = node.get_attr("keep_dims")
     if keep_dims:
@@ -422,7 +424,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             if node.inputs[idx].is_const():
                 # if input is a constant, transpose that one
                 if not parent.data_format:
-                    val = parent.get_tensor_value()
+                    val = parent.get_tensor_value(as_list=False)
                     parent.set_tensor_value(val.transpose(NHWC_TO_NCHW))
             else:
                 # if input comes from a op, insert transpose op
@@ -442,7 +444,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
         if node.inputs[1].is_const():
             # kernel is const - transpose the const
             if not parent.data_format:
-                val = parent.get_tensor_value()
+                val = parent.get_tensor_value(as_list=False)
                 val = val.transpose(HWCN_TO_NCHW)
                 parent.set_tensor_value(val)
         else:
@@ -861,10 +863,9 @@ def _wrap_concat_with_cast(ctx, node):
 def concat_op(ctx, node, name, args):
     # old concat op has axis as input[0]
     axis_node = node.inputs[0]
-    axis = axis_node.get_tensor_value()
+    axis_val = axis_node.get_tensor_value()
     ctx.remove_input(node, node.input[0])
 
-    axis_val = axis[0]
     if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
         input_shape = ctx.get_shape(node.input[0])
         axis_val = len(input_shape) + axis_val
@@ -881,10 +882,9 @@ def concatv2_op(ctx, node, name, args):
     # T output = ConcatV2(T values, Tidx axis, @int N, @type Tidx)
     # T concat_result = Concat(T inputs, @INT axis)
     axis_node = node.inputs[-1]
-    axis = axis_node.get_tensor_value()
+    axis_val = axis_node.get_tensor_value()
     ctx.remove_input(node, node.input[-1])
 
-    axis_val = axis[0]
     if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
         input_shape = ctx.get_shape(node.input[0])
         axis_val = len(input_shape) + axis_val
@@ -926,7 +926,7 @@ def gatherv2_op(ctx, node, name, args):
     # for GatherV2 axis come as input
     axis = node.inputs[2].get_tensor_value()
     ctx.remove_input(node, node.input[2])
-    node.set_attr("axis", axis[0])
+    node.set_attr("axis", axis)
     return node
 
 
@@ -935,7 +935,7 @@ def split_op(ctx, node, name, args):
     # T outputs = Split(T input, @INT axis, @INTS split)
     split_dims = node.inputs[0].get_tensor_value()
     ctx.remove_input(node, node.input[0])
-    node.set_attr("axis", split_dims[0])
+    node.set_attr("axis", split_dims)
     return node
 
 
@@ -947,7 +947,7 @@ def splitv_op(ctx, node, name, args):
     ctx.remove_input(node, node.input[2])
     ctx.remove_input(node, node.input[1])
     node.set_attr("split", split)
-    node.set_attr("axis", split_dims[0])
+    node.set_attr("axis", split_dims)
     return node
 
 
@@ -965,7 +965,7 @@ def pad_op(ctx, node, name, args):
         raise ValueError(mode + " pad mode is not supported")
 
     if mode in [None, "constant"] and len(node.input) == 3:
-        const_val = node.inputs[2].get_tensor_value()[0]
+        const_val = node.inputs[2].get_tensor_value()
         node.set_attr("value", const_val)
         ctx.remove_input(node, node.input[2])
 
@@ -1000,7 +1000,7 @@ def expanddims_op(ctx, node, name, args):
     if dim_node.is_const():
         node.type = "Unsqueeze"
         input_rank = len(ctx.get_shape(node.input[0]))
-        dim = dim_node.get_tensor_value()[0]
+        dim = dim_node.get_tensor_value()
         dim = dim + input_rank + 1 if dim < 0 else dim
         node.set_attr("axes", [dim])
         ctx.remove_input(node, node.input[1])
@@ -1043,7 +1043,7 @@ def expanddims_op7(ctx, node, name, args):
     if dim_node.is_const():
         node.type = "Unsqueeze"
         input_rank = len(ctx.get_shape(node.input[0]))
-        dim = dim_node.get_tensor_value()[0]
+        dim = dim_node.get_tensor_value()
         dim = dim + input_rank + 1 if dim < 0 else dim
         node.set_attr("axes", [dim])
         ctx.remove_input(node, node.input[1])
@@ -1218,7 +1218,7 @@ def multinomial_op(ctx, node, name, args):
     else:
         output_dtype = onnx_pb.TensorProto.INT32
     node.set_attr("dtype", output_dtype)
-    node.set_attr("sample_size", sample_size[0])
+    node.set_attr("sample_size", sample_size)
     ctx.remove_input(node, node.input[1])
     return node
 
@@ -1232,7 +1232,7 @@ def topk_op(ctx, node, name, args):
     topk_output2 = node.output[1]
 
     new_topk_name = utils.make_name(topk_node_name)
-    k = node.inputs[1].get_tensor_value()[0]
+    k = node.inputs[1].get_tensor_value()
     new_topk_node = ctx.make_node("TopK", [node.input[0]],
                                   outputs=[topk_output1, utils.port_name(new_topk_name, 1)],
                                   name=new_topk_name, attr={"k": k})
@@ -1354,11 +1354,11 @@ def onehot_op(ctx, node, name, args):
     axis = node.get_attr("axis")
     # axis becomes axis for gather
     node.set_attr("axis", 0)
-    depth = node.inputs[1].get_tensor_value()[0]
-    on = node.inputs[2].get_tensor_value()[0]
-    off = node.inputs[3].get_tensor_value()[0]
-    dtype = node.inputs[2].get_tensor_type()
-    eye = np.eye(depth, dtype=dtype)
+    depth = node.inputs[1].get_tensor_value()
+    on_val = node.inputs[2].get_tensor_value(as_list=False)
+    on = on_val.tolist()
+    off = node.inputs[3].get_tensor_value()
+    eye = np.eye(depth, dtype=on_val.dtype)
     if on != 0:
         eye[eye == 1] = on
         eye[eye == 0] = off
@@ -1395,13 +1395,15 @@ def fused_batchnorm_op7(ctx, node, name, args):
     val_type = utils.ONNX_TO_NUMPY_DTYPE[ctx.get_dtype(node.input[1])]
 
     if mean_shape != scale_shape:
-        new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(), scale_shape), dtype=val_type)
+        new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(as_list=False), scale_shape),
+                                  dtype=val_type)
         new_mean_node_name = utils.make_name(node.name)
         ctx.make_const(new_mean_node_name, new_mean_value)
         node.input[3] = new_mean_node_name
 
     if var_shape != scale_shape:
-        new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(), scale_shape), dtype=val_type)
+        new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(as_list=False), scale_shape),
+                                 dtype=val_type)
         new_val_node_name = utils.make_name(node.name)
         ctx.make_const(new_val_node_name, new_var_value)
         node.input[4] = new_val_node_name
@@ -1512,10 +1514,10 @@ def fill_op(ctx, node, name, args):
     shape = ctx.get_shape(node.output[0])
     utils.make_sure(all(i >= 0 for i in shape), "shape attr should not be less than zero")
     value = node.inputs[1].get_tensor_value()
-    value_proto = numpy_helper.from_array(node.inputs[1].get_tensor())
+    value_proto = numpy_helper.from_array(node.inputs[1].get_tensor_value(as_list=False))
     dtype = value_proto.data_type
     # onnx spec says value MUST be float.
-    node.set_attr("value", float(value[0]))
+    node.set_attr("value", float(value))
     node.set_attr("shape", shape)
     node.set_attr("dtype", dtype)
     del node.input[:]
@@ -1705,10 +1707,10 @@ def reduce_logic_op(ctx, node, name, args):
     # T output = All(T x, list(int) reduce_indices, @bool keepdims)
     # T output = Any(T x, list(int) reduce_indices, @bool keepdims)
     reduce_dim = node.inputs[1].get_tensor_value()
-    if isinstance(reduce_dim, np.ndarray):
-        reduce_dim = reduce_dim.tolist()
-    else:
-        reduce_dim = [reduce_dim[0]]
+
+    # for Any, the reduce_indices can be scalar as observed.
+    if np.isscalar(reduce_dim):
+        reduce_dim = [reduce_dim]
 
     utils.make_sure(all(i >= 0 for i in reduce_dim), "negative reduce axis is not supported in onnx for now")
 
@@ -1949,7 +1951,7 @@ def rewrite_random_normal(g, ops):
     match_results = list(matcher.match_ops(ops))
     for match in match_results:
         output = match.get_op('output')
-        mean = output.inputs[1].get_tensor_value()[0]
+        mean = output.inputs[1].get_tensor_value()
         dtype = g.get_dtype(output.output[0])
         op_name = utils.make_name("RandomNormal")
         out_name = port_name(op_name)
@@ -2030,7 +2032,7 @@ def rewrite_flatten(g, ops):
             reshape_node = match.get_op('reshape')
             pack_node = match.get_op('pack')
             slice_node = match.get_op('slice')
-            need_rewrite = pack_node.inputs[1].is_const() and pack_node.inputs[1].get_tensor_value()[0] == -1
+            need_rewrite = pack_node.inputs[1].is_const() and pack_node.inputs[1].get_tensor_value() == -1
             if not need_rewrite:
                 continue
 
@@ -2045,9 +2047,9 @@ def rewrite_flatten(g, ops):
                 if not need_rewrite:
                     continue
 
-            begin = slice_node.inputs[1].get_tensor_value()
-            end = slice_node.inputs[2].get_tensor_value()
-            strides = slice_node.inputs[3].get_tensor_value()
+            begin = slice_node.inputs[1].get_tensor_value(as_list=False)
+            end = slice_node.inputs[2].get_tensor_value(as_list=False)
+            strides = slice_node.inputs[3].get_tensor_value(as_list=False)
             need_rewrite = np.array_equal(begin, [0]) and len(end) == 1 and \
                            np.array_equal(strides, [1]) and end[0] - begin[0] == len(input_shape) - 2
             if not need_rewrite:
@@ -2121,7 +2123,7 @@ def rewrite_constant_fold(g, ops):
                 for node in op.inputs:
                     if not node.is_const():
                         break
-                    inputs.append(node.get_tensor())
+                    inputs.append(node.get_tensor_value(as_list=False))
 
                 log.debug("op name %s, %s, %s", op.name, len(op.input), len(inputs))
                 if inputs and len(op.input) == len(inputs):

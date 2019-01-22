@@ -270,7 +270,7 @@ class GRUUnitRewriter(UnitRewriterBase):
 
         node = self.g.get_node_by_output(initializer_input_id)
         if node.is_const():
-            val = node.get_tensor_value()
+            val = node.get_tensor_value(as_list=False)
             initial_name = utils.make_name("Const")
             new_val = np.expand_dims(val, axis=0)
             const_node = self.g.make_const(initial_name, new_val)
