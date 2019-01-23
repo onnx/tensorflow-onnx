@@ -226,29 +226,38 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             check_shape=True, check_dtype=True)
 
     def test_maxpool(self):
-        for p in get_conv_getdata():
-            _, padding, x_shape, ksize, strides = p
+        for tf_shape in ["known", "unknown"]:
             tf.reset_default_graph()
-            x_val = make_xval(x_shape)
-            x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
-            mp = tf.nn.max_pool(x, ksize, strides, padding=padding)
-            _ = tf.identity(mp, name=_TFOUTPUT)
+            for p in get_conv_getdata():
+                _, padding, x_shape, ksize, strides = p
+                tf.reset_default_graph()
+                x_val = make_xval(x_shape)
+                if tf_shape == "known":
+                    x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+                else:
+                    x = tf.placeholder(tf.float32, shape=[None] * x_val.ndim, name=_TFINPUT)
+                mp = tf.nn.max_pool(x, ksize, strides, padding=padding)
+                _ = tf.identity(mp, name=_TFOUTPUT)
 
-            self.log.debug(str(p))
-            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+                self.log.debug(str(p))
+                self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @unittest.skipIf(*onnxruntime_check("AveragePool"))
     def test_avgpool(self):
-        for p in get_conv_getdata(kind=0):
-            _, padding, x_shape, ksize, strides = p
-            tf.reset_default_graph()
-            x_val = make_xval(x_shape)
-            x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
-            mp = tf.nn.avg_pool(x, ksize, strides, padding=padding)
-            _ = tf.identity(mp, name=_TFOUTPUT)
+        for tf_shape in ["known", "unknown"]:
+            for p in get_conv_getdata(kind=0):
+                _, padding, x_shape, ksize, strides = p
+                tf.reset_default_graph()
+                x_val = make_xval(x_shape)
+                if tf_shape == "known":
+                    x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+                else:
+                    x = tf.placeholder(tf.float32, shape=[None] * x_val.ndim, name=_TFINPUT)
+                mp = tf.nn.avg_pool(x, ksize, strides, padding=padding)
+                _ = tf.identity(mp, name=_TFOUTPUT)
 
-            self.log.debug(str(p))
-            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+                self.log.debug(str(p))
+                self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def _conv_test(self, x_val, w, strides=None, padding="VALID", dilations=None, rtol=1e-07):
         if strides is None:
@@ -315,6 +324,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
         self._conv_test(x_val, kernel_val, strides=strides, padding="VALID",
                         dilations=dilations, rtol=1e-05)
+
+    def test_conv2d_8(self):
+        for input_shape in [[10, 10], [5, 5]]:
+            tf.reset_default_graph()
+            x_val = make_xval((1, 1, *input_shape)).transpose(NCHW_TO_NHWC)
+            w = np.random.random_sample([3, 3, 1, 2]).astype(np.float32)
+            strides = [1, 2, 2, 1]
+
+            x = tf.placeholder(tf.float32, shape=[None] * 4, name=_TFINPUT)
+            kernel = tf.constant(w, dtype=tf.float32, name='k')
+            conv = tf.nn.conv2d(x, kernel, strides=strides, padding="SAME")
+            _ = tf.identity(conv, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-5)
 
     def test_conv2d_transpose(self):
         x_shape = [2, 6, 4, 3]
