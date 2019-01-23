@@ -23,6 +23,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         res = tf.cond(x[0] < y[0], lambda: x+y, lambda: x-y, name="test_cond")
         _ = tf.identity(res, name="output")
 
@@ -74,6 +76,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         res = tf.cond(x[0] < y[0], lambda: [x, x+y], lambda: [x, x-y], name="test")
         _ = tf.identity(res, name="output")
 
@@ -87,6 +91,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         res = tf.cond(x[0] < y[0], lambda: [x, x], lambda: [y, y], name="test_cond")
         _ = tf.identity(res, name="output")
 
@@ -100,6 +106,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         def cond_graph():
             def cond_graph1():
                 def cond_graph2():
@@ -169,6 +177,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         res = tf.case([(tf.reduce_all(x < 1), lambda: x+y), (tf.reduce_all(y > 0), lambda: tf.square(y))],
                       default=lambda: x, name="test_case")
         _ = tf.identity(res, name="output")
@@ -183,6 +193,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         res = tf.case([(tf.reduce_all(x < 1), lambda: x+y), (tf.reduce_all(y > 0), lambda: tf.square(y))],
                       default=lambda: x, name="test_case", exclusive=True)
         _ = tf.identity(res, name="output")
@@ -197,6 +209,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         res = tf.case([(tf.reduce_all(x < 1), lambda: x+y), (tf.reduce_all(y > 0), lambda: tf.square(y))])
         _ = tf.identity(res, name="output")
 
@@ -210,6 +224,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         res = tf.case(
             [(tf.reduce_all(x < 1), lambda: [x+y, x-y]), (tf.reduce_all(y > 0), lambda: [tf.abs(x), tf.square(y)])],
             default=lambda: [x, y], name="test_case"
@@ -226,6 +242,8 @@ class CondTests(Tf2OnnxBackendTestBase):
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = x + 1
+        y = y + 1
         def case_graph():
             return tf.case(
                 [(tf.reduce_all(x < 1), lambda: x+y), (tf.reduce_all(y > 0), lambda: tf.square(y))],
