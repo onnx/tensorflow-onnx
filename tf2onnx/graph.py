@@ -166,11 +166,6 @@ class Node(object):
         val = [self.graph.get_dtype(n) for n in self._output]
         return val
 
-    def input_shape_at(self, idx):
-        """Get shape of the idx-th input"""
-        inp = self.input[idx]
-        return self.graph.get_shape(inp)
-
     def get_tensor_type(self):
         """Get the onnx data type of a tensor."""
         t = self.get_attr("value")

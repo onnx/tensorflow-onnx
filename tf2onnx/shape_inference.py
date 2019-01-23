@@ -123,7 +123,7 @@ def infer_shape_for_node(g, node):
         axis_node = node.inputs[1]
         axis = axis_node.get_tensor_value()[0]
         keep_dims = node.get_attr_int("keep_dims")
-        shape = node.input_shape_at(0)
+        shape = g.get_shape(node.input[0])
         if axis < 0:
             axis += len(shape)
 

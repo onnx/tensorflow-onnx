@@ -2,53 +2,45 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.rewriter.loop_rewriter_base
+tf2onnx.rewriter.cond_rewriter
 """
 
 from __future__ import division
 from __future__ import print_function
 import logging
-from collections import defaultdict, OrderedDict
+import traceback
+from collections import OrderedDict
+from enum import Enum
 from tf2onnx import utils
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.cond_rewriter_base")
 
-# pylint: disable=missing-docstring, unused-argument
+# pylint: disable=missing-docstring,unused-argument,broad-except
 
-class CondGraphContext:
-    """context for each branch graph"""
+class BranchType(Enum):
+    """Type of branch"""
+    TRUE = 1
+    FALSE = 2
+    # TODO: sometimes, the branch depends on control inputs,
+    # so we just set it unknown
+    UNKNOWN = 3
+
+
+class CondBranchContext:
+    """Context for each branch graph"""
     def __init__(self):
-        self.output = set()
+        self.output = []
         self.nodes = set()
-
-    def empty(self):
-        return len(self.output) == 0 and len(self.nodes) == 0
-
-    def intersection(self, cond_body_graph):
-        intersect_node = [
-            n.name for n in self.nodes.intersection(cond_body_graph.nodes)
-        ]
-        intersect_output = self.output.intersection(cond_body_graph.output)
-        return list(intersect_node) + list(intersect_output)
-
-    def same_branch(self, graph_context):
-        if not self.output or not graph_context.output:
-            return False
-        return list(self.output)[0] == list(graph_context.output)[0]
-
-    def union(self, cond_body_graph):
-        self.output |= cond_body_graph.output
-        self.nodes |= cond_body_graph.nodes
 
 
 class CondContext:
-    def __init__(self, cond_scope, pred_input, true_graph_context,
-                 false_graph_context, switchs, merges):
+    def __init__(self, cond_scope, pred_input, true_branch_context,
+                 false_branch_context, switchs, merges):
         self.cond_scope = cond_scope # name scope for this tf.cond
         self.pred_input = pred_input # condition input
-        self.true_graph_context = true_graph_context
-        self.false_graph_context = false_graph_context
+        self.true_branch_context = true_branch_context
+        self.false_branch_context = false_branch_context
         self.switchs = set(switchs)
         self.merges = merges # list of merges in order
         self.if_node = None
@@ -80,21 +72,28 @@ class CondRewriter:
             return all_nodes
 
         for name_scope, merge_nodes in name_scope_merges.items():
-            pred_input, true_graph_context, false_graph_context, switchs = \
-                self._parse_cond(name_scope, merge_nodes)
-            cond_context = CondContext(
-                name_scope,
-                pred_input,
-                true_graph_context,
-                false_graph_context,
-                switchs,
-                merge_nodes
-            )
+            cond_context = None
+            try:
+                pred_input, true_branch_context, false_branch_context, switchs = \
+                    self._parse_cond(name_scope, merge_nodes)
+                cond_context = CondContext(
+                    name_scope,
+                    pred_input,
+                    true_branch_context,
+                    false_branch_context,
+                    switchs,
+                    merge_nodes
+                )
+            except Exception as ex:
+                tb = traceback.format_exc()
+                log.warning("tf.cond rewrite failed, due to exception: %s, details:%s", ex, tb)
+                continue
+
             nodes_to_add, nodes_to_remove = self._cut_off_connection(cond_context)
             self._set_branch_graph(cond_context)
             nodes_to_remove.extend(
-                list(cond_context.true_graph_context.nodes) + \
-                list(cond_context.false_graph_context.nodes)
+                list(cond_context.true_branch_context.nodes) + \
+                list(cond_context.false_branch_context.nodes)
             )
             for n in nodes_to_remove:
                 if n in all_nodes:
@@ -105,8 +104,43 @@ class CondRewriter:
 
         return self.g.get_nodes()
 
+    def _branch_type(self, branch_output, nodes):
+        """Infer the branch type (true, false or unknown)"""
+        branch = BranchType.UNKNOWN
+        # the branch is empty
+        if not nodes:
+            input_node = self.g.get_node_by_output(branch_output)
+            if self._is_switch(input_node):
+                if branch_output == input_node.output[0]:
+                    branch = BranchType.FALSE
+                else:
+                    branch = BranchType.TRUE
+            return branch
+        for node in nodes:
+            for inp in node.input:
+                input_node = self.g.get_node_by_output(inp)
+                if self._is_switch(input_node):
+                    if inp == input_node.output[0]:
+                        if branch == BranchType.TRUE:
+                            raise ValueError(
+                                "true and false graph intersect at {}".format(node.name)
+                            )
+                        branch = BranchType.FALSE
+                    else:
+                        if branch == BranchType.FALSE:
+                            raise ValueError(
+                                "true and false graph intersect at {}".format(node.name)
+                            )
+                        branch = BranchType.TRUE
+        if branch == BranchType.UNKNOWN:
+            log.debug(
+                "branch only contains const node: [%s]",
+                ",".join(n for n in nodes)
+            )
+        return branch
+
     def _cut_off_connection(self, cond_context):
-        """cut off switchs and merges"""
+        """Cut off switchs and merges, all changes are based on the origin graph"""
         nodes_to_remove = list(cond_context.switchs) + list(cond_context.merges)
         nodes_to_add = []
         log.debug("cut off switch connection")
@@ -118,14 +152,14 @@ class CondRewriter:
                 outputs=[switch.output[0]],
                 op_name_scope=cond_context.cond_scope
             )
-            cond_context.false_graph_context.nodes.add(false_switch_id)
+            cond_context.false_branch_context.nodes.add(false_switch_id)
             true_switch_id = self.g.make_node(
                 "Identity",
                 [switch.input[0]],
                 outputs=[switch.output[1]],
                 op_name_scope=cond_context.cond_scope
             )
-            cond_context.true_graph_context.nodes.add(true_switch_id)
+            cond_context.true_branch_context.nodes.add(true_switch_id)
             nodes_to_add.extend([false_switch_id, true_switch_id])
         # replace merge with if node
         log.debug("cut off merge connection")
@@ -139,150 +173,112 @@ class CondRewriter:
         nodes_to_add.append(cond_context.if_node)
         return nodes_to_add, nodes_to_remove
 
-    def _is_switch(self, node):
-        return node.type == "Switch"
-
     def _is_merge(self, node):
         return node.type == "Merge"
 
-    def _pair_output_with_merge(self, true_output, false_output, merges):
-        """pair output according to the order of merges"""
-        log.debug(
-            "pair ture and false output according to the order of merge"
-        )
-        log.debug("true outuput: %s", true_output)
-        log.debug("false output: %s", false_output)
-        log.debug("merges: %s", [m.input for m in merges])
-        paired_false_output = []
-        paired_true_output = []
-        for merge in merges:
-            f_input = None
-            if merge.input[0] in true_output:
-                paired_true_output.append(merge.input[0])
-                f_input = merge.input[1]
-            elif merge.input[1] in true_output:
-                paired_true_output.append(merge.input[1])
-                f_input = merge.input[0]
-            else:
-                raise ValueError(
-                    "No output info in true branch outputs to merge node: {}".format(merge.name)
-                )
-            if f_input in false_output:
-                paired_false_output.append(f_input)
-            else:
-                raise ValueError(
-                    "No output info in false branch outputs to merge node: {}".format(merge.name)
-                )
-        return paired_true_output, paired_false_output, merges
+    def _is_switch(self, node):
+        return node.type == "Switch"
 
     def _parse_cond(self, name_scope, merge_nodes):
-        """parse condition subgraph for these merge nodes"""
-        true_graph_context, false_graph_context, switchs = self._trace_back(name_scope, merge_nodes)
+        """Parse condition subgraph for these merge nodes"""
+        true_branch_context, false_branch_context, switchs = self._trace_back(name_scope, merge_nodes)
         # find pred output from any switch
         pred_input = list(switchs)[0].input[1]
-        return pred_input, true_graph_context, false_graph_context, switchs
+        return pred_input, true_branch_context, false_branch_context, switchs
 
     def _trace_back(self, name_scope, merge_nodes):
         """
-        trace back to the switch from merge nodes and collect the nodes
+        Trace back to the switch from merge nodes and collect the nodes
         in the true/false branchs of tf.cond respectively, some comments:
         1. According to tf.cond implementation, We make the hypothesis
            that one tf.cond cannot comprise successive Switch nodes.
-        2. This implement doesn't depend on control inputs. For a price,
+        2. Thank to construct_graph_from_nodes, in which Identity node
+           will be added to each output of subgraph, we needn't deal with the
+           branch with only one const node specially.
+
+        TODO: This implement doesn't depend on control inputs. For a price,
            in the case that true and false branch both only contain a
            const node, we will throw a Exception.
-        3. Thank to construct_graph_from_nodes, in which Identity node
-           will add to each output of subgraph, we needn't deal with the
-           branch with only one const node specially.
         """
         log.debug("trace back from [%s]", ",".join(n.name for n in merge_nodes))
-        stack = [m for m in merge_nodes]
-        downstream_graph = defaultdict(CondGraphContext)
-        non_input_node_downstream_graph = []
-        true_graph_context = CondGraphContext()
-        false_graph_context = CondGraphContext()
-        # take down output info
+        true_branch_context = CondBranchContext()
+        false_branch_context = CondBranchContext()
+        total_switchs = set()
         for merge_node in merge_nodes:
-            for i in merge_node.input:
-                input_node = self.g.get_node_by_output(i)
-                downstream_graph[input_node].output.add(i)
-                # if switch connects to merge directly
-                if self._is_switch(input_node):
-                    if i == input_node.output[0]:
-                        false_graph_context.output.add(i)
-                    else:
-                        true_graph_context.output.add(i)
+            true_branch_nodes, true_output, false_branch_nodes, false_output, switchs = \
+                self._trace_back_from_one_merge(merge_node)
+            true_branch_context.nodes |= set(true_branch_nodes)
+            true_branch_context.output.append(true_output)
+            false_branch_context.nodes |= set(false_branch_nodes)
+            false_branch_context.output.append(false_output)
+            total_switchs |= switchs
+        log.debug("=================true body graph===============")
+        log.debug(true_branch_context.nodes)
+        log.debug(true_branch_context.output)
+        log.debug("=================false body graph===============")
+        log.debug(false_branch_context.nodes)
+        log.debug(false_branch_context.output)
+        return true_branch_context, false_branch_context, total_switchs
+
+    def _trace_back_from_one_merge(self, merge_node):
+        """Parse the ingredients (nodes and outputs)of true and false branch"""
+        log.debug("trace back from %s", merge_node.name)
+        true_branch_nodes = None
+        true_output = None
+        false_branch_nodes = None
+        false_output = None
+        merge_input_1 = merge_node.input[0]
+        merge_input_2 = merge_node.input[1]
         switchs = set()
-        while stack:
-            node = stack.pop()
-            inputs = node.input + node.get_implicit_inputs()
-            if not inputs:
-                non_input_node_downstream_graph.append(
-                    downstream_graph[node]
-                )
-            for inp in inputs:
-                input_node = self.g.get_node_by_output(inp)
-                if self._is_merge(input_node):
-                    raise ValueError("nest merge at {} in {}".format(input_node.name, name_scope))
-                # stop at the first switch
-                if self._is_switch(input_node):
-                    log.debug("encounter the first switch: %s", input_node.name)
-                    # false branch
-                    if input_node.output[0] == inp:
-                        false_graph_context.union(downstream_graph[node])
-                    # true branch
-                    else:
-                        true_graph_context.union(downstream_graph[node])
-                    switchs.add(input_node)
-                    # self._workaround_for_placeholder(input_node.input[0])
-                else:
-                    downstream_graph[input_node].nodes.add(input_node)
-                    downstream_graph[input_node].union(downstream_graph[node])
-                    stack.append(input_node)
-        if true_graph_context.empty() and false_graph_context.empty():
+        def stop_at_switch(node):
+            if self._is_switch(node):
+                switchs.add(node)
+                return False
+            return True
+        branch_nodes_1 = self.g.extract_sub_graph_nodes(
+            [merge_input_1],
+            stop_at_switch
+        )
+        branch_nodes_2 = self.g.extract_sub_graph_nodes(
+            [merge_input_2],
+            stop_at_switch
+        )
+        branch_type_1 = self._branch_type(merge_input_1, branch_nodes_1)
+        branch_type_2 = self._branch_type(merge_input_2, branch_nodes_2)
+        # handle the case one branch only contains a const node
+        if branch_type_1 == BranchType.UNKNOWN and branch_type_2 == BranchType.UNKNOWN:
             raise ValueError("Cannot handle the case both true and false branchs only \
                              contain const nodes for now.")
-        for graph_context in non_input_node_downstream_graph:
-            if graph_context.same_branch(true_graph_context) or \
-                    true_graph_context.empty():
-                true_graph_context.union(graph_context)
-            else:
-                false_graph_context.union(graph_context)
-        # one node cannot belong to both true and false graph
-        intersection = true_graph_context.intersection(false_graph_context)
-        if intersection:
-            raise ValueError("true graph and false graph intersect at [{}]".format(
-                ",".join(intersection)
-            ))
-        log.debug("=================false body graph===============")
-        log.debug(false_graph_context.nodes)
-        log.debug(false_graph_context.output)
-        log.debug("=================true body graph===============")
-        log.debug(true_graph_context.nodes)
-        log.debug(true_graph_context.output)
-        return true_graph_context, false_graph_context, switchs
+        if branch_type_1 == branch_type_2:
+            raise ValueError("true graph and false graph are intersected")
+        if branch_type_1 == BranchType.TRUE:
+            true_branch_nodes = branch_nodes_1
+            true_output = merge_input_1
+            false_branch_nodes = branch_nodes_2
+            false_output = merge_input_2
+        else:
+            true_branch_nodes = branch_nodes_2
+            true_output = merge_input_2
+            false_branch_nodes = branch_nodes_1
+            false_output = merge_input_1
+        return true_branch_nodes, true_output, false_branch_nodes, false_output, switchs
 
     def _set_branch_graph(self, cond_context):
-        """set body graph for each branch"""
+        """Set body graph for each branch"""
         log.debug("set graph for if branchs")
-        paired_true_output, paired_false_output, _ = self._pair_output_with_merge(
-            cond_context.true_graph_context.output,
-            cond_context.false_graph_context.output,
-            cond_context.merges
-        )
         true_graph = utils.construct_graph_from_nodes(
             self.g,
-            list(cond_context.true_graph_context.nodes),
-            paired_true_output,
-            [self.g.get_shape(out) for out in paired_true_output],
-            [self.g.get_dtype(out) for out in paired_true_output]
+            list(cond_context.true_branch_context.nodes),
+            cond_context.true_branch_context.output,
+            [self.g.get_shape(out) for out in cond_context.true_branch_context.output],
+            [self.g.get_dtype(out) for out in cond_context.true_branch_context.output]
         )
         false_graph = utils.construct_graph_from_nodes(
             self.g,
-            list(cond_context.false_graph_context.nodes),
-            paired_false_output,
-            [self.g.get_shape(out) for out in paired_false_output],
-            [self.g.get_dtype(out) for out in paired_false_output]
+            list(cond_context.false_branch_context.nodes),
+            cond_context.false_branch_context.output,
+            [self.g.get_shape(out) for out in cond_context.false_branch_context.output],
+            [self.g.get_dtype(out) for out in cond_context.false_branch_context.output]
         )
         cond_context.if_node.set_body_graph_as_attr("then_branch", true_graph)
         cond_context.if_node.set_body_graph_as_attr("else_branch", false_graph)
