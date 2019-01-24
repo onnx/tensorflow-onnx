@@ -43,7 +43,6 @@ class CondContext:
         self.false_branch_context = false_branch_context
         self.switchs = set(switchs)
         self.merges = merges # list of merges in order
-        self.if_node = None
 
 
 class CondRewriter:
@@ -90,7 +89,8 @@ class CondRewriter:
                 continue
 
             nodes_to_add, nodes_to_remove = self._cut_off_connection(cond_context)
-            self._set_branch_graph(cond_context)
+            nodes_to_add.append(self._create_if_node(cond_context))
+            # remove nodes in If branchs explicitly
             nodes_to_remove.extend(
                 list(cond_context.true_branch_context.nodes) + \
                 list(cond_context.false_branch_context.nodes)
@@ -104,44 +104,35 @@ class CondRewriter:
 
         return self.g.get_nodes()
 
-    def _branch_type(self, branch_output, nodes):
-        """Infer the branch type (true, false or unknown)"""
-        branch = BranchType.UNKNOWN
-        # the branch is empty
-        if not nodes:
-            input_node = self.g.get_node_by_output(branch_output)
-            if self._is_switch(input_node):
-                if branch_output == input_node.output[0]:
-                    branch = BranchType.FALSE
-                else:
-                    branch = BranchType.TRUE
-            return branch
-        for node in nodes:
-            for inp in node.input:
-                input_node = self.g.get_node_by_output(inp)
-                if self._is_switch(input_node):
-                    if inp == input_node.output[0]:
-                        if branch == BranchType.TRUE:
-                            raise ValueError(
-                                "true and false graph intersect at {}".format(node.name)
-                            )
-                        branch = BranchType.FALSE
-                    else:
-                        if branch == BranchType.FALSE:
-                            raise ValueError(
-                                "true and false graph intersect at {}".format(node.name)
-                            )
-                        branch = BranchType.TRUE
-        if branch == BranchType.UNKNOWN:
-            log.debug(
-                "branch only contains const node: [%s]",
-                ",".join(n for n in nodes)
-            )
-        return branch
+    def _create_if_node(self, cond_context):
+        if_node = self.g.make_node(
+            "If",
+            [cond_context.pred_input],
+            op_name_scope=cond_context.cond_scope,
+            outputs=[m.output[0] for m in cond_context.merges],
+            skip_conversion=False
+        )
+        log.debug("set graph for if branchs")
+        true_graph = utils.construct_graph_from_nodes(
+            self.g,
+            list(cond_context.true_branch_context.nodes),
+            cond_context.true_branch_context.output,
+            [self.g.get_shape(out) for out in cond_context.true_branch_context.output],
+            [self.g.get_dtype(out) for out in cond_context.true_branch_context.output]
+        )
+        false_graph = utils.construct_graph_from_nodes(
+            self.g,
+            list(cond_context.false_branch_context.nodes),
+            cond_context.false_branch_context.output,
+            [self.g.get_shape(out) for out in cond_context.false_branch_context.output],
+            [self.g.get_dtype(out) for out in cond_context.false_branch_context.output]
+        )
+        if_node.set_body_graph_as_attr("then_branch", true_graph)
+        if_node.set_body_graph_as_attr("else_branch", false_graph)
+        return if_node
 
     def _cut_off_connection(self, cond_context):
         """Cut off switchs and merges, all changes are based on the origin graph"""
-        nodes_to_remove = list(cond_context.switchs) + list(cond_context.merges)
         nodes_to_add = []
         log.debug("cut off switch connection")
         # replace switch with identity node
@@ -163,14 +154,7 @@ class CondRewriter:
             nodes_to_add.extend([false_switch_id, true_switch_id])
         # replace merge with if node
         log.debug("cut off merge connection")
-        cond_context.if_node = self.g.make_node(
-            "If",
-            [cond_context.pred_input],
-            op_name_scope=cond_context.cond_scope,
-            outputs=[m.output[0] for m in cond_context.merges],
-            skip_conversion=False
-        )
-        nodes_to_add.append(cond_context.if_node)
+        nodes_to_remove = list(cond_context.switchs) + list(cond_context.merges)
         return nodes_to_add, nodes_to_remove
 
     def _is_merge(self, node):
@@ -212,12 +196,6 @@ class CondRewriter:
             false_branch_context.nodes |= set(false_branch_nodes)
             false_branch_context.output.append(false_output)
             total_switchs |= switchs
-        log.debug("=================true body graph===============")
-        log.debug(true_branch_context.nodes)
-        log.debug(true_branch_context.output)
-        log.debug("=================false body graph===============")
-        log.debug(false_branch_context.nodes)
-        log.debug(false_branch_context.output)
         return true_branch_context, false_branch_context, total_switchs
 
     def _trace_back_from_one_merge(self, merge_node):
@@ -245,13 +223,13 @@ class CondRewriter:
         )
         branch_type_1 = self._branch_type(merge_input_1, branch_nodes_1)
         branch_type_2 = self._branch_type(merge_input_2, branch_nodes_2)
-        # handle the case one branch only contains a const node
+        # all possible branch types: UU, UT, UF, TU, TF, FU, FT
         if branch_type_1 == BranchType.UNKNOWN and branch_type_2 == BranchType.UNKNOWN:
             raise ValueError("Cannot handle the case both true and false branchs only \
                              contain const nodes for now.")
         if branch_type_1 == branch_type_2:
             raise ValueError("true graph and false graph are intersected")
-        if branch_type_1 == BranchType.TRUE:
+        if branch_type_1 == BranchType.TRUE or branch_type_2 == BranchType.FALSE:
             true_branch_nodes = branch_nodes_1
             true_output = merge_input_1
             false_branch_nodes = branch_nodes_2
@@ -263,25 +241,36 @@ class CondRewriter:
             false_output = merge_input_1
         return true_branch_nodes, true_output, false_branch_nodes, false_output, switchs
 
-    def _set_branch_graph(self, cond_context):
-        """Set body graph for each branch"""
-        log.debug("set graph for if branchs")
-        true_graph = utils.construct_graph_from_nodes(
-            self.g,
-            list(cond_context.true_branch_context.nodes),
-            cond_context.true_branch_context.output,
-            [self.g.get_shape(out) for out in cond_context.true_branch_context.output],
-            [self.g.get_dtype(out) for out in cond_context.true_branch_context.output]
-        )
-        false_graph = utils.construct_graph_from_nodes(
-            self.g,
-            list(cond_context.false_branch_context.nodes),
-            cond_context.false_branch_context.output,
-            [self.g.get_shape(out) for out in cond_context.false_branch_context.output],
-            [self.g.get_dtype(out) for out in cond_context.false_branch_context.output]
-        )
-        cond_context.if_node.set_body_graph_as_attr("then_branch", true_graph)
-        cond_context.if_node.set_body_graph_as_attr("else_branch", false_graph)
+    def _branch_type(self, branch_output, nodes):
+        """Infer the branch type (true, false or unknown)"""
+        branch = BranchType.UNKNOWN
+        # the branch is empty
+        if not nodes:
+            input_node = self.g.get_node_by_output(branch_output)
+            if self._is_switch(input_node):
+                if branch_output == input_node.output[0]:
+                    branch = BranchType.FALSE
+                else:
+                    branch = BranchType.TRUE
+            return branch
+        for node in nodes:
+            for inp in node.input:
+                input_node = self.g.get_node_by_output(inp)
+                if self._is_switch(input_node):
+                    if inp == input_node.output[0]:
+                        if branch == BranchType.TRUE:
+                            raise ValueError("true and false graph intersect at {}".format(node.name))
+                        branch = BranchType.FALSE
+                    else:
+                        if branch == BranchType.FALSE:
+                            raise ValueError("true and false graph intersect at {}".format(node.name))
+                        branch = BranchType.TRUE
+        if branch == BranchType.UNKNOWN:
+            log.debug(
+                "branch only contains const node: [%s]",
+                ",".join(n for n in nodes)
+            )
+        return branch
 
 
 def rewrite_cond(g, ops):
