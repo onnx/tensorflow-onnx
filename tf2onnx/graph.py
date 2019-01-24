@@ -169,10 +169,14 @@ class Node(object):
     def get_tensor_value(self, as_list=True):
         """Get value for onnx tensor.
         Args:
-            as_list: whether result numpy ndarray in list.
+            as_list: whether return numpy ndarray in list.
         Returns:
-             If as_list=True, return the array as a (possibly nested) list.
-             Otherwise, return data of type np.ndarray.
+            If as_list=True, return the array as a (possibly nested) list.
+            Otherwise, return data of type np.ndarray.
+
+            If a tensor is a scalar having value 1,
+                when as_list=False, return np.array(1), type is <class 'numpy.ndarray'>
+                when as_list=True, return 1, type is <class 'int'>.
         """
         if not self.is_const():
             raise ValueError("get tensor value: {} must be Const".format(self.name))
