@@ -23,6 +23,7 @@ import six
 import tensorflow as tf
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
+from tensorflow.contrib.rnn import GRUBlockCell  # pylint: disable=unused-import
 import yaml
 import PIL.Image
 
@@ -30,7 +31,6 @@ import tf2onnx
 from tf2onnx import utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph
-from tensorflow.contrib.rnn import GRUBlockCell  # pylint: disable=unused-import
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 

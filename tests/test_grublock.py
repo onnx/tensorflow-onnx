@@ -238,6 +238,50 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "cell_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.01)
 
+    def test_dynamic_gru_output_consumed_only(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        cell1 = rnn.GRUBlockCell(
+            units)
+
+        outputs, _ = tf.nn.dynamic_rnn(
+            cell1,
+            x,
+            dtype=tf.float32)
+
+        _ = tf.identity(outputs, name="output")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.0001)
+
+    def test_dynamic_gru_state_consumed_only(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        cell1 = rnn.GRUBlockCell(
+            units)
+
+        _, cell_state = tf.nn.dynamic_rnn(
+            cell1,
+            x,
+            dtype=tf.float32)
+
+        _ = tf.identity(cell_state, name="cell_state")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["cell_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.0001)
+
     def test_dynamic_bigru(self):
         units = 5
         batch_size = 1
@@ -297,6 +341,35 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
 
+    def test_dynamic_bigru_state_consumed_only(self):
+        units = 5
+        batch_size = 1
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+
+        gru_list = []
+        if True:
+            # bigru, no scope
+            cell1 = rnn.GRUBlockCell(
+                units)
+            cell2 = rnn.GRUBlockCell(
+                units)
+            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+                cell1,
+                cell2,
+                x,
+                dtype=tf.float32)
+            gru_list.append(cell_state)
+
+        _ = tf.identity(cell_state, name="cell_state")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["cell_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
+
     def test_dynamic_bidirectional_but_one_gru(self):
         units = 5
         batch_size = 1
@@ -350,6 +423,33 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
+
+    def test_dynamic_bidirectional_but_one_gru_and_state_consumed_only(self):
+        units = 5
+        batch_size = 1
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+
+        gru_list = []
+        if True:
+            # bigru, no scope
+            cell = rnn.GRUBlockCell(
+                units)
+            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+                cell,
+                cell,
+                x,
+                dtype=tf.float32)
+            gru_list.append(cell_state)
+
+        _ = tf.identity(cell_state, name="cell_state")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["cell_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
 
 
