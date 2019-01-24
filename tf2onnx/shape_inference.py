@@ -95,7 +95,7 @@ def infer_shape_for_node(g, node):
         if not axis_node.is_const():
             return False
 
-        axis = axis_node.get_tensor_value()[0]
+        axis = axis_node.get_tensor_value()
         val = 0
         data_inputs = node.input[:-1]
         for i in data_inputs:
@@ -121,9 +121,9 @@ def infer_shape_for_node(g, node):
 
     if node.type in ["All", "Any", "Min"]:
         axis_node = node.inputs[1]
-        axis = axis_node.get_tensor_value()[0]
+        axis = axis_node.get_tensor_value()
         keep_dims = node.get_attr_int("keep_dims")
-        shape = node.input_shape_at(0)
+        shape = g.get_shape(node.input[0])
         if axis < 0:
             axis += len(shape)
 

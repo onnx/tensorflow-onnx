@@ -197,7 +197,7 @@ def get_weights_from_const_node(g, node):
         temp = temp.inputs[0]
 
     if temp and temp.type == 'Const':
-        val = temp.get_tensor_value()
+        val = temp.get_tensor_value(as_list=False)
         dtype = utils.ONNX_TO_NUMPY_DTYPE[g.get_dtype(temp.output[0])]
         log.debug("found weights %s", temp.name)
     else:
@@ -214,7 +214,7 @@ def check_is_timemajor_transpose(node):
 
     perm_node = node.inputs[1]
     if perm_node.is_const():
-        return list(node.inputs[1].get_tensor_value()) == [1, 0, 2]
+        return list(node.inputs[1].get_tensor_value(as_list=False)) == [1, 0, 2]
     if check_is_unfolded_perm(perm_node):
         return True
     raise ValueError("Not supported yet")
@@ -226,7 +226,7 @@ def check_is_unfolded_perm(perm_node):
     # but it should be calculated when constant-fold. TODO: investigate why not constant fold.
     # current workaround: use np to calculate the val explicitly.
     if perm_node.type == "ConcatV2" and len(perm_node.inputs) == 3:
-        const_node_val = perm_node.inputs[0].get_tensor_value()
+        const_node_val = perm_node.inputs[0].get_tensor_value(as_list=False)
         if list(const_node_val) != [1, 0]:
             return False
 
@@ -234,7 +234,7 @@ def check_is_unfolded_perm(perm_node):
         range_start = range_node.inputs[0].get_tensor_value()
         range_limit = range_node.inputs[1].get_tensor_value()
         range_delta = range_node.inputs[2].get_tensor_value()
-        if range_node.type == "Range" and range_start == [2] and range_limit == [3] and range_delta == [1]:
+        if range_node.type == "Range" and range_start == 2 and range_limit == 3 and range_delta == 1:
             # we just hard code this now
             # todo: refine this
             return True

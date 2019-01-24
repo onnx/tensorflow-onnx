@@ -114,7 +114,7 @@ def rewrite_constant_fold(g, ops):
             inputs = []
             for node in op.inputs:
                 if node and node.is_const():
-                    inputs.append(node.get_tensor())
+                    inputs.append(node.get_tensor_value(as_list=False))
 
             if inputs and len(op.input) == len(inputs):
                 func = func_map.get(op.type)

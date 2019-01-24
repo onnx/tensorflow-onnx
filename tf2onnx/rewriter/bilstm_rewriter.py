@@ -147,7 +147,7 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
 def check_const(g, input_id):
     node = g.get_node_by_output(input_id)
     if node and node.is_const():
-        return (True, node.get_tensor_value())
+        return (True, node.get_tensor_value(as_list=False))
     return (None, None)
 
 
