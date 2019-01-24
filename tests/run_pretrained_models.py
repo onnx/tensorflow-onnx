@@ -300,7 +300,8 @@ class Test(object):
                     v = inputs[k]
                     inputs[k] = v.astype(dtype)
             if self.force_input_shape:
-                shape_override = self.input_names
+                for k, v in inputs.items():
+                    shape_override[k] = list(v.shape)
 
             # run the model with tensorflow
             if self.skip_tensorflow:

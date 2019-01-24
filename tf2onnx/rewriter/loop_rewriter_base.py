@@ -443,45 +443,10 @@ class LoopRewriterBase(object):
     @staticmethod
     def construct_graph_from_nodes(parent_g, nodes, outputs):
         log.debug("construct_graph_from_nodes")
-        g = parent_g.create_new_graph_with_same_config()
-        g.parent_graph = parent_g
-        nodes = set(nodes)
-        all_inputs_and_outputs = set()
-        ops = []
-        for op in nodes:
-            all_inputs_and_outputs |= set(op.input)
-            # we assume original graph won't have nested graphs here
-            all_inputs_and_outputs |= set(op.get_implicit_inputs(False))
-            all_inputs_and_outputs |= set(op.output)
-
-            new_node = g.make_node(op.type, op.input, outputs=op.output, attr=op.attr, name=op.name,
-                                   skip_conversion=op._skip_conversion)
-            body_graphs = op.graph.contained_graphs.pop(op.name, None)
-            if body_graphs:
-                new_node.set_body_graph_as_attr(op.name, body_graphs)
-            ops.append(new_node)
-
-        for i in all_inputs_and_outputs:
-            if i not in g._output_shapes:
-                g._output_shapes[i] = parent_g._output_shapes[i]
-            if i not in g._dtypes:
-                g._dtypes[i] = parent_g._dtypes[i]
-
-        g.set_nodes(ops)
-
-        # handle cell graph: insert identity node, since sometimes we need output same output_id
-        # as state_output and scan_out, but ONNX don't allow the same output_id to appear more
-        # than once as output node.
-        cell_body_nodes = []
-        new_output_names = []
-        for out_tensor_value_info in outputs:
-            node = g.make_node("Identity", inputs=[out_tensor_value_info.id], op_name_scope="sub_graph_ending_node",
-                               shapes=[out_tensor_value_info.shape], dtypes=[out_tensor_value_info.dtype])
-            new_output_names.append(node.output[0])
-            cell_body_nodes.append(node)
-
-        cell_nodes = g.get_nodes()
-        cell_nodes.extend(cell_body_nodes)
-        g.set_nodes(cell_nodes)
-        g.outputs = new_output_names
-        return g
+        return utils.construct_graph_from_nodes(
+            parent_g,
+            nodes,
+            [out.id for out in outputs],
+            [out.shape for out in outputs],
+            [out.dtype for out in outputs]
+        )

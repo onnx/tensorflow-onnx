@@ -279,7 +279,7 @@ class Node(object):
                 output_available_in_cur_graph.add(n)
 
         outer_scope_node_input_ids = all_node_inputs - output_available_in_cur_graph
-        return outer_scope_node_input_ids
+        return list(outer_scope_node_input_ids)
 
 
 class Graph(object):
@@ -929,7 +929,7 @@ class Graph(object):
             a set of nodes
         """
         res_set = set()
-        if not dest_node:
+        if not dest_node or (input_checker and input_checker(dest_node) is False):
             return res_set
 
         processing_set = set([dest_node])
@@ -982,6 +982,11 @@ class Graph(object):
         """Delete nodes not in subgraph ending with output_names."""
         if outputs_name:
             related_nodes = self.extract_sub_graph_nodes(outputs_name)
+            for node in related_nodes:
+                attr_body_graphs = node.get_body_graphs()
+                if attr_body_graphs:
+                    for _, body_graph in attr_body_graphs.items():
+                        body_graph.delete_unused_nodes(body_graph.outputs)
             self.set_nodes(related_nodes)
         else:
             print("WARINING: outputs not specified, delete_unused_nodes not taking effect.")

@@ -7,6 +7,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 __all__ = [
+    "cond_rewriter",
     "custom_rnn_rewriter",
     "gru_rewriter",
     "loop_rewriter",
