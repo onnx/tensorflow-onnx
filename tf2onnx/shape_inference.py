@@ -126,12 +126,12 @@ def infer_shape_for_node(g, node):
             axis = [axis]
         keep_dims = node.get_attr_int("keep_dims")
         shape = g.get_shape(node.input[0])
-        for i in range(len(axis)):
+        for i, _ in enumerate(axis):
             if axis[i] < 0:
                 axis[i] += len(shape)
 
         new_shape = []
-        for i in range(len(shape)):
+        for i, _ in enumerate(shape):
             if i in axis:
                 if keep_dims:
                     new_shape.append(1)
