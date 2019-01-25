@@ -122,16 +122,21 @@ def infer_shape_for_node(g, node):
     if node.type in ["All", "Any", "Min"]:
         axis_node = node.inputs[1]
         axis = axis_node.get_tensor_value()
+        if not isinstance(axis, list):
+            axis = [axis]
         keep_dims = node.get_attr_int("keep_dims")
         shape = g.get_shape(node.input[0])
-        if axis < 0:
-            axis += len(shape)
+        for i in range(len(axis)):
+            if axis[i] < 0:
+                axis[i] += len(shape)
 
-        new_shape = shape[:axis]
-        if keep_dims:
-            new_shape += [1]
-        if axis < len(shape) - 1:
-            new_shape += shape[axis+1:]
+        new_shape = []
+        for i in range(len(shape)):
+            if i in axis:
+                if keep_dims:
+                    new_shape.append(1)
+            else:
+                new_shape.append(shape[i])
 
         g.set_shape(node.output[0], new_shape)
         log.debug("set %s node [%s] with new shape %s", node.type, node.output[0], new_shape)
