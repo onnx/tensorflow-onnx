@@ -549,7 +549,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         tf.reset_default_graph()
 
         x_val = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=np.float32)
-        indices = np.array([[0], [2], [4], [7]], dtype=np.int32)
+        indices = np.array([[[0], [2]], [[4], [7]], [[6], [1]]], dtype=np.int32)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.gather_nd(x, tf.constant(indices))
         _ = tf.identity(x_, name=_TFOUTPUT)
