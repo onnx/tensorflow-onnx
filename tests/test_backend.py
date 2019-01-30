@@ -428,12 +428,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    def test_placeholder_with_default(self):
+    def test_placeholder_with_default_use_default(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
-        y = tf.constant(x_val, name="y")
-        x = tf.placeholder_with_default(y, x_val.shape, name=_TFINPUT)
-        _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        x = tf.constant(x_val, name="x")
+        y = tf.placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+
+    def test_placeholder_with_default_use_feed(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x = tf.constant(x_val, name="x")
+        y = tf.placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
+        self._run_test_case([_OUTPUT], {_INPUT: x_feed_val})
 
     @unittest.skipIf(*onnxruntime_check("Add"))
     def test_add_bcast(self):
