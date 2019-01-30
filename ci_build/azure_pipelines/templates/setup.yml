@@ -3,7 +3,7 @@
 steps:
 - bash: |
     set -ex
-    pip install pytest pytest-cov pytest-runner graphviz requests pyyaml pillow
+    pip install pytest pytest-cov pytest-runner graphviz requests pyyaml pillow pandas
     pip install $(CI_PIP_TF_NAME) $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME)
     python setup.py install
     pip freeze --all
