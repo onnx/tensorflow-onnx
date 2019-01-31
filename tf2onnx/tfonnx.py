@@ -1667,7 +1667,14 @@ def erf_op(ctx, node, name, args):
     nodes = [
         mknode("Abs", [x], "x"),
         mknode("Sub", [null, x], "negx"),
-        mknode("Div", [x, outp("x")], "sign"),  # FIXME: this might not work for x=0
+        mknode("Greater", [x, null], "isPositive"),
+        mknode("Cast", [outp("isPositive")], "isPositiveValue", to=onnx_pb.TensorProto.FLOAT),
+        mknode("Less", [x, null], "isNeg"),
+        mknode("Cast", [outp("isNeg")], "isNegValue", to=onnx_pb.TensorProto.FLOAT),
+        mknode("Sub", [outp("isPositiveValue"), outp("isNegValue")], "sign0"),
+        mknode("Add", [outp("sign0"), one], "signAddOne"),
+        mknode("Abs", [outp("sign0")], "nonZero"),
+        mknode("Sub", [outp("signAddOne"), outp("nonZero")], "sign"),
         mknode("Mul", [outp("x"), p], "4"),
         mknode("Add", [outp("4"), one], "5"),
         mknode("Div", [one, outp("5")], "t"),
