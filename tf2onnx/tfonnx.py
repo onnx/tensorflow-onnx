@@ -2263,7 +2263,7 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                 input_name = op.input[i]
                 dtype = g.get_dtype(input_name)
                 if dtype is None:
-                    log.warning("For %s (type is %s)' input: %s, its dtype should not be None if we need add Cast for it.",
+                    log.warning("Adding Cast for op %s (type is %s)' input: %s, dtype should not be None",
                                 op.name, op.type, input_name)
 
                 if dtype != onnx_pb.TensorProto.FLOAT:
