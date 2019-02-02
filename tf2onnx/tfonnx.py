@@ -2440,7 +2440,8 @@ def run_late_rewriters(g, funcs, continue_on_error):
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
-                     extra_opset=None, shape_override=None, inputs_as_nchw=None, output_names=None):
+                     extra_opset=None, shape_override=None, inputs_as_nchw=None,
+                     input_names=None, output_names=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -2453,7 +2454,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
             inputs_as_nchw: transpose inputs in list from nchw to nchw
-            output_names: name of output nodes in graph
+            input_names: name of input nodes in graph, formatted as node_name:port_id
+            output_names: name of output nodes in graph, formatted as node_name:port_id
         Return:
             onnx graph
     """
@@ -2466,13 +2468,19 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
 
+    io_to_check = []
+    if input_names:
+        io_to_check.extend(input_names)
     if output_names:
+        io_to_check.extend(output_names)
+
+    if io_to_check:
         # check output existence in case user passed in wrong output ids
-        non_exists = set(output_names) - set(output_shapes.keys())
+        non_exists = set(io_to_check) - set(output_shapes.keys())
         if non_exists:
-            print("\nFailed to convert: outputs specified do not exist, make sure your passed" \
-                  "in format: placeholder_name:output_port_id. Outputs: ", non_exists)
-            raise ValueError("Outputs Not Found")
+            log.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed" \
+                  " in format: input/output_node_name:port_id. Problematical inputs/outputs are: %s \n", non_exists)
+            raise ValueError("Inputs/Outputs Not Found")
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
 

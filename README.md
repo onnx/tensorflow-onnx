@@ -177,7 +177,8 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             continue_on_error=False, verbose=False, target=None,
             opset=None, custom_op_handlers=None,
             custom_rewriter=None, extra_opset=None,
-            shape_override=None, inputs_as_nchw=None, output_names=None):
+            shape_override=None, inputs_as_nchw=None,
+            input_names=None, output_names=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -190,7 +191,8 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
             inputs_as_nchw: transpose inputs in list from nchw to nchw
-            output_names: name of output nodes in graph
+            input_names: name of input nodes in graph, formatted as node_name:port_id
+            output_names: name of output nodes in graph, formatted as node_name:port_id
         Return:
             onnx graph
     """
@@ -204,7 +206,7 @@ with tf.Session() as sess:
     x = tf.placeholder(tf.float32, [2, 3], name="input")
     x_ = tf.add(x, x)
     _ = tf.identity(x_, name="output")
-    onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph, output_names=["output:0"])
+    onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph, input_names=["input:0"], output_names=["output:0"])
     model_proto = onnx_graph.make_model("test")
     with open("/tmp/model.onnx", "wb") as f:
         f.write(model_proto.SerializeToString())
@@ -239,6 +241,7 @@ with tf.Session() as sess:
     onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph,
                                                  custom_op_handlers={"Print": print_handler},
                                                  extra_opset=[helper.make_opsetid(_TENSORFLOW_DOMAIN, 1)],
+                                                 input_names=["input:0"],
                                                  output_names=["output:0"])
     model_proto = onnx_graph.make_model("test")
     with open("/tmp/model.onnx", "wb") as f:

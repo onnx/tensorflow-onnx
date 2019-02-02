@@ -167,10 +167,11 @@ class Test(object):
             self.tf_runtime = time.time() - start
         return result
 
-    def to_onnx(self, tf_graph, opset=None, shape_override=None):
+    def to_onnx(self, tf_graph, opset=None, shape_override=None, input_names=None):
         """Convert graph to tensorflow."""
         return process_tf_graph(tf_graph, continue_on_error=True, verbose=True, opset=opset,
-                                target=Test.target, shape_override=shape_override, output_names=self.output_names)
+                                target=Test.target, shape_override=shape_override,
+                                input_names=input_names, output_names=self.output_names)
 
     def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
@@ -287,7 +288,7 @@ class Test(object):
         with open(model_path, "rb") as f:
             graph_def.ParseFromString(f.read())
 
-        graph_def = tf2onnx.tfonnx.tf_optimize(inputs, self.output_names, graph_def, fold_const)
+        graph_def = tf2onnx.tfonnx.tf_optimize(inputs.keys(), self.output_names, graph_def, fold_const)
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
@@ -312,7 +313,8 @@ class Test(object):
             model_proto = None
             try:
                 # convert model to onnx
-                onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override)
+                onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override,
+                                          input_names=inputs.keys())
                 new_model_proto = GraphUtil.opt_transposes_with_graph(onnx_graph, "test", debug=debug)
                 if new_model_proto:
                     model_proto = new_model_proto
