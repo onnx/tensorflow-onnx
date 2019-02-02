@@ -428,12 +428,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    def test_placeholder_with_default(self):
+    def test_placeholder_with_default_use_default(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
-        y = tf.constant(x_val, name="y")
-        x = tf.placeholder_with_default(y, x_val.shape, name=_TFINPUT)
-        _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        x = tf.constant(x_val, name="x")
+        y = tf.placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+
+    def test_placeholder_with_default_use_feed(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x = tf.constant(x_val, name="x")
+        y = tf.placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
+        self._run_test_case([_OUTPUT], {_INPUT: x_feed_val})
 
     @unittest.skipIf(*onnxruntime_check("Add"))
     def test_add_bcast(self):
@@ -549,7 +557,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         tf.reset_default_graph()
 
         x_val = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=np.float32)
-        indices = np.array([[0], [2], [4], [7]], dtype=np.int32)
+        indices = np.array([[[0], [2]], [[4], [7]], [[6], [1]]], dtype=np.int32)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.gather_nd(x, tf.constant(indices))
         _ = tf.identity(x_, name=_TFOUTPUT)
@@ -823,18 +831,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.slice(x0, t1, t2)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
-    @unittest.skipIf(*support_op_conversion_since(9, "slice"))
-    def test_slice_with_non_const(self):
-        x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)
-        t1 = np.array([0, 1], dtype=np.int32)
-        t2 = np.array([2, 2], dtype=np.int32)
-        x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
-        t1_ = tf.placeholder(tf.int32, t1.shape, name=_TFINPUT1)
-        t2_ = tf.placeholder(tf.int32, t2.shape, name=_TFINPUT2)
-        x_ = tf.slice(x0, t1_, t2_)
-        _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: t1, _INPUT2: t2})
 
     def test_split(self):
         x_val = np.linspace(1.0, 5 * 30.0, 5 * 30).astype(np.float32).reshape(5, 30)

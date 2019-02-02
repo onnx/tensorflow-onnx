@@ -286,6 +286,24 @@ def placeholder_op(ctx, node, name, args):
     return None
 
 
+def placeholder_with_default_op(ctx, node, name, args):
+    # Overriding initializer with input is not well supported for these targets
+    if ctx.is_target(TARGET_RS4, TARGET_RS5, TARGET_RS6):
+        log.warning("%s: placeholder_with_default_op, default value is not supported by target, ignore it" % node.name)
+        return placeholder_op(ctx, node, name, args)
+
+    default_value_node = ctx.get_node_by_output(node.input[0])
+    if not default_value_node.is_const():
+        log.warning("%s: placeholder_with_default_op, non const default value is not supported, ignore it" % node.name)
+        return placeholder_op(ctx, node, name, args)
+
+    # Copy the tensor value, set its name to current node's output, add as initializer
+    value = default_value_node.get_tensor_value(as_list=False)
+    tensor = numpy_helper.from_array(value, node.output[0])
+    ctx.add_initializer(tensor)
+    return None
+
+
 def square_op(ctx, node, name, args):
     node.type = "Mul"
     node.input.append(node.input[0])
@@ -895,18 +913,6 @@ def concatv2_op(ctx, node, name, args):
         nodes = _wrap_concat_with_cast(ctx, node)
         return nodes
     return node
-
-
-def dynamic_slice_op(ctx, node, name, args):
-    # tf op, T output = Slice(T input, Index begin, Index size, @type Index)
-    # onnx op, T output = DynamicSlice(T input, Tind starts, Tind ends, (optional)Tind axes), ends are exclusive
-
-    starts = node.inputs[1]
-    size = node.inputs[2]
-    ends = ctx.make_node("Add", [starts.output[0], size.output[0]])
-    new_slice = ctx.make_node("DynamicSlice", [*node.input[0:2], ends.output[0]],
-                              name=node.name, outputs=node.output)
-    return [ends, new_slice]
 
 
 def slice_op(ctx, node, name, args):
@@ -1642,7 +1648,14 @@ def erf_op(ctx, node, name, args):
     nodes = [
         mknode("Abs", [x], "x"),
         mknode("Sub", [null, x], "negx"),
-        mknode("Div", [x, outp("x")], "sign"),  # FIXME: this might not work for x=0
+        mknode("Greater", [x, null], "isPositive"),
+        mknode("Cast", [outp("isPositive")], "isPositiveValue", to=onnx_pb.TensorProto.FLOAT),
+        mknode("Less", [x, null], "isNeg"),
+        mknode("Cast", [outp("isNeg")], "isNegValue", to=onnx_pb.TensorProto.FLOAT),
+        mknode("Sub", [outp("isPositiveValue"), outp("isNegValue")], "sign0"),
+        mknode("Add", [outp("sign0"), one], "signAddOne"),
+        mknode("Abs", [outp("sign0")], "nonZero"),
+        mknode("Sub", [outp("signAddOne"), outp("nonZero")], "sign"),
         mknode("Mul", [outp("x"), p], "4"),
         mknode("Add", [outp("4"), one], "5"),
         mknode("Div", [one, outp("5")], "t"),
@@ -1794,7 +1807,7 @@ _OPSET_4 = {
     "PadV2": (pad_op, ["Pad"]),
     "Placeholder": (placeholder_op, []),
     "PlaceholderV2": (placeholder_op, []),
-    "PlaceholderWithDefault": (placeholder_op, []),
+    "PlaceholderWithDefault": (placeholder_with_default_op, []),
     "Pow": (pow_op, []),
     "Prod": (reduce_op, ["ReduceProd"]),
     "RandomNormal": (direct_op, []),
@@ -1904,7 +1917,6 @@ _OPSET_9 = {
     "Atanh": (direct_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
-    "Slice": (dynamic_slice_op, []),
 }
 
 _OPSETS = [

@@ -60,26 +60,22 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
     nodes = []
     # reshape indices into [sum(indices[:-1]), indices[-1]]
     indices_shape = ctx.make_node("Shape", [indices], dtypes=[TensorProto.INT64])
-    outter_shape = ctx.make_node("Slice",
-                                 [indices_shape.output[0]],
-                                 attr={"axes": [0], "ends": [-1], "starts": [0]},
-                                 dtypes=[TensorProto.INT64])
+    indices_size = ctx.make_node("Size", [indices])
     inner_shape = ctx.make_node("Slice",
                                 [indices_shape.output[0]],
                                 attr={"axes": [0], "ends": [INT64_MAX], "starts": [-1]},
                                 dtypes=[TensorProto.INT64])
-    outter_shape_sum = ctx.make_node("ReduceSum",
-                                     [outter_shape.output[0]],
-                                     attr={"axes": [0], "keepdims": 1},
-                                     dtypes=[TensorProto.INT64])
+    outter_shape = ctx.make_node("Div",
+                                 [indices_size.output[0], inner_shape.output[0]],
+                                 dtypes=[TensorProto.INT64])
     flatten_shape = ctx.make_node("Concat",
-                                  [outter_shape_sum.output[0], inner_shape.output[0]],
+                                  [outter_shape.output[0], inner_shape.output[0]],
                                   attr={"axis": 0},
                                   dtypes=[TensorProto.INT64])
     flatten_indices = ctx.make_node("Reshape", [indices, flatten_shape.output[0]])
-    nodes.extend([indices_shape, outter_shape, inner_shape, outter_shape_sum, flatten_shape, flatten_indices])
+    nodes.extend([indices_shape, indices_size, inner_shape, outter_shape, flatten_shape, flatten_indices])
     # outter loop for each index
-    # for (int i=0; i<outter_shape_sum; i++) inner_loop(params, flatten_indices[i])
+    # for (int i=0; i<outter_shape; i++) inner_loop(params, flatten_indices[i])
     cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
     dummy_const = ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
 
@@ -111,7 +107,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
     g.add_graph_output(result_name, t_params, [])
 
     gathernd_loop = ctx.make_node("Loop",
-                                  [outter_shape_sum.output[0], cond_const.output[0], params],
+                                  [outter_shape.output[0], cond_const.output[0], params],
                                   output_count=2,
                                   op_name_scope=scope_name, skip_conversion=False)
     gathernd_loop.set_body_graph_as_attr("body", g)
@@ -129,8 +125,13 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
                                        [inner_loop_shape_.output[0]],
                                        attr={"axes": [0], "ends": [INT64_MAX], "starts": [1]},
                                        dtypes=[TensorProto.INT64])
+
+    indices_outter_shape = ctx.make_node("Slice",
+                                         [indices_shape.output[0]],
+                                         attr={"axes": [0], "ends": [-1], "starts": [0]},
+                                         dtypes=[TensorProto.INT64])
     output_shape_ = ctx.make_node("Concat",
-                                  [outter_shape.output[0], output_inner_shape.output[0]],
+                                  [indices_outter_shape.output[0], output_inner_shape.output[0]],
                                   attr={"axis": 0},
                                   dtypes=[TensorProto.INT64])
     output_shape = ctx.make_node("Slice",
@@ -140,7 +141,8 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
     output_reshape = ctx.make_node("Reshape",
                                    [gathernd_loop.output[1], output_shape.output[0]],
                                    outputs=[output])
-    nodes.extend([inner_loop_shape,
+    nodes.extend([indices_outter_shape,
+                  inner_loop_shape,
                   inner_loop_shape_,
                   output_inner_shape,
                   output_shape_,

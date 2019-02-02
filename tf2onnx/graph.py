@@ -216,7 +216,6 @@ class Node(object):
         # track shapes in _output_shapes
         self.graph.set_shape(t.name, t.dims)
 
-
     def get_body_graphs(self):
         return self.graph.contained_graphs.get(self.name, None)
 
@@ -355,9 +354,9 @@ class Graph(object):
     def initializers(self):
         return self._initializers
 
-    def is_target(self, name):
-        """Return True if target platform is name."""
-        return name in self._target
+    def is_target(self, *names):
+        """Return True if target platform contains any name."""
+        return any(name in self._target for name in names)
 
     def is_initializer(self, name):
         """Check the name is a constant value. name is in format - node_name:<int>."""
@@ -614,6 +613,7 @@ class Graph(object):
 
     def topological_sort(self, ops):
         """Topological sort of graph."""
+
         def _push_stack(stack, node, in_stack):
             stack.append(node)
             if node in in_stack:
@@ -708,7 +708,6 @@ class Graph(object):
                                                  initializer.data_type,
                                                  initializer.dims)
             input_with_initializers.append(val)
-
 
         # todo(pengwa): clean up initializer related code.
         # create input_tensor_values
