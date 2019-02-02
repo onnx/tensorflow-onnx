@@ -335,3 +335,8 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
 
 def tf_name_scope(name):
     return '/'.join(name.split('/')[:-1])
+
+
+def create_vague_shape_like(shape):
+    make_sure(len(shape) >= 0, "rank should be >= 0")
+    return [-1 for i in enumerate(shape)]

@@ -204,7 +204,9 @@ def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_
 
     g.add_graph_output(cond_output_id, TensorProto.BOOL, ())
     g.add_graph_output(fake_var_output_id, TensorProto.FLOAT, ())
-    g.add_graph_output(loop_output_id, output_data_type, output_shape[1:])
+
+    # use None for all dims, just keep original rank. Because it is observed, dims might be changed in loop.
+    g.add_graph_output(loop_output_id, output_data_type, utils.create_vague_shape_like(output_shape[1:]))
 
     return g
 
@@ -234,5 +236,5 @@ def create_body_graph_for_if_branch(parent_g, data_type, output_shape, chosen_cu
     )
     nodes.append(identity_node)
     g.set_nodes(nodes)
-    g.add_graph_output("y", data_type, output_shape)
+    g.add_graph_output("y", data_type, utils.create_vague_shape_like(output_shape))
     return g

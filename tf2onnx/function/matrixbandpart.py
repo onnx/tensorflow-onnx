@@ -53,7 +53,7 @@ def matrixbandpart_op(ctx, node, name, args):
                   g.make_node("Identity", ["cond"], outputs=["cond_out"]),
                   g.make_node("Identity", ["line"], outputs=["res"]),
                   g.make_node("Identity", [slice_node.output[0]], outputs=["line_out"])]
-
+    g.set_nodes(body_nodes)
     g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
     g.add_graph_input("cond", onnx_pb.TensorProto.BOOL, [])
     g.add_graph_input("line", onnx_pb.TensorProto.BOOL, [-1, -1])

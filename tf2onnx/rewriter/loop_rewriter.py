@@ -56,6 +56,9 @@ class LoopRewriter(LoopRewriterBase):
 
             body_nodes = set(cell_g_info.nodes + cond_g_info.nodes)
             body_outputs = cond_g_info.outputs + cell_g_info.outputs
+            for out_tensor_value_info in body_outputs:
+                out_tensor_value_info.shape = utils.create_vague_shape_like(out_tensor_value_info.shape)
+
             loop_body_g = LoopRewriterBase.construct_graph_from_nodes(self.g, body_nodes, body_outputs)
 
             # create loop body graph inputs
@@ -74,7 +77,7 @@ class LoopRewriter(LoopRewriterBase):
                     dtype = tensor_value_info.dtype
                     shape = tensor_value_info.shape
 
-                loop_body_g.add_graph_input(input_name, dtype, shape)
+                loop_body_g.add_graph_input(input_name, dtype, utils.create_vague_shape_like(shape))
 
             body_nodes_to_append = []
             for input_ta in loop_props.tensor_array_inputs:
