@@ -191,8 +191,8 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
             inputs_as_nchw: transpose inputs in list from nchw to nchw
-            input_names: name of input nodes in graph, formatted as node_name:port_id
-            output_names: name of output nodes in graph, formatted as node_name:port_id
+            input_names: list of input node names in graph, input name format as node_name:port_id
+            output_names: list of output node names in graph, output name format as node_name:port_id
         Return:
             onnx graph
     """
