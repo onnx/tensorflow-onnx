@@ -98,6 +98,7 @@ def main():
                              custom_op_handlers=custom_ops,
                              extra_opset=extra_opset,
                              shape_override=args.shape_override,
+                             input_names=args.inputs,
                              output_names=args.outputs,
                              inputs_as_nchw=args.inputs_as_nchw)
 
