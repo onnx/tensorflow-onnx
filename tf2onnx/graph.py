@@ -940,9 +940,9 @@ class Graph(object):
                 # we don't care about nested graph here, just handle current graph cropping.
                 node = self.get_node_by_output(input_id, search_in_parent_graphs=False)
                 if not node:
-                    # some node (for example Scan) has optional inputs, which
-                    # might has empty input.
-                    # subgraph might has input defined in outer graph
+                    # some nodes (for example Scan) have optional inputs, which
+                    # might have empty input.
+                    # subgraph might have input defined in outer graph
                     continue
                 if node not in res_set:
                     if input_checker and input_checker(node) is False:

@@ -1300,17 +1300,10 @@ def minmax_op(ctx, node, name, args):
 
 def pack_op(ctx, node, name, args):
     # hack to make up for the missing onnx pack op
-
-    pack_shape = ctx.get_shape(node.output[0])
-    if not pack_shape:
-        # sometimes Pack output shape is None (for example Pack is following control flow Exit op)
-        input_cnt = len(node.inputs)
-        input_shape = ctx.get_shape(node.input[0])
-        if input_shape:
-            pack_shape = [input_cnt] + input_shape
-            ctx.set_shape(node.output[0], pack_shape)
-
     axis = node.get_attr("axis").i
+    if axis < 0:
+        axis += len(ctx.get_shape(node.input[0])) + 1
+
     nodes = []
     inputs = []
     dtype = None
@@ -1747,6 +1740,14 @@ def zeroslike_op(ctx, node, name, args):
     return mul_op
 
 
+def softmax_op(ctx, node, name, args):
+    # T output = Softmax(T logits). The axis softmax would be performed on is always on -1.
+    # T output = Softmax(T input, @int axis). Default axis is 1.
+    logits_rank = len(ctx.get_shape(node.input[0]))
+    node.set_attr("axis", logits_rank - 1)
+    return node
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1829,7 +1830,7 @@ _OPSET_4 = {
     "Sqrt": (direct_op, []),
     "Square": (square_op, []),
     "SquaredDifference": (squareddifference_op, []),
-    "Softmax": (direct_op, ["Softmax"]),
+    "Softmax": (softmax_op, ["Softmax"]),
     "StopGradient": (identity_op, ["Identity"]),
     "StridedSlice": (stridedslice_op, []),
     "Sub": (broadcast_op, []),
@@ -2261,6 +2262,10 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
 
                 input_name = op.input[i]
                 dtype = g.get_dtype(input_name)
+                if dtype is None:
+                    log.warning("Adding Cast for op %s (type is %s)' input: %s, dtype should not be None",
+                                op.name, op.type, input_name)
+
                 if dtype != onnx_pb.TensorProto.FLOAT:
                     output_dtype = dtype
                     if input_node and input_node.type == "Cast" \
