@@ -53,12 +53,15 @@ def process_bigru(g, bi_grus):
         # create node
         w_name = utils.make_name("W")
         w_node = g.make_const(w_name, W, skip_conversion=True)
+        all_nodes.append(w_node)
 
         r_name = utils.make_name("R")
         r_node = g.make_const(r_name, R, skip_conversion=True)
+        all_nodes.append(r_node)
 
         b_name = utils.make_name("B")
         b_node = g.make_const(b_name, B, skip_conversion=True)
+        all_nodes.append(b_node)
         gru_inputs = [gru_fw.input[0], w_node.output[0],
                       r_node.output[0], b_node.output[0]]
         if len(gru_fw.inputs) > 4:

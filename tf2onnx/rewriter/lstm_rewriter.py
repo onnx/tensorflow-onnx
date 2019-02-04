@@ -192,6 +192,8 @@ class LSTMUnitRewriter(UnitRewriterBase):
         rnn_props.onnx_input_ids["R"] = r_node.output[0]
         rnn_props.onnx_input_ids["B"] = b_node.output[0]
 
+        return [w_node, r_node, b_node]
+
     def process_var_init_nodes(self, rnn_props):
         init_h_id = None
         init_c_id = None

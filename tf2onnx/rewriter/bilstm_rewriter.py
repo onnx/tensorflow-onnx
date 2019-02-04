@@ -12,7 +12,6 @@ from __future__ import unicode_literals
 
 import logging
 import numpy as np
-from onnx import numpy_helper
 from tf2onnx import utils
 from tf2onnx.rewriter.rnn_utils import is_reverse_op
 
@@ -51,12 +50,15 @@ def process_bilstm(g, bi_lstms):
         # create node
         w_name = utils.make_name("W")
         w_node = g.make_const(w_name, W, skip_conversion=True)
+        all_nodes.append(w_node)
 
         r_name = utils.make_name("R")
         r_node = g.make_const(r_name, R, skip_conversion=True)
+        all_nodes.append(r_node)
 
         b_name = utils.make_name("B")
         b_node = g.make_const(b_name, B, skip_conversion=True)
+        all_nodes.append(b_node)
         lstm_inputs = [lstm_fw.input[0], w_node.output[0], r_node.output[0], b_node.output[0]]
         if len(lstm_fw.inputs) > 4:
             lstm_inputs.extend([lstm_fw.input[4], h_node.output[0], c_node.output[0]])
@@ -152,9 +154,7 @@ def check_const(g, input_id):
 
 
 def get_np_val_for_const(g, node, input_index):
-    input_name = node.input[input_index]
-    tensor = g.get_initializer(input_name)
-    return numpy_helper.to_array(tensor)
+    return node.inputs[input_index].get_tensor_value(as_list=False)
 
 
 def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
@@ -166,8 +166,8 @@ def _process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
         init_node = g.make_const(init_name, initial_val, skip_conversion=True)
     else:
         init_node = g.make_node("Concat", [fw_init_input_id, bw_init_input_id], attr={"axis": 0})
-        to_append.append(init_node)
 
+    to_append.append(init_node)
     return init_node
 
 

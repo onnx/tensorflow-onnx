@@ -193,6 +193,13 @@ def map_tf_dtype(dtype):
     return dtype
 
 
+def map_numpy_to_onnx_dtype(np_dtype):
+    for onnx_dtype, numpy_dtype in ONNX_TO_NUMPY_DTYPE.items():
+        if numpy_dtype == np_dtype:
+            return onnx_dtype
+    raise ValueError("unsupported dtype " + np_dtype + " for mapping")
+
+
 def node_name(name):
     """Get node name without io#."""
     pos = name.find(":")

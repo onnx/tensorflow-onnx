@@ -38,7 +38,7 @@ class LoopRewriter(LoopRewriterBase):
 
     def rewrite(self, context):
         log.debug("enter rewrite function")
-        loop_node = None
+        loop_nodes = None
         try:
             loop_props = context.loop_properties
             cell_g_info = context.cell_graph
@@ -97,14 +97,14 @@ class LoopRewriter(LoopRewriterBase):
 
 
             ## create Loop node
-            loop_node = self._create_loop_node(context, loop_props)
-            if not loop_node:
+            loop_nodes = self._create_loop_node(context, loop_props)
+            if not loop_nodes:
                 log.error("failed to create loop node during rewrite")
                 return REWRITER_RESULT.FAIL
-            loop_node.set_body_graph_as_attr("body", loop_body_g)
+            loop_nodes[0].set_body_graph_as_attr("body", loop_body_g)
 
             all_nodes = self.g.get_nodes()
-            all_nodes.append(loop_node)
+            all_nodes.extend(loop_nodes)
             self.g.set_nodes(all_nodes)
 
             log.debug("rewrite successfully")
@@ -133,4 +133,4 @@ class LoopRewriter(LoopRewriterBase):
                                      outputs=loop_outputs, op_name_scope="generic_loop",
                                      skip_conversion=False)
 
-        return loop_node
+        return [loop_node, trip_cnt, cond]

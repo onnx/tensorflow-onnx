@@ -15,7 +15,7 @@ import traceback
 import six
 import numpy as np
 
-from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
+from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetIdProto, AttributeProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
@@ -118,7 +118,7 @@ class Node(object):
         return self.type in ["Const", "ConstV2"]
 
     def is_graph_input(self):
-        return self.type == utils.GRAPH_INPUT_TYPE
+        return self.type in ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
 
     def __str__(self):
         return str(self._op)
@@ -201,20 +201,21 @@ class Node(object):
         return t.dims
 
     def set_tensor_value(self, new_val):
-        """Set new value for existing onnx tensor."""
+        """Set new value for existing onnx tensor.
+        Args:
+            new_val: value of type numpy ndarray
+        """
         if not self.is_const():
-            raise ValueError("get tensor value: {} must be Const".format(self.name))
+            raise ValueError("set tensor value: {} must be Const".format(self.name))
         t = self.get_attr("value")
         if not t:
             raise ValueError("set tensor value: {} is None".format(self.name))
         t = helper.get_attribute_value(t)
-        if not t.raw_data:
-            raise ValueError("set tensor value: {} is not raw_data".format(self.name))
-        t.raw_data = new_val.tobytes()
-        for i, _ in enumerate(t.dims):
-            t.dims[i] = new_val.shape[i]
+        onnx_tensor = numpy_helper.from_array(new_val, t.name)
+        del t
+        self.set_attr("value", onnx_tensor)
         # track shapes in _output_shapes
-        self.graph.set_shape(t.name, t.dims)
+        self.graph.set_shape(onnx_tensor.name, onnx_tensor.dims)
 
     def get_body_graphs(self):
         return self.graph.contained_graphs.get(self.name, None)
@@ -273,10 +274,6 @@ class Node(object):
                     if b_graphs:
                         graphs.extend(b_graphs.values())
 
-            # exclude graph inputs
-            for n in graph.inputs:
-                output_available_in_cur_graph.add(n)
-
         outer_scope_node_input_ids = all_node_inputs - output_available_in_cur_graph
         return list(outer_scope_node_input_ids)
 
@@ -295,7 +292,6 @@ class Graph(object):
         if target is None:
             target = []
         self._nodes = []
-        self._initializers = {}
         self._nodes_by_name = {}
         self._output_to_node_name = {}
         self.shapes = {}
@@ -307,7 +303,7 @@ class Graph(object):
         self._opset = find_opset(opset)
         self._extra_opset = extra_opset
 
-        self.inputs = []
+        self._order_sensitive_inputs = []
         self.outputs = output_names
 
         self.parent_graph = None
@@ -350,28 +346,22 @@ class Graph(object):
     def opset(self):
         return self._opset
 
-    @property
-    def initializers(self):
-        return self._initializers
-
     def is_target(self, *names):
         """Return True if target platform contains any name."""
         return any(name in self._target for name in names)
 
-    def is_initializer(self, name):
-        """Check the name is a constant value. name is in format - node_name:<int>."""
-        return name in self._initializers
-
-    def set_initializer(self, name, val):
-        """Set initializer."""
-        self._initializers[name] = val
-
     def make_const(self, name, np_val, skip_conversion=False):
-        """Make a new constant in the graph"""
+        """Make a new constant in the graph.
+        Args:
+            name: const node name, must be unique.
+            np_val: value of type numpy ndarray.
+            skip_conversion: bool, indicate whether this created node would be mapped during conversion.
+        """
         onnx_tensor = numpy_helper.from_array(np_val, name)
-        self.add_initializer(onnx_tensor)
         node = self.make_node("Const", [], outputs=[name], name=name, attr={"value": onnx_tensor},
                               skip_conversion=skip_conversion)
+        self.set_shape(name, np_val.shape)
+        self.set_dtype(name, utils.map_numpy_to_onnx_dtype(np_val.dtype))
         return node
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
@@ -463,42 +453,11 @@ class Graph(object):
         ret = None
         if name:
             ret = self._nodes_by_name.get(name)
-        else:
-            ret = self._get_initializer_as_const_node(output)
-
-        if not ret:
-            ret = self._get_graph_input_as_dummy_node(output)
-
         return ret
 
     def get_node_by_name(self, name):
         """Get node by name."""
         ret = self._nodes_by_name.get(name)
-        if not ret:
-            ret = self._get_initializer_as_const_node(name)
-
-        if not ret:
-            ret = self._get_graph_input_as_dummy_node(name)
-        return ret
-
-    def _get_initializer_as_const_node(self, name):
-        """Create dummy const node representing initializers for easier node manipulation."""
-        ret = None
-        # if we processed the graph fully, set_nodes() the graph has no longer const nodes
-        # since we moved them to be initializers. But all graph processing code uses Node
-        # as the common data structure. To avoid special casing lots of code for initializers
-        # we create a dummy 'Const' Node here.
-        initializer = self._initializers.get(name)
-        if initializer is not None:
-            ret = self.make_node("Const", inputs=[], outputs=[name], name=name,
-                                 attr={"value": initializer})
-        return ret
-
-    def _get_graph_input_as_dummy_node(self, name):
-        """Create dummy node representing graph inputs for easier node manipulation."""
-        ret = None
-        if name in self.inputs:
-            ret = self.make_node(utils.GRAPH_INPUT_TYPE, inputs=[], outputs=[name], name=name)
         return ret
 
     def set_node_by_name(self, node):
@@ -508,23 +467,20 @@ class Graph(object):
             self._output_to_node_name[op_output] = node.name
 
     def add_graph_input(self, name, dtype=None, shape=None):
-        """Add placeholder node as graph's input."""
+        """Add placeholder node as graph's input. Order matters only for subgraph.
+           Placeholders in original graph are assumed for main graph, order not matters.
+        """
         if dtype is None:
             dtype = self.get_dtype(name)
 
         if shape is None:
             shape = self.get_shape(name)
 
-        if name not in self.inputs:
-            utils.make_sure(shape is not None, "shape for input %s should not be None", name)
-            utils.make_sure(dtype is not None, "dtype for input %s should not be None", name)
-            # append firstly then the input can be retrieved
-            # to get/set shape/dtype.
-            self.inputs.append(name)
-            self.set_shape(name, shape)
-            self.set_dtype(name, dtype)
-        else:
-            raise ValueError("graph input " + name + " already exists")
+        new_node = self.make_node("Placeholder", [], outputs=[name], dtypes=[dtype], shapes=[shape])
+        self._order_sensitive_inputs.append(new_node)
+        all_nodes = self.get_nodes()
+        all_nodes.append(new_node)
+        self.set_nodes(all_nodes)
 
     def add_graph_output(self, name, dtype=None, shape=None):
         """Add node output as graph's output."""
@@ -543,28 +499,6 @@ class Graph(object):
             self.set_dtype(name, dtype)
         else:
             raise ValueError("graph output " + name + " already exists")
-
-    def add_initializer(self, tensor):
-        """Add tensor to initializers."""
-        self._initializers[tensor.name] = tensor
-        self.set_shape(tensor.name, tensor.dims)
-
-    def get_initializer(self, name):
-        """Return tensor or throw exception if it does not exist."""
-        if self.is_initializer(name):
-            return self._initializers[name]
-        raise ValueError("no initializer called " + name)
-
-    def update_initializer(self, name, tensor):
-        if self.is_initializer(name):
-            new_tensor = numpy_helper.from_array(tensor, name)
-            if new_tensor.dims != self._initializers[name].dims:
-                self.set_shape(name, new_tensor.dims)
-
-            del self._initializers[name]
-            self._initializers[name] = new_tensor
-        else:
-            raise ValueError("no initializer called " + name)
 
     def get_dtype(self, name):
         """Get dtype for node."""
@@ -637,15 +571,15 @@ class Graph(object):
             all_input = set(op.input)
             implicit_inputs = op.get_implicit_inputs()
             all_input |= set(implicit_inputs)
+            # remove those empty inputs
+            all_input = list(filter(lambda a: a != '', all_input))
             for inp in all_input:
                 j = self.get_node_by_output(inp)
-                # todo(pengwa): remove j None check here once Loop conversion logic is added.
-                if j and not j.is_const() and not j.is_graph_input():
-                    if self.parent_graph and j.name not in op_name_to_index:
-                        # there might be some outer-scoped inputs for an inner Graph.
-                        pass
-                    else:
-                        g[op_name_to_index[j.name]].append(i)
+                if self.parent_graph and j.name not in op_name_to_index:
+                    # there might be some outer-scoped inputs for an inner Graph.
+                    pass
+                else:
+                    g[op_name_to_index[j.name]].append(i)
 
         # label for each op. highest = sink nodes.
         label = [-1 for _ in range(n)]
@@ -689,36 +623,51 @@ class Graph(object):
         #    optimizer = TransposeOptimizer(self, False)
         #    optimizer.optimize()
         ops = []
-        all_inputs = set()
+        order_non_sensitive_placeholders = []
+        order_sensitive_placeholders = self._order_sensitive_inputs
+        const_ops = []
         for op in self.get_nodes():
-            all_inputs |= set(op.input)
-            all_inputs |= set(op.get_implicit_inputs())
-            onnx_op = op.op
-            ops.append(onnx_op)
+            if op.is_const():
+                const_ops.append(op)
+                continue
+            elif op.is_graph_input():
+                if op not in self._order_sensitive_inputs:
+                    order_non_sensitive_placeholders.append(op)
+                continue
+            ops.append(op)
+        placeholder_ops = order_sensitive_placeholders + order_non_sensitive_placeholders
 
-        # create input_tensor_values, initializers
-        # if initializer is not used as input by any node, then it will be ignored
-        initializers = [i for i in list(self._initializers.values()) if i.name in all_inputs]
-        input_with_initializers = []
-        for initializer in initializers:
-            shape = self.get_shape(initializer.name)
-            if shape and list(shape) != initializer.dims:
-                raise ValueError("initializer shape is inconsistent for " + initializer.name)
-            val = utils.make_onnx_inputs_outputs(initializer.name,
-                                                 initializer.data_type,
-                                                 initializer.dims)
-            input_with_initializers.append(val)
+        # create initializers for placeholder with default nodes
+        initializers = []
+        placeholder_default_const_ops = []
+        for op in placeholder_ops:
+            if op.type == "PlaceholderWithDefault":
+                utils.make_sure(op.inputs[0].is_const(),
+                                "non-const default value for PlaceholderWithDefault is not supported.")
+                # copy the tensor value, set its name to current node's output, add as initializer
+                value = op.inputs[0].get_tensor_value(as_list=False)
+                tensor = numpy_helper.from_array(value, op.output[0])
+                initializers.append(tensor)
+                placeholder_default_const_ops.append(op.inputs[0])
 
-        # todo(pengwa): clean up initializer related code.
+        # create initializers for constant nodes
+        const_ops = [op for op in const_ops if op not in placeholder_default_const_ops]
+        for op in const_ops:
+            const_val = op.get_tensor_value(as_list=False)
+            tensor = numpy_helper.from_array(const_val, op.output[0])
+            initializers.append(tensor)
+
         # create input_tensor_values
-        input_tensor_values = self.make_onnx_graph_io(self.inputs)
-        input_with_initializers.extend(input_tensor_values)
+        input_ids = [op.output[0] for op in placeholder_ops + const_ops]
+        input_tensor_values = self.make_onnx_graph_io(input_ids)
 
         # create output_tensor_values
         output_tensor_values = self.make_onnx_graph_io(self.outputs)
-        # create model proto
-        graph = helper.make_graph(ops, graph_name,
-                                  input_with_initializers,
+
+        # create graph proto
+        graph = helper.make_graph([op.op for op in ops],
+                                  graph_name,
+                                  input_tensor_values,
                                   output_tensor_values,
                                   initializer=initializers,
                                   doc_string=doc)
@@ -950,12 +899,13 @@ class Graph(object):
                     processing_set.add(node)
         return res_set
 
-    def extract_sub_graph_nodes(self, outputs_name, input_checker=None):
+    def extract_sub_graph_nodes(self, outputs_name, input_checker=None, ignore_unused_placeholder=True):
         """Return nodes of subgraph having output_ids as outputs.
         Args:
             output_ids: output node output id of the subgraph to find
             input_checker: customized input check function: bool func(node)
-
+            ignore_unused_placeholder: bool, indicates whether unused placeholder will be removed
+                in the resulting nodes.
         Return:
             a list of nodes
         """
@@ -964,23 +914,23 @@ class Graph(object):
             return list(res_set)
 
         for output in outputs_name:
-            node = self.get_node_by_output(output)
+            node = self.get_node_by_output(output, search_in_parent_graphs=False)
             res_set = res_set.union(self._extract_sub_graph_nodes(node, input_checker))
 
-        # const nodes made at conversion stage are not needed, because ONNX will use initializer automatically
-        not_need_const = set()
-        for node in res_set:
-            # before Const is mapped to initializer, we should NOT remove it.
-            if self.is_initializer(node.name) or node.is_graph_input():
-                not_need_const.add(node)
-
-        res_set = res_set - not_need_const
+        if not ignore_unused_placeholder:
+            # add back placeholder nodes if they are not connected to outputs.
+            for node in self.get_nodes():
+                if node.is_graph_input():
+                    if node not in res_set:
+                        res_set.add(node)
         return list(res_set)
 
     def delete_unused_nodes(self, outputs_name):
         """Delete nodes not in subgraph ending with output_names."""
         if outputs_name:
-            related_nodes = self.extract_sub_graph_nodes(outputs_name)
+            # we need keep those placeholders that are used as input of Loop's body graph.
+            # some of them are not used in the graph, but still need be there to keep the graph complete.
+            related_nodes = self.extract_sub_graph_nodes(outputs_name, ignore_unused_placeholder=False)
             for node in related_nodes:
                 attr_body_graphs = node.get_body_graphs()
                 if attr_body_graphs:
@@ -988,7 +938,7 @@ class Graph(object):
                         body_graph.delete_unused_nodes(body_graph.outputs)
             self.set_nodes(related_nodes)
         else:
-            print("WARINING: outputs not specified, delete_unused_nodes not taking effect.")
+            print("WARNING: outputs not specified, delete_unused_nodes not taking effect.")
 
 
 class GraphUtil(object):
@@ -1087,35 +1037,22 @@ class GraphUtil(object):
         output_shapes.update(shapes)
         output_dtypes.update(dtypes)
 
-        non_const_nodes = []
-        const_nodes = []
+        nodes_to_append = []
         for n in graph_proto.node:
             if n.op_type == "Constant":
-                const_nodes.append(n)
-                continue
-            non_const_nodes.append(n)
+                n.op_type = "Const"
+            nodes_to_append.append(n)
 
         output_names = []
         for n in graph_proto.output:
             output_names.append(n.name)
 
-        g = Graph(non_const_nodes, output_shapes, output_dtypes, None, None, None, output_names)
-        GraphUtil._parse_graph_initializer(g, graph_proto)
+        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, None, None, output_names)
+        const_nodes_from_initializer = GraphUtil._parse_graph_initializer(g, graph_proto)
+        all_nodes = g.get_nodes()
+        all_nodes.extend(const_nodes_from_initializer)
+        g.set_nodes(all_nodes)
 
-        for n in const_nodes:
-            name = n.output[0]
-            tensor = None
-            for a in n.attribute:
-                if a.name == "value":
-                    tensor = helper.get_attribute_value(a)
-                    if not isinstance(tensor, TensorProto):
-                        raise ValueError("Constant value is not a tensor, unexpected.")
-                    break
-
-            if tensor:
-                g.set_initializer(name, tensor)
-            else:
-                raise ValueError("failed to parse tensor value from Constant node")
 
         GraphUtil._parse_graph_input(g, graph_proto)
 
@@ -1160,8 +1097,12 @@ class GraphUtil(object):
     @staticmethod
     def _parse_graph_initializer(g, graph_proto):
         """Get graph initializers and put into Graph object."""
+        const_nodes = []
         for initializer in graph_proto.initializer:
-            g.add_initializer(initializer)
+            np_val = numpy_helper.to_array(initializer)
+            const_nodes.append(g.make_const(initializer.name, np_val))
+
+        return const_nodes
 
     @staticmethod
     def _parse_graph_input(g, graph_proto):

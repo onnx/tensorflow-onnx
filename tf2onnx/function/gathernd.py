@@ -23,6 +23,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
     trip_node = ctx.make_node("Size", [index.output[0]])
     nodes.append(trip_node)
     cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+    nodes.append(cond_const)
     trip_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
     cond_out_name = utils.make_name("cond_out")
@@ -78,6 +79,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
     # for (int i=0; i<outter_shape; i++) inner_loop(params, flatten_indices[i])
     cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
     dummy_const = ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
+    nodes.extend([cond_const, dummy_const])
 
     # body graph creation
     g = ctx.create_new_graph_with_same_config()
@@ -143,6 +145,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
                                    outputs=[output])
     nodes.extend([indices_outter_shape,
                   inner_loop_shape,
+                  one_const,
                   inner_loop_shape_,
                   output_inner_shape,
                   output_shape_,

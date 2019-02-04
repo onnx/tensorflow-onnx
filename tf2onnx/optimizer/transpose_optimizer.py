@@ -7,7 +7,6 @@ from __future__ import unicode_literals
 import logging
 
 import numpy as np
-from onnx import numpy_helper
 
 from tf2onnx import utils
 
@@ -61,11 +60,10 @@ class TransposeOptimizer(object):
                                      and n.inputs[0].is_const()
                                      and n.inputs[1].is_const())]
         for reshape_op in constable_reshape_ops:
-            target_t = numpy_helper.to_array(self._g.get_initializer(reshape_op.input[0]))
-            target_shape = numpy_helper.to_array(self._g.get_initializer(reshape_op.input[1]))
+            target_t = reshape_op.inputs[0].get_tensor_value(as_list=False)
+            target_shape = reshape_op.inputs[1].get_tensor_value(as_list=False)
             new_data = np.reshape(target_t, tuple(target_shape))
             const_name = utils.port_name(utils.make_name("Const"))
-            new_tensor = numpy_helper.from_array(new_data, const_name)
 
             # point all children nodes inputs to the new node
             for output_name in reshape_op.output:
@@ -73,7 +71,8 @@ class TransposeOptimizer(object):
                     for i, name in enumerate(child.input):
                         if name == output_name:
                             child.input[i] = const_name
-            self._g.add_initializer(new_tensor)
+            ops.append(self._g.make_const(const_name, new_data))
+
             # need call this to make input update synced to protobuf val
             self._g.update_proto()
             ops.remove(reshape_op)
@@ -105,10 +104,10 @@ class TransposeOptimizer(object):
                     if need_insert_reshape:
                         op_name = utils.make_name("reshape")
                         shape_name = utils.make_name(op_name)
-                        self._g.make_const(shape_name, np.array(new_shape, dtype=np.int64))
+                        shape_const_node = self._g.make_const(shape_name, np.array(new_shape, dtype=np.int64))
                         reshape_node = self._g.make_node("Reshape", inputs=[op.input[0], shape_name], outputs=op.output,
                                                          name=op_name)
-                        self._update_graph_nodes([reshape_node], [op], True)
+                        self._update_graph_nodes([shape_const_node, reshape_node], [op], True)
                     else:
                         self._remove_useless_tranpose(op)
         self._g.update_proto()
@@ -153,18 +152,19 @@ class TransposeOptimizer(object):
     def _initialize_handlers(self):
         self._handler_map = {
             "Add": self._add_handler,
+            "Cast": self._simple_through_handler,
             "Concat": self._concat_handler,
             "Identity": self._identity_handler,
-            "LeakyRelu": self._relu_handler,
+            "LeakyRelu": self._simple_through_handler,
             "Max": self._maxmin_handler,
             "Min": self._maxmin_handler,
             "Mul": self._mul_handler,
             "Pad": self._pad_handler,
             "ReduceMean": self._reducemean_handler,
-            "Relu": self._relu_handler,
+            "Relu": self._simple_through_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
-            "Tanh": self._tanh_handler,
+            "Tanh": self._simple_through_handler,
             "Transpose": self._transpose_handler,
         }
 
@@ -349,9 +349,6 @@ class TransposeOptimizer(object):
             return False
         return self._handle_node_having_branches(node)
 
-    def _relu_handler(self, trans, node):
-        return self._switch_transpose_and_node(node, trans)
-
     def _transpose_handler(self, trans, node):
         if is_nchw_transpose(node):
             ops = self._g.get_nodes()
@@ -374,11 +371,12 @@ class TransposeOptimizer(object):
             return False
 
         for i in all_other_inputs:
-            numpy_val = numpy_helper.to_array(self._g.get_initializer(i))
+            target_node = self._g.get_node_by_output(i)
+            numpy_val = target_node.get_tensor_value(as_list=False)
             rank = np.rank(numpy_val)
             if rank == 4:
                 transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
-                self._g.update_initializer(i, transposed_val)
+                target_node.set_tensor_value(transposed_val)
             elif rank == 1:  #  scalar
                 # do nothing
                 pass
@@ -388,13 +386,15 @@ class TransposeOptimizer(object):
 
     def _mul_handler(self, trans, node):
         multiplier_input_id = None
-        for i in node.input:
+        multiplier_input_node = None
+        for i, input_node in zip(node.input, node.inputs):
             if i != trans.output[0]:
                 multiplier_input_id = i
+                multiplier_input_node = input_node
 
-        if not self._g.is_initializer(multiplier_input_id):
+        if not multiplier_input_node.is_const():
             return False
-        multiplier = self._g.get_initializer(multiplier_input_id)
+        multiplier = multiplier_input_node.get_tensor_value(as_list=False)
 
         # todo: apply this block if we have model case multiplier_input_id==0, and verify that.
         if multiplier_input_id == node.input[1]:
@@ -402,20 +402,19 @@ class TransposeOptimizer(object):
             # make sure conv don't have bias set
             if t_p.type == "Conv" and t_p.inputs[1].is_const() and len(t_p.input) == 2:
                 conv = t_p
-                numpy_val = numpy_helper.to_array(self._g.get_initializer(conv.input[1]))
+                numpy_val = conv.inputs[1].get_tensor_value(as_list=False)
                 transposed_val = np.transpose(numpy_val, (2, 3, 1, 0))
-                mul_val = numpy_helper.to_array(multiplier)
+                mul_val = multiplier
                 result = np.multiply(transposed_val, mul_val)
-                self._g.update_initializer(conv.input[1], np.transpose(result, (3, 2, 0, 1)))
+                conv.inputs[1].set_tensor_value(np.transpose(result, (3, 2, 0, 1)))
 
                 ops = self._g.get_nodes()
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
                 self._update_graph_nodes(None, [node], True)
                 return True
 
-        # sometimes, dims is None as observed for a float scalar.
-        # if there is only 1 number, so we just move transpose after the mul
-        if not multiplier.dims or multiplier.dims[0] == 1:
+        # if the shape is () or (1), we just move transpose after the mul
+        if not multiplier.shape or (len(multiplier.shape) == 1 and multiplier.shape[0] == 1):
             return self._switch_transpose_and_node(node, trans)
 
         return False
@@ -466,6 +465,5 @@ class TransposeOptimizer(object):
             return self._switch_transpose_and_node(node, trans)
         return False
 
-    # todo: consider share a same logic for element-wise op.
-    def _tanh_handler(self, trans, node):
+    def _simple_through_handler(self, trans, node):
         return self._switch_transpose_and_node(node, trans)

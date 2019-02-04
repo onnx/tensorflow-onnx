@@ -92,11 +92,11 @@ def select_op8(ctx, node, name, args):
 def create_loop_op(g, gather_input_ids, output_type, output_shape, trip_count_input_ids, rank):
     nodes = []
     cond_var_name = utils.make_name("cond_var")
-    g.make_const(cond_var_name, np.array(True, dtype=np.bool))
+    nodes.append(g.make_const(cond_var_name, np.array(True, dtype=np.bool)))
 
     # Loop requires at least a variable, add a useless fake variable.
     fake_val_name = utils.make_name("fake_var")
-    g.make_const(fake_val_name, np.array(0.0, dtype=np.float32))
+    nodes.append(g.make_const(fake_val_name, np.array(0.0, dtype=np.float32)))
 
     if rank < 1:
         raise ValueError("rank is < 1")
@@ -130,7 +130,6 @@ def get_inputs_for_current_iteration(g, input_id, iter_index):
 def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_shape, trip_count_input_ids,
                            rank, loop_name):
     g = parent_g.create_new_graph_with_same_config()
-    nodes = []
     iter_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
     fake_var_name = utils.make_name("fake_var")
@@ -138,7 +137,7 @@ def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_
     g.add_graph_input(iter_name, TensorProto.INT64, (1,))  # iteration_num
     g.add_graph_input(cond_name, TensorProto.BOOL, ())  # condition
     g.add_graph_input(fake_var_name, TensorProto.FLOAT, ())  # loop-carried dependency
-
+    nodes = g.get_nodes()
     # get the i'th value of condition
     cond_input_id = gather_input_ids[0]
     new_nodes, cond_input_id_for_current_iter = get_inputs_for_current_iteration(g, cond_input_id, iter_name)
