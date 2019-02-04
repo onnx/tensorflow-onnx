@@ -19,10 +19,9 @@ import traceback
 
 import numpy as np
 import onnx
-from onnx import numpy_helper
 
 import tf2onnx.utils
-from tf2onnx.graph import Graph, GraphUtil
+from tf2onnx.graph import GraphUtil
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("onnx-experiments")
@@ -38,10 +37,8 @@ def get_args():
 
 
 def load_graph(fname):
-    with open(fname, "rb") as f:
-        data = f.read()
-        model_proto = onnx.ModelProto()
-        g = GraphUtil.create_graph_from_onnx_model(model_proto)
+    model_proto = onnx.ModelProto()
+    g = GraphUtil.create_graph_from_onnx_model(model_proto)
     return g, model_proto.producer_name
 
 
