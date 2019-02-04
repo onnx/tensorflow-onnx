@@ -1538,7 +1538,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         res = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label, logits=logits)
         _ = tf.identity(res, name=_TFOUTPUT)
 
-        self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val})
+        self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val}, rtol=1e-6)
 
     @unittest.skipIf(BACKEND in ["onnxruntime"], "onnxruntime Slice did not supported BOOL.")
     def test_matrix_band_part(self):

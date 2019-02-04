@@ -212,6 +212,7 @@ class CustomRnnRewriter(LoopRewriterBase):
             if inferred_shape is not None and inferred_shape[1:].count(-1) <= 1:
                 new_shape_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
                                                    np.array(inferred_shape[1:], dtype=np.int64))
+                nodes_to_add.append(new_shape_node)
             else:
                 # otherwise, get the dim dynamically, e.g. remove the fake batch size (e.g.1)
                 # from [1, time, real-batch, ...]
@@ -233,10 +234,12 @@ class CustomRnnRewriter(LoopRewriterBase):
             if inferred_shape is not None and inferred_shape.count(-1) <= 1:
                 new_shape_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
                                                    np.array([1] + inferred_shape, dtype=np.int64))
+                nodes_to_add.append(new_shape_node)
             else:
                 # add a fake batch size : 1
                 fake_batch_size_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
                                                          np.array([1,], dtype=np.int64))
+                nodes_to_add.append(fake_batch_size_node)
                 new_shape_node = self.g.make_node("Concat",
                                                   [fake_batch_size_node.output[0], shape_node.output[0]],
                                                   attr={"axis": 0})

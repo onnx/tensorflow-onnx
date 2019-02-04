@@ -19,7 +19,7 @@ import tensorflow as tf
 import tf2onnx
 import tf2onnx.utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.graph import Graph
+from tf2onnx.graph import GraphUtil
 
 # pylint: disable=missing-docstring
 
@@ -43,8 +43,8 @@ def onnx_to_graphviz(g):
 
 def onnx_pretty(g, args=None):
     """Onnx graph pretty print."""
-    model_proto = g.make_model("converted from {}".format(args.input))
-    return helper.printable_graph(model_proto.graph)
+    graph_proto = g.make_model("converted from {}".format(args.input))
+    return helper.printable_graph(graph_proto.graph)
 
 
 class Tf2OnnxInternalTests(unittest.TestCase):
@@ -73,60 +73,63 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         n5 = helper.make_node("Abs", ["n4:0"], ["n5:0"], name="n5")
         n6 = helper.make_node("Identity", ["n5:0"], ["n6:0"], name="n6")
 
-        model_proto = helper.make_graph(
+        graph_proto = helper.make_graph(
             nodes=[n1, n2, n3, n4, n5, n6],
             name="test",
             inputs=[helper.make_tensor_value_info("input", TensorProto.FLOAT, [2, 2])],
             outputs=[helper.make_tensor_value_info("n5:0", TensorProto.FLOAT, [2, 2])],
             initializer=[]
         )
-        return model_proto
+        return graph_proto
 
     def test_insert_node1(self):
-        model_proto = self.sample_net()
-        nodes = model_proto.node
-        g = Graph(nodes, output_shapes={}, dtypes={})
+        graph_proto = self.sample_net()
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n2 = g.get_node_by_name("n2")
         n7 = g.insert_new_node_on_input(n2, "Abs", "n1:0", name="n7")
         ops = g.get_nodes()
         ops.append(n7)
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)
-        expected = 'digraph { n1 [op_type=Abs] n7 [op_type=Abs] n2 [op_type=Abs] n3 [op_type=Abs] ' \
-                   'n4 [op_type=Add] n5 [op_type=Abs] n6 [op_type=Identity] ' \
-                   'input -> n1 n1:0 -> n7 n7:0 -> n2 n1:0 -> n3 n2:0 -> n4 n3:0 -> n4 n4:0 -> n5 n5:0 -> n6 }'
+        expected = 'digraph { Placeholder__4 [op_type=Placeholder] ' \
+                   'n1 [op_type=Abs] n7 [op_type=Abs] n2 [op_type=Abs] n3 [op_type=Abs] ' \
+                   'n4 [op_type=Add] n5 [op_type=Abs] graph_outputs_Identity__3 [op_type=Identity] ' \
+                   'n6 [op_type=Identity] input -> n1 n1:0 -> n7 n7:0 -> n2 n1:0 -> n3 ' \
+                   'n2:0 -> n4 n3:0 -> n4 n4:0 -> n5 raw_output___2:0 -> graph_outputs_Identity__3 ' \
+                   'raw_output___2:0 -> n6 }'
         self.assertEqual(expected, result)
 
     def test_insert_node2(self):
-        model_proto = self.sample_net()
-        nodes = model_proto.node
-        g = Graph(nodes, output_shapes={}, dtypes={})
+        graph_proto = self.sample_net()
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n7 = g.insert_new_node_on_output("Abs", "n1:0", name="n7")
         ops = g.get_nodes()
         ops.append(n7)
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)
-        expected = 'digraph { n1 [op_type=Abs] n7 [op_type=Abs] n3 [op_type=Abs] n2 [op_type=Abs] ' \
-                   'n4 [op_type=Add] n5 [op_type=Abs] n6 [op_type=Identity] ' \
-                   'input -> n1 n1:0 -> n7 n7:0 -> n3 n7:0 -> n2 n2:0 -> n4 n3:0 -> n4 n4:0 -> n5 n5:0 -> n6 }'
+        expected = 'digraph { Placeholder__4 [op_type=Placeholder] n1 [op_type=Abs] n7 [op_type=Abs] ' \
+                   'n3 [op_type=Abs] n2 [op_type=Abs] n4 [op_type=Add] n5 [op_type=Abs] ' \
+                   'graph_outputs_Identity__3 [op_type=Identity] n6 [op_type=Identity] ' \
+                   'input -> n1 n1:0 -> n7 n7:0 -> n3 n7:0 -> n2 n2:0 -> n4 n3:0 -> n4 ' \
+                   'n4:0 -> n5 raw_output___2:0 -> graph_outputs_Identity__3 raw_output___2:0 -> n6 }'
         self.assertEqual(expected, result)
 
     def test_remove_input(self):
-        model_proto = self.sample_net()
-        nodes = model_proto.node
-        g = Graph(nodes, output_shapes={}, dtypes={})
+        graph_proto = self.sample_net()
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n4 = g.get_node_by_name("n4")
         g.remove_input(n4, n4.input[1])
         result = onnx_to_graphviz(g)
         expected = 'digraph { n1 [op_type=Abs] n2 [op_type=Abs] n3 [op_type=Abs] n4 [op_type=Add] ' \
-                   'n5 [op_type=Abs] n6 [op_type=Identity] input -> n1 n1:0 -> n2 n1:0 -> n3 n2:0 -> n4 ' \
-                   'n4:0 -> n5 n5:0 -> n6 }'
+                   'n5 [op_type=Abs] n6 [op_type=Identity] graph_outputs_Identity__3 ' \
+                   '[op_type=Identity] Placeholder__4 [op_type=Placeholder] input -> n1 ' \
+                   'n1:0 -> n2 n1:0 -> n3 n2:0 -> n4 n4:0 -> n5 raw_output___2:0 -> n6 ' \
+                   'raw_output___2:0 -> graph_outputs_Identity__3 }'
         self.assertEqual(expected, result)
 
     def test_rewrite_subgraph(self):
-        model_proto = self.sample_net()
-        nodes = model_proto.node
-        g = tf2onnx.graph.Graph(nodes, output_shapes={}, dtypes={})
+        graph_proto = self.sample_net()
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         pattern = \
             OpTypePattern('Abs', name='output', inputs=[
                 OpTypePattern('Add', name='input')
@@ -143,9 +146,12 @@ class Tf2OnnxInternalTests(unittest.TestCase):
             ops = g.replace_subgraph(ops, match, [], [output_node], [], [new_node])
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)
-        expected = 'digraph { n1 [op_type=Abs] n3 [op_type=Abs] n2 [op_type=Abs] ReplacedOp__2 [op_type=Sub] ' \
-                   'n6 [op_type=Identity] input -> n1 n1:0 -> n3 n1:0 -> n2 n2:0 -> ReplacedOp__2 ' \
-                   'n3:0 -> ReplacedOp__2 ReplacedOp__2:0 -> n6 }'
+        expected = 'digraph { Placeholder__4 [op_type=Placeholder] n1 [op_type=Abs] ' \
+                   'n3 [op_type=Abs] n2 [op_type=Abs] ReplacedOp__5 [op_type=Sub] ' \
+                   'graph_outputs_Identity__3 [op_type=Identity] n6 [op_type=Identity] ' \
+                   'input -> n1 n1:0 -> n3 n1:0 -> n2 n2:0 -> ReplacedOp__5 ' \
+                   'n3:0 -> ReplacedOp__5 ReplacedOp__5:0 -> graph_outputs_Identity__3 ' \
+                   'ReplacedOp__5:0 -> n6 }'
         self.assertEqual(expected, result)
 
     def test_match_flipped(self):
@@ -153,7 +159,7 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         n2 = helper.make_node("Add", ["i2", "i2"], ["n2:0"], name="n2")
         n3 = helper.make_node("Mul", ["n1:0", "n2:0"], ["n3:0"], name="n3")
 
-        model_proto = helper.make_graph(
+        graph_proto = helper.make_graph(
             nodes=[n1, n2, n3],
             name="test",
             inputs=[helper.make_tensor_value_info("i1", TensorProto.FLOAT, [2, 2]),
@@ -161,8 +167,7 @@ class Tf2OnnxInternalTests(unittest.TestCase):
             outputs=[helper.make_tensor_value_info("n2:0", TensorProto.FLOAT, [2, 2])],
             initializer=[]
         )
-        nodes = model_proto.node
-        g = tf2onnx.graph.Graph(nodes, output_shapes={}, dtypes={})
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         pattern = OpTypePattern('Mul', inputs=[
             OpTypePattern('Add'),
             OpTypePattern('Sub')

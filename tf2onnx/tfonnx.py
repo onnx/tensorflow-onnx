@@ -151,9 +151,7 @@ def _convert_shapenode_to_int64(ctx, node, input_number):
         # if it is a const, change the const to be int64
         shape = shape_node.get_tensor_value()
         shape = np.array(list(shape), dtype=np.int64)
-        onnx_tensor = numpy_helper.from_array(shape, name)
-        ctx.set_initializer(name, onnx_tensor)
-        shape_node.set_attr("value", onnx_tensor)
+        shape_node.set_tensor_value(shape)
         ctx.set_dtype(shape_node.output[0], onnx_pb.TensorProto.INT64)
         ctx.copy_shape(name, shape_node.output[0])
         return [node]
@@ -238,15 +236,6 @@ def broadcast_op7(ctx, node, name, args):
     return node
 
 
-def const_op(ctx, node, name, args):
-    """Constants - make those initializers."""
-    tensor = node.get_attr("value")
-    ctx.add_initializer(tensor.t)
-    # we return None - const will not be in the node list. But we keep the mapping for
-    # get_node_by_name() so we don't need to lookup the initializers.
-    return None
-
-
 def arg_minmax_op(ctx, node, name, args):
     # output_type output = ArgMin(T input, Tidx dimension, @type Tidx, @type output_type)
     # tensor(int32) reduced = ArgMin(T data, @INT axis, @INT keepdims)
@@ -278,30 +267,6 @@ def reduce_op(ctx, node, name, args):
         del node.attr['keep_dims']
         node.set_attr("keepdims", keep_dims.i)
     return node
-
-
-def placeholder_op(ctx, node, name, args):
-    input_name = node.output[0]
-    ctx.add_graph_input(input_name, ctx.get_dtype(input_name), ctx.get_shape(input_name))
-    return None
-
-
-def placeholder_with_default_op(ctx, node, name, args):
-    # Overriding initializer with input is not well supported for these targets
-    if ctx.is_target(TARGET_RS4, TARGET_RS5, TARGET_RS6):
-        log.warning("%s: placeholder_with_default_op, default value is not supported by target, ignore it" % node.name)
-        return placeholder_op(ctx, node, name, args)
-
-    default_value_node = ctx.get_node_by_output(node.input[0])
-    if not default_value_node.is_const():
-        log.warning("%s: placeholder_with_default_op, non const default value is not supported, ignore it" % node.name)
-        return placeholder_op(ctx, node, name, args)
-
-    # Copy the tensor value, set its name to current node's output, add as initializer
-    value = default_value_node.get_tensor_value(as_list=False)
-    tensor = numpy_helper.from_array(value, node.output[0])
-    ctx.add_initializer(tensor)
-    return None
 
 
 def square_op(ctx, node, name, args):
@@ -485,7 +450,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             else:
                 # new reshape takes new shape as input[1]
                 shape_name = utils.make_name(node.name)
-                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
+                nodes.append(ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64)))
                 input_name = node.input[1]
                 reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
                 reshape.input.append(shape_name)
@@ -696,7 +661,7 @@ def relu6_op(ctx, node, name, args):
     dtype = ctx.get_dtype(node.input[0])
     dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
     shape = ctx.get_shape(node.input[0])
-
+    nodes = []
     if -1 in shape:
         # if the shape has unknown dims we need to do something like this for opset < 8 (=no broadcast for min/max):
         # tz = sub(features, features)
@@ -707,7 +672,7 @@ def relu6_op(ctx, node, name, args):
 
         # const tensor 6
         six_name = utils.make_name(node.name)
-        ctx.make_const(six_name, np.array([6.], dtype=dtype))
+        nodes.append(ctx.make_const(six_name, np.array([6.], dtype=dtype)))
 
         # get a tensor of input shape with zeros
         sub_node = ctx.make_node("Sub", [node.input[0], node.input[0]], op_name_scope=input_node.name)
@@ -720,22 +685,24 @@ def relu6_op(ctx, node, name, args):
         min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
         min_node.input.append(add_node.output[0])
         ctx.copy_shape(old_output, min_node.output[0])
-        return [sub_node, add_node, node, min_node]
+        nodes.extend([sub_node, add_node, node, min_node])
+        return nodes
 
     # if there is no unknown dim in shape we can use constants
     node.type = "Max"
     zero_name = utils.make_name(node.name)
-    ctx.make_const(zero_name, np.zeros(shape, dtype=dtype))
+    nodes.append(ctx.make_const(zero_name, np.zeros(shape, dtype=dtype)))
     six_name = utils.make_name(node.name)
     six = np.zeros(shape, dtype=dtype)
     six.fill(6)
-    ctx.make_const(six_name, six)
+    nodes.append(ctx.make_const(six_name, six))
     node.input.append(zero_name)
     min_name = utils.make_name(node.name)
     min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
     min_node.input.append(six_name)
     ctx.copy_shape(old_output, min_node.output[0])
-    return [node, min_node]
+    nodes.extend([node, min_node])
+    return nodes
 
 
 def relu6_op8(ctx, node, name, args):
@@ -745,18 +712,19 @@ def relu6_op8(ctx, node, name, args):
     dtype = ctx.get_dtype(node.input[0])
     dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
     node.type = "Max"
-
+    nodes = []
     # const tensor 6
     six_name = utils.make_name(node.name)
-    ctx.make_const(six_name, np.array([6], dtype=dtype))
+    nodes.append(ctx.make_const(six_name, np.array([6], dtype=dtype)))
     zero_name = utils.make_name(node.name)
-    ctx.make_const(zero_name, np.array([0], dtype=dtype))
+    nodes.append(ctx.make_const(zero_name, np.array([0], dtype=dtype)))
     node.input.append(zero_name)
     min_name = utils.make_name(node.name)
     min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
     min_node.input.append(six_name)
     ctx.copy_shape(old_output, min_node.output[0])
-    return [node, min_node]
+    nodes.extend([node, min_node])
+    return nodes
 
 
 def squareddifference_op(ctx, node, name, args):
@@ -786,7 +754,7 @@ def sign_op(ctx, node, name, args):
         raise ValueError("dtype " + node_dtype + " is not supported in onnx for now")
     input_tensor_type = utils.ONNX_TO_NUMPY_DTYPE[node_dtype]
     zero_name = utils.make_name("{}_zero".format(node.name))
-    ctx.make_const(zero_name, np.array(0, dtype=input_tensor_type))
+    nodes.append(ctx.make_const(zero_name, np.array(0, dtype=input_tensor_type)))
     greater_node = ctx.make_node("Greater", [node.input[0], zero_name])
     less_node = ctx.make_node("Less", [node.input[0], zero_name])
     cast_node_1 = ctx.make_node("Cast", [greater_node.output[0]], {"to": node_dtype})
@@ -820,12 +788,12 @@ def biasadd_op7(ctx, node, name, args):
         if node.inputs[1].type == 'Const' and len(shape1) == 1:
             new_broadcast_shape = [shape1[0],] + [1,] * (len(shape0) - 2)
             shape_name = utils.make_name(node.name)
-            ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
+            shape_const_node = ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
             op_name = node.input[1]
             reshape_node = ctx.insert_new_node_on_input(node, "Reshape", op_name)
             reshape_node.input.append(shape_name)
             ctx.set_shape(reshape_node.output[0], new_broadcast_shape)
-            return [reshape_node, node]
+            return [shape_const_node, reshape_node, node]
     return node
 
 
@@ -1039,10 +1007,10 @@ def expanddims_op7(ctx, node, name, args):
     if shape is not None and shape.count(-1) < 2:
         # tensorflow already infers the output shape so we can just take it
         shape_name = utils.make_name(node.name)
-        ctx.make_const(shape_name, np.array(shape, dtype=np.int64))
+        shape_node = ctx.make_const(shape_name, np.array(shape, dtype=np.int64))
         node.type = "Reshape"
         node.input[1] = shape_name
-        return node
+        return [node, shape_node]
 
     # if there is more than one -1 in the shape, Reshape won't support.
     dim_node = node.inputs[1]
@@ -1209,7 +1177,7 @@ def upsample_op9(ctx, node, name, args):
     res = ctx.make_node("Transpose", upsample.output, {"perm": [0, 2, 3, 1]},
                         name=node.name, outputs=node.output)
     return [ori_shape, ori_shape_hw, ori_shape_hw_float, target_hw_float, scales_hw,
-            scales, input_nchw, upsample, res]
+            const_one_array, scales, input_nchw, upsample, res]
 
 
 def multinomial_op(ctx, node, name, args):
@@ -1364,8 +1332,9 @@ def onehot_op(ctx, node, name, args):
     else:
         eye[eye == 0] = off
         eye[eye == 1] = on
+    nodes = [node]
     const_name = utils.make_name(node.name)
-    ctx.make_const(const_name, eye)
+    nodes.append(ctx.make_const(const_name, eye))
     # setup gather inputs
     del node.input[:]
     node.input.append(const_name)
@@ -1376,8 +1345,9 @@ def onehot_op(ctx, node, name, args):
         name = utils.make_name(node.name)
         transpose_node = ctx.insert_new_node_on_output("Transpose", node.output[0], name)
         ctx.copy_shape(node.output[0], transpose_node.output[0])
-        return [node, transpose_node]
-    return node
+        nodes.append(transpose_node)
+        return nodes
+    return nodes
 
 
 def fused_batchnorm_op7(ctx, node, name, args):
@@ -1397,14 +1367,14 @@ def fused_batchnorm_op7(ctx, node, name, args):
         new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(as_list=False), scale_shape),
                                   dtype=val_type)
         new_mean_node_name = utils.make_name(node.name)
-        ctx.make_const(new_mean_node_name, new_mean_value)
+        nodes.append(ctx.make_const(new_mean_node_name, new_mean_value))
         node.input[3] = new_mean_node_name
 
     if var_shape != scale_shape:
         new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(as_list=False), scale_shape),
                                  dtype=val_type)
         new_val_node_name = utils.make_name(node.name)
-        ctx.make_const(new_val_node_name, new_var_value)
+        nodes.append(ctx.make_const(new_val_node_name, new_var_value))
         node.input[4] = new_val_node_name
 
     return nodes
@@ -1602,7 +1572,7 @@ def shape_op(ctx, node, name, args):
 
 def erf_op(ctx, node, name, args):
     """Error function."""
-
+    nodes = []
     # constant names
     a1 = "erf_a1"
     a2 = "erf_a2"
@@ -1622,18 +1592,17 @@ def erf_op(ctx, node, name, args):
     def mknode(op_type, inputs, opname, **kwargs):
         return Node(helper.make_node(op_type, inputs, [outp(opname)], name=n + "__" + opname, **kwargs), ctx)
 
-    try:
-        _ = ctx.get_initializer("erf_a1")
-    except:  # pylint: disable=bare-except
+    erf_a1_node = ctx.get_node_by_output("erf_a1")
+    if erf_a1_node is None:
         # insert the constants for erf once
-        ctx.make_const(a1, np.array(0.254829592, dtype=np.float32))
-        ctx.make_const(a2, np.array(-0.284496736, dtype=np.float32))
-        ctx.make_const(a3, np.array(1.421413741, dtype=np.float32))
-        ctx.make_const(a4, np.array(-1.453152027, dtype=np.float32))
-        ctx.make_const(a5, np.array(1.061405429, dtype=np.float32))
-        ctx.make_const(p, np.array(0.3275911, dtype=np.float32))
-        ctx.make_const(one, np.array(1., dtype=np.float32))
-        ctx.make_const(null, np.array(0., dtype=np.float32))
+        nodes.extend([ctx.make_const(a1, np.array(0.254829592, dtype=np.float32)),
+                      ctx.make_const(a2, np.array(-0.284496736, dtype=np.float32)),
+                      ctx.make_const(a3, np.array(1.421413741, dtype=np.float32)),
+                      ctx.make_const(a4, np.array(-1.453152027, dtype=np.float32)),
+                      ctx.make_const(a5, np.array(1.061405429, dtype=np.float32)),
+                      ctx.make_const(p, np.array(0.3275911, dtype=np.float32)),
+                      ctx.make_const(one, np.array(1., dtype=np.float32)),
+                      ctx.make_const(null, np.array(0., dtype=np.float32))])
 
     x = node.input[0]
 
@@ -1645,7 +1614,7 @@ def erf_op(ctx, node, name, args):
     #  y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) *  t * math.exp(-x * x)
     #  return sign * y  # erf(-x) = -erf(x)
 
-    nodes = [
+    nodes.extend([
         mknode("Abs", [x], "x"),
         mknode("Sub", [null, x], "negx"),
         mknode("Greater", [x, null], "isPositive"),
@@ -1673,7 +1642,7 @@ def erf_op(ctx, node, name, args):
         mknode("Mul", [outp("15"), outp("7")], "16"),
         mknode("Sub", [one, outp("16")], "17"),
         Node(helper.make_node("Mul", [outp("17"), outp("sign")], [output_name], name=n), ctx),
-    ]
+    ])
     return nodes
 
 
@@ -1737,7 +1706,7 @@ def zeroslike_op(ctx, node, name, args):
     const_zero = ctx.make_const(node_name, np.array(0).astype(utils.ONNX_TO_NUMPY_DTYPE[input_dtype]))
     mul_op = ctx.make_node(op_type="Mul", inputs=[node.input[0], const_zero.output[0]],
                            name=node.name, outputs=node.output)
-    return mul_op
+    return [const_zero, mul_op]
 
 
 def softmax_op(ctx, node, name, args):
@@ -1763,8 +1732,8 @@ _OPSET_4 = {
     "Cast": (cast_op, []),
     "Concat": (concat_op, ["Concat"]),
     "ConcatV2": (concatv2_op, ["Concat"]),
-    "Const": (const_op, []),
-    "ConstV2": (const_op, []),
+    "Const": (direct_op, []),
+    "ConstV2": (direct_op, []),
     "Conv2D": (conv_op, ["Conv"]),
     "Conv2DBackpropInput": (convtranspose_op, ["ConvTranspose"]),
     "Conv3D": (conv_op, ["Conv"]),
@@ -1805,9 +1774,9 @@ _OPSET_4 = {
     "NotEqual": (direct_op, ["Not"]),
     "Pad": (pad_op, []),
     "PadV2": (pad_op, ["Pad"]),
-    "Placeholder": (placeholder_op, []),
-    "PlaceholderV2": (placeholder_op, []),
-    "PlaceholderWithDefault": (placeholder_with_default_op, []),
+    "Placeholder": (direct_op, []),
+    "PlaceholderV2": (direct_op, []),
+    "PlaceholderWithDefault": (direct_op, []),
     "Pow": (pow_op, []),
     "Prod": (reduce_op, ["ReduceProd"]),
     "RandomNormal": (direct_op, []),

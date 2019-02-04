@@ -122,7 +122,8 @@ class UnitRewriterBase(object):
             return REWRITER_RESULT.SKIP
 
         self.print_step("process the weights/bias/ft_bias, to fit onnx weights/bias requirements")
-        self.process_weights_and_bias(rnn_weights, rnn_props)
+        nodes = self.process_weights_and_bias(rnn_weights, rnn_props)
+        self.all_nodes.extend(nodes)
 
         _, batch_size_node = self.process_seq_length(rnn_props, seq_len_input_node)
         rnn_props.batch_size_node = batch_size_node
@@ -435,7 +436,8 @@ class UnitRewriterBase(object):
 
         const_node = self.g.make_const(utils.make_name("Const"), np.array([[[fill_val]]], dtype=fill_val_dtype))
         tile_node = self.g.make_node("Tile", [const_node.output[0], tile_shape_int64.output[0]])
-        self.all_nodes.extend([tile_shape, tile_shape_int64, tile_node])
+        self.all_nodes.extend([tile_shape, tile_shape_int64, tile_node,
+                               num_direction_node, h_node, const_node])
         return tile_node
 
     def _convert_timemajor_transpose(self, node):

@@ -25,6 +25,7 @@ def matrixbandpart_op(ctx, node, name, args):
     # no need to worry about the dtype, because bool type is needed as Xor only support bool
     node_name = utils.make_name("const_zero")
     const_zero = ctx.make_const(name=node_name, np_val=np.array([0]).astype(np.int32))
+    nodes.append(const_zero)
     first_col_or_row = ctx.make_node(op_type="Gather", inputs=[node.input[0], const_zero.output[0]],
                                      attr={"axis": axis})
     nodes.append(first_col_or_row)
@@ -41,6 +42,7 @@ def matrixbandpart_op(ctx, node, name, args):
     g = ctx.create_new_graph_with_same_config()
     node_name = utils.make_name("const_zero_bool")
     const_zero_bool = ctx.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
+    nodes.append(const_zero_bool)
     ctx.set_dtype(const_zero_bool.output[0], onnx_pb.TensorProto.BOOL)
 
     # shift right the line and add zero at the left.
@@ -67,14 +69,16 @@ def matrixbandpart_op(ctx, node, name, args):
     nodes.append(shape)
     node_name = utils.make_name("line_num_index")
     col_or_row_num_index = ctx.make_const(name=node_name, np_val=np.array(axis).astype(np.int32))
+    nodes.append(col_or_row_num_index)
     line_num = ctx.make_node(op_type="Gather", inputs=[shape.output[0], col_or_row_num_index.output[0]])
     nodes.append(line_num)
     trip_cnt = line_num.output[0]
     node_name = utils.make_name("true")
-    cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(np.bool)).output[0]
+    cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(np.bool))
+    nodes.append(cond)
     col_init = one_line.output[0]
 
-    loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond, col_init], output_count=2)
+    loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init], output_count=2)
     loop_node.set_body_graph_as_attr("body", g)
     nodes.append(loop_node)
     # convert generated mask matrix from bool to right shape and data type

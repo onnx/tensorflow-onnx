@@ -42,7 +42,8 @@ def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
     mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum.output[0]])
     res = ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], outputs=[node.output[0]], attr={"axes": [1]})
 
-    return [onehot, log_softmax, mul1, reduce_sum, mul2, res]
+    return [const_eye, onehot, log_softmax, mul1, reduce_sum,
+            const_negative_one, mul2, res]
 
 
 def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, args):
@@ -95,5 +96,6 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
                         inputs=[mul2.output[0]], outputs=[node.output[0]],
                         attr={"axes": [1]})
 
-    nodes.extend([indices_size, indices_unsqueeze, id_unsqueeze, indices_with_id, log_softmax, mul2, res])
+    nodes.extend([zero_const, one_const, indices_size, indices_unsqueeze, id_unsqueeze, indices_with_id,
+                  log_softmax, const_negative_one, mul2, res])
     return nodes

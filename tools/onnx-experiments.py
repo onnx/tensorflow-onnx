@@ -19,10 +19,9 @@ import traceback
 
 import numpy as np
 import onnx
-from onnx import numpy_helper
 
 import tf2onnx.utils
-from tf2onnx.graph import Graph
+from tf2onnx.graph import GraphUtil
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("onnx-experiments")
@@ -38,51 +37,8 @@ def get_args():
 
 
 def load_graph(fname):
-    with open(fname, "rb") as f:
-        data = f.read()
-        model_proto = onnx.ModelProto()
-        model_proto.ParseFromString(data)
-        onnx_nodes = model_proto.graph.node
-        output_names = []
-
-        # some pytorch model had empty names - make one up
-        for node in onnx_nodes:
-            if not node.name:
-                node.name = tf2onnx.utils.make_name("was_empty")
-
-        g = Graph(onnx_nodes, output_shapes={}, dtypes={}, output_names=output_names)
-        for i in model_proto.graph.initializer:
-            v = numpy_helper.to_array(i)
-            name = i.name
-            g.initializers[name] = i
-            dtype = i.data_type
-            g.set_dtype(name, dtype)
-            g.set_shape(name, v.shape)
-        for i in model_proto.graph.input:
-            name = i.name
-            if name in g.initializers:
-                # ignore if it is not a model input
-                continue
-            shape = [j.dim_value if hasattr(i.type.tensor_type, "dim_value") else -1
-                     for j in i.type.tensor_type.shape.dim]
-            dtype = i.type.tensor_type.elem_type
-            g.set_dtype(name, dtype)
-            g.set_shape(name, shape)
-            g.add_graph_input(name, dtype, shape)
-        for i in model_proto.graph.output:
-            name = i.name
-            shape = [j.dim_value if hasattr(i.type.tensor_type, "dim_value") else -1
-                     for j in i.type.tensor_type.shape.dim]
-            dtype = i.type.tensor_type.elem_type
-            g.set_dtype(name, dtype)
-            g.set_shape(name, shape)
-            output_names.append(name)
-
-        # TODO: this is a hack in case a output name does not follow tensorflow convention
-        for node in g.get_nodes():
-            for name in node.output:
-                g._nodes_by_name[name] = node  # pylint: disable=protected-access
-
+    model_proto = onnx.ModelProto()
+    g = GraphUtil.create_graph_from_onnx_model(model_proto)
     return g, model_proto.producer_name
 
 

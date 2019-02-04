@@ -255,6 +255,8 @@ class GRUUnitRewriter(UnitRewriterBase):
         rnn_props.onnx_input_ids["R"] = r_node.output[0]
         rnn_props.onnx_input_ids["B"] = b_node.output[0]
 
+        return [w_node, r_node, b_node]
+
     def process_var_init_nodes(self, rnn_props):
         assert "state" in rnn_props.var_initializers.keys()
         found_node_id = rnn_props.var_initializers["state"]

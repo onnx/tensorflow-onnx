@@ -21,7 +21,8 @@ def make_range_const(ctx, start, limit, delta, output, scope_name, dtype):
     delta = ctx.get_node_by_output(delta).get_tensor_value(as_list=False)
     val = np.arange(start, limit, delta, dtype=start.dtype)
     const_range = ctx.make_const(base_name, val)
-    return ctx.make_node("Identity", [const_range.output[0]], dtypes=[dtype], outputs=[output])
+    return [ctx.make_node("Identity", [const_range.output[0]], dtypes=[dtype], outputs=[output]),
+            const_range]
 
 
 def make_range_non_const(ctx, start, limit, delta, output, scope_name, dtype):
@@ -65,7 +66,7 @@ def make_range_non_const(ctx, start, limit, delta, output, scope_name, dtype):
     # cond
     # Use initializer here since Constant OP before opset 9 does not support bool type
     cond_name = "{}_cond".format(base_name)
-    ctx.make_const(cond_name, np.ones((), dtype=bool))
+    nodes.append(ctx.make_const(cond_name, np.ones((), dtype=bool)))
 
     # body
     g = ctx.create_new_graph_with_same_config()
