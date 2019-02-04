@@ -1041,6 +1041,10 @@ class GraphUtil(object):
         for n in graph_proto.node:
             if n.op_type == "Constant":
                 n.op_type = "Const"
+
+            # some pytorch model had empty names - make one up
+            if not n.name:
+                n.name = utils.make_name("was_empty")
             nodes_to_append.append(n)
 
         output_names = []
