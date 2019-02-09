@@ -2284,7 +2284,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     # apply custom ops on top of the assembled opset. We can either completment the opset
     # or override existing ops with a custom op.
     if custom_op_handlers is not None:
-        custom_opset = {k: [v, []] for k, v in custom_op_handlers.items()}
+        custom_opset = {k: v for k, v in custom_op_handlers.items()}
         ops_mapping.update(custom_opset)
 
     ops = g.get_nodes()
