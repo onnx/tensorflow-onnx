@@ -340,29 +340,6 @@ def reshape_op5(ctx, node, name, args):
     return [input_cast] + nodes
 
 
-def less_op7(ctx, node, name, args):
-    """Elementwise Ops with Less-7 flag."""
-    nodes = [node]
-    input1_dtype = ctx.get_dtype(node.input[0])
-    input2_dtype = ctx.get_dtype(node.input[1])
-    target_dtype = onnx_pb.TensorProto.FLOAT
-    need_case_1 = input1_dtype != target_dtype
-    if need_case_1:
-        input1_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
-        input1_cast.set_attr("to", target_dtype)
-        ctx.copy_shape(node.output[0], input1_cast.output[0])
-        ctx.set_shape(input1_cast.output[0], target_dtype)
-        nodes.insert(0, input1_cast)
-
-        input2_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[1])
-        input2_cast.set_attr("to", target_dtype)
-        ctx.copy_shape(node.output[0], input2_cast.output[0])
-        ctx.set_shape(input2_cast.output[0], target_dtype)
-        nodes.insert(0, input2_cast)
-
-    return nodes
-
-
 NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
 HWCN_TO_NCHW = [3, 2, 0, 1]
@@ -980,23 +957,6 @@ def expanddims_op(ctx, node, name, args):
         ctx.remove_input(node, node.input[1])
         return node
     raise ValueError("non-const dim is not supported")
-
-
-def greater_op7(ctx, node, name, args):
-    nodes = []
-    supported_types = [
-        onnx_pb.TensorProto.FLOAT,
-        onnx_pb.TensorProto.FLOAT16,
-        onnx_pb.TensorProto.DOUBLE
-    ]
-    for inp in node.input:
-        if ctx.get_dtype(inp) not in supported_types:
-            inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=onnx_pb.TensorProto.FLOAT)
-            ctx.copy_shape(inp, inp_cast.output[0])
-            ctx.set_dtype(inp_cast.output[0], onnx_pb.TensorProto.FLOAT)
-            nodes.append(inp_cast)
-    nodes.append(broadcast_op7(ctx, node, name, args))
-    return nodes
 
 
 def expanddims_op7(ctx, node, name, args):
@@ -1717,6 +1677,27 @@ def softmax_op(ctx, node, name, args):
     return node
 
 
+def logical_compare_op(ctx, node, name, args):
+    # T2 output = Greater(T1 x, T1 y), T2=tensor(bool)
+    # T2 output = Less(T1 x, T1 y), T2=tensor(bool)
+    nodes = [node]
+    # Great/Less in opset7 only supports limited types, insert Cast if needed
+    if ctx.opset < 9:
+        supported_dtypes = [
+            onnx_pb.TensorProto.FLOAT,
+            onnx_pb.TensorProto.FLOAT16,
+            onnx_pb.TensorProto.DOUBLE
+        ]
+        target_dtype = onnx_pb.TensorProto.FLOAT
+        for inp in node.input:
+            if ctx.get_dtype(inp) not in supported_dtypes:
+                inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=target_dtype)
+                ctx.copy_shape(inp, inp_cast.output[0])
+                ctx.set_dtype(inp_cast.output[0], target_dtype)
+                nodes.append(inp_cast)
+    return nodes
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1845,8 +1826,8 @@ _OPSET_7 = {
     "FloorMod": (floormod_op, []),
     "FusedBatchNorm": (fused_batchnorm_op7, []),
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
-    "Greater": (greater_op7, []),
-    "Less": (less_op7, []),
+    "Greater": (logical_compare_op, []),
+    "Less": (logical_compare_op, []),
     "LogicalAnd": (broadcast_op7, ["And"]),
     "LogicalOr": (broadcast_op7, ["Or"]),
     "MatrixBandPart": (matrixbandpart_op, []),
@@ -1884,6 +1865,8 @@ _OPSET_9 = {
     "Asinh": (direct_op, []),
     "Acosh": (direct_op, []),
     "Atanh": (direct_op, []),
+    "Greater": (logical_compare_op, []),
+    "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
 }
@@ -2178,9 +2161,9 @@ def rewrite_logical_compare_with_equal(g, ops):
             compare_e_op = match.get_op('compare_with_equal')
             data_type = g.get_dtype(compare_e_op.input[0])
             compare_input_ids = compare_e_op.input
-            need_cast = data_type not in (onnx_pb.TensorProto.FLOAT16,
-                                          onnx_pb.TensorProto.FLOAT,
-                                          onnx_pb.TensorProto.DOUBLE)
+            need_cast = g.opset < 9 and data_type not in (onnx_pb.TensorProto.FLOAT16,
+                                                          onnx_pb.TensorProto.FLOAT,
+                                                          onnx_pb.TensorProto.DOUBLE)
             if need_cast:
                 compare_input_ids = []
                 for input_id in compare_e_op.input:

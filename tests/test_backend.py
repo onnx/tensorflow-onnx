@@ -117,7 +117,8 @@ def onnxruntime_check(op):
         "Div": 7, #  Div-1, Div-6
         "Elu": 6, #  Elu-1
         "Exp": 6, #  Exp-1
-        "Greater": 7, #  Greater-1
+        "Greater": 7, #  Greater-7
+        "Less": 7,  # Less-7
         "Log": 6, #  Log-1
         "Max": 6, #  Max-1
         "Min": 6, #  Min-1
@@ -656,6 +657,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x1 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT)
         x2 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT1)
         mi = tf.greater(x1, x2)
+        _ = tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
+    @unittest.skipIf(*onnxruntime_check("Less"))
+    def test_less(self):
+        x_val1 = np.array([4, 2, 4, 1], dtype=np.float32).reshape((2, 2))
+        x_val2 = np.array([2, 4, 4, 1], dtype=np.float32).reshape((2, 2))
+        x1 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+        x2 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT1)
+        mi = tf.less(x1, x2)
+        _ = tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
+    @unittest.skipIf(*onnxruntime_check("Less"))
+    def test_less_unsupport_type(self):
+        x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
+        x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
+        x1 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT)
+        x2 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT1)
+        mi = tf.less(x1, x2)
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
