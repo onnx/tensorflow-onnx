@@ -1267,6 +1267,12 @@ def minmax_op(ctx, node, name, args):
 
 
 def pack_op(ctx, node, name, args):
+    # in tf, "pack" can accept one input tensor which means doing nothing,
+    # so remove the node in ONNX
+    if len(node.inputs) == 1:
+        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], node.input[0])
+        return None
+
     # hack to make up for the missing onnx pack op
     axis = node.get_attr("axis").i
     if axis < 0:
