@@ -1476,7 +1476,7 @@ def fill_op7(ctx, node, name, args):
 
 
 def fill_op(ctx, node, name, args):
-    node.type = "ConstantLike"
+    node.type = "ConstantOfShape"
     # both shape and value in tensorflow are passed as tensor.
     # In onnx the value is an attribute so we need to fetch the value as const which
     # sooner or later will be a problem for tensorflow-onnx.
