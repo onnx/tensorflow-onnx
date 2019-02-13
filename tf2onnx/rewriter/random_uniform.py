@@ -69,9 +69,11 @@ def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output):
     if ru_op.inputs[0].type == "Shape":
         shape_node = ru_op.inputs[0]
         new_node = g.make_node("RandomUniformLike", inputs=[shape_node.input[0]], name=op_name,
-                               attr={"low": tmin, "high": tmax, "dtype": dtype})
+                               attr={"low": tmin, "high": tmax, "dtype": dtype},
+                               shapes=shape_node.output_shapes, dtypes=[dtype])
     else:
         shape = g.get_shape(output.output[0])
         new_node = g.make_node("RandomUniform", [], name=op_name,
-                               attr={"low": tmin, "high": tmax, "dtype": dtype, "shape": shape})
+                               attr={"low": tmin, "high": tmax, "dtype": dtype, "shape": shape},
+                               shapes=[shape], dtypes=[dtype])
     return new_node

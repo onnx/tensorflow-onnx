@@ -258,6 +258,35 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
 
+    def test_dropout(self):
+        is_training = tf.placeholder_with_default(False, (), "is_training")
+        x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
+        # Define a scope for reusing the variables
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name="input_1")
+
+        fc1 = tf.layers.dropout(x, rate=.1, training=is_training)
+
+        _ = tf.identity(fc1, name="output")
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
+
+    def test_simple_random_uniform(self):
+        x_val = np.array([1, 2, 3], dtype=np.float32)
+        y_val = np.array([4, 5, 6], dtype=np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = tf.random.uniform(x_val.shape, 0, x, seed=42)
+        y = y + 1
+        res = tf.case([(tf.reduce_all(x < 1), lambda: x + y), (tf.reduce_all(y > 0), lambda: tf.square(y))],
+                      default=lambda: x, name="test_case")
+        _ = tf.identity(res, name="output")
+
+        feed_dict = {"input_1:0": x_val, "input_2:0": y_val}
+        input_names_with_port = ["input_1:0", "input_2:0"]
+        output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
 
 if __name__ == '__main__':
     Tf2OnnxBackendTestBase.trigger(CondTests)
