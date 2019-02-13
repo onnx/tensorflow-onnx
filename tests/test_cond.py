@@ -273,18 +273,16 @@ class CondTests(Tf2OnnxBackendTestBase):
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
 
     def test_simple_random_uniform(self):
-        x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
-        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
-        x = tf.random.uniform(x_val.shape, 0, x, seed=42)
+        x = tf.random.uniform([3], 0, 10, seed=42)
         y = y + 1
         res = tf.case([(tf.reduce_all(x < 1), lambda: x + y), (tf.reduce_all(y > 0), lambda: tf.square(y))],
                       default=lambda: x, name="test_case")
         _ = tf.identity(res, name="output")
 
-        feed_dict = {"input_1:0": x_val, "input_2:0": y_val}
-        input_names_with_port = ["input_1:0", "input_2:0"]
+        feed_dict = {"input_2:0": y_val}
+        input_names_with_port = ["input_2:0"]
         output_names_with_port = ["output:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
 
