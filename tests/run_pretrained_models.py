@@ -23,7 +23,9 @@ import six
 import tensorflow as tf
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework.graph_util import convert_variables_to_constants
-from tensorflow.contrib.rnn import GRUBlockCell  # pylint: disable=unused-import
+# contrib ops are registered only when the module is imported, the following import statement is needed,
+# otherwise tf runtime error will show up when the tf model is restored from pb file because of un-registered ops.
+import tensorflow.contrib.rnn  # pylint: disable=unused-import
 import yaml
 import PIL.Image
 

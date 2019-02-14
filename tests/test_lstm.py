@@ -396,7 +396,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        lstm_list = []
         if True:
             # bilstm, no scope
             cell1 = rnn.LSTMCell(
@@ -412,7 +411,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 cell2,
                 x,
                 dtype=tf.float32)
-            lstm_list.append(outputs)
 
         _ = tf.identity(outputs, name="output")
         _ = tf.identity(cell_state, name="cell_state")
@@ -431,7 +429,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        lstm_list = []
         if True:
             # bilstm, no scope
             cell1 = rnn.LSTMCell(
@@ -447,7 +444,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 cell2,
                 x,
                 dtype=tf.float32)
-            lstm_list.append(outputs)
 
         _ = tf.identity(outputs, name="output")
 
@@ -465,7 +461,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        lstm_list = []
         if True:
             # bilstm, no scope
             cell1 = rnn.LSTMCell(
@@ -476,12 +471,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
                 dtype=tf.float32)
-            lstm_list.append(outputs)
 
         _ = tf.identity(cell_state, name="cell_state")
 

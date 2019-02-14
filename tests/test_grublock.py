@@ -290,7 +290,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        gru_list = []
         if True:
             # bigru, no scope
             cell1 = rnn.GRUBlockCell(
@@ -302,7 +301,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
                 cell2,
                 x,
                 dtype=tf.float32)
-            gru_list.append(outputs)
 
         _ = tf.identity(outputs, name="output")
         _ = tf.identity(cell_state, name="cell_state")
@@ -320,7 +318,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        gru_list = []
         if True:
             # bigru, no scope
             cell1 = rnn.GRUBlockCell(
@@ -332,7 +329,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
                 cell2,
                 x,
                 dtype=tf.float32)
-            gru_list.append(outputs)
 
         _ = tf.identity(outputs, name="output")
 
@@ -349,7 +345,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        gru_list = []
         if True:
             # bigru, no scope
             cell1 = rnn.GRUBlockCell(
@@ -361,7 +356,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
                 cell2,
                 x,
                 dtype=tf.float32)
-            gru_list.append(cell_state)
 
         _ = tf.identity(cell_state, name="cell_state")
 
@@ -378,7 +372,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        gru_list = []
         if True:
             # bigru, no scope
             cell = rnn.GRUBlockCell(
@@ -388,7 +381,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
                 cell,
                 x,
                 dtype=tf.float32)
-            gru_list.append(outputs)
 
         _ = tf.identity(outputs, name="output")
         _ = tf.identity(cell_state, name="cell_state")
@@ -406,7 +398,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        gru_list = []
         if True:
             # bigru, no scope
             cell = rnn.GRUBlockCell(
@@ -416,7 +407,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
                 cell,
                 x,
                 dtype=tf.float32)
-            gru_list.append(outputs)
 
         _ = tf.identity(outputs, name="output")
 
@@ -433,7 +423,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        gru_list = []
         if True:
             # bigru, no scope
             cell = rnn.GRUBlockCell(
@@ -443,7 +432,6 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
                 cell,
                 x,
                 dtype=tf.float32)
-            gru_list.append(cell_state)
 
         _ = tf.identity(cell_state, name="cell_state")
 
