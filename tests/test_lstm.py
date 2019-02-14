@@ -19,6 +19,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
+
 class LSTMTests(Tf2OnnxBackendTestBase):
     def test_test_single_dynamic_lstm_state_is_tuple(self):
         self.internal_test_single_dynamic_lstm(True)
@@ -334,6 +335,52 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "cell_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.0001)
 
+    def test_dynamic_lstm_output_consumed_only(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        cell1 = rnn.LSTMCell(
+            units,
+            state_is_tuple=True)
+
+        outputs, _ = tf.nn.dynamic_rnn(
+            cell1,
+            x,
+            dtype=tf.float32)
+
+        _ = tf.identity(outputs, name="output")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.0001)
+
+    def test_dynamic_lstm_state_consumed_only(self):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        cell1 = rnn.LSTMCell(
+            units,
+            state_is_tuple=True)
+
+        _, cell_state = tf.nn.dynamic_rnn(
+            cell1,
+            x,
+            dtype=tf.float32)
+
+        _ = tf.identity(cell_state, name="cell_state")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["cell_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.0001)
+
     def test_dynamic_bilstm_state_is_tuple(self):
         self.internal_test_dynamic_bilstm_with_parameters(True)
 
@@ -349,7 +396,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        lstm_list = []
         if True:
             # bilstm, no scope
             cell1 = rnn.LSTMCell(
@@ -365,7 +411,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 cell2,
                 x,
                 dtype=tf.float32)
-            lstm_list.append(outputs)
 
         _ = tf.identity(outputs, name="output")
         _ = tf.identity(cell_state, name="cell_state")
@@ -384,7 +429,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        lstm_list = []
         if True:
             # bilstm, no scope
             cell1 = rnn.LSTMCell(
@@ -400,13 +444,44 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 cell2,
                 x,
                 dtype=tf.float32)
-            lstm_list.append(outputs)
 
         _ = tf.identity(outputs, name="output")
 
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+
+    def test_dynamic_bilstm_state_consumed_only(self, state_is_tuple=True):
+        units = 5
+        batch_size = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        initializer = init_ops.constant_initializer(0.5)
+
+        if True:
+            # bilstm, no scope
+            cell1 = rnn.LSTMCell(
+                units,
+                initializer=initializer,
+                state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
+            cell2 = rnn.LSTMCell(
+                units,
+                initializer=initializer,
+                state_is_tuple=state_is_tuple)
+            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+                cell1,
+                cell2,
+                x,
+                dtype=tf.float32)
+
+        _ = tf.identity(cell_state, name="cell_state")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["cell_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
 

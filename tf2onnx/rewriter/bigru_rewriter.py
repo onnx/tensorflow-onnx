@@ -153,10 +153,12 @@ def rewrite_bidirectional_grus(g, ops):
             is_backward_gru = True
 
         if is_backward_gru:
-            # make sure reverse gru output will be reversed back
-            if get_reverse_nodes_after_y_output(g, n):
-                log.debug("find bw gru %s", input_id)
-                bw_gru[input_id] = [input_id, n]
+            # if output 0 is consumed, and there is no reverse after the gru output.
+            # it's not reversed gru
+            if g.find_output_consumers(n.output[0]) and not get_reverse_nodes_after_y_output(g, n):
+                continue
+            log.debug("find bw gru %s", input_id)
+            bw_gru[input_id] = [input_id, n]
         else:
             log.debug("find fw gru %s", input_id)
             fw_gru[input_id] = [input_id, n]
