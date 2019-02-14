@@ -399,22 +399,17 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     # kernel must to be transposed
     if with_kernel:
         parent = node.inputs[1]
-        if node.inputs[1].is_const():
-            # kernel is const - transpose the const
-            if not parent.data_format:
-                val = parent.get_tensor_value(as_list=False)
-                val = val.transpose(HWCN_TO_NCHW)
-                parent.set_tensor_value(val)
-        else:
-            # kernel comes from op, insert transpose op
-            input_name = node.input[1]
-            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
-            transpose.set_attr("perm", HWCN_TO_NCHW)
-            transpose.inserted_nchw = True
-            ctx.copy_shape(input_name, transpose.output[0])
-            new_shape = spatial_map(ctx.get_shape(input_name), HWCN_TO_NCHW)
-            ctx.set_shape(transpose.output[0], new_shape)
-            nodes.append(transpose)
+        # note: kernel may be used by multiple nodes,
+        # so even kernel is a const, transposing kernel can't be done statically.
+        # so "transpose" op is inserted here and will consider to remove it in later optimization phase if possible.
+        input_name = node.input[1]
+        transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
+        transpose.set_attr("perm", HWCN_TO_NCHW)
+        transpose.inserted_nchw = True
+        ctx.copy_shape(input_name, transpose.output[0])
+        new_shape = spatial_map(ctx.get_shape(input_name), HWCN_TO_NCHW)
+        ctx.set_shape(transpose.output[0], new_shape)
+        nodes.append(transpose)
         parent.data_format = "NCHW"
 
         # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
@@ -1227,6 +1222,12 @@ def minmax_op(ctx, node, name, args):
 
 
 def pack_op(ctx, node, name, args):
+    # in tf, "pack" can accept one input tensor which means doing nothing,
+    # so remove the node in ONNX
+    if len(node.inputs) == 1:
+        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], node.input[0])
+        return None
+
     # hack to make up for the missing onnx pack op
     axis = node.get_attr("axis").i
     if axis < 0:
@@ -1436,7 +1437,7 @@ def fill_op7(ctx, node, name, args):
 
 
 def fill_op(ctx, node, name, args):
-    node.type = "ConstantLike"
+    node.type = "ConstantOfShape"
     # both shape and value in tensorflow are passed as tensor.
     # In onnx the value is an attribute so we need to fetch the value as const which
     # sooner or later will be a problem for tensorflow-onnx.
