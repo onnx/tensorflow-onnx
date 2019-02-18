@@ -207,7 +207,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { "ArgMin/dimension" [op_type=Const] input1 [op_type=Placeholder shape="[2, 3]"] ' \
+                'digraph { "ArgMin/dimension" [op_type=Const] input1 [op_type=Placeholder shape="[2, 3]"] '
                 'ArgMin [op_type=ArgMin] output [op_type=Identity] input1:0 -> ArgMin ArgMin:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -260,12 +260,12 @@ class Tf2OnnxGraphTests(unittest.TestCase):
 
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { input1 [op_type=Placeholder shape="[1, 4, 4, 1]"] Conv2D__2 [op_type=Transpose] '
-                '"kernel/shape" [op_type=Const] k [op_type=Const] kernel [op_type=Reshape] '
-                'Conv2D__3 [op_type=Transpose] Conv2D [op_type=Conv] Conv2D__4 [op_type=Transpose] '
-                'output [op_type=Identity] input1:0 -> Conv2D__2 k:0 -> kernel "kernel/shape":0 -> kernel '
-                'kernel:0 -> Conv2D__3 Conv2D__2:0 -> Conv2D Conv2D__3:0 -> Conv2D '
-                'Conv2D:0 -> Conv2D__4 Conv2D__4:0 -> output }',
+                'digraph { input1 [op_type=Placeholder shape="[1, 4, 4, 1]"] Conv2D__3 [op_type=Transpose] '
+                '"kernel/shape" [op_type=Const] kernel__2 [op_type=Cast] k [op_type=Const] '
+                'kernel [op_type=Reshape] Conv2D__4 [op_type=Transpose] Conv2D [op_type=Conv] '
+                'Conv2D__5 [op_type=Transpose] output [op_type=Identity] input1:0 -> Conv2D__3 '
+                '"kernel/shape":0 -> kernel__2 k:0 -> kernel kernel__2:0 -> kernel kernel:0 -> Conv2D__4 '
+                'Conv2D__3:0 -> Conv2D Conv2D__4:0 -> Conv2D Conv2D:0 -> Conv2D__5 Conv2D__5:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_squeeze(self):
@@ -275,7 +275,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Squeeze [op_type=Squeeze] '\
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Squeeze [op_type=Squeeze] '
                 'output [op_type=Identity] input1:0 -> Squeeze Squeeze:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -286,7 +286,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Cast [op_type=Cast] output [op_type=Identity] '\
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Cast [op_type=Cast] output [op_type=Identity] '
                 'input1:0 -> Cast Cast:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -297,9 +297,10 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { "Reshape/shape" [op_type=Const] input1 [op_type=Placeholder shape="[2, 3]"] '
-                'Reshape [op_type=Reshape] output [op_type=Identity] input1:0 -> Reshape '
-                '"Reshape/shape":0 -> Reshape Reshape:0 -> output }',
+                'digraph { "Reshape/shape" [op_type=Const] Reshape__2 [op_type=Cast] '
+                'input1 [op_type=Placeholder shape="[2, 3]"] Reshape [op_type=Reshape] '
+                'output [op_type=Identity] "Reshape/shape":0 -> Reshape__2 input1:0 -> Reshape '
+                'Reshape__2:0 -> Reshape Reshape:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_custom_rewrite(self):
