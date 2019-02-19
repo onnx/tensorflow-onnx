@@ -221,13 +221,32 @@ def infer_output_shapes_with_partial_inputs(g, node):
         return True
 
     if node.type == "TensorArrayGatherV3":
-        # TensorArrayGatherV3's output: all of the elements in the TensorArray,
-        # concatenated along a new axis (the new dimension 0)
-        flow_in_node = node.inputs[2]
-        if flow_in_node.type != "Exit":
+        # TensorArrayGatherV3's output: all of the elem in the TensorArray,
+        # concatenated along a new axis (the new dimension 0), so shape of TensorArray should be found first.
+        # And TensorArrayWrite will write elem to TensorArray, so shape of TensorArray can be got from TensorArrayWrite
+        # so the process is: first find TensorArrayWrite and then get TensorArray's shape,
+        # and finally add one dim to the shape is shape of TensorArrayGather
+
+        handle_node = node.inputs[0]
+        if handle_node.type != "TensorArrayV3":
             return False
 
-        shape = g.get_shape(flow_in_node.output[0])
+        # find TensorArrayWrite
+        tensor_array_consumers = g.find_output_consumers(handle_node.output[0])
+        tensor_array_write_found = False
+        for i in tensor_array_consumers:
+            if tensor_array_write_found:
+                break
+            consumer_nodes = g.find_output_consumers(i.output[0])
+            for j in consumer_nodes:
+                if i.type == "Enter" and j.type == "TensorArrayWriteV3":
+                    tensor_array_write_node = j
+                    tensor_array_write_found = True
+                    break
+        # get TensorArray shape from input tensor of the found TensorArrayWrite node
+        value_node = tensor_array_write_node.inputs[2]
+        shape = g.get_shape(value_node.output[0])
+        # update TensorArray's shape info
         if shape is not None:
             new_shape = [-1] + shape
             g.set_shape(node.output[0], new_shape)
