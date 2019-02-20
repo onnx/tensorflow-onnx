@@ -376,6 +376,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
 
+    def test_dropout(self):
+        is_training = tf.placeholder_with_default(False, (), "is_training")
+        x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
+        # Define a scope for reusing the variables
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name="input_1")
+
+        fc1 = tf.layers.dropout(x, rate=.1, training=is_training)
+
+        _ = tf.identity(fc1, name="output")
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
+
     def test_conv2d_with_input_transpose(self):
         x_shape = [2, 32, 32, 3]
         kernel_shape = [3, 3, 3, 3]
