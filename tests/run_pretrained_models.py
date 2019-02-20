@@ -205,6 +205,7 @@ class Test(object):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
         model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto, include_test_data=True)
+        utils.save_onnx_model(TMPPATH, name, inputs, model_proto, include_test_data=False, as_text=True)
         print("\t\t" + model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
