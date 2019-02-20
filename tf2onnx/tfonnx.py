@@ -1962,7 +1962,15 @@ def rewrite_dropout(g, ops):
         outputs = match.get_op('outputs')
         op_name = utils.make_name("Dropout")
         out_name = port_name(op_name)
-        new_node = g.make_node("Dropout", [inputs2.input[0]], outputs=[out_name], name=op_name, attr={"ratio": 1.0})
+        new_node = g.make_node(
+            "Dropout",
+            [inputs2.input[0]],
+            outputs=[out_name],
+            name=op_name,
+            attr={"ratio": 1.0},
+            shapes=[g.get_shape(inputs2.input[0])],
+            dtypes=[g.get_dtype(inputs2.input[0])]
+        )
         ops = g.replace_subgraph(ops, match, [inputs2], [outputs], [new_node], [new_node])
 
     return ops
