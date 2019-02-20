@@ -101,9 +101,9 @@ def main():
                              input_names=args.inputs,
                              output_names=args.outputs,
                              inputs_as_nchw=args.inputs_as_nchw)
- 
+
     model_proto = g.make_model("converted from {}".format(args.input))
-        
+
     new_model_proto = GraphUtil.opt_transposes_with_graph(g, "converted from {}".format(args.input),
                                                           optimize=not args.continue_on_error)
     if new_model_proto:
