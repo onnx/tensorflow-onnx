@@ -70,10 +70,10 @@ def infer_shape_for_node(g, node):
         shape_attr = node.get_attr("shape")
         new_shape = None
         if shape_attr.type == onnx_pb.TensorProto.INT32:
-            new_shape = shape_attr.ints
+            new_shape = list(shape_attr.ints)
         elif shape_attr.type == onnx_pb.TensorProto.FLOAT:
             # for scalar placeholder, it's type is float
-            val = shape_attr.floats
+            val = list(shape_attr.floats)
             if val:
                 raise ValueError("placeholder shape has floats value, and not scalar value")
             else:
