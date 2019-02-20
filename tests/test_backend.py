@@ -201,6 +201,33 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(op_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    def test_map_fn(self):
+        def fn0(elem):
+            res = elem + elem * elem
+            return res
+
+        def fn1(elem):
+            res = elem[0] * elem[1] + elem[0]
+            return res
+
+        x_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
+        y_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
+
+        # test fn0
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        res_ = tf.map_fn(fn0, x, dtype=tf.float32)
+        _ = tf.identity(res_, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT1], {_INPUT: x_val}, rtol=0)
+        tf.reset_default_graph()
+
+        # test fn1
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.float32, shape=y_val.shape, name=_TFINPUT1)
+        res_ = tf.map_fn(fn1, (x, y), dtype=tf.float32)
+        _ = tf.identity(res_, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT1], {_INPUT: x_val, _INPUT1: y_val}, rtol=0)
+        tf.reset_default_graph()
+
     @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
     @unittest.skipIf(*support_op_conversion_since(7, "multinomial"))
     def test_multinomial(self):
@@ -212,7 +239,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since returned indexes are random we can only check type and shape
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, check_value=False,
                             check_shape=True, check_dtype=True)
-
 
     @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
     @unittest.skipIf(*support_op_conversion_since(7, "multinomial"))
