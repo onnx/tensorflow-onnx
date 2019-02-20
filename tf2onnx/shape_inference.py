@@ -10,6 +10,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 import logging
 from onnx import onnx_pb
+from tf2onnx import utils
 
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
 
@@ -232,17 +233,9 @@ def infer_output_shapes_with_partial_inputs(g, node):
             return False
 
         # find TensorArrayWrite
-        tensor_array_consumers = g.find_output_consumers(handle_node.output[0])
-        tensor_array_write_found = False
-        for i in tensor_array_consumers:
-            if tensor_array_write_found:
-                break
-            consumer_nodes = g.find_output_consumers(i.output[0])
-            for j in consumer_nodes:
-                if i.type == "Enter" and j.type == "TensorArrayWriteV3":
-                    tensor_array_write_node = j
-                    tensor_array_write_found = True
-                    break
+        tensor_array_write_node = _find_tensorarray_write(g, handle_node)
+        if not tensor_array_write_node:
+            return False
         # get TensorArray shape from input tensor of the found TensorArrayWrite node
         value_node = tensor_array_write_node.inputs[2]
         shape = g.get_shape(value_node.output[0])
@@ -347,3 +340,16 @@ def broadcast_shape_inference(shape_0, shape_1):
             return None
         i -= 1
     return new_shape
+
+
+def _find_tensorarray_write(graph, node):
+    utils.make_sure(node.type == "TensorArrayV3", "node should be tensorarray")
+
+    tensor_array_consumers = graph.find_output_consumers(node.output[0])
+    for i in tensor_array_consumers:
+        if i.type == "Enter":
+            consumer_nodes = graph.find_output_consumers(i.output[0])
+            for j in consumer_nodes:
+                if j.type == "TensorArrayWriteV3":
+                    return j
+    return None
