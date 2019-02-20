@@ -381,8 +381,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
         # Define a scope for reusing the variables
         x = tf.placeholder(tf.float32, shape=x_val.shape, name="input_1")
+        x_ = tf.identity(x)
 
-        fc1 = tf.layers.dropout(x, rate=.1, training=is_training)
+        fc1 = tf.layers.dropout(x_, rate=.1, training=is_training)
 
         _ = tf.identity(fc1, name="output")
         feed_dict = {"input_1:0": x_val}
