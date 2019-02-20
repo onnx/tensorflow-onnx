@@ -8,3 +8,17 @@ steps:
     python setup.py install
     pip freeze --all
   displayName: 'Setup Environment'
+
+# TODO: remove later
+# Anaconda python 3.6.8 h9f7ef89_1 changed dll lookup logic, numpy failes to load dll on Windows
+# https://github.com/numpy/numpy/issues/12957
+# https://github.com/ContinuumIO/anaconda-issues/issues/10629
+# Add numpy lib path manually here
+- bash: |
+    site_dir=$(python -c "import site; print(site.getsitepackages()[1])")
+    echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+  displayName: 'Fix numpy path'
+  condition: and(succeeded(), in(variables['Agent.OS'], 'Windows_NT'))
+
+- bash: env
+  displayName: 'Display Environment Variables'
