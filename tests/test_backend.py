@@ -106,9 +106,7 @@ def onnxruntime_check(op):
         return (False, "")
 
     if op == "AveragePool":
-        import onnxruntime as ort
-        if ort.__version__ == "0.1.4":
-            return (True, "Skip AveragePool for onnxruntime 0.1.4")
+        return (True, "Skip AveragePool for onnxruntime due to bug")
 
     support_since = {
         "Abs": 6, #  Abs-1
