@@ -211,7 +211,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, check_value=False,
                             check_shape=True, check_dtype=True)
 
-
     @unittest.skipIf(BACKEND in ["caffe2"], "not supported correctly in caffe2")
     @unittest.skipIf(*support_op_conversion_since(7, "multinomial"))
     def test_multinomial1(self):

@@ -10,6 +10,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 import logging
 from onnx import onnx_pb
+from tf2onnx import utils
 
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
 
@@ -91,10 +92,10 @@ def infer_shape_for_node(g, node):
         shape_attr = node.get_attr("shape")
         new_shape = None
         if shape_attr.type == onnx_pb.TensorProto.INT32:
-            new_shape = shape_attr.ints
+            new_shape = list(shape_attr.ints)
         elif shape_attr.type == onnx_pb.TensorProto.FLOAT:
             # for scalar placeholder, it's type is float
-            val = shape_attr.floats
+            val = list(shape_attr.floats)
             if val:
                 raise ValueError("placeholder shape has floats value, and not scalar value")
             else:
@@ -243,13 +244,24 @@ def infer_output_shapes_with_partial_inputs(g, node):
         return True
 
     if node.type == "TensorArrayGatherV3":
-        # TensorArrayGatherV3's output: all of the elements in the TensorArray,
-        # concatenated along a new axis (the new dimension 0)
-        flow_in_node = node.inputs[2]
-        if flow_in_node.type != "Exit":
+        # TensorArrayGatherV3's output: all of the elem in the TensorArray,
+        # concatenated along a new axis (the new dimension 0), so shape of TensorArray should be found first.
+        # And TensorArrayWrite will write elem to TensorArray, so shape of TensorArray can be got from TensorArrayWrite
+        # so the process is: first find TensorArrayWrite and then get TensorArray's shape,
+        # and finally add one dim to the shape is shape of TensorArrayGather
+
+        handle_node = node.inputs[0]
+        if handle_node.type != "TensorArrayV3":
             return False
 
-        shape = g.get_shape(flow_in_node.output[0])
+        # find TensorArrayWrite
+        tensor_array_write_node = _find_tensorarray_write(g, handle_node)
+        if not tensor_array_write_node:
+            return False
+        # get TensorArray shape from input tensor of the found TensorArrayWrite node
+        value_node = tensor_array_write_node.inputs[2]
+        shape = g.get_shape(value_node.output[0])
+        # update TensorArray's shape info
         if shape is not None:
             new_shape = [-1] + shape
             g.set_shape(node.output[0], new_shape)
@@ -350,3 +362,16 @@ def broadcast_shape_inference(shape_0, shape_1):
             return None
         i -= 1
     return new_shape
+
+
+def _find_tensorarray_write(graph, node):
+    utils.make_sure(node.type == "TensorArrayV3", "node should be tensorarray")
+
+    tensor_array_consumers = graph.find_output_consumers(node.output[0])
+    for i in tensor_array_consumers:
+        if i.type == "Enter":
+            consumer_nodes = graph.find_output_consumers(i.output[0])
+            for j in consumer_nodes:
+                if j.type == "TensorArrayWriteV3":
+                    return j
+    return None
