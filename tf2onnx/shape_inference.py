@@ -17,6 +17,28 @@ from onnx import onnx_pb
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.shape_inference")
 
+direct_ops = [
+    "Cast",
+    "Enter",
+    "Exit",
+    "Floor",
+    "Identity",
+    "LogicalNot",
+    "ReverseSequence",
+    "Sigmoid",
+    "Square",
+    "Tanh"
+]
+broadcast_ops = [
+    "Add",
+    "Greater",
+    "GreaterEqual",
+    "Less",
+    "LogicalAnd",
+    "Mul",
+    "RealDiv",
+    "Sub"
+]
 
 def infer_shape_for_graph(g):
     no_shape_updated = True
@@ -58,10 +80,10 @@ def infer_shape_for_node(g, node):
         log.debug("node %s has inputs don't have shape specified, they are: %s", node.name, no_shape)
         return False
 
-    if node.type in ["Cast", "Enter", "Exit", "Floor", "LogicalNot", "ReverseSequence", "Sigmoid", "Tanh", "Identity"]:
+    if node.type in direct_ops:
         return set_shape_from_input(g, node.input[0], node.output[0])
 
-    if node.type in ["Add", "Greater", "GreaterEqual", "Less", "LogicalAnd", "Mul", "RealDiv", "Sub"]:
+    if node.type in broadcast_ops:
         return set_shape_from_inputs_broadcast(g, node.input, node.output[0])
 
     if node.type == "Placeholder":
