@@ -1242,6 +1242,28 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @unittest.skipIf(BACKEND in ["caffe2"], "multiple dims not supported")
+    def test_strided_slice7(self):
+        x_val = np.arange(5*6).astype("float32").reshape(5, 6)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.strided_slice(x, [0, 1], [3, 4], [1, 1], begin_mask=2)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+        tf.reset_default_graph()
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.strided_slice(x, [0, 1], [3, 4], [1, 1], end_mask=2)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+        tf.reset_default_graph()
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.strided_slice(x, [0, 1], [3, 4], [1, 1], shrink_axis_mask=2)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+
     @unittest.skipIf(BACKEND in ["caffe2"], "fails with schema error")
     @unittest.skipIf(*support_op_conversion_since(7, "batchnorm"))
     def test_batchnorm(self):

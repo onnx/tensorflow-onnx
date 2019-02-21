@@ -998,11 +998,14 @@ def stridedslice_op(ctx, node, name, args):
         if attr is not None and attr.i != 0:
             raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
     input_shape = ctx.get_shape(node.input[0])
-    begin = node.inputs[1].get_tensor_value()
-    end = node.inputs[2].get_tensor_value()
-    strides = node.inputs[3].get_tensor_value()
+    begin = node.inputs[1].get_tensor_value(as_list=False)
+    end = node.inputs[2].get_tensor_value(as_list=False)
+    strides = node.inputs[3].get_tensor_value(as_list=False)
+    max_size = np.iinfo(begin.dtype).max
     end_mask = node.get_attr("end_mask")
     end_mask = end_mask.i if end_mask is not None else 0
+    begin_mask = node.get_attr("begin_mask")
+    begin_mask = begin_mask.i if begin_mask is not None else 0
     shrink_axis_mask = node.get_attr("shrink_axis_mask")
     shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
     new_begin = []
@@ -1018,19 +1021,25 @@ def stridedslice_op(ctx, node, name, args):
 
         # an implicit condition is stride == 1 (checked in above)
         if begin_item < 0 and end_item == 0:
-            end_item = sys.maxsize
+            end_item = max_size
 
         mask = (shrink_axis_mask >> idx) & 1
         if mask != 0:
             new_begin.append(begin_item)
+            end_item = begin_item + 1 if begin_item != -1 else max_size
             new_end.append(end_item)
             needs_squeeze.append(idx)
             continue
 
-        new_begin.append(begin_item)
+        mask = (begin_mask >> idx) & 1
+        if mask != 0:
+            new_begin.append(0)
+        else:
+            new_begin.append(begin_item)
+
         mask = (end_mask >> idx) & 1
         if mask != 0:
-            new_end.append(sys.maxsize)
+            new_end.append(max_size)
         else:
             new_end.append(end_item)
 
