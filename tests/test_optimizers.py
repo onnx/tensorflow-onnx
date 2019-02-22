@@ -7,15 +7,14 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-
 import numpy as np
 from onnx import helper, TensorProto
 from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import unittest_main
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
-
 
 class OptimizerTests(Tf2OnnxBackendTestBase):
     """Run original model proto and modified model proto with onnxruntime, compare the results."""
@@ -34,7 +33,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         self.assertTrue(current["Transpose"] < previous["Transpose"], msg="transpose ops count not changed")
 
-        if type(self).BACKEND == "onnxruntime":
+        if self.config.is_onnxruntime_backend:
             expected = self.run_onnxruntime(origin_model_path, onnx_feed_dict, output_names_with_port)
             actual = self.run_onnxruntime(new_model_path, onnx_feed_dict, output_names_with_port)
         else:
@@ -105,5 +104,6 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_and_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                              model_proto)
 
+
 if __name__ == "__main__":
-    Tf2OnnxBackendTestBase.trigger(OptimizerTests)
+    unittest_main()

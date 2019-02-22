@@ -6,8 +6,12 @@
 from __future__ import division
 from __future__ import print_function
 
+import unittest
+
 import tensorflow as tf
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import unittest_main
+
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 
@@ -53,6 +57,7 @@ class ConstantFoldingTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name="output_0")
         self._run_test_case(["output_0:0"], {})
 
+    @unittest.skip("tensorflow op ListDiff is not supported")
     def test_bahdanau_attention_memory_layer_tensordot(self):
         rank = tf.constant(3, dtype=tf.int32, name='rank')
         start = tf.constant(0, dtype=tf.int32, name='start')
@@ -76,5 +81,6 @@ class ConstantFoldingTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(out, name="output_0")
         self._run_test_case(["output_0:0"], {})
 
+
 if __name__ == '__main__':
-    Tf2OnnxBackendTestBase.trigger(ConstantFoldingTests)
+    unittest_main()

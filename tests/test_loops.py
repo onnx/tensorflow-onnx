@@ -13,6 +13,8 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import unittest_main
+
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
@@ -52,6 +54,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         # todo: we cannot support i >= 3 for now, because in this case, TensorArray by default will
         # leave 0 for in the first 3 index.
         c = lambda i, *_: tf.logical_and(tf.less(i, 10), i >= 0)
+
         def b(i, out_ta):
             new_i = tf.add(i, 1)
             out_ta_new = out_ta.write(i, i)
@@ -197,4 +200,4 @@ class LoopTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
-    Tf2OnnxBackendTestBase.trigger(LoopTests)
+    unittest_main()
