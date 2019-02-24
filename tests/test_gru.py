@@ -16,6 +16,9 @@ from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import unittest_main
+
+
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
 
@@ -301,7 +304,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.0001)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001, atol=1e-07)
 
     def test_dynamic_bigru(self):
         units = 5
@@ -474,4 +477,4 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
-    Tf2OnnxBackendTestBase.trigger(GRUTests)
+    unittest_main()

@@ -15,6 +15,8 @@ import tensorflow as tf
 from tensorflow.contrib import rnn
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import unittest_main
+
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
@@ -413,7 +415,7 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-07)
 
     def test_dynamic_bidirectional_but_one_gru_and_state_consumed_only(self):
         units = 5
@@ -442,4 +444,4 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
-    Tf2OnnxBackendTestBase.trigger(GRUBlockTests)
+    unittest_main()

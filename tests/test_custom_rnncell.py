@@ -13,12 +13,15 @@ import tensorflow as tf
 from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import check_tf_min_version, check_opset_min_version, unittest_main
+
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 # pylint: disable=abstract-method,arguments-differ
 
-class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
+class CustomRnnCellTests(Tf2OnnxBackendTestBase):
+    @check_opset_min_version(8, "Scan")
     def test_single_dynamic_custom_rnn(self):
         size = 5  # size of each model layer.
         batch_size = 1
@@ -37,6 +40,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "final_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
+    @check_opset_min_version(8, "Scan")
     def test_single_dynamic_custom_rnn_time_major(self):
         size = 5  # size of each model layer.
         batch_size = 1
@@ -55,6 +59,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "final_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
+    @check_opset_min_version(8, "Scan")
     def test_single_dynamic_custom_rnn_with_seq_length(self):
         units = 5
         batch_size = 6
@@ -78,6 +83,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "cell_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @check_opset_min_version(8, "Scan")
     def test_single_dynamic_custom_rnn_with_non_const_seq_length(self):
         units = 5
         batch_size = 6
@@ -104,6 +110,8 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "cell_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @check_opset_min_version(8, "Scan")
+    @check_tf_min_version("1.8")
     def test_attention_wrapper_const_encoder(self):
         size = 5
         time_step = 3
@@ -143,6 +151,8 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "final_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
+    @check_opset_min_version(8, "Scan")
+    @check_tf_min_version("1.8")
     def test_attention_wrapper_lstm_encoder(self):
         size = 5
         time_step = 3
@@ -188,6 +198,8 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output_0:0", "output:0", "final_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
+    @check_opset_min_version(8, "Scan")
+    @check_tf_min_version("1.8")
     def test_attention_wrapper_lstm_encoder_input_has_none_dim(self):
         size = 5
         time_step = 3
@@ -234,6 +246,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
+    @check_opset_min_version(8, "Scan")
     def test_multi_rnn_lstm(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -269,6 +282,8 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "cell_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @check_opset_min_version(8, "Scan")
+    @check_tf_min_version("1.8")
     def test_bidrectional_attention_wrapper_lstm_encoder(self):
         size = 30
         time_step = 3
@@ -327,6 +342,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output_0:0", "final_state:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
+
 class GatedGRUCell(tf.nn.rnn_cell.RNNCell):
     def __init__(self, hidden_dim, reuse=None):
         super().__init__(self, _reuse=reuse)
@@ -366,5 +382,6 @@ class GatedGRUCell(tf.nn.rnn_cell.RNNCell):
         next_h = h1 * (1 - z) + state * z
         return next_h, next_h
 
+
 if __name__ == '__main__':
-    Tf2OnnxBackendTestBase.trigger(CustomRnnCellTests)
+    unittest_main()

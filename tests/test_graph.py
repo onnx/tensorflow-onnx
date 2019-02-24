@@ -20,6 +20,7 @@ from onnx import helper
 import tf2onnx
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
+from common import unittest_main
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 
@@ -115,7 +116,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x_ = tf.abs(x)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
-            self.assertEqual('digraph { input [op_type=Placeholder shape="[2, 3]"]'\
+            self.assertEqual('digraph { input [op_type=Placeholder shape="[2, 3]"]' \
                              ' Abs [op_type=Abs] output [op_type=Identity] input:0 -> Abs Abs:0 -> output }',
                              onnx_to_graphviz(g))
 
@@ -354,4 +355,4 @@ class Tf2OnnxGraphTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest_main()

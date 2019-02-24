@@ -20,6 +20,8 @@ import tf2onnx
 import tf2onnx.utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.graph import GraphUtil
+from common import unittest_main
+
 
 # pylint: disable=missing-docstring
 
@@ -187,4 +189,4 @@ class Tf2OnnxInternalTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest_main()

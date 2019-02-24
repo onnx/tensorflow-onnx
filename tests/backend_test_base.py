@@ -8,34 +8,23 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import argparse
 import logging
 import os
-import sys
-import tempfile
 import unittest
 
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
+from common import get_test_config
 from tf2onnx import utils
-from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
+from tf2onnx.tfonnx import process_tf_graph, tf_optimize
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
-    # static variables
-    TMPPATH = tempfile.mkdtemp()
-    BACKEND = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
-    OPSET = int(os.environ.get("TF2ONNX_TEST_OPSET", 7))
-    TARGET = os.environ.get("TF2ONNX_TEST_TARGET", "").split(",")
-    DEBUG = None
-
-    def debug_mode(self):
-        return type(self).DEBUG
-
     def setUp(self):
+        self.config = get_test_config()
         self.maxDiff = None
         tf.reset_default_graph()
         # reset name generation on every test
@@ -43,7 +32,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         np.random.seed(1)  # Make it reproducible.
 
         self.log = logging.getLogger("tf2onnx.unitest." + str(type(self)))
-        if self.debug_mode():
+        if self.config.is_debug_mode:
             self.log.setLevel(logging.DEBUG)
         else:
             # suppress log info of tensorflow so that result of test can be seen much easier
@@ -83,17 +72,17 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def _run_backend(self, g, outputs, input_dict):
         model_proto = g.make_model("test")
         model_path = self.save_onnx_model(model_proto, input_dict)
-        if type(self).BACKEND == "onnxmsrtnext":
+        if self.config.backend == "onnxmsrtnext":
             y = self.run_onnxmsrtnext(model_path, input_dict, outputs)
-        elif type(self).BACKEND == "onnxruntime":
+        elif self.config.backend == "onnxruntime":
             y = self.run_onnxruntime(model_path, input_dict, outputs)
-        elif type(self).BACKEND == "caffe2":
+        elif self.config.backend == "caffe2":
             y = self.run_onnxcaffe2(model_proto, input_dict)
         else:
             raise ValueError("unknown backend")
         return y
 
-    def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07,
+    def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=0.,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=False,
                       check_dtype=False, process_args=None, onnx_feed_dict=None):
         # optional - passed to process_tf_graph
@@ -104,7 +93,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             onnx_feed_dict = feed_dict
 
         graph_def = None
-        save_dir = os.path.join(type(self).TMPPATH, self._testMethodName)
+        save_dir = os.path.join(self.config.temp_path, self._testMethodName)
 
         if convert_var_to_const:
             with tf.Session() as sess:
@@ -123,7 +112,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 output_dict.append(sess.graph.get_tensor_by_name(out_name))
             expected = sess.run(output_dict, feed_dict=feed_dict)
 
-        if self.debug_mode():
+        if self.config.is_debug_mode:
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
             model_path = os.path.join(save_dir, self._testMethodName + "_original.pb")
@@ -134,7 +123,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         graph_def = tf_optimize(input_names_with_port, output_names_with_port,
                                 sess.graph_def, constant_fold)
 
-        if self.debug_mode() and constant_fold:
+        if self.config.is_debug_mode and constant_fold:
             model_path = os.path.join(save_dir, self._testMethodName + "_after_tf_optimize.pb")
             with open(model_path, "wb") as f:
                 f.write(graph_def.SerializeToString())
@@ -144,45 +133,23 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         tf.import_graph_def(graph_def, name='')
 
         with tf.Session() as sess:
-            g = process_tf_graph(sess.graph, opset=type(self).OPSET, output_names=output_names_with_port,
-                                 target=type(self).TARGET, **process_args)
+            g = process_tf_graph(sess.graph, opset=self.config.opset, output_names=output_names_with_port,
+                                 target=self.config.target, **process_args)
             actual = self._run_backend(g, output_names_with_port, onnx_feed_dict)
 
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
-                self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=0.)
+                self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
             if check_dtype:
                 self.assertEqual(expected_val.dtype, actual_val.dtype)
             if check_shape:
                 self.assertEqual(expected_val.shape, actual_val.shape)
 
     def save_onnx_model(self, model_proto, feed_dict, postfix=""):
-        save_path = os.path.join(type(self).TMPPATH, self._testMethodName)
+        save_path = os.path.join(self.config.temp_path, self._testMethodName)
         target_path = utils.save_onnx_model(save_path, self._testMethodName + postfix, feed_dict, model_proto,
-                                            include_test_data=self.debug_mode(), as_text=self.debug_mode())
+                                            include_test_data=self.config.is_debug_mode,
+                                            as_text=self.config.is_debug_mode)
 
         self.log.debug("create model file: %s", target_path)
         return target_path
-
-    @staticmethod
-    def trigger(ut_class):
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--backend', default=Tf2OnnxBackendTestBase.BACKEND,
-                            choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
-                            help="backend to test against")
-        parser.add_argument('--opset', type=int, default=Tf2OnnxBackendTestBase.OPSET, help="opset to test against")
-        parser.add_argument("--target", default=",".join(DEFAULT_TARGET), choices=POSSIBLE_TARGETS,
-                            help="target platform")
-        parser.add_argument("--debug", help="output debugging information", action="store_true")
-        parser.add_argument('unittest_args', nargs='*')
-
-        args = parser.parse_args()
-        print(args)
-        ut_class.BACKEND = args.backend
-        ut_class.OPSET = args.opset
-        ut_class.DEBUG = args.debug
-        ut_class.TARGET = args.target
-
-        # Now set the sys.argv to the unittest_args (leaving sys.argv[0] alone)
-        sys.argv[1:] = args.unittest_args
-        unittest.main()
