@@ -1713,6 +1713,15 @@ def logical_compare_op(ctx, node, name, args):
     return nodes
 
 
+def where_op(ctx, node, name, args):
+    # T_y output = Where(T_x condition), return indices of elements whose value are True
+    node.type = "NonZero"
+    transpose_node = ctx.insert_new_node_on_output("Transpose", node.output[0], name=utils.make_name("where_op_added"))
+    ctx.set_shape(transpose_node.output[0], ctx.get_shape(node.output[0]))
+    ctx.set_dtype(transpose_node.output[0], ctx.get_dtype(node.output[0]))
+    return [node, transpose_node]
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1884,6 +1893,7 @@ _OPSET_9 = {
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
+    "Where": (where_op, []),
 }
 
 _OPSETS = [
