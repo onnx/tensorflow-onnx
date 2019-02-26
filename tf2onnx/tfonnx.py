@@ -1456,17 +1456,14 @@ def fill_op(ctx, node, name, args):
     # both shape and value in tensorflow are passed as tensor.
     # In onnx the value is an attribute so we need to fetch the value as const which
     # sooner or later will be a problem for tensorflow-onnx.
-    shape = ctx.get_shape(node.output[0])
-    utils.make_sure(all(i >= 0 for i in shape), "shape attr should not be less than zero")
-    value = node.inputs[1].get_tensor_value()
-    value_proto = numpy_helper.from_array(node.inputs[1].get_tensor_value(as_list=False))
-    dtype = value_proto.data_type
-    # onnx spec says value MUST be float.
-    node.set_attr("value", float(value))
-    node.set_attr("shape", shape)
-    node.set_attr("dtype", dtype)
-    del node.input[:]
-    return node
+    # ConstantOfShape in onnxruntime only support int64, so insert cast op
+    cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.INT64)
+    dtype = ctx.get_dtype(node.output[0])
+    value = np.array([node.inputs[1].get_tensor_value()]).astype(utils.ONNX_TO_NUMPY_DTYPE[dtype])
+    value_proto = numpy_helper.from_array(value)
+    node.set_attr("value", value_proto)
+    del node.input[1]
+    return [node, cast_node]
 
 
 def reverse_op8(ctx, node, name, args):
