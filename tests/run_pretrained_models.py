@@ -10,6 +10,7 @@ from __future__ import unicode_literals
 
 import argparse
 import os
+import shutil
 import sys
 import tarfile
 import tempfile
@@ -438,6 +439,9 @@ def main():
         except Exception as ex:
             ret = None
             print(ex)
+        finally:
+            if os.path.exists(TMPPATH) and not args.debug:
+                shutil.rmtree(TMPPATH)
         if not ret:
             failed += 1
 
