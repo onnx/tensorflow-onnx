@@ -721,11 +721,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @skip_caffe2_backend("fails on caffe2 with dim issue")
     @check_onnxruntime_incompatibility("Mul")
     def test_leaky_relu(self):
-        x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
-        x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
-        x_ = tf.nn.leaky_relu(x)
-        _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        for alpha in [0.1, -0.1]:
+            x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
+            x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+            x_ = tf.nn.leaky_relu(x, alpha)
+            _ = tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+            tf.reset_default_graph()
 
     @check_onnxruntime_incompatibility("Elu")
     def test_elu(self):
