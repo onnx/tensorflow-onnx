@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
+
 """Transpose Optimizer."""
 
 from __future__ import unicode_literals
@@ -114,9 +115,9 @@ class TransposeOptimizer(object):
         self._g.update_proto()
         self._g.topological_sort(self._g.get_nodes())
 
-    def merge_transpose_with_same_input(self):
+    def merge_duplicated_transposes(self):
         # strategy used in previous procedure is to move transpose nodes down if possible,
-        # and it means that when a node has n outputs then n transpose will be generated ,
+        # and it means that when a node has n outputs then n transpose will be generated,
         # so we should merge them back to one if they can't be eliminated in previous procedure.
         graph = self._g
         input_transposes_map = defaultdict(list)
@@ -125,7 +126,7 @@ class TransposeOptimizer(object):
                 key = (node.input[0], str(node.get_attr("perm").ints))
                 input_transposes_map[key].append(node)
 
-        for _, transposes in input_transposes_map.items():
+        for transposes in input_transposes_map.values():
             # merge transpose nodes into one: make nodes use the output of the first transpose node
             transpose_out = transposes[0].output[0]
             for node in transposes[1:]:
@@ -163,8 +164,8 @@ class TransposeOptimizer(object):
 
         log.debug("finish after " + str(iteration_cnt) + " iteration(s)")
 
+        self.merge_duplicated_transposes()
         self.post_optimize_action()
-        self.merge_transpose_with_same_input()
 
         current_counter = self._g.dump_node_statistics()
         transpose_cnt = current_counter["Transpose"]
