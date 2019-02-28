@@ -449,8 +449,9 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
                 input_shape = spatial_map(input_shape, NHWC_TO_NCHW)
                 output_shape = spatial_map(output_shape, NHWC_TO_NCHW)
             # calculate pads
-            if any(input_shape[i + 2] == -1 for i in range(spatial)):
-                log.warning("node %s has unknown dim %s for pads calculation, fallback to auto_pad" % (
+            if any(input_shape[i + 2] == -1 for i in range(spatial)) \
+               or any(output_shape[i + 2] == -1 for i in range(spatial)):
+                log.debug("node %s has unknown dim %s for pads calculation, fallback to auto_pad" % (
                     node.name, str(input_shape)))
                 node.set_attr("auto_pad", "SAME_UPPER")
             else:
