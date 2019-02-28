@@ -133,7 +133,7 @@ class main(object):
         inputs, outputs = get_graph_def_io_nodes(graph_def)
         logging.info("graph has:")
         logging.info("\t%s inputs: %s", len(inputs), ','.join(inputs))
-        logging.info("\t%s (possible) outputs: %s", len(inputs), ','.join(outputs))
+        logging.info("\t%s (possible) outputs: %s", len(outputs), ','.join(outputs))
 
     @staticmethod
     def print_graph_stat(input_path):
