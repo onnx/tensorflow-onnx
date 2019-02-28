@@ -26,6 +26,7 @@ from tf2onnx.graph import Node, Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.cond_rewriter import rewrite_cond
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
+from tf2onnx.rewriter.leakyrelu_rewriter import rewrite_leakyrelu
 from tf2onnx.rewriter.rnn import rewrite_bi_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_custom_rnn_cell
 from tf2onnx.rewriter.rnn import rewrite_generic_loop
@@ -2482,7 +2483,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     # bi-directional re-writer should be placed after single directional re-writer
     rewriters = [rewrite_transpose, rewrite_flatten,
                  rewrite_random_uniform, rewrite_random_uniform_fold_const,
-                 rewrite_random_normal, rewrite_dropout,
+                 rewrite_random_normal, rewrite_dropout, rewrite_leakyrelu,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_single_direction_grublock,
                  rewrite_bi_direction_gru, rewrite_logical_compare_with_equal,

@@ -10,6 +10,7 @@ __all__ = [
     "cond_rewriter",
     "custom_rnn_rewriter",
     "gru_rewriter",
+    "leakyrelu_rewriter",
     "loop_rewriter",
     "loop_rewriter_base",
     "lstm_rewriter",
