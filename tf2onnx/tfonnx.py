@@ -1332,6 +1332,13 @@ def fused_batchnorm_op7(ctx, node, name, args):
     # a: data_format, epsilon, is_training
     # onnx inputs: X, scale, B, mean, variance, attributes: epsilon, momentum=0.9, spatial : 1
     # output: y, mean, var, savedmean, savedvar,
+
+    # detach unused outputs. While we could let the unused outputs dangle,
+    # some runtimes like pytorch/caffe2 do complain about it.
+    consumers = [ctx.find_output_consumers(output_name) for output_name in node.output[1:]]
+    if not any(consumers):
+        del node.output[1:]
+
     nodes = conv_convert_inputs(ctx, node, with_kernel=False)
     scale_shape = ctx.get_shape(node.input[1])
     mean_shape = ctx.get_shape(node.input[3])
