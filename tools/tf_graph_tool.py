@@ -7,6 +7,7 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+from collections import Counter
 import logging
 import os
 import sys
@@ -135,6 +136,19 @@ class main(object):
         logging.info("\t%s (possible) outputs: %s", len(inputs), ','.join(outputs))
 
     @staticmethod
+    def print_graph_stat(input_path):
+        logging.info("load from %s", input_path)
+        graph_def = load_graph_def_from_pb(input_path)
+
+        op_stat = Counter()
+        for node in graph_def.node:
+            op_stat[node.op] += 1
+
+        logging.info("graph stat:")
+        for op, count in sorted(op_stat.items(), key=lambda x: x[0]):
+            logging.info("\t%s = %s", op, count)
+
+    @staticmethod
     def extract_sub_graph(input_path, output_path=None, dest_nodes=None):
         if not output_path:
             output_path = append_file_name_suffix(input_path, "sub")
@@ -177,6 +191,11 @@ if __name__ == "__main__":
     subparser = subparsers.add_parser("io", help="get input nodes for graph, guess output nodes")
     subparser.add_argument("--input", dest="input_path", required=True, help="input pb path")
     subparser.set_defaults(func=main.get_graph_io_nodes)
+
+    # stat
+    subparser = subparsers.add_parser("stat", help="print stat")
+    subparser.add_argument("--input", dest="input_path", required=True, help="input pb path")
+    subparser.set_defaults(func=main.print_graph_stat)
 
     # extract
     subparser = subparsers.add_parser("extract", help="extract sub-graph")
