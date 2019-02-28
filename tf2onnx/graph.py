@@ -19,6 +19,7 @@ from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetId
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+from tf2onnx.schema import ONNXSchema
 
 
 # todo(pengwa): remove protected-access later
@@ -72,7 +73,7 @@ class Node(object):
     def attr_onnx(self):
         onnx_attrs = {}
         for a in self._attr.values():
-            if a.name in utils.ONNX_VALID_ATTRIBUTES:
+            if a.name in ONNXSchema.get_attribute(self.type, self.graph.opset):
                 onnx_attrs[a.name] = a
         return onnx_attrs
 
