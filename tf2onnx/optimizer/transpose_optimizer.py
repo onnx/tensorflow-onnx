@@ -1,8 +1,10 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
+
 """Transpose Optimizer."""
 
 from __future__ import unicode_literals
+from collections import defaultdict
 
 import logging
 
@@ -113,6 +115,27 @@ class TransposeOptimizer(object):
         self._g.update_proto()
         self._g.topological_sort(self._g.get_nodes())
 
+    def merge_duplicated_transposes(self):
+        # strategy used in previous procedure is to move transpose nodes down if possible,
+        # and it means that when a node has n outputs then n transpose will be generated,
+        # so we should merge them back to one if they can't be eliminated in previous procedure.
+        graph = self._g
+        input_transposes_map = defaultdict(list)
+        for node in graph.get_nodes():
+            if node.type == "Transpose":
+                key = (node.input[0], str(node.get_attr("perm").ints))
+                input_transposes_map[key].append(node)
+
+        for transposes in input_transposes_map.values():
+            # merge transpose nodes into one: make nodes use the output of the first transpose node
+            transpose_out = transposes[0].output[0]
+            for node in transposes[1:]:
+                old_transpose_out = node.output[0]
+                graph.replace_all_inputs(graph.get_nodes(), old_transpose_out, transpose_out)
+
+        # dangling transpose nodes can be deleted
+        graph.delete_unused_nodes(graph.outputs)
+
     def optimize(self):
         previous_counter = self._g.dump_node_statistics()
         no_action = False
@@ -140,6 +163,8 @@ class TransposeOptimizer(object):
                 break
 
         log.debug("finish after " + str(iteration_cnt) + " iteration(s)")
+
+        self.merge_duplicated_transposes()
         self.post_optimize_action()
 
         current_counter = self._g.dump_node_statistics()
