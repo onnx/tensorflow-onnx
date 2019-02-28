@@ -552,8 +552,7 @@ class Graph(object):
             stack.append(node)
             if node in in_stack:
                 raise ValueError('Graph has cycles.')
-            else:
-                in_stack[node] = True
+            in_stack[node] = True
 
         def _get_unvisited_child(g, node, not_visited):
             for child in g[node]:

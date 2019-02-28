@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.rewrite - rewrite tensorflow subgraph to onnx random_uniform op
+tf2onnx.rewriter - rewrite tensorflow subgraph to onnx random_uniform op
 """
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx import utils

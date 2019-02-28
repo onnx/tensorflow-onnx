@@ -98,8 +98,7 @@ def infer_shape_for_node(g, node):
             val = list(shape_attr.floats)
             if val:
                 raise ValueError("placeholder shape has floats value, and not scalar value")
-            else:
-                new_shape = ()
+            new_shape = ()
 
         if new_shape is not None:
             g.set_shape(node.output[0], new_shape)
