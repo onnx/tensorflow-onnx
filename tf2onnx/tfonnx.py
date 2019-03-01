@@ -1894,18 +1894,19 @@ _OPSET_8 = {
 }
 
 _OPSET_9 = {
+    "Acosh": (direct_op, []),
+    "Asinh": (direct_op, []),
+    "Atanh": (direct_op, []),
+    "Cosh": (direct_op, []),
     "Erf": (direct_op, []),
     "Fill": (fill_op, []),
-    "Sinh": (direct_op, []),
-    "Cosh": (direct_op, []),
-    "Asinh": (direct_op, []),
-    "Acosh": (direct_op, []),
-    "Atanh": (direct_op, []),
     "Greater": (logical_compare_op, []),
+    "IsNan": (direct_op, ["IsNaN"])
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
     "Where": (where_op, []),
+    "Sinh": (direct_op, []),
 }
 
 _OPSETS = [

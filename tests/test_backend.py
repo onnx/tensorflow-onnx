@@ -1702,10 +1702,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-    @check_opset_min_version(9, "isnan")
+    @check_opset_min_version(9, "is_nan")
     def test_isnan(self):
         # only compatible with dtype `float32`
-        x_val1 = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2,2))
+        x_val1 = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x_val2 = np.array([np.nan, np.nan, np.nan, np.nan], dtype=np.float32).reshape((2, 2))
         x_val3 = np.array([1.0, np.nan, -3.0, np.nan], dtype=np.float32).reshape((2, 2))
         for x_val in [x_val1, x_val2, x_val3]:
