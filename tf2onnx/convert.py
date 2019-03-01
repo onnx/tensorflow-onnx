@@ -14,11 +14,13 @@ import onnx
 from onnx import helper
 import tensorflow as tf
 
-import tf2onnx.utils
+import tf2onnx
+from tf2onnx import utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
+
 
 # pylint: disable=unused-argument
 
@@ -45,7 +47,7 @@ def get_args():
 
     args.shape_override = None
     if args.inputs:
-        args.inputs, args.shape_override = tf2onnx.utils.split_nodename_and_shape(args.inputs)
+        args.inputs, args.shape_override = utils.split_nodename_and_shape(args.inputs)
     if args.outputs:
         args.outputs = args.outputs.split(",")
     if args.inputs_as_nchw:
@@ -64,14 +66,14 @@ def default_custom_op_handler(ctx, node, name, args):
 def main():
     args = get_args()
 
-    opset = tf2onnx.utils.find_opset(args.opset)
+    opset = utils.find_opset(args.opset)
     print("using tensorflow={}, onnx={}, opset={}, tfonnx={}/{}".format(
         tf.__version__, onnx.__version__, opset,
         tf2onnx.__version__, tf2onnx.version.git_version[:6]))
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.
-    tf2onnx.utils.ONNX_UNKNOWN_DIMENSION = args.unknown_dim
+    utils.ONNX_UNKNOWN_DIMENSION = args.unknown_dim
 
     if args.custom_ops:
         # default custom ops for tensorflow-onnx are in the "tf" namespace
@@ -113,9 +115,8 @@ def main():
 
     # write onnx graph
     if args.output:
-        with open(args.output, "wb") as f:
-            f.write(model_proto.SerializeToString())
-            print("\nComplete successfully, the onnx model is generated at " + args.output)
+        utils.save_protobuf(args.output, model_proto)
+        print("\nComplete successfully, the onnx model is generated at " + args.output)
 
 
 if __name__ == "__main__":
