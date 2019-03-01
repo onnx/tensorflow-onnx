@@ -2429,7 +2429,7 @@ def run_pre_rewriters(g, rewriters):
         if body_graphs:
             for attr, b_g in body_graphs.items():
                 log.debug("start rewriting subgraph of %s's attribute %s", node.name, attr)
-                tensorflow_onnx_rewrite(b_g, rewriters)
+                run_pre_rewriters(b_g, rewriters)
 
 
 def transpose_inputs(ctx, inputs_as_nchw):
