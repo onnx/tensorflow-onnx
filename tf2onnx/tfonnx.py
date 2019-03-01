@@ -1457,13 +1457,15 @@ def fill_op(ctx, node, name, args):
     # In onnx the value is an attribute so we need to fetch the value as const which
     # sooner or later will be a problem for tensorflow-onnx.
     # ConstantOfShape in onnxruntime only support int64, so insert cast op
-    cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.INT64)
+    input_dtype_is_int64 = utils.ONNX_TO_NUMPY_DTYPE[ctx.get_dtype(node.input[0])] == np.int64
+    if not input_dtype_is_int64:
+        cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.INT64)
     dtype = ctx.get_dtype(node.output[0])
     value = np.array([node.inputs[1].get_tensor_value()]).astype(utils.ONNX_TO_NUMPY_DTYPE[dtype])
     value_proto = numpy_helper.from_array(value)
     node.set_attr("value", value_proto)
     del node.input[1]
-    return [node, cast_node]
+    return [node] if input_dtype_is_int64 else [node, cast_node]
 
 
 def reverse_op8(ctx, node, name, args):
@@ -1716,9 +1718,12 @@ def logical_compare_op(ctx, node, name, args):
 def where_op(ctx, node, name, args):
     # T_y output = Where(T_x condition), return indices of elements whose value are True
     node.type = "NonZero"
+    # in onnx, indices are returned in this way [[ind_a_0, ind_b_0, ...], [ind_a_1, ind_b_1,...]];
+    # while in tf, the result will be [[ind_a_0, ind_a_1, ...], [ind_b_0, ind_b_1, ...], ...]
+    # this is the reason a transpose node inserted here.
     transpose_node = ctx.insert_new_node_on_output("Transpose", node.output[0], name=utils.make_name("where_op_added"))
-    ctx.set_shape(transpose_node.output[0], ctx.get_shape(node.output[0]))
-    ctx.set_dtype(transpose_node.output[0], ctx.get_dtype(node.output[0]))
+    ctx.copy_shape(node.output[0], transpose_node.output[0])
+    ctx.copy_dtype(node.output[0], transpose_node.output[0])
     return [node, transpose_node]
 
 
