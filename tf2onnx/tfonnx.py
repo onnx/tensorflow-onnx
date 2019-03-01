@@ -1901,7 +1901,7 @@ _OPSET_9 = {
     "Erf": (direct_op, []),
     "Fill": (fill_op, []),
     "Greater": (logical_compare_op, []),
-    "IsNan": (direct_op, ["IsNaN"])
+    "IsNan": (direct_op, ["IsNaN"]),
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
