@@ -75,7 +75,7 @@ def main():
 
     if args.custom_ops:
         # default custom ops for tensorflow-onnx are in the "tf" namespace
-        custom_ops = {op: default_custom_op_handler for op in args.custom_ops.split(",")}
+        custom_ops = {op: (default_custom_op_handler, []) for op in args.custom_ops.split(",")}
         extra_opset = [helper.make_opsetid(_TENSORFLOW_DOMAIN, 1)]
     else:
         custom_ops = {}
