@@ -1502,6 +1502,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "where")
+    def test_where_with_cond_only(self):
+        for np_type, tf_type in [(np.int32, tf.int32), (np.float32, tf.float32)]:
+            x_val = np.random.randint(0, 2, size=[10, 20, 30]).astype(np_type)
+            x = tf.placeholder(tf_type, shape=[None] * x_val.ndim, name=_TFINPUT)
+            res = tf.where(x)
+            _ = tf.identity(res, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+            tf.reset_default_graph()
+
     @check_opset_min_version(6, "cast")
     def test_shape_int32(self):
         x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]], dtype=np.float32)

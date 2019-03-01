@@ -398,11 +398,11 @@ class TransposeOptimizer(object):
         for i in all_other_inputs:
             target_node = self._g.get_node_by_output(i)
             numpy_val = target_node.get_tensor_value(as_list=False)
-            rank = np.rank(numpy_val)
+            rank = numpy_val.ndim
             if rank == 4:
                 transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
                 target_node.set_tensor_value(transposed_val)
-            elif rank == 1:  #  scalar
+            elif rank == 1:  # scalar
                 # do nothing
                 pass
             else:

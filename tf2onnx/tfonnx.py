@@ -1463,17 +1463,16 @@ def fill_op(ctx, node, name, args):
     # both shape and value in tensorflow are passed as tensor.
     # In onnx the value is an attribute so we need to fetch the value as const which
     # sooner or later will be a problem for tensorflow-onnx.
-    shape = ctx.get_shape(node.output[0])
-    utils.make_sure(all(i >= 0 for i in shape), "shape attr should not be less than zero")
-    value = node.inputs[1].get_tensor_value()
-    value_proto = numpy_helper.from_array(node.inputs[1].get_tensor_value(as_list=False))
-    dtype = value_proto.data_type
-    # onnx spec says value MUST be float.
-    node.set_attr("value", float(value))
-    node.set_attr("shape", shape)
-    node.set_attr("dtype", dtype)
-    del node.input[:]
-    return node
+    # ConstantOfShape in onnxruntime only support int64, so insert cast op
+    input_dtype_is_int64 = utils.ONNX_TO_NUMPY_DTYPE[ctx.get_dtype(node.input[0])] == np.int64
+    if not input_dtype_is_int64:
+        cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.INT64)
+    dtype = ctx.get_dtype(node.output[0])
+    value = np.array([node.inputs[1].get_tensor_value()]).astype(utils.ONNX_TO_NUMPY_DTYPE[dtype])
+    value_proto = numpy_helper.from_array(value)
+    node.set_attr("value", value_proto)
+    del node.input[1]
+    return [node] if input_dtype_is_int64 else [node, cast_node]
 
 
 def reverse_op8(ctx, node, name, args):
@@ -1723,6 +1722,18 @@ def logical_compare_op(ctx, node, name, args):
     return nodes
 
 
+def where_op(ctx, node, name, args):
+    # T_y output = Where(T_x condition), return indices of elements whose value are True
+    node.type = "NonZero"
+    # in onnx, indices are returned in this way [[ind_a_0, ind_b_0, ...], [ind_a_1, ind_b_1,...]];
+    # while in tf, the result will be [[ind_a_0, ind_a_1, ...], [ind_b_0, ind_b_1, ...], ...]
+    # this is the reason a transpose node inserted here.
+    transpose_node = ctx.insert_new_node_on_output("Transpose", node.output[0], name=utils.make_name("where_op_added"))
+    ctx.copy_shape(node.output[0], transpose_node.output[0])
+    ctx.copy_dtype(node.output[0], transpose_node.output[0])
+    return [node, transpose_node]
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1894,6 +1905,7 @@ _OPSET_9 = {
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
+    "Where": (where_op, []),
 }
 
 _OPSETS = [

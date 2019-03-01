@@ -141,6 +141,17 @@ def infer_shape_for_node(g, node):
         log.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
         return True
 
+    if node.type == "Gather":
+        # uses the follwing link to know how to infer shape of output
+        # https://www.tensorflow.org/api_docs/python/tf/gather
+        shape_params = g.get_shape(node.input[0])
+        shape_indices = g.get_shape(node.input[1])
+        axis = node.input[2].get_tensor_value()
+
+        shape = shape_params[:axis] + shape_indices + shape_indices[axis+1:]
+        g.set_shape(node.output[0], shape)
+        return True
+
     if node.type in ["All", "Any", "Min"]:
         axis_node = node.inputs[1]
         axis = axis_node.get_tensor_value()
