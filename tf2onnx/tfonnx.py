@@ -2419,6 +2419,28 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     return mapped_op, unmapped_op
 
 
+def tensorflow_onnx_rewrite(g, rewriters):
+    try:
+        ops = g.get_nodes()
+        for rewrite in rewriters:
+            ops = rewrite(g, ops)
+            g.set_nodes(ops)
+        for node in ops:
+            body_graphs = node.get_body_graphs()
+            if body_graphs:
+                for attr, b_g in body_graphs.items():
+                    log.debug("start rewriting subgraph of %s's attribute %s", node.name, attr)
+                    tensorflow_onnx_rewrite(b_g, rewriters)
+    except Exception as ex:
+        type_, value_, traceback_ = sys.exc_info()
+        log.error("node %s: exception %s" % (rewrite, ex))
+        ex_ext = traceback.format_exception(type_, value_, traceback_)
+        if continue_on_error:
+            log.info(ex_ext)
+        else:
+            raise ex
+
+
 def transpose_inputs(ctx, inputs_as_nchw):
     """Insert a transpose from NHWC to NCHW on model input on users request."""
     ops = []
@@ -2553,19 +2575,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
 
-    try:
-        ops = g.get_nodes()
-        for rewrite in rewriters:
-            ops = rewrite(g, ops)
-            g.set_nodes(ops)
-    except Exception as ex:
-        type_, value_, traceback_ = sys.exc_info()
-        log.error("node %s: exception %s" % (rewrite, ex))
-        ex_ext = traceback.format_exception(type_, value_, traceback_)
-        if continue_on_error:
-            log.info(ex_ext)
-        else:
-            raise ex
+    tensorflow_onnx_rewrite(g, rewriters)
 
     # some nodes may already copied into inner Graph, so remove them from main Graph.
     g.delete_unused_nodes(output_names)
