@@ -1905,8 +1905,8 @@ _OPSET_9 = {
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
-    "Where": (where_op, []),
     "Sinh": (direct_op, []),
+    "Where": (where_op, []),
 }
 
 _OPSETS = [
