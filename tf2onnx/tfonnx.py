@@ -383,6 +383,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
                 transpose.set_attr("perm", NHWC_TO_NCHW)
                 transpose.inserted_nchw = True
+                transpose.skip_conversion = True
                 shape = ctx.get_shape(input_name)
                 new_shape = spatial_map(shape, NHWC_TO_NCHW)
                 ctx.set_shape(transpose.output[0], new_shape)
@@ -399,6 +400,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
         transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
         transpose.set_attr("perm", HWCN_TO_NCHW)
         transpose.inserted_nchw = True
+        transpose.skip_conversion = True
         ctx.copy_shape(input_name, transpose.output[0])
         new_shape = spatial_map(ctx.get_shape(input_name), HWCN_TO_NCHW)
         ctx.set_shape(transpose.output[0], new_shape)
@@ -412,6 +414,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 input_name = node.input[1]
                 reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
                 reshape.set_attr("shape", new_kernel_shape)
+                reshape.skip_conversion = True
             else:
                 # new reshape takes new shape as input[1]
                 shape_name = utils.make_name(node.name)
@@ -419,6 +422,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 input_name = node.input[1]
                 reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
                 reshape.input.append(shape_name)
+                reshape.skip_conversion = True
             ctx.set_shape(reshape.output[0], new_kernel_shape)
             nodes.append(reshape)
 
@@ -433,6 +437,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
             transpose.set_attr("perm", NCHW_TO_NHWC)
             transpose.inserted_nchw = True
+            transpose.skip_conversion = True
             ctx.set_shape(transpose.output[0], ctx.get_shape(node.output[idx]))
             nodes.append(transpose)
             node.data_format = "NCHW"
@@ -2300,6 +2305,47 @@ def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, ["Div", "IsNaN", "ReduceSum", "Slice", "Split", "Tile", "Transpose"])
 
 
+def rewrite_conv2d_with_pad(g, ops):
+    pattern = \
+        OpTypePattern("Conv2D", name="conv", inputs=[
+            OpTypePattern("Pad", name="pad"),
+            OpTypePattern("*")
+        ])
+    matcher = GraphMatcher(pattern)
+    match_results = list(matcher.match_ops(ops))
+    for match in match_results:
+        conv = match.get_op("conv")
+        pad = match.get_op("pad")
+        paddings = pad.inputs[1]
+
+        if not paddings.is_const():
+            continue
+        mode = pad.get_attr("mode")
+        if mode:
+            mode = mode.s.decode("utf-8").lower()
+        if mode not in [None, "constant"] or len(pad.input) >= 3:
+            continue
+        # Conv2D already has a pad
+        if conv.get_attr("padding") == "SAME":
+            continue
+
+        log.debug("merge pad [%s] into conv [%s]", pad.name, conv.name)
+        paddings_val = np.array(paddings.get_tensor_value())
+        # can't pad on batch or channel dimensions
+        if np.any(paddings_val[0]) or np.any(paddings_val[3]):
+            continue
+        paddings_val = paddings_val[1:3]
+        paddings_val = paddings_val.transpose().flatten()
+        g.replace_input(conv, conv.input[0], pad.input[0])
+        # convert Conv2D
+        conv.type = "Conv"
+        ops.extend(conv_op(g, conv, conv.name, []))
+        conv.skip_conversion = True
+        conv.set_attr("auto_pad", "NOTSET")
+        conv.set_attr("pads", paddings_val)
+    return ops
+
+
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
@@ -2496,7 +2542,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     # bi-directional re-writer should be placed after single directional re-writer
     rewriters = [rewrite_transpose, rewrite_flatten,
                  rewrite_random_uniform, rewrite_random_uniform_fold_const,
-                 rewrite_random_normal, rewrite_dropout, rewrite_leakyrelu,
+                 rewrite_random_normal, rewrite_dropout,
+                 rewrite_leakyrelu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_single_direction_grublock,
                  rewrite_bi_direction_gru, rewrite_logical_compare_with_equal,

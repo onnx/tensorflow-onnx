@@ -150,6 +150,14 @@ class Node(object):
     def is_deleted(self):
         return self.type == "@@DELETED@@"
 
+    @property
+    def skip_conversion(self):
+        return self._skip_conversion
+
+    @skip_conversion.setter
+    def skip_conversion(self, val):
+        self._skip_conversion = val
+
     # If some Node is created as onnx_node, then we don't need convert it
     def need_skip(self):
         return self._skip_conversion
