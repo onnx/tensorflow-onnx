@@ -1894,17 +1894,18 @@ _OPSET_8 = {
 }
 
 _OPSET_9 = {
+    "Acosh": (direct_op, []),
+    "Asinh": (direct_op, []),
+    "Atanh": (direct_op, []),
+    "Cosh": (direct_op, []),
     "Erf": (direct_op, []),
     "Fill": (fill_op, []),
-    "Sinh": (direct_op, []),
-    "Cosh": (direct_op, []),
-    "Asinh": (direct_op, []),
-    "Acosh": (direct_op, []),
-    "Atanh": (direct_op, []),
     "Greater": (logical_compare_op, []),
+    "IsNan": (direct_op, ["IsNaN"]),
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
+    "Sinh": (direct_op, []),
     "Where": (where_op, []),
 }
 
@@ -2296,7 +2297,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Div", "ReduceSum", "Slice", "Split", "Tile", "Transpose"])
+    return rewrite_incomplete_type_support(g, ops, ["Div", "IsNaN", "ReduceSum", "Slice", "Split", "Tile", "Transpose"])
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
