@@ -198,7 +198,7 @@ def get_weights_from_const_node(g, node):
 
     if temp and temp.type == 'Const':
         val = temp.get_tensor_value(as_list=False)
-        dtype = utils.ONNX_TO_NUMPY_DTYPE[g.get_dtype(temp.output[0])]
+        dtype = utils.map_onnx_to_numpy_type(g.get_dtype(temp.output[0]))
         log.debug("found weights %s", temp.name)
     else:
         log.debug("weight node seems not to be Const, skip, node name is %s", temp.name)

@@ -604,7 +604,7 @@ def relu6_op(ctx, node, name, args):
     # since onnx does not have relu6, compose it with multiple ops.
     old_output = node.output[0]
     dtype = ctx.get_dtype(node.input[0])
-    dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
+    dtype = utils.map_onnx_to_numpy_type(dtype) if dtype else np.float32
     shape = ctx.get_shape(node.input[0])
     if -1 in shape:
         # if the shape has unknown dims we need to do something like this for opset < 8 (=no broadcast for min/max):
@@ -651,7 +651,7 @@ def relu6_op8(ctx, node, name, args):
     # since onnx does not have relu6, compose it with multiple ops.
     old_output = node.output[0]
     dtype = ctx.get_dtype(node.input[0])
-    dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
+    dtype = utils.map_onnx_to_numpy_type(dtype) if dtype else np.float32
     node.type = "Max"
     # const tensor 6
     six_name = utils.make_name(node.name)
@@ -687,7 +687,7 @@ def sign_op(ctx, node, name, args):
     utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
     if node_dtype in [onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
         raise ValueError("dtype " + node_dtype + " is not supported in onnx for now")
-    input_tensor_type = utils.ONNX_TO_NUMPY_DTYPE[node_dtype]
+    input_tensor_type = utils.map_onnx_to_numpy_type(node_dtype)
     zero_name = utils.make_name("{}_zero".format(node.name))
     ctx.make_const(zero_name, np.array(0, dtype=input_tensor_type))
     greater_node = ctx.make_node("Greater", [node.input[0], zero_name])
@@ -1280,7 +1280,7 @@ def fused_batchnorm_op7(ctx, node, name, args):
     scale_shape = ctx.get_shape(node.input[1])
     mean_shape = ctx.get_shape(node.input[3])
     var_shape = ctx.get_shape(node.input[4])
-    val_type = utils.ONNX_TO_NUMPY_DTYPE[ctx.get_dtype(node.input[1])]
+    val_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1]))
 
     if mean_shape != scale_shape:
         new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(as_list=False), scale_shape),
@@ -1387,11 +1387,11 @@ def fill_op(ctx, node, name, args):
     # In onnx the value is an attribute so we need to fetch the value as const which
     # sooner or later will be a problem for tensorflow-onnx.
     # ConstantOfShape in onnxruntime only support int64, so insert cast op
-    input_dtype_is_int64 = utils.ONNX_TO_NUMPY_DTYPE[ctx.get_dtype(node.input[0])] == np.int64
+    input_dtype_is_int64 = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0])) == np.int64
     if not input_dtype_is_int64:
         cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.INT64)
     dtype = ctx.get_dtype(node.output[0])
-    value = np.array([node.inputs[1].get_tensor_value()]).astype(utils.ONNX_TO_NUMPY_DTYPE[dtype])
+    value = np.array([node.inputs[1].get_tensor_value()]).astype(utils.map_onnx_to_numpy_type(dtype))
     value_proto = numpy_helper.from_array(value)
     node.set_attr("value", value_proto)
     del node.input[1]
@@ -1601,7 +1601,7 @@ def zeroslike_op(ctx, node, name, args):
     # when params "dtype" used, tf will call another op "Fill" instead, so Cast is not needed here.
     input_dtype = ctx.get_dtype(node.input[0])
     node_name = utils.make_name("zero")
-    const_zero = ctx.make_const(node_name, np.array(0).astype(utils.ONNX_TO_NUMPY_DTYPE[input_dtype]))
+    const_zero = ctx.make_const(node_name, np.array(0).astype(utils.map_onnx_to_numpy_type(input_dtype)))
     shapes = node.output_shapes
     dtypes = node.output_dtypes
     ctx.remove_node(name)
@@ -2051,7 +2051,7 @@ def rewrite_constant_fold(g, ops):
                     log.info("folding node type=%s, name=%s" % (op.type, op.name))
                     if op.type == "Cast":
                         dst = op.get_attr_int("to")
-                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[dst]
+                        np_type = tf2onnx.utils.map_onnx_to_numpy_type(dst)
                         val = np.cast[np_type](*inputs)
                     elif op.type == "ConcatV2":
                         axis = inputs[-1]
@@ -2059,7 +2059,7 @@ def rewrite_constant_fold(g, ops):
                         val = func(tuple(values), axis)
                     elif op.type == "ListDiff":
                         out_type = op.get_attr_int("out_idx")
-                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[out_type]
+                        np_type = tf2onnx.utils.map_onnx_to_numpy_type(out_type)
                         val = func(*inputs)
                         val = val.astype(np_type)
                     elif op.type in ["Pack"]:
@@ -2068,7 +2068,7 @@ def rewrite_constant_fold(g, ops):
                         val = func(inputs, axis=axis)
                     elif op.type == "Range":
                         dtype = op.get_attr_int("Tidx")
-                        np_type = tf2onnx.utils.ONNX_TO_NUMPY_DTYPE[dtype]
+                        np_type = tf2onnx.utils.map_onnx_to_numpy_type(dtype)
                         val = func(*inputs, dtype=np_type)
                     else:
                         val = func(*inputs)

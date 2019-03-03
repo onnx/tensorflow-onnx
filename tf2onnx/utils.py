@@ -138,7 +138,7 @@ def tf_to_onnx_tensor(tensor, name=""):
         dims = [1]
     is_raw, data = get_tf_tensor_data(tensor)
     if not is_raw and len(data) == 1 and np.prod(dims) > 1:
-        batch_data = np.zeros(dims, dtype=ONNX_TO_NUMPY_DTYPE[new_type])
+        batch_data = np.zeros(dims, dtype=map_onnx_to_numpy_type(new_type))
         batch_data.fill(data[0])
         onnx_tensor = numpy_helper.from_array(batch_data, name=name)
     else:
@@ -207,6 +207,10 @@ def map_numpy_to_onnx_dtype(np_dtype):
     raise ValueError("unsupported dtype " + np_dtype + " for mapping")
 
 
+def map_onnx_to_numpy_type(onnx_type):
+    return ONNX_TO_NUMPY_DTYPE[onnx_type]
+
+
 def node_name(name):
     """Get node name without io#."""
     pos = name.find(":")
@@ -226,12 +230,6 @@ def make_onnx_shape(shape):
 def port_name(name, nr=0):
     """Map node output number to name."""
     return name + ":" + str(nr)
-
-
-def make_onnx_identity(node_input, node_output, name=None):
-    if name is None:
-        name = make_name("identity")
-    return helper.make_node("Identity", [node_input], [node_output], name=name)
 
 
 def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):

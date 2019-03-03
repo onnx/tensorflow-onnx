@@ -29,7 +29,7 @@ def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
     logit_dtype = ctx.get_dtype(logit_name)
     utils.make_sure(logit_dtype, "Dtype of {} is None".format(logit_name))
 
-    dtype = utils.ONNX_TO_NUMPY_DTYPE[logit_dtype]
+    dtype = utils.map_onnx_to_numpy_type(logit_dtype)
     eye = np.eye(depth).astype(dtype)
     const_name = utils.make_name("const_eye")
     const_eye = ctx.make_const(name=const_name, np_val=eye)
@@ -82,7 +82,7 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
     make_gathernd(ctx, log_softmax.output[0], indices_with_id.output[0], gathernd_output,
                   gathernd_name, logit_dtype)
     const_name = utils.make_name("const_negative_one")
-    const_negative_one = ctx.make_const(const_name, np.array(-1).astype(utils.ONNX_TO_NUMPY_DTYPE[logit_dtype]))
+    const_negative_one = ctx.make_const(const_name, np.array(-1).astype(utils.map_onnx_to_numpy_type(logit_dtype)))
     mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], gathernd_output])
     shapes = node.output_shapes
     dtypes = node.output_dtypes
