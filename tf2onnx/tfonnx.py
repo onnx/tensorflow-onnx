@@ -2535,7 +2535,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         non_exists = set(io_to_check) - set(output_shapes.keys())
         if non_exists:
             log.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed"
-                    " in format: input/output_node_name:port_id. Problematical inputs/outputs are: %s \n", non_exists)
+                      "in format: input/output_node_name:port_id. Problematical inputs/outputs are: %s \n",
+                      non_exists)
             raise ValueError("Inputs/Outputs Not Found")
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
