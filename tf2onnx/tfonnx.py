@@ -146,7 +146,6 @@ def tensorflow_to_onnx(graph, shape_override):
 
 def _convert_shapenode_to_int64(ctx, node, input_number):
     """cast int32 shape into int64 shape."""
-    shape_node = node.inputs[input_number]
     name = node.input[input_number]
 
     cast_node = ctx.insert_new_node_on_input(node, "Cast", name)
@@ -382,7 +381,6 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 input_name = node.input[idx]
                 transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
                 transpose.set_attr("perm", NHWC_TO_NCHW)
-                transpose.inserted_nchw = True
                 transpose.skip_conversion = True
                 shape = ctx.get_shape(input_name)
                 new_shape = spatial_map(shape, NHWC_TO_NCHW)
@@ -393,19 +391,30 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     # kernel must to be transposed
     if with_kernel:
         parent = node.inputs[1]
-        # note: kernel may be used by multiple nodes,
-        # so even kernel is a const, transposing kernel can't be done statically.
-        # so "transpose" op is inserted here and will consider to remove it in later optimization phase if possible.
-        input_name = node.input[1]
-        transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
-        transpose.set_attr("perm", HWCN_TO_NCHW)
-        transpose.inserted_nchw = True
-        transpose.skip_conversion = True
-        ctx.copy_shape(input_name, transpose.output[0])
-        new_shape = spatial_map(ctx.get_shape(input_name), HWCN_TO_NCHW)
-        ctx.set_shape(transpose.output[0], new_shape)
-        nodes.append(transpose)
-        parent.data_format = "NCHW"
+
+        need_transpose = True
+        if node.inputs[1].is_const():
+            # kernel is const - transpose the const if we are the only consumer of const
+            # TODO: maybe we should make a copy of the const, or look at the other consumers
+            # if they'd want a transose as well.
+            consumers = ctx.find_output_consumers(node.input[1])
+            if len(consumers) == 1:
+                val = parent.get_tensor_value(as_list=False)
+                val = val.transpose(HWCN_TO_NCHW)
+                parent.set_tensor_value(val)
+                parent.data_format = "NCHW"
+                need_transpose = False
+
+        if need_transpose:
+            input_name = node.input[1]
+            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
+            transpose.set_attr("perm", HWCN_TO_NCHW)
+            transpose.skip_conversion = True
+            ctx.copy_shape(input_name, transpose.output[0])
+            new_shape = spatial_map(ctx.get_shape(input_name), HWCN_TO_NCHW)
+            ctx.set_shape(transpose.output[0], new_shape)
+            nodes.append(transpose)
+            parent.data_format = "NCHW"
 
         # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
         if new_kernel_shape:
@@ -436,7 +445,6 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             op_name = utils.make_name(node.name)
             transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
             transpose.set_attr("perm", NCHW_TO_NHWC)
-            transpose.inserted_nchw = True
             transpose.skip_conversion = True
             ctx.set_shape(transpose.output[0], ctx.get_shape(node.output[idx]))
             nodes.append(transpose)
@@ -2434,7 +2442,6 @@ def transpose_inputs(ctx, inputs_as_nchw):
                 op_name = utils.make_name(node.name)
                 transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
                 transpose.set_attr("perm", NCHW_TO_NHWC)
-                transpose.inserted_nchw = True
                 ctx.copy_shape(output_name, transpose.output[0])
                 ctx.set_shape(output_name, np.array(shape)[NHWC_TO_NCHW])
                 ops.append(transpose)
@@ -2527,8 +2534,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         # check output existence in case user passed in wrong output ids
         non_exists = set(io_to_check) - set(output_shapes.keys())
         if non_exists:
-            log.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed" \
-                  " in format: input/output_node_name:port_id. Problematical inputs/outputs are: %s \n", non_exists)
+            log.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed"
+                    " in format: input/output_node_name:port_id. Problematical inputs/outputs are: %s \n", non_exists)
             raise ValueError("Inputs/Outputs Not Found")
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
