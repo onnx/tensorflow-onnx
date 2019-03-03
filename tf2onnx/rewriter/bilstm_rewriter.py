@@ -82,11 +82,8 @@ def process_bilstm(g, bi_lstms):
         slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 2, all_nodes, to_remove)
 
         lstm_bw_old_x = lstm_bw.input[0]
-        new_nodes = []
-        for n in all_nodes:
-            if n.name not in to_remove:
-                new_nodes.append(n)
-        g.set_nodes(new_nodes)
+        for n in to_remove:
+            g.remove_node(n)
 
         old_x_consumers = g.find_output_consumers(lstm_bw_old_x)
         # the transpose/reverse here must be followed by LSTM if it is still useful.
@@ -100,9 +97,7 @@ def process_bilstm(g, bi_lstms):
                 reverse_node = reverse_node.inputs[0]
 
             g.replace_all_inputs(g.get_nodes(), reverse_node.output[0], reverse_node.input[0])
-            new_nodes = g.get_nodes()
-            new_nodes.remove(reverse_node)
-            g.set_nodes(new_nodes)
+            g.remove_node(reverse_node.name)
         else:
             raise ValueError("Reverse is still used by LSTM as input, cannot remove")
 

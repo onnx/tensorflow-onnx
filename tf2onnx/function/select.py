@@ -18,7 +18,6 @@ def select_op8(ctx, node, name, args):
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
     utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
 
-    nodes = []
     true_data_type = ctx.get_dtype(node.input[1])
     true_data_shape = ctx.get_shape(node.input[1])
     make_sure(true_data_type is not None, "select true data dtype cannot be None")
@@ -35,7 +34,6 @@ def select_op8(ctx, node, name, args):
         shape_node_output_shape = [rank]
         shape_node = ctx.make_node("Shape", [node.input[0]], op_name_scope=node.name,
                                    shapes=[shape_node_output_shape], dtypes=[TensorProto.INT64])
-        nodes.append(shape_node)
 
         # todo(pengwa), move those leveraging rewrite_incomplete_type_support_onnxruntime after shape inferencing
         # bug is fixed.
@@ -44,7 +42,6 @@ def select_op8(ctx, node, name, args):
         shape_f_node = ctx.make_node("Cast", [shape_node.output[0]], attr={"to": target_dtype},
                                      shapes=[shape_node_output_shape], dtypes=[target_dtype],
                                      op_name_scope=node.name)
-        nodes.append(shape_f_node)
 
         split_attr = [1 for i in range(rank)]
         output_shapes = [[1] for i in range(rank)]
@@ -52,7 +49,6 @@ def select_op8(ctx, node, name, args):
         split_node = ctx.make_node("Split", [shape_f_node.output[0]], output_count=rank,
                                    attr={"split": split_attr}, shapes=output_shapes,
                                    dtypes=output_dtypes, op_name_scope=node.name)
-        nodes.append(split_node)
 
         trip_cnts = []
         for i in range(rank):
@@ -63,26 +59,19 @@ def select_op8(ctx, node, name, args):
                                          shapes=[output_shape], dtypes=[target_dtype],
                                          op_name_scope=node.name)
             trip_cnts.append(shape_i_node.output[0])
-            nodes.append(shape_i_node)
         # workaround ends
 
-        onnx_nodes = create_loop_op(ctx, node.input, true_data_type, true_data_shape, trip_cnts, rank)
-        nodes.extend(onnx_nodes)
-        loop_node = onnx_nodes[-1]
+        loop_node = create_loop_op(ctx, node.input, true_data_type, true_data_shape, trip_cnts, rank)
 
         val_output_id = loop_node.output[1]
     elif rank == 0:
-        if_node, val_output_id = create_if_op(ctx, node.input, true_data_type, true_data_shape)
-        nodes.append(if_node)
+        _, val_output_id = create_if_op(ctx, node.input, true_data_type, true_data_shape)
 
     ctx.copy_shape(node.output[0], val_output_id)
     ctx.set_dtype(node.output[0], true_data_type)
-
-    output_node = ctx.make_node("Identity", [val_output_id], outputs=node.output,
-                                shapes=[ctx.get_shape(val_output_id)], dtypes=[true_data_type])
-    nodes.append(output_node)
-
-    return nodes
+    ctx.remove_node(node.name)
+    ctx.make_node("Identity", [val_output_id], outputs=node.output,
+                  shapes=[ctx.get_shape(val_output_id)], dtypes=[true_data_type])
 
 
 # gather_input_ids is 1-D tensor, containing 3 elements:
@@ -90,13 +79,12 @@ def select_op8(ctx, node, name, args):
 # 1: true result to gather on
 # 2: false result to father on
 def create_loop_op(g, gather_input_ids, output_type, output_shape, trip_count_input_ids, rank):
-    nodes = []
     cond_var_name = utils.make_name("cond_var")
-    nodes.append(g.make_const(cond_var_name, np.array(True, dtype=np.bool)))
+    g.make_const(cond_var_name, np.array(True, dtype=np.bool))
 
     # Loop requires at least a variable, add a useless fake variable.
     fake_val_name = utils.make_name("fake_var")
-    nodes.append(g.make_const(fake_val_name, np.array(0.0, dtype=np.float32)))
+    g.make_const(fake_val_name, np.array(0.0, dtype=np.float32))
 
     if rank < 1:
         raise ValueError("rank is < 1")
@@ -112,19 +100,13 @@ def create_loop_op(g, gather_input_ids, output_type, output_shape, trip_count_in
     loop_body = create_loop_body_graph(g, gather_input_ids, output_type, output_shape, trip_count_input_ids,
                                        rank, loop_node.name)
     loop_node.set_body_graph_as_attr("body", loop_body)
-    nodes.append(loop_node)
-    return nodes
+    return loop_node
 
 
 def get_inputs_for_current_iteration(g, input_id, iter_index):
-    nodes = []
     cond_gather_node = g.make_node("Gather", [input_id, iter_index])
-    nodes.append(cond_gather_node)
-
     cur_cond_val_scalar_node = g.make_node("Squeeze", [cond_gather_node.output[0]], attr={"axes": [0]})
-    nodes.append(cur_cond_val_scalar_node)
-
-    return nodes, cur_cond_val_scalar_node.output[0]
+    return cur_cond_val_scalar_node.output[0]
 
 
 def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_shape, trip_count_input_ids,
@@ -137,69 +119,57 @@ def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_
     g.add_graph_input(iter_name, TensorProto.INT64, (1,))  # iteration_num
     g.add_graph_input(cond_name, TensorProto.BOOL, ())  # condition
     g.add_graph_input(fake_var_name, TensorProto.FLOAT, ())  # loop-carried dependency
-    nodes = g.get_nodes()
+
     # get the i'th value of condition
     cond_input_id = gather_input_ids[0]
-    new_nodes, cond_input_id_for_current_iter = get_inputs_for_current_iteration(g, cond_input_id, iter_name)
-    nodes.extend(new_nodes)
+    cond_input_id_for_current_iter = get_inputs_for_current_iteration(g, cond_input_id, iter_name)
 
     # get the i'th value of true values
     true_input_id = gather_input_ids[1]
-    new_nodes, true_input_id_for_current_iter = get_inputs_for_current_iteration(g, true_input_id, iter_name)
-    nodes.extend(new_nodes)
-
+    true_input_id_for_current_iter = get_inputs_for_current_iteration(g, true_input_id, iter_name)
 
     # get the i'th value of false values
     false_input_id = gather_input_ids[2]
-    new_nodes, false_input_id_for_current_iter = get_inputs_for_current_iteration(g, false_input_id, iter_name)
-    nodes.extend(new_nodes)
+    false_input_id_for_current_iter = get_inputs_for_current_iteration(g, false_input_id, iter_name)
 
     input_ids_for_current_iter = [cond_input_id_for_current_iter, true_input_id_for_current_iter,
                                   false_input_id_for_current_iter]
     output_id = None
     rank = rank - 1
     if rank >= 1:
-        nodes_1 = create_loop_op(g, input_ids_for_current_iter, output_data_type, output_shape[1:],
-                                 trip_count_input_ids, rank)
-        loop_1 = nodes_1[-1]
+        loop_1 = create_loop_op(g, input_ids_for_current_iter, output_data_type, output_shape[1:],
+                                trip_count_input_ids, rank)
         output_id = loop_1.output[1]
-        nodes.extend(nodes_1)
     elif rank == 0:
-        if_node, if_node_output_id = create_if_op(g, input_ids_for_current_iter, output_data_type, output_shape[1:])
+        _, if_node_output_id = create_if_op(g, input_ids_for_current_iter, output_data_type, output_shape[1:])
         output_id = if_node_output_id
-        nodes.append(if_node)
 
     output_identity_name = utils.make_name("loop_output")
     loop_output_id = utils.port_name(output_identity_name)
-    loop_output_node = g.make_node(
+    g.make_node(
         'Identity',
         [output_id],
         outputs=[loop_output_id],
         name=output_identity_name
     )
-    nodes.append(loop_output_node)
 
     cond_identity_name = utils.make_name("cond_output")
     cond_output_id = utils.port_name(cond_identity_name)
-    identity_node = g.make_node(
+    g.make_node(
         'Identity',
         [cond_name],
         outputs=[cond_output_id],
         name=cond_identity_name
     )
-    nodes.append(identity_node)
 
     fake_var_identity_name = utils.make_name("fake_var_output")
     fake_var_output_id = utils.port_name(fake_var_identity_name)
-    identity_node = g.make_node(
+    g.make_node(
         'Identity',
         [fake_var_name],
         outputs=[fake_var_output_id],
         name=fake_var_identity_name
     )
-    nodes.append(identity_node)
-
-    g.set_nodes(nodes)
 
     g.add_graph_output(cond_output_id, TensorProto.BOOL, ())
     g.add_graph_output(fake_var_output_id, TensorProto.FLOAT, ())
@@ -225,15 +195,12 @@ def create_if_op(g, input_ids, output_data_type, output_shape):
 
 def create_body_graph_for_if_branch(parent_g, data_type, output_shape, chosen_cur_cond_val_out_name, op_name):
     g = parent_g.create_new_graph_with_same_config()
-    nodes = []
     name = utils.make_name("Identity")
-    identity_node = g.make_node(
+    g.make_node(
         'Identity',
         inputs=[chosen_cur_cond_val_out_name],
         outputs=['y'],
         name=name
     )
-    nodes.append(identity_node)
-    g.set_nodes(nodes)
     g.add_graph_output("y", data_type, utils.create_vague_shape_like(output_shape))
     return g

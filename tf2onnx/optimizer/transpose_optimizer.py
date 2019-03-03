@@ -73,13 +73,12 @@ class TransposeOptimizer(object):
                     for i, name in enumerate(child.input):
                         if name == output_name:
                             child.input[i] = const_name
-            ops.append(self._g.make_const(const_name, new_data))
+            self._g.make_const(const_name, new_data)
 
             # need call this to make input update synced to protobuf val
             self._g.update_proto()
-            ops.remove(reshape_op)
-            self._g.set_nodes(ops)
-            self._g.topological_sort(ops)
+            self._g.remove_node(reshape_op.name)
+            self._g.topological_sort(self._g.get_nodes())
 
     def post_optimize_action(self):
         nodes = self.nodes
@@ -106,10 +105,10 @@ class TransposeOptimizer(object):
                     if need_insert_reshape:
                         op_name = utils.make_name("reshape")
                         shape_name = utils.make_name(op_name)
-                        shape_const_node = self._g.make_const(shape_name, np.array(new_shape, dtype=np.int64))
-                        reshape_node = self._g.make_node("Reshape", inputs=[op.input[0], shape_name], outputs=op.output,
-                                                         name=op_name)
-                        self._update_graph_nodes([shape_const_node, reshape_node], [op], True)
+                        self._g.make_const(shape_name, np.array(new_shape, dtype=np.int64))
+                        self._g.remove_node(op.name)
+                        self._g.make_node("Reshape", inputs=[op.input[0], shape_name], outputs=op.output,
+                                          name=op_name)
                     else:
                         self._remove_useless_tranpose(op)
         self._g.update_proto()
@@ -193,20 +192,6 @@ class TransposeOptimizer(object):
             "Transpose": self._transpose_handler,
         }
 
-    # if there is nodes added, removed, or inputs changed, we need update the output_nodes/output_number etc.
-    def _update_graph_nodes(self, nodes_to_extend, nodes_to_remove, has_input_changed=False):
-        ops = self.nodes
-
-        if nodes_to_remove:
-            for n in nodes_to_remove:
-                ops.remove(n)
-
-        if nodes_to_extend:
-            ops.extend(nodes_to_extend)
-
-        if nodes_to_extend or nodes_to_remove or has_input_changed:
-            self._g.set_nodes(ops)
-
     def _handle_node_having_branches(self, node):
         # create transpose pairs if some input are not.
         self._create_transpose_pairs_before_node(node)
@@ -215,29 +200,23 @@ class TransposeOptimizer(object):
         # otherwise, it would impact their other output nodes
         if self._transpose_has_single_consumer_node(node.inputs):
             self._create_transpose_pairs_after_node(node)
-            to_remove = []
-
             input_transposes = node.inputs
             for n in input_transposes:
                 n_input = n.input[0]
-                assert len(n.output) == 1
+                utils.make_sure(len(n.output) == 1, "only expect single output")
                 self._g.replace_all_inputs(self._g.get_nodes(), n.output[0], n_input)
+                self._g.remove_node(n.name)
 
-                to_remove.append(n)
-
-            assert len(node.output) == 1
+            utils.make_sure(len(node.output) == 1, "only expect single output")
             # currently we assume node only has 1 output, for cases where it is more than 1 for example Split
             # we need consider the fact that Split's multiple output will not always has data in NCHW/NHWC,
             # it might be a different shape.
             output_transposes = self._g.find_output_consumers(node.output[0])
             for n in output_transposes:
                 n_input = n.input[0]
-                assert len(n.output) == 1
+                utils.make_sure(len(n.output) == 1, "only expect single output")
                 self._g.replace_all_inputs(self._g.get_nodes(), n.output[0], n_input)
-
-                to_remove.append(n)
-
-            self._update_graph_nodes(None, to_remove, True)
+                self._g.remove_node(n.name)
             return True
 
         log.debug("input transpose does not have single consumer, skipping...")
@@ -272,8 +251,6 @@ class TransposeOptimizer(object):
             # only nhwc transpose can reach here
             new_shape = [shape[i] for i in [0, 3, 1, 2]]
             self._g.set_shape(node.output[0], new_shape)
-
-        self._g.set_nodes(ops)
         return True
 
     # if return value is True, then it means Transpose is handled as designed
@@ -291,18 +268,16 @@ class TransposeOptimizer(object):
                 return op_handler(trans, p)
             return False
         # move transpose into branches to let Transposes can be "handled" in each branch
-        to_append = []
         for n in out_nodes:
             branch_trans = self._g.make_node("Transpose", [trans.input[0]], attr=trans.attr_onnx)
             self._g.replace_input(n, trans.output[0], branch_trans.output[0])
 
-            to_append.append(branch_trans)
-        self._update_graph_nodes(to_append, [trans], True)
+        self._g.remove_node(trans.name)
         return False
 
     def _remove_useless_tranpose(self, trans):
         self._g.replace_all_inputs(self._g.get_nodes(), trans.output[0], trans.input[0])
-        self._update_graph_nodes(None, [trans], True)
+        self._g.remove_node(trans.name)
 
     def _transpose_has_single_consumer_node(self, trans_nodes):
         result = True
@@ -326,17 +301,11 @@ class TransposeOptimizer(object):
     def _create_transpose_pairs_after_node(self, node):
         assert len(node.output) == 1  # just support node who has 1 output
         non_nchw_trans_consumers = self._get_non_nchw_transpose_output_nodes(node)
-        added_node = []
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nchw_trans_consumers
         for consumer in non_nchw_trans_consumers:
             nchw_node = self._g.make_node("Transpose", [node.output[0]], attr={"perm": [0, 3, 1, 2]})
             nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
             self._g.replace_input(consumer, node.output[0], nhwc_node.output[0])
-            added_node.extend([nchw_node, nhwc_node])
-
-        if added_node:
-            self._update_graph_nodes(added_node, None, True)
-        return added_node
 
     def _create_transpose_pairs_before_node(self, node):
         non_nhwc_trans_inputs = []
@@ -346,17 +315,11 @@ class TransposeOptimizer(object):
                 if [input_id, n] not in non_nhwc_trans_inputs:
                     non_nhwc_trans_inputs.append([input_id, n])
 
-        added_node = []
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nhwc_trans_consumers
         for input_id, n in non_nhwc_trans_inputs:
             nchw_node = self._g.make_node("Transpose", [input_id], attr={"perm": [0, 3, 1, 2]})
             nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
             self._g.replace_input(node, input_id, nhwc_node.output[0])
-            added_node.extend([nchw_node, nhwc_node])
-
-        if added_node:
-            self._update_graph_nodes(added_node, None, True)
-        return added_node
 
     def _add_handler(self, trans, node):
         if node.inputs[1].is_const():
@@ -369,7 +332,9 @@ class TransposeOptimizer(object):
                 ops = self._g.get_nodes()
                 trans.input[0] = utils.port_name(conv_node.name)
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-                self._update_graph_nodes([conv_node], [t_p, node], True)
+
+                self._g.remove_node(t_p.name)
+                self._g.remove_node(node.name)
                 return True
             return False
         return self._handle_node_having_branches(node)
@@ -378,7 +343,9 @@ class TransposeOptimizer(object):
         if is_nchw_transpose(node):
             ops = self._g.get_nodes()
             self._g.replace_all_inputs(ops, node.output[0], trans.input[0])
-            self._update_graph_nodes(None, [trans, node], True)
+
+            self._g.remove_node(trans.name)
+            self._g.remove_node(node.name)
             return True
         return False
 
@@ -435,7 +402,7 @@ class TransposeOptimizer(object):
 
                 ops = self._g.get_nodes()
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-                self._update_graph_nodes(None, [node], True)
+                self._g.remove_node(node.name)
                 return True
 
         # if the shape is () or (1), we just move transpose after the mul
@@ -447,7 +414,7 @@ class TransposeOptimizer(object):
     def _identity_handler(self, trans, node):
         ops = self._g.get_nodes()
         self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-        self._update_graph_nodes(None, [node], True)
+        self._g.remove_node(node.name)
         return True
 
     def _concat_handler(self, trans, node):

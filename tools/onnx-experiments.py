@@ -64,9 +64,6 @@ def rewrite_constant_fold(g, ops):
     while keep_looking:
         keep_looking = False
         for idx, op in enumerate(ops):
-            if op.is_deleted():
-                continue
-
             inputs = []
             for node in op.inputs:
                 if node and node.is_const():
@@ -114,13 +111,13 @@ def rewrite_constant_fold(g, ops):
                         for consumer in consumers:
                             g.replace_input(consumer, old_output_name, new_output_name)
                     for node in op.inputs:
-                        node.set_deleted()
+                        g.remove_node(node.name)
                     keep_looking = True
                 except Exception as ex:  # pylint: disable=broad-except
                     tb = traceback.format_exc()
                     log.info("exception: %s, details: %s", ex, tb)
                     # pylint: enable=too-many-nested-blocks
-    return g.remove_deleted_nodes(ops)
+    return ops
 
 
 def main():

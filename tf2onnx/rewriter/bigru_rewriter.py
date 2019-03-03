@@ -93,11 +93,9 @@ def process_bigru(g, bi_grus):
             g, gru_fw, gru_bw, bi_gru_node, 1, all_nodes, to_remove)
 
         gru_bw_old_x = gru_bw.input[0]
-        new_nodes = []
-        for n in all_nodes:
-            if n.name not in to_remove:
-                new_nodes.append(n)
-        g.set_nodes(new_nodes)
+
+        for n in to_remove:
+            g.remove_node(n)
 
         old_x_consumers = g.find_output_consumers(gru_bw_old_x)
         # the transpose/reverse here must be followed by GRU if it is still useful.
@@ -113,9 +111,7 @@ def process_bigru(g, bi_grus):
 
             g.replace_all_inputs(
                 g.get_nodes(), reverse_node.output[0], reverse_node.input[0])
-            new_nodes = g.get_nodes()
-            new_nodes.remove(reverse_node)
-            g.set_nodes(new_nodes)
+            g.remove_node(reverse_node.name)
         else:
             raise ValueError(
                 "Reverse is still used by GRU as input, cannot remove")

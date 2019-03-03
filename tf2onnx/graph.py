@@ -10,6 +10,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import collections
+import copy
 import sys
 import traceback
 import six
@@ -57,7 +58,20 @@ class Node(object):
 
     @property
     def output(self):
-        return self._output
+        return copy.deepcopy(self._output)
+
+    @output.setter
+    def output(self, val):
+        """Set op output. Output should be updated explicitly,
+        changing it would require output mapping changed.
+        """
+        for o in self._output:
+            del self.graph._output_to_node_name[o]
+
+        self._output = val
+        for o in self._output:
+            utils.make_sure(o not in self.graph._output_to_node_name, "output %s already in output mapping", o)
+            self.graph._output_to_node_name[o] = self.name
 
     @property
     def inputs(self):
@@ -84,10 +98,6 @@ class Node(object):
     @property
     def op(self):
         return self._op
-
-    @name.setter
-    def name(self, val):
-        self._op.name = val
 
     @property
     def type(self):
@@ -143,12 +153,6 @@ class Node(object):
 
     def set_attr_onnx(self, value):
         self.attr[value.name] = value
-
-    def set_deleted(self):
-        self.type = "@@DELETED@@"
-
-    def is_deleted(self):
-        return self.type == "@@DELETED@@"
 
     @property
     def skip_conversion(self):
@@ -312,38 +316,35 @@ class Graph(object):
         self._extra_opset = extra_opset
 
         self._order_sensitive_inputs = []
-        self.outputs = output_names
+        self.outputs = output_names if output_names is not None else []
 
         self.parent_graph = None
         self.contained_graphs = {}  # {node_name: {node_attribute_name: Graph}}
 
         ops = [Node(node, self) for node in nodes]
+        self.reset_nodes(ops)
 
         # add identity node after each output, in case it is renamed during conversion.
-        if self.outputs:
-            to_append = []
-            for n in ops:
-                raw_outputs = n.output
-                new_output_base_name = None
-                index_out = 0
-                for i, o in enumerate(raw_outputs):
-                    if o in output_names:
-                        if not new_output_base_name:
-                            new_output_base_name = utils.make_name("raw_output_")
-                        new_out = port_name(new_output_base_name, index_out)
-                        self.replace_all_inputs(ops, o, new_out)
-                        n.output[i] = new_out
-                        index_out += 1
-                        new_output_node = self.make_node("Identity", [new_out], outputs=[o],
-                                                         op_name_scope="graph_outputs")
-                        to_append.append(new_output_node)
-                        self.set_node_by_name(n)
-                        self.copy_shape(o, new_out)
-                        self.copy_dtype(o, new_out)
+        for o in self.outputs:
+            n = self.get_node_by_output_in_current_graph(o)
+            new_output_name = port_name(utils.make_name("raw_output_"))
+            n_shapes = n.output_shapes
+            n_dtypes = n.output_dtypes
+            self.remove_node(n.name)
 
-            ops.extend(to_append)
+            new_outputs = [o if o != output else new_output_name for output in n.output]
+            new_node = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
+                                      skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes)
+            body_graphs = n.graph.contained_graphs.pop(n.name, None)
+            if body_graphs:
+                for attr_name, body_graph in body_graphs.items():
+                    body_graph.parent_graph = self
+                    new_node.set_body_graph_as_attr(attr_name, body_graph)
 
-        self.set_nodes(ops)
+            self.replace_all_inputs(self.get_nodes(), o, new_output_name)
+            self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope="graph_outputs")
+            self.copy_shape(new_output_name, o)
+            self.copy_dtype(new_output_name, o)
 
     def create_new_graph_with_same_config(self):
         """Create a clean graph inheriting current graph's configuration."""
@@ -391,6 +392,7 @@ class Graph(object):
         if outputs is None:
             outputs = [name + ":" + str(i) for i in range(output_count)]
 
+        output_count = len(outputs)
         raw_attr = {}
         onnx_attrs = []
         for a, v in attr.items():
@@ -398,6 +400,13 @@ class Graph(object):
                 onnx_attrs.append(v)
             else:
                 raw_attr[a] = v
+
+        n = self.get_node_by_name(name)
+        utils.make_sure(n is None, "name %s already exists in node: \n%s", name, n)
+        for o in outputs:
+            n = self.get_node_by_output_in_current_graph(o)
+            utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
+
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **raw_attr)
 
         if op_type in ["If", "Loop", "Scan"]:
@@ -409,25 +418,74 @@ class Graph(object):
             _ = [node.set_attr_onnx(a) for a in onnx_attrs]
 
         if shapes:
-            utils.make_sure(len(shapes) == output_count, "output shape count not equal to output count")
+            utils.make_sure(len(shapes) == output_count,
+                            "output shape count %s not equal to output count %s", len(shapes), output_count)
             for i in range(output_count):
                 self.set_shape(node.output[i], shapes[i])
 
         if dtypes:
-            utils.make_sure(len(dtypes) == output_count, "output dtypes count not equal to output count")
+            utils.make_sure(len(dtypes) == output_count,
+                            "output dtypes count %s not equal to output count %s", len(dtypes), output_count)
             for i in range(output_count):
                 self.set_dtype(node.output[i], dtypes[i])
 
+        self._nodes.append(node)
         return node
 
-    def set_nodes(self, ops):
-        """Set new node list."""
+    def remove_node(self, node_name):
+        """Remove node in current graph."""
+        utils.make_sure(node_name in self._nodes_by_name, "node %s not in current graph, cannot remove", node_name)
+        node = self.get_node_by_name(node_name)
+        del self._nodes_by_name[node_name]
+        if node_name in self.contained_graphs:
+            del self.contained_graphs[node_name]
+
+        if node in self._order_sensitive_inputs:
+            self._order_sensitive_inputs.remove(node)
+
+        for op_output in node.output:
+            del self._output_to_node_name[op_output]
+
+            if op_output in self._output_shapes:
+                del self._output_shapes[op_output]
+            if op_output in self._dtypes:
+                del self._dtypes[op_output]
+
+        self._nodes.remove(node)
+
+    def reset_nodes(self, ops):
+        """Reset the graph with node list."""
+        remained_dtypes = {}
+        remained_shapes = {}
+        remained_sub_graphs = {}
+        for op in ops:
+            for op_output in op.output:
+                # this check should be removed once we make sure all output tensors have dtype/shape.
+                if op_output in self._dtypes:
+                    remained_dtypes[op_output] = self._dtypes[op_output]
+                if op_output in self._output_shapes:
+                    remained_shapes[op_output] = self._output_shapes[op_output]
+
+            if op.name in self.contained_graphs:
+                remained_sub_graphs[op.name] = self.contained_graphs[op.name]
+
         self._nodes = ops
+        self.contained_graphs = remained_sub_graphs
         self._nodes_by_name = {op.name: op for op in ops}
         self._output_to_node_name = {}
         for op in ops:
             for op_output in op.output:
                 self._output_to_node_name[op_output] = op.name
+
+        for n in self._order_sensitive_inputs:
+            if n not in ops:
+                self._order_sensitive_inputs.remove(n)
+        for o in self.outputs:
+            if o not in self._output_to_node_name:
+                raise ValueError("graph output " + o + " not exist")
+
+        self._dtypes = remained_dtypes
+        self._output_shapes = remained_shapes
 
     def update_proto(self):
         """Update the onnx protobuf from out internal Node structure."""
@@ -486,13 +544,11 @@ class Graph(object):
 
         new_node = self.make_node("Placeholder", [], outputs=[name], dtypes=[dtype], shapes=[shape])
         self._order_sensitive_inputs.append(new_node)
-        all_nodes = self.get_nodes()
-        all_nodes.append(new_node)
-        self.set_nodes(all_nodes)
 
     def add_graph_output(self, name, dtype=None, shape=None):
         """Add node output as graph's output."""
-        # todo(pengwa): check output existence
+        utils.make_sure(name in self._output_to_node_name, "output %s not exist in the graph", name)
+
         if dtype is None:
             dtype = self.get_dtype(name)
 
@@ -544,6 +600,7 @@ class Graph(object):
         if isinstance(val, np.ndarray):
             val = val.tolist()
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
+        utils.make_sure(node is not None, "cannot find node by output id %s", name)
         node.graph._output_shapes[name] = val
 
     def copy_shape(self, input_name, output_name):
@@ -610,7 +667,7 @@ class Graph(object):
                     label_counter -= 1
 
         ret = [x for _, x in sorted(zip(label, ops))]
-        self.set_nodes(ret)
+        self.reset_nodes(ret)
 
     def make_graph(self, doc, graph_name="tf2onnx"):
         """
@@ -783,7 +840,7 @@ class Graph(object):
         if name is None:
             name = utils.make_name(node.name)
         new_output = port_name(name)
-        new_node = Node(helper.make_node(op_type, [input_name], [new_output], name=name, **kwargs), self)
+        new_node = self.make_node(op_type, [input_name], attr=kwargs, outputs=[new_output], name=name)
         for i, n in enumerate(node.input):
             if n == input_name:
                 node.input[i] = new_output
@@ -801,10 +858,16 @@ class Graph(object):
         Returns:
             node that was inserted
         """
-        assert isinstance(output_name, six.text_type) and isinstance(op_type, six.text_type)
+        utils.make_sure(isinstance(output_name, six.text_type), "output_name's type is not expected: %s",
+                        type(output_name))
+        utils.make_sure(isinstance(op_type, six.text_type), "op_type's type is not expected: %s",
+                        type(op_type))
+
         new_output = port_name(name)
-        new_node = Node(helper.make_node(op_type, [output_name], [new_output], name=name, **kwargs), self)
-        self.replace_all_inputs(self.get_nodes(), output_name, new_output)
+        new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name)
+
+        to_replace = [n for n in self.get_nodes() if n != new_node]
+        self.replace_all_inputs(to_replace, output_name, new_output)
         return new_node
 
     def find_output_consumers(self, output_name):
@@ -824,6 +887,9 @@ class Graph(object):
     @staticmethod
     def replace_all_inputs(ops, old_input, new_input):
         """Replace all inputs pointing to old_input with new_input."""
+        if old_input == new_input:
+            return
+
         for node in ops:
             for i, input_name in enumerate(node.input):
                 if input_name == old_input:
@@ -845,34 +911,6 @@ class Graph(object):
                 node.input[i] = new_input
                 is_replaced = True
         return is_replaced
-
-    @staticmethod
-    def replace_subgraph(ops, subgraph_nodes, old_inputs, old_outputs, new_inputs, new_outputs):
-        """Replace subgraph."""
-        if len(old_inputs) != len(new_inputs) or len(old_outputs) != len(new_outputs):
-            raise ValueError("replace_subgraph - inputs and outputs need to be same length")
-
-        # point all children nodes inputs to the new node
-        for oo, no in zip(old_outputs, new_outputs):
-            for output_name in oo.output:
-                for child in ops:
-                    for i, name in enumerate(child.input):
-                        if name == output_name:
-                            child.input[i] = port_name(no.name)
-
-        # delete nodes no longer used
-        removed = set()
-        for node in subgraph_nodes.get_nodes():
-            if not node or node in removed:
-                continue
-            ops.remove(node)
-            removed.add(node)
-        ops.extend(new_outputs)
-        return ops
-
-    @staticmethod
-    def remove_deleted_nodes(ops):
-        return [node for node in ops if not node.is_deleted()]
 
     def _extract_sub_graph_nodes(self, dest_node, input_checker=None):
         """Return nodes of subgraph ending with dest_node.
@@ -943,7 +981,7 @@ class Graph(object):
                 if attr_body_graphs:
                     for _, body_graph in attr_body_graphs.items():
                         body_graph.delete_unused_nodes(body_graph.outputs)
-            self.set_nodes(related_nodes)
+            self.reset_nodes(related_nodes)
         else:
             print("WARNING: outputs not specified, delete_unused_nodes not taking effect.")
 
@@ -1059,12 +1097,7 @@ class GraphUtil(object):
             output_names.append(n.name)
 
         g = Graph(nodes_to_append, output_shapes, output_dtypes, None, None, None, output_names)
-        const_nodes_from_initializer = GraphUtil._parse_graph_initializer(g, graph_proto)
-        all_nodes = g.get_nodes()
-        all_nodes.extend(const_nodes_from_initializer)
-        g.set_nodes(all_nodes)
-
-
+        GraphUtil._parse_graph_initializer(g, graph_proto)
         GraphUtil._parse_graph_input(g, graph_proto)
 
         for n in g.get_nodes():

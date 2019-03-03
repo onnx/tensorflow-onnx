@@ -14,6 +14,7 @@ from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.rnn_utils import is_loopcond_op, is_tensor_array_op
 from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
+from tf2onnx.utils import TensorValueInfo
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.loop_rewriter_base")
@@ -162,14 +163,6 @@ class InputTensorArray(object):
         self.consumer = TensorValueInfo(consumer_id, g)
 
 
-class TensorValueInfo(object):
-    def __init__(self, tensor_id, g):
-        self.id = tensor_id
-        if self.id:
-            self.dtype = g.get_dtype(tensor_id)
-            self.shape = g.get_shape(tensor_id)
-
-
 class LoopRewriterBase(object):
     def __init__(self, g):
         self.g = g
@@ -207,13 +200,7 @@ class LoopRewriterBase(object):
 
             if self.need_rewrite(context):
                 # cut off connection between cell/cond graphs and useless nodes like Merge, NextIteration.
-                to_remove = self._cut_off_connection_for_cell(context)
-                all_nodes = self.g.get_nodes()
-                for n in set(to_remove):
-                    if n in all_nodes:
-                        all_nodes.remove(n)
-                self.g.set_nodes(all_nodes)
-
+                self._cut_off_connection_for_cell(context)
                 context.cell_graph = self._crop_loop_body_sub_graph(context)
                 context.cond_graph = self._crop_loop_condition_sub_graph(context)
 
@@ -317,11 +304,11 @@ class LoopRewriterBase(object):
         return graph_info
 
     def _cut_off_connection_for_cell(self, context):
-        nodes_to_remove = []
         for val in context.loop_properties.all_variables.values():
             if val.switch_true_identity_output.id:
                 # remove the node to cut off a starting node of the cell (e.g. loop body).
-                nodes_to_remove.append(self.g.get_node_by_output(val.switch_true_identity_output.id))
+                n = self.g.get_node_by_output(val.switch_true_identity_output.id)
+                self.g.remove_node(n.name)
 
             if val.is_tensor_array:
                 # connect NextIteration to an invalid node, to cut off an ending node of the cell.
@@ -334,9 +321,7 @@ class LoopRewriterBase(object):
 
         for scan_input in context.loop_properties.scan_inputs:
             # remove the node to cut off connection between scan_input and the cell.
-            nodes_to_remove.append(self.g.get_node_by_output(scan_input))
-
-        return nodes_to_remove
+            self.g.remove_node(self.g.get_node_by_output(scan_input.id).name)
 
     def _get_loop_var_from_switch(self, switch_node):
         if switch_node.type != 'Switch':

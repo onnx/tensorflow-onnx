@@ -12,6 +12,7 @@ import traceback
 from collections import OrderedDict
 from enum import Enum
 from tf2onnx import utils
+from tf2onnx.utils import TensorValueInfo
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.cond_rewriter_base")
@@ -36,13 +37,13 @@ class CondBranchContext:
 
 class CondContext:
     def __init__(self, cond_scope, pred_input, true_branch_context,
-                 false_branch_context, switchs, merges):
+                 false_branch_context, switchs, merge_tensor_value_infos):
         self.cond_scope = cond_scope # name scope for this tf.cond
         self.pred_input = pred_input # condition input
         self.true_branch_context = true_branch_context
         self.false_branch_context = false_branch_context
         self.switchs = set(switchs)
-        self.merges = merges # list of merges in order
+        self.merges = merge_tensor_value_infos # list of TensorValueInfo for merge nodes in order
 
 
 class CondRewriter:
@@ -75,31 +76,25 @@ class CondRewriter:
             try:
                 pred_input, true_branch_context, false_branch_context, switchs = \
                     self._parse_cond(name_scope, merge_nodes)
+                merge_node_tensor_value_infos = [TensorValueInfo(m.output[0], self.g) for m in merge_nodes]
                 cond_context = CondContext(
                     name_scope,
                     pred_input,
                     true_branch_context,
                     false_branch_context,
                     switchs,
-                    merge_nodes
+                    merge_node_tensor_value_infos
                 )
             except Exception as ex:
                 tb = traceback.format_exc()
                 log.warning("tf.cond rewrite failed, due to exception: %s, details:%s", ex, tb)
                 continue
 
-            nodes_to_add, nodes_to_remove = self._cut_off_connection(cond_context)
-            nodes_to_add.append(self._create_if_node(cond_context))
-            # remove nodes in If branchs explicitly
-            nodes_to_remove.extend(
-                list(cond_context.true_branch_context.nodes) + \
-                list(cond_context.false_branch_context.nodes)
-            )
-            for n in nodes_to_remove:
-                if n in all_nodes:
-                    all_nodes.remove(n)
-            all_nodes.extend(nodes_to_add)
-            self.g.set_nodes(all_nodes)
+            self._cut_off_connection(cond_context)
+            self._create_if_node(cond_context)
+            # remove nodes in If branches explicitly
+            for n in list(cond_context.true_branch_context.nodes) + list(cond_context.false_branch_context.nodes):
+                self.g.remove_node(n.name)
         log.debug("cond pre rewrite done")
 
         return self.g.get_nodes()
@@ -109,10 +104,12 @@ class CondRewriter:
             "If",
             [cond_context.pred_input],
             op_name_scope=cond_context.cond_scope,
-            outputs=[m.output[0] for m in cond_context.merges],
+            outputs=[m.id for m in cond_context.merges],
+            shapes=[m.shape for m in cond_context.merges],
+            dtypes=[m.dtype for m in cond_context.merges],
             skip_conversion=False
         )
-        log.debug("set graph for if branchs")
+        log.debug("set graph for if branches")
         true_graph = utils.construct_graph_from_nodes(
             self.g,
             list(cond_context.true_branch_context.nodes),
@@ -137,25 +134,33 @@ class CondRewriter:
         log.debug("cut off switch connection")
         # replace switch with identity node
         for switch in cond_context.switchs:
+            shapes = switch.output_shapes
+            dtypes = switch.output_dtypes
+            self.g.remove_node(switch.name)
             false_switch_id = self.g.make_node(
                 "Identity",
                 [switch.input[0]],
                 outputs=[switch.output[0]],
-                op_name_scope=cond_context.cond_scope
+                op_name_scope=cond_context.cond_scope,
+                shapes=[shapes[0]],
+                dtypes=[dtypes[0]],
             )
             cond_context.false_branch_context.nodes.add(false_switch_id)
             true_switch_id = self.g.make_node(
                 "Identity",
                 [switch.input[0]],
                 outputs=[switch.output[1]],
-                op_name_scope=cond_context.cond_scope
+                op_name_scope=cond_context.cond_scope,
+                shapes=[shapes[1]],
+                dtypes=[dtypes[1]],
             )
             cond_context.true_branch_context.nodes.add(true_switch_id)
             nodes_to_add.extend([false_switch_id, true_switch_id])
         # replace merge with if node
         log.debug("cut off merge connection")
-        nodes_to_remove = list(cond_context.switchs) + list(cond_context.merges)
-        return nodes_to_add, nodes_to_remove
+        for tensor_value_info in cond_context.merges:
+            n = self.g.get_node_by_output(tensor_value_info.id)
+            self.g.remove_node(n.name)
 
     def _is_merge(self, node):
         return node.type == "Merge"
