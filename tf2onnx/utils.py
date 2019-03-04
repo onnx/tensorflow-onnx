@@ -11,6 +11,8 @@ from __future__ import unicode_literals
 
 import os
 import re
+import shutil
+import tempfile
 import six
 import numpy as np
 import tensorflow as tf
@@ -94,6 +96,7 @@ INTERNAL_NAME = 1
 
 # Fake onnx op type which is used for Graph input.
 GRAPH_INPUT_TYPE = "NON_EXISTENT_ONNX_TYPE"
+
 
 def make_name(name):
     """Make op name for inserted ops."""
@@ -274,18 +277,13 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
             t = numpy_helper.from_array(data)
             t.name = data_key
             data_full_path = os.path.join(data_path, "input_" + str(i) + ".pb")
-            with open(data_full_path, 'wb') as f:
-                f.write(t.SerializeToString())
+            save_protobuf(data_full_path, t)
             i += 1
 
     target_path = os.path.join(save_path, onnx_file_name + ".onnx")
-    with open(target_path, "wb") as f:
-        f.write(model_proto.SerializeToString())
-
+    save_protobuf(target_path, model_proto)
     if as_text:
-        with open(target_path + ".pbtxt", "w") as f:
-            f.write(text_format.MessageToString(model_proto))
-
+        save_protobuf(target_path + ".pbtxt", model_proto, as_text=True)
     return target_path
 
 
@@ -347,3 +345,22 @@ def tf_name_scope(name):
 def create_vague_shape_like(shape):
     make_sure(len(shape) >= 0, "rank should be >= 0")
     return [-1 for i in enumerate(shape)]
+
+
+def get_temp_directory():
+    return os.environ.get("TF2ONNX_TEMP_DIRECTORY", tempfile.mkdtemp())
+
+
+def delete_directory(path):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+
+
+def save_protobuf(path, message, as_text=False):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if as_text:
+        with open(path, "w") as f:
+            f.write(text_format.MessageToString(message))
+    else:
+        with open(path, "wb") as f:
+            f.write(message.SerializeToString())
