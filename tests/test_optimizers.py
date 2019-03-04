@@ -19,7 +19,8 @@ from common import unittest_main
 class OptimizerTests(Tf2OnnxBackendTestBase):
     """Run original model proto and modified model proto with onnxruntime, compare the results."""
 
-    def run_and_compare(self, output_names_with_port, onnx_feed_dict, origin_proto, debug=False, rtol=1e-07):
+    def run_and_compare(self, output_names_with_port, onnx_feed_dict, origin_proto,
+                        remaining_transpose_num=None, debug=False, rtol=1e-07):
         origin_model_path = self.save_onnx_model(origin_proto, onnx_feed_dict, postfix="_origin")
 
         new_proto = GraphUtil.opt_transposes_with_model_proto(origin_proto)
@@ -32,6 +33,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         current = GraphUtil.get_node_count_from_onnx_graph(new_proto.graph)
 
         self.assertTrue(current["Transpose"] < previous["Transpose"], msg="transpose ops count not changed")
+        if remaining_transpose_num is not None:
+            self.assertTrue(current["Transpose"] == remaining_transpose_num, msg="some transpose ops left unexpected")
 
         if self.config.is_onnxruntime_backend:
             expected = self.run_onnxruntime(origin_model_path, onnx_feed_dict, output_names_with_port)
@@ -58,7 +61,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
-                             model_proto)
+                             model_proto, remaining_transpose_num=0)
 
     def test_leaky_relu(self):
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -74,7 +77,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
-                             model_proto)
+                             model_proto, remaining_transpose_num=0)
 
     def test_max(self):
         const_1_val = [2.0]
@@ -102,7 +105,38 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
-                             model_proto)
+                             model_proto, remaining_transpose_num=0)
+
+    def test_transpose_merge(self):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        node1 = helper.make_node("Transpose", ["X"], ["Y_1"], perm=[0, 2, 3, 1], name="trans_1")
+        node2 = helper.make_node("Mul", ["Y", "Y_1"], ["OUT"], name="mul")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-merge-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5))],
+            [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, (2, 4, 5, 3))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["OUT"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
+                             model_proto, remaining_transpose_num=1)
+
+    def test_transpose_with_shape(self):
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        node2 = helper.make_node("Shape", ["Y"], ["Z"], name="shape")
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "transpose_with_shape",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.INT64, [4])],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["Z"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
+                             model_proto, remaining_transpose_num=0)
 
 
 if __name__ == "__main__":
