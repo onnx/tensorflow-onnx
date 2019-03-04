@@ -39,7 +39,6 @@ class Node(object):
         self._input = [i for i in node.input]
         self._output = [i for i in node.output]
         self._attr = {}
-        self.inserted_nchw = False
 
         graph.set_node_by_name(self)
         # dict to original attributes
@@ -1063,7 +1062,6 @@ class GraphUtil(object):
         all_nodes = g.get_nodes()
         all_nodes.extend(const_nodes_from_initializer)
         g.set_nodes(all_nodes)
-
 
         GraphUtil._parse_graph_input(g, graph_proto)
 
