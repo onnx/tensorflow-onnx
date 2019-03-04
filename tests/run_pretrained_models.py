@@ -10,10 +10,8 @@ from __future__ import unicode_literals
 
 import argparse
 import os
-import shutil
 import sys
 import tarfile
-import tempfile
 import time
 import traceback
 import zipfile
@@ -37,7 +35,7 @@ from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 
-TMPPATH = tempfile.mkdtemp()
+TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
 PERFITER = 1000
 
 
@@ -192,7 +190,7 @@ class Test(object):
     def run_onnxmsrtnext(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import lotus
-        model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto)
+        model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto)
         m = lotus.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
         if self.perf:
@@ -205,8 +203,8 @@ class Test(object):
     def run_onnxruntime(self, name, model_proto, inputs):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
-        model_path = utils.save_onnx_model(TMPPATH, name, inputs, model_proto, include_test_data=True)
-        utils.save_onnx_model(TMPPATH, name, inputs, model_proto, include_test_data=False, as_text=True)
+        model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True)
+        utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=False, as_text=True)
         print("\t\t" + model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
@@ -221,8 +219,7 @@ class Test(object):
     def create_onnx_file(name, model_proto, inputs, outdir):
         os.makedirs(outdir, exist_ok=True)
         model_path = os.path.join(outdir, name + ".onnx")
-        with open(model_path, "wb") as f:
-            f.write(model_proto.SerializeToString())
+        utils.save_protobuf(model_path, model_proto)
         print("\tcreated", model_path)
 
     def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, fold_const=None):
@@ -440,8 +437,8 @@ def main():
             ret = None
             print(ex)
         finally:
-            if os.path.exists(TMPPATH) and not args.debug:
-                shutil.rmtree(TMPPATH)
+            if not args.debug:
+                utils.delete_directory(TEMP_DIR)
         if not ret:
             failed += 1
 

@@ -288,6 +288,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(conv, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-5)
 
+    def test_conv2d_with_pad(self):
+        x_val = make_xval((1, 1, 5, 5)).transpose(NCHW_TO_NHWC)
+        w = np.random.random_sample([3, 3, 1, 2]).astype(np.float32)
+        strides = [1, 1, 1, 1]
+
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        kernel = tf.constant(w, dtype=tf.float32, name='k')
+        x_pad = tf.pad(x, paddings=[[0, 0], [2, 2], [2, 2], [0, 0]])
+        conv = tf.nn.conv2d(x_pad, kernel, strides=strides, padding="VALID")
+        _ = tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-5)
+
     def test_conv2d_transpose(self):
         x_shape = [2, 6, 4, 3]
         output_shape = [2, 13, 9, 2]
@@ -722,8 +734,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_onnxruntime_incompatibility("Mul")
     def test_leaky_relu(self):
         for alpha in [0.1, -0.1, 1.0, -1.0, 10.0, -10.0]:
-            x_val = 1000*np.random.random_sample([1000, 100]).astype(np.float32)
-            x = tf.placeholder(tf.float32, [None]*x_val.ndim, name=_TFINPUT)
+            x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
+            x = tf.placeholder(tf.float32, [None] * x_val.ndim, name=_TFINPUT)
             x_ = tf.nn.leaky_relu(x, alpha)
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
@@ -1199,7 +1211,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice7(self):
-        x_val = np.arange(5*6).astype("float32").reshape(5, 6)
+        x_val = np.arange(5 * 6).astype("float32").reshape(5, 6)
 
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.strided_slice(x, [0, 1], [3, 4], [1, 1], begin_mask=2)
@@ -1217,7 +1229,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.strided_slice(x, [0, 1], [3, 4], [1, 1], shrink_axis_mask=2)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
 
     @skip_caffe2_backend("fails with schema error")
     @check_opset_min_version(7, "batchnorm")
@@ -1701,6 +1712,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(res, name=_TFOUTPUT)
         _ = tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+    @check_opset_min_version(9, "is_nan")
+    def test_isnan(self):
+        # only compatible with dtype `float32`
+        x_val1 = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x_val2 = np.array([np.nan, np.nan, np.nan, np.nan], dtype=np.float32).reshape((2, 2))
+        x_val3 = np.array([1.0, np.nan, -3.0, np.nan], dtype=np.float32).reshape((2, 2))
+        for x_val in [x_val1, x_val2, x_val3]:
+            x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            x_ = tf.is_nan(x)
+            _ = tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+            tf.reset_default_graph()
 
 
 if __name__ == '__main__':
