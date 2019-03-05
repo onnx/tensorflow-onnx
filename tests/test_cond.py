@@ -139,7 +139,6 @@ class CondTests(Tf2OnnxBackendTestBase):
 
         def cond_graph():
             b = tf.constant(np.array([0], dtype=np.int32), dtype=tf.int32)
-            z = tf.gather_nd(x, b)
             # while_loop
             c = lambda y: tf.reduce_any(tf.less(y, 10))
             b = lambda i: tf.add(y, 1)
