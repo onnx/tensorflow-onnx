@@ -231,10 +231,8 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph)
             self.assertEqual(
-                'digraph { Relu6__3 [op_type=Const] Relu6__2 [op_type=Const] '
-                'input1 [op_type=Placeholder shape="[2, 3]"] Relu6 [op_type=Max] '
-                'Relu6__4 [op_type=Min] output [op_type=Identity] input1:0 -> Relu6 '
-                'Relu6__2 -> Relu6 Relu6:0 -> Relu6__4 Relu6__3 -> Relu6__4 Relu6__4:0 -> output }',
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Relu6 [op_type=Relu] Relu6__2 [op_type=Clip] '
+                'output [op_type=Identity] input1:0 -> Relu6 Relu6:0 -> Relu6__2 Relu6__2:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_conv2d(self):

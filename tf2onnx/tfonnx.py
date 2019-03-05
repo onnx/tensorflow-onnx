@@ -634,75 +634,11 @@ def pool_op(ctx, node, name, args):
 
 def relu6_op(ctx, node, name, args):
     # relu6 = min(max(features, 0), 6)
-    # since onnx does not have relu6, compose it with multiple ops.
-    old_output = node.output[0]
-    dtype = ctx.get_dtype(node.input[0])
-    dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
-    shape = ctx.get_shape(node.input[0])
-    nodes = []
-    if -1 in shape:
-        # if the shape has unknown dims we need to do something like this for opset < 8 (=no broadcast for min/max):
-        # tz = sub(features, features)
-        # t6 = add(6, tz)
-        # relu6 = min(max(features, t0), t6)
-        input_node = node.inputs[0]
-        node.type = "Max"
-
-        # const tensor 6
-        six_name = utils.make_name(node.name)
-        nodes.append(ctx.make_const(six_name, np.array([6.], dtype=dtype)))
-
-        # get a tensor of input shape with zeros
-        sub_node = ctx.make_node("Sub", [node.input[0], node.input[0]], op_name_scope=input_node.name)
-        node.input.append(sub_node.output[0])
-
-        # get a tensor of input shape with 6
-        add_node = ctx.make_node("Add", [six_name, sub_node.output[0]], op_name_scope=input_node.name)
-
-        min_name = utils.make_name(node.name)
-        min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
-        min_node.input.append(add_node.output[0])
-        ctx.copy_shape(old_output, min_node.output[0])
-        nodes.extend([sub_node, add_node, node, min_node])
-        return nodes
-
-    # if there is no unknown dim in shape we can use constants
-    node.type = "Max"
-    zero_name = utils.make_name(node.name)
-    nodes.append(ctx.make_const(zero_name, np.zeros(shape, dtype=dtype)))
-    six_name = utils.make_name(node.name)
-    six = np.zeros(shape, dtype=dtype)
-    six.fill(6)
-    nodes.append(ctx.make_const(six_name, six))
-    node.input.append(zero_name)
-    min_name = utils.make_name(node.name)
-    min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
-    min_node.input.append(six_name)
-    ctx.copy_shape(old_output, min_node.output[0])
-    nodes.extend([node, min_node])
-    return nodes
-
-
-def relu6_op8(ctx, node, name, args):
-    # relu6 = min(max(features, 0), 6) for opset >= 8
-    # since onnx does not have relu6, compose it with multiple ops.
-    old_output = node.output[0]
-    dtype = ctx.get_dtype(node.input[0])
-    dtype = utils.ONNX_TO_NUMPY_DTYPE[dtype] if dtype else np.float32
-    node.type = "Max"
-    nodes = []
-    # const tensor 6
-    six_name = utils.make_name(node.name)
-    nodes.append(ctx.make_const(six_name, np.array([6], dtype=dtype)))
-    zero_name = utils.make_name(node.name)
-    nodes.append(ctx.make_const(zero_name, np.array([0], dtype=dtype)))
-    node.input.append(zero_name)
-    min_name = utils.make_name(node.name)
-    min_node = ctx.insert_new_node_on_output("Min", node.output[0], name=min_name)
-    min_node.input.append(six_name)
-    ctx.copy_shape(old_output, min_node.output[0])
-    nodes.extend([node, min_node])
-    return nodes
+    node.type = "Relu"
+    clip_name = utils.make_name(node.name)
+    clip_node = ctx.insert_new_node_on_output("Clip", node.output[0], name=clip_name, min=0.0, max=6.0)
+    ctx.copy_shape(node.output[0], clip_node.output[0])
+    return [node, clip_node]
 
 
 def squareddifference_op(ctx, node, name, args):
@@ -1901,7 +1837,6 @@ _OPSET_7 = {
 }
 
 _OPSET_8 = {
-    "Relu6": (relu6_op8, []),  # make use of min/max broadcast
     "ReverseSequence": (reverse_op8, []),  # make use of scan
     "Select": (select_op8, []),
 }

@@ -187,6 +187,7 @@ class TransposeOptimizer(object):
             "Pad": self._pad_handler,
             "ReduceMean": self._reducemean_handler,
             "Relu": self._simple_through_handler,
+            "Clip": self._simple_through_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
             "Tanh": self._simple_through_handler,
