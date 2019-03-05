@@ -1056,18 +1056,37 @@ def upsample_op9(ctx, node, name, args):
     # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
     # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
     # wants the input to be NHWC - adjust target_shape to this.
-    ori_shape = ctx.make_node("Shape", [node.input[0]])
-    ori_shape_hw = ctx.make_node("Slice", ori_shape.output, {"axes": [0], "starts": [1], "ends": [3]})
-    ori_shape_hw_float = ctx.make_node("Cast", ori_shape_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
 
-    target_hw = node.inputs[1]
-    target_hw_float = ctx.make_node("Cast", target_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
+    # first create "scales" info for onnx upsample
+    # if shape of input and output known then  "scale" is calculated statically and set as a const node
+    shape = ctx.get_shape(node.input[0])
+    added_nodes = []
+    if shape and shape[2] != -1 and shape[1] != -1 and node.inputs[1].is_const():
+        target_shape = node.inputs[1].get_tensor_value()
+        n, h, w, c = shape
+        nh, nw = target_shape
+        # scales is nchw
+        # the reason not storing data at raw field is because of the bug: https://github.com/onnx/onnx/issues/1852
+        scale_val = np.array([1.0, 1.0, float(nh) / h, float(nw) / w]).astype(np.float32)
+        scales = ctx.make_const(utils.make_name("scales"), scale_val, raw=False)
+        added_nodes.append(scales)
+    else:
+        ori_shape = ctx.make_node("Shape", [node.input[0]])
+        ori_shape_hw = ctx.make_node("Slice", ori_shape.output, {"axes": [0], "starts": [1], "ends": [3]})
+        ori_shape_hw_float = ctx.make_node("Cast", ori_shape_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
 
-    scales_hw = ctx.make_node("Div", [target_hw_float.output[0], ori_shape_hw_float.output[0]])
+        target_hw = node.inputs[1]
+        target_hw_float = ctx.make_node("Cast", target_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
 
-    const_one_array = ctx.make_const(utils.make_name("one"), np.array([1.0, 1.0]).astype(np.float32))
-    # scaler is nchw
-    scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
+        scales_hw = ctx.make_node("Div", [target_hw_float.output[0], ori_shape_hw_float.output[0]])
+
+        const_one_array = ctx.make_const(utils.make_name("one"), np.array([1.0, 1.0]).astype(np.float32))
+        # scales is nchw
+        scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
+        added_nodes.extend([ori_shape, ori_shape_hw, ori_shape_hw_float, target_hw_float,
+                            scales_hw, const_one_array, scales])
+
+    # because onnxruntime only supports to scale the last two dims so transpose is inserted
     input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": [0, 3, 1, 2]})
     upsample = ctx.make_node("Upsample", [input_nchw.output[0], scales.output[0]], attr={"mode": args[0]})
 

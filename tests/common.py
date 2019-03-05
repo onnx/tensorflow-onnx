@@ -7,6 +7,7 @@ import argparse
 import os
 import sys
 import unittest
+from collections import defaultdict
 
 from distutils.version import LooseVersion
 from tf2onnx import utils
@@ -15,7 +16,7 @@ from tf2onnx.tfonnx import DEFAULT_TARGET, POSSIBLE_TARGETS
 __all__ = ["TestConfig", "get_test_config", "unittest_main",
            "check_tf_min_version", "skip_tf_versions",
            "check_opset_min_version", "check_target", "skip_onnxruntime_backend", "skip_caffe2_backend",
-           "check_onnxruntime_incompatibility"]
+           "check_onnxruntime_incompatibility", "validate_const_node", "group_nodes_by_type"]
 
 
 # pylint: disable=missing-docstring
@@ -209,3 +210,17 @@ def check_onnxruntime_incompatibility(op):
 
     reason = "{} is not supported by onnxruntime before opset {}".format(op, support_since[op])
     return unittest.skipIf(True, reason)
+
+
+def validate_const_node(node, expected_val):
+    if node.is_const():
+        node_val = node.get_tensor_value()
+        return node_val == expected_val
+    return False
+
+
+def group_nodes_by_type(graph):
+    res = defaultdict(list)
+    for node in graph.get_nodes():
+        res[node.type].append(node)
+    return res
