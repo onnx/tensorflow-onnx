@@ -131,7 +131,7 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
 
-    def test_while_loop_between_conds(self):
+    def test_while_loop_in_cond(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
@@ -143,10 +143,9 @@ class CondTests(Tf2OnnxBackendTestBase):
             # while_loop
             c = lambda y: tf.reduce_any(tf.less(y, 10))
             b = lambda i: tf.add(y, 1)
-            r = tf.while_loop(c, b, [y])
-            return tf.cond(x[0] > y[0], lambda: z, lambda: r)
+            return tf.while_loop(c, b, [y])
 
-        res = x[2] * tf.cond(x[0] < y[0], lambda: x, cond_graph, name="test_cond")
+        res = tf.cond(x[0] < y[0], lambda: x, cond_graph, name="test_cond")
         _ = tf.identity(res, name="output")
 
         feed_dict = {"input_1:0": x_val, "input_2:0": y_val}
