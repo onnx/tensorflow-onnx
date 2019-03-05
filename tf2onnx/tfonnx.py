@@ -2477,7 +2477,9 @@ def topological_sort(g, continue_on_error):
 
 def run_rewriters(g, funcs, continue_on_error):
     """Rewrite the original graph and body graphs of nodes"""
-    # NOTE: not topologically sort graph here
+    # NOTE(wayuanho):
+    # 1. we don't sort graph here, rewriter is expected to do it on its own.
+    # 2. the graph here may have circles, current topological_sort cannot handle it.
     for func in funcs:
         try:
             ops = func(g, g.get_nodes())
