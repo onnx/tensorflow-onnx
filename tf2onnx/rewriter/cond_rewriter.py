@@ -104,12 +104,47 @@ class CondRewriter:
 
         return self.g.get_nodes()
 
+    def _get_output_shape_dtype(self, cond_context):
+        output_shapes = []
+        output_dtypes = []
+        for i, _ in enumerate(cond_context.true_branch_context.output):
+            true_output = cond_context.true_branch_context.output[i]
+            false_output = cond_context.false_branch_context.output[i]
+            true_shape = self.g.get_shape(true_output)
+            true_dtype = self.g.get_dtype(true_output)
+            false_shape = self.g.get_shape(false_output)
+            false_dtype = self.g.get_dtype(false_output)
+            if true_shape != false_shape:
+                raise RuntimeError(
+                    "the shape of outputs {} and {} mismatch: {}, {}".format(
+                        true_output,
+                        false_output,
+                        true_shape,
+                        false_shape
+                    )
+                )
+            if true_dtype != false_dtype:
+                raise RuntimeError(
+                    "the shape of outputs {} and {} mismatch: {}, {}".format(
+                        true_output,
+                        false_output,
+                        true_dtype,
+                        false_dtype
+                    )
+                )
+            output_shapes.append(true_shape)
+            output_dtypes.append(true_dtype)
+        return output_shapes, output_dtypes
+
     def _create_if_node(self, cond_context):
+        output_shapes, output_dtypes = self._get_output_shape_dtype(cond_context)
         if_node = self.g.make_node(
             "If",
             [cond_context.pred_input],
             op_name_scope=cond_context.cond_scope,
             outputs=[m.output[0] for m in cond_context.merges],
+            shapes=output_shapes,
+            dtypes=output_dtypes,
             skip_conversion=False
         )
         log.debug("set graph for if branchs")
@@ -117,15 +152,15 @@ class CondRewriter:
             self.g,
             list(cond_context.true_branch_context.nodes),
             cond_context.true_branch_context.output,
-            [self.g.get_shape(out) for out in cond_context.true_branch_context.output],
-            [self.g.get_dtype(out) for out in cond_context.true_branch_context.output]
+            output_shapes,
+            output_dtypes
         )
         false_graph = utils.construct_graph_from_nodes(
             self.g,
             list(cond_context.false_branch_context.nodes),
             cond_context.false_branch_context.output,
-            [self.g.get_shape(out) for out in cond_context.false_branch_context.output],
-            [self.g.get_dtype(out) for out in cond_context.false_branch_context.output]
+            output_shapes,
+            output_dtypes
         )
         if_node.set_body_graph_as_attr("then_branch", true_graph)
         if_node.set_body_graph_as_attr("else_branch", false_graph)
@@ -268,7 +303,7 @@ class CondRewriter:
         if branch == BranchType.UNKNOWN:
             log.debug(
                 "branch only contains const node: [%s]",
-                ",".join(n for n in nodes)
+                ",".join(n.name for n in nodes)
             )
         return branch
 

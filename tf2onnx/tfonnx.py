@@ -2482,16 +2482,28 @@ def topological_sort(g, continue_on_error):
             pass
 
 
-def run_late_rewriters(g, funcs, continue_on_error):
+def run_rewriters(g, funcs, continue_on_error):
+    """Rewrite the original graph and body graphs of nodes"""
+    # NOTE(wayuanho):
+    # 1. we don't sort graph here, rewriter is expected to do it on its own.
+    # 2. the graph here may have circles, current topological_sort cannot handle it.
+    for func in funcs:
+        try:
+            ops = func(g, g.get_nodes())
+            g.set_nodes(ops)
+        except Exception as ex:
+            type_, value_, traceback_ = sys.exc_info()
+            log.error("rewriter %s: exception %s", func, ex)
+            ex_ext = traceback.format_exception(type_, value_, traceback_)
+            if continue_on_error:
+                log.info(ex_ext)
+            else:
+                raise ex
+
     if g.contained_graphs:
         for dict_val in g.contained_graphs.values():
             for attr_name, b_g in dict_val.items():
-                run_late_rewriters(b_g, funcs, attr_name)
-
-    topological_sort(g, continue_on_error)
-    for func in funcs:
-        ops = func(g, g.get_nodes())
-        g.set_nodes(ops)
+                run_rewriters(b_g, funcs, attr_name)
 
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
@@ -2561,19 +2573,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
 
-    try:
-        ops = g.get_nodes()
-        for rewrite in rewriters:
-            ops = rewrite(g, ops)
-            g.set_nodes(ops)
-    except Exception as ex:
-        type_, value_, traceback_ = sys.exc_info()
-        log.error("node %s: exception %s" % (rewrite, ex))
-        ex_ext = traceback.format_exception(type_, value_, traceback_)
-        if continue_on_error:
-            log.info(ex_ext)
-        else:
-            raise ex
+    run_rewriters(g, rewriters, continue_on_error)
 
     # some nodes may already copied into inner Graph, so remove them from main Graph.
     g.delete_unused_nodes(output_names)
@@ -2590,7 +2590,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if TARGET_RS6 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs6)
     if late_rewriters:
-        run_late_rewriters(g, late_rewriters, continue_on_error)
+        run_rewriters(g, late_rewriters, continue_on_error)
 
     # onnx requires topological sorting
     topological_sort(g, continue_on_error)

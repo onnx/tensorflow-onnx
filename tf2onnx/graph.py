@@ -390,6 +390,8 @@ class Graph(object):
         if outputs is None:
             outputs = [name + ":" + str(i) for i in range(output_count)]
 
+        output_count = len(outputs)
+
         raw_attr = {}
         onnx_attrs = []
         for a, v in attr.items():
