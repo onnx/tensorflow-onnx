@@ -178,6 +178,7 @@ class TransposeOptimizer(object):
         self._handler_map = {
             "Add": self._add_handler,
             "Cast": self._simple_through_handler,
+            "Clip": self._simple_through_handler,
             "Concat": self._concat_handler,
             "Identity": self._identity_handler,
             "LeakyRelu": self._simple_through_handler,
@@ -187,7 +188,6 @@ class TransposeOptimizer(object):
             "Pad": self._pad_handler,
             "ReduceMean": self._reducemean_handler,
             "Relu": self._simple_through_handler,
-            "Clip": self._simple_through_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
             "Tanh": self._simple_through_handler,
