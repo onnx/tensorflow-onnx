@@ -16,6 +16,7 @@ from tf2onnx import utils
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.cond_rewriter_base")
 
+
 # pylint: disable=missing-docstring,unused-argument,broad-except
 
 class BranchType(Enum):
@@ -29,6 +30,7 @@ class BranchType(Enum):
 
 class CondBranchContext:
     """Context for each branch graph"""
+
     def __init__(self):
         self.output = []
         self.nodes = set()
@@ -37,12 +39,12 @@ class CondBranchContext:
 class CondContext:
     def __init__(self, cond_scope, pred_input, true_branch_context,
                  false_branch_context, switchs, merges):
-        self.cond_scope = cond_scope # name scope for this tf.cond
-        self.pred_input = pred_input # condition input
+        self.cond_scope = cond_scope  # name scope for this tf.cond
+        self.pred_input = pred_input  # condition input
         self.true_branch_context = true_branch_context
         self.false_branch_context = false_branch_context
         self.switchs = set(switchs)
-        self.merges = merges # list of merges in order
+        self.merges = merges  # list of merges in order
 
 
 class CondRewriter:
@@ -114,7 +116,7 @@ class CondRewriter:
             true_dtype = self.g.get_dtype(true_output)
             false_shape = self.g.get_shape(false_output)
             false_dtype = self.g.get_dtype(false_output)
-            if true_shape != false_shape:
+            if not utils.are_shapes_compatible(true_shape, false_shape):
                 raise RuntimeError(
                     "the shape of outputs {} and {} mismatch: {}, {}".format(
                         true_output,
@@ -132,7 +134,7 @@ class CondRewriter:
                         false_dtype
                     )
                 )
-            output_shapes.append(true_shape)
+            output_shapes.append(utils.merge_shapes(true_shape, false_shape))
             output_dtypes.append(true_dtype)
         return output_shapes, output_dtypes
 
@@ -243,11 +245,13 @@ class CondRewriter:
         merge_input_1 = merge_node.input[0]
         merge_input_2 = merge_node.input[1]
         switchs = set()
+
         def stop_at_switch(node):
             if self._is_switch(node):
                 switchs.add(node)
                 return False
             return True
+
         branch_nodes_1 = self.g.extract_sub_graph_nodes(
             [merge_input_1],
             stop_at_switch
