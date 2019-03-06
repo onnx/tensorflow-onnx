@@ -36,10 +36,12 @@ broadcast_ops = [
     "GreaterEqual",
     "Less",
     "LogicalAnd",
+    "LogicalOr",
     "Mul",
     "RealDiv",
     "Sub"
 ]
+
 
 def infer_shape_for_graph(g):
     no_shape_updated = True
@@ -135,7 +137,7 @@ def infer_shape_for_node(g, node):
             axis += len(s1)
         new_shape = s1[:axis] + [val]
         if axis < len(s1) - 1:
-            new_shape += s1[axis+1:]
+            new_shape += s1[axis + 1:]
 
         g.set_shape(node.output[0], new_shape)
         log.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
@@ -148,7 +150,7 @@ def infer_shape_for_node(g, node):
         shape_indices = g.get_shape(node.input[1])
         axis = node.input[2].get_tensor_value()
 
-        shape = shape_params[:axis] + shape_indices + shape_indices[axis+1:]
+        shape = shape_params[:axis] + shape_indices + shape_indices[axis + 1:]
         g.set_shape(node.output[0], shape)
         return True
 
