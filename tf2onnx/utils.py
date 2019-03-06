@@ -342,11 +342,6 @@ def tf_name_scope(name):
     return '/'.join(name.split('/')[:-1])
 
 
-def create_vague_shape_like(shape):
-    make_sure(len(shape) >= 0, "rank should be >= 0")
-    return [-1 for i in enumerate(shape)]
-
-
 def get_temp_directory():
     return os.environ.get("TF2ONNX_TEMP_DIRECTORY", tempfile.mkdtemp())
 
@@ -364,3 +359,70 @@ def save_protobuf(path, message, as_text=False):
     else:
         with open(path, "wb") as f:
             f.write(message.SerializeToString())
+
+
+def is_list_or_tuple(obj):
+    return type(obj) in [list, tuple]
+
+
+def is_unknown_dimension(dim):
+    """  Return true if dim is not a positive integer value. """
+    if dim is None or not isinstance(dim, int):
+        return True
+    return dim <= 0
+
+
+def merge_shapes(shape1, shape2):
+    """
+    Merge 2 shapes, return merged shape, choose more specific dimension value from either side.
+    Raise exception for mismatch.
+    """
+    if shape1 is None:
+        return shape2
+    if shape2 is None:
+        return shape1
+
+    make_sure(is_list_or_tuple(shape1), "invalid type for shape1")
+    make_sure(is_list_or_tuple(shape2), "invalid type for shape2")
+    make_sure(len(shape1) == len(shape2), "shapes rank mismatch: shape1=%s, shape2=%s", shape1, shape2)
+
+    merged = []
+    for d1, d2 in zip(shape1, shape2):
+        d = d1
+        if is_unknown_dimension(d1):
+            d = d2
+        elif not is_unknown_dimension(d2):
+            make_sure(d1 == d2, "shapes dimension mismatch: shape1=%s, shape2=%s", shape1, shape2)
+        merged.append(d)
+    return merged
+
+
+def are_shapes_compatible(src, dest):
+    """
+    Returns True iff src is compatible with dest.
+    None is compatible with all shapes, different ranks are not considered as compatible
+    """
+    try:
+        merge_shapes(src, dest)
+        return True
+    except Exception:
+        return False
+
+
+def are_shapes_equal(src, dest):
+    if src is None:
+        return dest is None
+    if dest is None:
+        return src is None
+
+    make_sure(is_list_or_tuple(src), "invalid type for src")
+    make_sure(is_list_or_tuple(dest), "invalid type for dest")
+
+    if len(src) != len(dest):
+        return False
+    return all(i == j for i, j in zip(src, dest))
+
+
+def create_vague_shape_like(shape):
+    make_sure(len(shape) >= 0, "rank should be >= 0")
+    return [-1 for i in enumerate(shape)]
