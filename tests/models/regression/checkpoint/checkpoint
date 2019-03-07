@@ -1,0 +1,2 @@
+model_checkpoint_path: "C:\\src\\tensorflow-onnx\\tests\\models\\regression\\checkpoint\\model"
+all_model_checkpoint_paths: "C:\\src\\tensorflow-onnx\\tests\\models\\regression\\checkpoint\\model"
