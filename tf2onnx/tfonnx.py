@@ -1834,11 +1834,11 @@ _OPSET_7 = {
     "If": (direct_op, []),
     "Loop": (direct_op, []),
     "Scan": (direct_op, []),
+    "Select": (select_op7, []),
 }
 
 _OPSET_8 = {
     "ReverseSequence": (reverse_op8, []),  # make use of scan
-    "Select": (select_op8, []),
 }
 
 _OPSET_9 = {
