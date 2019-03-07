@@ -16,8 +16,7 @@ from onnx import TensorProto
 from onnx import helper
 
 import tensorflow as tf
-import tf2onnx
-import tf2onnx.utils
+from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.graph import GraphUtil
 from common import unittest_main
@@ -50,14 +49,13 @@ def onnx_pretty(g, args=None):
 
 
 class Tf2OnnxInternalTests(unittest.TestCase):
-
     def setUp(self):
         """Setup test."""
         # suppress log info of tensorflow so that result of test can be seen much easier
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         tf.logging.set_verbosity(tf.logging.WARN)
 
-        tf2onnx.utils.INTERNAL_NAME = 1
+        utils.INTERNAL_NAME = 1
         arg = namedtuple("Arg", "input inputs outputs verbose")
         self._args0 = arg(input="test", inputs=[], outputs=["output:0"], verbose=False)
         self._args1 = arg(input="test", inputs=["input:0"], outputs=["output:0"], verbose=False)
@@ -142,8 +140,8 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         for match in match_results:
             input_node = match.get_op('input')
             output_node = match.get_op('output')
-            op_name = tf2onnx.utils.make_name("ReplacedOp")
-            out_name = tf2onnx.utils.port_name(op_name)
+            op_name = utils.make_name("ReplacedOp")
+            out_name = utils.port_name(op_name)
             new_node = g.make_node("Sub", inputs=input_node.input, outputs=[out_name], name=op_name)
             ops = g.replace_subgraph(ops, match, [], [output_node], [], [new_node])
         g.topological_sort(ops)
@@ -183,9 +181,25 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         arg = "input/V-1_2:0,input/X:0[1,2,3],Y:1[4,5],Z:3,A:1,B"
         expected_inputs = ['input/V-1_2:0', 'input/X:0', 'Y:1', 'Z:3', 'A:1', 'B']
         expected_shape = {'Y:1': [4, 5], 'input/X:0': [1, 2, 3]}
-        inputs, shape_override = tf2onnx.utils.split_nodename_and_shape(arg)
+        inputs, shape_override = utils.split_nodename_and_shape(arg)
         self.assertEqual(expected_inputs, inputs)
         self.assertEqual(expected_shape, shape_override)
+
+    def test_shape_utils(self):
+        self.assertEqual(utils.merge_shapes(None, None), None)
+        self.assertEqual(utils.merge_shapes([], None), [])
+        self.assertEqual(utils.merge_shapes(None, [1, 2, 3]), [1, 2, 3])
+        self.assertEqual(utils.merge_shapes([1, 3], [None, 3]), [1, 3])
+        self.assertEqual(utils.merge_shapes([1, None, 3], (-1, 2, "unk")), [1, 2, 3])
+
+        self.assertTrue(utils.are_shapes_compatible(None, []))
+        self.assertTrue(utils.are_shapes_compatible([1, None, 3], (-1, 2, "unk")))
+        self.assertFalse(utils.are_shapes_compatible([1, 2, 3], (2, 3)))
+        self.assertFalse(utils.are_shapes_compatible([1, 2, 3], (4, 5, 6)))
+
+        self.assertTrue(utils.are_shapes_equal(None, None))
+        self.assertFalse(utils.are_shapes_equal(None, []))
+        self.assertTrue(utils.are_shapes_equal([1, 2, 3], (1, 2, 3)))
 
 
 if __name__ == '__main__':
