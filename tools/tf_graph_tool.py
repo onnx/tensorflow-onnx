@@ -31,7 +31,8 @@ def get_file_name_without_ext(path):
 
 def replace_file_extension(path, ext):
     tokens = path.split('.')[:-1]
-    return '.'.join(tokens.appends(ext))
+    tokens.append(ext)
+    return '.'.join(tokens)
 
 
 def append_file_name_suffix(path, suffix):
