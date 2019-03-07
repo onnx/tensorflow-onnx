@@ -665,7 +665,7 @@ def sign_op(ctx, node, name, args):
     node_dtype = ctx.get_dtype(node.output[0])
     utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
     if node_dtype in [onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
-        raise ValueError("dtype " + node_dtype + " is not supported in onnx for now")
+        raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
     input_tensor_type = utils.ONNX_TO_NUMPY_DTYPE[node_dtype]
     zero_name = utils.make_name("{}_zero".format(node.name))
     nodes.append(ctx.make_const(zero_name, np.array(0, dtype=input_tensor_type)))
@@ -676,6 +676,16 @@ def sign_op(ctx, node, name, args):
     sub_node = ctx.make_node("Sub", [cast_node_1.output[0], cast_node_2.output[0]], outputs=[node.output[0]])
     nodes.extend([greater_node, less_node, cast_node_1, cast_node_2, sub_node])
     return nodes
+
+def sign_op9(ctx, node, name, args):
+    # Currently supported dtypes: `float32`, `float64`, `int32`, `int64`
+    # Ignored dtype: `bfloat16`
+    node_dtype = ctx.get_dtype(node.output[0])
+    utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
+    if node_dtype in [onnx_pb.TensorProto.BOOL, onnx_pb.TensorProto.FLOAT16,
+                      onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
+        raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
+    return node
 
 
 def biasadd_op(ctx, node, name, args):
@@ -1853,6 +1863,7 @@ _OPSET_9 = {
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
+    "Sign": (sign_op9, []),
     "Sinh": (direct_op, []),
     "Where": (where_op, []),
 }
