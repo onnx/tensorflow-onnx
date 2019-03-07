@@ -1446,7 +1446,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @check_opset_min_version(7, "where")
+    # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
+    @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so Select op is not supported")
     def test_where(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
         true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
@@ -1458,7 +1459,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @check_opset_min_version(7, "where")
+    @check_opset_min_version(8, "where")
     def test_where_with_two_rank_input(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
         true_result = np.array([[111, 111], [222, 222], [333, 333], [444, 444], [555, 555],
@@ -1474,7 +1475,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @check_opset_min_version(7, "where")
+    @check_opset_min_version(8, "where")
     def test_where_with_two_rank_condition(self):
         x_val = np.array([[1, 2, -3, 4, -5, -6, -7, 8, 9, 0]], dtype=np.int32)
         true_result = np.array([[111, 222, 333, 444, 555, 666, 777, 888, 999, 1000]],
@@ -1487,7 +1488,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @check_opset_min_version(7, "where")
+    @check_opset_min_version(8, "where")
     def test_where_with_three_rank_condition(self):
         x_val = np.array([[[1, 2, -3, 4, -5, -6, -7, 8, 9, 0]]], dtype=np.int32)
         true_result = np.array([[[111, 222, 333, 444, 555, 666, 777, 888, 999, 1000]]],
@@ -1500,7 +1501,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @check_opset_min_version(7, "where")
+    @check_opset_min_version(8, "where")
     def test_where_scalar(self):
         x_val = np.array(6, dtype=np.int32)
         true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
