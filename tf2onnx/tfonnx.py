@@ -64,7 +64,7 @@ def tflist_to_onnx(node_list, shape_override):
     # ignore the following attributes
     ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
-                    "output_dtype", "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
+                    "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
                     "Tout", "Tlabels", "Tindex", "element_shape"]
     # some stats
     op_cnt = collections.Counter()
@@ -239,10 +239,22 @@ def arg_minmax_op(ctx, node, name, args):
         dim_count = len(input_shape) if input_shape else 0
         axis = dim_count + axis
 
+    nodes = [node]
+    # TF ArgMin/ArgMax may return int32 or int64
+    # Onnx ArgMin/ArgMax only supports int64 output, add cast if needed
+    if node.get_attr_int("output_type") == onnx_pb.TensorProto.INT32:
+        # current node will return int64 after conversion, which differs from previous dtype got from tf
+        ctx.set_dtype(node.output[0], onnx_pb.TensorProto.INT64)
+        op_name = utils.make_name("Cast")
+        cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name, to=onnx_pb.TensorProto.INT32)
+        ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.INT32)
+        ctx.copy_shape(node.output[0], cast_node.output[0])
+        nodes.append(cast_node)
+
     node.set_attr("axis", axis)
     node.set_attr("keepdims", 0)
     ctx.remove_input(node, node.input[1])
-    return node
+    return nodes
 
 
 def reduce_op(ctx, node, name, args):
@@ -700,7 +712,7 @@ def biasadd_op7(ctx, node, name, args):
         shape0 = ctx.get_shape(node.input[0])
         shape1 = ctx.get_shape(node.input[1])
         if node.inputs[1].type == 'Const' and len(shape1) == 1:
-            new_broadcast_shape = [shape1[0],] + [1,] * (len(shape0) - 2)
+            new_broadcast_shape = [shape1[0]] + [1] * (len(shape0) - 2)
             shape_name = utils.make_name(node.name)
             shape_const_node = ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
             op_name = node.input[1]
@@ -1191,7 +1203,6 @@ def minmax_op(ctx, node, name, args):
 
 
 def pack_op(ctx, node, name, args):
-
     # hack to make up for the missing onnx pack op
     axis = node.get_attr("axis").i
     if axis < 0:
@@ -1333,14 +1344,18 @@ def matmul_op(ctx, node, name, args):
         shape = ctx.get_shape(node.input[0])
         if shape:
             perm = list(range(0, len(shape)))
-            tmp = perm[-1]; perm[-1] = perm[-2]; perm[-2] = tmp
+            tmp = perm[-1]
+            perm[-1] = perm[-2]
+            perm[-2] = tmp
             transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm)
             nodes.insert(0, transpose)
     if transpose_b != 0:
         shape = ctx.get_shape(node.input[1])
         if shape:
             perm = list(range(0, len(shape)))
-            tmp = perm[-1]; perm[-1] = perm[-2]; perm[-2] = tmp
+            tmp = perm[-1]
+            perm[-1] = perm[-2]
+            perm[-2] = tmp
             transpose = ctx.insert_new_node_on_input(node, "Transpose", node.input[1], perm=perm)
             nodes.insert(0, transpose)
 
