@@ -38,6 +38,9 @@ def get_args():
 
 def load_graph(fname):
     model_proto = onnx.ModelProto()
+    with open(fname, "rb") as f:
+        data = f.read()
+        model_proto.ParseFromString(data)
     g = GraphUtil.create_graph_from_onnx_model(model_proto)
     return g, model_proto.producer_name
 
