@@ -16,7 +16,6 @@ from onnx import TensorProto
 from onnx import helper
 
 import tensorflow as tf
-import tf2onnx
 from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.graph import GraphUtil

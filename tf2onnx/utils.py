@@ -362,7 +362,7 @@ def save_protobuf(path, message, as_text=False):
 
 
 def is_list_or_tuple(obj):
-    return type(obj) in [list, tuple]
+    return isinstance(obj, (list, tuple))
 
 
 def is_unknown_dimension(dim):
@@ -405,11 +405,12 @@ def are_shapes_compatible(src, dest):
     try:
         merge_shapes(src, dest)
         return True
-    except Exception:
+    except:  # pylint: disable=bare-except
         return False
 
 
 def are_shapes_equal(src, dest):
+    """ Check whether 2 shapes are equal. """
     if src is None:
         return dest is None
     if dest is None:
