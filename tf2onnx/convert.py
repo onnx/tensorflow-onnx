@@ -29,14 +29,14 @@ _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 def get_args():
     """Parse commandline."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", help="input graphdef file")
-    parser.add_argument("--graphdef", help="input as graphdef file")
-    parser.add_argument("--saved-model", help="input saved model directory")
-    parser.add_argument("--checkpoint", help="input as checkpoint directory")
+    parser.add_argument("--input", help="input from graphdef")
+    parser.add_argument("--graphdef", help="input from graphdef")
+    parser.add_argument("--saved-model", help="input from saved model")
+    parser.add_argument("--checkpoint", help="input from checkpoint")
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names")
     parser.add_argument("--outputs", help="model output_names")
-    parser.add_argument("--opset", type=int, default=None, help="highest opset to use")
+    parser.add_argument("--opset", type=int, default=None, help="onnx opset to use")
     parser.add_argument("--custom-ops", help="list of custom ops")
     parser.add_argument("--target", default=",".join(DEFAULT_TARGET), choices=POSSIBLE_TARGETS, help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
@@ -95,6 +95,7 @@ def main():
         custom_ops = {}
         extra_opset = None
 
+    # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:
         graph_def, inputs, outputs = loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
         model_path = args.graphdef

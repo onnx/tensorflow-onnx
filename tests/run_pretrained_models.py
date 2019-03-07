@@ -221,16 +221,13 @@ class Test(object):
 
         inputs = list(self.input_names.keys())
         outputs = self.output_names
-        tf.reset_default_graph()
         if self.model_type in ["checkpoint"]:
-            frozen_graph, inputs, outputs = loader.from_checkpoint(model_path, inputs, outputs)
+            graph_def, inputs, outputs = loader.from_checkpoint(model_path, inputs, outputs)
         elif self.model_type in ["saved_model"]:
-            frozen_graph, inputs, outputs = loader.from_saved_model(model_path, inputs, outputs)
+            graph_def, inputs, outputs = loader.from_saved_model(model_path, inputs, outputs)
         else:
-            frozen_graph, inputs, outputs = loader.from_graphdef(model_path, inputs, outputs)
-        tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
-        model_path = os.path.join(dir_name, "frozen.pb")
-
+            graph_def, inputs, outputs = loader.from_graphdef(model_path, inputs, outputs)
+    
         # create the input data
         inputs = {}
         for k, v in self.input_names.items():
@@ -241,10 +238,6 @@ class Test(object):
         if self.more_inputs:
             for k, v in self.more_inputs.items():
                 inputs[k] = v
-
-        graph_def = graph_pb2.GraphDef()
-        with open(model_path, "rb") as f:
-            graph_def.ParseFromString(f.read())
 
         graph_def = tf2onnx.tfonnx.tf_optimize(inputs.keys(), self.output_names, graph_def, fold_const)
         shape_override = {}

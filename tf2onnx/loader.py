@@ -34,37 +34,49 @@ def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=T
 
 def from_graphdef(model_path, input_names, output_names):
     """Load tensorflow graph from graphdef."""
+    # make sure we start with clean default graph
+    tf.reset_default_graph()
     with tf.Session() as sess:
         graph_def = tf.GraphDef()
         with tf.gfile.GFile(model_path, 'rb') as f:
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def, name='')
             frozen_graph = freeze_session(sess, output_names=output_names)
+    # clean up after us
+    tf.reset_default_graph()
     return frozen_graph, input_names, output_names
 
 
 def from_checkpoint(model_path, input_names, output_names):
     """Load tensorflow graph from checkpoint."""
+    # make sure we start with clean default graph
+    tf.reset_default_graph()
+    # model_path = checkpoint/checkpoint.meta
     saver = tf.train.import_meta_graph(model_path)
     with tf.Session() as sess:
-        saver.restore(sess, model_path)
+        # restore from model_path minus the ".meta"
+        saver.restore(sess, model_path[:-5])
         frozen_graph = freeze_session(sess, output_names=output_names)
+    # clean up after us
+    tf.reset_default_graph()
     return frozen_graph, input_names, output_names
 
 
 def from_saved_model(model_path, input_names, output_names):
     """Load tensorflow graph from saved_model."""
+    # make sure we start with clean default graph
+    tf.reset_default_graph()
     inputs = {}
     outputs = {}
     try:
         from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
+        # pylint: disable=unnecessary-lambda
         get_signature_def = lambda meta_graph_def, k: \
             signature_def_utils.get_signature_def_by_key(meta_graph_def, k)
     except ImportError:
         # TF1.12 changed the api
         get_signature_def = lambda meta_graph_def, k: meta_graph_def.signature_def[k]
 
-    # saved_model format - convert to checkpoint
     with tf.Session() as sess:
         meta_graph_def = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
         for k in meta_graph_def.signature_def.keys():
@@ -80,4 +92,6 @@ def from_saved_model(model_path, input_names, output_names):
             if not o.endswith(":0"):
                 del outputs[o]
         frozen_graph = freeze_session(sess, output_names=list(outputs.keys()))
-        return frozen_graph, inputs.keys(), outputs.keys()
+    # clean up after us
+    tf.reset_default_graph()
+    return frozen_graph, inputs.keys(), outputs.keys()
