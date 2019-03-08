@@ -57,7 +57,7 @@ def get_args():
         if not args.input and not args.outputs:
             raise ValueError("graphdef and checkpoint models need to provide inputs and outputs")
     if not any([args.graphdef, args.checkpoint, args.saved_model]):
-            raise ValueError("need input as graphdef, checkpoint or saved_model")
+        raise ValueError("need input as graphdef, checkpoint or saved_model")
     if args.inputs:
         args.inputs, args.shape_override = utils.split_nodename_and_shape(args.inputs)
     if args.outputs:

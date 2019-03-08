@@ -25,7 +25,6 @@ import tensorflow as tf
 # otherwise tf runtime error will show up when the tf model is restored from pb file because of un-registered ops.
 import tensorflow.contrib.rnn  # pylint: disable=unused-import
 import yaml
-from tensorflow.core.framework import graph_pb2
 
 import tf2onnx
 from tf2onnx import loader
@@ -227,7 +226,7 @@ class Test(object):
             graph_def, inputs, outputs = loader.from_saved_model(model_path, inputs, outputs)
         else:
             graph_def, inputs, outputs = loader.from_graphdef(model_path, inputs, outputs)
-    
+
         # create the input data
         inputs = {}
         for k, v in self.input_names.items():
