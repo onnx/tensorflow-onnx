@@ -1029,12 +1029,25 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case([_OUTPUT], {}, check_value=False, check_shape=True)
 
-    @unittest.skip("")
+    @skip_caffe2_backend()
     def test_argminmax(self):
-        # TODO: fails on onnxmsrt caffe2
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
-        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
         x_ = tf.argmin(x, axis=0)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val = np.array([1, 2, -2, -1], dtype=np.int32).reshape((2, 2))
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        x_ = tf.argmax(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val = np.array([1, 2, -2, -1], dtype=np.int32).reshape((2, 2))
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        x_ = tf.argmax(x, output_type=x_val.dtype)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
