@@ -670,7 +670,7 @@ def cast_op(ctx, node, name, args):
     return node
 
 
-def sign_op(ctx, node, name, args):
+def sign_op4(ctx, node, name, args):
     """Sign op."""
     # T sign = Sign(T Input)
     nodes = []
@@ -691,13 +691,9 @@ def sign_op(ctx, node, name, args):
 
 
 def sign_op9(ctx, node, name, args):
-    # Currently supported: `float32`
-    # Ignored: `bfloat16`
-    # TODO: add support for `int32`, `int64`
     node_dtype = ctx.get_dtype(node.output[0])
     utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
-    if node_dtype in [onnx_pb.TensorProto.BOOL, onnx_pb.TensorProto.FLOAT16,
-                      onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
+    if node_dtype in [onnx_pb.TensorProto.BOOL, onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
         raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
     return node
 
@@ -1805,7 +1801,7 @@ _OPSET_4 = {
     "Pack": (pack_op, []),
     "Unpack": (unpack_op, []),
     "Erf": (erf_op, []),
-    "Sign": (sign_op, []),
+    "Sign": (sign_op4, []),
     "ZerosLike": (zeroslike_op, []),
 }
 
