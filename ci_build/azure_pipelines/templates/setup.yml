@@ -18,7 +18,7 @@ steps:
   displayName: 'Setup Environment'
 
 # TODO: remove later
-# Anaconda python 3.6.8 h9f7ef89_1 changed dll lookup logic, numpy failes to load dll on Windows
+# Anaconda python 3.6.8 h9f7ef89_1 changed dll lookup logic, numpy fails to load dll on Windows
 # https://github.com/numpy/numpy/issues/12957
 # https://github.com/ContinuumIO/anaconda-issues/issues/10629
 # Add numpy lib path manually here
