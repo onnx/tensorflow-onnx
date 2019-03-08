@@ -690,6 +690,18 @@ def sign_op(ctx, node, name, args):
     return nodes
 
 
+def sign_op9(ctx, node, name, args):
+    # Currently supported: `float32`
+    # Ignored: `bfloat16`
+    # TODO: add support for `int32`, `int64`
+    node_dtype = ctx.get_dtype(node.output[0])
+    utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
+    if node_dtype in [onnx_pb.TensorProto.BOOL, onnx_pb.TensorProto.FLOAT16,
+                      onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
+        raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
+    return node
+
+
 def biasadd_op(ctx, node, name, args):
     # T output = BiasAdd(T value, T bias, @string data_format)
     # T output = BiasAddV1(T value, T bias)
@@ -1868,6 +1880,7 @@ _OPSET_9 = {
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
+    "Sign": (sign_op9, []),
     "Sinh": (direct_op, []),
     "Where": (where_op, []),
 }
