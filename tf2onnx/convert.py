@@ -108,7 +108,7 @@ def main():
 
     # todo: consider to enable const folding by default?
     graph_def = tf_optimize(args.inputs, args.outputs, graph_def, args.fold_const)
-    tf.reset_default_graph()
+
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')
     with tf.Session(graph=tf_graph):

@@ -17,7 +17,7 @@ from tensorflow.python.framework.graph_util import convert_variables_to_constant
 
 def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=True):
     """Freezes the state of a session into a pruned computation graph."""
-    output_names = [i.replace(":0", "") for i in output_names]
+    output_names = [i.split(':')[:-1][0] for i in output_names]
     graph = sess.graph
     with graph.as_default():
         freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
@@ -42,7 +42,7 @@ def from_graphdef(model_path, input_names, output_names):
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def, name='')
             frozen_graph = freeze_session(sess, output_names=output_names)
-    # clean up after us
+    # clean up
     tf.reset_default_graph()
     return frozen_graph, input_names, output_names
 
@@ -57,7 +57,7 @@ def from_checkpoint(model_path, input_names, output_names):
         # restore from model_path minus the ".meta"
         saver.restore(sess, model_path[:-5])
         frozen_graph = freeze_session(sess, output_names=output_names)
-    # clean up after us
+    # clean up
     tf.reset_default_graph()
     return frozen_graph, input_names, output_names
 
@@ -86,12 +86,7 @@ def from_saved_model(model_path, input_names, output_names):
             outputs_tensor_info = get_signature_def(meta_graph_def, k).outputs
             for _, output_tensor in sorted(outputs_tensor_info.items()):
                 outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
-        # freeze uses the node name derived from output:0 so only pass in output:0;
-        # it will provide all outputs of that node.
-        for o in list(outputs.keys()):
-            if not o.endswith(":0"):
-                del outputs[o]
         frozen_graph = freeze_session(sess, output_names=list(outputs.keys()))
-    # clean up after us
+    # clean up
     tf.reset_default_graph()
     return frozen_graph, inputs.keys(), outputs.keys()
