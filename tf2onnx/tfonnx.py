@@ -670,7 +670,7 @@ def cast_op(ctx, node, name, args):
     return node
 
 
-def sign_op(ctx, node, name, args):
+def sign_op4(ctx, node, name, args):
     """Sign op."""
     # T sign = Sign(T Input)
     nodes = []
@@ -688,6 +688,14 @@ def sign_op(ctx, node, name, args):
     sub_node = ctx.make_node("Sub", [cast_node_1.output[0], cast_node_2.output[0]], outputs=[node.output[0]])
     nodes.extend([greater_node, less_node, cast_node_1, cast_node_2, sub_node])
     return nodes
+
+
+def sign_op9(ctx, node, name, args):
+    node_dtype = ctx.get_dtype(node.output[0])
+    utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
+    if node_dtype in [onnx_pb.TensorProto.BOOL, onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
+        raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
+    return node
 
 
 def biasadd_op(ctx, node, name, args):
@@ -1793,7 +1801,7 @@ _OPSET_4 = {
     "Pack": (pack_op, []),
     "Unpack": (unpack_op, []),
     "Erf": (erf_op, []),
-    "Sign": (sign_op, []),
+    "Sign": (sign_op4, []),
     "ZerosLike": (zeroslike_op, []),
 }
 
@@ -1868,6 +1876,7 @@ _OPSET_9 = {
     "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
+    "Sign": (sign_op9, []),
     "Sinh": (direct_op, []),
     "Where": (where_op, []),
 }
