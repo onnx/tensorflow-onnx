@@ -2,8 +2,9 @@
 
 # TODO: change package name when nightly build is ready
 
-# Unit test
 jobs:
+
+# Unit test
 - template: 'templates/job_generator.yml'
   parameters:
     tf_versions: ['1.12']
@@ -15,7 +16,6 @@ jobs:
       - template: 'unit_test.yml'
 
 # Pre-trained model test
-jobs:
 - template: 'templates/job_generator.yml'
   parameters:
     tf_versions: ['1.12']
