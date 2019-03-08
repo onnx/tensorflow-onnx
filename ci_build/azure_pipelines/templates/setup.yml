@@ -13,6 +13,12 @@ steps:
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
 
+    # HACK: before onnxruntime nightly package is ready, install onnxruntime from pypi test
+    if [[ $CI_ONNXRUNTIME_FROM_PYPI_TEST == "true" ]] ;
+    then
+      pip install --index-url https://test.pypi.org/simple/ onnxruntime --force-reinstall
+    fi
+
     python setup.py install
     pip freeze --all
   displayName: 'Setup Environment'
