@@ -337,7 +337,9 @@ def delete_directory(path):
 
 
 def save_protobuf(path, message, as_text=False):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dir_name = os.path.dirname(path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
     if as_text:
         with open(path, "w") as f:
             f.write(text_format.MessageToString(message))
