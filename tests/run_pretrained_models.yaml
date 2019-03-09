@@ -1,6 +1,32 @@
 #
 # simple models for basic functional test
 #
+regression-graphdef:
+  model: tests/models/regression/graphdef/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1]
+  outputs:
+    - pred:0
+
+regression-checkpoint:
+  model: tests/models/regression/checkpoint/model.meta
+  model_type: checkpoint
+  input_get: get_ramp
+  inputs:
+    "X:0": [1]
+  outputs:
+    - pred:0
+
+regression-saved-model:
+  model: tests/models/regression/saved_model
+  model_type: saved_model
+  input_get: get_ramp
+  inputs:
+    "X:0": [1]
+  outputs:
+    - pred:0
+
 benchtf-fc:
   model: tests/models/fc-layers/frozen.pb
   input_get: get_ramp

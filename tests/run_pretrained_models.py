@@ -16,19 +16,18 @@ import time
 import traceback
 import zipfile
 
+import PIL.Image
 import numpy as np
 import requests
 import six
 import tensorflow as tf
-from tensorflow.core.framework import graph_pb2
-from tensorflow.python.framework.graph_util import convert_variables_to_constants
 # contrib ops are registered only when the module is imported, the following import statement is needed,
 # otherwise tf runtime error will show up when the tf model is restored from pb file because of un-registered ops.
 import tensorflow.contrib.rnn  # pylint: disable=unused-import
 import yaml
-import PIL.Image
 
 import tf2onnx
+from tf2onnx import loader
 from tf2onnx import utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph
@@ -72,23 +71,6 @@ _INPUT_FUNC_MAPPING = {
     "get_random256": get_random256,
     "get_ramp": get_ramp
 }
-
-
-def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=True):
-    """Freezes the state of a session into a pruned computation graph."""
-    output_names = [i.replace(":0", "") for i in output_names]
-    graph = sess.graph
-    with graph.as_default():
-        freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
-        output_names = output_names or []
-        output_names += [v.op.name for v in tf.global_variables()]
-        input_graph_def = graph.as_graph_def()
-        if clear_devices:
-            for node in input_graph_def.node:
-                node.device = ""
-        frozen_graph = convert_variables_to_constants(sess, input_graph_def,
-                                                      output_names, freeze_var_names)
-        return frozen_graph
 
 
 class Test(object):
@@ -236,44 +218,14 @@ class Test(object):
             dir_name = os.path.dirname(self.local)
         print("\tdownloaded", model_path)
 
+        inputs = list(self.input_names.keys())
+        outputs = self.output_names
         if self.model_type in ["checkpoint"]:
-            #
-            # if the input model is a checkpoint, convert it to a frozen model
-            saver = tf.train.import_meta_graph(model_path)
-            with tf.Session() as sess:
-                saver.restore(sess, model_path[:-5])
-                frozen_graph = freeze_session(sess, output_names=self.output_names)
-                tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
-            model_path = os.path.join(dir_name, "frozen.pb")
+            graph_def, inputs, outputs = loader.from_checkpoint(model_path, inputs, outputs)
         elif self.model_type in ["saved_model"]:
-            try:
-                from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
-                get_signature_def = lambda meta_graph_def, k: \
-                    signature_def_utils.get_signature_def_by_key(meta_graph_def, k)
-            except ImportError:
-                # TF1.12 changed the api
-                get_signature_def = lambda meta_graph_def, k: meta_graph_def.signature_def[k]
-
-            # saved_model format - convert to checkpoint
-            with tf.Session() as sess:
-                meta_graph_def = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
-                inputs = {}
-                outputs = {}
-                for k in meta_graph_def.signature_def.keys():
-                    inputs_tensor_info = get_signature_def(meta_graph_def, k).inputs
-                    for _, input_tensor in sorted(inputs_tensor_info.items()):
-                        inputs[input_tensor.name] = sess.graph.get_tensor_by_name(input_tensor.name)
-                    outputs_tensor_info = get_signature_def(meta_graph_def, k).outputs
-                    for _, output_tensor in sorted(outputs_tensor_info.items()):
-                        outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
-                # freeze uses the node name derived from output:0 so only pass in output:0;
-                # it will provide all outputs of that node.
-                for o in list(outputs.keys()):
-                    if not o.endswith(":0"):
-                        del outputs[o]
-                frozen_graph = freeze_session(sess, output_names=list(outputs.keys()))
-                tf.train.write_graph(frozen_graph, dir_name, "frozen.pb", as_text=False)
-            model_path = os.path.join(dir_name, "frozen.pb")
+            graph_def, inputs, outputs = loader.from_saved_model(model_path, inputs, outputs)
+        else:
+            graph_def, inputs, outputs = loader.from_graphdef(model_path, inputs, outputs)
 
         # create the input data
         inputs = {}
@@ -285,10 +237,6 @@ class Test(object):
         if self.more_inputs:
             for k, v in self.more_inputs.items():
                 inputs[k] = v
-        tf.reset_default_graph()
-        graph_def = graph_pb2.GraphDef()
-        with open(model_path, "rb") as f:
-            graph_def.ParseFromString(f.read())
 
         graph_def = tf2onnx.tfonnx.tf_optimize(inputs.keys(), self.output_names, graph_def, fold_const)
         shape_override = {}
