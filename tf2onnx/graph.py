@@ -169,12 +169,16 @@ class Node(object):
     @property
     def output_shapes(self):
         """Get output shapes."""
+        utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
+                        self.name)
         val = [self.graph.get_shape(n) for n in self._output]
         return val
 
     @property
     def output_dtypes(self):
         """Get output dtypes."""
+        utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
+                        self.name)
         val = [self.graph.get_dtype(n) for n in self._output]
         return val
 
@@ -452,6 +456,7 @@ class Graph(object):
                 del self._dtypes[op_output]
 
         self._nodes.remove(node)
+        node.graph = None
 
     def reset_nodes(self, ops):
         """Reset the graph with node list."""
