@@ -91,7 +91,7 @@ inception_v3_slim:
   outputs:
     - InceptionV3/Predictions/Softmax:0
   rtol: 0.02
-  atol: 0.000001
+  atol: 0.00001
 
 googlenet_v1_nonslim:
   disabled: true

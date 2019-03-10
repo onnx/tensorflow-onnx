@@ -86,9 +86,8 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         graph_proto = self.sample_net()
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n2 = g.get_node_by_name("n2")
-        n7 = g.insert_new_node_on_input(n2, "Abs", "n1:0", name="n7")
+        g.insert_new_node_on_input(n2, "Abs", "n1:0", name="n7")
         ops = g.get_nodes()
-        ops.append(n7)
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)
         expected = 'digraph { Placeholder__4 [op_type=Placeholder] ' \
@@ -102,9 +101,8 @@ class Tf2OnnxInternalTests(unittest.TestCase):
     def test_insert_node2(self):
         graph_proto = self.sample_net()
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
-        n7 = g.insert_new_node_on_output("Abs", "n1:0", name="n7")
+        g.insert_new_node_on_output("Abs", "n1:0", name="n7")
         ops = g.get_nodes()
-        ops.append(n7)
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)
         expected = 'digraph { Placeholder__4 [op_type=Placeholder] n1 [op_type=Abs] n7 [op_type=Abs] ' \
@@ -119,12 +117,14 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n4 = g.get_node_by_name("n4")
         g.remove_input(n4, n4.input[1])
+        ops = g.get_nodes()
+        g.topological_sort(ops)
         result = onnx_to_graphviz(g)
-        expected = 'digraph { n1 [op_type=Abs] n2 [op_type=Abs] n3 [op_type=Abs] n4 [op_type=Add] ' \
-                   'n5 [op_type=Abs] n6 [op_type=Identity] graph_outputs_Identity__3 ' \
-                   '[op_type=Identity] Placeholder__4 [op_type=Placeholder] input -> n1 ' \
-                   'n1:0 -> n2 n1:0 -> n3 n2:0 -> n4 n4:0 -> n5 raw_output___2:0 -> n6 ' \
-                   'raw_output___2:0 -> graph_outputs_Identity__3 }'
+        expected = 'digraph { Placeholder__4 [op_type=Placeholder] n1 [op_type=Abs] n3 [op_type=Abs] ' \
+                   'n2 [op_type=Abs] n4 [op_type=Add] n5 [op_type=Abs] ' \
+                   'graph_outputs_Identity__3 [op_type=Identity] n6 [op_type=Identity] ' \
+                   'input -> n1 n1:0 -> n3 n1:0 -> n2 n2:0 -> n4 n4:0 -> n5 ' \
+                   'raw_output___2:0 -> graph_outputs_Identity__3 raw_output___2:0 -> n6 }'
         self.assertEqual(expected, result)
 
     def test_rewrite_subgraph(self):
@@ -143,7 +143,9 @@ class Tf2OnnxInternalTests(unittest.TestCase):
             op_name = utils.make_name("ReplacedOp")
             out_name = utils.port_name(op_name)
             new_node = g.make_node("Sub", inputs=input_node.input, outputs=[out_name], name=op_name)
-            ops = g.replace_subgraph(ops, match, [], [output_node], [], [new_node])
+            g.replace_all_inputs(ops, output_node.output[0], new_node.output[0])
+            for n in set(match.get_nodes()):
+                g.remove_node(n.name)
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)
         expected = 'digraph { Placeholder__4 [op_type=Placeholder] n1 [op_type=Abs] ' \

@@ -31,7 +31,9 @@ def rewrite_random_uniform(g, ops):
         tmin = input2.inputs[1].get_tensor_value()
 
         new_node = create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output)
-        ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
+        g.replace_all_inputs(ops, output.output[0], new_node.output[0])
+        for n in set(match.get_nodes()):
+            g.remove_node(n.name)
 
     return ops
 
@@ -58,7 +60,9 @@ def rewrite_random_uniform_fold_const(g, ops):
         tmin = output.inputs[1].get_tensor_value()
         tmax = tmin + tmax_minus_tmin
         new_node = create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output)
-        ops = g.replace_subgraph(ops, match, [], [output], [], [new_node])
+        g.replace_all_inputs(ops, output.output[0], new_node.output[0])
+        for n in set(match.get_nodes()):
+            g.remove_node(n.name)
 
     return ops
 

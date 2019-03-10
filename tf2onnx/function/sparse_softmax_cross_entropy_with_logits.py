@@ -24,11 +24,12 @@ def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
     depth = ctx.get_shape(logit_name)[-1]
     # if number of classes is unknown or too large
     if depth == utils.ONNX_UNKNOWN_DIMENSION or depth > 20000:
-        return sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, args)
+        sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, args)
+        return
     logit_dtype = ctx.get_dtype(logit_name)
     utils.make_sure(logit_dtype, "Dtype of {} is None".format(logit_name))
 
-    dtype = utils.ONNX_TO_NUMPY_DTYPE[logit_dtype]
+    dtype = utils.map_onnx_to_numpy_type(logit_dtype)
     eye = np.eye(depth).astype(dtype)
     const_name = utils.make_name("const_eye")
     const_eye = ctx.make_const(name=const_name, np_val=eye)
@@ -40,14 +41,15 @@ def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
     const_name = utils.make_name("const_negative_one")
     const_negative_one = ctx.make_const(name=const_name, np_val=np.array(-1).astype(dtype))
     mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum.output[0]])
-    res = ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], outputs=[node.output[0]], attr={"axes": [1]})
 
-    return [const_eye, onehot, log_softmax, mul1, reduce_sum,
-            const_negative_one, mul2, res]
+    shapes = node.output_shapes
+    dtypes = node.output_dtypes
+    ctx.remove_node(name)
+    ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], outputs=[node.output[0]], attr={"axes": [1]},
+                  shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, args):
-    nodes = []
     # make subgraph to implement one_hot, idea comes from onehot_op
     indices_name = node.input[1]
     indices_shape = ctx.get_shape(indices_name)
@@ -61,7 +63,6 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
     indices_dtype = ctx.get_dtype(indices_name)
     if indices_dtype != TensorProto.INT64:
         indices_cast = ctx.make_node("Cast", [indices_name], attr={"to": TensorProto.INT64})
-        nodes.append(indices_cast)
         indices_name = indices_cast.output[0]
     indices_size = ctx.make_node("Size", [indices_name])
     indices_unsqueeze = ctx.make_node("Unsqueeze", [indices_name], attr={"axes": [1]})
@@ -69,13 +70,8 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
     one_const = ctx.make_const(utils.make_name("one"), np.array(1, dtype=np.int64))
     id_name = utils.make_name("sparse_softmax_id")
     id_output = utils.port_name(id_name)
-    nodes.extend(make_range(ctx,
-                            zero_const.output[0],
-                            indices_size.output[0],
-                            one_const.output[0],
-                            id_output,
-                            id_name,
-                            TensorProto.INT64))
+    make_range(ctx, zero_const.output[0], indices_size.output[0], one_const.output[0],
+               id_output, id_name, shape=[-1], dtype=TensorProto.INT64)
     id_unsqueeze = ctx.make_node("Unsqueeze", [id_output], attr={"axes": [1]})
     indices_with_id = ctx.make_node("Concat",
                                     [id_unsqueeze.output[0], indices_unsqueeze.output[0]],
@@ -83,19 +79,14 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
     log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=[logit_name], dtypes=[logit_dtype])
     gathernd_name = utils.make_name("sparse_softmax_gathernd")
     gathernd_output = utils.port_name(gathernd_name)
-    nodes.extend(make_gathernd(ctx,
-                               log_softmax.output[0],
-                               indices_with_id.output[0],
-                               gathernd_output,
-                               gathernd_name,
-                               logit_dtype))
+    make_gathernd(ctx, log_softmax.output[0], indices_with_id.output[0], gathernd_output,
+                  gathernd_name, logit_dtype)
     const_name = utils.make_name("const_negative_one")
-    const_negative_one = ctx.make_const(const_name, np.array(-1).astype(utils.ONNX_TO_NUMPY_DTYPE[logit_dtype]))
+    const_negative_one = ctx.make_const(const_name, np.array(-1).astype(utils.map_onnx_to_numpy_type(logit_dtype)))
     mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], gathernd_output])
-    res = ctx.make_node(op_type="Squeeze",
-                        inputs=[mul2.output[0]], outputs=[node.output[0]],
-                        attr={"axes": [1]})
-
-    nodes.extend([zero_const, one_const, indices_size, indices_unsqueeze, id_unsqueeze, indices_with_id,
-                  log_softmax, const_negative_one, mul2, res])
-    return nodes
+    shapes = node.output_shapes
+    dtypes = node.output_dtypes
+    ctx.remove_node(name)
+    ctx.make_node(op_type="Squeeze",
+                  inputs=[mul2.output[0]], outputs=[node.output[0]],
+                  attr={"axes": [1]}, shapes=[shapes[0]], dtypes=[dtypes[0]])

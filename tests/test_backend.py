@@ -474,7 +474,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         y = tf.placeholder(tf.float32, x_shape, name=_TFINPUT1)
         x_ = tf.matmul(x, y, transpose_b=True)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=1e-6)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=1e-5)
 
     @check_onnxruntime_incompatibility("Sub")
     def test_sub(self):

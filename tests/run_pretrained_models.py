@@ -265,6 +265,7 @@ class Test(object):
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override,
                                           input_names=inputs.keys())
+                model_proto = onnx_graph.make_model("converted from tf2onnx")
                 new_model_proto = GraphUtil.opt_transposes_with_graph(onnx_graph, "test", debug=debug)
                 if new_model_proto:
                     model_proto = new_model_proto

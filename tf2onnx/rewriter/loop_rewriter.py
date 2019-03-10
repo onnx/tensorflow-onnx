@@ -38,7 +38,7 @@ class LoopRewriter(LoopRewriterBase):
 
     def rewrite(self, context):
         log.debug("enter rewrite function")
-        loop_nodes = None
+        loop_node = None
         try:
             loop_props = context.loop_properties
             cell_g_info = context.cell_graph
@@ -79,33 +79,19 @@ class LoopRewriter(LoopRewriterBase):
 
                 loop_body_g.add_graph_input(input_name, dtype, utils.create_vague_shape_like(shape))
 
-            body_nodes_to_append = []
             for input_ta in loop_props.tensor_array_inputs:
                 # Loop does not have scan inputs, so we use Gather to get data for each iteration.
                 index_node = loop_body_g.make_node("Unsqueeze", [input_ta.index_input_id], attr={"axes": [0]})
-                body_nodes_to_append.append(index_node)
                 gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, index_node.output[0]])
-                body_nodes_to_append.append(gather_node)
                 data_node = loop_body_g.make_node("Squeeze", [gather_node.output[0]], attr={"axes": [0]})
-                body_nodes_to_append.append(data_node)
-
                 loop_body_g.replace_all_inputs(loop_body_g.get_nodes(), input_ta.consumer.id, data_node.output[0])
 
-            body_nodes = loop_body_g.get_nodes()
-            body_nodes.extend(body_nodes_to_append)
-            loop_body_g.set_nodes(body_nodes)
-
-
             ## create Loop node
-            loop_nodes = self._create_loop_node(context, loop_props)
-            if not loop_nodes:
+            loop_node = self._create_loop_node(context, loop_props)
+            if not loop_node:
                 log.error("failed to create loop node during rewrite")
                 return REWRITER_RESULT.FAIL
-            loop_nodes[0].set_body_graph_as_attr("body", loop_body_g)
-
-            all_nodes = self.g.get_nodes()
-            all_nodes.extend(loop_nodes)
-            self.g.set_nodes(all_nodes)
+            loop_node.set_body_graph_as_attr("body", loop_body_g)
 
             log.debug("rewrite successfully")
             return REWRITER_RESULT.OK
@@ -116,13 +102,20 @@ class LoopRewriter(LoopRewriterBase):
             return REWRITER_RESULT.FAIL
 
     def _create_loop_node(self, context, loop_props):
-        # reuse original output connection id (e.g. Exit_XXX), so we don't need set shape.
         loop_outputs = []
+        loop_output_shapes = []
+        loop_output_dtypes = []
         for tensor_value_info in loop_props.state_outputs_exits + loop_props.scan_outputs_exits:
             if tensor_value_info.id:
                 loop_outputs.append(tensor_value_info.id)
+                loop_output_shapes.append(tensor_value_info.shape)
+                loop_output_dtypes.append(tensor_value_info.dtype)
+                n = self.g.get_node_by_output(tensor_value_info.id)
+                self.g.remove_node(n.name)
             else:
                 loop_outputs.append(utils.make_name("unused_loop_output_"))
+                loop_output_shapes.append(-1)
+                loop_output_dtypes.append(None)
 
         # trip count and cond are not used, giving them values just because bug
         # (https://github.com/Microsoft/onnxruntime/issues/255) of onnxruntime.
@@ -131,6 +124,7 @@ class LoopRewriter(LoopRewriterBase):
         loop_node = self.g.make_node("Loop", [trip_cnt.output[0]] + [cond.output[0]] +
                                      loop_props.state_inputs_initial_values,  # ONNX Loop support state inputs only
                                      outputs=loop_outputs, op_name_scope="generic_loop",
+                                     shapes=loop_output_shapes, dtypes=loop_output_dtypes,
                                      skip_conversion=False)
 
-        return [loop_node, trip_cnt, cond]
+        return loop_node

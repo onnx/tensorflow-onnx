@@ -102,19 +102,16 @@ class CustomRnnRewriter(LoopRewriterBase):
         log.debug("enter rewrite function")
         try:
             scan_props = context.loop_properties
-            nodes_to_append = []
 
             state_inputs_initial_values = []
             for state_input in scan_props.state_inputs_initial_values:
                 nodes = self._adapt_scan_sequence_input_or_output("input", state_input, False)
                 state_inputs_initial_values.append(nodes[-1].output[0])
-                nodes_to_append.extend(nodes)
 
             scan_inputs_initial_values = []
             for scan_input in scan_props.scan_inputs_initial_values:
                 nodes = self._adapt_scan_sequence_input_or_output("input", scan_input, False)
                 scan_inputs_initial_values.append(nodes[-1].output[0])
-                nodes_to_append.extend(nodes)
 
             cell_g_info = context.cell_graph
             scan_body_g = LoopRewriterBase.construct_graph_from_nodes(self.g, cell_g_info.nodes, cell_g_info.outputs)
@@ -131,13 +128,7 @@ class CustomRnnRewriter(LoopRewriterBase):
                 return REWRITER_RESULT.FAIL
 
             scan_node.set_body_graph_as_attr("body", scan_body_g)
-            nodes_to_append.append(scan_node)
-            to_append = self._connect_scan_with_output(context, scan_node)
-            nodes_to_append.extend(to_append)
-
-            all_nodes = self.g.get_nodes()
-            all_nodes.extend(nodes_to_append)
-            self.g.set_nodes(all_nodes)
+            self._connect_scan_with_output(context, scan_node)
 
             return REWRITER_RESULT.OK
 
@@ -159,8 +150,10 @@ class CustomRnnRewriter(LoopRewriterBase):
         loop_outputs_dtypes = []
         for tensor_value_info in scan_props.state_outputs_exits + scan_props.scan_outputs_exits:
             if tensor_value_info.id:
-                loop_outputs_shapes.append([1] + self.g.get_shape(tensor_value_info.id))
-                loop_outputs_dtypes.append(self.g.get_dtype(tensor_value_info.id))
+                loop_outputs_shapes.append([1] + tensor_value_info.shape)
+                loop_outputs_dtypes.append(tensor_value_info.dtype)
+                n = self.g.get_node_by_output(tensor_value_info.id)
+                self.g.remove_node(n.name)
             else:
                 loop_outputs_shapes.append(None)
                 loop_outputs_dtypes.append(None)
@@ -180,12 +173,10 @@ class CustomRnnRewriter(LoopRewriterBase):
         log.debug("connect scan output with the graph")
 
         index = 0
-        nodes_to_append = []
         for out_tensor_value_info in context.loop_properties.state_outputs_exits:
             if out_tensor_value_info.id:
                 nodes = self._adapt_scan_sequence_input_or_output("state_output_reshape",
                                                                   scan_node.output[index], True)
-                nodes_to_append.extend(nodes)
                 self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
 
             index += 1
@@ -194,11 +185,9 @@ class CustomRnnRewriter(LoopRewriterBase):
             if out_tensor_value_info.id:
                 nodes = self._adapt_scan_sequence_input_or_output("scan_output_reshape",
                                                                   scan_node.output[index], True)
-                nodes_to_append.extend(nodes)
                 self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
             index += 1
 
-        return nodes_to_append
 
     def _adapt_scan_sequence_input_or_output(self, target_name, input_id, handle_output=False):
         nodes_to_add = []

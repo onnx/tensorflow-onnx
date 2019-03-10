@@ -74,6 +74,13 @@ ONNX_DTYPE_NAMES = {
     onnx_pb.TensorProto.BOOL: "bool"
 }
 
+class TensorValueInfo(object):
+    def __init__(self, tensor_id, g):
+        self.id = tensor_id
+        if self.id:
+            self.dtype = g.get_dtype(tensor_id)
+            self.shape = g.get_shape(tensor_id)
+
 ONNX_UNKNOWN_DIMENSION = -1
 
 # index for internally generated names
@@ -119,7 +126,7 @@ def tf_to_onnx_tensor(tensor, name=""):
         dims = [1]
     is_raw, data = get_tf_tensor_data(tensor)
     if not is_raw and len(data) == 1 and np.prod(dims) > 1:
-        batch_data = np.zeros(dims, dtype=ONNX_TO_NUMPY_DTYPE[new_type])
+        batch_data = np.zeros(dims, dtype=map_onnx_to_numpy_type(new_type))
         batch_data.fill(data[0])
         onnx_tensor = numpy_helper.from_array(batch_data, name=name)
     else:
@@ -188,6 +195,10 @@ def map_numpy_to_onnx_dtype(np_dtype):
     raise ValueError("unsupported dtype " + np_dtype + " for mapping")
 
 
+def map_onnx_to_numpy_type(onnx_type):
+    return ONNX_TO_NUMPY_DTYPE[onnx_type]
+
+
 def node_name(name):
     """Get node name without io#."""
     pos = name.find(":")
@@ -207,12 +218,6 @@ def make_onnx_shape(shape):
 def port_name(name, nr=0):
     """Map node output number to name."""
     return name + ":" + str(nr)
-
-
-def make_onnx_identity(node_input, node_output, name=None):
-    if name is None:
-        name = make_name("identity")
-    return helper.make_node("Identity", [node_input], [node_output], name=name)
 
 
 def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
@@ -284,18 +289,16 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
     g.parent_graph = parent_g
     nodes = set(nodes)
     all_outputs = set()
-    ops = []
     for op in nodes:
         all_outputs |= set(op.output)
 
         new_node = g.make_node(op.type, op.input, outputs=op.output, attr=op.attr, name=op.name,
-                               skip_conversion=op._skip_conversion)
+                               skip_conversion=op.skip_conversion)
         body_graphs = op.graph.contained_graphs.pop(op.name, None)
         if body_graphs:
             for attr_name, body_graph in body_graphs.items():
                 body_graph.parent_graph = g
                 new_node.set_body_graph_as_attr(attr_name, body_graph)
-        ops.append(new_node)
 
     for i in all_outputs:
         if i not in g._output_shapes:
@@ -303,22 +306,14 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
         if i not in g._dtypes:
             g._dtypes[i] = parent_g._dtypes[i]
 
-    g.set_nodes(ops)
-
     # handle cell graph: insert identity node, since sometimes we need output same output_id
     # as state_output and scan_out, but ONNX don't allow the same output_id to appear more
     # than once as output node.
-    cell_body_nodes = []
     new_output_names = []
     for output, shape, dtype in zip(outputs, shapes, dtypes):
         node = g.make_node("Identity", inputs=[output], op_name_scope="sub_graph_ending_node",
                            shapes=[shape], dtypes=[dtype])
         new_output_names.append(node.output[0])
-        cell_body_nodes.append(node)
-
-    cell_nodes = g.get_nodes()
-    cell_nodes.extend(cell_body_nodes)
-    g.set_nodes(cell_nodes)
     g.outputs = new_output_names
     return g
 

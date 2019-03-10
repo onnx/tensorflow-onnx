@@ -20,29 +20,22 @@ def matrixbandpart_op(ctx, node, name, args):
     # methods to generate mask matrix: if lower triangular is needed, then generate column one by one
     # otherwise row is generated one by one.
     axis, counter_axis, squeeze_axis = (1, 0, 2) if bandpart == [-1, 0] else (0, 1, 1)
-    nodes = []
     # 1: subgraph to implement tf.onelike(input[:, 0]),
     # no need to worry about the dtype, because bool type is needed as Xor only support bool
     node_name = utils.make_name("const_zero")
     const_zero = ctx.make_const(name=node_name, np_val=np.array([0]).astype(np.int32))
-    nodes.append(const_zero)
     first_col_or_row = ctx.make_node(op_type="Gather", inputs=[node.input[0], const_zero.output[0]],
                                      attr={"axis": axis})
-    nodes.append(first_col_or_row)
     first_col_or_row_casted = ctx.make_node(op_type="Cast", inputs=first_col_or_row.output,
                                             attr={"to": onnx_pb.TensorProto.BOOL})
-    nodes.append(first_col_or_row_casted)
     # line means one col or one row
     zero_line = ctx.make_node(op_type="Xor", inputs=first_col_or_row_casted.output*2)
-    nodes.append(zero_line)
     one_line = ctx.make_node(op_type="Not", inputs=zero_line.output)
-    nodes.append(one_line)
 
     # 2: "loop" to generate mask matrix: generate col or row of matrix one by one
     g = ctx.create_new_graph_with_same_config()
     node_name = utils.make_name("const_zero_bool")
     const_zero_bool = ctx.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
-    nodes.append(const_zero_bool)
     ctx.set_dtype(const_zero_bool.output[0], onnx_pb.TensorProto.BOOL)
 
     # shift right the line and add zero at the left.
@@ -51,11 +44,10 @@ def matrixbandpart_op(ctx, node, name, args):
     slice_node = g.make_node(op_type="Slice", inputs=[new_line.output[0]],
                              attr={"axes": [counter_axis], "starts": [0], "ends": [-1]})
 
-    body_nodes = [slice_node, new_line,
-                  g.make_node("Identity", ["cond"], outputs=["cond_out"]),
-                  g.make_node("Identity", ["line"], outputs=["res"]),
-                  g.make_node("Identity", [slice_node.output[0]], outputs=["line_out"])]
-    g.set_nodes(body_nodes)
+    g.make_node("Identity", ["cond"], outputs=["cond_out"])
+    g.make_node("Identity", ["line"], outputs=["res"])
+    g.make_node("Identity", [slice_node.output[0]], outputs=["line_out"])
+
     g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
     g.add_graph_input("cond", onnx_pb.TensorProto.BOOL, [])
     g.add_graph_input("line", onnx_pb.TensorProto.BOOL, [-1, -1])
@@ -66,35 +58,28 @@ def matrixbandpart_op(ctx, node, name, args):
 
     # initial value of body vars
     shape = ctx.make_node(op_type="Shape", inputs=[node.input[0]])  # dtype of result is int64
-    nodes.append(shape)
     node_name = utils.make_name("line_num_index")
     col_or_row_num_index = ctx.make_const(name=node_name, np_val=np.array(axis).astype(np.int32))
-    nodes.append(col_or_row_num_index)
     line_num = ctx.make_node(op_type="Gather", inputs=[shape.output[0], col_or_row_num_index.output[0]])
-    nodes.append(line_num)
     trip_cnt = line_num.output[0]
     node_name = utils.make_name("true")
     cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(np.bool))
-    nodes.append(cond)
     col_init = one_line.output[0]
 
     loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init], output_count=2)
     loop_node.set_body_graph_as_attr("body", g)
-    nodes.append(loop_node)
     # convert generated mask matrix from bool to right shape and data type
     squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})
-    nodes.append(squeeze)
     cast1 = ctx.make_node(op_type="Cast", inputs=squeeze.output, attr={"to": onnx_pb.TensorProto.FLOAT})
-    nodes.append(cast1)
     if axis == 1:
         mask_matrix = ctx.make_node(op_type="Transpose", inputs=cast1.output)
-        nodes.append(mask_matrix)
     else:
         mask_matrix = squeeze
     cast2 = ctx.make_node(op_type="Cast", inputs=mask_matrix.output,
                           attr={"to": ctx.get_dtype(node.input[0])})
-    nodes.append(cast2)
-    res = ctx.make_node(op_type="Mul", inputs=[cast2.output[0], node.input[0]],
-                        name=node.name, outputs=node.output)
-    nodes.append(res)
-    return nodes
+    shapes = node.output_shapes
+    dtypes = node.output_dtypes
+    ctx.remove_node(node.name)
+    ctx.make_node(op_type="Mul", inputs=[cast2.output[0], node.input[0]],
+                  name=node.name, outputs=node.output, shapes=shapes,
+                  dtypes=dtypes)
