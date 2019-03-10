@@ -40,6 +40,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf.logging.set_verbosity(tf.logging.WARN)
             self.log.setLevel(logging.INFO)
 
+    def tearDown(self):
+        if not self.config.is_debug_mode:
+            utils.delete_directory(self.test_data_directory)
+
+    @property
+    def test_data_directory(self):
+        return os.path.join(self.config.temp_dir, self._testMethodName)
+
     @staticmethod
     def assertAllClose(expected, actual, **kwargs):
         np.testing.assert_allclose(expected, actual, **kwargs)
@@ -72,6 +80,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def _run_backend(self, g, outputs, input_dict):
         model_proto = g.make_model("test")
         model_path = self.save_onnx_model(model_proto, input_dict)
+
         if self.config.backend == "onnxmsrtnext":
             y = self.run_onnxmsrtnext(model_path, input_dict, outputs)
         elif self.config.backend == "onnxruntime":
@@ -84,7 +93,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=0.,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=False,
-                      check_dtype=False, process_args=None, onnx_feed_dict=None):
+                      check_dtype=True, process_args=None, onnx_feed_dict=None):
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -93,8 +102,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             onnx_feed_dict = feed_dict
 
         graph_def = None
-        save_dir = os.path.join(self.config.temp_path, self._testMethodName)
-
         if convert_var_to_const:
             with tf.Session() as sess:
                 variables_lib.global_variables_initializer().run()
@@ -113,20 +120,18 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             expected = sess.run(output_dict, feed_dict=feed_dict)
 
         if self.config.is_debug_mode:
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            model_path = os.path.join(save_dir, self._testMethodName + "_original.pb")
-            with open(model_path, "wb") as f:
-                f.write(sess.graph_def.SerializeToString())
+            if not os.path.exists(self.test_data_directory):
+                os.makedirs(self.test_data_directory)
+            model_path = os.path.join(self.test_data_directory, self._testMethodName + "_original.pb")
+            utils.save_protobuf(model_path, sess.graph_def)
             self.log.debug("created file %s", model_path)
 
         graph_def = tf_optimize(input_names_with_port, output_names_with_port,
                                 sess.graph_def, constant_fold)
 
         if self.config.is_debug_mode and constant_fold:
-            model_path = os.path.join(save_dir, self._testMethodName + "_after_tf_optimize.pb")
-            with open(model_path, "wb") as f:
-                f.write(graph_def.SerializeToString())
+            model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
+            utils.save_protobuf(model_path, graph_def)
             self.log.debug("created file  %s", model_path)
 
         tf.reset_default_graph()
@@ -146,9 +151,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 self.assertEqual(expected_val.shape, actual_val.shape)
 
     def save_onnx_model(self, model_proto, feed_dict, postfix=""):
-        save_path = os.path.join(self.config.temp_path, self._testMethodName)
-        target_path = utils.save_onnx_model(save_path, self._testMethodName + postfix, feed_dict, model_proto,
-                                            include_test_data=self.config.is_debug_mode,
+        target_path = utils.save_onnx_model(self.test_data_directory, self._testMethodName + postfix, feed_dict,
+                                            model_proto, include_test_data=self.config.is_debug_mode,
                                             as_text=self.config.is_debug_mode)
 
         self.log.debug("create model file: %s", target_path)

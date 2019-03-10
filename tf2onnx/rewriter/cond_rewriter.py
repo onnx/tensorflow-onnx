@@ -17,6 +17,7 @@ from tf2onnx.utils import TensorValueInfo
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.rewriter.cond_rewriter_base")
 
+
 # pylint: disable=missing-docstring,unused-argument,broad-except
 
 class BranchType(Enum):
@@ -30,6 +31,7 @@ class BranchType(Enum):
 
 class CondBranchContext:
     """Context for each branch graph"""
+
     def __init__(self):
         self.output = []
         self.nodes = set()
@@ -37,13 +39,13 @@ class CondBranchContext:
 
 class CondContext:
     def __init__(self, cond_scope, pred_input, true_branch_context,
-                 false_branch_context, switchs, merge_tensor_value_infos):
-        self.cond_scope = cond_scope # name scope for this tf.cond
-        self.pred_input = pred_input # condition input
+                 false_branch_context, switchs, merges):
+        self.cond_scope = cond_scope  # name scope for this tf.cond
+        self.pred_input = pred_input  # condition input
         self.true_branch_context = true_branch_context
         self.false_branch_context = false_branch_context
         self.switchs = set(switchs)
-        self.merges = merge_tensor_value_infos # list of TensorValueInfo for merge nodes in order
+        self.merges = merges  # list of merges in order
 
 
 class CondRewriter:
@@ -76,14 +78,13 @@ class CondRewriter:
             try:
                 pred_input, true_branch_context, false_branch_context, switchs = \
                     self._parse_cond(name_scope, merge_nodes)
-                merge_node_tensor_value_infos = [TensorValueInfo(m.output[0], self.g) for m in merge_nodes]
                 cond_context = CondContext(
                     name_scope,
                     pred_input,
                     true_branch_context,
                     false_branch_context,
                     switchs,
-                    merge_node_tensor_value_infos
+                    merge_nodes
                 )
             except Exception as ex:
                 tb = traceback.format_exc()
@@ -99,14 +100,47 @@ class CondRewriter:
 
         return self.g.get_nodes()
 
+    def _get_output_shape_dtype(self, cond_context):
+        output_shapes = []
+        output_dtypes = []
+        for i, _ in enumerate(cond_context.true_branch_context.output):
+            true_output = cond_context.true_branch_context.output[i]
+            false_output = cond_context.false_branch_context.output[i]
+            true_shape = self.g.get_shape(true_output)
+            true_dtype = self.g.get_dtype(true_output)
+            false_shape = self.g.get_shape(false_output)
+            false_dtype = self.g.get_dtype(false_output)
+            if not utils.are_shapes_compatible(true_shape, false_shape):
+                raise RuntimeError(
+                    "the shape of outputs {} and {} mismatch: {}, {}".format(
+                        true_output,
+                        false_output,
+                        true_shape,
+                        false_shape
+                    )
+                )
+            if true_dtype != false_dtype:
+                raise RuntimeError(
+                    "the shape of outputs {} and {} mismatch: {}, {}".format(
+                        true_output,
+                        false_output,
+                        true_dtype,
+                        false_dtype
+                    )
+                )
+            output_shapes.append(utils.merge_shapes(true_shape, false_shape))
+            output_dtypes.append(true_dtype)
+        return output_shapes, output_dtypes
+
     def _create_if_node(self, cond_context):
+        output_shapes, output_dtypes = self._get_output_shape_dtype(cond_context)
         if_node = self.g.make_node(
             "If",
             [cond_context.pred_input],
             op_name_scope=cond_context.cond_scope,
-            outputs=[m.id for m in cond_context.merges],
-            shapes=[m.shape for m in cond_context.merges],
-            dtypes=[m.dtype for m in cond_context.merges],
+            outputs=[m.output[0] for m in cond_context.merges],
+            shapes=output_shapes,
+            dtypes=output_dtypes,
             skip_conversion=False
         )
         log.debug("set graph for if branches")
@@ -114,15 +148,15 @@ class CondRewriter:
             self.g,
             list(cond_context.true_branch_context.nodes),
             cond_context.true_branch_context.output,
-            [self.g.get_shape(out) for out in cond_context.true_branch_context.output],
-            [self.g.get_dtype(out) for out in cond_context.true_branch_context.output]
+            output_shapes,
+            output_dtypes
         )
         false_graph = utils.construct_graph_from_nodes(
             self.g,
             list(cond_context.false_branch_context.nodes),
             cond_context.false_branch_context.output,
-            [self.g.get_shape(out) for out in cond_context.false_branch_context.output],
-            [self.g.get_dtype(out) for out in cond_context.false_branch_context.output]
+            output_shapes,
+            output_dtypes
         )
         if_node.set_body_graph_as_attr("then_branch", true_graph)
         if_node.set_body_graph_as_attr("else_branch", false_graph)
@@ -158,8 +192,7 @@ class CondRewriter:
             nodes_to_add.extend([false_switch_id, true_switch_id])
         # replace merge with if node
         log.debug("cut off merge connection")
-        for tensor_value_info in cond_context.merges:
-            n = self.g.get_node_by_output(tensor_value_info.id)
+        for n in cond_context.merges:
             self.g.remove_node(n.name)
 
     def _is_merge(self, node):
@@ -213,11 +246,13 @@ class CondRewriter:
         merge_input_1 = merge_node.input[0]
         merge_input_2 = merge_node.input[1]
         switchs = set()
+
         def stop_at_switch(node):
             if self._is_switch(node):
                 switchs.add(node)
                 return False
             return True
+
         branch_nodes_1 = self.g.extract_sub_graph_nodes(
             [merge_input_1],
             stop_at_switch
@@ -273,7 +308,7 @@ class CondRewriter:
         if branch == BranchType.UNKNOWN:
             log.debug(
                 "branch only contains const node: [%s]",
-                ",".join(n for n in nodes)
+                ",".join(n.name for n in nodes)
             )
         return branch
 

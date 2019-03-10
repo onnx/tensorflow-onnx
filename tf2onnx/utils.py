@@ -11,6 +11,8 @@ from __future__ import unicode_literals
 
 import os
 import re
+import shutil
+import tempfile
 import six
 import numpy as np
 import tensorflow as tf
@@ -81,26 +83,12 @@ class TensorValueInfo(object):
 
 ONNX_UNKNOWN_DIMENSION = -1
 
-#
-# attributes onnx understands. Everything else coming from tensorflow
-# will be ignored.
-#
-ONNX_VALID_ATTRIBUTES = {
-    'p', 'bias', 'axes', 'pads', 'mean', 'activation_beta', 'spatial_scale', 'broadcast', 'pooled_shape', 'high',
-    'activation_alpha', 'is_test', 'hidden_size', 'activations', 'beta', 'input_as_shape', 'drop_states', 'alpha',
-    'momentum', 'scale', 'axis', 'dilations', 'transB', 'axis_w', 'blocksize', 'output_sequence', 'mode', 'perm',
-    'min', 'seed', 'ends', 'paddings', 'to', 'gamma', 'width_scale', 'normalize_variance', 'group', 'ratio', 'values',
-    'dtype', 'output_shape', 'spatial', 'split', 'input_forget', 'keepdims', 'transA', 'auto_pad', 'border', 'low',
-    'linear_before_reset', 'height_scale', 'output_padding', 'shape', 'kernel_shape', 'epsilon', 'size', 'starts',
-    'direction', 'max', 'clip', 'across_channels', 'value', 'strides', 'extra_shape', 'scales', 'k', 'sample_size',
-    'blocksize', 'epsilon', 'momentum', 'body', 'directions', 'num_scan_inputs', 'then_branch', 'else_branch'
-}
-
 # index for internally generated names
 INTERNAL_NAME = 1
 
 # Fake onnx op type which is used for Graph input.
 GRAPH_INPUT_TYPE = "NON_EXISTENT_ONNX_TYPE"
+
 
 def make_name(name):
     """Make op name for inserted ops."""
@@ -279,18 +267,13 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
             t = numpy_helper.from_array(data)
             t.name = data_key
             data_full_path = os.path.join(data_path, "input_" + str(i) + ".pb")
-            with open(data_full_path, 'wb') as f:
-                f.write(t.SerializeToString())
+            save_protobuf(data_full_path, t)
             i += 1
 
     target_path = os.path.join(save_path, onnx_file_name + ".onnx")
-    with open(target_path, "wb") as f:
-        f.write(model_proto.SerializeToString())
-
+    save_protobuf(target_path, model_proto)
     if as_text:
-        with open(target_path + ".pbtxt", "w") as f:
-            f.write(text_format.MessageToString(model_proto))
-
+        save_protobuf(target_path + ".pbtxt", model_proto, as_text=True)
     return target_path
 
 
@@ -337,6 +320,90 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
 
 def tf_name_scope(name):
     return '/'.join(name.split('/')[:-1])
+
+
+def get_temp_directory():
+    return os.environ.get("TF2ONNX_TEMP_DIRECTORY", tempfile.mkdtemp())
+
+
+def delete_directory(path):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+
+
+def save_protobuf(path, message, as_text=False):
+    dir_name = os.path.dirname(path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+    if as_text:
+        with open(path, "w") as f:
+            f.write(text_format.MessageToString(message))
+    else:
+        with open(path, "wb") as f:
+            f.write(message.SerializeToString())
+
+
+def is_list_or_tuple(obj):
+    return isinstance(obj, (list, tuple))
+
+
+def is_unknown_dimension(dim):
+    """  Return true if dim is not a positive integer value. """
+    if dim is None or not isinstance(dim, int):
+        return True
+    return dim <= 0
+
+
+def merge_shapes(shape1, shape2):
+    """
+    Merge 2 shapes, return merged shape, choose more specific dimension value from either side.
+    Raise exception for mismatch.
+    """
+    if shape1 is None:
+        return shape2
+    if shape2 is None:
+        return shape1
+
+    make_sure(is_list_or_tuple(shape1), "invalid type for shape1")
+    make_sure(is_list_or_tuple(shape2), "invalid type for shape2")
+    make_sure(len(shape1) == len(shape2), "shapes rank mismatch: shape1=%s, shape2=%s", shape1, shape2)
+
+    merged = []
+    for d1, d2 in zip(shape1, shape2):
+        d = d1
+        if is_unknown_dimension(d1):
+            d = d2
+        elif not is_unknown_dimension(d2):
+            make_sure(d1 == d2, "shapes dimension mismatch: shape1=%s, shape2=%s", shape1, shape2)
+        merged.append(d)
+    return merged
+
+
+def are_shapes_compatible(src, dest):
+    """
+    Returns True iff src is compatible with dest.
+    None is compatible with all shapes, different ranks are not considered as compatible
+    """
+    try:
+        merge_shapes(src, dest)
+        return True
+    except:  # pylint: disable=bare-except
+        return False
+
+
+def are_shapes_equal(src, dest):
+    """ Check whether 2 shapes are equal. """
+    if src is None:
+        return dest is None
+    if dest is None:
+        return src is None
+
+    make_sure(is_list_or_tuple(src), "invalid type for src")
+    make_sure(is_list_or_tuple(dest), "invalid type for dest")
+
+    if len(src) != len(dest):
+        return False
+    return all(i == j for i, j in zip(src, dest))
 
 
 def create_vague_shape_like(shape):

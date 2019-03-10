@@ -427,7 +427,6 @@ class LoopRewriterBase(object):
 
     @staticmethod
     def construct_graph_from_nodes(parent_g, nodes, outputs):
-        log.debug("construct_graph_from_nodes")
         return utils.construct_graph_from_nodes(
             parent_g,
             nodes,

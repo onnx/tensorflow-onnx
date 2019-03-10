@@ -6,15 +6,16 @@
 import argparse
 import os
 import sys
-import tempfile
 import unittest
 
 from distutils.version import LooseVersion
+from tf2onnx import utils
 from tf2onnx.tfonnx import DEFAULT_TARGET, POSSIBLE_TARGETS
 
 __all__ = ["TestConfig", "get_test_config", "unittest_main",
-           "check_tf_min_version", "check_opset_min_version", "check_target", "skip_onnxruntime_backend",
-           "skip_caffe2_backend", "check_onnxruntime_incompatibility"]
+           "check_tf_min_version", "skip_tf_versions",
+           "check_opset_min_version", "check_target", "skip_onnxruntime_backend", "skip_caffe2_backend",
+           "check_onnxruntime_incompatibility"]
 
 
 # pylint: disable=missing-docstring
@@ -23,12 +24,12 @@ class TestConfig(object):
     def __init__(self):
         self.platform = sys.platform
         self.tf_version = self._get_tf_version()
-        self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", 7))
+        self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", 9))
         self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.backend_version = self._get_backend_version()
         self.is_debug_mode = False
-        self.temp_path = tempfile.mkdtemp()
+        self.temp_dir = utils.get_temp_directory()
 
     @property
     def is_mac(self):
@@ -67,7 +68,8 @@ class TestConfig(object):
                             "target={}".format(self.target),
                             "backend={}".format(self.backend),
                             "backend_version={}".format(self.backend_version),
-                            "is_debug_mode={}".format(self.is_debug_mode)])
+                            "is_debug_mode={}".format(self.is_debug_mode),
+                            "temp_dir={}".format(self.temp_dir)])
 
     @staticmethod
     def load():
@@ -75,20 +77,23 @@ class TestConfig(object):
         # if not launched by pytest, parse console arguments to override config
         if "pytest" not in sys.argv[0]:
             parser = argparse.ArgumentParser()
-            parser.add_argument('--backend', default=config.backend,
+            parser.add_argument("--backend", default=config.backend,
                                 choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                                 help="backend to test against")
-            parser.add_argument('--opset', type=int, default=config.opset, help="opset to test against")
+            parser.add_argument("--opset", type=int, default=config.opset, help="opset to test against")
             parser.add_argument("--target", default=",".join(config.target), choices=POSSIBLE_TARGETS,
                                 help="target platform")
             parser.add_argument("--debug", help="output debugging information", action="store_true")
-            parser.add_argument('unittest_args', nargs='*')
+            parser.add_argument("--temp_dir", help="temp dir")
+            parser.add_argument("unittest_args", nargs='*')
 
             args = parser.parse_args()
             config.backend = args.backend
             config.opset = args.opset
             config.target = args.target.split(',')
             config.is_debug_mode = args.debug
+            if args.temp_dir:
+                config.temp_dir = args.temp_dir
 
             # Now set the sys.argv to the unittest_args (leaving sys.argv[0] alone)
             sys.argv[1:] = args.unittest_args

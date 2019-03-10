@@ -20,6 +20,7 @@ from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetId
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+from tf2onnx.schemas import get_schema
 
 
 # todo(pengwa): remove protected-access later
@@ -40,7 +41,6 @@ class Node(object):
         self._input = [i for i in node.input]
         self._output = [i for i in node.output]
         self._attr = {}
-        self.inserted_nchw = False
 
         graph.set_node_by_name(self)
         # dict to original attributes
@@ -65,6 +65,7 @@ class Node(object):
         """Set op output. Output should be updated explicitly,
         changing it would require output mapping changed.
         """
+        self._graph_check()
         for o in self._output:
             del self.graph._output_to_node_name[o]
 
@@ -76,6 +77,7 @@ class Node(object):
     @property
     def inputs(self):
         """Input node objects."""
+        self._graph_check()
         val = [self.graph.get_node_by_output(n) for n in self._input]
         return val
 
@@ -87,8 +89,10 @@ class Node(object):
     def attr_onnx(self):
         onnx_attrs = {}
         for a in self._attr.values():
-            if a.name in utils.ONNX_VALID_ATTRIBUTES:
-                onnx_attrs[a.name] = a
+            schema = get_schema(self.type, self.graph.opset)
+            if schema:
+                if schema.has_attribute(a.name):
+                    onnx_attrs[a.name] = a
         return onnx_attrs
 
     @property
@@ -169,16 +173,14 @@ class Node(object):
     @property
     def output_shapes(self):
         """Get output shapes."""
-        utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
-                        self.name)
+        self._graph_check()
         val = [self.graph.get_shape(n) for n in self._output]
         return val
 
     @property
     def output_dtypes(self):
         """Get output dtypes."""
-        utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
-                        self.name)
+        self._graph_check()
         val = [self.graph.get_dtype(n) for n in self._output]
         return val
 
@@ -231,12 +233,15 @@ class Node(object):
         del t
         self.set_attr("value", onnx_tensor)
         # track shapes in _output_shapes
+        self._graph_check()
         self.graph.set_shape(onnx_tensor.name, onnx_tensor.dims)
 
     def get_body_graphs(self):
+        self._graph_check()
         return self.graph.contained_graphs.get(self.name, None)
 
     def set_body_graph_as_attr(self, attr_name, graph):
+        self._graph_check()
         if self.name not in self.graph.contained_graphs:
             self.graph.contained_graphs[self.name] = {}
 
@@ -293,6 +298,10 @@ class Node(object):
         outer_scope_node_input_ids = all_node_inputs - output_available_in_cur_graph
         return list(outer_scope_node_input_ids)
 
+    def _graph_check(self):
+        utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
+                        self.name)
+
 
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
@@ -334,12 +343,13 @@ class Graph(object):
             new_output_name = port_name(utils.make_name("raw_output_"))
             n_shapes = n.output_shapes
             n_dtypes = n.output_dtypes
+            body_graphs = n.graph.contained_graphs.pop(n.name, None)
             self.remove_node(n.name)
 
             new_outputs = [o if o != output else new_output_name for output in n.output]
             new_node = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
                                       skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes)
-            body_graphs = n.graph.contained_graphs.pop(n.name, None)
+
             if body_graphs:
                 for attr_name, body_graph in body_graphs.items():
                     body_graph.parent_graph = self

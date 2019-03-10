@@ -734,8 +734,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_onnxruntime_incompatibility("Mul")
     def test_leaky_relu(self):
         for alpha in [0.1, -0.1, 1.0, -1.0, 10.0, -10.0]:
-            x_val = 1000*np.random.random_sample([1000, 100]).astype(np.float32)
-            x = tf.placeholder(tf.float32, [None]*x_val.ndim, name=_TFINPUT)
+            x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
+            x = tf.placeholder(tf.float32, [None] * x_val.ndim, name=_TFINPUT)
             x_ = tf.nn.leaky_relu(x, alpha)
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
@@ -1029,12 +1029,25 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case([_OUTPUT], {}, check_value=False, check_shape=True)
 
-    @unittest.skip("")
+    @skip_caffe2_backend()
     def test_argminmax(self):
-        # TODO: fails on onnxmsrt caffe2
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
-        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
         x_ = tf.argmin(x, axis=0)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val = np.array([1, 2, -2, -1], dtype=np.int32).reshape((2, 2))
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        x_ = tf.argmax(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val = np.array([1, 2, -2, -1], dtype=np.int32).reshape((2, 2))
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        x_ = tf.argmax(x, output_type=x_val.dtype)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
@@ -1211,7 +1224,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice7(self):
-        x_val = np.arange(5*6).astype("float32").reshape(5, 6)
+        x_val = np.arange(5 * 6).astype("float32").reshape(5, 6)
 
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.strided_slice(x, [0, 1], [3, 4], [1, 1], begin_mask=2)
@@ -1229,7 +1242,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.strided_slice(x, [0, 1], [3, 4], [1, 1], shrink_axis_mask=2)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
 
     @skip_caffe2_backend("fails with schema error")
     @check_opset_min_version(7, "batchnorm")
