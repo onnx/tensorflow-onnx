@@ -24,7 +24,7 @@ class TestConfig(object):
     def __init__(self):
         self.platform = sys.platform
         self.tf_version = self._get_tf_version()
-        self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", 9))
+        self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", 7))
         self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.backend_version = self._get_backend_version()

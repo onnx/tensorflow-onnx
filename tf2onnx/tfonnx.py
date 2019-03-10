@@ -199,7 +199,6 @@ def broadcast_op(ctx, node, name, args):
             node.input[1] = tmp
     else:
         node.set_attr("broadcast", 0)
-        return node
 
 
 def broadcast_op7(ctx, node, name, args):
@@ -221,7 +220,6 @@ def broadcast_op7(ctx, node, name, args):
             tmp = node.input[0]
             node.input[0] = node.input[1]
             node.input[1] = tmp
-    return node
 
 
 def arg_minmax_op(ctx, node, name, args):
@@ -682,7 +680,7 @@ def biasadd_op7(ctx, node, name, args):
     # T output = BiasAddV1(T value, T bias)
     # According TF bias_add definition, the input dim is always only 1.
     node.type = "Add"
-    node = broadcast_op7(ctx, node, name, args)
+    broadcast_op7(ctx, node, name, args)
 
     # on NHWC, bias will broadcast from largest dim, which is default onnx Add op broadcast behavior.
     if not node.is_nhwc():
