@@ -120,7 +120,7 @@ class CondRewriter:
                 )
             if true_dtype != false_dtype:
                 raise RuntimeError(
-                    "the shape of outputs {} and {} mismatch: {}, {}".format(
+                    "the dtype of outputs {} and {} mismatch: {}, {}".format(
                         true_output,
                         false_output,
                         true_dtype,

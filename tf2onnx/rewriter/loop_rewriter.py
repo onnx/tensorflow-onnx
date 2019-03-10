@@ -102,7 +102,6 @@ class LoopRewriter(LoopRewriterBase):
             return REWRITER_RESULT.FAIL
 
     def _create_loop_node(self, context, loop_props):
-        # reuse original output connection id (e.g. Exit_XXX), so we don't need set shape.
         loop_outputs = []
         loop_output_shapes = []
         loop_output_dtypes = []
@@ -125,6 +124,7 @@ class LoopRewriter(LoopRewriterBase):
         loop_node = self.g.make_node("Loop", [trip_cnt.output[0]] + [cond.output[0]] +
                                      loop_props.state_inputs_initial_values,  # ONNX Loop support state inputs only
                                      outputs=loop_outputs, op_name_scope="generic_loop",
+                                     shapes=loop_output_shapes, dtypes=loop_output_dtypes,
                                      skip_conversion=False)
 
         return loop_node
