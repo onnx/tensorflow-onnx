@@ -648,12 +648,16 @@ def sign_op4(ctx, node, name, args):
     node_dtype = ctx.get_dtype(node.output[0])
     utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
     if node_dtype in [onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
-        raise ValueError("dtype " + node_dtype + " is not supported in onnx for now")
-    input_tensor_type = utils.map_onnx_to_numpy_type(node_dtype)
+        raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
     zero_name = utils.make_name("{}_zero".format(node.name))
-    ctx.make_const(zero_name, np.array(0, dtype=input_tensor_type))
-    greater_node = ctx.make_node("Greater", [node.input[0], zero_name])
-    less_node = ctx.make_node("Less", [node.input[0], zero_name])
+    ctx.make_const(zero_name, np.array(0, dtype=utils.ONNX_TO_NUMPY_DTYPE[1]))
+    if node_dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
+        cast_node_0 = ctx.make_node("Cast", [node.input[0]], {"to": 1})
+        greater_node = ctx.make_node("Greater", [cast_node_0.output[0], zero_name])
+        less_node = ctx.make_node("Less", [cast_node_0.output[0], zero_name])
+    else:
+        greater_node = ctx.make_node("Greater", [node.input[0], zero_name])
+        less_node = ctx.make_node("Less", [node.input[0], zero_name])
     cast_node_1 = ctx.make_node("Cast", [greater_node.output[0]], {"to": node_dtype})
     cast_node_2 = ctx.make_node("Cast", [less_node.output[0]], {"to": node_dtype})
 
