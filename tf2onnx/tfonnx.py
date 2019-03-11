@@ -2255,7 +2255,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
                 log.info("explictly skip node " + node.name)
                 log.debug("explictly skip node " + node.name)
                 continue
-            log.info("convert node ", node.name)
+            log.info("convert node " + node.name)
             has_update = True
             op = node.type
             map_info = ops_mapping.get(op)
