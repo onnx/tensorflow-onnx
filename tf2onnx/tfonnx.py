@@ -505,9 +505,9 @@ def conv_kernel_shape(ctx, node, input_idx, spatial=2):
 
 def conv_op(ctx, node, name, args):
     # T output = Conv2D(T input, T filter, @list(int) strides, @bool use_cudnn_on_gpu,
-    #                       @string padding, @string data_format)
+    #                   @string padding, @string data_format)
     # T Y = Conv(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
-    #                       @AttrType.INTS kernel_shape, @AttrType.INTS pads, @AttrType.INTS strides)
+    #            @AttrType.INTS kernel_shape, @AttrType.INTS pads, @AttrType.INTS strides)
     kernel_shape = conv_kernel_shape(ctx, node, 1, spatial=2)
     strides = conv_dims_attr(node, "strides")
     dilations = conv_dims_attr(node, "dilations")
@@ -2243,13 +2243,19 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
         ops_mapping.update(custom_opset)
 
     has_update = True
+    a = 0
     while has_update:
+        log.info("mapping iteration %s", a)
+        a += 1
         has_update = False
+        #g.topological_sort(g.get_nodes())
         ops = [n for n in g.get_nodes()]
         for node in ops:
             if node.need_skip():
+                log.info("explictly skip node ", node.name)
                 log.debug("explictly skip node " + node.name)
                 continue
+            log.info("convert node ", node.name)
             has_update = True
             op = node.type
             map_info = ops_mapping.get(op)
@@ -2261,7 +2267,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
                     raise ValueError("tensorflow op " + op + " is not supported")
             mapped_op[op] += 1
             func, args = map_info
-            onnx_node = None
+
             if args:
                 node.type = args[0]
                 args = args[1:]
