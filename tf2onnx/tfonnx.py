@@ -2245,7 +2245,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     has_update = True
     while has_update:
         has_update = False
-        ops = g.get_nodes()
+        ops = [n for n in g.get_nodes()]
         for node in ops:
             if node.need_skip():
                 log.debug("explictly skip node " + node.name)
