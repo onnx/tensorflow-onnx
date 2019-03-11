@@ -2242,53 +2242,49 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
         custom_opset = {k: v for k, v in custom_op_handlers.items()}
         ops_mapping.update(custom_opset)
 
-    has_update = True
-    while has_update:
-        has_update = False
-        ops = g.get_nodes()
-        for node in ops:
-            if node.need_skip():
-                log.debug("explictly skip node " + node.name)
-                continue
-            has_update = True
-            op = node.type
-            map_info = ops_mapping.get(op)
-            if map_info is None:
-                if continue_on_error:
-                    unmapped_op[op] += 1
-                    continue
-                else:
-                    raise ValueError("tensorflow op " + op + " is not supported")
-            mapped_op[op] += 1
-            func, args = map_info
-            onnx_node = None
-            if args:
-                node.type = args[0]
-                args = args[1:]
-            try:
-                body_graphs = node.get_body_graphs()
-                if body_graphs:
-                    for attr, b_g in body_graphs.items():
-                        log.debug("start handling subgraph of %s's attribute %s", node.name, attr)
-                        b_g.topological_sort(b_g.get_nodes())
-                        # we assume only ONNX nodes have subgraph defined in pre-rewriters.
-                        # that means, if we create node having subgraphs in this step, the
-                        # created subgraphs' nodes won't be mapped.
-                        m_ops, unm_ops = tensorflow_onnx_mapping(b_g, continue_on_error, custom_op_handlers)
-                        mapped_op += m_ops
-                        unmapped_op += unm_ops
-                        log.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
+    ops = [n for n in g.get_nodes()]
+    for node in ops:
+        if node.need_skip():
+            log.debug("explictly skip node " + node.name)
+            continue
 
-                func(g, node, node.name, args)
-                node.skip_conversion = True
-            except Exception as ex:
-                type_, value_, traceback_ = sys.exc_info()
-                log.error("node %s: exception %s" % (node.name, ex))
-                ex_ext = traceback.format_exception(type_, value_, traceback_)
-                if continue_on_error:
-                    log.info(ex_ext)
-                else:
-                    raise ex
+        op = node.type
+        map_info = ops_mapping.get(op)
+        if map_info is None:
+            if continue_on_error:
+                unmapped_op[op] += 1
+                continue
+            else:
+                raise ValueError("tensorflow op " + op + " is not supported")
+        mapped_op[op] += 1
+        func, args = map_info
+        if args:
+            node.type = args[0]
+            args = args[1:]
+        try:
+            body_graphs = node.get_body_graphs()
+            if body_graphs:
+                for attr, b_g in body_graphs.items():
+                    log.debug("start handling subgraph of %s's attribute %s", node.name, attr)
+                    b_g.topological_sort(b_g.get_nodes())
+                    # we assume only ONNX nodes have subgraph defined in pre-rewriters.
+                    # that means, if we create node having subgraphs in this step, the
+                    # created subgraphs' nodes won't be mapped.
+                    m_ops, unm_ops = tensorflow_onnx_mapping(b_g, continue_on_error, custom_op_handlers)
+                    mapped_op += m_ops
+                    unmapped_op += unm_ops
+                    log.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
+
+            func(g, node, node.name, args)
+            node.skip_conversion = True
+        except Exception as ex:
+            type_, value_, traceback_ = sys.exc_info()
+            log.error("node %s: exception %s" % (node.name, ex))
+            ex_ext = traceback.format_exception(type_, value_, traceback_)
+            if continue_on_error:
+                log.info(ex_ext)
+            else:
+                raise ex
 
     return mapped_op, unmapped_op
 
