@@ -2249,7 +2249,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
         a += 1
         has_update = False
         #g.topological_sort(g.get_nodes())
-        ops = [n for n in g.get_nodes()]
+        #ops = [n for n in g.get_nodes()]
         for node in ops:
             if node.need_skip():
                 log.info("explictly skip node " + node.name)
