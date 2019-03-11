@@ -187,7 +187,6 @@ class LoopRewriterBase(object):
         return REWRITER_RESULT.FAIL
 
     def run_internal(self):
-        log.debug("enter loop rewriter")
         for op in self.g.get_nodes():
             if not is_loopcond_op(op):
                 continue
@@ -265,11 +264,9 @@ class LoopRewriterBase(object):
         output_ids = [out_tensor_value_info.id for out_tensor_value_info in outputs]
         ops, enter_nodes, _ = self.find_subgraph(set(input_ids), set(output_ids), self.g, merge_as_end=False)
 
-        other_enter_input_ids = []
         for enter_node in enter_nodes:
             # connect Enter's output to Enter's input
             self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0])
-            other_enter_input_ids.append(enter_node.input[0])
 
         return GraphInfo(ops, inputs, outputs)
 
@@ -279,11 +276,9 @@ class LoopRewriterBase(object):
         outputs = [TensorValueInfo(o, self.g) for o in output_ids]
         ops, enter_nodes, merge_nodes = self.find_subgraph(set(input_ids), set(output_ids), self.g, merge_as_end=True)
 
-        other_enter_input_ids = []
         for enter_node in enter_nodes:
             # connect Enter's output to Enter's input
             self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0])
-            other_enter_input_ids.append(enter_node.input[0])
 
         dependent_vars = []
         for merge_node in merge_nodes:
