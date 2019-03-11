@@ -2245,14 +2245,14 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     has_update = True
     a = 0
     while has_update:
-        log.info("mapping iteration %s", a)
+        log.info("mapping iteration " + str(a))
         a += 1
         has_update = False
         #g.topological_sort(g.get_nodes())
         ops = [n for n in g.get_nodes()]
         for node in ops:
             if node.need_skip():
-                log.info("explictly skip node ", node.name)
+                log.info("explictly skip node " + node.name)
                 log.debug("explictly skip node " + node.name)
                 continue
             log.info("convert node ", node.name)
