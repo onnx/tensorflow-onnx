@@ -190,8 +190,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.log.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skipIf(get_test_config().is_onnxruntime_backend and get_test_config().backend_version == "0.2.1"
-                     and (not get_test_config().is_mac), "onnxruntime bug")
+    @unittest.skipIf(get_test_config().is_onnxruntime_backend and get_test_config().backend_version == "0.2.1",
+                     "onnxruntime bug")
     @check_onnxruntime_incompatibility("AveragePool")
     def test_avgpool(self):
         for tf_shape in ["known", "unknown"]:
@@ -207,7 +207,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 _ = tf.identity(mp, name=_TFOUTPUT)
 
                 self.log.debug(str(p))
-                self._run_test_case([_OUTPUT], {_INPUT: x_val})
+                self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-06)
 
     def _conv_test(self, x_val, w, strides=None, padding="VALID", dilations=None, rtol=1e-07):
         if strides is None:
