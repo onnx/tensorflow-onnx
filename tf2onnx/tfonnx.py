@@ -430,11 +430,15 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     if node.is_nhwc():
         for idx in output_indices:
             output_name = node.output[idx]
+            output_shape = ctx.get_shape(node.output[idx])
             op_name = utils.make_name(node.name)
             transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
             transpose.set_attr("perm", NCHW_TO_NHWC)
             transpose.skip_conversion = True
-            ctx.set_shape(transpose.output[0], ctx.get_shape(node.output[idx]))
+            # set TF NHWC shape to transpose node output
+            ctx.set_shape(transpose.output[0], output_shape)
+            # Transpose TF NHWC shape back to NCHW shape for current ONNX conv node output
+            ctx.set_shape(output_name, spatial_map(output_shape, NHWC_TO_NCHW))
             node.data_format = "NCHW"
 
 
