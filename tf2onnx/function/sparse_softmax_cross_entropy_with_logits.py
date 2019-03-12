@@ -59,6 +59,7 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
         raise ValueError("onehot op: only rank1 is supported")
     logit_name = node.input[0]
     logit_dtype = ctx.get_dtype(logit_name)
+    logit_shape = ctx.get_shape(logit_name)
     utils.make_sure(logit_dtype, "Dtype of {} is None".format(logit_name))
     indices_dtype = ctx.get_dtype(indices_name)
     if indices_dtype != TensorProto.INT64:
@@ -76,11 +77,12 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, name, arg
     indices_with_id = ctx.make_node("Concat",
                                     [id_unsqueeze.output[0], indices_unsqueeze.output[0]],
                                     attr={"axis": 1})
-    log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=[logit_name], dtypes=[logit_dtype])
+    log_softmax = ctx.make_node(op_type="LogSoftmax",
+                                inputs=[logit_name], dtypes=[logit_dtype], shapes=[logit_shape])
     gathernd_name = utils.make_name("sparse_softmax_gathernd")
     gathernd_output = utils.port_name(gathernd_name)
     make_gathernd(ctx, log_softmax.output[0], indices_with_id.output[0], gathernd_output,
-                  gathernd_name, logit_dtype)
+                  gathernd_name, logit_dtype, [logit_shape], [logit_dtype])
     const_name = utils.make_name("const_negative_one")
     const_negative_one = ctx.make_const(const_name, np.array(-1).astype(utils.map_onnx_to_numpy_type(logit_dtype)))
     mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], gathernd_output])

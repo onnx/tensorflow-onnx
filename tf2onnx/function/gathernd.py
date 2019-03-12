@@ -49,7 +49,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
     return inner_loop
 
 
-def make_gathernd(ctx, params, indices, output, scope_name, t_params):
+def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dtypes):
     """make GatherNd op."""
     # Tparams output = GatherNd(Tparams params, Tidx indices)
     scope_name = utils.make_name(scope_name)
@@ -131,7 +131,11 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params):
                                  [output_shape_.output[0]],
                                  attr={"axes": [0], "ends": [-1], "starts": [0]},
                                  dtypes=[TensorProto.INT64])
-    ctx.make_node("Reshape", [gathernd_loop.output[1], output_shape.output[0]], outputs=[output])
+    ctx.make_node("Reshape",
+                  [gathernd_loop.output[1], output_shape.output[0]],
+                  outputs=[output],
+                  shapes=shapes,
+                  dtypes=dtypes)
 
 
 def gathernd_op(ctx, node, name, args):
@@ -143,4 +147,7 @@ def gathernd_op(ctx, node, name, args):
     # same as the attr Tparams
     t_params = ctx.get_dtype(params)
     utils.make_sure(t_params, "Dtype of {} is None".format(indices))
-    make_gathernd(ctx, params, indices, output, name, t_params)
+    shapes = node.output_shapes
+    dtypes = node.output_dtypes
+    ctx.remove_node(node.name)
+    make_gathernd(ctx, params, indices, output, name, t_params, shapes, dtypes)
