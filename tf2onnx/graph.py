@@ -340,7 +340,7 @@ class Graph(object):
         # add identity node after each output, in case it is renamed during conversion.
         for o in self.outputs:
             n = self.get_node_by_output_in_current_graph(o)
-            new_output_name = port_name(utils.make_name("raw_output_"))
+            new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
             n_shapes = n.output_shapes
             n_dtypes = n.output_dtypes
             body_graphs = n.graph.contained_graphs.pop(n.name, None)
@@ -356,7 +356,7 @@ class Graph(object):
                     new_node.set_body_graph_as_attr(attr_name, body_graph)
 
             self.replace_all_inputs(self.get_nodes(), o, new_output_name)
-            self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope="graph_outputs")
+            self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
             self.copy_shape(new_output_name, o)
             self.copy_dtype(new_output_name, o)
 
@@ -1112,8 +1112,8 @@ class GraphUtil(object):
             output_names.append(n.name)
 
         g = Graph(nodes_to_append, output_shapes, output_dtypes, None, None, None, output_names)
-        GraphUtil._parse_graph_initializer(g, graph_proto)
-        GraphUtil._parse_graph_input(g, graph_proto)
+        const_nodes = GraphUtil._parse_graph_initializer(g, graph_proto)
+        GraphUtil._parse_graph_input(g, graph_proto, [n.name for n in const_nodes])
 
         for n in g.get_nodes():
             for attr_name, attr_val in n.attr.items():
@@ -1164,10 +1164,11 @@ class GraphUtil(object):
         return const_nodes
 
     @staticmethod
-    def _parse_graph_input(g, graph_proto):
+    def _parse_graph_input(g, graph_proto, const_node_names):
         """Get graph inputs not defined as initializers and put into Graph object."""
         shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.input)
         for name in shapes:
             shape = shapes[name]
             dtype = dtypes[name]
-            g.add_graph_input(name, dtype, shape)
+            if name not in const_node_names:
+                g.add_graph_input(name, dtype, shape)

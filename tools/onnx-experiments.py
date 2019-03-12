@@ -81,7 +81,7 @@ def rewrite_constant_fold(g, ops):
                     log.info("folding node type=%s, name=%s", op.type, op.name)
                     if op.type == "Cast":
                         dst = op.get_attr_int("to")
-                        np_type = dst
+                        np_type = tf2onnx.utils.map_onnx_to_numpy_type(dst)
                         val = np.cast[np_type](*inputs)
                     elif op.type == "Transpose":
                         perm = op.get_attr("perm").ints
@@ -113,8 +113,9 @@ def rewrite_constant_fold(g, ops):
                     if consumers:
                         for consumer in consumers:
                             g.replace_input(consumer, old_output_name, new_output_name)
-                    for node in op.inputs:
-                        g.remove_node(node.name)
+                    for i, node in zip(op.input, op.inputs):
+                        if len(g.find_output_consumers(i)) == 1:
+                            g.remove_node(node.name)
                     keep_looking = True
                 except Exception as ex:  # pylint: disable=broad-except
                     tb = traceback.format_exc()
