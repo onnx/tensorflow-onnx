@@ -650,9 +650,9 @@ def sign_op4(ctx, node, name, args):
     if node_dtype in [onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
         raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
     zero_name = utils.make_name("{}_zero".format(node.name))
-    ctx.make_const(zero_name, np.array(0, dtype=utils.ONNX_TO_NUMPY_DTYPE[1]))
+    ctx.make_const(zero_name, np.array(0, dtype=np.float32))
     if node_dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
-        cast_node_0 = ctx.make_node("Cast", [node.input[0]], {"to": 1})
+        cast_node_0 = ctx.make_node("Cast", [node.input[0]], {"to": onnx_pb.TensorProto.FLOAT})
         greater_node = ctx.make_node("Greater", [cast_node_0.output[0], zero_name])
         less_node = ctx.make_node("Less", [cast_node_0.output[0], zero_name])
     else:
