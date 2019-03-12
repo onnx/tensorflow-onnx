@@ -175,7 +175,22 @@ def infer_shape_for_node(g, node):
 
         g.set_shape(node.output[0], new_shape)
         log.debug("set %s node [%s] with new shape %s", node.type, node.output[0], new_shape)
+        return True
 
+    if node.type == "ExpandDims":
+        # https://www.tensorflow.org/api_docs/python/tf/expand_dims
+        input_shape = g.get_shape(node.input[0])
+        dim_node = node.inputs[1]
+        if input_shape is None or not dim_node.is_const():
+            return False
+
+        dim = dim_node.get_tensor_value()
+        if dim < 0:
+            dim = dim + len(input_shape) + 1
+
+        new_shape = input_shape[:dim] + [1] + input_shape[dim:]
+        g.set_shape(node.output[0], new_shape)
+        log.debug("set [%s] with new shape %s", node.output[0], new_shape)
         return True
 
     return False
