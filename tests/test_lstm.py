@@ -147,36 +147,38 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_single_dynamic_lstm_seq_length_is_not_const(self):
-        units = 5
-        batch_size = 6
-        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
-        x_val = np.stack([x_val] * batch_size)
-        state_is_tuple = True
-        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        initializer = init_ops.constant_initializer(0.5)
+        for np_dtype, tf_dtype in [[np.int32, tf.int32], [np.int64, tf.int64], [np.float32, tf.float32]]:
+            tf.reset_default_graph()
+            units = 5
+            batch_size = 6
+            x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
+            x_val = np.stack([x_val] * batch_size)
+            state_is_tuple = True
+            x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+            initializer = init_ops.constant_initializer(0.5)
 
-        y_val = np.array([4, 3, 4, 5, 2, 1], dtype=np.int32)
-        seq_length = tf.placeholder(tf.int32, y_val.shape, name="input_2")
+            y_val = np.array([4, 3, 4, 5, 2, 1], dtype=np_dtype)
+            seq_length = tf.placeholder(tf_dtype, y_val.shape, name="input_2")
 
-        # no scope
-        cell = rnn.LSTMCell(
-            units,
-            initializer=initializer,
-            state_is_tuple=state_is_tuple)
-        outputs, cell_state = tf.nn.dynamic_rnn(
-            cell,
-            x,
-            dtype=tf.float32,
-            sequence_length=tf.identity(seq_length))
+            # no scope
+            cell = rnn.LSTMCell(
+                units,
+                initializer=initializer,
+                state_is_tuple=state_is_tuple)
+            outputs, cell_state = tf.nn.dynamic_rnn(
+                cell,
+                x,
+                dtype=tf.float32,
+                sequence_length=tf.identity(seq_length))
 
-        _ = tf.identity(outputs, name="output")
-        _ = tf.identity(cell_state, name="cell_state")
+            _ = tf.identity(outputs, name="output")
+            _ = tf.identity(cell_state, name="cell_state")
 
-        feed_dict = {"input_1:0": x_val, "input_2:0": y_val}
-        input_names_with_port = ["input_1:0", "input_2:0"]
-        output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
-                           graph_validator=lambda g: check_lstm_count(g, 1))
+            feed_dict = {"input_1:0": x_val, "input_2:0": y_val}
+            input_names_with_port = ["input_1:0", "input_2:0"]
+            output_names_with_port = ["output:0", "cell_state:0"]
+            self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                               graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_single_dynamic_lstm_placeholder_input(self):
         units = 5
