@@ -1662,6 +1662,7 @@ _OPSET_4 = {
     "Log": (direct_op, []),
     "LogSoftmax": (direct_op, ["LogSoftmax"]),
     "LRN": (lrn_op, []),
+    "LSTMBlockCell": (lstm_block_cell_op, []),
     "LogicalAnd": (broadcast_op, ["And"]),
     "LogicalNot": (direct_op, ["Not"]),
     "LogicalOr": (broadcast_op, ["Or"]),
