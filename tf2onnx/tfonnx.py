@@ -907,9 +907,10 @@ def expanddims_op7(ctx, node, name, args):
     dim_node = node.inputs[1]
     if dim_node.is_const():
         node.type = "Unsqueeze"
-        input_rank = len(ctx.get_shape(node.input[0]))
         dim = dim_node.get_tensor_value()
-        dim = dim + input_rank + 1 if dim < 0 else dim
+        if dim < 0:
+            input_rank = len(ctx.get_shape(node.input[0]))
+            dim = dim + input_rank + 1
         node.set_attr("axes", [dim])
         ctx.remove_input(node, node.input[1])
         return
