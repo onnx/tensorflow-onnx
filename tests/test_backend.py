@@ -92,7 +92,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, output_names_with_port, feed_dict, **kwargs):
         kwargs["convert_var_to_const"] = False
         kwargs["constant_fold"] = False
-        self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
+        return self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
 
     def _test_expand_dims(self, idx):
         tf.reset_default_graph()
@@ -1276,7 +1276,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_new_size_ = tf.constant(x_new_size)
         x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        if self.config.opset >= 9:
+            scale_node = group_nodes_by_type(graph)["Upsample"][0].inputs[1]
+            self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 2.0, 2.0]))
 
     @check_opset_min_version(9, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor_with_non_const(self):
@@ -1301,7 +1304,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_new_size_ = tf.constant(x_new_size)
         x_ = tf.image.resize_bilinear(x, x_new_size_)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        if self.config.opset >= 9:
+            scale_node = group_nodes_by_type(graph)["Upsample"][0].inputs[1]
+            self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 2.0, 2.0]))
 
     @check_opset_min_version(9, "resize_bilinear")
     def test_resize_bilinear_with_non_const(self):

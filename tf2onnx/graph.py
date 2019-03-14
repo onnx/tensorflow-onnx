@@ -373,14 +373,19 @@ class Graph(object):
         """Return True if target platform contains any name."""
         return any(name in self._target for name in names)
 
-    def make_const(self, name, np_val, skip_conversion=False):
+    def make_const(self, name, np_val, skip_conversion=False, raw=True):
         """Make a new constant in the graph.
         Args:
             name: const node name, must be unique.
             np_val: value of type numpy ndarray.
             skip_conversion: bool, indicate whether this created node would be mapped during conversion.
+            raw: whether to store data at field of raw_data or the specific field according to its dtype
         """
-        onnx_tensor = numpy_helper.from_array(np_val, name)
+        if raw:
+            onnx_tensor = numpy_helper.from_array(np_val, name)
+        else:
+            onnx_tensor = helper.make_tensor(name, utils.map_numpy_to_onnx_dtype(np_val.dtype),
+                                             np_val.shape, np_val, raw=False)
         node = self.make_node("Const", [], outputs=[name], name=name, attr={"value": onnx_tensor},
                               skip_conversion=skip_conversion)
         self.set_shape(name, np_val.shape)
@@ -732,8 +737,12 @@ class Graph(object):
         # create initializers for constant nodes
         const_ops = [op for op in const_ops if op not in placeholder_default_const_ops]
         for op in const_ops:
-            const_val = op.get_tensor_value(as_list=False)
-            tensor = numpy_helper.from_array(const_val, op.output[0])
+            # not to use numpy_helper.from_array to create a new tensor
+            # because sometimes onnx will have a bug that only check the tensor data in specific field
+            # such as at upsample it only checks the float_data field.
+            t = op.get_attr("value")
+            tensor = helper.get_attribute_value(t)
+            tensor.name = op.output[0]
             initializers.append(tensor)
 
         # create input_tensor_values
