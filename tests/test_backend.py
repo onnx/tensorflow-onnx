@@ -1741,6 +1741,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
             tf.reset_default_graph()
 
+    def test_round(self):
+        # for float, half value (e.g. -0.5, 2.5) is skipped for now due to different round mode
+        x_val1 = np.arange(-5, 5, 0.3, dtype=np.float32)
+        x_val2 = np.arange(-5, 5, 1, dtype=np.int32)
+        for x_val in [x_val1, x_val2]:
+            x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+            x_ = tf.round(x)
+            _ = tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+            tf.reset_default_graph()
+
 
 if __name__ == '__main__':
     unittest_main()
