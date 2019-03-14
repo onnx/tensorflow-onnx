@@ -1638,6 +1638,24 @@ def where_op(ctx, node, name, args):
     return [node, transpose_node]
 
 
+def round_op7(ctx, node, name, args):
+    dtype = ctx.get_dtype(node.input[0])
+    if dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
+        node.type = "Identity"
+        return
+
+    # Workaround: for floating point, TF round mode is half to even, while round half up is used here.
+    # Will switch to onnx Round when it is ready.
+    # The difference now is for numbers like 2.5, 4.5 etc.
+    # In practise, it is supposed to have minor impact.
+    log.warning("node %s has different round mode than tf.math.round", node.name)
+    half_name = utils.make_name("const_half")
+    const_half = ctx.make_const(half_name, np.array(0.5).astype(utils.map_onnx_to_numpy_type(dtype)))
+    add_half = ctx.make_node(op_type="Add", inputs=[node.input[0], const_half.output[0]])
+    ctx.remove_node(name)
+    ctx.make_node(op_type="Floor", name=node.name, inputs=[add_half.output[0]], outputs=[node.output[0]])
+
+
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
 #
@@ -1779,6 +1797,7 @@ _OPSET_7 = {
     "RealDiv": (broadcast_op7, ["Div"]),
     "ResizeBilinear": (upsample_op7, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),
+    "Round": (round_op7, []),
     "Sin": (direct_op, []),
     "Sub": (broadcast_op7, []),
     "Tan": (direct_op, []),
