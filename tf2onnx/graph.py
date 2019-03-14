@@ -46,10 +46,6 @@ class Node(object):
         # dict to original attributes
         for a in node.attribute:
             self._attr[a.name] = a
-
-        self.data_format = self.get_attr("data_format")
-        if self.data_format:
-            self.data_format = self.data_format.s.decode("utf-8")
         self._skip_conversion = skip_conversion
 
     @property
@@ -123,6 +119,16 @@ class Node(object):
         """Set Op type."""
         self._op.domain = val
 
+    @property
+    def data_format(self):
+        """Return data_format."""
+        return self.get_attr_str("data_format")
+
+    @data_format.setter
+    def data_format(self, val):
+        """Set data_format."""
+        self.set_attr("data_format", val)
+
     def is_nhwc(self):
         """Return True if node is in NCHW format."""
         return self.data_format == "NHWC"
@@ -141,16 +147,21 @@ class Node(object):
         return "<onnx op type='%s' name=%s>" % (self.type, self._op.name)
 
     def get_attr(self, name, default=None):
-        """Get attribute map."""
+        """Get raw attribute value."""
         attr = self.attr.get(name, default)
         return attr
 
     def get_attr_int(self, name):
-        """Get attribute map."""
-        attr = self.attr.get(name)
+        """Get attribute value as int."""
+        attr = self.get_attr(name)
         utils.make_sure(attr is not None, "attribute %s is None", name)
         attr = attr.i
         return attr
+
+    def get_attr_str(self, name, encoding="utf-8"):
+        """Get attribute value as string."""
+        attr = self.get_attr(name)
+        return attr.s.decode(encoding) if attr else None
 
     def set_attr(self, name, value):
         self.attr[name] = helper.make_attribute(name, value)
