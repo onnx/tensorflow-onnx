@@ -203,6 +203,21 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         self.assertFalse(utils.are_shapes_equal(None, []))
         self.assertTrue(utils.are_shapes_equal([1, 2, 3], (1, 2, 3)))
 
+    def test_data_format(self):
+        n1 = helper.make_node("Conv", ["X", "W"], ["Y"], name="n1", data_format="NHWC")
+        graph_proto = helper.make_graph(
+            nodes=[n1],
+            name="test",
+            inputs=[helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2]),
+                    helper.make_tensor_value_info("W", TensorProto.FLOAT, [2, 2])],
+            outputs=[helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
+            initializer=[]
+        )
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
+        n = g.get_node_by_name("n1")
+        self.assertEqual(n.data_format, "NHWC")
+        self.assertTrue(n.is_nhwc())
+
 
 if __name__ == '__main__':
     unittest_main()
