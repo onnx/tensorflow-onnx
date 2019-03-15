@@ -90,7 +90,7 @@ class GRUBlockUnitRewriter(GRUUnitRewriter):
     @staticmethod
     def _state_switch_check(enter_target_node_input_id, identity_consumers, match):
         node = match.get_op("GRUBlockCell")
-        if node == identity_consumers[0]:
+        if node in identity_consumers:
             log.debug("find state initializer value at %s", enter_target_node_input_id)
             return enter_target_node_input_id
         return None
