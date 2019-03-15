@@ -250,11 +250,18 @@ def arg_minmax_op(ctx, node, name, args):
 
 def reduce_op(ctx, node, name, args):
     axes_node = node.inputs[1]
-    input_rank = len(ctx.get_shape(node.input[0]))
     axes = axes_node.get_tensor_value()
     if np.isscalar(axes):
         axes = [axes]
-    axes = [val + input_rank if val < 0 else val for val in axes]
+    input_shape = ctx.get_shape(node.input[0])
+    if input_shape is None:
+        for val in axes:
+            if val < 0:
+                raise ValueError("reduce_op: can have negative axis because we don't know input rank")
+    else:
+        input_rank = len(ctx.get_shape(node.input[0]))
+        axes = [val + input_rank if val < 0 else val for val in axes]
+
     node.set_attr("axes", axes)
     ctx.remove_input(node, node.input[1])
     keep_dims = node.get_attr("keep_dims")
