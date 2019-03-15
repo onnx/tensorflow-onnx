@@ -1561,14 +1561,14 @@ def shape_op(ctx, node, name, args):
 def erf_op(ctx, node, name, args):
     """Error function."""
     # constant names
-    a1 = "erf_a1"
-    a2 = "erf_a2"
-    a3 = "erf_a3"
-    a4 = "erf_a4"
-    a5 = "erf_a5"
-    p = "erf_p"
-    one = "erf_one"
-    null = "erf_null"
+    a1 = utils.make_name("erf_a1")
+    a2 = utils.make_name("erf_a2")
+    a3 = utils.make_name("erf_a3")
+    a4 = utils.make_name("erf_a4")
+    a5 = utils.make_name("erf_a5")
+    p = utils.make_name("erf_p")
+    one = utils.make_name("erf_one")
+    null = utils.make_name("erf_null")
 
     n = node.name
     output_name = node.output[0]
