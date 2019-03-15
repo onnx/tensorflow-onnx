@@ -6,7 +6,7 @@ jobs:
     tf_versions: ['1.12']
     onnx_opsets: ['8', '7']
     onnx_backends:
-      onnxruntime: ['0.2.1']
+      onnxruntime: ['0.3.0']
     job:
       steps:
       - template: 'unit_test.yml'
