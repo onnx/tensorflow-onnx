@@ -114,7 +114,7 @@ class LoopRewriter(LoopRewriterBase):
                 self.g.remove_node(n.name)
             else:
                 loop_outputs.append(utils.make_name("unused_loop_output_"))
-                loop_output_shapes.append(-1)
+                loop_output_shapes.append([-1])
                 loop_output_dtypes.append(None)
 
         # trip count and cond are not used, giving them values just because bug
