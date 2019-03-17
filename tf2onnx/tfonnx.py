@@ -255,9 +255,8 @@ def reduce_op(ctx, node, name, args):
         axes = [axes]
     input_shape = ctx.get_shape(node.input[0])
     if input_shape is None:
-        for val in axes:
-            if val < 0:
-                raise ValueError("reduce_op: can have negative axis because we don't know input rank")
+        if any([val < 0 for val in axes]):
+            raise ValueError("reduce_op: cannot have negative axis because we don't know input rank")
     else:
         input_rank = len(ctx.get_shape(node.input[0]))
         axes = [val + input_rank if val < 0 else val for val in axes]
