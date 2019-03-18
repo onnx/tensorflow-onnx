@@ -13,7 +13,7 @@ import tensorflow as tf
 from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import check_tf_min_version, check_opset_min_version, unittest_main
+from common import check_tf_min_version, check_opset_min_version, unittest_main, skip_specific_opset_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -284,6 +284,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "Scan")
     @check_tf_min_version("1.8")
+    @skip_specific_opset_version(9, "ReverseSequence cannot be efficient mapped in OPSET 9")
     def test_bidrectional_attention_wrapper_lstm_encoder(self):
         size = 30
         time_step = 3
