@@ -116,7 +116,6 @@ def process_bigru(g, bi_grus):
             raise ValueError(
                 "Reverse is still used by GRU as input, cannot remove")
 
-    g.update_proto()
     return g.get_nodes()
 
 

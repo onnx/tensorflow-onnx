@@ -45,8 +45,6 @@ class TransposeOptimizer(object):
         self._handler_map = {}
         self._force_stop = {}
 
-        # make sure all proto of nodes or attribtues are update to date
-        self._g.update_proto()
         self._initialize_handlers()
         self.pre_optimize_action()
 
@@ -74,9 +72,6 @@ class TransposeOptimizer(object):
                         if name == output_name:
                             child.input[i] = const_name
             self._g.make_const(const_name, new_data)
-
-            # need call this to make input update synced to protobuf val
-            self._g.update_proto()
             self._g.remove_node(reshape_op.name)
             self._g.topological_sort(self._g.get_nodes())
 
@@ -111,7 +106,6 @@ class TransposeOptimizer(object):
                                           name=op_name)
                     else:
                         self._remove_useless_tranpose(op)
-        self._g.update_proto()
         self._g.topological_sort(self._g.get_nodes())
 
     def merge_duplicated_transposes(self):

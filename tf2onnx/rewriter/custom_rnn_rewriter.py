@@ -190,7 +190,7 @@ class CustomRnnRewriter(LoopRewriterBase):
             if out_tensor_value_info.id:
                 if self.g.opset == 8:
                     nodes = self._adapt_scan_sequence_input_or_output("state_output_reshape",
-                                                                        scan_node.output[index], True)
+                                                                      scan_node.output[index], True)
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
                 else:
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, scan_node.output[index])
@@ -200,7 +200,7 @@ class CustomRnnRewriter(LoopRewriterBase):
             if out_tensor_value_info.id:
                 if self.g.opset == 8:
                     nodes = self._adapt_scan_sequence_input_or_output("scan_output_reshape",
-                                                                        scan_node.output[index], True)
+                                                                      scan_node.output[index], True)
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
                 else:
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, scan_node.output[index])

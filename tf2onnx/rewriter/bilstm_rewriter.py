@@ -101,8 +101,6 @@ def process_bilstm(g, bi_lstms):
         else:
             raise ValueError("Reverse is still used by LSTM as input, cannot remove")
 
-
-    g.update_proto()
     return g.get_nodes()
 
 
