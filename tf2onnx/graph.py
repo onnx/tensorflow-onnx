@@ -17,10 +17,10 @@ import traceback
 import six
 import numpy as np
 
-from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetIdProto, AttributeProto
+from onnx import helper, numpy_helper, shape_inference, OperatorSetIdProto, AttributeProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
-from tf2onnx.optimizer import IdentityOptimizer, TransposeOptimizer
+from tf2onnx import optimizer
 from tf2onnx.schemas import get_schema
 
 logging.basicConfig(level=logging.INFO)
@@ -1042,30 +1042,11 @@ class GraphUtil(object):
     """Utilities for Graph manipulation."""
 
     @staticmethod
-    def optimize_graph(graph, doc_string, optimize=None, debug=False):
-        """Optimize the graph, for example: eliminating all useless Transpose/Identity pairs.
-
-        Returns:
-            model proto after optimization, if optimizer run successfully
-            or None, if exceptions happen
-        """
-        try:
-            opts = [TransposeOptimizer(graph, output_names=graph.outputs, debug=debug),
-                    IdentityOptimizer(graph, output_names=graph.outputs, debug=debug)
-                    ]
-            for opt in opts:
-                opt.optimize()
-            model_proto = graph.make_model(doc_string, optimize=optimize)
-            return model_proto
-        except Exception:
-            # degradation to non-optimized model proto
-            type_, value_, traceback_ = sys.exc_info()
-            ex_ext = traceback.format_exception(type_, value_, traceback_)
-            print("NON-CRITICAL error in optimizer: ", ex_ext)
-            return None
+    def optimize_graph(graph, debug=False):
+        return optimizer.optimize_graph(graph, debug)
 
     @staticmethod
-    def optimize_graph_with_model_proto(onnx_model_proto, debug=False):
+    def optimize_model_proto(onnx_model_proto, debug=False):
         """Optimize the model proto, for example: eliminating all useless Transpose pairs.
 
         Returns:
@@ -1074,16 +1055,10 @@ class GraphUtil(object):
         """
         try:
             kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
-            g = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
-
-            opts = [TransposeOptimizer(g, output_names=g.outputs, debug=debug),
-                    IdentityOptimizer(g, output_names=g.outputs, debug=debug)
-                    ]
-            for opt in opts:
-                opt.optimize()
-
-            model_proto = g.make_model(onnx_model_proto.graph.doc_string,
-                                       graph_name=onnx_model_proto.graph.name, **kwargs)
+            graph = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
+            graph = GraphUtil.optimize_graph(graph, debug)
+            model_proto = graph.make_model(onnx_model_proto.graph.doc_string,
+                                           graph_name=onnx_model_proto.graph.name, **kwargs)
 
             if onnx_model_proto.metadata_props:
                 metadata_props = {p.key: p.value for p in onnx_model_proto.metadata_props}
@@ -1123,11 +1098,12 @@ class GraphUtil(object):
         # apply shape inference on the model
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
         graph_proto = inferred_model.graph
-        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto)
+        opset_version = onnx_model_proto.opset_import[0].version
+        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version)
         return main_graph
 
     @staticmethod
-    def create_graph_from_onnx_graph(graph_proto):
+    def create_graph_from_onnx_graph(graph_proto, opset_version=None):
         """Create Graph loading onnx graph proto."""
         output_shapes = {}
         output_dtypes = {}
@@ -1154,7 +1130,7 @@ class GraphUtil(object):
         for n in graph_proto.output:
             output_names.append(n.name)
 
-        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, None, None, output_names)
+        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, None, output_names)
         const_nodes = GraphUtil._parse_graph_initializer(g, graph_proto)
         GraphUtil._parse_graph_input(g, graph_proto, [n.name for n in const_nodes])
 

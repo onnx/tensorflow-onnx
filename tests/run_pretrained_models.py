@@ -270,7 +270,7 @@ class Test(object):
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override,
                                           input_names=inputs.keys())
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
-                new_model_proto = GraphUtil.optimize_graph(onnx_graph, "test", debug=debug)
+                new_model_proto = GraphUtil.optimize_graph(onnx_graph, debug=debug).make_model("optimized")
                 if new_model_proto:
                     model_proto = new_model_proto
                 else:

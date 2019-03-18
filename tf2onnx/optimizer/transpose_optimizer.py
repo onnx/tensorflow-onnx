@@ -38,15 +38,14 @@ def is_useless_transpose(transpose_node):
 class TransposeOptimizer(object):
     """Transpose Optimizer."""
 
-    def __init__(self, graph, output_names, debug=False):
-        self._g = graph
-        self._output_names = [name.split(":")[0] for name in output_names]
+    def __init__(self, debug=False):
         self._debug = debug
         self._handler_map = {}
         self._force_stop = {}
 
         self._initialize_handlers()
-        self.pre_optimize_action()
+        self._g = None
+        self._output_names = None
 
     @property
     def nodes(self):
@@ -54,6 +53,7 @@ class TransposeOptimizer(object):
 
     def pre_optimize_action(self):
         # make Reshape into a const, which then can be fused into Conv's weight for mobilenet_v1_75_192
+        self._output_names = [name.split(":")[0] for name in self._g.outputs]
         ops = self.nodes
         constable_reshape_ops = [n for n in ops
                                  if (n.type == "Reshape"
@@ -129,7 +129,9 @@ class TransposeOptimizer(object):
         # dangling transpose nodes can be deleted
         graph.delete_unused_nodes(graph.outputs)
 
-    def optimize(self):
+    def optimize(self, graph):
+        self._g = graph
+        self.pre_optimize_action()
         previous_counter = self._g.dump_node_statistics()
         no_action = False
         iteration_cnt = 0
@@ -166,6 +168,7 @@ class TransposeOptimizer(object):
         log.info(" %d transpose op(s) left, ops diff after transpose optimization: %s", transpose_cnt, current_counter)
         if transpose_cnt > 2:
             log.warning("please try add --fold_const to help remove more transpose")
+        return self._g
 
     def _initialize_handlers(self):
         self._handler_map = {
