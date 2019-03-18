@@ -938,6 +938,9 @@ class Graph(object):
             return
 
         for node in ops:
+            if old_input in node.input and new_input in node.output:
+                raise RuntimeError("creating a circle in the graph is not allowed: " + node.name)
+
             for i, input_name in enumerate(node.input):
                 if input_name == old_input:
                     node.input[i] = new_input
