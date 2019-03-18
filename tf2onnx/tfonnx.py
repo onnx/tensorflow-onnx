@@ -926,7 +926,7 @@ def expanddims_op7(ctx, node, name, args):
 
 def stridedslice_op(ctx, node, name, args):
     # for now we implement common cases. Things like strides!=1 are not mappable to onnx.
-    not_supported_attr = ["ellipsis_mask", "new_axis_mask"]
+    not_supported_attr = ["new_axis_mask"]
     for attr_name in not_supported_attr:
         attr = node.get_attr(attr_name)
         if attr is not None and attr.i != 0:
@@ -938,6 +938,8 @@ def stridedslice_op(ctx, node, name, args):
     max_size = np.iinfo(begin.dtype).max
     end_mask = node.get_attr("end_mask")
     end_mask = end_mask.i if end_mask is not None else 0
+    ellipsis_mask = node.get_attr("ellipsis_mask")
+    ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
     begin_mask = node.get_attr("begin_mask")
     begin_mask = begin_mask.i if begin_mask is not None else 0
     shrink_axis_mask = node.get_attr("shrink_axis_mask")
@@ -952,6 +954,11 @@ def stridedslice_op(ctx, node, name, args):
         if strides[idx] != 1:
             raise ValueError("StridedSlice: only strides=1 is supported")
         axes.append(idx)
+
+        if (ellipsis_mask >> idx) & 1:
+            new_begin.append(0)
+            new_end.append(max_size)
+            continue
 
         # an implicit condition is stride == 1 (checked in above)
         if begin_item < 0 and end_item == 0:
