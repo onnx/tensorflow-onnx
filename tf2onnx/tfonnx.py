@@ -938,6 +938,8 @@ def stridedslice_op(ctx, node, name, args):
     max_size = np.iinfo(begin.dtype).max
     end_mask = node.get_attr("end_mask")
     end_mask = end_mask.i if end_mask is not None else 0
+    ellipsis_mask = node.get_attr("ellipsis_mask")
+    ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
     begin_mask = node.get_attr("begin_mask")
     begin_mask = begin_mask.i if begin_mask is not None else 0
     shrink_axis_mask = node.get_attr("shrink_axis_mask")
