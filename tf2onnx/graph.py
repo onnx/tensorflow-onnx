@@ -19,6 +19,7 @@ import numpy as np
 from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetIdProto, AttributeProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
+from tf2onnx.optimizer.identity_optimizer import IdentityOptimizer
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 from tf2onnx.schemas import get_schema
 
@@ -842,6 +843,10 @@ class Graph(object):
         op_cnt = collections.Counter()
         for n in self.get_nodes():
             op_cnt[n.type] += 1
+            body_graphs = n.get_body_graphs()
+            if body_graphs:
+                for _, b_g in body_graphs.items():
+                    op_cnt += b_g.dump_node_statistics()
 
         return op_cnt
 
@@ -1025,16 +1030,19 @@ class GraphUtil(object):
     """Utilities for Graph manipulation."""
 
     @staticmethod
-    def opt_transposes_with_graph(graph, doc_string, optimize=None, debug=False):
-        """Optimize the graph, eliminating all useless Transpose pairs.
+    def optimize_graph(graph, doc_string, optimize=None, debug=False):
+        """Optimize the graph, for example: eliminating all useless Transpose/Identity pairs.
 
         Returns:
             model proto after optimization, if optimizer run successfully
             or None, if exceptions happen
         """
         try:
-            opt = TransposeOptimizer(graph, output_names=graph.outputs, debug=debug)
-            opt.optimize()
+            opts = [TransposeOptimizer(graph, output_names=graph.outputs, debug=debug),
+                    IdentityOptimizer(graph, output_names=graph.outputs, debug=debug)
+                   ]
+            for opt in opts:
+                opt.optimize()
             model_proto = graph.make_model(doc_string, optimize=optimize)
             return model_proto
         except Exception:
@@ -1045,8 +1053,8 @@ class GraphUtil(object):
             return None
 
     @staticmethod
-    def opt_transposes_with_model_proto(onnx_model_proto, debug=False):
-        """Optimize the model proto, eliminating all useless Transpose pairs.
+    def optimize_graph_with_model_proto(onnx_model_proto, debug=False):
+        """Optimize the model proto, for example: eliminating all useless Transpose pairs.
 
         Returns:
             model proto after optimization, if optimizer run successfully
@@ -1054,10 +1062,13 @@ class GraphUtil(object):
         """
         try:
             kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
-
             g = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
-            opt = TransposeOptimizer(g, output_names=g.outputs, debug=debug)
-            opt.optimize()
+
+            opts = [TransposeOptimizer(g, output_names=g.outputs, debug=debug),
+                    IdentityOptimizer(g, output_names=g.outputs, debug=debug)
+                   ]
+            for opt in opts:
+                opt.optimize()
 
             model_proto = g.make_model(onnx_model_proto.graph.doc_string,
                                        graph_name=onnx_model_proto.graph.name, **kwargs)

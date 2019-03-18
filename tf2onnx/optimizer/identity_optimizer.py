@@ -1,0 +1,98 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license.
+
+"""Identity Optimizer.
+   Remove useless Identity node in graphs including subgraphs, but does not hurt model output names.
+"""
+
+from __future__ import unicode_literals
+import logging
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("tf2onnx.optimizer.identity_optimizer")
+
+
+# pylint: disable=logging-not-lazy,unused-argument,missing-docstring
+# FIXME:
+# pylint: disable=unused-variable
+
+
+class IdentityOptimizer(object):
+    """Identity Optimizer."""
+
+    def __init__(self, main_graph, output_names, debug=False):
+        self._g = main_graph
+        self._output_names = [name.split(":")[0] for name in output_names]
+        self._debug = debug
+
+    def optimize(self):
+        previous_counter = self._g.dump_node_statistics()
+        self._optimize_recursively(self._g)
+        current_counter = self._g.dump_node_statistics()
+        identity_cnt = current_counter["Identity"]
+        current_counter.subtract(previous_counter)
+        log.info(" %d identity op(s) left, ops diff after identity optimization: %s", identity_cnt, current_counter)
+
+    def _optimize_recursively(self, g):
+        self._optimize(g)
+        nodes = [n for n in g.get_nodes()]
+        for n in nodes:
+            body_graphs = n.get_body_graphs()
+            if body_graphs:
+                for attr, b_g in body_graphs.items():
+                    log.debug("start handling subgraph of %s's attribute %s", n.name, attr)
+                    self._optimize_recursively(b_g)
+                    log.debug("finish handling subgraph of %s's attribute %s", n.name, attr)
+
+    def _optimize(self, g):
+        has_update = True
+        while has_update:
+            has_update = False
+            nodes = [n for n in g.get_nodes() if n.type == "Identity"]
+            for n in nodes:
+                if n.graph is None:
+                    log.info("node has been removed from this graph, skip")
+                    continue
+
+                graph_outputs = set(n.output).intersection(g.outputs)
+                ret = False
+                if graph_outputs:
+                    ret = self._handle_graph_output_identity(g, n, graph_outputs)
+                else:
+                    ret = self._handle_non_graph_output_identity(g, n)
+                has_update = ret
+
+        self._g.topological_sort(self._g.get_nodes())
+
+
+    def _handle_non_graph_output_identity(self, graph, identity):
+        graph.replace_all_inputs(graph.get_nodes(), identity.output[0], identity.input[0])
+        graph.remove_node(identity.name)
+        return True
+
+    def _handle_graph_output_identity(self, graph, identity, graph_outputs):
+        input_id = identity.input[0]
+        input_node = identity.inputs[0]
+        if input_node.is_graph_input():
+            # Identity between input and output should not be removed.
+            log.debug("skip identity between input and output")
+            return False
+
+        output_id = identity.output[0]
+        output_shape = graph.get_shape(output_id)
+        output_dtype = graph.get_dtype(output_id)
+        if input_id in graph.outputs:
+            # input id already be graph output, so we cannot make that be another graph output.
+            # this Identity must be kept.
+            log.debug("identity input already be graph output")
+            return False
+
+        graph.remove_node(identity.name)
+        new_output = [output_id if o == input_id else o for o in input_node.output]
+        input_node.output = new_output
+
+        graph.set_shape(output_id, output_shape)
+        graph.set_dtype(output_id, output_dtype)
+
+        graph.replace_all_inputs(graph.get_nodes(), input_id, output_id)
+        return True
