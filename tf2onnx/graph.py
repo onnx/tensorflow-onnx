@@ -19,8 +19,7 @@ import numpy as np
 from onnx import helper, numpy_helper, optimizer, shape_inference, OperatorSetIdProto, AttributeProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
-from tf2onnx.optimizer.identity_optimizer import IdentityOptimizer
-from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+from tf2onnx.optimizer import IdentityOptimizer, TransposeOptimizer
 from tf2onnx.schemas import get_schema
 
 
