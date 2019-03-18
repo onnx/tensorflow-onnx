@@ -93,7 +93,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=0.,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=False,
-                      check_dtype=True, process_args=None, onnx_feed_dict=None):
+                      check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None):
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -149,6 +149,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 self.assertEqual(expected_val.dtype, actual_val.dtype)
             if check_shape:
                 self.assertEqual(expected_val.shape, actual_val.shape)
+
+        if graph_validator:
+            self.assertTrue(graph_validator(g))
 
         return g
 
