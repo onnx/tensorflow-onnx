@@ -208,7 +208,6 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_identity_compare(["Z1", "Z2"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                   model_proto, remaining_identity_num=1)
 
-
     def test_identity_in_subgraph_non_graph_output(self):
         node1 = helper.make_node("Add", ["X", "X"], ["Y"], name="add")
 

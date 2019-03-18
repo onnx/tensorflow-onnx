@@ -73,6 +73,12 @@ class IdentityOptimizer(object):
     def _handle_graph_output_identity(self, graph, identity, graph_outputs):
         input_id = identity.input[0]
         input_node = identity.inputs[0]
+
+        if input_node.graph != graph:
+            # If input node is in parent graph, we don't handle it now
+            log.debug("input node in parent graph, skip")
+            return False
+
         if input_node.is_graph_input():
             # Identity between input and output should not be removed.
             log.debug("skip identity between input and output")
