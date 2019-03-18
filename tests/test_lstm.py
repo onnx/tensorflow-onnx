@@ -16,7 +16,7 @@ from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main
+from common import unittest_main, check_lstm_count
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -55,7 +55,67 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
 
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
+
+    def test_single_dynamic_lstm_time_major(self):
+        units = 5
+        seq_len = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
+        x_val = np.stack([x_val] * seq_len)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        initializer = init_ops.constant_initializer(0.5)
+
+        # no scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            time_major=True,
+            dtype=tf.float32)
+
+        _ = tf.identity(outputs, name="output")
+        _ = tf.identity(cell_state, name="cell_state")
+
+        input_names_with_port = ["input_1:0"]
+        feed_dict = {"input_1:0": x_val}
+
+        output_names_with_port = ["output:0", "cell_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
+
+    def test_single_dynamic_lstm_forget_bias(self):
+        units = 5
+        seq_len = 6
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
+        x_val = np.stack([x_val] * seq_len)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        initializer = init_ops.constant_initializer(0.5)
+
+        # no scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            forget_bias=0.5)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            time_major=True,
+            dtype=tf.float32)
+
+        _ = tf.identity(outputs, name="output")
+        _ = tf.identity(cell_state, name="cell_state")
+
+        input_names_with_port = ["input_1:0"]
+        feed_dict = {"input_1:0": x_val}
+
+        output_names_with_port = ["output:0", "cell_state:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_single_dynamic_lstm_seq_length_is_const(self):
         units = 5
@@ -83,7 +143,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_single_dynamic_lstm_seq_length_is_not_const(self):
         units = 5
@@ -114,7 +175,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val, "input_2:0": y_val}
         input_names_with_port = ["input_1:0", "input_2:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_single_dynamic_lstm_placeholder_input(self):
         units = 5
@@ -140,7 +202,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_single_dynamic_lstm_ch_zero_state_initializer(self):
         units = 5
@@ -171,7 +234,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_single_dynamic_lstm_consume_one_of_ch_tuple(self):
         units = 5
@@ -199,7 +263,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state_c:0", "cell_state_h:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     @unittest.skip("FIXME: disable for now for accuracy problem")
     def test_single_dynamic_lstm_random_weights(self, state_is_tuple=True):
@@ -228,7 +293,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     @unittest.skip("FIXME: disable for now for accuracy problem")
     def test_single_dynamic_lstm_random_weights2(self, state_is_tuple=True):
@@ -256,7 +322,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.01)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.01,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_multiple_dynamic_lstm_state_is_tuple(self):
         self.internal_test_multiple_dynamic_lstm_with_parameters(True)
@@ -311,7 +378,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 2))
 
     def test_dynamic_basiclstm(self):
         units = 5
@@ -335,7 +403,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001, atol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001, atol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_dynamic_lstm_output_consumed_only(self):
         units = 5
@@ -358,7 +427,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001, atol=1e-07)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001, atol=1e-07,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_dynamic_lstm_state_consumed_only(self):
         units = 5
@@ -381,7 +451,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_dynamic_bilstm_state_is_tuple(self):
         self.internal_test_dynamic_bilstm_with_parameters(True)
@@ -420,7 +491,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_dynamic_bilstm_output_consumed_only(self, state_is_tuple=True):
         units = 5
@@ -452,7 +524,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
     def test_dynamic_bilstm_state_consumed_only(self, state_is_tuple=True):
         units = 5
@@ -484,7 +557,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["cell_state:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 1))
 
 
 if __name__ == '__main__':
