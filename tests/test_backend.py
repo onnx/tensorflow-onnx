@@ -620,23 +620,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_onnxruntime_incompatibility("Greater")
     def test_greater(self):
-        x_val1 = np.array([4, 2, 4, 1], dtype=np.float32).reshape((2, 2))
-        x_val2 = np.array([2, 4, 4, 1], dtype=np.float32).reshape((2, 2))
-        x1 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
-        x2 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT1)
-        mi = tf.greater(x1, x2)
-        _ = tf.identity(mi, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+        for op in [tf.greater, tf.greater_equal]:
+            tf.reset_default_graph()
+            x_val1 = np.array([4, 2, 4, 1], dtype=np.float32).reshape((2, 2))
+            x_val2 = np.array([2, 4, 4, 1], dtype=np.float32).reshape((2, 2))
+            x1 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+            x2 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT1)
+            mi = op(x1, x2)
+            _ = tf.identity(mi, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
     @check_onnxruntime_incompatibility("Greater")
     def test_greater_unsupport_type(self):
-        x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
-        x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
-        x1 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT)
-        x2 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT1)
-        mi = tf.greater(x1, x2)
-        _ = tf.identity(mi, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+        for op in [tf.greater, tf.greater_equal]:
+            tf.reset_default_graph()
+            x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
+            x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
+            x1 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT)
+            x2 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT1)
+            mi = op(x1, x2)
+            _ = tf.identity(mi, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
     @check_onnxruntime_incompatibility("Less")
     def test_less(self):
