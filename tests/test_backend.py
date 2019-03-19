@@ -1399,7 +1399,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.01)
 
     @check_opset_min_version(8, "Scan")
-    @skip_specific_opset_version(9, "ReverseSequence not supported")
+    @skip_opset(9, "ReverseSequence")
     def test_reverse_sequence_batch_major(self):
         x_val = np.array([[[1, 2, 3], [4, 5, 6], [0, 0, 0]],
                           [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
@@ -1430,7 +1430,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(8, "Scan")
-    @skip_specific_opset_version(9, "ReverseSequence not supported")
+    @skip_opset(9, "ReverseSequence")
     def test_reverse_sequence_time_major(self):
         x_val = np.array([[[1, 2, 3], [1, 2, 3], [1, 2, 3]],
                           [[4, 5, 6], [4, 5, 6], [0, 0, 0]],

@@ -1460,8 +1460,8 @@ def reverse_op9(ctx, node, name, args):
     # here. Actually using loops to do that is kind of meaningless since there will be performance
     # issue there for sure.
 
-    raise RuntimeError("ReverseSequence is not supported to convert in OPSET9,"
-                       " if possible please try use OPSET 8 instead.")
+    raise NotImplementedError("ReverseSequence is not supported to convert in OPSET 9,"
+                              " if possible please try using OPSET 8 instead.")
 
 
 def shape_op(ctx, node, name, args):

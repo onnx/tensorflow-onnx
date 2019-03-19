@@ -85,6 +85,10 @@ class CustomRnnRewriter(LoopRewriterBase):
         return True
 
     def need_rewrite(self, context):
+        if self.g.opset < 8:
+            log.debug("skip the custom_rnn_rewriter due to lower opset version %s", self.g.opset)
+            return False
+
         context.rnn_scope = self._get_rnn_scope_name(context.while_context_scope)
 
         if not self._parse_rnn_loop(context):
@@ -108,7 +112,7 @@ class CustomRnnRewriter(LoopRewriterBase):
                 if self.g.opset == 8:
                     nodes = self._adapt_scan_sequence_input_or_output("input", state_input, False)
                     state_inputs_initial_values.append(nodes[-1].output[0])
-                else:
+                else:  # since opset 9
                     state_inputs_initial_values.append(state_input)
 
             scan_inputs_initial_values = []
@@ -116,7 +120,7 @@ class CustomRnnRewriter(LoopRewriterBase):
                 if self.g.opset == 8:
                     nodes = self._adapt_scan_sequence_input_or_output("input", scan_input, False)
                     scan_inputs_initial_values.append(nodes[-1].output[0])
-                else:
+                else:  # since opset 9
                     scan_inputs_initial_values.append(scan_input)
 
             cell_g_info = context.cell_graph
@@ -192,7 +196,7 @@ class CustomRnnRewriter(LoopRewriterBase):
                     nodes = self._adapt_scan_sequence_input_or_output("state_output_reshape",
                                                                       scan_node.output[index], True)
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
-                else:
+                else:  # since opset 9
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, scan_node.output[index])
             index += 1
 
@@ -202,7 +206,7 @@ class CustomRnnRewriter(LoopRewriterBase):
                     nodes = self._adapt_scan_sequence_input_or_output("scan_output_reshape",
                                                                       scan_node.output[index], True)
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
-                else:
+                else:  # since opset 9
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, scan_node.output[index])
             index += 1
 
