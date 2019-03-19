@@ -153,7 +153,7 @@ class Test(object):
 
     def to_onnx(self, tf_graph, opset=None, shape_override=None, input_names=None):
         """Convert graph to tensorflow."""
-        return process_tf_graph(tf_graph, continue_on_error=True, verbose=True, opset=opset,
+        return process_tf_graph(tf_graph, continue_on_error=False, verbose=True, opset=opset,
                                 target=Test.target, shape_override=shape_override,
                                 input_names=input_names, output_names=self.output_names)
 
@@ -186,7 +186,6 @@ class Test(object):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
         model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True)
-        utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=False, as_text=True)
         print("\t\t" + model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
