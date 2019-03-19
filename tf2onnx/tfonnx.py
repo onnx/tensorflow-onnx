@@ -33,7 +33,7 @@ from tf2onnx.rewriter.rnn import rewrite_generic_loop
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
-from tf2onnx.shape_inference import infer_shape_for_graph, set_shape_from_inputs_broadcast
+from tf2onnx.shape_inference import infer_shape_for_graph
 from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
@@ -1611,8 +1611,10 @@ def logical_compare_op(ctx, node, name, args):
 
 def logical_compareeq_op(ctx, node, name, args):
     logical_compare_op(ctx, node, name, [])
-    ctx.insert_new_node_on_output("Not", node.output[0], name=utils.make_name(name),
-                                  shapes=ctx.get_shape(node.output[0]), dtypes=ctx.get_dtype(node.output[0]))
+    output_name = node.output[0]
+    new_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(name))
+    ctx.copy_shape(output_name, new_node.output[0])
+    ctx.set_dtype(new_node.output[0], ctx.get_dtype(output_name))
 
 
 def where_op(ctx, node, name, args):
