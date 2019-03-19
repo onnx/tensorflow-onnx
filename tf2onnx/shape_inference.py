@@ -35,6 +35,7 @@ broadcast_ops = [
     "Greater",
     "GreaterEqual",
     "Less",
+    "LessEqual",
     "LogicalAnd",
     "LogicalOr",
     "Mul",
@@ -154,7 +155,7 @@ def infer_shape_for_node(g, node):
         g.set_shape(node.output[0], shape)
         return True
 
-    if node.type in ["All", "Any", "Min"]:
+    if node.type in ["All", "Any", "Max", "Min"]:
         axis_node = node.inputs[1]
         axis = axis_node.get_tensor_value()
         if not isinstance(axis, list):

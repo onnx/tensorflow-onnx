@@ -126,8 +126,8 @@ def main():
 
     model_proto = g.make_model("converted from {}".format(args.input))
 
-    new_model_proto = GraphUtil.opt_transposes_with_graph(g, "converted from {}".format(model_path),
-                                                          optimize=not args.continue_on_error)
+    new_model_proto = GraphUtil.optimize_graph(g, "converted from {}".format(model_path),
+                                               optimize=not args.continue_on_error)
     if new_model_proto:
         model_proto = new_model_proto
     else:

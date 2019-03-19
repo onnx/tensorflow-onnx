@@ -33,7 +33,7 @@ from tf2onnx.rewriter.rnn import rewrite_generic_loop
 from tf2onnx.rewriter.rnn import rewrite_single_direction_gru
 from tf2onnx.rewriter.rnn import rewrite_single_direction_grublock
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm
-from tf2onnx.shape_inference import infer_shape_for_graph, set_shape_from_inputs_broadcast
+from tf2onnx.shape_inference import infer_shape_for_graph
 from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
@@ -1642,6 +1642,13 @@ def logical_compare_op(ctx, node, name, args):
                 ctx.copy_shape(inp, inp_cast.output[0])
                 ctx.set_dtype(inp_cast.output[0], target_dtype)
 
+def logical_compareeq_op(ctx, node, name, args):
+    logical_compare_op(ctx, node, name, [])
+    output_name = node.output[0]
+    new_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(name))
+    ctx.copy_shape(output_name, new_node.output[0])
+    ctx.set_dtype(new_node.output[0], ctx.get_dtype(output_name))
+
 
 def where_op(ctx, node, name, args):
     # T_y output = Where(T_x condition), return indices of elements whose value are True
@@ -1786,6 +1793,8 @@ _OPSET_7 = {
     "FusedBatchNormV2": (fused_batchnorm_op7, []),
     "Greater": (logical_compare_op, []),
     "Less": (logical_compare_op, []),
+    "GreaterEqual": (logical_compareeq_op, ["Less"]),
+    "LessEqual": (logical_compareeq_op, ["Greater"]),
     "LogicalAnd": (broadcast_op7, ["And"]),
     "LogicalOr": (broadcast_op7, ["Or"]),
     "MatrixBandPart": (matrixbandpart_op, []),
@@ -1821,9 +1830,7 @@ _OPSET_9 = {
     "Cosh": (direct_op, []),
     "Erf": (direct_op, []),
     "Fill": (fill_op, []),
-    "Greater": (logical_compare_op, []),
     "IsNan": (direct_op, ["IsNaN"]),
-    "Less": (logical_compare_op, []),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
     "ReverseSequence": (reverse_op9, []),
@@ -2112,50 +2119,6 @@ def rewrite_constant_fold(g, ops):
                 # ignore errors
 
         # pylint: enable=too-many-nested-blocks
-    return ops
-
-
-def rewrite_logical_compare_with_equal(g, ops):
-    patterns = {"GreaterEqual": "Greater",
-                "LessEqual": "Less"}
-    for p in patterns:
-        pattern = OpTypePattern(p, name='compare_with_equal')
-        compare_name = patterns[p]
-        matcher = GraphMatcher(pattern)
-        match_results = list(matcher.match_ops(ops))
-        for match in match_results:
-            nodes_to_append = []
-            compare_e_op = match.get_op('compare_with_equal')
-            data_type = g.get_dtype(compare_e_op.input[0])
-            compare_input_ids = compare_e_op.input
-            need_cast = g.opset < 9 and data_type not in (onnx_pb.TensorProto.FLOAT16,
-                                                          onnx_pb.TensorProto.FLOAT,
-                                                          onnx_pb.TensorProto.DOUBLE)
-            if need_cast:
-                compare_input_ids = []
-                for input_id in compare_e_op.input:
-                    cast_node = g.make_node("Cast", [input_id], op_name_scope=compare_e_op.name,
-                                            attr={"to": onnx_pb.TensorProto.FLOAT}, shapes=[g.get_shape(input_id)],
-                                            dtypes=[onnx_pb.TensorProto.FLOAT])
-                    compare_input_ids.append(cast_node.output[0])
-                    nodes_to_append.append(cast_node)
-
-            g_node = g.make_node(compare_name, compare_input_ids, op_name_scope=compare_e_op.name,
-                                 dtypes=[onnx_pb.TensorProto.BOOL])
-            set_shape_from_inputs_broadcast(g, compare_input_ids, g_node.output[0])
-            new_shape = g.get_shape(g_node.output[0])
-            nodes_to_append.append(g_node)
-
-            e_node = g.make_node("Equal", compare_e_op.input, op_name_scope=compare_e_op.name,
-                                 shapes=[new_shape], dtypes=[onnx_pb.TensorProto.BOOL])
-            nodes_to_append.append(e_node)
-
-            compare_e_op.type = "LogicalOr"
-            compare_e_op.input[0] = g_node.output[0]
-            compare_e_op.input[1] = e_node.output[0]
-            g.set_dtype(compare_e_op.output[0], onnx_pb.TensorProto.BOOL)
-            g.set_shape(compare_e_op.output[0], new_shape)
-            ops.extend(nodes_to_append)
     return ops
 
 
@@ -2469,7 +2432,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                  rewrite_leakyrelu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_single_direction_grublock,
-                 rewrite_bi_direction_gru, rewrite_logical_compare_with_equal,
+                 rewrite_bi_direction_gru,
                  rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond
                  ]
 
