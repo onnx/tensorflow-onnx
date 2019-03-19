@@ -1402,8 +1402,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.01)
 
-    # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
-    @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so scan op is not supported")
+    @check_opset_min_version(8, "Scan")
+    @skip_opset(9, "ReverseSequence")
     def test_reverse_sequence_batch_major(self):
         x_val = np.array([[[1, 2, 3], [4, 5, 6], [0, 0, 0]],
                           [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
@@ -1433,8 +1433,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
-    @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so scan op is not supported")
+    @check_opset_min_version(8, "Scan")
+    @skip_opset(9, "ReverseSequence")
     def test_reverse_sequence_time_major(self):
         x_val = np.array([[[1, 2, 3], [1, 2, 3], [1, 2, 3]],
                           [[4, 5, 6], [4, 5, 6], [0, 0, 0]],
@@ -1465,8 +1465,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    # @unittest.skipIf(OPSET < 8, "supported with opset 8 or better")
-    @unittest.skip("FIXME: the newest onnxruntime wheel hasn't been published to PYPI, so Select op is not supported")
+    @check_opset_min_version(8, "where")
     def test_where(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
         true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],

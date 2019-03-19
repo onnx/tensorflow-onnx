@@ -85,6 +85,10 @@ class CustomRnnRewriter(LoopRewriterBase):
         return True
 
     def need_rewrite(self, context):
+        if self.g.opset < 8:
+            log.debug("skip the custom_rnn_rewriter due to lower opset version %s", self.g.opset)
+            return False
+
         context.rnn_scope = self._get_rnn_scope_name(context.while_context_scope)
 
         if not self._parse_rnn_loop(context):
@@ -105,13 +109,19 @@ class CustomRnnRewriter(LoopRewriterBase):
 
             state_inputs_initial_values = []
             for state_input in scan_props.state_inputs_initial_values:
-                nodes = self._adapt_scan_sequence_input_or_output("input", state_input, False)
-                state_inputs_initial_values.append(nodes[-1].output[0])
+                if self.g.opset == 8:
+                    nodes = self._adapt_scan_sequence_input_or_output("input", state_input, False)
+                    state_inputs_initial_values.append(nodes[-1].output[0])
+                else:  # since opset 9
+                    state_inputs_initial_values.append(state_input)
 
             scan_inputs_initial_values = []
             for scan_input in scan_props.scan_inputs_initial_values:
-                nodes = self._adapt_scan_sequence_input_or_output("input", scan_input, False)
-                scan_inputs_initial_values.append(nodes[-1].output[0])
+                if self.g.opset == 8:
+                    nodes = self._adapt_scan_sequence_input_or_output("input", scan_input, False)
+                    scan_inputs_initial_values.append(nodes[-1].output[0])
+                else:  # since opset 9
+                    scan_inputs_initial_values.append(scan_input)
 
             cell_g_info = context.cell_graph
             scan_body_g = LoopRewriterBase.construct_graph_from_nodes(self.g, cell_g_info.nodes, cell_g_info.outputs)
@@ -155,17 +165,24 @@ class CustomRnnRewriter(LoopRewriterBase):
                 n = self.g.get_node_by_output(tensor_value_info.id)
                 self.g.remove_node(n.name)
             else:
-                loop_outputs_shapes.append(None)
+                loop_outputs_shapes.append([-1])
                 loop_outputs_dtypes.append(None)
 
-        # here we did not give the sequence_length, because
-        # current batch size is 1, not original batch size
-        # original seq_length will be used by the loop body of Scan op.
-        scan_node = self.g.make_node("Scan", [""] + init_values, op_name_scope="custom_rnn_scan",
-                                     attr={"num_scan_inputs": len(scan_props.scan_inputs)},
-                                     output_count=len(scan_props.state_outputs + scan_props.scan_outputs),
-                                     shapes=loop_outputs_shapes, dtypes=loop_outputs_dtypes,
-                                     skip_conversion=False)
+        if self.g.opset == 8:
+            # here we did not give the sequence_length, because
+            # current batch size is 1, not original batch size
+            # original seq_length will be used by the loop body of Scan op.
+            scan_node = self.g.make_node("Scan", [""] + init_values, op_name_scope="custom_rnn_scan",
+                                         attr={"num_scan_inputs": len(scan_props.scan_inputs)},
+                                         output_count=len(scan_props.state_outputs + scan_props.scan_outputs),
+                                         shapes=loop_outputs_shapes, dtypes=loop_outputs_dtypes,
+                                         skip_conversion=False)
+        else:
+            scan_node = self.g.make_node("Scan", init_values, op_name_scope="custom_rnn_scan",
+                                         attr={"num_scan_inputs": len(scan_props.scan_inputs)},
+                                         output_count=len(scan_props.state_outputs + scan_props.scan_outputs),
+                                         shapes=loop_outputs_shapes, dtypes=loop_outputs_dtypes,
+                                         skip_conversion=False)
 
         return scan_node
 
@@ -175,17 +192,22 @@ class CustomRnnRewriter(LoopRewriterBase):
         index = 0
         for out_tensor_value_info in context.loop_properties.state_outputs_exits:
             if out_tensor_value_info.id:
-                nodes = self._adapt_scan_sequence_input_or_output("state_output_reshape",
-                                                                  scan_node.output[index], True)
-                self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
-
+                if self.g.opset == 8:
+                    nodes = self._adapt_scan_sequence_input_or_output("state_output_reshape",
+                                                                      scan_node.output[index], True)
+                    self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
+                else:  # since opset 9
+                    self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, scan_node.output[index])
             index += 1
 
         for out_tensor_value_info in context.loop_properties.scan_outputs_exits:
             if out_tensor_value_info.id:
-                nodes = self._adapt_scan_sequence_input_or_output("scan_output_reshape",
-                                                                  scan_node.output[index], True)
-                self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
+                if self.g.opset == 8:
+                    nodes = self._adapt_scan_sequence_input_or_output("scan_output_reshape",
+                                                                      scan_node.output[index], True)
+                    self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, nodes[-1].output[0])
+                else:  # since opset 9
+                    self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, scan_node.output[index])
             index += 1
 
 

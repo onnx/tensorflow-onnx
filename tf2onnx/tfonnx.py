@@ -1454,6 +1454,15 @@ def reverse_op8(ctx, node, name, args):
     node.input[0] = node.input[1]
     node.input[1] = tmp
 
+def reverse_op9(ctx, node, name, args):
+    # T output = ReverseSequence(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
+    # we cannot easily construct reverse_sequence equivalence in opset 9, so we will not support it
+    # here. Actually using loops to do that is kind of meaningless since there will be performance
+    # issue there for sure.
+
+    raise NotImplementedError("ReverseSequence is not supported to convert in OPSET 9,"
+                              " if possible please try using OPSET 8 instead.")
+
 
 def shape_op(ctx, node, name, args):
     # out_type output = Shape(T input, @int32|int64 out_type), out_type by default int32
@@ -1824,6 +1833,7 @@ _OPSET_9 = {
     "IsNan": (direct_op, ["IsNaN"]),
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
+    "ReverseSequence": (reverse_op9, []),
     "Sign": (sign_op9, []),
     "Sinh": (direct_op, []),
     "Where": (where_op, []),
@@ -2450,8 +2460,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # onnx requires topological sorting
     topological_sort(g, continue_on_error)
-
-    g.update_proto()
 
     if verbose:
         print("tensorflow ops: {}".format(op_cnt))

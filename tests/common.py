@@ -15,8 +15,9 @@ from tf2onnx.tfonnx import DEFAULT_TARGET, POSSIBLE_TARGETS
 
 __all__ = ["TestConfig", "get_test_config", "unittest_main",
            "check_tf_min_version", "skip_tf_versions",
-           "check_opset_min_version", "check_target", "skip_onnxruntime_backend", "skip_caffe2_backend",
-           "check_onnxruntime_incompatibility", "validate_const_node", "group_nodes_by_type"]
+           "check_opset_min_version", "check_target", "skip_caffe2_backend", "skip_onnxruntime_backend",
+           "skip_opset", "check_onnxruntime_incompatibility", "validate_const_node",
+           "group_nodes_by_type"]
 
 
 # pylint: disable=missing-docstring
@@ -153,6 +154,13 @@ def check_opset_min_version(min_required_version, message=""):
     config = get_test_config()
     reason = _append_message("conversion requires opset >= {}".format(min_required_version), message)
     return unittest.skipIf(config.opset < min_required_version, reason)
+
+
+def skip_opset(opset_v, message=""):
+    """ Skip if opset = opset_v """
+    config = get_test_config()
+    reason = _append_message("conversion requires opset != {}".format(opset_v), message)
+    return unittest.skipIf(config.opset == opset_v, reason)
 
 
 def check_target(required_target, message=""):
