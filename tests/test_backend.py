@@ -1217,7 +1217,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = x[2, :]
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-    
+
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice7(self):
         x_val = np.arange(5 * 6).astype("float32").reshape(5, 6)
