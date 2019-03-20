@@ -343,34 +343,32 @@ class LSTMTests(Tf2OnnxBackendTestBase):
 
         lstm_output_list = []
         lstm_cell_state_list = []
-        if True:
-            # no scope
-            cell = rnn.LSTMCell(
-                units,
-                initializer=initializer,
-                state_is_tuple=state_is_tuple)
+        # no scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            dtype=tf.float32)
+        lstm_output_list.append(outputs)
+        lstm_cell_state_list.append(cell_state)
+
+        # given scope
+        cell = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        with variable_scope.variable_scope("root1") as scope:
             outputs, cell_state = tf.nn.dynamic_rnn(
                 cell,
                 x,
-                dtype=tf.float32)
-            lstm_output_list.append(outputs)
-            lstm_cell_state_list.append(cell_state)
-
-        if True:
-            # given scope
-            cell = rnn.LSTMCell(
-                units,
-                initializer=initializer,
-                state_is_tuple=state_is_tuple)
-            with variable_scope.variable_scope("root1") as scope:
-                outputs, cell_state = tf.nn.dynamic_rnn(
-                    cell,
-                    x,
-                    dtype=tf.float32,
-                    sequence_length=[4, 4, 4, 4, 4, 4],
-                    scope=scope)
-            lstm_output_list.append(outputs)
-            lstm_cell_state_list.append(cell_state)
+                dtype=tf.float32,
+                sequence_length=[4, 4, 4, 4, 4, 4],
+                scope=scope)
+        lstm_output_list.append(outputs)
+        lstm_cell_state_list.append(cell_state)
 
         _ = tf.identity(lstm_output_list, name="output")
         _ = tf.identity(lstm_cell_state_list, name="cell_state")
@@ -469,21 +467,20 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        if True:
-            # bilstm, no scope
-            cell1 = rnn.LSTMCell(
-                units,
-                initializer=initializer,
-                state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
-            cell2 = rnn.LSTMCell(
-                units,
-                initializer=initializer,
-                state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
-                cell1,
-                cell2,
-                x,
-                dtype=tf.float32)
+        # bilstm, no scope
+        cell1 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
+        cell2 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            cell1,
+            cell2,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(outputs, name="output")
         _ = tf.identity(cell_state, name="cell_state")
@@ -503,21 +500,20 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        if True:
-            # bilstm, no scope
-            cell1 = rnn.LSTMCell(
-                units,
-                initializer=initializer,
-                state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
-            cell2 = rnn.LSTMCell(
-                units,
-                initializer=initializer,
-                state_is_tuple=state_is_tuple)
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(
-                cell1,
-                cell2,
-                x,
-                dtype=tf.float32)
+        # bilstm, no scope
+        cell1 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
+        cell2 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            cell1,
+            cell2,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(outputs, name="output")
 
@@ -536,21 +532,20 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
         initializer = init_ops.constant_initializer(0.5)
 
-        if True:
-            # bilstm, no scope
-            cell1 = rnn.LSTMCell(
-                units,
-                initializer=initializer,
-                state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
-            cell2 = rnn.LSTMCell(
-                units,
-                initializer=initializer,
-                state_is_tuple=state_is_tuple)
-            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
-                cell1,
-                cell2,
-                x,
-                dtype=tf.float32)
+        # bilstm, no scope
+        cell1 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
+        cell2 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple)
+        _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            cell1,
+            cell2,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(cell_state, name="cell_state")
 
