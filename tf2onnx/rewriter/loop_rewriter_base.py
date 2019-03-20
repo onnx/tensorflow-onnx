@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 
 import logging
+from collections import OrderedDict
 from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter.rnn_utils import is_loopcond_op, is_tensor_array_op
@@ -47,8 +48,8 @@ class LoopProperties(object):
         # use enter name as key, they are initial inputs.
         # we don't use enter_input_id because it might be
         # used as initial input for more than one Enter nodes.
-        self.state_variables = {}
-        self.scan_variables = {}
+        self.state_variables = OrderedDict()
+        self.scan_variables = OrderedDict()
 
         self.tensor_array_inputs = []  # list of type InputTensorArray
 
@@ -61,6 +62,11 @@ class LoopProperties(object):
             self.state_variables[var.enter_name] = var
         else:
             self.scan_variables[var.enter_name] = var
+
+    def get_variables(self, checker):
+        if not checker:
+            return self.all_variables.values()
+        return [v for v in self.all_variables.values() if checker(v)]
 
     @property
     def all_variables(self):

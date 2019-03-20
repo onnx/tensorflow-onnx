@@ -12,7 +12,7 @@ from __future__ import unicode_literals
 import logging
 
 from tf2onnx.rewriter.bilstm_rewriter import rewrite_bidirectional_lstms
-from tf2onnx.rewriter.lstm_rewriter import LSTMUnitRewriter
+from tf2onnx.rewriter.lstm_rewriter_v2 import LSTMUnitRewriterV2
 from tf2onnx.rewriter.grublock_rewriter import GRUUnitRewriter, GRUBlockUnitRewriter
 from tf2onnx.rewriter.bigru_rewriter import rewrite_bidirectional_grus
 from tf2onnx.rewriter.custom_rnn_rewriter import CustomRnnRewriter
@@ -25,7 +25,7 @@ log = logging.getLogger("tf2onnx.rewriter.rnn")
 
 
 def rewrite_single_direction_lstm(g, ops):
-    r = LSTMUnitRewriter(g)
+    r = LSTMUnitRewriterV2(g)
     return r.run()
 
 

@@ -139,7 +139,7 @@ class GRUUnitRewriter(UnitRewriterBase):
 
         # gather output for sure has shape [time, batch, hidden]
         gather_output_id = gather_node.output[0]
-        log.debug("found output ta gather node %d", gather_output_id)
+        log.debug("found output ta gather node %s", gather_output_id)
         # in tf batch major mode, output shape is : [batch, time, hidden]
         # in time major mode, output shape is: [time, batch, hidden]
         # in onnx, output shape is : [time, num_directions, batch, hidden]

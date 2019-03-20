@@ -59,30 +59,28 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         gru_output_list = []
         gru_cell_state_list = []
-        if True:
-            # no scope
-            cell = rnn.GRUBlockCell(
-                units)
+        # no scope
+        cell = rnn.GRUBlockCell(
+            units)
+        outputs, cell_state = tf.nn.dynamic_rnn(
+            cell,
+            x,
+            dtype=tf.float32)
+        gru_output_list.append(outputs)
+        gru_cell_state_list.append(cell_state)
+
+        # given scope
+        cell = rnn.GRUBlockCell(
+            units)
+        with variable_scope.variable_scope("root1") as scope:
             outputs, cell_state = tf.nn.dynamic_rnn(
                 cell,
                 x,
-                dtype=tf.float32)
-            gru_output_list.append(outputs)
-            gru_cell_state_list.append(cell_state)
-
-        if True:
-            # given scope
-            cell = rnn.GRUBlockCell(
-                units)
-            with variable_scope.variable_scope("root1") as scope:
-                outputs, cell_state = tf.nn.dynamic_rnn(
-                    cell,
-                    x,
-                    dtype=tf.float32,
-                    sequence_length=[4],
-                    scope=scope)
-            gru_output_list.append(outputs)
-            gru_cell_state_list.append(cell_state)
+                dtype=tf.float32,
+                sequence_length=[4],
+                scope=scope)
+        gru_output_list.append(outputs)
+        gru_cell_state_list.append(cell_state)
 
         _ = tf.identity(gru_output_list, name="output")
         _ = tf.identity(gru_cell_state_list, name="cell_state")
@@ -302,17 +300,16 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        if True:
-            # bigru, no scope
-            cell1 = rnn.GRUBlockCell(
-                units)
-            cell2 = rnn.GRUBlockCell(
-                units)
-            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
-                cell1,
-                cell2,
-                x,
-                dtype=tf.float32)
+        # bigru, no scope
+        cell1 = rnn.GRUBlockCell(
+            units)
+        cell2 = rnn.GRUBlockCell(
+            units)
+        outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            cell1,
+            cell2,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(outputs, name="output")
         _ = tf.identity(cell_state, name="cell_state")
@@ -331,17 +328,16 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        if True:
-            # bigru, no scope
-            cell1 = rnn.GRUBlockCell(
-                units)
-            cell2 = rnn.GRUBlockCell(
-                units)
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(
-                cell1,
-                cell2,
-                x,
-                dtype=tf.float32)
+        # bigru, no scope
+        cell1 = rnn.GRUBlockCell(
+            units)
+        cell2 = rnn.GRUBlockCell(
+            units)
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            cell1,
+            cell2,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(outputs, name="output")
 
@@ -359,17 +355,16 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        if True:
-            # bigru, no scope
-            cell1 = rnn.GRUBlockCell(
-                units)
-            cell2 = rnn.GRUBlockCell(
-                units)
-            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
-                cell1,
-                cell2,
-                x,
-                dtype=tf.float32)
+        # bigru, no scope
+        cell1 = rnn.GRUBlockCell(
+            units)
+        cell2 = rnn.GRUBlockCell(
+            units)
+        _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            cell1,
+            cell2,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(cell_state, name="cell_state")
 
@@ -387,15 +382,14 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        if True:
-            # bigru, no scope
-            cell = rnn.GRUBlockCell(
-                units)
-            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
-                cell,
-                cell,
-                x,
-                dtype=tf.float32)
+        # bigru, no scope
+        cell = rnn.GRUBlockCell(
+            units)
+        outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            cell,
+            cell,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(outputs, name="output")
         _ = tf.identity(cell_state, name="cell_state")
@@ -414,15 +408,14 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        if True:
-            # bigru, no scope
-            cell = rnn.GRUBlockCell(
-                units)
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(
-                cell,
-                cell,
-                x,
-                dtype=tf.float32)
+        # bigru, no scope
+        cell = rnn.GRUBlockCell(
+            units)
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            cell,
+            cell,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(outputs, name="output")
 
@@ -440,15 +433,14 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
 
         x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
 
-        if True:
-            # bigru, no scope
-            cell = rnn.GRUBlockCell(
-                units)
-            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
-                cell,
-                cell,
-                x,
-                dtype=tf.float32)
+        # bigru, no scope
+        cell = rnn.GRUBlockCell(
+            units)
+        _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            cell,
+            cell,
+            x,
+            dtype=tf.float32)
 
         _ = tf.identity(cell_state, name="cell_state")
 
