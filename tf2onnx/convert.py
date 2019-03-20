@@ -10,7 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
-import onnx
 from onnx import helper
 import tensorflow as tf
 
