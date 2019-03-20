@@ -20,7 +20,7 @@ from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
-from tf2onnx import utils
+from tf2onnx import schemas, utils
 from tf2onnx.function import *  # pylint: disable=wildcard-import
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
@@ -1461,6 +1461,7 @@ def reverse_op8(ctx, node, name, args):
     node.input[0] = node.input[1]
     node.input[1] = tmp
 
+
 def reverse_op9(ctx, node, name, args):
     # T output = ReverseSequence(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
     # we cannot easily construct reverse_sequence equivalence in opset 9, so we will not support it
@@ -1648,6 +1649,7 @@ def logical_compare_op(ctx, node, name, args):
                 inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=target_dtype)
                 ctx.copy_shape(inp, inp_cast.output[0])
                 ctx.set_dtype(inp_cast.output[0], target_dtype)
+
 
 def logical_compareeq_op(ctx, node, name, args):
     logical_compare_op(ctx, node, name, [])
@@ -2400,6 +2402,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
+    if opset > schemas.get_max_supported_opset_version():
+        log.warning("currently installed onnx package %s is too low to support opset %s, "
+                    "please upgrade onnx package to avoid potential conversion issue.",
+                    utils.get_onnx_version(), opset)
+
     if shape_override is None:
         shape_override = {}
     if inputs_as_nchw is None:

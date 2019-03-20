@@ -18,6 +18,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from google.protobuf import text_format
+import onnx
 from onnx import helper, onnx_pb, defs, numpy_helper
 
 #
@@ -74,12 +75,14 @@ ONNX_DTYPE_NAMES = {
     onnx_pb.TensorProto.BOOL: "bool"
 }
 
+
 class TensorValueInfo(object):
     def __init__(self, tensor_id, g):
         self.id = tensor_id
         if self.id:
             self.dtype = g.get_dtype(tensor_id)
             self.shape = g.get_shape(tensor_id)
+
 
 ONNX_UNKNOWN_DIMENSION = -1
 
@@ -409,3 +412,7 @@ def are_shapes_equal(src, dest):
 def create_vague_shape_like(shape):
     make_sure(len(shape) >= 0, "rank should be >= 0")
     return [-1 for i in enumerate(shape)]
+
+
+def get_onnx_version():
+    return onnx.__version__
