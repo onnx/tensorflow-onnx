@@ -218,6 +218,36 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         self.assertEqual(n.data_format, "NHWC")
         self.assertTrue(n.is_nhwc())
 
+    def test_node_attr_onnx(self):
+        n1 = helper.make_node("Conv", ["X", "W"], ["Y"], name="n1", my_attr="my_attr")
+        graph_proto = helper.make_graph(
+            nodes=[n1],
+            name="test",
+            inputs=[helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2]),
+                    helper.make_tensor_value_info("W", TensorProto.FLOAT, [2, 2])],
+            outputs=[helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
+            initializer=[]
+        )
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
+        n1 = g.get_node_by_name("n1")
+        self.assertTrue("my_attr" in n1.attr)
+        self.assertTrue("my_attr" not in n1.attr_onnx)
+
+        n1 = helper.make_node("Conv", ["X", "W"], ["Y"], name="n1", domain="my_domain", my_attr="my_attr")
+        print(n1)
+        graph_proto = helper.make_graph(
+            nodes=[n1],
+            name="test",
+            inputs=[helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2]),
+                    helper.make_tensor_value_info("W", TensorProto.FLOAT, [2, 2])],
+            outputs=[helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
+            initializer=[]
+        )
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
+        n1 = g.get_node_by_name("n1")
+        self.assertTrue("my_attr" in n1.attr)
+        self.assertTrue("my_attr" in n1.attr_onnx)
+
 
 if __name__ == '__main__':
     unittest_main()
