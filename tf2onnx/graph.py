@@ -1212,7 +1212,10 @@ class GraphUtil(object):
     def _parse_graph_input(g, graph_proto, const_node_names):
         """Get graph inputs not defined as initializers and put into Graph object."""
         shapes, dtypes = GraphUtil._parse_shape_and_type_from_value_infos(graph_proto.input)
-        for name in shapes:
+        # make sure the input is added in order we read from graph_proto,
+        # because for subgraphs, the input orders matter.
+        for graph_input in graph_proto.input:
+            name = graph_input.name
             shape = shapes[name]
             dtype = dtypes[name]
             if name not in const_node_names:
