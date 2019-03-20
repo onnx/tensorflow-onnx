@@ -20,7 +20,7 @@ from onnx import helper
 import tf2onnx
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
-from common import unittest_main
+from common import get_test_config, unittest_main
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 
@@ -96,6 +96,8 @@ class Tf2OnnxGraphTests(unittest.TestCase):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         tf.logging.set_verbosity(tf.logging.WARN)
 
+        self.config = get_test_config()
+
         tf2onnx.utils.INTERNAL_NAME = 1
         tf.reset_default_graph()
         arg = namedtuple("Arg", "input inputs outputs verbose continue_on_error")
@@ -115,7 +117,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x = tf.placeholder(tf.float32, [2, 3], name="input")
             x_ = tf.abs(x)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual('digraph { input [op_type=Placeholder shape="[2, 3]"]' \
                              ' Abs [op_type=Abs] output [op_type=Identity] input:0 -> Abs Abs:0 -> output }',
                              onnx_to_graphviz(g))
@@ -127,7 +129,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { RandomUniform__2 [op_type=RandomUniform shape="[2, 3]"] output1 [op_type=Identity] '
                 'output2 [op_type=Identity] output [op_type=Identity] RandomUniform__2:0 -> output1 '
@@ -138,7 +140,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
         with tf.Session() as sess:
             x_ = tf.random_normal([2, 3], name="rand")
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             actual = onnx_to_graphviz(g)
             expected = 'digraph { RandomNormal__2 [op_type=RandomNormal shape="[2, 3]"] output [op_type=Identity] ' \
                        'RandomNormal__2:0 -> output }'
@@ -154,7 +156,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             actual = onnx_to_graphviz(g)
             expected = 'digraph { prob [op_type=Placeholder shape="[]"] input2 [op_type=Placeholder shape="[1, 3]"] ' \
                        'input1 [op_type=Placeholder shape="[2, 3]"] Add [op_type=Add] Dropout__3 [op_type=Dropout] ' \
@@ -169,7 +171,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
             x_ = tf.add(x1, x2)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { input2 [op_type=Placeholder shape="[1, 3]"] input1 [op_type=Placeholder shape="[2, 3]"] '
                 'Add [op_type=Add] output [op_type=Identity] input1:0 -> Add input2:0 -> Add Add:0 -> output }',
@@ -181,7 +183,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
             x_ = tf.squared_difference(x1, x2)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { input2 [op_type=Placeholder shape="[1, 3]"] input1 [op_type=Placeholder shape="[1, 3]"] '
                 'SquaredDifference [op_type=Sub] SquaredDifference__2 [op_type=Mul] '
@@ -195,7 +197,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.reduce_sum(x1)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { Const [op_type=Const] input1 [op_type=Placeholder shape="[2, 3]"] '
                 'Sum [op_type=ReduceSum] output [op_type=Identity] input1:0 -> Sum Sum:0 -> output }',
@@ -206,7 +208,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.argmin(x1, axis=0)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { "ArgMin/dimension" [op_type=Const] input1 [op_type=Placeholder shape="[2, 3]"] '
                 'ArgMin [op_type=ArgMin] output [op_type=Identity] input1:0 -> ArgMin ArgMin:0 -> output }',
@@ -217,7 +219,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.rsqrt(x1)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Rsqrt [op_type=Sqrt] '
                 'Rsqrt__2 [op_type=Reciprocal] output [op_type=Identity] input1:0 -> Rsqrt '
@@ -229,7 +231,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.nn.relu6(x1)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Relu6 [op_type=Relu] Relu6__2 [op_type=Clip] '
                 'output [op_type=Identity] input1:0 -> Relu6 Relu6:0 -> Relu6__2 Relu6__2:0 -> output }',
@@ -257,7 +259,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             sess.run(tf.global_variables_initializer())
             _ = sess.run(conv, feed_dict={image_: image})
 
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[1, 4, 4, 1]"] Conv2D__3 [op_type=Transpose] '
                 '"kernel/shape" [op_type=Const] kernel__2 [op_type=Cast] k [op_type=Const] '
@@ -272,7 +274,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.squeeze(x1)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Squeeze [op_type=Squeeze] '
                 'output [op_type=Identity] input1:0 -> Squeeze Squeeze:0 -> output }',
@@ -283,7 +285,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.cast(x1, tf.int32)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Cast [op_type=Cast] output [op_type=Identity] '
                 'input1:0 -> Cast Cast:0 -> output }',
@@ -294,7 +296,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.reshape(x1, [3, 2])
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph)
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
                 'digraph { "Reshape/shape" [op_type=Const] Reshape__2 [op_type=Cast] '
                 'input1 [op_type=Placeholder shape="[2, 3]"] Reshape [op_type=Reshape] '
@@ -319,7 +321,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             x = tf.placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.add(x, x)
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph, custom_rewriter=[rewrite_test])
+            g = process_tf_graph(sess.graph, opset=self.config.opset, custom_rewriter=[rewrite_test])
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Add [op_type=Mul] '
                 'output [op_type=Identity] input1:0 -> Add input1:0 -> Add Add:0 -> output }',
@@ -345,6 +347,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph,
                                  custom_op_handlers={"Print": (print_handler, ["Identity", "mode"])},
+                                 opset=self.config.opset,
                                  extra_opset=helper.make_opsetid(_TENSORFLOW_DOMAIN, 1))
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Print [op_type=Identity] '
