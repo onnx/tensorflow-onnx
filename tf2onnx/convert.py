@@ -10,7 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
-import onnx
 from onnx import helper
 import tensorflow as tf
 
@@ -80,7 +79,7 @@ def main():
 
     opset = utils.find_opset(args.opset)
     print("using tensorflow={}, onnx={}, opset={}, tfonnx={}/{}".format(
-        tf.__version__, onnx.__version__, opset,
+        tf.__version__, utils.get_onnx_version(), opset,
         tf2onnx.__version__, tf2onnx.version.git_version[:6]))
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
