@@ -11,6 +11,7 @@ from __future__ import unicode_literals
 
 import collections
 import copy
+import logging
 import sys
 import traceback
 import six
@@ -21,6 +22,9 @@ from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
 from tf2onnx.optimizer import IdentityOptimizer, TransposeOptimizer
 from tf2onnx.schemas import get_schema
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("graph")
 
 
 # todo(pengwa): remove protected-access later
@@ -83,12 +87,16 @@ class Node(object):
 
     @property
     def attr_onnx(self):
+        """Return onnx valid attributes"""
+        schema = get_schema(self.type, self.graph.opset, self.domain)
+        if schema is None and not (self.is_const() or self.is_graph_input()):
+            log.warning("Node %s uses non-stardard onnx op <%s, %s>, skip attribute check", self.name, self.domain,
+                        self.type)
+
         onnx_attrs = {}
         for a in self._attr.values():
-            schema = get_schema(self.type, self.graph.opset)
-            if schema:
-                if schema.has_attribute(a.name):
-                    onnx_attrs[a.name] = a
+            if schema is None or schema.has_attribute(a.name):
+                onnx_attrs[a.name] = a
         return onnx_attrs
 
     @property
@@ -358,8 +366,10 @@ class Graph(object):
             self.remove_node(n.name)
 
             new_outputs = [output if output != o else new_output_name for output in n.output]
+            # domain should be passed to new node
             new_node = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
-                                      skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes)
+                                      skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
+                                      domain=n.domain)
 
             if body_graphs:
                 for attr_name, body_graph in body_graphs.items():
@@ -404,7 +414,7 @@ class Graph(object):
         return node
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
-                  op_name_scope=None, name=None, shapes=None, dtypes=None):
+                  op_name_scope=None, name=None, shapes=None, dtypes=None, domain=None):
         """Make a new onnx node in the graph"""
         if attr is None:
             attr = {}
@@ -437,7 +447,7 @@ class Graph(object):
             n = self.get_node_by_output_in_current_graph(o)
             utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
 
-        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, **raw_attr)
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
         if op_type in ["If", "Loop", "Scan"]:
             # we force the op containing inner graphs not skipped during conversion.
@@ -864,7 +874,7 @@ class Graph(object):
         # don't remove output from parent since others might depend on it
         return True
 
-    def insert_new_node_on_input(self, node, op_type, input_name, name=None, **kwargs):
+    def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             node: we want to replace the input for this node
@@ -879,14 +889,14 @@ class Graph(object):
         if name is None:
             name = utils.make_name(node.name)
         new_output = port_name(name)
-        new_node = self.make_node(op_type, [input_name], attr=kwargs, outputs=[new_output], name=name)
+        new_node = self.make_node(op_type, [input_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
         for i, n in enumerate(node.input):
             if n == input_name:
                 node.input[i] = new_output
                 break
         return new_node
 
-    def insert_new_node_on_output(self, op_type, output_name, name=None, **kwargs):
+    def insert_new_node_on_output(self, op_type, output_name, name=None, domain=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             op_type: type for new operation
@@ -903,7 +913,7 @@ class Graph(object):
                         type(op_type))
 
         new_output = port_name(name)
-        new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name)
+        new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
         to_replace = [n for n in self.get_nodes() if n != new_node]
         self.replace_all_inputs(to_replace, output_name, new_output)
@@ -1042,7 +1052,7 @@ class GraphUtil(object):
         try:
             opts = [TransposeOptimizer(graph, output_names=graph.outputs, debug=debug),
                     IdentityOptimizer(graph, output_names=graph.outputs, debug=debug)
-                   ]
+                    ]
             for opt in opts:
                 opt.optimize()
             model_proto = graph.make_model(doc_string, optimize=optimize)
@@ -1068,7 +1078,7 @@ class GraphUtil(object):
 
             opts = [TransposeOptimizer(g, output_names=g.outputs, debug=debug),
                     IdentityOptimizer(g, output_names=g.outputs, debug=debug)
-                   ]
+                    ]
             for opt in opts:
                 opt.optimize()
 

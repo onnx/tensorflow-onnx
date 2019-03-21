@@ -12,7 +12,6 @@ from __future__ import unicode_literals
 from collections import defaultdict, OrderedDict
 from onnx import defs
 
-
 ONNX_DOMAIN = ""
 
 
@@ -77,16 +76,39 @@ def _register_all_schemas_with_history():
     return ordered_map
 
 
+def _parse_domain_opset_versions(schemas):
+    """ Get max opset version among all schemas within each domain. """
+    domain_opset_versions = dict()
+    for domain_version_schema_map in schemas.values():
+        for domain, version_schema_map in domain_version_schema_map.items():
+            # version_schema_map is sorted by since_version in descend order
+            max_version = next(iter(version_schema_map))
+            if domain not in domain_opset_versions:
+                domain_opset_versions[domain] = int(max_version)
+            else:
+                domain_opset_versions[domain] = max(domain_opset_versions[domain], int(max_version))
+    return domain_opset_versions
+
+
 # format is <OpName, <Domain, <SinceVersion, OpSchema>>>
 # SinceVersion is sorted from high to low
 _schemas = _register_all_schemas_with_history()
 
+_domain_opset_versions = _parse_domain_opset_versions(_schemas)
+
 
 def get_schema(name, max_inclusive_opset_version, domain=ONNX_DOMAIN):
     """Get schema by name within specific version."""
+    domain = domain or ONNX_DOMAIN
     domain_version_schema_map = _schemas[name]
     version_schema_map = domain_version_schema_map[domain]
     for version, schema in version_schema_map.items():
         if version <= max_inclusive_opset_version:
             return schema
     return None
+
+
+def get_max_supported_opset_version(domain=ONNX_DOMAIN):
+    """Get max supported opset version by current onnx package given a domain."""
+    domain = domain or ONNX_DOMAIN
+    return _domain_opset_versions.get(domain, None)
