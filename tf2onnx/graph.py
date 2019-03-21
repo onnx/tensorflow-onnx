@@ -349,20 +349,8 @@ class Graph(object):
         self.reset_nodes(ops)
 
         # add identity node after each output, in case it is renamed during conversion.
-        nodes_seen = set()
-        multi_output_nodes = set()
         for o in self.outputs:
             n = self.get_node_by_output_in_current_graph(o)
-            if n in nodes_seen:
-                multi_output_nodes.add(n)
-            else:
-                nodes_seen.add(n)
-
-        for o in self.outputs:
-            n = self.get_node_by_output_in_current_graph(o)
-            # TODO: below doesn't work for nodes with multiple outputs. A work around, keep those intact.
-            if n in multi_output_nodes:
-                continue
             new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
             n_shapes = n.output_shapes
             n_dtypes = n.output_dtypes
