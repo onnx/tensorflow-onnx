@@ -234,7 +234,6 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         self.assertTrue("my_attr" not in n1.attr_onnx)
 
         n1 = helper.make_node("Conv", ["X", "W"], ["Y"], name="n1", domain="my_domain", my_attr="my_attr")
-        print(n1)
         graph_proto = helper.make_graph(
             nodes=[n1],
             name="test",
