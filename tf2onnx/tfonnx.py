@@ -473,6 +473,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, [
         "Div",
+        "Greater",
         "IsNaN",
         "ReduceSum",
         "Slice",

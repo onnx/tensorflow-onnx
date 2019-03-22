@@ -81,6 +81,9 @@ class TransposeOptimizer(GraphOptimizerBase):
                 input_shape = self._g.get_shape(op.input[0])
                 if not input_shape:
                     continue
+                # reshape only supports one dime is -1
+                if input_shape.count(-1) > 1:
+                    continue
 
                 new_shape = []
                 # when transpose is NHWC_TO_NCHW
