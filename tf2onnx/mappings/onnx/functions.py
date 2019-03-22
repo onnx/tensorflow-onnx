@@ -26,6 +26,10 @@ HWCN_TO_NCHW = [3, 2, 0, 1]
 NCHW_TO_HWCN = [2, 3, 1, 0]
 
 
+# pylint: disable=logging-not-lazy,unused-argument,missing-docstring
+# FIXME:
+# pylint: disable=unused-variable
+
 def _convert_shapenode_to_int64(ctx, node, input_number):
     """cast int32 shape into int64 shape."""
     name = node.input[input_number]

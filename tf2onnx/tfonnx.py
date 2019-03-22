@@ -31,14 +31,13 @@ from tf2onnx.utils import port_name
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx")
 
-
 NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
 HWCN_TO_NCHW = [3, 2, 0, 1]
 NCHW_TO_HWCN = [2, 3, 1, 0]
 
 
-# pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
+# pylint: disable=broad-except,logging-not-lazy,missing-docstring
 # FIXME:
 # pylint: disable=unused-variable
 
