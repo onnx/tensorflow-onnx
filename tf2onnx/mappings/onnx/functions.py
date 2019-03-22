@@ -15,8 +15,7 @@ import numpy as np
 from onnx import helper, onnx_pb, numpy_helper
 
 import tf2onnx
-from tf2onnx import utils
-from tf2onnx.tfonnx import TARGET_RS4, TARGET_CAFFE2
+from tf2onnx import constants, utils
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.mappings.onnx")
@@ -68,7 +67,7 @@ def broadcast_op(ctx, node, name, args):
         node.set_attr("broadcast", 1)
         # this works around shortcomings in the broadcasting code
         # of caffe2 and winml/rs4.
-        if ctx.is_target(TARGET_RS4):
+        if ctx.is_target(constants.TARGET_RS4):
             # in rs4 mul and add do not support scalar correctly
             if not shape0:
                 if node.inputs[0].is_const():
@@ -91,7 +90,7 @@ def broadcast_op7(ctx, node, name, args):
     if shape0 != shape1:
         # this works around shortcomings in the broadcasting code
         # of caffe2 and winml/rs4.
-        if ctx.is_target(TARGET_RS4):
+        if ctx.is_target(constants.TARGET_RS4):
             # in rs4 mul and add do not support scalar correctly
             if not shape0:
                 if node.inputs[0].is_const():
@@ -900,7 +899,7 @@ def stridedslice_op(ctx, node, name, args):
 
 
 def pow_op(ctx, node, name, args):
-    if ctx.is_target(TARGET_CAFFE2):
+    if ctx.is_target(constants.TARGET_CAFFE2):
         # workaround a bug in caffe2 pre Feb2018, pow(a, b) becomes np.exp(np.log(a) * b)
         node.type = "Log"
         b = node.input[1]

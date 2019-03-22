@@ -20,7 +20,7 @@ from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
-from tf2onnx import schemas, utils
+from tf2onnx import constants, schemas, utils
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx import mappings
@@ -31,15 +31,6 @@ from tf2onnx.utils import port_name
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx")
 
-# Target for the generated onnx graph. It possible targets:
-# onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)
-# caffe2 = include some workarounds for caffe2 and winml
-TARGET_RS4 = "rs4"
-TARGET_RS5 = "rs5"
-TARGET_RS6 = "rs6"
-TARGET_CAFFE2 = "caffe2"
-POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2]
-DEFAULT_TARGET = []
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
@@ -695,7 +686,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if inputs_as_nchw is None:
         inputs_as_nchw = []
     if target is None:
-        target = DEFAULT_TARGET
+        target = constants.DEFAULT_TARGET
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
 
@@ -748,9 +739,9 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # post-processing rewriters
     late_rewriters = []
-    if TARGET_RS5 in target:
+    if constants.TARGET_RS5 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs5)
-    if TARGET_RS6 in target:
+    if constants.TARGET_RS6 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs6)
     if late_rewriters:
         run_rewriters(g, late_rewriters, continue_on_error)
