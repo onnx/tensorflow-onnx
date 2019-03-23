@@ -7,8 +7,8 @@ tf2onnx.tf2onnx - sparse_softmax_cross_entropy_with_logits op conversion
 import numpy as np
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
-from tf2onnx.function.range import make_range
-from tf2onnx.function.gathernd import make_gathernd
+from .range import make_range
+from .gathernd import make_gathernd
 
 # pylint: disable=unused-argument,missing-docstring
 

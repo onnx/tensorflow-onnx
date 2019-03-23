@@ -2,8 +2,13 @@
 # Licensed under the MIT license.
 """ tf2onnx mapping functions for onnx domain. """
 
-from tf2onnx.function import *  # pylint: disable=wildcard-import
 from .functions import *  # pylint: disable=wildcard-import
+from .gathernd import gathernd_op
+from .lstm_block_cell import lstm_block_cell_op
+from .matrixbandpart import matrixbandpart_op
+from .range import range_op7
+from .select import select_op8
+from .sparse_softmax_cross_entropy_with_logits import sparse_softmax_cross_entropy_with_logits_op
 
 # map tensorflow ops to onnx ops. The format below is
 # "TFOP": func_to_map, ["OnnxOp", ...]
