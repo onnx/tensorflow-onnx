@@ -16,6 +16,7 @@ import traceback
 
 import numpy as np
 from onnx import helper, onnx_pb, numpy_helper
+import tensorflow as tf
 from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
@@ -2394,6 +2395,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
+    opset = utils.find_opset(opset)
+    print("using tensorflow={}, onnx={}, opset={}, tfonnx={}/{}".format(
+        tf.__version__, utils.get_onnx_version(), opset,
+        tf2onnx.__version__, tf2onnx.version.git_version[:6]))
+
     if opset > schemas.get_max_supported_opset_version():
         log.warning("currently installed onnx package %s is too low to support opset %s, "
                     "please upgrade onnx package to avoid potential conversion issue.",

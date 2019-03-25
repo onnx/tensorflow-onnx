@@ -13,7 +13,6 @@ import argparse
 from onnx import helper
 import tensorflow as tf
 
-import tf2onnx
 from tf2onnx import utils
 from tf2onnx import loader
 from tf2onnx.graph import GraphUtil
@@ -76,11 +75,6 @@ def default_custom_op_handler(ctx, node, name, args):
 
 def main():
     args = get_args()
-
-    opset = utils.find_opset(args.opset)
-    print("using tensorflow={}, onnx={}, opset={}, tfonnx={}/{}".format(
-        tf.__version__, utils.get_onnx_version(), opset,
-        tf2onnx.__version__, tf2onnx.version.git_version[:6]))
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.
