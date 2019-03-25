@@ -340,8 +340,13 @@ class TransposeOptimizer(object):
             ops = self._g.get_nodes()
             self._g.replace_all_inputs(ops, node.output[0], trans.input[0])
 
+            shape = self._g.get_shape(node.output[0])
+            dtype = self._g.get_dtype(node.output[0])
             self._g.remove_node(trans.name)
             self._g.remove_node(node.name)
+            if node.output[0] in self._g.outputs:
+                self._g.make_node("Identity", [trans.input[0]],
+                                  outputs=node.output, shapes=[shape], dtypes=[dtype])
             return True
         return False
 
@@ -408,6 +413,8 @@ class TransposeOptimizer(object):
         return False
 
     def _identity_handler(self, trans, node):
+        if node.output[0] in self._g.outputs:
+            return False
         ops = self._g.get_nodes()
         self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
         self._g.remove_node(node.name)
