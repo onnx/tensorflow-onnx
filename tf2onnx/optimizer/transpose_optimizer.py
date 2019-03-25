@@ -380,7 +380,7 @@ class TransposeOptimizer(object):
                 multiplier_input_id = i
                 multiplier_input_node = input_node
 
-        if not multiplier_input_node.is_const():
+        if multiplier_input_node is None or not multiplier_input_node.is_const():
             return False
         multiplier = multiplier_input_node.get_tensor_value(as_list=False)
 
