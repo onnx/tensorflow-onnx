@@ -77,21 +77,34 @@ def get_node_name(tensor_name):
     return tensor_name.split(":")[0]
 
 
+def get_node_shape(node):
+    shape_attr = node.attr.get("shape")
+    shape = [d.size for d in shape_attr.shape.dim]
+    return shape
+
+
 def get_graph_def_io_nodes(graph_def):
     consumed = set()
     inputs = []
     outputs = []
+    input_shapes = []
     for node in graph_def.node:
         for i in node.input:
             consumed.add(get_node_name(i))
         if node.op in ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]:
             inputs.append(node.name)
+            shape = []
+            try:
+                shape = get_node_shape(node)
+            except:  # pylint: disable=bare-except
+                pass
+            input_shapes.append(shape)
 
     for node in graph_def.node:
         if node.name not in consumed and node.name not in inputs:
             outputs.append(node.name)
 
-    return inputs, outputs
+    return inputs, outputs, input_shapes
 
 
 class main(object):
@@ -131,10 +144,14 @@ class main(object):
     def get_graph_io_nodes(input_path):
         logging.info("load from %s", input_path)
         graph_def = load_graph_def_from_pb(input_path)
-        inputs, outputs = get_graph_def_io_nodes(graph_def)
+        inputs, outputs, input_shapes = get_graph_def_io_nodes(graph_def)
         logging.info("graph has:")
-        logging.info("\t%s inputs: %s", len(inputs), ','.join(inputs))
-        logging.info("\t%s (possible) outputs: %s", len(outputs), ','.join(outputs))
+        logging.info("\t%s inputs:", len(inputs))
+        for input_name, input_shape in zip(inputs, input_shapes):
+            print("\"{}:0\": {}".format(input_name, input_shape))
+        logging.info("\t%s (possible) outputs:", len(outputs))
+        for output in outputs:
+            print("- {}:0".format(output))
 
     @staticmethod
     def print_graph_stat(input_path):
