@@ -766,6 +766,12 @@ def concat_op(ctx, node, name, args):
 def concatv2_op(ctx, node, name, args):
     # T output = ConcatV2(T values, Tidx axis, @int N, @type Tidx)
     # T concat_result = Concat(T inputs, @INT axis)
+    # if any input is empty, remove the input and concat the others
+    # NOTE: workaround for https://github.com/Microsoft/onnxruntime/issues/681
+    for i, inp in enumerate(node.inputs):
+        if inp.is_const() and inp.get_tensor_value() == []:
+            ctx.remove_input(node, node.input[i])
+
     axis_node = node.inputs[-1]
     axis_val = axis_node.get_tensor_value()
     ctx.remove_input(node, node.input[-1])
@@ -1154,6 +1160,28 @@ def minmax_op(ctx, node, name, args):
     # handle this by doing something like:
     # y = min(x1, add(x2, sub(x1, x1))), where x1, x2 are the inputs and x2 is a scalar
     # this will create a tensor of zeros of the shape of x1, adds x2 to it (which broadcasts) and use that for min.
+    # support more dtype
+    supported_dtypes = [
+        onnx_pb.TensorProto.FLOAT,
+        onnx_pb.TensorProto.FLOAT16,
+        onnx_pb.TensorProto.DOUBLE
+    ]
+    target_dtype = onnx_pb.TensorProto.FLOAT
+    for inp in node.input:
+        dtype = ctx.get_dtype(inp)
+        utils.make_sure(dtype, "dtype of {} is None".format(inp))
+        if dtype not in supported_dtypes:
+            inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=target_dtype)
+            ctx.copy_shape(inp, inp_cast.output[0])
+            ctx.set_dtype(inp_cast.output[0], target_dtype)
+    origin_dtype = ctx.get_dtype(node.output[0])
+    utils.make_sure(origin_dtype, "dtype of {} is None".format(node.output[0]))
+    ctx.set_dtype(node.output[0], target_dtype)
+    cast_name = utils.make_name(name)
+    cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)
+    to_replace = [n for n in ctx.get_nodes() if n != cast_node]
+    ctx.replace_all_inputs(to_replace, node.output[0], cast_node.output[0])
+
     shapeo = ctx.get_shape(node.output[0])
     needs_broadcast_op = []
     has_correct_shape = []
@@ -1676,6 +1704,7 @@ _OPSET_4 = {
     "BiasAdd": (biasadd_op, []),
     "BiasAddV1": (biasadd_op, []),
     "Cast": (cast_op, []),
+    "CheckNumerics": (identity_op, ["Identity"]),
     "Concat": (concat_op, ["Concat"]),
     "ConcatV2": (concatv2_op, ["Concat"]),
     "Const": (direct_op, []),

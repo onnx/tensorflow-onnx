@@ -596,6 +596,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
+        tf.reset_default_graph()
+        x_val1 = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.int32).reshape((2, 2))
+        x_val2 = np.array([4.0, 4.0, 4.0, 4.0], dtype=np.int32).reshape((2, 2))
+        x1 = tf.placeholder(tf.int32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.placeholder(tf.int32, x_val2.shape, name=_TFINPUT1)
+        mi = tf.minimum(x1, x2)
+        _ = tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
     @skip_caffe2_backend("issue with broadcasting scalar")
     @check_onnxruntime_incompatibility("Sub")
     def test_min_broadcast(self):

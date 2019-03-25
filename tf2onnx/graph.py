@@ -908,7 +908,7 @@ class Graph(object):
                 break
         return new_node
 
-    def insert_new_node_on_output(self, op_type, output_name, name=None, domain=None, **kwargs):
+    def insert_new_node_on_output(self, op_type, output_name, name, domain=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             op_type: type for new operation
