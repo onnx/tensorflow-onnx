@@ -377,7 +377,7 @@ class Graph(object):
             body_graphs = n.graph.contained_graphs.pop(n.name, None)
             self.remove_node(n.name)
 
-            new_outputs = [o if o != output else new_output_name for output in n.output]
+            new_outputs = [output if o != output else new_output_name for output in n.output]
             # domain should be passed to new node
             new_node = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
                                       skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,

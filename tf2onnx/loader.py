@@ -87,6 +87,11 @@ def from_saved_model(model_path, input_names, output_names):
             for _, output_tensor in sorted(outputs_tensor_info.items()):
                 outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
         frozen_graph = freeze_session(sess, output_names=list(outputs.keys()))
+        frozen_inputs = []
+        # get inputs in frozen graph
+        for n in frozen_graph.node:
+            if n.name in inputs.keys():
+                frozen_inputs.append(n.name)
     # clean up
     tf.reset_default_graph()
-    return frozen_graph, inputs.keys(), outputs.keys()
+    return frozen_graph, frozen_inputs, outputs.keys()
