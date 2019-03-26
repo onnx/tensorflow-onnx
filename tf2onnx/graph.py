@@ -1138,7 +1138,7 @@ class GraphUtil(object):
             for attr_name, attr_val in n.attr.items():
                 if attr_val.HasField('g'):
                     # it was assumed that the a.g has inferred shapes/dtypes.
-                    sub_g = GraphUtil.create_graph_from_onnx_graph(attr_val.g)
+                    sub_g = GraphUtil.create_graph_from_onnx_graph(attr_val.g, opset_version)
                     n.set_body_graph_as_attr(attr_name, sub_g)
         return g
 
