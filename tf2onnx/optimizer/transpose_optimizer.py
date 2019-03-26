@@ -115,7 +115,7 @@ class TransposeOptimizer(object):
         graph = self._g
         input_transposes_map = defaultdict(list)
         for node in graph.get_nodes():
-            if node.type == "Transpose":
+            if node.type == "Transpose" and node.get_attr("perm"):
                 key = (node.input[0], str(node.get_attr("perm").ints))
                 input_transposes_map[key].append(node)
 
