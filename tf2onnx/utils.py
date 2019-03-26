@@ -120,21 +120,39 @@ def split_nodename_and_shape(name):
 
 
 def tf_to_onnx_tensor(tensor, name=""):
-    """Convert tensorflow tensor to onnx tensor."""
+    """
+    Convert tensorflow tensor to onnx tensor.
+    Here deal with three types of tensor:
+    1. normal tensor, e.g., np.array([1,2,3], dtype=DTYPE):
+        tensor_content: raw data of [1,2,3]
+        tensor_shape.dim: [3]
+        DTYPE_val: empty
+    2. scalar tensor, e.g., np.array(1, dtype=DTYPE):
+        tensor_content: empty
+        tensor_shape.dim: [0]
+        DTYPE_val: 1
+    3. empty tensor, e.g., np.array([], dtype=DTYPE) and np.array([[]], dtype=DTYPE):
+        tensor_content: empty
+        tensor_shape.dim: [0] and [1, 0]
+        DTYPE_val: empty
+    """
     new_type = TF_TO_ONNX_DTYPE[tensor.dtype]
     tdim = tensor.tensor_shape.dim
     dims = [d.size for d in tdim]
-    # FIXME: something is fishy here
-    if dims == [0]:
-        dims = [1]
     is_raw, data = get_tf_tensor_data(tensor)
+    # empty tensor
+    if not is_raw and data is None:
+        np_data = np.array([], dtype=map_onnx_to_numpy_type(new_type)).reshape(dims)
+        return numpy_helper.from_array(np_data, name=name)
+    make_sure(data, "tensor data isn't expected to be None or empty")
+    # scalar tensor
+    if dims == [0] and not is_raw and len(data) == 1:
+        return helper.make_tensor(name, new_type, [], data, False)
     if not is_raw and len(data) == 1 and np.prod(dims) > 1:
         batch_data = np.zeros(dims, dtype=map_onnx_to_numpy_type(new_type))
         batch_data.fill(data[0])
-        onnx_tensor = numpy_helper.from_array(batch_data, name=name)
-    else:
-        onnx_tensor = helper.make_tensor(name, new_type, dims, data, is_raw)
-    return onnx_tensor
+        return numpy_helper.from_array(batch_data, name=name)
+    return helper.make_tensor(name, new_type, dims, data, is_raw)
 
 
 def get_tf_tensor_data(tensor):
@@ -154,16 +172,15 @@ def get_tf_tensor_data(tensor):
         data = tensor.int64_val
     elif tensor.bool_val:
         data = tensor.bool_val
-    elif tensor.dtype == tf.int32:
-        data = [0]
-    elif tensor.dtype == tf.int64:
-        data = [0]
-    elif tensor.dtype == tf.float32:
-        data = [0.]
-    elif tensor.dtype == tf.float16:
-        data = [0]
     elif tensor.string_val:
         data = tensor.string_val
+    elif tensor.dtype in [
+            tf.int32,
+            tf.int64,
+            tf.float32,
+            tf.float16
+    ]:
+        data = None
     else:
         raise ValueError('tensor data not supported')
     return [is_raw, data]

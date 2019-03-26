@@ -596,6 +596,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
+        tf.reset_default_graph()
+        x_val1 = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.int32).reshape((2, 2))
+        x_val2 = np.array([4.0, 4.0, 4.0, 4.0], dtype=np.int32).reshape((2, 2))
+        x1 = tf.placeholder(tf.int32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.placeholder(tf.int32, x_val2.shape, name=_TFINPUT1)
+        mi = tf.minimum(x1, x2)
+        _ = tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
     @skip_caffe2_backend("issue with broadcasting scalar")
     @check_onnxruntime_incompatibility("Sub")
     def test_min_broadcast(self):
@@ -787,6 +796,35 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.concat([x1, x2, x3], 0)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, "input3:0": x_val3})
+
+    def test_concat_empty_const_input(self):
+        x_val1 = np.array([1, 2, 3], dtype=np.float32)
+        x_val2 = np.array([], dtype=np.float32)
+        x1 = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.constant(x_val2, dtype=tf.float32)
+        x_ = tf.concat([x1, x2], 0)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1})
+
+        tf.reset_default_graph()
+        x_val1 = np.array([[1, 2, 3]], dtype=np.float32)
+        x_val2 = np.array([[]], dtype=np.float32)
+        x1 = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.constant(x_val2, dtype=tf.float32)
+        x_ = tf.concat([x1, x2], 1)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1})
+
+        tf.reset_default_graph()
+        x_val1 = np.array([1, 2, 3], dtype=np.float32)
+        x_val2 = np.array([], dtype=np.float32)
+        x_val3 = np.array([13, 14, 15], dtype=np.float32)
+        x1 = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.constant(x_val2, dtype=tf.float32)
+        x3 = tf.placeholder(tf.float32, x_val3.shape, name=_TFINPUT1)
+        x_ = tf.concat([x1, x2, x3], 0)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val3})
 
     @check_opset_min_version(6, "cast")
     def test_concat_int64(self):

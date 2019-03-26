@@ -12,8 +12,9 @@ import unittest
 from collections import namedtuple
 
 import graphviz as gv
+import numpy as np
 from onnx import TensorProto
-from onnx import helper
+from onnx import helper, numpy_helper
 
 import tensorflow as tf
 from tf2onnx import utils
@@ -246,6 +247,37 @@ class Tf2OnnxInternalTests(unittest.TestCase):
         n1 = g.get_node_by_name("n1")
         self.assertTrue("my_attr" in n1.attr)
         self.assertTrue("my_attr" in n1.attr_onnx)
+
+    def test_tensor_data(self):
+        tensors = {
+            "empty_tensor": np.array([], dtype=np.float32),
+            "multi_dim_empty_tensor": np.array([[], []], dtype=np.float32),
+            "scalar": np.array(1., dtype=np.float32),
+            "one_item_array": np.array([1.], dtype=np.float32),
+            "normal_array": np.array([[1., 2.], [2., 3.]], dtype=np.float32)
+        }
+        tf.reset_default_graph()
+        with tf.Session() as sess:
+            for n, data in tensors.items():
+                tf.constant(data, dtype=tf.float32, name=n)
+
+        for tf_node in sess.graph.get_operations():
+            name = tf_node.name
+            self.assertTrue(name in tensors.keys())
+
+            self.assertTrue("value" in tf_node.node_def.attr)
+            # convert to onnx tensor value
+            tensor_value = utils.tf_to_onnx_tensor(
+                utils.get_tf_node_attr(tf_node, "value"),
+                name=utils.port_name(tf_node.name)
+            )
+            attr = helper.make_attribute("value", tensor_value)
+            # same as node.get_tensor_value(is_list=False)
+            actual = numpy_helper.to_array(helper.get_attribute_value(attr))
+
+            expected = tensors[name]
+
+            self.assertTrue(np.array_equal(expected, actual))
 
 
 if __name__ == '__main__':

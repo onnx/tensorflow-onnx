@@ -15,6 +15,7 @@ import tarfile
 import time
 import traceback
 import zipfile
+import logging
 
 import PIL.Image
 import numpy as np
@@ -33,6 +34,9 @@ from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("tf2onnx")
 
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
 PERFITER = 1000
@@ -246,9 +250,10 @@ class Test(object):
             for k in inputs.keys():  # pylint: disable=consider-iterating-dictionary
                 t = sess.graph.get_tensor_by_name(k)
                 dtype = tf.as_dtype(t.dtype).name
-                if type != "float32":
-                    v = inputs[k]
-                    inputs[k] = v.astype(dtype)
+                v = inputs[k]
+                if dtype != v.dtype:
+                    log.warning("input dtype doesn't match tensorflow's")
+                    inputs[k] = np.array(v, dtype=dtype)
             if self.force_input_shape:
                 for k, v in inputs.items():
                     shape_override[k] = list(v.shape)
