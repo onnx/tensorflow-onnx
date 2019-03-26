@@ -769,8 +769,11 @@ def concatv2_op(ctx, node, name, args):
     # if any input is empty, remove the input and concat the others
     # NOTE: workaround for https://github.com/Microsoft/onnxruntime/issues/681
     for i, inp in enumerate(node.inputs):
-        if inp.is_const() and inp.get_tensor_value() == []:
+        if inp.is_const() and inp.get_tensor_value(as_list=False).size == 0:
             ctx.remove_input(node, node.input[i])
+    # all inputs are deleted
+    if not node.input:
+        raise RuntimeError("all inputs of {} are empty".format(name))
 
     axis_node = node.inputs[-1]
     axis_val = axis_node.get_tensor_value()
@@ -1175,7 +1178,7 @@ def minmax_op(ctx, node, name, args):
             ctx.copy_shape(inp, inp_cast.output[0])
             ctx.set_dtype(inp_cast.output[0], target_dtype)
     origin_dtype = ctx.get_dtype(node.output[0])
-    utils.make_sure(origin_dtype, "dtype of {} is None".format(node.output[0]))
+    utils.make_sure(origin_dtype is not None, "dtype of {} is None".format(node.output[0]))
     ctx.set_dtype(node.output[0], target_dtype)
     cast_name = utils.make_name(name)
     cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)

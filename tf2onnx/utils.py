@@ -131,9 +131,9 @@ def tf_to_onnx_tensor(tensor, name=""):
         tensor_content: empty
         tensor_shape.dim: [0]
         DTYPE_val: 1
-    3. empty tensor, e.g., np.array([], dtype=DTYPE):
+    3. empty tensor, e.g., np.array([], dtype=DTYPE) and np.array([[]], dtype=DTYPE):
         tensor_content: empty
-        tensor_shape.dim: [0]
+        tensor_shape.dim: [0] and [1, 0]
         DTYPE_val: empty
     """
     new_type = TF_TO_ONNX_DTYPE[tensor.dtype]
@@ -141,8 +141,8 @@ def tf_to_onnx_tensor(tensor, name=""):
     dims = [d.size for d in tdim]
     is_raw, data = get_tf_tensor_data(tensor)
     # empty tensor
-    if dims == [0] and not is_raw and data is None:
-        np_data = np.array([], dtype=map_onnx_to_numpy_type(new_type))
+    if not is_raw and data is None:
+        np_data = np.array([], dtype=map_onnx_to_numpy_type(new_type)).reshape(dims)
         return numpy_helper.from_array(np_data, name=name)
     make_sure(data, "tensor data isn't expected to be None or empty")
     # scalar tensor
