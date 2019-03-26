@@ -357,27 +357,15 @@ class Graph(object):
         self.reset_nodes(ops)
 
         # add identity node after each output, in case it is renamed during conversion.
-        nodes_seen = set()
-        multi_output_nodes = set()
         for o in self.outputs:
             n = self.get_node_by_output_in_current_graph(o)
-            if n in nodes_seen:
-                multi_output_nodes.add(n)
-            else:
-                nodes_seen.add(n)
-
-        for o in self.outputs:
-            n = self.get_node_by_output_in_current_graph(o)
-            # TODO: below doesn't work for nodes with multiple outputs. A work around, keep those intact.
-            if n in multi_output_nodes:
-                continue
             new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
             n_shapes = n.output_shapes
             n_dtypes = n.output_dtypes
             body_graphs = n.graph.contained_graphs.pop(n.name, None)
             self.remove_node(n.name)
 
-            new_outputs = [o if o != output else new_output_name for output in n.output]
+            new_outputs = [output if output != o else new_output_name for output in n.output]
             # domain should be passed to new node
             new_node = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
                                       skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
