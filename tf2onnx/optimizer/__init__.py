@@ -8,6 +8,7 @@ from __future__ import unicode_literals
 
 import sys
 import traceback
+from collections import OrderedDict
 
 from tf2onnx.optimizer.identity_optimizer import IdentityOptimizer
 from tf2onnx.optimizer.merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
@@ -16,13 +17,13 @@ from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 # pylint: disable=missing-docstring, broad-except
 
 # optimizer sequence need to be considered carefully
-_optimizers = {
-    "transpose_opt": TransposeOptimizer,
+_optimizers = OrderedDict([
+    ("transpose_opt", TransposeOptimizer),
     # merge_duplicated_nodes should be used after transpose_opt
     # for transpose_opt may have some trans nodes that can be merge
-    "merge_duplicated_nodes": MergeDuplicatedNodesOptimizer,
-    "identity_opt": IdentityOptimizer,
-}
+    ("merge_duplicated_nodes", MergeDuplicatedNodesOptimizer),
+    ("identity_opt", IdentityOptimizer),
+])
 
 
 def optimize_graph(graph, debug=False):
