@@ -13,7 +13,7 @@ from tf2onnx.function.gathernd import make_gathernd
 # pylint: disable=unused-argument,missing-docstring
 
 
-def softmax_cross_entropy_with_logits_computation(ctx, label, logit, tf_ori_node):
+def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
     label_dtype = ctx.get_dtype(label.output[0])
     logit_dtype = ctx.get_dtype(logit.output[0])
     utils.make_sure(label_dtype == logit_dtype, "the following logic only works on same dtype of label and logit")
@@ -32,7 +32,7 @@ def softmax_cross_entropy_with_logits_computation(ctx, label, logit, tf_ori_node
                   outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
-def softmax_cross_entropy_with_logits_op(ctx, node, name, args):
+def softmax_cross_entropy_with_logits_op7(ctx, node, name, args):
     logits = node.inputs[0]
     logit_dtype = ctx.get_dtype(logits.output[0])
     labels = node.inputs[1]
@@ -40,10 +40,10 @@ def softmax_cross_entropy_with_logits_op(ctx, node, name, args):
     if label_dtype != logit_dtype:
         labels = ctx.make_node("Cast", labels.output, attr={"to": logit_dtype}, dtypes=[logit_dtype])
 
-    softmax_cross_entropy_with_logits_computation(ctx, labels, logits, node)
+    _make_softmax_cross_entropy_with_logits(ctx, labels, logits, node)
 
 
-def sparse_softmax_cross_entropy_with_logits_op(ctx, node, name, args):
+def sparse_softmax_cross_entropy_with_logits_op7(ctx, node, name, args):
     # make subgraph to implement one_hot, idea comes from onehot_op
     indices_name = node.input[1]
     indices_shape = ctx.get_shape(indices_name)
@@ -150,4 +150,4 @@ def sparse_softmax_cross_entropy_with_logits_op9(ctx, node, name, args):
     if logit_dtype != TensorProto.INT64:
         label_node = ctx.make_node("Cast", label_node.output, attr={"to": logit_dtype}, dtypes=[logit_dtype])
 
-    softmax_cross_entropy_with_logits_computation(ctx, label_node, logit_node, node)
+    _make_softmax_cross_entropy_with_logits(ctx, label_node, logit_node, node)
