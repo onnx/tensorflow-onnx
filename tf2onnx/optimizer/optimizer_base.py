@@ -17,6 +17,8 @@ class GraphOptimizerBase(object):
     def optimize(self, graph):
         original_node_statistics = graph.dump_node_statistics()
         graph = self._optimize(graph)
+        graph.delete_unused_nodes(graph.outputs)
+        graph.topological_sort(graph.get_nodes())
         node_statistics = graph.dump_node_statistics()
         self._print_stat_diff(original_node_statistics, node_statistics)
         return graph
