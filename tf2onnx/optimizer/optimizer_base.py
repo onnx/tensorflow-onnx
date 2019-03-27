@@ -5,20 +5,13 @@
 
 from __future__ import unicode_literals
 
-import logging
-
-from tf2onnx import utils
-
 
 class GraphOptimizerBase(object):
     """optimizer graph to improve performance
     """
 
-    def __init__(self, name="GraphOptimizerBase", debug=False):
+    def __init__(self, debug=False):
         self._debug = debug
-        utils.make_sure(name is not None, "name of optimizer is needed.")
-        self._name = name
-        self._log = logging.getLogger("tf2onnx.optimizer.%s" % self._name)
 
     def optimize(self, graph):
         original_node_statistics = graph.dump_node_statistics()

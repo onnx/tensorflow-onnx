@@ -8,6 +8,7 @@
 """
 
 from collections import defaultdict, namedtuple
+import logging
 
 from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 
@@ -18,11 +19,14 @@ from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     """Remove duplicate nodes.
     """
-    _key_to_group_nodes = namedtuple("key", "type input")
+    _KeyToGroupNodes = namedtuple("key", "type input")
 
-    def __init__(self, name="MergeDuplicatedNodesOptimizer", debug=False):
-        super(MergeDuplicatedNodesOptimizer, self).__init__(name=name)
-
+    def __init__(self, debug=False):
+        super(MergeDuplicatedNodesOptimizer, self).__init__(debug)
+        # optimizer should have name and log property
+        self._name = "MergeDuplicatedNodesOptimizer"
+        self._log = logging.getLogger("tf2onnx.optimizer.%s" % self._name)
+        # used internally
         self._graph_can_be_optimized = True
 
     def _optimize(self, graph):
@@ -46,7 +50,7 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     def _group_nodes_by_type_inputs(self, graph):
         res = defaultdict(list)
         for node in graph.get_nodes():
-            res[self._key_to_group_nodes(node.type, tuple(node.input))].append(node)
+            res[self._KeyToGroupNodes(node.type, tuple(node.input))].append(node)
         return res
 
     def _del_nodes_if_duplicated(self, nodes_group, graph):

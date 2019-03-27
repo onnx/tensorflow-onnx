@@ -8,18 +8,22 @@
 from __future__ import unicode_literals
 import logging
 
-logging.basicConfig(level=logging.INFO)
+from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
+
+
 log = logging.getLogger("tf2onnx.optimizer.identity_optimizer")
 
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable
 
 
-class IdentityOptimizer(object):
+class IdentityOptimizer(GraphOptimizerBase):
     """Identity Optimizer."""
 
     def __init__(self, debug=False):
-        self._debug = debug
+        super(IdentityOptimizer, self).__init__(debug)
+        self._name = "IdentityOptimizer"
+
         self._g = None
 
     def optimize(self, graph):

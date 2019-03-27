@@ -18,7 +18,7 @@ from tensorflow.python.ops import variables as variables_lib
 from common import get_test_config
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize
-from tf2onnx.graph import GraphUtil
+from tf2onnx import optimizer
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -141,7 +141,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         with tf.Session() as sess:
             g = process_tf_graph(sess.graph, opset=self.config.opset, output_names=output_names_with_port,
                                  target=self.config.target, **process_args)
-            g = GraphUtil.optimize_graph(g)
+            g = optimizer.optimize_graph(g)
             actual = self._run_backend(g, output_names_with_port, onnx_feed_dict)
 
         for expected_val, actual_val in zip(expected, actual):

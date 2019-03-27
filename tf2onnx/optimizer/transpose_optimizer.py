@@ -11,6 +11,7 @@ import logging
 import numpy as np
 
 from tf2onnx import utils
+from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.optimizer.transpose_optimizer")
@@ -35,11 +36,12 @@ def is_useless_transpose(transpose_node):
     return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints == list(range(len(perm_attr.ints)))
 
 
-class TransposeOptimizer(object):
+class TransposeOptimizer(GraphOptimizerBase):
     """Transpose Optimizer."""
 
     def __init__(self, debug=False):
-        self._debug = debug
+        super(TransposeOptimizer, self).__init__(debug)
+        self._name = "TransposeOptimizer"
         self._handler_map = {}
         self._force_stop = {}
 

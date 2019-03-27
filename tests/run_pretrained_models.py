@@ -30,7 +30,7 @@ import yaml
 import tf2onnx
 from tf2onnx import loader
 from tf2onnx import utils
-from tf2onnx.graph import GraphUtil
+from tf2onnx import optimizer
 from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
@@ -270,7 +270,7 @@ class Test(object):
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override,
                                           input_names=inputs.keys())
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
-                new_model_proto = GraphUtil.optimize_graph(onnx_graph, debug=debug).make_model("optimized")
+                new_model_proto = optimizer.optimize_graph(onnx_graph, debug=debug).make_model("optimized")
                 if new_model_proto:
                     model_proto = new_model_proto
                 else:
