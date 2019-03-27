@@ -1105,12 +1105,22 @@ class GraphUtil(object):
         # apply shape inference on the model
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
         graph_proto = inferred_model.graph
-        opset_version = onnx_model_proto.opset_import[0].version
-        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version)
+
+        opset_version = None
+        extra_opset = []
+        for opset in onnx_model_proto.opset_import:
+            if not opset.domain:
+                # domain field is None or empty means it is onnx domain
+                opset_version = opset.version
+            else:
+                extra_opset.append(opset)
+
+        utils.make_sure(opset_version is not None, "opset version is not specified for onnx domain")
+        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version, extra_opset)
         return main_graph
 
     @staticmethod
-    def create_graph_from_onnx_graph(graph_proto, opset_version=None):
+    def create_graph_from_onnx_graph(graph_proto, opset_version=None, extra_opset=None):
         """Create Graph loading onnx graph proto."""
         output_shapes = {}
         output_dtypes = {}
@@ -1137,7 +1147,7 @@ class GraphUtil(object):
         for n in graph_proto.output:
             output_names.append(n.name)
 
-        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, None, output_names)
+        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, extra_opset, output_names)
         const_nodes = GraphUtil._parse_graph_initializer(g, graph_proto)
         GraphUtil._parse_graph_input(g, graph_proto, [n.name for n in const_nodes])
 
@@ -1145,7 +1155,7 @@ class GraphUtil(object):
             for attr_name, attr_val in n.attr.items():
                 if attr_val.HasField('g'):
                     # it was assumed that the a.g has inferred shapes/dtypes.
-                    sub_g = GraphUtil.create_graph_from_onnx_graph(attr_val.g, opset_version)
+                    sub_g = GraphUtil.create_graph_from_onnx_graph(attr_val.g, opset_version, extra_opset)
                     n.set_body_graph_as_attr(attr_name, sub_g)
         return g
 
