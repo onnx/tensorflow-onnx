@@ -1800,7 +1800,6 @@ _OPSET_5 = {
     "ExpandDims": (expanddims_op7, []),
     "OneHot": (onehot_op, []),
     "Reshape": (reshape_op5, []),
-    "SparseSoftmaxCrossEntropyWithLogits": (sparse_softmax_cross_entropy_with_logits_op, [])
 }
 
 _OPSET_6 = {
@@ -1841,6 +1840,8 @@ _OPSET_7 = {
     "ResizeNearestNeighbor": (upsample_op7, ["Upsample", "nearest"]),
     "Sin": (direct_op, []),
     "Sub": (broadcast_op7, []),
+    "SoftmaxCrossEntropyWithLogits": (softmax_cross_entropy_with_logits_op7, []),
+    "SparseSoftmaxCrossEntropyWithLogits": (sparse_softmax_cross_entropy_with_logits_op7, []),
     "Tan": (direct_op, []),
     "Tile": (tile_op7, []),
     "TruncateDiv": (broadcast_op7, ["Div"]),
@@ -1870,6 +1871,7 @@ _OPSET_9 = {
     "ReverseSequence": (reverse_op9, []),
     "Sign": (sign_op9, []),
     "Sinh": (direct_op, []),
+    "SparseSoftmaxCrossEntropyWithLogits": (sparse_softmax_cross_entropy_with_logits_op9, []),
     "Where": (where_op, []),
 }
 

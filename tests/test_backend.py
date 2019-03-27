@@ -1613,6 +1613,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kwargs = {"check_dtype": True}
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, **kwargs)
 
+    # @check_opset_min_version(7, "broadcasting op")
+    @unittest.skip("disable it for now, since fold const has bug")
+    def test_softmax_cross_entropy_with_logits(self):
+        num_class = 5
+        data_shape = [100, num_class]
+        for np_dtype, tf_dtype in zip([np.int32, np.int64], [tf.int32, tf.int64]):
+            tf.reset_default_graph()
+            label_val = np.random.randint(0, num_class - 1, data_shape).astype(np_dtype)
+            logits_val = np.random.random(data_shape).astype(np.float32)
+
+            label = tf.placeholder(tf_dtype, shape=data_shape, name=_TFINPUT)
+            logits = tf.placeholder(tf.float32, shape=data_shape, name=_TFINPUT1)
+
+            res1 = tf.nn.softmax_cross_entropy_with_logits_v2(labels=label, logits=logits)
+            _ = tf.identity(res1, name=_TFOUTPUT)
+
+            self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val}, atol=1e-5)
+
     def test_sparse_softmax_cross_entropy_with_logits(self):
         num_class = 5
         label_val = np.array([3, 2, 0, 4]).astype(np.int32)

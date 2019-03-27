@@ -11,7 +11,9 @@ from tf2onnx.function.lstm_block_cell import lstm_block_cell_op
 from tf2onnx.function.matrixbandpart import matrixbandpart_op
 from tf2onnx.function.range import range_op7
 from tf2onnx.function.select import select_op8
-from tf2onnx.function.sparse_softmax_cross_entropy_with_logits import sparse_softmax_cross_entropy_with_logits_op
+from tf2onnx.function.softmax_cross_entropy_with_logits import softmax_cross_entropy_with_logits_op7
+from tf2onnx.function.softmax_cross_entropy_with_logits import sparse_softmax_cross_entropy_with_logits_op7
+from tf2onnx.function.softmax_cross_entropy_with_logits import sparse_softmax_cross_entropy_with_logits_op9
 
 __all__ = [
     "gathernd_op",
@@ -19,5 +21,7 @@ __all__ = [
     "matrixbandpart_op",
     "range_op7",
     "select_op8",
-    "sparse_softmax_cross_entropy_with_logits_op"
+    "softmax_cross_entropy_with_logits_op7",
+    "sparse_softmax_cross_entropy_with_logits_op7",
+    "sparse_softmax_cross_entropy_with_logits_op9",
 ]

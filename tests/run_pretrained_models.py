@@ -84,7 +84,7 @@ class Test(object):
     target = []
 
     def __init__(self, url, local, make_input, input_names, output_names,
-                 disabled=False, more_inputs=None, rtol=0.01, atol=0.,
+                 disabled=False, more_inputs=None, rtol=0.01, atol=1e-6,
                  check_only_shape=False, model_type="frozen", force_input_shape=False,
                  skip_tensorflow=False):
         self.url = url
