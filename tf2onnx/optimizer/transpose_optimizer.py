@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.optimizer.transpose_optimizer")
 
 
-# pylint: disable=logging-not-lazy,unused-argument,missing-docstring
+# pylint: disable=logging-not-lazy,unused-argument,missing-docstring,abstract-method
 # FIXME:
 # pylint: disable=unused-variable
 

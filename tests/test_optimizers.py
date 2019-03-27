@@ -348,7 +348,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         )
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
-        self.run_merge_duplicated_nodes_compare(["value1", "value2"], {"X": np.random.randn(5, 5).astype(np.float32)}, model_proto,
+        self.run_merge_duplicated_nodes_compare(["value1", "value2"],
+                                                {"X": np.random.randn(5, 5).astype(np.float32)}, model_proto,
                                                 op_type="Add", remaining_op_num=2)
 
     def test_duplicated_different_output_length(self):

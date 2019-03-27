@@ -14,7 +14,7 @@ from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 log = logging.getLogger("tf2onnx.optimizer.identity_optimizer")
 
 
-# pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable
+# pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
 
 
 class IdentityOptimizer(GraphOptimizerBase):

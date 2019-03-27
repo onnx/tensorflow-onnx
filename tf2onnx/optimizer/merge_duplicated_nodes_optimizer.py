@@ -15,12 +15,11 @@ from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
 
+_KeyToGroupNodes = namedtuple("key", "type input")
 
 class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     """Remove duplicate nodes.
     """
-    _KeyToGroupNodes = namedtuple("key", "type input")
-
     def __init__(self, debug=False):
         super(MergeDuplicatedNodesOptimizer, self).__init__(debug)
         # optimizer should have name and log property
@@ -47,10 +46,11 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
                 continue
             self._del_nodes_if_duplicated(nodes_group, graph)
 
-    def _group_nodes_by_type_inputs(self, graph):
+    @staticmethod
+    def _group_nodes_by_type_inputs(graph):
         res = defaultdict(list)
         for node in graph.get_nodes():
-            res[self._KeyToGroupNodes(node.type, tuple(node.input))].append(node)
+            res[_KeyToGroupNodes(node.type, tuple(node.input))].append(node)
         return res
 
     def _del_nodes_if_duplicated(self, nodes_group, graph):
