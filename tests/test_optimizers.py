@@ -45,7 +45,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             raise ValueError("only onnxruntime is supported to test transpose optimizer")
 
         for expected_val, actual_val in zip(expected, actual):
-            self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=0.)
+            self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=1e-5)
             self.assertEqual(expected_val.dtype, actual_val.dtype)
             self.assertEqual(expected_val.shape, actual_val.shape)
 
@@ -146,6 +146,21 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["Z"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
+
+    def test_transpose_with_identity(self):
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        node2 = helper.make_node("Identity", ["Y"], ["Z"], name="identity")
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "transpose_with_identity",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (2, 4, 5, 3))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=1)
 
     # Tranpose Optimizer Tests End
 

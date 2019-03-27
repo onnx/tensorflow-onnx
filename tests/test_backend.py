@@ -1118,6 +1118,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
             tf.reset_default_graph()
 
+    @check_target("rs6", "onehot")
     def test_onehot0(self):
         x_val = np.array([0, 1, 2], dtype=np.int32)
         depth = 5
@@ -1138,6 +1139,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_target("rs6", "onehot")
     def test_onehot2(self):
         for axis in [-1, 0, 1]:
             tf.reset_default_graph()
@@ -1148,6 +1150,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_target("rs6", "onehot")
     @check_opset_min_version(9, "onehot")
     def test_onehot3(self):
         # rank 1

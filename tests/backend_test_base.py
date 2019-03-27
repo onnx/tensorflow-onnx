@@ -91,7 +91,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             raise ValueError("unknown backend")
         return y
 
-    def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=0.,
+    def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=False,
                       check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None):
         # optional - passed to process_tf_graph
