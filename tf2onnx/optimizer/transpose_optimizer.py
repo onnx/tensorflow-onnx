@@ -385,6 +385,7 @@ class TransposeOptimizer(object):
                 multiplier_input_id = i
                 multiplier_input_node = input_node
 
+        # node's inputs may come from one same node. if so the multiplier_input_node may be none
         if multiplier_input_node is None or not multiplier_input_node.is_const():
             return False
         multiplier = multiplier_input_node.get_tensor_value(as_list=False)
