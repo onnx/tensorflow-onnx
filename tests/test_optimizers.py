@@ -45,7 +45,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             raise ValueError("only onnxruntime is supported to test transpose optimizer")
 
         for expected_val, actual_val in zip(expected, actual):
-            self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=0.)
+            self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=1e-5)
             self.assertEqual(expected_val.dtype, actual_val.dtype)
             self.assertEqual(expected_val.shape, actual_val.shape)
 
