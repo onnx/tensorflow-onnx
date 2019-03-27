@@ -40,8 +40,7 @@ class TransposeOptimizer(GraphOptimizerBase):
     """Transpose Optimizer."""
 
     def __init__(self, debug=False):
-        super(TransposeOptimizer, self).__init__(debug)
-        self._name = "TransposeOptimizer"
+        super(TransposeOptimizer, self).__init__("TransposeOptimizer", debug)
         self._handler_map = {}
         self._force_stop = {}
 

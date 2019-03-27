@@ -17,13 +17,12 @@ from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 
 _KeyToGroupNodes = namedtuple("key", "type input")
 
+
 class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     """Remove duplicate nodes.
     """
     def __init__(self, debug=False):
-        super(MergeDuplicatedNodesOptimizer, self).__init__(debug)
-        # optimizer should have name and log property
-        self._name = "MergeDuplicatedNodesOptimizer"
+        super(MergeDuplicatedNodesOptimizer, self).__init__("MergeDuplicatedNodesOptimizer", debug)
         self._log = logging.getLogger("tf2onnx.optimizer.%s" % self._name)
         # used internally
         self._graph_can_be_optimized = True

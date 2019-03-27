@@ -10,8 +10,9 @@ class GraphOptimizerBase(object):
     """optimizer graph to improve performance
     """
 
-    def __init__(self, debug=False):
+    def __init__(self, name, debug=False):
         self._debug = debug
+        self._name = name
 
     def optimize(self, graph):
         original_node_statistics = graph.dump_node_statistics()
@@ -22,6 +23,10 @@ class GraphOptimizerBase(object):
 
     def _optimize(self, graph):
         raise NotImplementedError
+
+    @property
+    def name(self):
+        return self._name
 
     @staticmethod
     def _apply_optimization(graph, optimize_func):

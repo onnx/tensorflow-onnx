@@ -21,8 +21,7 @@ class IdentityOptimizer(GraphOptimizerBase):
     """Identity Optimizer."""
 
     def __init__(self, debug=False):
-        super(IdentityOptimizer, self).__init__(debug)
-        self._name = "IdentityOptimizer"
+        super(IdentityOptimizer, self).__init__("IdentityOptimizer", debug)
 
         self._g = None
 
