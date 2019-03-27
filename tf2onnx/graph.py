@@ -345,6 +345,9 @@ class Graph(object):
 
         self._output_shapes = output_shapes
         self._opset = find_opset(opset)
+
+        if extra_opset is not None:
+            utils.make_sure(isinstance(extra_opset, list), "invalid extra_opset")
         self._extra_opset = extra_opset
 
         self._order_sensitive_inputs = []
@@ -384,11 +387,15 @@ class Graph(object):
     def create_new_graph_with_same_config(self):
         """Create a clean graph inheriting current graph's configuration."""
         return Graph([], output_shapes={}, dtypes={}, target=self._target, opset=self._opset,
-                     extra_opset=self._extra_opset, output_names=[])
+                     extra_opset=self.extra_opset, output_names=[])
 
     @property
     def opset(self):
         return self._opset
+
+    @property
+    def extra_opset(self):
+        return self._extra_opset
 
     def is_target(self, *names):
         """Return True if target platform contains any name."""
@@ -801,8 +808,8 @@ class Graph(object):
             imp = OperatorSetIdProto()
             imp.version = self._opset
             opsets.append(imp)
-            if self._extra_opset is not None:
-                opsets.extend(self._extra_opset)
+            if self.extra_opset is not None:
+                opsets.extend(self.extra_opset)
             kwargs["opset_imports"] = opsets
         model_proto = helper.make_model(graph, **kwargs)
 
