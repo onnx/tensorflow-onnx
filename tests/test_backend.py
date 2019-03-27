@@ -1582,6 +1582,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(9, "where")
+    @check_target("rs6", "onnxruntime Transpose type limitation")
     def test_where_with_cond_only(self):
         for np_type, tf_type in [(np.int32, tf.int32), (np.float32, tf.float32)]:
             x_val = np.random.randint(0, 2, size=[10, 20, 30]).astype(np_type)

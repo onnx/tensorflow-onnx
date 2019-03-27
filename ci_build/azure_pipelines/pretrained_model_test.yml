@@ -4,7 +4,7 @@ jobs:
 - template: 'templates/job_generator.yml'
   parameters:
     tf_versions: ['1.12']
-    onnx_opsets: ['8', '7']
+    onnx_opsets: ['9', '8', '7']
     onnx_backends:
       onnxruntime: ['0.3.0']
     job:
