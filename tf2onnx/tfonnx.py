@@ -2266,28 +2266,6 @@ def rewrite_conv2d_with_pad(g, ops):
     return ops
 
 
-def rewrite_const_sub_with_pack(g, ops):
-    # slice op needs "begin" and "size" are const while tf fold_const can't fold const_sub with pack
-    pattern = \
-        OpTypePattern("Pack", name="pack", inputs=[
-            OpTypePattern("Sub", name="sub", inputs=[
-                OpTypePattern("Const"),
-                OpTypePattern("Const")
-            ])
-        ])
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        sub = match.get_op("sub")
-        sub_res = sub.inputs[0].get_tensor_value() - sub.inputs[1].get_tensor_value()
-        utils.make_sure(isinstance(sub_res, (int, float)), "pack input here should be a scalar")
-        pack = match.get_op("pack")
-        np_val = np.array([sub_res]).astype(utils.map_onnx_to_numpy_type(g.get_dtype(pack.output[0])))
-        const = g.make_const(utils.make_name("const_val"), np_val)
-        g.replace_all_inputs(ops, pack.output[0], const.output[0])
-    return g.get_nodes()
-
-
 def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
@@ -2494,7 +2472,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
-    rewriters = [rewrite_transpose, rewrite_flatten, rewrite_const_sub_with_pack,
+    rewriters = [rewrite_transpose, rewrite_flatten,
                  rewrite_random_uniform, rewrite_random_uniform_fold_const,
                  rewrite_random_normal, rewrite_dropout,
                  rewrite_leakyrelu, rewrite_conv2d_with_pad,
