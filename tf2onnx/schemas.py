@@ -12,7 +12,7 @@ from __future__ import unicode_literals
 from collections import defaultdict, OrderedDict
 from onnx import defs
 
-ONNX_DOMAIN = ""
+from . import constants
 
 
 class OnnxOpSchema(object):
@@ -97,9 +97,9 @@ _schemas = _register_all_schemas_with_history()
 _domain_opset_versions = _parse_domain_opset_versions(_schemas)
 
 
-def get_schema(name, max_inclusive_opset_version, domain=ONNX_DOMAIN):
+def get_schema(name, max_inclusive_opset_version, domain=None):
     """Get schema by name within specific version."""
-    domain = domain or ONNX_DOMAIN
+    domain = domain or constants.ONNX_DOMAIN
     domain_version_schema_map = _schemas[name]
     version_schema_map = domain_version_schema_map[domain]
     for version, schema in version_schema_map.items():
@@ -108,7 +108,7 @@ def get_schema(name, max_inclusive_opset_version, domain=ONNX_DOMAIN):
     return None
 
 
-def get_max_supported_opset_version(domain=ONNX_DOMAIN):
+def get_max_supported_opset_version(domain=None):
     """Get max supported opset version by current onnx package given a domain."""
-    domain = domain or ONNX_DOMAIN
+    domain = domain or constants.ONNX_DOMAIN
     return _domain_opset_versions.get(domain, None)

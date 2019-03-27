@@ -13,12 +13,9 @@ import argparse
 from onnx import helper
 import tensorflow as tf
 
-from tf2onnx import utils
-from tf2onnx import loader
+from tf2onnx import constants, loader, utils
 from tf2onnx.graph import GraphUtil
-from tf2onnx.tfonnx import process_tf_graph, tf_optimize, DEFAULT_TARGET, POSSIBLE_TARGETS
-
-_TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
+from tf2onnx.tfonnx import process_tf_graph, tf_optimize
 
 
 # pylint: disable=unused-argument
@@ -36,7 +33,8 @@ def get_args():
     parser.add_argument("--outputs", help="model output_names")
     parser.add_argument("--opset", type=int, default=None, help="onnx opset to use")
     parser.add_argument("--custom-ops", help="list of custom ops")
-    parser.add_argument("--target", default=",".join(DEFAULT_TARGET), choices=POSSIBLE_TARGETS, help="target platform")
+    parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=constants.POSSIBLE_TARGETS,
+                        help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
@@ -69,7 +67,7 @@ def get_args():
 
 
 def default_custom_op_handler(ctx, node, name, args):
-    node.domain = _TENSORFLOW_DOMAIN
+    node.domain = constants.DEFAULT_CUSTOM_OP_OPSET.domain
     return node
 
 
@@ -83,7 +81,7 @@ def main():
     if args.custom_ops:
         # default custom ops for tensorflow-onnx are in the "tf" namespace
         custom_ops = {op: (default_custom_op_handler, []) for op in args.custom_ops.split(",")}
-        extra_opset = [helper.make_opsetid(_TENSORFLOW_DOMAIN, 1)]
+        extra_opset = [constants.DEFAULT_CUSTOM_OP_OPSET]
     else:
         custom_ops = {}
         extra_opset = None
