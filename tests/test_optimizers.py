@@ -306,7 +306,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         graph = helper.make_graph(
             [node0, node1, node2, node3, node4],
-            "transpose-merge-test",
+            "test_duplicated_duplicated_input",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (5, 5))],
             [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, (5, 5))],
         )
@@ -325,7 +325,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         graph = helper.make_graph(
             [node0, node1, node2, node3, node4],
-            "transpose-merge-test",
+            "test_duplicated_duplicated_attributes",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (5, 5))],
             [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, (5,))],
         )
@@ -333,6 +333,66 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_merge_duplicated_nodes_compare(["OUT"], {"X": np.random.randn(5, 5).astype(np.float32)}, model_proto,
                                                 op_type="ReduceSum", remaining_op_num=2)
+
+    def test_duplicated_node_is_graph_output(self):
+        node0 = helper.make_node('Add', inputs=["X", "X"], outputs=["value0"])
+        node1 = helper.make_node('Add', inputs=["X", "X"], outputs=["value1"])
+        node2 = helper.make_node('Add', inputs=["value1", "X"], outputs=["value2"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "test_duplicated_node_is_graph_output",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (5, 5))],
+            [helper.make_tensor_value_info("value1", TensorProto.FLOAT, (5, 5)),
+             helper.make_tensor_value_info("value2", TensorProto.FLOAT, (5, 5))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_merge_duplicated_nodes_compare(["value1", "value2"], {"X": np.random.randn(5, 5).astype(np.float32)}, model_proto,
+                                                op_type="Add", remaining_op_num=2)
+
+    def test_duplicated_different_output_length(self):
+        node0 = helper.make_node('Dropout', inputs=["X"], outputs=["value0"])
+        node1 = helper.make_node('Dropout', inputs=["X"], outputs=["value1", "mask"])
+        node2 = helper.make_node('Dropout', inputs=["value1"], outputs=["value2"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "test_duplicated_different_output_length",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (5,))],
+            [helper.make_tensor_value_info("value1", TensorProto.FLOAT, (5,)),
+             helper.make_tensor_value_info("mask", TensorProto.BOOL, (5,)),
+             helper.make_tensor_value_info("value2", TensorProto.FLOAT, (5,))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_merge_duplicated_nodes_compare(["value1", "mask", "value2"],
+                                                {"X": np.random.randn(5,).astype(np.float32)},
+                                                model_proto,
+                                                op_type="Dropout", remaining_op_num=2)
+
+    def test_duplicated_need_multiple_run(self):
+        node00 = helper.make_node('Log', inputs=["X"], outputs=["value00"])
+        node01 = helper.make_node('Log', inputs=["value00"], outputs=["value01"])
+        node02 = helper.make_node('Log', inputs=["value01"], outputs=["value02"])
+
+        node10 = helper.make_node('Log', inputs=["X"], outputs=["value10"])
+        node11 = helper.make_node('Log', inputs=["value10"], outputs=["value11"])
+        node12 = helper.make_node('Log', inputs=["value11"], outputs=["value12"])
+
+        res = helper.make_node('Add', inputs=["value02", "value12"], outputs=["res"])
+
+        graph = helper.make_graph(
+            [node00, node01, node02, node10, node11, node12, res],
+            "test_duplicated_node_is_graph_output",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (5,))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (5,))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_merge_duplicated_nodes_compare(["res"], {"X": np.random.randn(5,).astype(np.float32)},
+                                                model_proto,
+                                                op_type="Log", remaining_op_num=3)
     # Merge Duplicated Nodes Optimizer Tests End
 
 
