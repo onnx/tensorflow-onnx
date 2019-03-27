@@ -18,11 +18,10 @@ import tensorflow as tf
 from onnx import helper
 
 import tf2onnx
+from tf2onnx import constants
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
 from common import get_test_config, unittest_main
-
-_TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 
 
 # pylint: disable=missing-docstring
@@ -336,7 +335,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             # becomes:
             #   T output = Identity(T Input)
             self.assertEqual(node.type, "Identity")
-            node.domain = _TENSORFLOW_DOMAIN
+            node.domain = constants.DEFAULT_CUSTOM_OP_OPSET.domain
             self.assertEqual(args[0], "mode")
             del node.input[1:]
             return node
@@ -348,7 +347,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             g = process_tf_graph(sess.graph,
                                  custom_op_handlers={"Print": (print_handler, ["Identity", "mode"])},
                                  opset=self.config.opset,
-                                 extra_opset=helper.make_opsetid(_TENSORFLOW_DOMAIN, 1))
+                                 extra_opset=[constants.DEFAULT_CUSTOM_OP_OPSET])
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Print [op_type=Identity] '
                 'output [op_type=Identity] input1:0 -> Print Print:0 -> output }',

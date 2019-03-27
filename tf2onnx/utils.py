@@ -20,6 +20,7 @@ from tensorflow.core.framework import types_pb2, tensor_pb2
 from google.protobuf import text_format
 import onnx
 from onnx import helper, onnx_pb, defs, numpy_helper
+from . import constants
 
 #
 #  mapping dtypes from tensorflow to onnx
@@ -174,12 +175,7 @@ def get_tf_tensor_data(tensor):
         data = tensor.bool_val
     elif tensor.string_val:
         data = tensor.string_val
-    elif tensor.dtype in [
-            tf.int32,
-            tf.int64,
-            tf.float32,
-            tf.float16
-    ]:
+    elif tensor.dtype in [tf.int32, tf.int64, tf.float32, tf.float16]:
         data = None
     else:
         raise ValueError('tensor data not supported')
@@ -249,16 +245,13 @@ def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
     return helper.make_tensor_value_info(name, elem_type, make_onnx_shape(shape), **kwargs)
 
 
-PREFERRED_OPSET = 7
-
-
 def find_opset(opset):
     """Find opset."""
     if opset is None or opset == 0:
         opset = defs.onnx_opset_version()
-        if opset > PREFERRED_OPSET:
+        if opset > constants.PREFERRED_OPSET:
             # if we use a newer onnx opset than most runtimes support, default to the one most supported
-            opset = PREFERRED_OPSET
+            opset = constants.PREFERRED_OPSET
     return opset
 
 

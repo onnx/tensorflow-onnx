@@ -10,8 +10,7 @@ import unittest
 from collections import defaultdict
 
 from distutils.version import LooseVersion
-from tf2onnx import utils
-from tf2onnx.tfonnx import DEFAULT_TARGET, POSSIBLE_TARGETS
+from tf2onnx import constants, utils
 
 __all__ = ["TestConfig", "get_test_config", "unittest_main",
            "check_tf_min_version", "skip_tf_versions",
@@ -26,8 +25,8 @@ class TestConfig(object):
     def __init__(self):
         self.platform = sys.platform
         self.tf_version = self._get_tf_version()
-        self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", 7))
-        self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(DEFAULT_TARGET)).split(',')
+        self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", constants.PREFERRED_OPSET))
+        self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(constants.DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.backend_version = self._get_backend_version()
         self.is_debug_mode = False
@@ -83,7 +82,7 @@ class TestConfig(object):
                                 choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                                 help="backend to test against")
             parser.add_argument("--opset", type=int, default=config.opset, help="opset to test against")
-            parser.add_argument("--target", default=",".join(config.target), choices=POSSIBLE_TARGETS,
+            parser.add_argument("--target", default=",".join(config.target), choices=constants.POSSIBLE_TARGETS,
                                 help="target platform")
             parser.add_argument("--debug", help="output debugging information", action="store_true")
             parser.add_argument("--temp_dir", help="temp dir")
