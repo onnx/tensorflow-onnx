@@ -11,12 +11,13 @@ import logging
 import numpy as np
 
 from tf2onnx import utils
+from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx.optimizer.transpose_optimizer")
 
 
-# pylint: disable=logging-not-lazy,unused-argument,missing-docstring
+# pylint: disable=logging-not-lazy,unused-argument,missing-docstring,abstract-method
 # FIXME:
 # pylint: disable=unused-variable
 
@@ -35,18 +36,17 @@ def is_useless_transpose(transpose_node):
     return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints == list(range(len(perm_attr.ints)))
 
 
-class TransposeOptimizer(object):
+class TransposeOptimizer(GraphOptimizerBase):
     """Transpose Optimizer."""
 
-    def __init__(self, graph, output_names, debug=False):
-        self._g = graph
-        self._output_names = [name.split(":")[0] for name in output_names]
-        self._debug = debug
+    def __init__(self, debug=False):
+        super(TransposeOptimizer, self).__init__("TransposeOptimizer", debug)
         self._handler_map = {}
         self._force_stop = {}
 
         self._initialize_handlers()
-        self.pre_optimize_action()
+        self._g = None
+        self._output_names = None
 
     @property
     def nodes(self):
@@ -54,6 +54,7 @@ class TransposeOptimizer(object):
 
     def pre_optimize_action(self):
         # make Reshape into a const, which then can be fused into Conv's weight for mobilenet_v1_75_192
+        self._output_names = [name.split(":")[0] for name in self._g.outputs]
         ops = self.nodes
         constable_reshape_ops = [n for n in ops
                                  if (n.type == "Reshape"
@@ -115,7 +116,7 @@ class TransposeOptimizer(object):
         graph = self._g
         input_transposes_map = defaultdict(list)
         for node in graph.get_nodes():
-            if node.type == "Transpose":
+            if node.type == "Transpose" and node.get_attr("perm"):
                 key = (node.input[0], str(node.get_attr("perm").ints))
                 input_transposes_map[key].append(node)
 
@@ -129,7 +130,9 @@ class TransposeOptimizer(object):
         # dangling transpose nodes can be deleted
         graph.delete_unused_nodes(graph.outputs)
 
-    def optimize(self):
+    def optimize(self, graph):
+        self._g = graph
+        self.pre_optimize_action()
         previous_counter = self._g.dump_node_statistics()
         no_action = False
         iteration_cnt = 0
@@ -166,6 +169,7 @@ class TransposeOptimizer(object):
         log.info(" %d transpose op(s) left, ops diff after transpose optimization: %s", transpose_cnt, current_counter)
         if transpose_cnt > 2:
             log.warning("please try add --fold_const to help remove more transpose")
+        return self._g
 
     def _initialize_handlers(self):
         self._handler_map = {

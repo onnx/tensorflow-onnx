@@ -6,10 +6,39 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from .identity_optimizer import IdentityOptimizer
-from .transpose_optimizer import TransposeOptimizer
+import sys
+import traceback
+from collections import OrderedDict
 
-__all__ = [
-    "IdentityOptimizer",
-    "TransposeOptimizer",
-]
+from tf2onnx.optimizer.identity_optimizer import IdentityOptimizer
+from tf2onnx.optimizer.merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
+from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+
+# pylint: disable=missing-docstring, broad-except
+
+# optimizer sequence need to be considered carefully
+_optimizers = OrderedDict([
+    ("transpose_opt", TransposeOptimizer),
+    # merge_duplicated_nodes should be used after transpose_opt
+    # for transpose_opt may have some trans nodes that can be merge
+    ("merge_duplicated_nodes", MergeDuplicatedNodesOptimizer),
+    ("identity_opt", IdentityOptimizer),
+])
+
+
+def optimize_graph(graph, debug=False):
+    try:
+        opts = _get_optimizers()
+        for opt in opts.values():
+            graph = opt(debug=debug).optimize(graph)
+        return graph
+    except Exception:
+        # degradation to non-optimized model proto
+        type_, value_, traceback_ = sys.exc_info()
+        ex_ext = traceback.format_exception(type_, value_, traceback_)
+        print("NON-CRITICAL error in optimizer: ", ex_ext)
+        return None
+
+
+def _get_optimizers():
+    return _optimizers

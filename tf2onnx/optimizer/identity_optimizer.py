@@ -8,30 +8,32 @@
 from __future__ import unicode_literals
 import logging
 
-logging.basicConfig(level=logging.INFO)
+from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
+
+
 log = logging.getLogger("tf2onnx.optimizer.identity_optimizer")
 
 
-# pylint: disable=logging-not-lazy,unused-argument,missing-docstring
-# FIXME:
-# pylint: disable=unused-variable
+# pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
 
 
-class IdentityOptimizer(object):
+class IdentityOptimizer(GraphOptimizerBase):
     """Identity Optimizer."""
 
-    def __init__(self, main_graph, output_names, debug=False):
-        self._g = main_graph
-        self._output_names = [name.split(":")[0] for name in output_names]
-        self._debug = debug
+    def __init__(self, debug=False):
+        super(IdentityOptimizer, self).__init__("IdentityOptimizer", debug)
 
-    def optimize(self):
+        self._g = None
+
+    def optimize(self, graph):
+        self._g = graph
         previous_counter = self._g.dump_node_statistics()
         self._optimize_recursively(self._g)
         current_counter = self._g.dump_node_statistics()
         identity_cnt = current_counter["Identity"]
         current_counter.subtract(previous_counter)
         log.info(" %d identity op(s) left, ops diff after identity optimization: %s", identity_cnt, current_counter)
+        return self._g
 
     def _optimize_recursively(self, g):
         self._optimize(g)
@@ -64,13 +66,14 @@ class IdentityOptimizer(object):
 
         self._g.topological_sort(self._g.get_nodes())
 
-
-    def _handle_non_graph_output_identity(self, graph, identity):
+    @staticmethod
+    def _handle_non_graph_output_identity(graph, identity):
         graph.replace_all_inputs(graph.get_nodes(), identity.output[0], identity.input[0])
         graph.remove_node(identity.name)
         return True
 
-    def _handle_graph_output_identity(self, graph, identity, graph_outputs):
+    @staticmethod
+    def _handle_graph_output_identity(graph, identity, graph_outputs):
         input_id = identity.input[0]
         input_node = identity.inputs[0]
 

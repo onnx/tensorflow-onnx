@@ -117,10 +117,9 @@ def main():
                              output_names=outputs,
                              inputs_as_nchw=args.inputs_as_nchw)
 
-    model_proto = g.make_model("converted from {}".format(args.input))
+    model_proto = g.make_model("converted from {}".format(model_path))
 
-    new_model_proto = GraphUtil.optimize_graph(g, "converted from {}".format(model_path),
-                                               optimize=not args.continue_on_error)
+    new_model_proto = GraphUtil.optimize_model_proto(model_proto)
     if new_model_proto:
         model_proto = new_model_proto
     else:
