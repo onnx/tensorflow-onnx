@@ -31,8 +31,10 @@ def get_args():
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names")
     parser.add_argument("--outputs", help="model output_names")
-    parser.add_argument("--opset", type=int, default=None, help="onnx opset to use")
+    parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
     parser.add_argument("--custom-ops", help="list of custom ops")
+    parser.add_argument("--extra_opset", default=None,
+                        help="extra opset with format like domain:version, e.g. com.microsoft:1")
     parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=constants.POSSIBLE_TARGETS,
                         help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
@@ -63,6 +65,11 @@ def get_args():
     if args.target:
         args.target = args.target.split(",")
 
+    if args.extra_opset:
+        tokens = args.extra_opset.split(':')
+        if len(tokens) != 2:
+            raise ValueError("invalid extra_opset argument")
+        args.extra_opset = [helper.make_opsetid(tokens[0], int(tokens[1]))]
     return args
 
 
@@ -78,13 +85,12 @@ def main():
     # support unknown dimensions.
     utils.ONNX_UNKNOWN_DIMENSION = args.unknown_dim
 
+    extra_opset = args.extra_opset or []
+    custom_ops = {}
     if args.custom_ops:
         # default custom ops for tensorflow-onnx are in the "tf" namespace
         custom_ops = {op: (default_custom_op_handler, []) for op in args.custom_ops.split(",")}
-        extra_opset = [constants.DEFAULT_CUSTOM_OP_OPSET]
-    else:
-        custom_ops = {}
-        extra_opset = None
+        extra_opset.append(constants.DEFAULT_CUSTOM_OP_OPSET)
 
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:

@@ -21,7 +21,7 @@ from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
-from tf2onnx import constants, schemas, utils
+from tf2onnx import constants, custom, schemas, utils
 from tf2onnx.function import *  # pylint: disable=wildcard-import
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
@@ -2322,13 +2322,28 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
 
-    # create ops mapping for the desired opset
+    # create ops mapping for the desired opsets
     ops_mapping = {}
+
+    # load mapping for onnx domain
     for target_opset, op_map in _OPSETS:
         if target_opset <= g.opset:
             ops_mapping.update(op_map)
 
-    # apply custom ops on top of the assembled opset. We can either completment the opset
+    # load mapping for known extra opsets
+    # order matters, later mapping overrides earlier's
+    if g.extra_opset is not None:
+        for extra_opset in g.extra_opset:
+            if extra_opset.domain == constants.MICROSOFT_DOMAIN:
+                # microsoft domain
+                for target_opset, op_map in custom.ms.OPSETS:
+                    if target_opset <= extra_opset.version:
+                        ops_mapping.update(op_map)
+            else:
+                # unknown opset, assume used in custom_op_handlers, skip it
+                pass
+
+    # apply custom ops on top of the assembled opset. We can either complement the opset
     # or override existing ops with a custom op.
     if custom_op_handlers is not None:
         custom_opset = {k: v for k, v in custom_op_handlers.items()}
@@ -2337,7 +2352,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     ops = [n for n in g.get_nodes()]
     for node in ops:
         if node.need_skip():
-            log.debug("explictly skip node " + node.name)
+            log.debug("explicitly skip node " + node.name)
             continue
 
         op = node.type
