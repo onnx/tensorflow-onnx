@@ -1128,7 +1128,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skip("")
+    @unittest.skip("only rank 1 is currently implemented")
     def test_onehot1(self):
         # only rank 1 is currently implemented
         x_val = np.array([[0, 2], [1, -1]], dtype=np.int32)
@@ -1139,12 +1139,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_onehot2(self):
-        x_val = np.array([0, 1, 2, 1, 2, 0, 1, 2, 1, 2], dtype=np.int32)
-        depth = 20
-        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
-        x_ = tf.one_hot(x, depth, on_value=5.0, axis=-1, off_value=1.0, dtype=tf.float32)
-        _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        for axis in [-1, 0, 1]:
+            tf.reset_default_graph()
+            x_val = np.array([0, 1, 2, 1, 2, 0, 1, 2, 1, 2], dtype=np.int32)
+            depth = 20
+            x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+            x_ = tf.one_hot(x, depth, on_value=5.0, axis=axis, off_value=1.0, dtype=tf.float32)
+            _ = tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(9, "onehot")
     def test_onehot3(self):
@@ -1160,16 +1162,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
             self.assertTrue(len(group_nodes_by_type(graph)["OneHot"]) == 1, "onnx onehot should be used")
         # rank 2
-        for np_dtype, tf_dtype in zip([np.int32, np.int64], [tf.int32, tf.int64]):
-            tf.reset_default_graph()
-            x_val = np.arange(0, 50, dtype=np_dtype).reshape([-1, 10])
-            depth = np.array(20).astype(np.int64)
-            x = tf.placeholder(tf_dtype, x_val.shape, name=_TFINPUT)
-            on_off = np.array([5.6, 1.2]).astype(np_dtype)
-            x_ = tf.one_hot(x, depth, on_value=on_off[0], axis=-1, off_value=on_off[1])
-            _ = tf.identity(x_, name=_TFOUTPUT)
-            graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
-            self.assertTrue(len(group_nodes_by_type(graph)["OneHot"]) == 1, "onnx onehot should be used")
+        for aixs in [-1, 0, 1, 2]:
+            for np_dtype, tf_dtype in zip([np.int32, np.int64], [tf.int32, tf.int64]):
+                tf.reset_default_graph()
+                x_val = np.arange(0, 50, dtype=np_dtype).reshape([-1, 10])
+                depth = np.array(20).astype(np.int64)
+                x = tf.placeholder(tf_dtype, x_val.shape, name=_TFINPUT)
+                on_off = np.array([5.6, 1.2]).astype(np_dtype)
+                x_ = tf.one_hot(x, depth, on_value=on_off[0], axis=aixs, off_value=on_off[1])
+                _ = tf.identity(x_, name=_TFOUTPUT)
+                graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
+                self.assertTrue(len(group_nodes_by_type(graph)["OneHot"]) == 1, "onnx onehot should be used")
 
     @skip_caffe2_backend("issue undefined dim 1")
     def test_flatten0(self):

@@ -1294,8 +1294,9 @@ def onehot_op9(ctx, node, name, args):
     # onnxruntime only supports int64
     output_dtype = ctx.get_dtype(node.input[2])
     if ctx.is_target(TARGET_RS6) and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
-        log.warning("unsupported dtype in onnxruntime, onehot can't be used directly")
+        log.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
         onehot_op(ctx, node, name, args)
+        return
 
     depth = node.input[1]
     depth = ctx.make_node("Unsqueeze", [depth], attr={"axes": [0]}).output[0]
@@ -1307,23 +1308,25 @@ def onehot_op9(ctx, node, name, args):
     off_on_value = ctx.make_node("Concat", [off_value, on_value], attr={"axis": 0}).output[0]
 
     indices = node.input[0]
-    if ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64 and ctx.is_target(TARGET_RS6):
+    if ctx.is_target(TARGET_RS6) and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
         indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
     node.input[0] = indices
 
-    if ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64 and ctx.is_target(TARGET_RS6):
+    if ctx.is_target(TARGET_RS6) and ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64:
         depth = ctx.make_node("Cast", [depth], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
     node.input[1] = depth
 
-    if output_dtype != onnx_pb.TensorProto.INT64 and ctx.is_target(TARGET_RS6):
+    if ctx.is_target(TARGET_RS6) and output_dtype != onnx_pb.TensorProto.INT64:
         off_on_value = ctx.make_node("Cast", [off_on_value], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
     node.input[2] = off_on_value
 
     del node.input[3]
 
-    if output_dtype != onnx_pb.TensorProto.INT64 and ctx.is_target(TARGET_RS6):
-        new_output = utils.make_name("onehot_output")
-        ctx.insert_new_node_on_output("Cast", node.output[0], new_output, to=output_dtype)
+    if ctx.is_target(TARGET_RS6) and output_dtype != onnx_pb.TensorProto.INT64:
+        new_node_name = utils.make_name("onehot_output")
+        new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
+        ctx.set_dtype(new_node.output[0], output_dtype)
+        ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
 
 
 def fused_batchnorm_op7(ctx, node, name, args):
