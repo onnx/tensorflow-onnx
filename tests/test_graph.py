@@ -70,6 +70,10 @@ def onnx_to_graphviz(g, include_attrs=False):
             if "broadcast" in attr:
                 kwarg["broadcast"] = "{}".format(int(attr["broadcast"].i))
 
+        # display domain if it is not onnx domain
+        if node.domain:
+            kwarg["domain"] = node.domain
+
         g2.node(node.name, op_type=node.type, **kwarg)
     for node in g.get_nodes():
         for i in node.input:
@@ -349,9 +353,11 @@ class Tf2OnnxGraphTests(unittest.TestCase):
                                  opset=self.config.opset,
                                  extra_opset=[constants.DEFAULT_CUSTOM_OP_OPSET])
             self.assertEqual(
-                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Print [op_type=Identity] '
-                'output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Print [domain="ai.onnx.converters.tensorflow" '
+                'op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
                 onnx_to_graphviz(g))
+            self.assertEqual(g.opset, self.config.opset)
+            self.assertEqual(g.extra_opset, [constants.DEFAULT_CUSTOM_OP_OPSET])
 
 
 if __name__ == '__main__':
