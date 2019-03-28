@@ -10,7 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
-from onnx import helper
 import tensorflow as tf
 
 from tf2onnx import constants, loader, utils
@@ -69,7 +68,7 @@ def get_args():
         tokens = args.extra_opset.split(':')
         if len(tokens) != 2:
             raise ValueError("invalid extra_opset argument")
-        args.extra_opset = [helper.make_opsetid(tokens[0], int(tokens[1]))]
+        args.extra_opset = [utils.make_opsetid(tokens[0], int(tokens[1]))]
     return args
 
 

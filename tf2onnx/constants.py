@@ -5,7 +5,7 @@
 common constants
 """
 
-from onnx import helper
+from . import utils
 
 # Built-in supported domains
 ONNX_DOMAIN = ""
@@ -16,7 +16,7 @@ MICROSOFT_DOMAIN = "com.microsoft"
 PREFERRED_OPSET = 7
 
 # Default opset for custom ops
-DEFAULT_CUSTOM_OP_OPSET = helper.make_opsetid("ai.onnx.converters.tensorflow", 1)
+DEFAULT_CUSTOM_OP_OPSET = utils.make_opsetid("ai.onnx.converters.tensorflow", 1)
 
 # Target for the generated onnx graph. It possible targets:
 # onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)

@@ -18,7 +18,7 @@ import tensorflow as tf
 from onnx import helper
 
 import tf2onnx
-from tf2onnx import constants
+from tf2onnx import constants, utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
@@ -362,8 +362,8 @@ class Tf2OnnxGraphTests(unittest.TestCase):
 
     def test_extra_opset(self):
         extra_opset = [
-            helper.make_opsetid(constants.MICROSOFT_DOMAIN, 1),
-            helper.make_opsetid("my.domain", 1024),
+            utils.make_opsetid(constants.MICROSOFT_DOMAIN, 1),
+            utils.make_opsetid("my.domain", 1024),
         ]
         with tf.Session() as sess:
             x = tf.placeholder(tf.float32, [2, 3], name="input1")
