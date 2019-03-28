@@ -52,4 +52,4 @@ class GraphOptimizerBase(object):
         for key, value in nodes_after_optimized.items():
             if value != 0:
                 res[key] = value
-        self._log.info("after optimized, the optimization_statistics is %s", res)
+        self._log.info("the optimization gain is %s", res)
