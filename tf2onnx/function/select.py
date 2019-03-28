@@ -13,6 +13,26 @@ from tf2onnx.utils import port_name, make_sure
 # pylint: disable=unused-argument,missing-docstring
 
 
+def select_op9(ctx, node, name, args):
+    # T output = Select(bool condition, T x, T y)
+    # T1 output = Where(bool condition, T1 x, T1 y)
+    # NOTE: condition can be 1-dimension in tensorflow, while in onnx,
+    # it should be broadcastable with other two inputs
+    cond_shape = ctx.get_shape(node.input[0])
+    make_sure(cond_shape is not None, "shape of {} is None".format(node.input[0]))
+    input_shape = ctx.get_shape(node.input[1])
+    if input_shape is None:
+        input_shape = ctx.get_shape(node.input[2])
+    make_sure(input_shape is not None, "input shape of {} is None".format(node.name))
+    input_rank = len(input_shape)
+    # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
+    if len(cond_shape) == 1 and input_rank > 1:
+        broadcast_shape = [cond_shape[0]] + [1] * (input_rank - 1)
+        shape_const = ctx.make_const(utils.make_name(name), np.array(broadcast_shape, dtype=np.int64))
+        reshape = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
+        ctx.replace_input(node, node.input[0], reshape.output[0])
+
+
 def select_op8(ctx, node, name, args):
     # T output = Select(bool condition, T x, T y)
     # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)

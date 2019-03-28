@@ -1171,20 +1171,25 @@ def minmax_op(ctx, node, name, args):
         onnx_pb.TensorProto.DOUBLE
     ]
     target_dtype = onnx_pb.TensorProto.FLOAT
+    need_cast = False
     for inp in node.input:
         dtype = ctx.get_dtype(inp)
-        utils.make_sure(dtype, "dtype of {} is None".format(inp))
+        utils.make_sure(dtype is not None, "dtype of {} is None".format(inp))
         if dtype not in supported_dtypes:
             inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=target_dtype)
             ctx.copy_shape(inp, inp_cast.output[0])
             ctx.set_dtype(inp_cast.output[0], target_dtype)
-    origin_dtype = ctx.get_dtype(node.output[0])
-    utils.make_sure(origin_dtype is not None, "dtype of {} is None".format(node.output[0]))
-    ctx.set_dtype(node.output[0], target_dtype)
-    cast_name = utils.make_name(name)
-    cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)
-    to_replace = [n for n in ctx.get_nodes() if n != cast_node]
-    ctx.replace_all_inputs(to_replace, node.output[0], cast_node.output[0])
+            need_cast = True
+    if need_cast:
+        origin_dtype = ctx.get_dtype(node.output[0])
+        utils.make_sure(origin_dtype is not None, "dtype of {} is None".format(node.output[0]))
+        ctx.set_dtype(node.output[0], target_dtype)
+        cast_name = utils.make_name(name)
+        cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)
+        ctx.set_dtype(cast_node.output[0], origin_dtype)
+        ctx.copy_shape(node.output[0], cast_node.output[0])
+        to_replace = [n for n in ctx.get_nodes() if n != cast_node]
+        ctx.replace_all_inputs(to_replace, node.output[0], cast_node.output[0])
 
     shapeo = ctx.get_shape(node.output[0])
     needs_broadcast_op = []
@@ -1912,6 +1917,7 @@ _OPSET_9 = {
     "ResizeBilinear": (upsample_op9, ["Upsample", "linear"]),
     "ResizeNearestNeighbor": (upsample_op9, ["Upsample", "nearest"]),
     "ReverseSequence": (reverse_op9, []),
+    "Select": (select_op9, ["Where"]),
     "Sign": (sign_op9, []),
     "Sinh": (direct_op, []),
     "SparseSoftmaxCrossEntropyWithLogits": (sparse_softmax_cross_entropy_with_logits_op9, []),
@@ -2209,6 +2215,7 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
     """
     ignored_input_index = {
         "Tile": [1],  # Tile's second input can only be int64
+        "Where": [0],  # Where's first input is bool
     }
     new_ops = []
     org_ops = [n for n in ops]
@@ -2264,7 +2271,16 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, ["Div", "IsNaN", "ReduceSum", "Slice", "Split", "Tile", "Transpose"])
+    return rewrite_incomplete_type_support(g, ops, [
+        "Div",
+        "IsNaN",
+        "ReduceSum",
+        "Slice",
+        "Split",
+        "Tile",
+        "Transpose",
+        "Where"
+    ])
 
 
 def rewrite_conv2d_with_pad(g, ops):
