@@ -777,11 +777,13 @@ def concatv2_op(ctx, node, name, args):
         raise RuntimeError("all inputs of {} are empty".format(name))
 
     axis_node = node.inputs[-1]
+    utils.make_sure(axis_node.is_const(), "{} needs to be const".format(axis_node.name))
     axis_val = axis_node.get_tensor_value()
     ctx.remove_input(node, node.input[-1])
 
     if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
         input_shape = ctx.get_shape(node.input[0])
+        utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
         axis_val = len(input_shape) + axis_val
     node.set_attr("axis", axis_val)
 
