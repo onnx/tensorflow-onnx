@@ -1548,6 +1548,28 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "where")
     def test_where(self):
+        x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.float32)
+        true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
+                               dtype=np.float32)
+        false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
+                                dtype=np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        picks = tf.where(x > -1, true_result, false_result)
+        _ = tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+        tf.reset_default_graph()
+        x_val = np.array(1, dtype=np.float32)
+        true_result = np.array(100, dtype=np.float32)
+        false_result = np.array(-111, dtype=np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        picks = tf.where(x > -1, true_result, false_result)
+        _ = tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(8, "where")
+    @check_target("rs6", "onnxruntime Where type limitation")
+    def test_where_int32(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
         true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
                                dtype=np.int32)
@@ -1560,15 +1582,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "where")
     def test_where_with_two_rank_input(self):
-        x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
+        x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.float32)
         true_result = np.array([[111, 111], [222, 222], [333, 333], [444, 444], [555, 555],
                                 [666, 666], [777, 777], [888, 888], [999, 999], [1000, 1000]],
-                               dtype=np.int32)
+                               dtype=np.float32)
         false_result = np.array([[-111, -111], [-222, -222], [-333, -333], [-444, -444],
                                  [-555, -555], [-666, -666], [-777, -777], [-888, -888],
                                  [-999, -999], [-1000, -1000]],
-                                dtype=np.int32)
-        x = tf.placeholder(tf.int32, [None], name=_TFINPUT)
+                                dtype=np.float32)
+        x = tf.placeholder(tf.float32, [None], name=_TFINPUT)
         picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
         _ = tf.identity(picks, name=_TFOUTPUT)
 
@@ -1576,12 +1598,12 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "where")
     def test_where_with_two_rank_condition(self):
-        x_val = np.array([[1, 2, -3, 4, -5, -6, -7, 8, 9, 0]], dtype=np.int32)
+        x_val = np.array([[1, 2, -3, 4, -5, -6, -7, 8, 9, 0]], dtype=np.float32)
         true_result = np.array([[111, 222, 333, 444, 555, 666, 777, 888, 999, 1000]],
-                               dtype=np.int32)
+                               dtype=np.float32)
         false_result = np.array([[-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000]],
-                                dtype=np.int32)
-        x = tf.placeholder(tf.int32, [1, 10], name=_TFINPUT)
+                                dtype=np.float32)
+        x = tf.placeholder(tf.float32, [1, 10], name=_TFINPUT)
         picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
         _ = tf.identity(picks, name=_TFOUTPUT)
 
@@ -1589,12 +1611,12 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "where")
     def test_where_with_three_rank_condition(self):
-        x_val = np.array([[[1, 2, -3, 4, -5, -6, -7, 8, 9, 0]]], dtype=np.int32)
+        x_val = np.array([[[1, 2, -3, 4, -5, -6, -7, 8, 9, 0]]], dtype=np.float32)
         true_result = np.array([[[111, 222, 333, 444, 555, 666, 777, 888, 999, 1000]]],
-                               dtype=np.int32)
+                               dtype=np.float32)
         false_result = np.array([[[-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000]]],
-                                dtype=np.int32)
-        x = tf.placeholder(tf.int32, [1, 1, 10], name=_TFINPUT)
+                                dtype=np.float32)
+        x = tf.placeholder(tf.float32, [1, 1, 10], name=_TFINPUT)
         picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
         _ = tf.identity(picks, name=_TFOUTPUT)
 
@@ -1602,17 +1624,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "where")
     def test_where_scalar(self):
-        x_val = np.array(6, dtype=np.int32)
+        x_val = np.array(6, dtype=np.float32)
         true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
-                               dtype=np.int32)
+                               dtype=np.float32)
         false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
-                                dtype=np.int32)
-        x = tf.placeholder(tf.int32, [], name=_TFINPUT)
+                                dtype=np.float32)
+        x = tf.placeholder(tf.float32, [], name=_TFINPUT)
         picks = tf.where(tf.greater_equal(x, 0), true_result, false_result)
         _ = tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @check_opset_min_version(9, "where")
+    @check_opset_min_version(9, "NonZero")
     @check_target("rs6", "onnxruntime Transpose type limitation")
     def test_where_with_cond_only(self):
         for np_type, tf_type in [(np.int32, tf.int32), (np.float32, tf.float32)]:
