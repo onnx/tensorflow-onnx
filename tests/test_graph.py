@@ -19,6 +19,7 @@ from onnx import helper
 
 import tf2onnx
 from tf2onnx import constants
+from tf2onnx.graph import GraphUtil
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
 from common import get_test_config, unittest_main
@@ -358,6 +359,28 @@ class Tf2OnnxGraphTests(unittest.TestCase):
                 onnx_to_graphviz(g))
             self.assertEqual(g.opset, self.config.opset)
             self.assertEqual(g.extra_opset, [constants.DEFAULT_CUSTOM_OP_OPSET])
+
+    def test_extra_opset(self):
+        extra_opset = [
+            helper.make_opsetid(constants.MICROSOFT_DOMAIN, 1),
+            helper.make_opsetid("my.domain", 1024),
+        ]
+        with tf.Session() as sess:
+            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+            x_ = tf.add(x, x)
+            _ = tf.identity(x_, name="output")
+            g = process_tf_graph(sess.graph,
+                                 opset=self.config.opset,
+                                 extra_opset=extra_opset)
+            self.assertEqual(g.opset, self.config.opset)
+            self.assertEqual(g.extra_opset, extra_opset)
+
+            # convert between graph and model proto, make sure extra opset is preserved
+            model_proto = g.make_model("test")
+            model_proto = GraphUtil.optimize_model_proto(model_proto)
+            g = GraphUtil.create_graph_from_onnx_model(model_proto)
+            self.assertEqual(g.opset, self.config.opset)
+            self.assertEqual(g.extra_opset, extra_opset)
 
 
 if __name__ == '__main__':
