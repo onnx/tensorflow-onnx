@@ -105,6 +105,7 @@ class Node(object):
 
     @property
     def op(self):
+        """TODO: have a better interface for this."""
         return self._op
 
     @property
