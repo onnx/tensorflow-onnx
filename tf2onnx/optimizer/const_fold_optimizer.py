@@ -93,6 +93,14 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         graph.remove_node(node.name)
 
     @staticmethod
+    @_register_func("Cast")
+    def _fold_cast(node, graph):
+        const_val = node.inputs[0].get_tensor_value(as_list=False)
+        np_dtype = utils.ONNX_TO_NUMPY_DTYPE[node.get_attr("to").i]
+        const_val_after_cast = const_val.astype(np_dtype)
+        return [const_val_after_cast]
+
+    @staticmethod
     @_register_func("Transpose")
     def _fold_transpose(node, graph) -> list:
         const_val = node.inputs[0].get_tensor_value(as_list=False)

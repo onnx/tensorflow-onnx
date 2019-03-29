@@ -503,6 +503,25 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["res"], {"X": np.random.randn(1).astype(np.float32)}, model_proto,
                              "Unsqueeze", 0)
+
+    def test_const_fold_cast_with_const(self):
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Cast", ["const"], ["value1"], to=TensorProto.INT64)
+        node3 = helper.make_node("Add", ["value1", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_const_fold_cast_with_const",
+            [helper.make_tensor_value_info("X", TensorProto.INT64, shape)],
+            [helper.make_tensor_value_info("res", TensorProto.INT64, shape)],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.int64)}, model_proto,
+                             "Cast", 0)
     # Const Fold Optimizer Tests End
 
 
