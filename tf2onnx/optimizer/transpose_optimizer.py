@@ -256,6 +256,9 @@ class TransposeOptimizer(GraphOptimizerBase):
     # if return value is True, then it means Transpose is handled as designed
     # otherwise, it means that we skip handling since it is not in our support set
     def _handle_nhwc_tranpose(self, trans):
+        if trans.output[0] in self._g.outputs:
+            log.debug("%s connects to graph outputs, skip", trans.output[0])
+            return False
         out_nodes = self._g.find_output_consumers(trans.output[0])
         if len(out_nodes) == 1:
             p = out_nodes[0]

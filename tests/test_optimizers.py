@@ -12,7 +12,7 @@ from onnx import helper, TensorProto
 from tf2onnx import utils
 from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main
+from common import unittest_main, group_nodes_by_type
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -161,6 +161,33 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["Z"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=1)
+
+    def test_trans_output_as_graph_outputs(self):
+        """
+        If transpose's output is graph's output, don't optimize it.
+        """
+        trans = helper.make_node("Transpose", ["X"], ["Y"], name="trans", perm=[0, 2, 3, 1])
+        graph_proto = helper.make_graph(
+            [trans],
+            "trans-to-graph-output",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5))],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, (2, 4, 5, 3))],
+        )
+
+        graph = GraphUtil.create_graph_from_onnx_graph(graph_proto)
+        # remove identity to graph output
+        identity_op = graph.get_node_by_output(graph.outputs[0])
+        graph.outputs = [identity_op.input[0]]
+        graph.remove_node(identity_op.name)
+
+        optimized_graph = GraphUtil.optimize_graph(graph, "onnx-tests")
+
+        self.assertTrue(optimized_graph, msg="graph after optimizer should not be None")
+
+        trans_cnt = len(group_nodes_by_type(optimized_graph)["Transpose"])
+
+        self.assertTrue(trans_cnt == 1, msg="Expect 1 Transpose ops left, but actually " +
+                        str(trans_cnt) + " left")
 
     # Tranpose Optimizer Tests End
 
@@ -395,7 +422,6 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                                 model_proto,
                                                 op_type="Log", remaining_op_num=3)
     # Merge Duplicated Nodes Optimizer Tests End
-
 
 if __name__ == "__main__":
     unittest_main()
