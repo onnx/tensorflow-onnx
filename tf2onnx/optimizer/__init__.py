@@ -31,6 +31,8 @@ def optimize_graph(graph, debug=False):
         opts = _get_optimizers()
         for opt in opts.values():
             graph = opt(debug=debug).optimize(graph)
+
+        graph.update_proto()
         return graph
     except Exception:
         # degradation to non-optimized model proto

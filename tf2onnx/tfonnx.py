@@ -2568,6 +2568,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     # onnx requires topological sorting
     topological_sort(g, continue_on_error)
 
+    g.update_proto()
+
     if verbose:
         print("tensorflow ops: {}".format(op_cnt))
         print("tensorflow attr: {}".format(attr_cnt))
