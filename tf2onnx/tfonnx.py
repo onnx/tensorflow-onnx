@@ -2334,9 +2334,9 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     # order matters, later mapping overrides earlier's
     if g.extra_opset is not None:
         for extra_opset in g.extra_opset:
-            if extra_opset.domain == constants.MICROSOFT_DOMAIN:
-                # microsoft domain
-                for target_opset, op_map in custom_opsets.ms.OPSETS:
+            opsets = custom_opsets.DOMAIN_OPSETS.get(extra_opset.domain, None)
+            if opsets is not None:
+                for target_opset, op_map in opsets:
                     if target_opset <= extra_opset.version:
                         ops_mapping.update(op_map)
             else:
