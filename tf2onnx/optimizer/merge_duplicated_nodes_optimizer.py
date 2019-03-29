@@ -8,7 +8,6 @@
 """
 
 from collections import defaultdict, namedtuple
-import logging
 
 from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 
@@ -23,7 +22,6 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     """
     def __init__(self, debug=False):
         super(MergeDuplicatedNodesOptimizer, self).__init__("MergeDuplicatedNodesOptimizer", debug)
-        self._log = logging.getLogger("tf2onnx.optimizer.%s" % self._name)
         # used internally
         self._graph_can_be_optimized = True
 

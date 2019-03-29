@@ -6,8 +6,6 @@
    for example, input of transpose node is const then we can do transpose statically instead of at runtime
 """
 
-import logging
-
 from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 from tf2onnx import utils
 
@@ -16,9 +14,9 @@ from tf2onnx import utils
 _func_map = {}
 
 
-def _register_func(onnx_op):
+def _register_func(op_type):
     def _internal_fun(func):
-        _func_map[onnx_op] = func
+        _func_map[op_type] = func
         return func
     return _internal_fun
 
@@ -27,7 +25,6 @@ class ConstFoldOptimizer(GraphOptimizerBase):
 
     def __init__(self, debug=False):
         super(ConstFoldOptimizer, self).__init__("ConstFoldOptimizer", debug)
-        self._log = logging.getLogger("tf2onnx.optimizer.%s" % self._name)
 
     def _optimize(self, graph):
         return self._apply_optimization(graph, self._optimize_at_current_graph_level)
@@ -38,14 +35,18 @@ class ConstFoldOptimizer(GraphOptimizerBase):
             graph_changed = False
             ops = graph.get_nodes()
             for op in ops:
-                if self._can_skip(op):
+                if self._should_skip(op):
                     continue
                 if self._fold_node(op, graph):
                     graph_changed = True
         return graph
 
     @staticmethod
-    def _can_skip(node):
+    def _should_skip(node):
+        # only support onnx official op for now, other op such as contrib op not supported for now
+        if not utils.is_onnx_domain(node.domain):
+            return True
+
         if node.is_const() or node.is_graph_input():
             return True
 
@@ -60,9 +61,13 @@ class ConstFoldOptimizer(GraphOptimizerBase):
             if node can be fold True will be return indicating that graph is changed
         """
         if self._all_inputs_are_const(node.inputs) and not self._is_graph_output(node, graph):
-            process_func = _func_map.get(node.type, self._try_fold)
-            return process_func(node, graph)
-
+            process_func = _func_map.get(node.type, None)
+            if process_func:
+                const_val_after_trans = process_func(node, graph)
+                self._replace_node_with_const(node, graph, const_val_after_trans)
+                return True
+            else:
+                self.log.warning("need to add function to fold op %s whose op_type is %s", node.name, node.type)
         return False
 
     @staticmethod
@@ -76,21 +81,20 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         return node_out_set.intersection(graph_out_set)
 
     @staticmethod
-    def _replace_node_with_const(node, graph, val):
-        const_node = graph.make_const(utils.make_name("const_fold_opt"), val)
-        graph.replace_all_inputs(graph.get_nodes(), node.output[0], const_node.output[0])
+    def _replace_node_with_const(node, graph, vals):
+        utils.make_sure(len(node.output) == len(vals), "length of node outputs and const vals should be same")
+        for old_input, val in zip(node.output, vals):
+            const_node = graph.make_const(utils.make_name("const_fold_opt"), val)
+            graph.set_dtype(const_node.output[0], utils.map_numpy_to_onnx_dtype(val.dtype))
+            graph.set_shape(const_node.output[0], val.shape)
+            graph.replace_all_inputs(graph.get_nodes(), old_input, const_node.output[0])
         graph.remove_node(node.name)
 
     @staticmethod
-    @_register_func(onnx_op="Transpose")
-    def _fold_transpose(node, graph):
+    @_register_func("Transpose")
+    def _fold_transpose(node, graph) -> list:
         const_val = node.inputs[0].get_tensor_value(as_list=False)
         perm_attr = node.get_attr("perm")
         perm = perm_attr.ints if perm_attr else None
         const_val_after_trans = const_val.transpose(perm)
-        ConstFoldOptimizer._replace_node_with_const(node, graph, const_val_after_trans)
-        return True
-
-    def _try_fold(self, node, graph):
-        self._log.warning("need to add function to fold op %s whose op_type is %s", node.name, node.type)
-        return False
+        return [const_val_after_trans]
