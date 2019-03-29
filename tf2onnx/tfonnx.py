@@ -21,7 +21,7 @@ from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
-from tf2onnx import constants, custom, schemas, utils
+from tf2onnx import constants, custom_opsets, schemas, utils
 from tf2onnx.function import *  # pylint: disable=wildcard-import
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
@@ -2336,7 +2336,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
         for extra_opset in g.extra_opset:
             if extra_opset.domain == constants.MICROSOFT_DOMAIN:
                 # microsoft domain
-                for target_opset, op_map in custom.ms.OPSETS:
+                for target_opset, op_map in custom_opsets.ms.OPSETS:
                     if target_opset <= extra_opset.version:
                         ops_mapping.update(op_map)
             else:
