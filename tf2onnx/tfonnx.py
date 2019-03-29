@@ -797,8 +797,16 @@ def slice_op(ctx, node, name, args):
     # T output = Slice(T input, Index begin, Index size, @type Index)
     # T output = Slice(T data, @INTS axes, @INTS ends, @INTS starts)
     starts = node.inputs[1].get_tensor_value()
-    size = node.inputs[2].get_tensor_value()
-    ends = np.add(starts, size)
+    sizes = node.inputs[2].get_tensor_value()
+    ends = []
+    for start, size in zip(starts, sizes):
+        # get all elements
+        if size == -1:
+            dtype = ctx.get_dtype(node.input[1])
+            utils.make_sure(dtype, "dtype of {} is None".format(node.input[1]))
+            ends.append(np.iinfo(dtype).max)
+        else:
+            ends.append(start + size)
     ctx.remove_input(node, node.input[2])
     ctx.remove_input(node, node.input[1])
     node.set_attr("starts", starts)
