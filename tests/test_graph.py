@@ -340,7 +340,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             # becomes:
             #   T output = Identity(T Input)
             self.assertEqual(node.type, "Identity")
-            node.domain = constants.DEFAULT_CUSTOM_OP_OPSET.domain
+            node.domain = constants.TENSORFLOW_OPSET.domain
             self.assertEqual(args[0], "mode")
             del node.input[1:]
             return node
@@ -352,13 +352,13 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             g = process_tf_graph(sess.graph,
                                  custom_op_handlers={"Print": (print_handler, ["Identity", "mode"])},
                                  opset=self.config.opset,
-                                 extra_opset=[constants.DEFAULT_CUSTOM_OP_OPSET])
+                                 extra_opset=[constants.TENSORFLOW_OPSET])
             self.assertEqual(
                 'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Print [domain="ai.onnx.converters.tensorflow" '
                 'op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
                 onnx_to_graphviz(g))
             self.assertEqual(g.opset, self.config.opset)
-            self.assertEqual(g.extra_opset, [constants.DEFAULT_CUSTOM_OP_OPSET])
+            self.assertEqual(g.extra_opset, [constants.TENSORFLOW_OPSET])
 
     def test_extra_opset(self):
         extra_opset = [

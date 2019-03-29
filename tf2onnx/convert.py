@@ -73,7 +73,7 @@ def get_args():
 
 
 def default_custom_op_handler(ctx, node, name, args):
-    node.domain = constants.DEFAULT_CUSTOM_OP_OPSET.domain
+    node.domain = constants.TENSORFLOW_OPSET.domain
     return node
 
 
@@ -89,7 +89,7 @@ def main():
     if args.custom_ops:
         # default custom ops for tensorflow-onnx are in the "tf" namespace
         custom_ops = {op: (default_custom_op_handler, []) for op in args.custom_ops.split(",")}
-        extra_opset.append(constants.DEFAULT_CUSTOM_OP_OPSET)
+        extra_opset.append(constants.TENSORFLOW_OPSET)
 
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:
