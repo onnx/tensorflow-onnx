@@ -66,8 +66,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
                 const_val_after_trans = process_func(node, graph)
                 self._replace_node_with_const(node, graph, const_val_after_trans)
                 return True
-            else:
-                self.log.warning("need to add function to fold op %s whose op_type is %s", node.name, node.type)
+        self.log.warning("need to add function to fold op %s whose op_type is %s", node.name, node.type)
         return False
 
     @staticmethod
