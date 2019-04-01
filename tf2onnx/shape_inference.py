@@ -151,7 +151,7 @@ def infer_shape_for_node(g, node):
         shape_indices = g.get_shape(node.input[1])
         axis = node.input[2].get_tensor_value()
 
-        shape = shape_params[:axis] + shape_indices + shape_indices[axis + 1:]
+        shape = shape_params[:axis] + shape_indices + shape_params[axis + 1:]
         g.set_shape(node.output[0], shape)
         return True
 
