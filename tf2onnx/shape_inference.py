@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 import logging
+import numpy as np
 from onnx import onnx_pb
 from tf2onnx import utils
 
@@ -115,35 +116,6 @@ def infer_shape_for_node(g, node):
             return False
         return set_shape_from_input(g, shape_node.input[0], node.output[0])
 
-    if node.type == "ConcatV2":
-        axis_node = node.inputs[-1]
-        if not axis_node.is_const():
-            return False
-
-        axis = axis_node.get_tensor_value()
-        val = 0
-        data_inputs = node.input[:-1]
-        for i in data_inputs:
-            s = g.get_shape(i)
-            if s is None:
-                return False
-
-            if s[axis] == -1:
-                val = -1
-                break
-            val += s[axis]
-
-        s1 = g.get_shape(node.input[0])
-        if axis < 0:
-            axis += len(s1)
-        new_shape = s1[:axis] + [val]
-        if axis < len(s1) - 1:
-            new_shape += s1[axis + 1:]
-
-        g.set_shape(node.output[0], new_shape)
-        log.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
-        return True
-
     if node.type == "Gather":
         # uses the follwing link to know how to infer shape of output
         # https://www.tensorflow.org/api_docs/python/tf/gather
@@ -194,6 +166,31 @@ def infer_shape_for_node(g, node):
         log.debug("set [%s] with new shape %s", node.output[0], new_shape)
         return True
 
+    if node.type == "Unpack":
+        input_shape = g.get_shape(node.input[0])
+        if input_shape is None:
+            return False
+
+        axis = node.get_attr("axis").i
+        if axis < 0:
+            axis += len(input_shape)
+
+        # the link below says that the rank of output is "rank(input) -1",
+        # from this statement "num" must equal to input_shape[axis], and if not tf will throw a runtime error
+        # https://www.tensorflow.org/api_docs/python/tf/unstack
+        new_shape = input_shape[:axis] + input_shape[axis + 1:]
+        for output in node.output:
+            g.set_shape(output, new_shape)
+            log.debug("set %s node [%s] with new shape %s", node.type, output, new_shape)
+        return True
+
+    if node.type in ["Minimum", "Maximum"]:
+        # ops that are elementwise and support broadcasting
+        input_shapes = [g.get_shape(node) for node in node.input]
+        new_shape = _shape_after_broadcasting(*input_shapes)
+        g.set_shape(node.output[0], new_shape)
+        return True
+
     return False
 
 
@@ -213,6 +210,40 @@ def infer_input_shapes(g, node):
 
 
 def infer_output_shapes_with_partial_inputs(g, node):
+    if node.type == "ConcatV2":
+        axis_node = node.inputs[-1]
+        if not axis_node.is_const():
+            return False
+
+        axis = axis_node.get_tensor_value()
+        data_inputs = node.input[:-1]
+        input_shapes = [g.get_shape(node) for node in data_inputs]
+        # find the best shape info, concat node requires all dims equal except the concat dim
+        new_shape = input_shapes[0]
+        for tmp in input_shapes:
+            if tmp is not None:
+                if new_shape is None:
+                    new_shape = tmp
+                elif tmp.count(-1) < new_shape.count(-1):
+                    new_shape = tmp
+                    break
+
+        if new_shape is None:
+            return False
+
+        if axis < 0:
+            axis += len(new_shape)
+        new_shape[axis] = -1
+        if input_shapes.count(None) == 0:
+            concat_dims = list(np.array(input_shapes)[:, axis])
+            # only when inputs' shape are known, then val of concat dim can be calculated
+            if concat_dims.count(-1) == 0:
+                new_shape[axis] = sum(concat_dims)
+
+        g.set_shape(node.output[0], new_shape)
+        log.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
+        return True
+
     if node.type == "Merge":
         s1 = g.get_shape(node.input[0])
         s2 = g.get_shape(node.input[1])
@@ -403,3 +434,43 @@ def _find_tensorarray_write(graph, node):
                 if j.type == "TensorArrayWriteV3":
                     return j
     return None
+
+
+def _broadcasting_rule_check(shape_a, shape_b):
+    utils.make_sure(len(shape_a) == len(shape_b), "the following code logic assumes length is equal")
+
+    legal_flag = True
+    for i, j in zip(shape_a, shape_b):
+        # if dim value is -1 then we assume legal
+        # because if not then the model runner such as onnxruntime will issue an error
+        if 1 in [i, j] or -1 in [i, j]:
+            continue
+        if i != j:
+            legal_flag = False
+
+    return legal_flag
+
+
+def _shape_after_broadcasting(shape_a, shape_b):
+    # expand shape data according to broadcasting rule to make them have same length
+    len_a = len(shape_a)
+    len_b = len(shape_b)
+    if len_a < len_b:
+        shape_a = [1] * (len_b - len_a) + shape_a
+    if len_b < len_a:
+        shape_b = [1] * (len_a - len_b) + shape_b
+
+    utils.make_sure(_broadcasting_rule_check(shape_a, shape_b), "broadcasting rule check")
+
+    shape = []
+    for i, j in zip(shape_a, shape_b):
+        if i not in [-1, 1]:
+            shape.append(i)
+        elif j not in [-1, 1]:
+            shape.append(j)
+        elif i == j == 1:
+            shape.append(1)
+        else:  # i,j can only be [-1, -1] or [-1, 1] or [1, -1]
+            shape.append(-1)
+
+    return shape
