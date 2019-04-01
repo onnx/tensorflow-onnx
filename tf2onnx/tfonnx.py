@@ -279,12 +279,15 @@ def squeeze_op(ctx, node, name, args):
         del node.attr["axis"]
 
     shape = ctx.get_shape(node.input[0])
-    utils.make_sure(shape is not None, "squeeze input shape cannot be None")
-    shape_len = len(shape)
     if axis and axis.ints:
         axis = axis.ints
-        axis = [a + shape_len if a < 0 else a for a in axis]
+        neg_axis = any([val < 0 for val in axis])
+        if neg_axis:
+            utils.make_sure(shape is not None, "squeeze input shape cannot be None")
+            shape_len = len(shape)
+            axis = [a + shape_len if a < 0 else a for a in axis]
     else:
+        utils.make_sure(shape is not None, "squeeze input shape cannot be None")
         axis = [i for i, j in enumerate(shape) if j == 1]
     node.set_attr("axes", axis)
 
@@ -460,7 +463,7 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
                 output_shape = spatial_map(output_shape, NHWC_TO_NCHW)
             # calculate pads
             if any(input_shape[i + 2] == -1 for i in range(spatial)):
-                log.warning("node %s has unknown dim %s for pads calculation, fallback to auto_pad" % (
+                log.debug("node %s has unknown dim %s for pads calculation, fallback to auto_pad" % (
                     node.name, str(input_shape)))
                 node.set_attr("auto_pad", "SAME_UPPER")
             else:
@@ -1217,7 +1220,6 @@ def minmax_op(ctx, node, name, args):
             # get a tensor with zeros (since there is no Fill op as of opset8)
             sub_node = ctx.make_node("Sub", [has_correct_shape, has_correct_shape],
                                      op_name_scope=input_node.name)
-
             # use add as 'broadcast' op
             add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
                                      op_name_scope=input_node.name)
