@@ -10,14 +10,14 @@ import unittest
 from collections import defaultdict
 
 from distutils.version import LooseVersion
-from tf2onnx import utils
-from tf2onnx.tfonnx import DEFAULT_TARGET, POSSIBLE_TARGETS
+from parameterized import parameterized
+from tf2onnx import constants, utils
 
 __all__ = ["TestConfig", "get_test_config", "unittest_main",
            "check_tf_min_version", "skip_tf_versions",
            "check_opset_min_version", "check_target", "skip_caffe2_backend", "skip_onnxruntime_backend",
            "skip_opset", "check_onnxruntime_incompatibility", "validate_const_node",
-           "group_nodes_by_type"]
+           "group_nodes_by_type", "test_ms_domain", "check_node_domain"]
 
 
 # pylint: disable=missing-docstring
@@ -26,8 +26,8 @@ class TestConfig(object):
     def __init__(self):
         self.platform = sys.platform
         self.tf_version = self._get_tf_version()
-        self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", 7))
-        self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(DEFAULT_TARGET)).split(',')
+        self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", constants.PREFERRED_OPSET))
+        self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(constants.DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.backend_version = self._get_backend_version()
         self.is_debug_mode = False
@@ -83,7 +83,7 @@ class TestConfig(object):
                                 choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
                                 help="backend to test against")
             parser.add_argument("--opset", type=int, default=config.opset, help="opset to test against")
-            parser.add_argument("--target", default=",".join(config.target), choices=POSSIBLE_TARGETS,
+            parser.add_argument("--target", default=",".join(config.target), choices=constants.POSSIBLE_TARGETS,
                                 help="target platform")
             parser.add_argument("--debug", help="output debugging information", action="store_true")
             parser.add_argument("--temp_dir", help="temp dir")
@@ -244,3 +244,31 @@ def check_lstm_count(graph, expected_count):
 
 def check_gru_count(graph, expected_count):
     return check_op_count(graph, "GRU", expected_count)
+
+
+_MAX_MS_OPSET_VERSION = 1
+
+
+def test_ms_domain(versions=None):
+    """ Parameterize test case to apply ms opset(s) as extra_opset. """
+
+    def _custom_name_func(testcase_func, param_num, param):
+        del param_num
+        arg = param.args[0]
+        return "%s_%s" % (testcase_func.__name__, arg.version)
+
+    # Test all opset versions in ms domain if versions is not specified
+    if versions is None:
+        versions = list(range(1, _MAX_MS_OPSET_VERSION + 1))
+
+    opsets = []
+    for version in versions:
+        opsets.append([utils.make_opsetid(constants.MICROSOFT_DOMAIN, version)])
+    return parameterized.expand(opsets, testcase_func_name=_custom_name_func)
+
+
+def check_node_domain(node, domain):
+    # None or empty string means onnx domain
+    if not domain:
+        return not node.domain
+    return node.domain == domain

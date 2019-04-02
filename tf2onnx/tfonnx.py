@@ -21,7 +21,7 @@ from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
-from tf2onnx import schemas, utils
+from tf2onnx import constants, custom_opsets, schemas, utils
 from tf2onnx.function import *  # pylint: disable=wildcard-import
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
@@ -31,16 +31,6 @@ from tf2onnx.utils import port_name
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tf2onnx")
-
-# Target for the generated onnx graph. It possible targets:
-# onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)
-# caffe2 = include some workarounds for caffe2 and winml
-TARGET_RS4 = "rs4"
-TARGET_RS5 = "rs5"
-TARGET_RS6 = "rs6"
-TARGET_CAFFE2 = "caffe2"
-POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2]
-DEFAULT_TARGET = []
 
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
@@ -178,7 +168,7 @@ def broadcast_op(ctx, node, name, args):
         node.set_attr("broadcast", 1)
         # this works around shortcomings in the broadcasting code
         # of caffe2 and winml/rs4.
-        if ctx.is_target(TARGET_RS4):
+        if ctx.is_target(constants.TARGET_RS4):
             # in rs4 mul and add do not support scalar correctly
             if not shape0:
                 if node.inputs[0].is_const():
@@ -201,7 +191,7 @@ def broadcast_op7(ctx, node, name, args):
     if shape0 != shape1:
         # this works around shortcomings in the broadcasting code
         # of caffe2 and winml/rs4.
-        if ctx.is_target(TARGET_RS4):
+        if ctx.is_target(constants.TARGET_RS4):
             # in rs4 mul and add do not support scalar correctly
             if not shape0:
                 if node.inputs[0].is_const():
@@ -1035,7 +1025,7 @@ def stridedslice_op(ctx, node, name, args):
 
 
 def pow_op(ctx, node, name, args):
-    if ctx.is_target(TARGET_CAFFE2):
+    if ctx.is_target(constants.TARGET_CAFFE2):
         # workaround a bug in caffe2 pre Feb2018, pow(a, b) becomes np.exp(np.log(a) * b)
         node.type = "Log"
         b = node.input[1]
@@ -1308,7 +1298,8 @@ def onehot_op9(ctx, node, name, args):
     # in ONNX, op's schema is (input, depth, value, @int axis), meaning of "value" is [off-value, on-value]
     # onnxruntime only supports int64
     output_dtype = ctx.get_dtype(node.input[2])
-    if ctx.is_target(TARGET_RS6) and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
+    if ctx.is_target(constants.TARGET_RS6) \
+            and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
         log.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
         onehot_op(ctx, node, name, args)
         return
@@ -1323,21 +1314,21 @@ def onehot_op9(ctx, node, name, args):
     off_on_value = ctx.make_node("Concat", [off_value, on_value], attr={"axis": 0}).output[0]
 
     indices = node.input[0]
-    if ctx.is_target(TARGET_RS6) and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
+    if ctx.is_target(constants.TARGET_RS6) and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
         indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
     node.input[0] = indices
 
-    if ctx.is_target(TARGET_RS6) and ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64:
+    if ctx.is_target(constants.TARGET_RS6) and ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64:
         depth = ctx.make_node("Cast", [depth], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
     node.input[1] = depth
 
-    if ctx.is_target(TARGET_RS6) and output_dtype != onnx_pb.TensorProto.INT64:
+    if ctx.is_target(constants.TARGET_RS6) and output_dtype != onnx_pb.TensorProto.INT64:
         off_on_value = ctx.make_node("Cast", [off_on_value], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
     node.input[2] = off_on_value
 
     del node.input[3]
 
-    if ctx.is_target(TARGET_RS6) and output_dtype != onnx_pb.TensorProto.INT64:
+    if ctx.is_target(constants.TARGET_RS6) and output_dtype != onnx_pb.TensorProto.INT64:
         new_node_name = utils.make_name("onehot_output")
         new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
         ctx.set_dtype(new_node.output[0], output_dtype)
@@ -2339,13 +2330,28 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
 
-    # create ops mapping for the desired opset
+    # create ops mapping for the desired opsets
     ops_mapping = {}
+
+    # load mapping for onnx domain
     for target_opset, op_map in _OPSETS:
         if target_opset <= g.opset:
             ops_mapping.update(op_map)
 
-    # apply custom ops on top of the assembled opset. We can either completment the opset
+    # load mapping for known extra opsets
+    # order matters, later mapping overrides earlier's
+    if g.extra_opset is not None:
+        for extra_opset in g.extra_opset:
+            opsets = custom_opsets.DOMAIN_OPSETS.get(extra_opset.domain, None)
+            if opsets is not None:
+                for target_opset, op_map in opsets:
+                    if target_opset <= extra_opset.version:
+                        ops_mapping.update(op_map)
+            else:
+                # unknown opset, assume used in custom_op_handlers, skip it
+                pass
+
+    # apply custom ops on top of the assembled opset. We can either complement the opset
     # or override existing ops with a custom op.
     if custom_op_handlers is not None:
         custom_opset = {k: v for k, v in custom_op_handlers.items()}
@@ -2354,7 +2360,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, custom_op_handlers):
     ops = [n for n in g.get_nodes()]
     for node in ops:
         if node.need_skip():
-            log.debug("explictly skip node " + node.name)
+            log.debug("explicitly skip node " + node.name)
             continue
 
         op = node.type
@@ -2513,7 +2519,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if inputs_as_nchw is None:
         inputs_as_nchw = []
     if target is None:
-        target = DEFAULT_TARGET
+        target = constants.DEFAULT_TARGET
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
 
@@ -2566,9 +2572,9 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # post-processing rewriters
     late_rewriters = []
-    if TARGET_RS5 in target:
+    if constants.TARGET_RS5 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs5)
-    if TARGET_RS6 in target:
+    if constants.TARGET_RS6 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs6)
     if late_rewriters:
         run_rewriters(g, late_rewriters, continue_on_error)

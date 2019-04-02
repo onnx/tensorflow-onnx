@@ -346,6 +346,9 @@ class Graph(object):
 
         self._output_shapes = output_shapes
         self._opset = find_opset(opset)
+
+        if extra_opset is not None:
+            utils.make_sure(isinstance(extra_opset, list), "invalid extra_opset")
         self._extra_opset = extra_opset
 
         self._order_sensitive_inputs = []
@@ -385,11 +388,15 @@ class Graph(object):
     def create_new_graph_with_same_config(self):
         """Create a clean graph inheriting current graph's configuration."""
         return Graph([], output_shapes={}, dtypes={}, target=self._target, opset=self._opset,
-                     extra_opset=self._extra_opset, output_names=[])
+                     extra_opset=self.extra_opset, output_names=[])
 
     @property
     def opset(self):
         return self._opset
+
+    @property
+    def extra_opset(self):
+        return self._extra_opset
 
     def is_target(self, *names):
         """Return True if target platform contains any name."""
@@ -802,8 +809,8 @@ class Graph(object):
             imp = OperatorSetIdProto()
             imp.version = self._opset
             opsets.append(imp)
-            if self._extra_opset is not None:
-                opsets.extend(self._extra_opset)
+            if self.extra_opset is not None:
+                opsets.extend(self.extra_opset)
             kwargs["opset_imports"] = opsets
         model_proto = helper.make_model(graph, **kwargs)
 
@@ -1099,12 +1106,22 @@ class GraphUtil(object):
         # apply shape inference on the model
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
         graph_proto = inferred_model.graph
-        opset_version = onnx_model_proto.opset_import[0].version
-        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version)
+
+        opset_version = None
+        extra_opset = []
+        for opset in onnx_model_proto.opset_import:
+            if not opset.domain:
+                # domain field is None or empty means it is onnx domain
+                opset_version = opset.version
+            else:
+                extra_opset.append(opset)
+
+        utils.make_sure(opset_version is not None, "opset version is not specified for onnx domain")
+        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version, extra_opset)
         return main_graph
 
     @staticmethod
-    def create_graph_from_onnx_graph(graph_proto, opset_version=None):
+    def create_graph_from_onnx_graph(graph_proto, opset_version=None, extra_opset=None):
         """Create Graph loading onnx graph proto."""
         output_shapes = {}
         output_dtypes = {}
@@ -1131,7 +1148,7 @@ class GraphUtil(object):
         for n in graph_proto.output:
             output_names.append(n.name)
 
-        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, None, output_names)
+        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, extra_opset, output_names)
         const_nodes = GraphUtil._parse_graph_initializer(g, graph_proto)
         GraphUtil._parse_graph_input(g, graph_proto, [n.name for n in const_nodes])
 
@@ -1139,7 +1156,7 @@ class GraphUtil(object):
             for attr_name, attr_val in n.attr.items():
                 if attr_val.HasField('g'):
                     # it was assumed that the a.g has inferred shapes/dtypes.
-                    sub_g = GraphUtil.create_graph_from_onnx_graph(attr_val.g, opset_version)
+                    sub_g = GraphUtil.create_graph_from_onnx_graph(attr_val.g, opset_version, extra_opset)
                     n.set_body_graph_as_attr(attr_name, sub_g)
         return g
 

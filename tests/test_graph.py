@@ -18,11 +18,11 @@ import tensorflow as tf
 from onnx import helper
 
 import tf2onnx
+from tf2onnx import constants, utils
+from tf2onnx.graph import GraphUtil
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
 from common import get_test_config, unittest_main
-
-_TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 
 
 # pylint: disable=missing-docstring
@@ -70,6 +70,10 @@ def onnx_to_graphviz(g, include_attrs=False):
                 kwarg["shape"] = "{}".format([int(i) for i in attr["shape"].ints])
             if "broadcast" in attr:
                 kwarg["broadcast"] = "{}".format(int(attr["broadcast"].i))
+
+        # display domain if it is not onnx domain
+        if node.domain:
+            kwarg["domain"] = node.domain
 
         g2.node(node.name, op_type=node.type, **kwarg)
     for node in g.get_nodes():
@@ -336,7 +340,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             # becomes:
             #   T output = Identity(T Input)
             self.assertEqual(node.type, "Identity")
-            node.domain = _TENSORFLOW_DOMAIN
+            node.domain = constants.TENSORFLOW_OPSET.domain
             self.assertEqual(args[0], "mode")
             del node.input[1:]
             return node
@@ -348,11 +352,35 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             g = process_tf_graph(sess.graph,
                                  custom_op_handlers={"Print": (print_handler, ["Identity", "mode"])},
                                  opset=self.config.opset,
-                                 extra_opset=helper.make_opsetid(_TENSORFLOW_DOMAIN, 1))
+                                 extra_opset=[constants.TENSORFLOW_OPSET])
             self.assertEqual(
-                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Print [op_type=Identity] '
-                'output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Print [domain="ai.onnx.converters.tensorflow" '
+                'op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
                 onnx_to_graphviz(g))
+            self.assertEqual(g.opset, self.config.opset)
+            self.assertEqual(g.extra_opset, [constants.TENSORFLOW_OPSET])
+
+    def test_extra_opset(self):
+        extra_opset = [
+            utils.make_opsetid(constants.MICROSOFT_DOMAIN, 1),
+            utils.make_opsetid("my.domain", 1024),
+        ]
+        with tf.Session() as sess:
+            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+            x_ = tf.add(x, x)
+            _ = tf.identity(x_, name="output")
+            g = process_tf_graph(sess.graph,
+                                 opset=self.config.opset,
+                                 extra_opset=extra_opset)
+            self.assertEqual(g.opset, self.config.opset)
+            self.assertEqual(g.extra_opset, extra_opset)
+
+            # convert between graph and model proto, make sure extra opset is preserved
+            model_proto = g.make_model("test")
+            model_proto = GraphUtil.optimize_model_proto(model_proto)
+            g = GraphUtil.create_graph_from_onnx_model(model_proto)
+            self.assertEqual(g.opset, self.config.opset)
+            self.assertEqual(g.extra_opset, extra_opset)
 
 
 if __name__ == '__main__':

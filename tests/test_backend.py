@@ -16,6 +16,7 @@ import tensorflow as tf
 from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
+from tf2onnx import constants
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 
@@ -905,60 +906,95 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @check_opset_min_version(7, "cast")
-    def test_range_const(self):
+    def _test_range_const(self, extra_opset=None):
+        process_args = {}
+        if extra_opset is not None:
+            process_args["extra_opset"] = [extra_opset]
+
         x = tf.range(5)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {})
+        self._run_test_case([_OUTPUT], {}, process_args=process_args)
         tf.reset_default_graph()
 
         x = tf.range(3, 3, 5)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {})
+        self._run_test_case([_OUTPUT], {}, process_args=process_args)
         tf.reset_default_graph()
 
         x = tf.range(0, -5, -2)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {})
+        self._run_test_case([_OUTPUT], {}, process_args=process_args)
         tf.reset_default_graph()
 
         x = tf.range(-5.0, 5.0, 1.5)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {})
+        self._run_test_case([_OUTPUT], {}, process_args=process_args)
         tf.reset_default_graph()
 
         x = tf.range(2.5, 5.0, 10.0)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {})
+        self._run_test_case([_OUTPUT], {}, process_args=process_args)
 
-    def test_range_non_const(self):
+    def _test_range_non_const(self, extra_opset=None):
+        process_args = {}
+        if extra_opset is not None:
+            process_args["extra_opset"] = [extra_opset]
+
         x = tf.range(5.0)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {})
+        g = self._run_test_case([_OUTPUT], {}, process_args=process_args)
+        self.assertTrue(extra_opset is None
+                        or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
         tf.reset_default_graph()
 
         x = tf.range(0, -5.0, -2)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {})
+        g = self._run_test_case([_OUTPUT], {}, process_args=process_args)
+        self.assertTrue(extra_opset is None
+                        or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
         tf.reset_default_graph()
 
-        x = tf.range(3.0, 3.0, 5)
-        _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {})
-        tf.reset_default_graph()
+        # disable this case for ms domain due to onnxruntime range-1 issue
+        # https://github.com/Microsoft/onnxruntime/issues/730
+        if not (extra_opset and extra_opset.domain == constants.MICROSOFT_DOMAIN):
+            x = tf.range(3.0, 3.0, 5)
+            _ = tf.identity(x, name=_TFOUTPUT)
+            g = self._run_test_case([_OUTPUT], {}, process_args=process_args)
+            self.assertTrue(extra_opset is None
+                            or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
+            tf.reset_default_graph()
 
         delta_val = np.array(1.5, dtype=np.float32)
         delta = tf.placeholder(tf.float32, shape=(), name=_TFINPUT)
         x = tf.range(-5.0, 5.0, delta)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: delta_val})
+        g = self._run_test_case([_OUTPUT], {_INPUT: delta_val}, process_args=process_args)
+        self.assertTrue(extra_opset is None
+                        or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
         tf.reset_default_graph()
 
         start_val = np.array(2.5, dtype=np.float32)
         start = tf.placeholder(tf.float32, shape=(), name=_TFINPUT)
         x = tf.range(start, 5.0, 10.0)
         _ = tf.identity(x, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: start_val})
+        g = self._run_test_case([_OUTPUT], {_INPUT: start_val}, process_args=process_args)
+        self.assertTrue(extra_opset is None
+                        or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
+
+    @check_opset_min_version(7, "cast")
+    def test_range_const(self):
+        self._test_range_const()
+
+    def test_range_non_const(self):
+        self._test_range_non_const()
+
+    @test_ms_domain()
+    def test_ms_range_const(self, extra_opset):
+        self._test_range_const(extra_opset)
+
+    @test_ms_domain()
+    def test_ms_range_non_const(self, extra_opset):
+        self._test_range_non_const(extra_opset)
 
     @check_onnxruntime_incompatibility("Sqrt")
     def test_rsqrt(self):

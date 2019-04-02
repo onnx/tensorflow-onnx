@@ -25,7 +25,7 @@ with tf.Session() as sess:
     x_ = tf.Print(x, [x], "hello")
     _ = tf.identity(x_, name="output")
     onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph,
-                                                 custom_op_handlers={"Print": print_handler},
+                                                 custom_op_handlers={"Print": (print_handler, [])},
                                                  extra_opset=[helper.make_opsetid(_TENSORFLOW_DOMAIN, 1)],
                                                  input_names=["input:0"],
                                                  output_names=["output:0"])
