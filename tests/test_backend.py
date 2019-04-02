@@ -1902,6 +1902,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
             tf.reset_default_graph()
 
+    def test_ceil(self):
+        x_val = np.array([-1.5, 1.2], dtype=np.float32)
+        x = tf.placeholder(tf.float32, [2], name=_TFINPUT)
+        x_ = tf.ceil(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_softplus(self):
+        x_val = np.array([-1, 0, 1], dtype=np.float32)
+        x = tf.placeholder(tf.float32, [3], name=_TFINPUT)
+        x_ = tf.math.softplus(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_softsign(self):
+        x_val = np.array([-1, 0, 1], dtype=np.float32)
+        x = tf.placeholder(tf.float32, [3], name=_TFINPUT)
+        x_ = tf.math.softsign(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
 if __name__ == '__main__':
     unittest_main()
