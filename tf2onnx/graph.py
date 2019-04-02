@@ -90,9 +90,8 @@ class Node(object):
         """Return onnx valid attributes"""
         schema = get_schema(self.type, self.graph.opset, self.domain)
         if schema is None and not (self.is_const() or self.is_graph_input()):
-            log.warning("Node %s uses non-stardard onnx op <%s, %s>, skip attribute check", self.name, self.domain,
-                        self.type)
-
+            log.debug("Node %s uses non-stardard onnx op <%s, %s>, skip attribute check",
+                      self.name, self.domain, self.type)
         onnx_attrs = {}
         for a in self._attr.values():
             if schema is None or schema.has_attribute(a.name):
