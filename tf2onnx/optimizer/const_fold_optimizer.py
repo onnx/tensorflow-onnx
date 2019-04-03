@@ -11,6 +11,8 @@ from tf2onnx import utils
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
 
+# key is op_type, value is the function to compute outputs
+# the schema of function is: inputs are(node, graph), output is a list of constant values.
 _func_map = {}
 
 
@@ -43,7 +45,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
 
     @staticmethod
     def _should_skip(node):
-        # only support onnx official op for now, other op such as contrib op not supported for now
+        # only support onnx official op for now, op in other domain is not supported for now
         if not utils.is_onnx_domain(node.domain):
             return True
 
@@ -63,10 +65,10 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         if self._all_inputs_are_const(node.inputs) and not self._is_graph_output(node, graph):
             process_func = _func_map.get(node.type, None)
             if process_func:
-                const_val_after_trans = process_func(node, graph)
-                self._replace_node_with_const(node, graph, const_val_after_trans)
+                const_outputs = process_func(node, graph)
+                self._replace_node_with_const(node, graph, const_outputs)
                 return True
-        self.log.warning("need to add function to fold op %s whose op_type is %s", node.name, node.type)
+        self.log.debug("need to add function to fold op %s whose op_type is %s", node.name, node.type)
         return False
 
     @staticmethod
