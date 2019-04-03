@@ -268,15 +268,16 @@ def squeeze_op(ctx, node, name, args):
     else:
         del node.attr["axis"]
 
-    shape = ctx.get_shape(node.input[0])
     if axis and axis.ints:
         axis = axis.ints
         neg_axis = any([val < 0 for val in axis])
         if neg_axis:
+            shape = ctx.get_shape(node.input[0])
             utils.make_sure(shape is not None, "squeeze input shape cannot be None")
             shape_len = len(shape)
             axis = [a + shape_len if a < 0 else a for a in axis]
     else:
+        shape = ctx.get_shape(node.input[0])
         utils.make_sure(shape is not None, "squeeze input shape cannot be None")
         axis = [i for i, j in enumerate(shape) if j == 1]
     node.set_attr("axes", axis)
