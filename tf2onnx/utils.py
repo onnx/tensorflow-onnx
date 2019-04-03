@@ -428,7 +428,6 @@ def get_onnx_version():
     return onnx.__version__
 
 
-
 def make_opsetid(domain, version):
     make_sure(isinstance(version, int), "version must be an integer")
     return helper.make_opsetid(domain, version)
@@ -438,4 +437,3 @@ def is_onnx_domain(domain):
     if domain is None or domain == "":
         return True
     return False
-
