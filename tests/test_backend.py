@@ -1912,14 +1912,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_softplus(self):
         x_val = np.array([-1, 0, 1], dtype=np.float32)
         x = tf.placeholder(tf.float32, [3], name=_TFINPUT)
-        x_ = tf.math.softplus(x)
+        x_ = tf.nn.softplus(x)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_softsign(self):
         x_val = np.array([-1, 0, 1], dtype=np.float32)
         x = tf.placeholder(tf.float32, [3], name=_TFINPUT)
-        x_ = tf.math.softsign(x)
+        x_ = tf.nn.softsign(x)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
