@@ -58,7 +58,7 @@ def from_checkpoint(model_path, input_names, output_names):
     # make sure we start with clean default graph
     tf.reset_default_graph()
     # model_path = checkpoint/checkpoint.meta
-    saver = tf.train.import_meta_graph(model_path)
+    saver = tf.train.import_meta_graph(model_path, clear_devices=True)
     with tf.Session() as sess:
         # restore from model_path minus the ".meta"
         saver.restore(sess, model_path[:-5])

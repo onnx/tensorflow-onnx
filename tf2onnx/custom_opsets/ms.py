@@ -4,24 +4,15 @@
 
 from onnx.onnx_pb import TensorProto
 from tf2onnx import constants, utils
-from tf2onnx.function.range import make_range_const
+from tf2onnx.handler import tf_op
+from tf2onnx.onnx_opset import controlflow
 
 
-# pylint: disable=unused-argument
-
-def range_op1(ctx, node, name, args):
-    """Range."""
-    # T range = Range(T start, T limit, T delta)
-    dtype = node.get_attr_int("Tidx")
-    shape = node.output_shapes[0]
-    utils.make_sure(dtype is not None, "Tidx of %s is None", node.name)
-    ctx.remove_node(node.name)
-    make_range(ctx, node.input[0], node.input[1], node.input[2], node.output[0], name, shape, dtype)
-
+# pylint: disable=unused-argument,missing-docstring
 
 def make_range(ctx, start, limit, delta, output, scope_name, shape, dtype):
     if all(ctx.get_node_by_output(n).is_const() for n in [start, limit, delta]) is True:
-        make_range_const(ctx, start, limit, delta, output, scope_name, shape, dtype)
+        controlflow.make_range_const(ctx, start, limit, delta, output, scope_name, shape, dtype)
     else:
         _make_range_non_const(ctx, start, limit, delta, output, scope_name, shape, dtype)
 
@@ -34,10 +25,14 @@ def _make_range_non_const(ctx, start, limit, delta, output, scope_name, shape, d
                   domain=constants.MICROSOFT_DOMAIN)
 
 
-_OPSET_1 = {
-    "Range": (range_op1, []),
-}
-
-OPSETS = [
-    (1, _OPSET_1),
-]
+@tf_op("Range", domain=constants.MICROSOFT_DOMAIN)
+class Range:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        """Range."""
+        # T range = Range(T start, T limit, T delta)
+        dtype = node.get_attr_int("Tidx")
+        shape = node.output_shapes[0]
+        utils.make_sure(dtype is not None, "Tidx of %s is None", node.name)
+        ctx.remove_node(node.name)
+        make_range(ctx, node.input[0], node.input[1], node.input[2], node.output[0], node.name, shape, dtype)
