@@ -23,7 +23,7 @@ from tensorflow.tools.graph_transforms import TransformGraph
 import tf2onnx
 import tf2onnx.onnx_opset # pylint: disable=unused-import
 import tf2onnx.custom_opsets # pylint: disable=unused-import
-from tf2onnx import constants, schemas, utils, handler, onnx_opset
+from tf2onnx import constants, schemas, utils, handler
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
