@@ -787,7 +787,7 @@ class Shape:
         ctx.copy_shape(node.output[0], output_cast.output[0])
 
 
-@tf_op("IsNan")
+@tf_op("IsNan", type_map={"IsNan": "IsNaN"})
 class IsNan:
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
