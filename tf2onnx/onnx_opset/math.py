@@ -48,7 +48,7 @@ class TrigOpSinceOpset7:
         pass
 
 
-@tf_op(["Acosh", "Asinh", "Atanh", "Cosh"])
+@tf_op(["Acosh", "Asinh", "Atanh", "Cosh", "Sinh"])
 class TrigOpSinceOpset9:
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
