@@ -38,10 +38,19 @@ class tf_op:
                 for name in self.name:
                     opset_dict[name] = (v, self.kwargs)
 
+    def register_compat_handler(self, func, version):
+        opset = tf_op._OPSETS.get(self.domain)
+        if not opset:
+            opset = []
+            tf_op._OPSETS[self.domain] = opset
+            while version >= len(opset):
+                opset.append({})
+            opset_dict = opset[version]
+            opset_dict[self.name[0]] = (func, self.kwargs)
+
     @staticmethod
     def get_opsets():
         return tf_op._OPSETS
-
 
     @staticmethod
     def create_mapping(max_opset, extra_opsets):
@@ -59,7 +68,6 @@ class tf_op:
 
         tf_op._MAPPING = ops_mapping
         return ops_mapping
-
 
     @staticmethod
     def find_op(name):

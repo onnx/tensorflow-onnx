@@ -717,7 +717,34 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     # apply custom ops on top of the assembled opset. We can either complement the opset
     # or override existing ops with a custom op.
     if custom_op_handlers is not None:
-        custom_opset = {k: v for k, v in custom_op_handlers.items()}
+        # below is a bit tricky since there are a few api's:
+        # 1. the future way we want custom ops to be registered with the @tf_op decorator. THose handlers will be
+        #     registered via the decorator on load of the module ... nothing is required here.
+        # 2. the old custom op api: a dictionary of {name: (func, args[])
+        #     We deal with this by using a compat_handler that wraps to old handler with a new style handler.
+        #     This is tempoary to give people give to move to the new api and after tf2onnx-1.5 we want to remove this
+        custom_opset = {}
+        for k, v in custom_op_handlers.items():
+            # FIXME: remove this after tf2onnx-1.5
+            def compat_handler(ctx, node, **kwargs):
+                # wrap old handler
+                name = node.name
+                args = kwargs["args"]
+                func = kwargs["func"]
+                return func(ctx, node, name, args)
+
+            args = v[1]
+            kwargs = {"func": v[0]}
+            if args:
+                type_map = {k: args[0]}
+                kwargs["type_map"] = type_map
+                args = args[1:]
+            kwargs["args"] = args
+            new_handler = handler.tf_op(k,
+                                        domain=constants.TENSORFLOW_OPSET.domain,
+                                        kwargs=kwargs)
+            new_handler.register_compat_handler(compat_handler, 1)
+            custom_opset[k] = (compat_handler, kwargs)
         ops_mapping.update(custom_opset)
 
     infer_shape_for_graph(g)
