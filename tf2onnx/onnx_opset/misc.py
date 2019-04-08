@@ -18,8 +18,8 @@ log = logging.getLogger("onnx_opset.misc")
 
 # pylint: disable=unused-argument,missing-docstring
 
-@tf_op(["CheckNumerics", "StopGradient", "NoOp"])
-class NukeNode:
+@tf_op(["CheckNumerics", "StopGradient"])
+class MoveToIdent:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
         node.type = "Identity"
@@ -39,3 +39,10 @@ class DirectOp:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op("NoOp")
+class NukeNode:
+    @classmethod
+    def version_4(cls, ctx, node, **kwargs):
+        ctx.remove_node(node.name)
