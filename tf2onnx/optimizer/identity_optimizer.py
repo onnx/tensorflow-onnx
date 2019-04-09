@@ -6,13 +6,8 @@
 """
 
 from __future__ import unicode_literals
-import logging
 
 from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
-
-
-log = logging.getLogger("tf2onnx.optimizer.identity_optimizer")
-
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
 
@@ -22,7 +17,6 @@ class IdentityOptimizer(GraphOptimizerBase):
 
     def __init__(self, debug=False):
         super(IdentityOptimizer, self).__init__("IdentityOptimizer", debug)
-
         self._g = None
 
     def optimize(self, graph):
@@ -31,8 +25,8 @@ class IdentityOptimizer(GraphOptimizerBase):
         self._optimize_recursively(self._g)
         current_counter = self._g.dump_node_statistics()
         identity_cnt = current_counter["Identity"]
-        current_counter.subtract(previous_counter)
-        log.info(" %d identity op(s) left, ops diff after identity optimization: %s", identity_cnt, current_counter)
+        self.log.info(" %d identity op(s) left", identity_cnt)
+        self._print_stat_diff(previous_counter, current_counter)
         return self._g
 
     def _optimize_recursively(self, g):
@@ -42,9 +36,9 @@ class IdentityOptimizer(GraphOptimizerBase):
             body_graphs = n.get_body_graphs()
             if body_graphs:
                 for attr, b_g in body_graphs.items():
-                    log.debug("start handling subgraph of %s's attribute %s", n.name, attr)
+                    self.log.debug("start handling subgraph of %s's attribute %s", n.name, attr)
                     self._optimize_recursively(b_g)
-                    log.debug("finish handling subgraph of %s's attribute %s", n.name, attr)
+                    self.log.debug("finish handling subgraph of %s's attribute %s", n.name, attr)
 
     def _optimize(self, g):
         has_update = True
@@ -53,7 +47,7 @@ class IdentityOptimizer(GraphOptimizerBase):
             nodes = [n for n in g.get_nodes() if n.type == "Identity"]
             for n in nodes:
                 if n.graph is None:
-                    log.info("node has been removed from this graph, skip")
+                    self.log.info("node has been removed from this graph, skip")
                     continue
 
                 graph_outputs = set(n.output).intersection(g.outputs)
@@ -72,19 +66,18 @@ class IdentityOptimizer(GraphOptimizerBase):
         graph.remove_node(identity.name)
         return True
 
-    @staticmethod
-    def _handle_graph_output_identity(graph, identity, graph_outputs):
+    def _handle_graph_output_identity(self, graph, identity, graph_outputs):
         input_id = identity.input[0]
         input_node = identity.inputs[0]
 
         if input_node.graph != graph:
             # If input node is in parent graph, we don't handle it now
-            log.debug("input node in parent graph, skip")
+            self.log.debug("input node in parent graph, skip")
             return False
 
         if input_node.is_graph_input():
             # Identity between input and output should not be removed.
-            log.debug("skip identity between input and output")
+            self.log.debug("skip identity between input and output")
             return False
 
         output_id = identity.output[0]
@@ -93,7 +86,7 @@ class IdentityOptimizer(GraphOptimizerBase):
         if input_id in graph.outputs:
             # input id already be graph output, so we cannot make that be another graph output.
             # this Identity must be kept.
-            log.debug("identity input already be graph output")
+            self.log.debug("identity input already be graph output")
             return False
 
         graph.remove_node(identity.name)

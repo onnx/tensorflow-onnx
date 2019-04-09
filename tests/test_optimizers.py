@@ -14,7 +14,6 @@ from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, group_nodes_by_type
 
-
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
 class OptimizerTests(Tf2OnnxBackendTestBase):
@@ -422,6 +421,70 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                                 model_proto,
                                                 op_type="Log", remaining_op_num=3)
     # Merge Duplicated Nodes Optimizer Tests End
+
+    # Const Fold Optimizer Tests Start
+
+    def test_const_fold_trans_with_const1(self):
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Transpose", ["const"], ["value1"])
+        node3 = helper.make_node("Add", ["value1", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_const_fold_trans_with_const1",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_const_fold_trans_with_const2(self):
+        # need multiple optimization run
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Transpose", ["const"], ["value1"])
+        node3 = helper.make_node("Transpose", ["value1"], ["value2"])
+        node4 = helper.make_node("Add", ["value2", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3, node4],
+            "test_const_fold_trans_with_const2",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_const_fold_node_is_output(self):
+        # need multiple optimization run
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Transpose", ["const"], ["value1"])
+        node3 = helper.make_node("Transpose", ["value1"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_const_fold_node_is_output",
+            [],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {},
+                                   model_proto, remaining_transpose_num=0)
+    # Const Fold Optimizer Tests End
+
 
 if __name__ == "__main__":
     unittest_main()
