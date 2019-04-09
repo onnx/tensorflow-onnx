@@ -39,16 +39,16 @@ def logical_compare_op(ctx, node, **kwargs):
                 ctx.set_dtype(inp_cast.output[0], target_dtype)
 
 
-@tf_op(["LogicalNot", "NotEqual"],
-       type_map={"LogicalNot": "Not"})
+@tf_op(["LogicalNot", "NotEqual"], onnx_op="Not")
 class DirectOp:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
         pass
 
 
-@tf_op(["Equal", "Greater", "Less", "LogicalAnd", "LogicalOr", "LogicalAnd", "LogicalOr"],
-       type_map={"LogicalAnd": "And", "LogicalOr": "Or"})
+@tf_op(["Equal", "Greater", "Less"])
+@tf_op("LogicalAnd", onnx_op="And")
+@tf_op("LogicalOr", onnx_op="Or")
 class BroadcastOp(common.BroadcastOp):
     pass
 
@@ -64,8 +64,8 @@ class Greater:
         logical_compare_op(ctx, node, **kwargs)
 
 
-@tf_op(["GreaterEqual", "LessEqual"],
-       type_map={"GreaterEqual": "Less", "LessEqual": "Greater"})
+@tf_op("GreaterEqual", onnx_op="Less")
+@tf_op("LessEqual", onnx_op="Greater")
 class GreaterLessEqual:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):

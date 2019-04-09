@@ -22,9 +22,11 @@ log = logging.getLogger("onnx_opset.reduction")
 
 # pylint: disable=unused-argument,missing-docstring
 
-@tf_op(["Min", "Max", "Mean", "Sum", "Prod"],
-       type_map={"Min": "ReduceMin", "Max": "ReduceMax", "Mean": "ReduceMean",
-                 "Sum": "ReduceSum", "Prod": "ReduceProd"})
+@tf_op("Min", onnx_op="ReduceMin")
+@tf_op("Max", onnx_op="ReduceMax")
+@tf_op("Mean", onnx_op="ReduceMean")
+@tf_op("Sum", onnx_op="ReduceSum")
+@tf_op("Prod", onnx_op="ReduceProd")
 class ReduceOpBase:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):

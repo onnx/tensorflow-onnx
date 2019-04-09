@@ -512,7 +512,7 @@ def rewrite_conv2d_with_pad(g, ops):
         g.replace_input(conv, conv.input[0], pad.input[0])
         # convert Conv2D
         conv.type = "Conv"
-        func, info = handler.tf_op.find_op("Conv2D")
+        func, info = handler.tf_op.find_effective_op("Conv2D")
         func(g, conv)
         conv.skip_conversion = True
         conv.set_attr("auto_pad", "NOTSET")
@@ -541,12 +541,10 @@ def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
         mapped_op[op] += 1
         func, kwargs = map_info
         if kwargs:
-            # if there is a type_map key we'll map the old type to a new type
-            type_map = kwargs.get("type_map")
-            if type_map:
-                new_type = type_map.get(node.type)
-                if new_type:
-                    node.type = new_type
+            # if there is a onnx_op key we'll map the old type to a new type
+            onnx_op = kwargs.get("onnx_op")
+            if onnx_op:
+                node.type = onnx_op
         try:
             body_graphs = node.get_body_graphs()
             if body_graphs:
@@ -736,8 +734,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             args = v[1]
             kwargs = {"func": v[0]}
             if args:
-                type_map = {k: args[0]}
-                kwargs["type_map"] = type_map
+                onnx_op = args[0]
+                kwargs["onnx_op"] = onnx_op
                 args = args[1:]
             kwargs["args"] = args
             new_handler = handler.tf_op(k,

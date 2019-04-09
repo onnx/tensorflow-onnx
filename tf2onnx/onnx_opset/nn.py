@@ -287,9 +287,8 @@ class DepthwiseConv2d:
         conv_convert_inputs(ctx, node, with_kernel=True, new_kernel_shape=new_kernel_shape)
 
 
-@tf_op(["AvgPool", "AvgPool3D", "MaxPool", "MaxPoolV2"],
-       type_map={"AvgPool": "AveragePool", "AvgPool3D": "AveragePool",
-                 "MaxPool": "MaxPool", "MaxPoolV2": "MaxPool"})
+@tf_op(["AvgPool", "AvgPool3D"], onnx_op="AveragePool")
+@tf_op(["MaxPool", "MaxPoolV2"], onnx_op="MaxPool")
 class PoolOp:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):

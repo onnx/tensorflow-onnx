@@ -365,7 +365,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
     def test_custom_op(self):
         """Custom op test."""
 
-        @tf_op("Print", type_map={"Print": "Identity"})
+        @tf_op("Print", onnx_op="Identity")
         class Print:
             @classmethod
             def version_1(cls, ctx, node, **kwargs):

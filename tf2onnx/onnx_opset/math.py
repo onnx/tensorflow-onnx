@@ -27,8 +27,7 @@ class BroadcastOp(common.BroadcastOp):
     pass
 
 
-@tf_op(["RealDiv", "TruncateDiv"],
-       type_map={"RealDiv": "Div", "TruncateDiv": "Div"})
+@tf_op(["RealDiv", "TruncateDiv"], onnx_op="Div")
 class RealDiv(common.BroadcastOp):
     pass
 
@@ -55,8 +54,8 @@ class TrigOpSinceOpset9:
         pass
 
 
-@tf_op(["Minimum", "Maximum"],
-       type_map={"Minimum": "Min", "Maximum": "Max"})
+@tf_op("Minimum", onnx_op="Min")
+@tf_op("Maximum", onnx_op="Max")
 class MinMaxOp:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
