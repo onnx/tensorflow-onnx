@@ -11,13 +11,15 @@ from __future__ import unicode_literals
 import collections
 import inspect
 
+from tf2onnx import constants
+
 # pylint: disable=unused-argument,missing-docstring,invalid-name
 
 class tf_op:
     _OPSETS = collections.OrderedDict()
     _MAPPING = None
 
-    def __init__(self, name, domain="onnx", **kwargs):
+    def __init__(self, name, domain=constants.ONNX_DOMAIN, **kwargs):
         if not isinstance(name, list):
             name = [name]
         self.name = name
@@ -54,7 +56,7 @@ class tf_op:
 
     @staticmethod
     def create_mapping(max_opset, extra_opsets):
-        mapping = {"onnx": max_opset}
+        mapping = {constants.ONNX_DOMAIN: max_opset}
         if extra_opsets:
             for extra_opset in extra_opsets:
                 mapping[extra_opset.domain] = extra_opset.version
