@@ -33,36 +33,6 @@ class RnnWeight:
         self.dtype = np_dtype
 
 
-class RnnWeights:
-    def __init__(self, kernel, bias, forget_bias):
-        self.kernel = kernel
-        self.bias = bias
-        self.forget_bias = forget_bias
-
-
-class RnnProperties:
-    def __init__(self):
-        # RNN input who are outside of rnn scope
-        self.input_node = None
-        self.input_id = None
-        self.var_initializers = {}
-
-        self.onnx_input_ids = {}
-
-        self.time_major = False
-        self.x_input_id = None # used to serve lstm's 1st input
-        self.input_size = None
-        self.hidden_size = None
-        self.batch_size_node = None # only for fill constant workaround
-
-    def is_valid(self):
-        if not self.input_node:
-            log.debug("no input node found for current rnn, skip")
-            return False
-        log.debug("input node with port id %s", self.input_id)
-        return True
-
-
 # TensorFlow LSTMCell/BasicLSTMCell computation graph matching
 xc_pattern = OpTypePattern('Split', inputs=[
     OpTypePattern("Const"), # axis for split
@@ -151,7 +121,22 @@ grucell_pattern = \
     ])
 
 
-grublockcell_pattern = OpTypePattern("GRUBlockCell", name="GRUBlockCell")
+grublockcell_pattern = OpTypePattern("GRUBlockCell", name="gru_block_cell", inputs=[
+    OpTypePattern("*"),
+    OpTypePattern("*"),
+    OpTypePattern("Enter", inputs=[
+        OpTypePattern("*", name="gate_kernel")
+    ]),
+    OpTypePattern("Enter", inputs=[
+        OpTypePattern("*", name="hidden_kernel")
+    ]),
+    OpTypePattern("Enter", inputs=[
+        OpTypePattern("*", name="gate_bias")
+    ]),
+    OpTypePattern("Enter", inputs=[
+        OpTypePattern("*", name="hidden_bias")
+    ])
+])
 
 
 lstmblockcell_pattern = \
@@ -280,39 +265,6 @@ def get_weights_from_const_node(g, node):
     return RnnWeight(node, val, dtype)
 
 
-def check_is_timemajor_transpose(node):
-    # TensorFlow transpose node has perm as its second input
-    if node.type != "Transpose":
-        return False
-
-    perm_node = node.inputs[1]
-    if perm_node.is_const():
-        return list(node.inputs[1].get_tensor_value(as_list=False)) == [1, 0, 2]
-    if check_is_unfolded_perm(perm_node):
-        return True
-    raise ValueError("Not supported yet")
-
-
-# todo: fix this
-def check_is_unfolded_perm(perm_node):
-    # For some case, like HallWay, the perm is a ConcatV2,
-    # but it should be calculated when constant-fold. TODO: investigate why not constant fold.
-    # current workaround: use np to calculate the val explicitly.
-    if perm_node.type == "ConcatV2" and len(perm_node.inputs) == 3:
-        const_node_val = perm_node.inputs[0].get_tensor_value(as_list=False)
-        if list(const_node_val) != [1, 0]:
-            return False
-
-        range_node = perm_node.inputs[1]
-        range_start = range_node.inputs[0].get_tensor_value()
-        range_limit = range_node.inputs[1].get_tensor_value()
-        range_delta = range_node.inputs[2].get_tensor_value()
-        if range_node.type == "Range" and range_start == 2 and range_limit == 3 and range_delta == 1:
-            # we just hard code this now
-            # todo: refine this
-            return True
-    return False
-
 def is_reverse_op(op):
     return op.type in ("ReverseV2", "ReverseSequence")
 
@@ -321,16 +273,8 @@ def is_concat_op(op):
     return op.type in ("Concat", "ConcatV2", "ConcatV3")
 
 
-def is_tensor_array_scatter_op(op):
-    return op.type in ("TensorArrayScatterV2", "TensorArrayScatterV3")
-
-
 def is_tensor_array_gather_op(op):
     return op.type in ("TensorArrayGatherV2", "TensorArrayGatherV3")
-
-
-def is_tensor_array_read_op(op):
-    return op.type in ("TensorArrayReadV2", "TensorArrayReadV3")
 
 
 def is_tensor_array_write_op(op):
@@ -339,14 +283,6 @@ def is_tensor_array_write_op(op):
 
 def is_tensor_array_op(op):
     return op.type in ("TensorArrayV2", "TensorArrayV3")
-
-
-def is_tensor_array_size_op(op):
-    return op.type in ("TensorArraySizeV2", "TensorArraySizeV3")
-
-
-def is_placeholder_op(op):
-    return op.type == "Placeholder"
 
 
 def is_loopcond_op(op):

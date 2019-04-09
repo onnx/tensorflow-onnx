@@ -28,15 +28,14 @@ class UnitRnnContext(Context):
         self.rnn_scope = None
         self.cell_match = None  # matched cell
 
-        self.weights = None
+        self.weights = {}
         self.seq_len_node = None
         self.state_variables = {}
         self.input_size = None
         self.hidden_size = None
 
-        self.attributes = {}
+        self.attributes = {} # onnx attributes
         self.onnx_input_ids = {}  # onnx inputs: [X, W, R, B, sequence_lens, initial_h, initial_c, P]
-        self.activations = None
 
 
 class UnitRnnRewriterBase(LoopRewriterBase):
@@ -89,8 +88,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         2 state variables used in rnn unit, such as c_t, h_t
         3 sequence node
         4 input_x
-        5 activations, optional
-        6 attributes, optional
+        5 attributes, e.g., activation_alpha, activation_beta... optional
         """
         log.debug("parse unit rnn")
 
@@ -102,11 +100,11 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         context.cell_match = cell_match
 
         log.debug("get_weight_and_bias starts")
-        rnn_weights = self.get_weight_and_bias(context)
-        if not rnn_weights:
+        weights = self.get_weight_and_bias(context)
+        if not weights:
             log.debug("rnn weights check failed, SKIP")
             return False
-        context.weights = rnn_weights
+        context.weights = weights
 
         if not self.get_state_variables(context):
             log.debug("no cell variable initializers found, SKIP")
@@ -125,11 +123,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
             return False
         context.onnx_input_ids["X"] = inputs[0]
 
-        if not self.get_rnn_activation(context):
-            log.debug("failed to find activation")
-            return False
-
-        if not self.get_attributes(context):
+        if not self.parse_attributes(context):
             log.debug("wrong attributes found")
             return False
 
@@ -162,10 +156,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
     def get_weight_and_bias(self, context):
         raise NotImplementedError()
 
-    def get_rnn_activation(self, context):
-        return True
-
-    def get_attributes(self, context):
+    def parse_attributes(self, context):
         return True
 
     def rewrite(self, context):
@@ -285,16 +276,16 @@ class UnitRnnRewriterBase(LoopRewriterBase):
             return
 
         gather_output_id = outputs[0].id
-        log.debug("found output for lstm: %s", gather_output_id)
+        log.debug("found output for rnn: %s", gather_output_id)
 
         # in tf batch major mode, output shape is : [batch, time, hidden]
         # in time major mode, output shape is: [time, batch, hidden]
         # in onnx, output shape is : [time, num_directions, batch, hidden]
 
-        lstm_node = context.rnn_node
-        output_id = lstm_node.output[0]
-        lstm_output_shape = self.g.get_shape(output_id)
-        squeeze_output_shape = [lstm_output_shape[0], lstm_output_shape[2], lstm_output_shape[3]]
+        rnn_node = context.rnn_node
+        output_id = rnn_node.output[0]
+        rnn_output_shape = self.g.get_shape(output_id)
+        squeeze_output_shape = [rnn_output_shape[0], rnn_output_shape[2], rnn_output_shape[3]]
         squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
                                         shapes=[squeeze_output_shape],
                                         dtypes=[self.g.get_dtype(output_id)])

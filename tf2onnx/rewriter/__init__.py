@@ -10,7 +10,7 @@ from tf2onnx.rewriter.cond_rewriter import rewrite_cond
 from tf2onnx.rewriter.random_uniform import rewrite_random_uniform, rewrite_random_uniform_fold_const
 from tf2onnx.rewriter.leakyrelu_rewriter import rewrite_leakyrelu
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm, \
-    rewrite_single_direction_gru, rewrite_single_direction_grublock, rewrite_bi_direction_gru, \
+    rewrite_single_direction_gru, rewrite_bi_direction_gru, \
     rewrite_custom_rnn_cell, rewrite_generic_loop
 
 __all__ = [
@@ -21,7 +21,6 @@ __all__ = [
     "rewrite_single_direction_lstm",
     "rewrite_bi_direction_lstm",
     "rewrite_single_direction_gru",
-    "rewrite_single_direction_grublock",
     "rewrite_bi_direction_gru",
     "rewrite_custom_rnn_cell",
     "rewrite_generic_loop"
