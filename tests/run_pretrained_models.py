@@ -155,10 +155,10 @@ class Test(object):
             self.tf_runtime = time.time() - start
         return result
 
-    def to_onnx(self, tf_graph, opset=None, shape_override=None, input_names=None):
+    def to_onnx(self, tf_graph, opset=None, extra_opset=None, shape_override=None, input_names=None):
         """Convert graph to tensorflow."""
         return process_tf_graph(tf_graph, continue_on_error=False, verbose=True, opset=opset,
-                                target=Test.target, shape_override=shape_override,
+                                extra_opset=extra_opset, target=Test.target, shape_override=shape_override,
                                 input_names=input_names, output_names=self.output_names)
 
     def run_caffe2(self, name, model_proto, inputs):
@@ -207,7 +207,8 @@ class Test(object):
         utils.save_protobuf(model_path, model_proto)
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, perf=None, fold_const=None):
+    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, extra_opset=None,
+                 perf=None, fold_const=None):
         """Run complete test against backend."""
         print(name)
         self.perf = perf
@@ -267,8 +268,8 @@ class Test(object):
             model_proto = None
             try:
                 # convert model to onnx
-                onnx_graph = self.to_onnx(sess.graph, opset=opset, shape_override=shape_override,
-                                          input_names=inputs.keys())
+                onnx_graph = self.to_onnx(sess.graph, opset=opset, extra_opset=extra_opset,
+                                          shape_override=shape_override, input_names=inputs.keys())
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
                 new_model_proto = optimizer.optimize_graph(onnx_graph, debug=debug).make_model("optimized")
                 if new_model_proto:
@@ -328,6 +329,8 @@ def get_args():
                         choices=["caffe2", "onnxmsrtnext", "onnxruntime"], help="backend to use")
     parser.add_argument("--verbose", help="verbose output", action="store_true")
     parser.add_argument("--opset", type=int, default=None, help="opset to use")
+    parser.add_argument("--extra_opset", default=None,
+                        help="extra opset with format like domain:version, e.g. com.microsoft:1")
     parser.add_argument("--debug", help="debug vlog", action="store_true")
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
@@ -338,6 +341,11 @@ def get_args():
     args = parser.parse_args()
 
     args.target = args.target.split(",")
+    if args.extra_opset:
+        tokens = args.extra_opset.split(':')
+        if len(tokens) != 2:
+            raise ValueError("invalid extra_opset argument")
+        args.extra_opset = [utils.make_opsetid(tokens[0], int(tokens[1]))]
     return args
 
 
@@ -385,7 +393,8 @@ def main():
         count += 1
         try:
             ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file,
-                             opset=args.opset, perf=args.perf, fold_const=args.fold_const)
+                             opset=args.opset, extra_opset=args.extra_opset, perf=args.perf,
+                             fold_const=args.fold_const)
         except Exception as ex:
             ret = None
             print(ex)
