@@ -216,6 +216,12 @@ def rewrite_dropout(g, ops):
         for n in set(match.get_nodes()):
             g.remove_node(n.name)
 
+    # remove dropout if its ratio is 1.0
+    for node in g.get_nodes():
+        if node.type == "Dropout" and node.get_attr("ratio").f == 1.0:
+            g.replace_all_inputs(g.get_nodes(), node.output[0], node.input[0])
+            g.remove_node(node.name)
+
     return ops
 
 
