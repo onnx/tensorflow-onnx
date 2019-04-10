@@ -185,17 +185,6 @@ mobilenet_v1_75_192:
   outputs:
     - MobilenetV1/Predictions/Softmax:0
 
-tiny-yolo:
-  # works but local file
-  disabled: true
-  model: c:/src/darkflow/built_graph/tiny-yolo.pb
-  input_get: get_beach
-  inputs:
-    "input:0": [1, 416, 416, 3]
-  outputs:
-    - output:0
-  rtol: 0.6
-
 nasnet-a_mobile_224:
   # has only checkpoint format
   disabled: true

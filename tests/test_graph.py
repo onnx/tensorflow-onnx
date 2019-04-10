@@ -22,10 +22,12 @@ from tf2onnx import constants, utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx.handler import tf_op
+
 from common import get_test_config, unittest_main
 
 
-# pylint: disable=missing-docstring
+# pylint: disable=missing-docstring,unused-argument,unused-variable
 
 def onnx_to_graphviz(g, include_attrs=False):
     """Return dot for graph."""
@@ -331,10 +333,10 @@ class Tf2OnnxGraphTests(unittest.TestCase):
                 'output [op_type=Identity] input1:0 -> Add input1:0 -> Add Add:0 -> output }',
                 onnx_to_graphviz(g))
 
-    def test_custom_op(self):
-        """Custom op test."""
+    def test_custom_op_depreciated(self):
+        """Custom op test using old depreciated api."""
 
-        def print_handler(ctx, node, name, args):  # pylint: disable=unused-argument
+        def print_handler(ctx, node, name, args):
             # replace tf.Print() with Identity
             #   T output = Print(T input, data, @list(type) U, @string message, @int first_n, @int summarize)
             # becomes:
@@ -351,6 +353,32 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph,
                                  custom_op_handlers={"Print": (print_handler, ["Identity", "mode"])},
+                                 opset=self.config.opset,
+                                 extra_opset=[constants.TENSORFLOW_OPSET])
+            self.assertEqual(
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Print [domain="ai.onnx.converters.tensorflow" '
+                'op_type=Identity] output [op_type=Identity] input1:0 -> Print Print:0 -> output }',
+                onnx_to_graphviz(g))
+            self.assertEqual(g.opset, self.config.opset)
+            self.assertEqual(g.extra_opset, [constants.TENSORFLOW_OPSET])
+
+    def test_custom_op(self):
+        """Custom op test."""
+
+        @tf_op("Print", onnx_op="Identity")
+        class Print:
+            @classmethod
+            def version_1(cls, ctx, node, **kwargs):
+                self.assertEqual(node.type, "Identity")
+                node.domain = constants.TENSORFLOW_OPSET.domain
+                del node.input[1:]
+                return node
+
+        with tf.Session() as sess:
+            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+            x_ = tf.Print(x, [x], "hello")
+            _ = tf.identity(x_, name="output")
+            g = process_tf_graph(sess.graph,
                                  opset=self.config.opset,
                                  extra_opset=[constants.TENSORFLOW_OPSET])
             self.assertEqual(
