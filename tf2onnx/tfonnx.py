@@ -192,7 +192,7 @@ def rewrite_dropout(g, ops):
             OpTypePattern('Floor', inputs=[
                 OpTypePattern('Add', inputs=[
                     OpTypePattern(None, name="input3"),
-                    OpTypePattern('RandomUniform'),
+                    OpTypePattern('RandomUniform|RandomUniformLike'),
                 ])
             ]),
         ])
