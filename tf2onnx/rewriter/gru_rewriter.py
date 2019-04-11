@@ -61,18 +61,18 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
 
     def _state_variable_finder(self, context):
         if self.gru_cell_type == RNNUnitType.GRUCell:
-            lstm_cell = context.cell_match
+            gru_cell = context.cell_match
             return self._find_state_variable_with_select(
                 context,
-                lstm_cell.get_op("cell_output").output[0],
-                [lstm_cell.get_op("cell_inputs")]
+                gru_cell.get_op("cell_output").output[0],
+                [gru_cell.get_op("cell_inputs")]
             )
         if self.gru_cell_type == RNNUnitType.GRUBlockCell:
-            lstm_block_cell = context.cell_match.get_op("gru_block_cell")
+            gru_block_cell = context.cell_match.get_op("gru_block_cell")
             return self._find_state_variable_with_select(
                 context,
-                lstm_block_cell.output[3],
-                [lstm_block_cell]
+                gru_block_cell.output[3],
+                [gru_block_cell]
             )
         return None
 
@@ -97,7 +97,7 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         # output should be no more than 1
         outputs = context.loop_properties.scan_outputs_exits
         if len(outputs) > 1:
-            log.debug("found %d outputs for lstm: %s", len(outputs), outputs)
+            log.debug("found %d outputs for gru: %s", len(outputs), outputs)
             return False
         return True
 
