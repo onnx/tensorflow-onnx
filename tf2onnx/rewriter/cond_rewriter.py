@@ -127,7 +127,7 @@ class CondRewriter:
                         false_dtype
                     )
                 )
-            output_shapes.append(utils.merge_shapes(true_shape, false_shape))
+            output_shapes.append(utils.create_vague_shape_like(utils.merge_shapes(true_shape, false_shape)))
             output_dtypes.append(true_dtype)
         return output_shapes, output_dtypes
 
