@@ -12,11 +12,11 @@ from __future__ import unicode_literals
 import logging
 
 from tf2onnx.rewriter.bilstm_rewriter import rewrite_bidirectional_lstms
-from tf2onnx.rewriter.lstm_rewriter_v2 import LSTMUnitRewriterV2
-from tf2onnx.rewriter.grublock_rewriter import GRUUnitRewriter, GRUBlockUnitRewriter
 from tf2onnx.rewriter.bigru_rewriter import rewrite_bidirectional_grus
 from tf2onnx.rewriter.custom_rnn_rewriter import CustomRnnRewriter
 from tf2onnx.rewriter.loop_rewriter import LoopRewriter
+from tf2onnx.rewriter.lstm_rewriter import LSTMUnitRewriter
+from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
@@ -25,7 +25,7 @@ log = logging.getLogger("tf2onnx.rewriter.rnn")
 
 
 def rewrite_single_direction_lstm(g, ops):
-    r = LSTMUnitRewriterV2(g)
+    r = LSTMUnitRewriter(g)
     return r.run()
 
 
@@ -40,11 +40,6 @@ def rewrite_single_direction_gru(g, ops):
 
 def rewrite_bi_direction_gru(g, ops):
     return rewrite_bidirectional_grus(g, ops)
-
-
-def rewrite_single_direction_grublock(g, ops):
-    r = GRUBlockUnitRewriter(g)
-    return r.run()
 
 
 def rewrite_custom_rnn_cell(g, ops):

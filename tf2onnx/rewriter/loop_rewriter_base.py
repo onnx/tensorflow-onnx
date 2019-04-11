@@ -193,10 +193,13 @@ class LoopRewriterBase(object):
         return REWRITER_RESULT.FAIL
 
     def run_internal(self):
+        loopcond_ops = []
         for op in self.g.get_nodes():
-            if not is_loopcond_op(op):
-                continue
+            if is_loopcond_op(op):
+                loopcond_ops.append(op)
 
+        # self.g.get_nodes may change inside this loop so that we parse all LoopCond first
+        for op in loopcond_ops:
             log.debug("======================\n handling loop cond node called %s", op.name)
             context = self.create_context()
             context.loop_cond = op
