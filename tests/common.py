@@ -13,8 +13,8 @@ from distutils.version import LooseVersion
 from parameterized import parameterized
 from tf2onnx import constants, utils
 
-__all__ = ["TestConfig", "get_test_config", "unittest_main",
-           "check_tf_min_version", "skip_tf_versions",
+__all__ = ["TestConfig", "get_test_config", "unittest_main", "check_onnxruntime_backend",
+           "check_tf_min_version", "skip_tf_versions", "check_onnxruntime_min_version",
            "check_opset_min_version", "check_target", "skip_caffe2_backend", "skip_onnxruntime_backend",
            "skip_opset", "check_onnxruntime_incompatibility", "validate_const_node",
            "group_nodes_by_type", "test_ms_domain", "check_node_domain"]
@@ -177,6 +177,21 @@ def skip_onnxruntime_backend(message=""):
     return unittest.skipIf(config.is_onnxruntime_backend, reason)
 
 
+def check_onnxruntime_backend(message=""):
+    """ Skip if backend is NOT onnxruntime """
+    config = get_test_config()
+    reason = _append_message("only supported by onnxruntime", message)
+    return unittest.skipIf(not config.is_onnxruntime_backend, reason)
+
+
+def check_onnxruntime_min_version(min_required_version, message=""):
+    """ Skip if onnxruntime version < min_required_version """
+    config = get_test_config()
+    reason = _append_message("conversion requires onnxruntime >= {}".format(min_required_version), message)
+    return unittest.skipIf(config.is_onnxruntime_backend and
+                           config.backend_version < LooseVersion(min_required_version), reason)
+
+
 def skip_caffe2_backend(message=""):
     """ Skip if backend is caffe2 """
     config = get_test_config()
@@ -253,6 +268,7 @@ _MAX_MS_OPSET_VERSION = 1
 def test_ms_domain(versions=None):
     """ Parameterize test case to apply ms opset(s) as extra_opset. """
 
+    @check_onnxruntime_backend()
     def _custom_name_func(testcase_func, param_num, param):
         del param_num
         arg = param.args[0]

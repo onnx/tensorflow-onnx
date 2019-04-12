@@ -1539,9 +1539,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.01)
 
-    @check_opset_min_version(8, "Scan")
-    @skip_opset(9, "ReverseSequence")
-    def test_reverse_sequence_batch_major(self):
+    def _test_reverse_sequence_batch_major(self, extra_opset=None):
+        process_args = {}
+        if extra_opset is not None:
+            process_args["extra_opset"] = [extra_opset]
+
         x_val = np.array([[[1, 2, 3], [4, 5, 6], [0, 0, 0]],
                           [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                           [[1, 2, 3], [0, 0, 0], [0, 0, 0]]],
@@ -1549,7 +1551,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, [None, 3, 3], name=_TFINPUT)
         x_ = tf.reverse_sequence(x, seq_axis=1, batch_axis=0, seq_lengths=[2, 3, 1])
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, process_args=process_args)
         tf.reset_default_graph()
 
         x_val = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3],
@@ -1560,7 +1562,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, [None, 3], name=_TFINPUT)
         x_ = tf.reverse_sequence(x, seq_axis=1, batch_axis=0, seq_lengths=[3] * 9)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, process_args=process_args)
         tf.reset_default_graph()
 
         x_val_shape = [5, 5, 7, 8, 9]
@@ -1568,11 +1570,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, [None, 5, 7, 8, 9], name=_TFINPUT)
         x_ = tf.reverse_sequence(x, seq_axis=1, batch_axis=0, seq_lengths=[5, 5, 5, 5, 5])
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, process_args=process_args)
 
-    @check_opset_min_version(8, "Scan")
-    @skip_opset(9, "ReverseSequence")
-    def test_reverse_sequence_time_major(self):
+    def _test_reverse_sequence_time_major(self, extra_opset=None):
+        process_args = {}
+        if extra_opset is not None:
+            process_args["extra_opset"] = [extra_opset]
+
         x_val = np.array([[[1, 2, 3], [1, 2, 3], [1, 2, 3]],
                           [[4, 5, 6], [4, 5, 6], [0, 0, 0]],
                           [[0, 0, 0], [7, 8, 9], [0, 0, 0]]
@@ -1581,7 +1585,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, [3, None, 3], name=_TFINPUT)
         x_ = tf.reverse_sequence(x, seq_axis=0, batch_axis=1, seq_lengths=[2, 3, 1])
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, process_args=process_args)
         tf.reset_default_graph()
 
         x_val = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3],
@@ -1592,7 +1596,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, [9, None], name=_TFINPUT)
         x_ = tf.reverse_sequence(x, seq_axis=0, batch_axis=1, seq_lengths=[9, 9, 9])
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, process_args=process_args)
         tf.reset_default_graph()
 
         x_val_shape = [5, 5, 7, 8, 9]
@@ -1600,7 +1604,28 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, [5, None, 7, 8, 9], name=_TFINPUT)
         x_ = tf.reverse_sequence(x, seq_axis=0, batch_axis=1, seq_lengths=[5, 5, 5, 5, 5])
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, process_args=process_args)
+
+    @check_opset_min_version(8, "Scan")
+    @skip_opset(9, "ReverseSequence")
+    def test_reverse_sequence_batch_major(self):
+        self._test_reverse_sequence_batch_major()
+
+    @check_opset_min_version(8, "Scan")
+    @skip_opset(9, "ReverseSequence")
+    def test_reverse_sequence_time_major(self):
+        self._test_reverse_sequence_time_major()
+
+    # only support onnxruntime with version larger than 0.4.0
+    @test_ms_domain()
+    @check_onnxruntime_min_version("0.4.0")
+    def test_ms_reverse_sequence_batch_major(self, extra_opset):
+        self._test_reverse_sequence_batch_major(extra_opset)
+
+    @test_ms_domain()
+    @check_onnxruntime_min_version("0.4.0")
+    def test_ms_reverse_sequence_time_major(self, extra_opset):
+        self._test_reverse_sequence_time_major(extra_opset)
 
     @check_opset_min_version(8, "where")
     def test_where(self):
