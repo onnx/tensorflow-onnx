@@ -366,6 +366,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
+        # when constant_fold is enabled, PlaceholderWithDefault will be folded into either a const or a placeholder.
+        # here we set it False to test PlaceholderWithDefault bug: https://github.com/onnx/tensorflow-onnx/pull/446
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False)
 
     def test_conv2d_with_input_transpose(self):
