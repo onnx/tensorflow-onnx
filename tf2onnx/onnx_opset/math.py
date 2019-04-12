@@ -40,6 +40,13 @@ class DirectOp:
         pass
 
 
+@tf_op(["LeakyRelu"])
+class TrigOpSinceOpset6:
+    @classmethod
+    def version_6(cls, ctx, node, **kwargs):
+        pass
+
+
 @tf_op(["Acos", "Asin", "Atan", "Cos", "Sin", "Tan"])
 class TrigOpSinceOpset7:
     @classmethod

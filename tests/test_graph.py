@@ -24,7 +24,7 @@ from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.handler import tf_op
 
-from common import get_test_config, unittest_main
+from common import get_test_config, unittest_main, check_tf_min_version, check_tf_max_version
 
 
 # pylint: disable=missing-docstring,unused-argument,unused-variable
@@ -152,6 +152,7 @@ class Tf2OnnxGraphTests(unittest.TestCase):
                        'RandomNormal__2:0 -> output }'
             self.assertEqual(expected, actual)
 
+    @check_tf_max_version("1.12")
     def test_dropout(self):
         with tf.Session() as sess:
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
@@ -168,6 +169,28 @@ class Tf2OnnxGraphTests(unittest.TestCase):
                        'input1 [op_type=Placeholder shape="[2, 3]"] Add [op_type=Add] output1 [op_type=Identity] ' \
                        'output2 [op_type=Identity] output [op_type=Identity] input1:0 -> Add input2:0 -> Add ' \
                        'Add:0 -> output1 output1:0 -> output2 output2:0 -> output }'
+            self.assertEqual(expected, actual)
+
+    @check_tf_min_version("1.13")
+    def test_dropout_2(self):
+        with tf.Session() as sess:
+            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
+            x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
+            prop = tf.placeholder(tf.float32, name="prob")
+            x_ = tf.add(x1, x2)
+            x_ = tf.nn.dropout(x_, prop)
+            x_ = tf.identity(x_, name="output1")
+            x_ = tf.identity(x_, name="output2")
+            _ = tf.identity(x_, name="output")
+            g = process_tf_graph(sess.graph, opset=self.config.opset)
+            actual = onnx_to_graphviz(g)
+            expected = 'digraph { "dropout/sub/x" [op_type=Const] "sub/x" [op_type=Const] ' \
+                       'prob [op_type=Placeholder shape="[]"] sub [op_type=Sub] "dropout/sub" [op_type=Sub] ' \
+                       'input2 [op_type=Placeholder shape="[1, 3]"] input1 [op_type=Placeholder shape="[2, 3]"] ' \
+                       'Add [op_type=Add] output1 [op_type=Identity] output2 [op_type=Identity] ' \
+                       'output [op_type=Identity] "sub/x":0 -> sub prob:0 -> sub "dropout/sub/x":0 -> ' \
+                       '"dropout/sub" sub:0 -> "dropout/sub" input1:0 -> Add input2:0 -> Add Add:0 -> ' \
+                       'output1 output1:0 -> output2 output2:0 -> output }'
             self.assertEqual(expected, actual)
 
     def test_add(self):
