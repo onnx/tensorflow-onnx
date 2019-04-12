@@ -66,8 +66,9 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 transpose.set_attr("perm", constants.NHWC_TO_NCHW)
                 transpose.skip_conversion = True
                 shape = ctx.get_shape(input_name)
-                new_shape = spatial_map(shape, constants.NHWC_TO_NCHW)
-                ctx.set_shape(transpose.output[0], new_shape)
+                if shape is not None:
+                    new_shape = spatial_map(shape, constants.NHWC_TO_NCHW)
+                    ctx.set_shape(transpose.output[0], new_shape)
             parent.data_format = "NCHW"
 
     # kernel must to be transposed
