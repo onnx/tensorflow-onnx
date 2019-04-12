@@ -26,10 +26,10 @@ pip install tensorflow
 or
 pip install tensorflow-gpu
 ```
-## Install  runtime
-Install an onnx runtime of your choice if you want to run tests. For example:
+## Install runtime
+If you want to run tests, install a runtime that can run ONNX models. For example:
 
-onnxruntime (only avaliable on linux):
+ONNX Runtime (available for Linux, Windows, and Mac):
 
 ```pip install onnxruntime```
 
@@ -44,7 +44,7 @@ We tested with pytorch/caffe2 and onnxruntime and unit tests are passing for tho
 We tested with tensorflow 1.5-1.12 and anaconda **3.5,3.6**.
 
 # Installation
-## From Pypi
+## From pypi
 ```pip install -U tf2onnx```
 
 ## From Source
