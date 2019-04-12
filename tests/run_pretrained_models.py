@@ -242,6 +242,8 @@ class Test(object):
                 inputs[k] = v
 
         graph_def = tf2onnx.tfonnx.tf_optimize(inputs.keys(), self.output_names, graph_def, fold_const)
+        if debug:
+            utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
