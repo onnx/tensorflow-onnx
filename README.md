@@ -27,7 +27,7 @@ or
 pip install tensorflow-gpu
 ```
 ## Install runtime
-Install the runtime of your choice that capable of running ONNX model if you want to run tests. For example:
+If you want to run tests, install a runtime that can run ONNX models. For example:
 
 ONNX Runtime (available for Linux, Windows, and Mac):
 
