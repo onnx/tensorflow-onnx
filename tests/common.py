@@ -197,6 +197,7 @@ def check_onnxruntime_incompatibility(op):
         "AveragePool": 7,  # AveragePool-1
         "Div": 7,  # Div-1, Div-6
         "Elu": 6,  # Elu-1
+        "Equal": 7,  # Equal-1
         "Exp": 6,  # Exp-1
         "Greater": 7,  # Greater-1
         "Less": 7,  # Less-1
