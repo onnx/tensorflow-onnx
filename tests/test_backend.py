@@ -1596,13 +1596,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_reverse_sequence_time_major(self):
         self._test_reverse_sequence_time_major()
 
+    # only support onnxruntime with version larger than 0.4.0
     @test_ms_domain()
-    @unittest.skipIf(True, "not support in pypi onnxruntime")
+    @check_onnxruntime_min_version("0.4.0")
     def test_ms_reverse_sequence_batch_major(self, extra_opset):
         self._test_reverse_sequence_batch_major(extra_opset)
 
     @test_ms_domain()
-    @unittest.skipIf(True, "not support in pypi onnxruntime")
+    @check_onnxruntime_min_version("0.4.0")
     def test_ms_reverse_sequence_time_major(self, extra_opset):
         self._test_reverse_sequence_time_major(extra_opset)
 
