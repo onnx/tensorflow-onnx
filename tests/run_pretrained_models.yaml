@@ -156,8 +156,6 @@ googlenet_v4_slim:
   rtol: 0.1
 
 mobilenet_v2_1.4_224:
-  # fails because of input[1] in squeeze is 0 instead of 1
-  disabled: true
   url: https://storage.googleapis.com/mobilenet_v2/checkpoints/mobilenet_v2_1.4_224.tgz
   model: mobilenet_v2_1.4_224_frozen.pb
   input_get: get_beach
