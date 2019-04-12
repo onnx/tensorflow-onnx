@@ -353,6 +353,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
 
+    def test_nn_dropout(self):
+        keep_prob = tf.placeholder_with_default(1., (), "keep_prob")
+        x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
+        # Define a scope for reusing the variables
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name="input_1")
+        x_ = tf.identity(x)
+
+        fc1 = tf.nn.dropout(x_, keep_prob)
+
+        _ = tf.identity(fc1, name="output")
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0"]
+        # when constant_fold is enabled, PlaceholderWithDefault will be folded into either a const or a placeholder.
+        # here we set it False to test PlaceholderWithDefault bug: https://github.com/onnx/tensorflow-onnx/pull/446
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False)
+
     def test_conv2d_with_input_transpose(self):
         x_shape = [2, 32, 32, 3]
         kernel_shape = [3, 3, 3, 3]

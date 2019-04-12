@@ -165,10 +165,9 @@ class Tf2OnnxGraphTests(unittest.TestCase):
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             actual = onnx_to_graphviz(g)
             expected = 'digraph { prob [op_type=Placeholder shape="[]"] input2 [op_type=Placeholder shape="[1, 3]"] ' \
-                       'input1 [op_type=Placeholder shape="[2, 3]"] Add [op_type=Add] Dropout__3 [op_type=Dropout] ' \
-                       'output1 [op_type=Identity] output2 [op_type=Identity] output [op_type=Identity] ' \
-                       'input1:0 -> Add input2:0 -> Add Add:0 -> Dropout__3 Dropout__3:0 -> output1 ' \
-                       'output1:0 -> output2 output2:0 -> output }'
+                       'input1 [op_type=Placeholder shape="[2, 3]"] Add [op_type=Add] output1 [op_type=Identity] ' \
+                       'output2 [op_type=Identity] output [op_type=Identity] input1:0 -> Add input2:0 -> Add ' \
+                       'Add:0 -> output1 output1:0 -> output2 output2:0 -> output }'
             self.assertEqual(expected, actual)
 
     def test_add(self):

@@ -192,7 +192,7 @@ def rewrite_dropout(g, ops):
             OpTypePattern('Floor', inputs=[
                 OpTypePattern('Add', inputs=[
                     OpTypePattern(None, name="input3"),
-                    OpTypePattern('RandomUniform'),
+                    OpTypePattern('RandomUniform|RandomUniformLike'),
                 ])
             ]),
         ])
@@ -215,6 +215,12 @@ def rewrite_dropout(g, ops):
         g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
         for n in set(match.get_nodes()):
             g.remove_node(n.name)
+
+    # remove dropout if its ratio is 1.0
+    for node in g.get_nodes():
+        if node.type == "Dropout" and node.get_attr("ratio").f == 1.0:
+            g.replace_all_inputs(g.get_nodes(), node.output[0], node.input[0])
+            g.remove_node(node.name)
 
     return ops
 

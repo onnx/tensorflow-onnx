@@ -687,6 +687,7 @@ class Graph(object):
             all_input = list(filter(lambda a: a != '', all_input))
             for inp in all_input:
                 j = self.get_node_by_output(inp)
+                utils.make_sure(j is not None, "Cannot find node with output {}".format(inp))
                 if self.parent_graph and j.name not in op_name_to_index:
                     # there might be some outer-scoped inputs for an inner Graph.
                     pass
@@ -754,6 +755,7 @@ class Graph(object):
         placeholder_default_const_ops = []
         for op in placeholder_ops:
             if op.type == "PlaceholderWithDefault":
+                utils.make_sure(op.inputs[0] is not None, "Cannot find node with output {}".format(op.input[0]))
                 utils.make_sure(op.inputs[0].is_const(),
                                 "non-const default value for PlaceholderWithDefault is not supported.")
                 # copy the tensor value, set its name to current node's output, add as initializer
@@ -1027,6 +1029,11 @@ class Graph(object):
                 if node.is_graph_input():
                     if node not in res_set:
                         res_set.add(node)
+                    if node.type == "PlaceholderWithDefault" and \
+                            node.inputs[0].is_const() and \
+                            node.inputs[0] not in res_set:
+                        res_set.add(node.inputs[0])
+
         return list(res_set)
 
     def delete_unused_nodes(self, outputs_name):
