@@ -15,7 +15,6 @@ import tarfile
 import time
 import traceback
 import zipfile
-import logging
 
 import PIL.Image
 import numpy as np
@@ -28,12 +27,11 @@ import tensorflow.contrib.rnn  # pylint: disable=unused-import
 import yaml
 
 import tf2onnx
-from tf2onnx import constants, loader, optimizer, utils
+from tf2onnx import loader, logging, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 
-logging.basicConfig(level=logging.INFO, format=constants.LOG_FORMAT)
 logger = logging.getLogger("run_pretrained")
 
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
@@ -331,10 +329,10 @@ def get_args():
     parser.add_argument("--target", default="", help="target platform")
     parser.add_argument("--backend", default="onnxruntime",
                         choices=["caffe2", "onnxmsrtnext", "onnxruntime"], help="backend to use")
-    parser.add_argument("--verbose", help="verbose output", action="store_true")
     parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
+    parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
     parser.add_argument("--debug", help="debug vlog", action="store_true")
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
@@ -372,11 +370,9 @@ def tests_from_yaml(fname):
 
 
 def main():
-    # suppress log info of tensorflow so that result of test can be seen much easier
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    tf.logging.set_verbosity(tf.logging.WARN)
-
     args = get_args()
+    logging.basicConfig(level=logging.get_adjusted_level(args.verbose))
+
     Test.cache_dir = args.cache
     Test.target = args.target
     tests = tests_from_yaml(args.config)

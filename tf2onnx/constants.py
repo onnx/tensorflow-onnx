@@ -5,7 +5,9 @@
 common constants
 """
 
-from . import utils
+from onnx import helper
+
+TF2ONNX_PACKAGE_NAME = __name__.split('.')[0]
 
 # Built-in supported domains
 ONNX_DOMAIN = ""
@@ -16,7 +18,7 @@ MICROSOFT_DOMAIN = "com.microsoft"
 PREFERRED_OPSET = 7
 
 # Default opset for custom ops
-TENSORFLOW_OPSET = utils.make_opsetid("ai.onnx.converters.tensorflow", 1)
+TENSORFLOW_OPSET = helper.make_opsetid("ai.onnx.converters.tensorflow", 1)
 
 # Target for the generated onnx graph. It possible targets:
 # onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)
@@ -32,5 +34,3 @@ NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
 HWCN_TO_NCHW = [3, 2, 0, 1]
 NCHW_TO_HWCN = [2, 3, 1, 0]
-
-LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s: %(message)s"

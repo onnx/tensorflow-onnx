@@ -30,12 +30,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # reset name generation on every test
         utils.INTERNAL_NAME = 1
         np.random.seed(1)  # Make it reproducible.
-
         self.logger = logging.getLogger(self.__class__.__name__)
-        if not self.config.is_debug_mode:
-            # suppress log info of tensorflow so that result of test can be seen much easier
-            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-            tf.logging.set_verbosity(tf.logging.WARN)
 
     def tearDown(self):
         if not self.config.is_debug_mode:

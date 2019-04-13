@@ -4,7 +4,6 @@
 """ test common utilities."""
 
 import argparse
-import logging
 import os
 import sys
 import unittest
@@ -12,7 +11,7 @@ from collections import defaultdict
 
 from distutils.version import LooseVersion
 from parameterized import parameterized
-from tf2onnx import constants, utils
+from tf2onnx import constants, logging, utils
 
 __all__ = ["TestConfig", "get_test_config", "unittest_main", "check_onnxruntime_backend",
            "check_tf_min_version", "skip_tf_versions", "check_onnxruntime_min_version",
@@ -31,6 +30,7 @@ class TestConfig(object):
         self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(constants.DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.backend_version = self._get_backend_version()
+        self.log_level = logging.WARNING
         self.is_debug_mode = False
         self.temp_dir = utils.get_temp_directory()
 
@@ -86,6 +86,7 @@ class TestConfig(object):
             parser.add_argument("--opset", type=int, default=config.opset, help="opset to test against")
             parser.add_argument("--target", default=",".join(config.target), choices=constants.POSSIBLE_TARGETS,
                                 help="target platform")
+            parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
             parser.add_argument("--debug", help="output debugging information", action="store_true")
             parser.add_argument("--temp_dir", help="temp dir")
             parser.add_argument("unittest_args", nargs='*')
@@ -94,6 +95,7 @@ class TestConfig(object):
             config.backend = args.backend
             config.opset = args.opset
             config.target = args.target.split(',')
+            config.log_level = logging.get_adjusted_level(args.verbose, config.log_level)
             config.is_debug_mode = args.debug
             if args.temp_dir:
                 config.temp_dir = args.temp_dir
@@ -116,8 +118,8 @@ def get_test_config():
 
 def unittest_main():
     config = get_test_config()
-    logging.basicConfig(level=logging.WARNING, format=constants.LOG_FORMAT)
-    with utils.set_log_level(logging.getLogger(), logging.INFO) as logger:
+    logging.basicConfig(level=config.log_level)
+    with logging.set_scope_level(logging.INFO) as logger:
         logger.info(config)
     unittest.main()
 

@@ -3,13 +3,12 @@
 
 """ print pytest config."""
 
-import logging
 from common import get_test_config
-from tf2onnx import constants, utils
+from tf2onnx import logging
 
 
 def pytest_configure():
     config = get_test_config()
-    logging.basicConfig(level=logging.WARNING, format=constants.LOG_FORMAT)
-    with utils.set_log_level(logging.getLogger(), logging.INFO) as logger:
+    logging.basicConfig(level=config.log_level)
+    with logging.set_scope_level(logging.INFO) as logger:
         logger.info(config)

@@ -10,12 +10,11 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
-import logging
 import tensorflow as tf
 
-from tf2onnx import constants, loader, utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize
+from . import constants, loader, logging, utils
 
 
 # pylint: disable=unused-argument
@@ -38,7 +37,7 @@ def get_args():
     parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=constants.POSSIBLE_TARGETS,
                         help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
-    parser.add_argument("--verbose", help="verbose output", action="store_true")
+    parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
     parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
                         action="store_true")
     # experimental
@@ -70,6 +69,7 @@ def get_args():
         if len(tokens) != 2:
             raise ValueError("invalid extra_opset argument")
         args.extra_opset = [utils.make_opsetid(tokens[0], int(tokens[1]))]
+
     return args
 
 
@@ -80,7 +80,7 @@ def default_custom_op_handler(ctx, node, name, args):
 
 def main():
     args = get_args()
-    logging.basicConfig(level=logging.INFO, format=constants.LOG_FORMAT)
+    logging.basicConfig(level=logging.get_adjusted_level(args.verbose))
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.
