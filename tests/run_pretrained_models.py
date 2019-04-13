@@ -28,14 +28,12 @@ import tensorflow.contrib.rnn  # pylint: disable=unused-import
 import yaml
 
 import tf2onnx
-from tf2onnx import loader
-from tf2onnx import utils
-from tf2onnx import optimizer
+from tf2onnx import constants, loader, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format=constants.LOG_FORMAT)
 log = logging.getLogger("tf2onnx")
 
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")

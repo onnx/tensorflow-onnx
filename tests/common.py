@@ -116,7 +116,7 @@ def get_test_config():
 
 def unittest_main():
     config = get_test_config()
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=logging.WARNING, format=constants.LOG_FORMAT)
     with utils.set_log_level(logging.getLogger(), logging.INFO) as logger:
         logger.info(config)
     unittest.main()
