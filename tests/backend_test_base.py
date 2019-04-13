@@ -26,20 +26,16 @@ from tf2onnx import optimizer
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     def setUp(self):
         self.config = get_test_config()
-        self.maxDiff = None
         tf.reset_default_graph()
         # reset name generation on every test
         utils.INTERNAL_NAME = 1
         np.random.seed(1)  # Make it reproducible.
 
         self.log = logging.getLogger("tf2onnx.unitest." + str(type(self)))
-        if self.config.is_debug_mode:
-            self.log.setLevel(logging.DEBUG)
-        else:
+        if not self.config.is_debug_mode:
             # suppress log info of tensorflow so that result of test can be seen much easier
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
             tf.logging.set_verbosity(tf.logging.WARN)
-            self.log.setLevel(logging.INFO)
 
     def tearDown(self):
         if not self.config.is_debug_mode:

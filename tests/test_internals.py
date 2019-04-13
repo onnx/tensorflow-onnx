@@ -7,8 +7,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import os
-import unittest
 from collections import namedtuple
 
 import graphviz as gv
@@ -20,6 +18,8 @@ import tensorflow as tf
 from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.graph import GraphUtil
+
+from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main
 
 
@@ -49,14 +49,9 @@ def onnx_pretty(g, args=None):
     return helper.printable_graph(graph_proto.graph)
 
 
-class Tf2OnnxInternalTests(unittest.TestCase):
+class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
     def setUp(self):
-        """Setup test."""
-        # suppress log info of tensorflow so that result of test can be seen much easier
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-        tf.logging.set_verbosity(tf.logging.WARN)
-
-        utils.INTERNAL_NAME = 1
+        super().setUp()
         arg = namedtuple("Arg", "input inputs outputs verbose")
         self._args0 = arg(input="test", inputs=[], outputs=["output:0"], verbose=False)
         self._args1 = arg(input="test", inputs=["input:0"], outputs=["output:0"], verbose=False)
