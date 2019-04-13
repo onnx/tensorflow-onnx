@@ -21,7 +21,7 @@ from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
 
-log = logging.getLogger("tf2onnx.rewriter.rnn")
+logger = logging.getLogger(__name__)
 
 
 def rewrite_single_direction_lstm(g, ops):

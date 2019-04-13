@@ -31,7 +31,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         utils.INTERNAL_NAME = 1
         np.random.seed(1)  # Make it reproducible.
 
-        self.log = logging.getLogger("tf2onnx.unitest." + str(type(self)))
+        self.logger = logging.getLogger(self.__class__.__name__)
         if not self.config.is_debug_mode:
             # suppress log info of tensorflow so that result of test can be seen much easier
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -121,7 +121,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 os.makedirs(self.test_data_directory)
             model_path = os.path.join(self.test_data_directory, self._testMethodName + "_original.pb")
             utils.save_protobuf(model_path, sess.graph_def)
-            self.log.debug("created file %s", model_path)
+            self.logger.debug("created file %s", model_path)
 
         graph_def = tf_optimize(input_names_with_port, output_names_with_port,
                                 sess.graph_def, constant_fold)
@@ -129,7 +129,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         if self.config.is_debug_mode:
             model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
             utils.save_protobuf(model_path, graph_def)
-            self.log.debug("created file  %s", model_path)
+            self.logger.debug("created file  %s", model_path)
 
         tf.reset_default_graph()
         tf.import_graph_def(graph_def, name='')
@@ -158,5 +158,5 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                             model_proto, include_test_data=self.config.is_debug_mode,
                                             as_text=self.config.is_debug_mode)
 
-        self.log.debug("create model file: %s", target_path)
+        self.logger.debug("create model file: %s", target_path)
         return target_path

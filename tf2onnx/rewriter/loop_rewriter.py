@@ -18,7 +18,7 @@ from tf2onnx.tfonnx import utils
 
 
 
-log = logging.getLogger("tf2onnx.rewriter.loop_rewriter")
+logger = logging.getLogger(__name__)
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,broad-except,protected-access
@@ -30,14 +30,14 @@ class LoopRewriter(LoopRewriterBase):
         return Context()
 
     def run(self):
-        log.debug("enter loop rewriter")
+        logger.debug("enter loop rewriter")
         return self.run_internal()
 
     def need_rewrite(self, context):
         return True
 
     def rewrite(self, context):
-        log.debug("enter rewrite function")
+        logger.debug("enter rewrite function")
         loop_node = None
         try:
             loop_props = context.loop_properties
@@ -89,16 +89,16 @@ class LoopRewriter(LoopRewriterBase):
             ## create Loop node
             loop_node = self._create_loop_node(context, loop_props)
             if not loop_node:
-                log.error("failed to create loop node during rewrite")
+                logger.error("failed to create loop node during rewrite")
                 return REWRITER_RESULT.FAIL
             loop_node.set_body_graph_as_attr("body", loop_body_g)
 
-            log.debug("rewrite successfully")
+            logger.debug("rewrite successfully")
             return REWRITER_RESULT.OK
 
         except Exception as ex:
             tb = traceback.format_exc()
-            log.error("loop rewrite failed, due to exception: %s, details:%s", ex, tb)
+            logger.error("loop rewrite failed, due to exception: %s, details:%s", ex, tb)
             return REWRITER_RESULT.FAIL
 
     def _create_loop_node(self, context, loop_props):

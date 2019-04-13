@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.tf2onnx.onnx_opset.nn
+nn
 """
 
 from __future__ import division
@@ -19,7 +19,7 @@ from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common, controlflow, tensor
 
 
-log = logging.getLogger("onnx_opset.nn")
+logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring,unused-variable
 
@@ -143,15 +143,15 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
             output_shape = ctx.get_shape(node.output[0])
             # check if the input shape is valid
             if len(input_shape) != len(pads):
-                log.error("node %s input needs to be rank %d, is %d", node.name, len(pads), len(input_shape))
+                logger.error("node %s input needs to be rank %d, is %d", node.name, len(pads), len(input_shape))
             # transpose shape to nchw
             if node.is_nhwc():
                 input_shape = spatial_map(input_shape, constants.NHWC_TO_NCHW)
                 output_shape = spatial_map(output_shape, constants.NHWC_TO_NCHW)
             # calculate pads
             if any(input_shape[i + 2] == -1 for i in range(spatial)):
-                log.debug("node %s has unknown dim %d for pads calculation, fallback to auto_pad",
-                          node.name, input_shape)
+                logger.debug("node %s has unknown dim %d for pads calculation, fallback to auto_pad",
+                             node.name, input_shape)
                 node.set_attr("auto_pad", "SAME_UPPER")
             else:
                 for i in range(spatial):

@@ -11,7 +11,6 @@ from collections import defaultdict, namedtuple
 
 from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 
-
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
 
 _KeyToGroupNodes = namedtuple("key", "type input")
@@ -20,8 +19,9 @@ _KeyToGroupNodes = namedtuple("key", "type input")
 class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     """Remove duplicate nodes.
     """
+
     def __init__(self, debug=False):
-        super(MergeDuplicatedNodesOptimizer, self).__init__("MergeDuplicatedNodesOptimizer", debug)
+        super(MergeDuplicatedNodesOptimizer, self).__init__(debug)
         # used internally
         self._graph_can_be_optimized = True
 

@@ -24,7 +24,7 @@ import tf2onnx.utils
 from tf2onnx.graph import GraphUtil
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("onnx-experiments")
+logger = logging.getLogger("onnx-experiments")
 
 
 def get_args():
@@ -75,10 +75,10 @@ def rewrite_constant_fold(g, ops):
             if inputs and len(op.input) == len(inputs):
                 func = func_map.get(op.type)
                 if func is None:
-                    log.info("can fold but don't know how, type=%s, name=%s", op.type, op.name)
+                    logger.info("can fold but don't know how, type=%s, name=%s", op.type, op.name)
                     continue
                 try:
-                    log.info("folding node type=%s, name=%s", op.type, op.name)
+                    logger.info("folding node type=%s, name=%s", op.type, op.name)
                     if op.type == "Cast":
                         dst = op.get_attr_int("to")
                         np_type = tf2onnx.utils.map_onnx_to_numpy_type(dst)
@@ -92,7 +92,7 @@ def rewrite_constant_fold(g, ops):
                     elif op.type == "Slice":
                         axis = op.get_attr_int("axis")
                         if axis != 0:
-                            log.info("can fold slice with axis!=0, type=%s, name=%s", op.type, op.name)
+                            logger.info("can fold slice with axis!=0, type=%s, name=%s", op.type, op.name)
                             continue
                         starts = op.get_attr_int("starts")
                         ends = op.get_attr_int("ends")
@@ -107,7 +107,7 @@ def rewrite_constant_fold(g, ops):
                     new_output_name = new_node_name
                     old_output_name = op.output[0]
                     old_node_name = op.name
-                    log.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
+                    logger.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
                     ops[idx] = g.make_const(new_node_name, val)
                     consumers = g.find_output_consumers(old_output_name)
                     if consumers:
@@ -119,7 +119,7 @@ def rewrite_constant_fold(g, ops):
                     keep_looking = True
                 except Exception as ex:  # pylint: disable=broad-except
                     tb = traceback.format_exc()
-                    log.info("exception: %s, details: %s", ex, tb)
+                    logger.info("exception: %s, details: %s", ex, tb)
                     # pylint: enable=too-many-nested-blocks
     return ops
 
@@ -140,7 +140,7 @@ def main():
     try:
         g.topological_sort(ops)
     except Exception as ex:  # pylint: disable=broad-except,unused-variable
-        log.error("graph has cycles, ignored ...")
+        logger.error("graph has cycles, ignored ...")
 
     model_proto = g.make_model(producer_name)
 

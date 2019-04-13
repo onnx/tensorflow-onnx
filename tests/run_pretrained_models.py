@@ -34,7 +34,7 @@ from tf2onnx.tfonnx import process_tf_graph
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 
 logging.basicConfig(level=logging.INFO, format=constants.LOG_FORMAT)
-log = logging.getLogger("tf2onnx")
+logger = logging.getLogger("run_pretrained")
 
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
 PERFITER = 1000
@@ -255,7 +255,7 @@ class Test(object):
                 dtype = tf.as_dtype(t.dtype).name
                 v = inputs[k]
                 if dtype != v.dtype:
-                    log.warning("input dtype doesn't match tensorflow's")
+                    logger.warning("input dtype doesn't match tensorflow's")
                     inputs[k] = np.array(v, dtype=dtype)
             if self.force_input_shape:
                 for k, v in inputs.items():

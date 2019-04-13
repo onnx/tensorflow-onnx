@@ -19,15 +19,15 @@ from tf2onnx.rewriter.bilstm_rewriter import slice_bilstm_for_original_lstm_cons
 
 
 
-log = logging.getLogger("tf2onnx.rewriter.bigru_rewriter")
+logger = logging.getLogger(__name__)
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
 def process_bigru(g, bi_grus):
     for fw, bw in bi_grus:
         input_id = fw[0]
-        log.debug("=========================")
-        log.debug("start handling potential bidirectional gru %s", input_id)
+        logger.debug("=========================")
+        logger.debug("start handling potential bidirectional gru %s", input_id)
 
         gru_fw = fw[1]
         gru_bw = bw[1]
@@ -47,7 +47,7 @@ def process_bigru(g, bi_grus):
             if len(gru_fw.inputs) > 4:
                 initializer_node = process_init_nodes(g, gru_fw, gru_bw, all_nodes)
         else:
-            log.error("fw, bw gru inputs num is not consistent. stop")
+            logger.error("fw, bw gru inputs num is not consistent. stop")
             continue
 
         # create node
@@ -71,7 +71,7 @@ def process_bigru(g, bi_grus):
         if gru_fw.get_attr("hidden_size").i == gru_bw.get_attr("hidden_size").i:
             hidden_size = gru_fw.get_attr("hidden_size").i
         else:
-            log.error("fw and bw has different hidden_size, skip")
+            logger.error("fw and bw has different hidden_size, skip")
             continue
         # activation has to be took care
         # attr here is proto
@@ -83,7 +83,7 @@ def process_bigru(g, bi_grus):
                 "activations": activations}
         bi_gru_node = g.make_node("GRU", gru_inputs, attr=attr, output_count=2)
         all_nodes.append(bi_gru_node)
-        log.debug("processing output nodes")
+        logger.debug("processing output nodes")
 
         to_remove = [gru_fw.name, gru_fw.input[1], gru_fw.input[2], gru_fw.input[3],
                      gru_bw.name, gru_bw.input[1], gru_bw.input[2], gru_bw.input[3]]
@@ -103,7 +103,7 @@ def process_bigru(g, bi_grus):
         old_x_has_gru_as_consumer = [
             n for n in old_x_consumers if n.type == "GRU"]
         if not old_x_has_gru_as_consumer:
-            log.debug("plan to remove useless reverse op in bw")
+            logger.debug("plan to remove useless reverse op in bw")
             reverse_node = g.get_node_by_output(gru_bw_old_x)
 
             if reverse_node.type == "Transpose":
@@ -152,10 +152,10 @@ def rewrite_bidirectional_grus(g, ops):
             # it's not reversed gru
             if g.find_output_consumers(n.output[0]) and not get_reverse_nodes_after_y_output(g, n):
                 continue
-            log.debug("find bw gru %s", input_id)
+            logger.debug("find bw gru %s", input_id)
             bw_gru[input_id] = [input_id, n]
         else:
-            log.debug("find fw gru %s", input_id)
+            logger.debug("find fw gru %s", input_id)
             fw_gru[input_id] = [input_id, n]
 
     # when fw_gru has same input as bw_gru, then it may be a bi gru

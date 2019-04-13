@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.tf2onnx.onnx_opset.generator
+traditional ml
 """
 
 from __future__ import division
@@ -11,7 +11,4 @@ from __future__ import unicode_literals
 
 import logging
 
-
-log = logging.getLogger("onnx_opset.traditional")
-
-# pylint: disable=unused-argument,missing-docstring
+logger = logging.getLogger(__name__)

@@ -15,7 +15,6 @@ from tf2onnx.optimizer.identity_optimizer import IdentityOptimizer
 from tf2onnx.optimizer.merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
-
 # pylint: disable=missing-docstring, broad-except
 
 # optimizer sequence need to be considered carefully

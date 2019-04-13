@@ -14,7 +14,7 @@ from enum import Enum
 from tf2onnx import utils
 
 
-log = logging.getLogger("tf2onnx.rewriter.cond_rewriter_base")
+logger = logging.getLogger(__name__)
 
 
 # pylint: disable=missing-docstring,unused-argument,broad-except
@@ -52,7 +52,7 @@ class CondRewriter:
         self.g = g
 
     def rewrite(self):
-        log.debug("enter cond pre rewrite")
+        logger.debug("enter cond pre rewrite")
         return self.run()
 
     def run(self):
@@ -87,7 +87,7 @@ class CondRewriter:
                 )
             except Exception as ex:
                 tb = traceback.format_exc()
-                log.warning("tf.cond rewrite failed, due to exception: %s, details:%s", ex, tb)
+                logger.warning("tf.cond rewrite failed, due to exception: %s, details:%s", ex, tb)
                 continue
 
             self._cut_off_connection(cond_context)
@@ -95,7 +95,7 @@ class CondRewriter:
             # remove nodes in If branches explicitly
             for n in list(cond_context.true_branch_context.nodes) + list(cond_context.false_branch_context.nodes):
                 self.g.remove_node(n.name)
-        log.debug("cond pre rewrite done")
+        logger.debug("cond pre rewrite done")
 
         return self.g.get_nodes()
 
@@ -145,7 +145,7 @@ class CondRewriter:
             dtypes=output_dtypes,
             skip_conversion=False
         )
-        log.debug("set graph for if branches")
+        logger.debug("set graph for if branches")
         true_graph = utils.construct_graph_from_nodes(
             self.g,
             list(cond_context.true_branch_context.nodes),
@@ -167,7 +167,7 @@ class CondRewriter:
     def _cut_off_connection(self, cond_context):
         """Cut off switchs and merges, all changes are based on the origin graph"""
         nodes_to_add = []
-        log.debug("cut off switch connection")
+        logger.debug("cut off switch connection")
         # replace switch with identity node
         for switch in cond_context.switchs:
             shapes = switch.output_shapes
@@ -193,7 +193,7 @@ class CondRewriter:
             cond_context.true_branch_context.nodes.add(true_switch_id)
             nodes_to_add.extend([false_switch_id, true_switch_id])
         # replace merge with if node
-        log.debug("cut off merge connection")
+        logger.debug("cut off merge connection")
         for n in cond_context.merges:
             self.g.remove_node(n.name)
 
@@ -224,7 +224,7 @@ class CondRewriter:
            in the case that true and false branch both only contain a
            const node, we will throw a Exception.
         """
-        log.debug("trace back from [%s]", ",".join(n.name for n in merge_nodes))
+        logger.debug("trace back from [%s]", ",".join(n.name for n in merge_nodes))
         true_branch_context = CondBranchContext()
         false_branch_context = CondBranchContext()
         total_switchs = set()
@@ -240,7 +240,7 @@ class CondRewriter:
 
     def _trace_back_from_one_merge(self, merge_node):
         """Parse the ingredients (nodes and outputs)of true and false branch"""
-        log.debug("trace back from %s", merge_node.name)
+        logger.debug("trace back from %s", merge_node.name)
         true_branch_nodes = None
         true_output = None
         false_branch_nodes = None
@@ -308,7 +308,7 @@ class CondRewriter:
                             raise ValueError("true and false graph intersect at {}".format(node.name))
                         branch = BranchType.TRUE
         if branch == BranchType.UNKNOWN:
-            log.debug(
+            logger.debug(
                 "branch only contains const node: [%s]",
                 ",".join(n.name for n in nodes)
             )

@@ -16,7 +16,7 @@ from tensorflow.python.framework.graph_util import convert_variables_to_constant
 from tf2onnx import utils
 
 
-log = logging.getLogger("loader")
+logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument
 
@@ -48,7 +48,7 @@ def remove_redundant_inputs(frozen_graph, input_names):
                 frozen_inputs.append(inp)
     deleted_inputs = list(set(input_names) - set(frozen_inputs))
     if deleted_inputs:
-        log.warning("inputs [%s] is not in frozen graph, delete them", ",".join(deleted_inputs))
+        logger.warning("inputs [%s] is not in frozen graph, delete them", ",".join(deleted_inputs))
     return frozen_inputs
 
 

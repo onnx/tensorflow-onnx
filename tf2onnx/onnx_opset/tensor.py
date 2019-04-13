@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.tf2onnx.onnx_opset.generator
+tensor
 """
 
 from __future__ import division
@@ -20,7 +20,7 @@ from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 
 
-log = logging.getLogger("onnx_opset.tensor")
+logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring,unused-variable
 
@@ -86,7 +86,7 @@ class Reshape:
         shape_node = node.inputs[1]
         shape = shape_node.get_tensor_value()
         if shape is None:
-            log.error("Reshape on node %s does not have a const shape", node.name)
+            logger.error("Reshape on node %s does not have a const shape", node.name)
             return
         ctx.remove_input(node, node.input[1])
         node.set_attr("shape", shape)
@@ -737,7 +737,7 @@ class OneHot:
         output_dtype = ctx.get_dtype(node.input[2])
         if ctx.is_target(constants.TARGET_RS6) \
             and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
-            log.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
+            logger.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
             cls.version_5(ctx, node, **kwargs)
             return
 

@@ -18,7 +18,7 @@ from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.utils import TensorValueInfo
 
 
-log = logging.getLogger("tf2onnx.rewriter.loop_rewriter_base")
+logger = logging.getLogger(__name__)
 INVALID_INPUT_ID = utils.make_name("invalid_input_id")
 
 # todo(pengwa) remove protected-access with changes to Graph/Node later.
@@ -200,7 +200,7 @@ class LoopRewriterBase(object):
 
         # self.g.get_nodes may change inside this loop so that we parse all LoopCond first
         for op in loopcond_ops:
-            log.debug("======================\n handling loop cond node called %s", op.name)
+            logger.debug("======================\n handling loop cond node called %s", op.name)
             context = self.create_context()
             context.loop_cond = op
 
@@ -214,9 +214,9 @@ class LoopRewriterBase(object):
 
                 _result = self.rewrite(context)
                 if _result == REWRITER_RESULT.OK:
-                    log.debug("rewrite successfully")
+                    logger.debug("rewrite successfully")
                 elif _result == REWRITER_RESULT.SKIP:
-                    log.debug("rewrite skipped for LoopCond called %s", op.name)
+                    logger.debug("rewrite skipped for LoopCond called %s", op.name)
                     continue
                 elif _result == REWRITER_RESULT.FAIL:
                     raise ValueError("rewrite failed, so just fast fail it")
@@ -234,7 +234,7 @@ class LoopRewriterBase(object):
         loop_cond_op = context.loop_cond
         parts = loop_cond_op.name.split('/')
         context.while_context_scope = '/'.join(parts[0:-1]) + "/"
-        log.debug("found while loop scope %s", context.while_context_scope)
+        logger.debug("found while loop scope %s", context.while_context_scope)
 
         switch_nodes = self.g.find_output_consumers(loop_cond_op.output[0])
         for s in switch_nodes:
@@ -329,13 +329,13 @@ class LoopRewriterBase(object):
 
     def _get_loop_var_from_switch(self, switch_node):
         if switch_node.type != 'Switch':
-            log.error("not a switch node, skip")
+            logger.error("not a switch node, skip")
             return None
 
         # the first input is data
         merge_node = switch_node.inputs[0]
         if merge_node.type != "Merge":
-            log.error("switch node does not has Merge as its first input")
+            logger.error("switch node does not has Merge as its first input")
             return None
 
         # find the output_true consumers
@@ -354,7 +354,7 @@ class LoopRewriterBase(object):
         target_node_input_id = None
         enter_node = [n for n in merge_node.inputs if n.type == 'Enter'][0]
         target_node_input_id = enter_node.input[0]
-        log.debug("a Switch >> Merge >> Enter is found called %s", enter_node.inputs[0].name)
+        logger.debug("a Switch >> Merge >> Enter is found called %s", enter_node.inputs[0].name)
 
         next_iteration_node = [n for n in merge_node.inputs if n.type == 'NextIteration'][0]
         last_iteration_output_id = next_iteration_node.input[0]
@@ -400,8 +400,8 @@ class LoopRewriterBase(object):
 
     @staticmethod
     def find_subgraph(input_ids, output_ids, g, merge_as_end=False):
-        log.debug("input ids %s ", input_ids)
-        log.debug("output ids %s ", output_ids)
+        logger.debug("input ids %s ", input_ids)
+        logger.debug("output ids %s ", output_ids)
 
         enter_nodes = set()
         merge_nodes = set()
@@ -409,16 +409,16 @@ class LoopRewriterBase(object):
         def find_input_boundary(node):
             if node.type == "Enter":
                 enter_nodes.add(node)
-                log.debug("terminate the input search at %s", node.name)
+                logger.debug("terminate the input search at %s", node.name)
                 return False
 
             if merge_as_end is True and node.type == "Merge":
                 merge_nodes.add(node)
-                log.debug("terminate the input search at %s", node.name)
+                logger.debug("terminate the input search at %s", node.name)
                 return False
 
             if node.is_const():
-                log.debug("terminate search at const node %s", node.name)
+                logger.debug("terminate search at const node %s", node.name)
                 return False
 
             for o in node.output:

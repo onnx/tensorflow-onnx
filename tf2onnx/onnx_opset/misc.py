@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.tf2onnx.onnx_opset.misc
+misc
 """
 
 from __future__ import division
@@ -14,7 +14,7 @@ import logging
 from tf2onnx.handler import tf_op
 
 
-log = logging.getLogger("onnx_opset.misc")
+logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring
 
