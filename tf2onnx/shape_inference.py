@@ -15,7 +15,7 @@ from tf2onnx import utils
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
 
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.shape_inference")
 
 direct_ops = [

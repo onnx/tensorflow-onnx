@@ -16,7 +16,7 @@ from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_pattern, \
 from tf2onnx.graph_matcher import GraphMatcher
 
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.unit_rnn_rewriter_base")
 
 

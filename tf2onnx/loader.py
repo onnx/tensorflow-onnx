@@ -15,7 +15,7 @@ from tensorflow.python.framework.graph_util import convert_variables_to_constant
 
 from tf2onnx import utils
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("loader")
 
 # pylint: disable=unused-argument

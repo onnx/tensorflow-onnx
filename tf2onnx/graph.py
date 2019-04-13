@@ -23,7 +23,7 @@ from tf2onnx.utils import port_name, find_opset
 from tf2onnx import optimizer
 from tf2onnx.schemas import get_schema
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("graph")
 
 

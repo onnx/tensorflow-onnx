@@ -17,7 +17,7 @@ from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.tfonnx import utils
 
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.loop_rewriter")
 
 

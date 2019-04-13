@@ -20,7 +20,7 @@ from tf2onnx.onnx_opset.nn import spatial_map
 from tf2onnx.handler import tf_op
 from tf2onnx.utils import make_sure
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("onnx_opset.controlflow")
 
 # pylint: disable=unused-argument,missing-docstring

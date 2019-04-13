@@ -16,7 +16,7 @@ from tf2onnx import utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("onnx_opset.logical")
 
 # pylint: disable=unused-argument,missing-docstring

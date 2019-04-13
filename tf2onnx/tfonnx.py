@@ -30,7 +30,7 @@ from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape_for_graph
 from tf2onnx.utils import port_name
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx")
 
 

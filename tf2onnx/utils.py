@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from contextlib import contextmanager
 import os
 import re
 import shutil
@@ -437,3 +438,15 @@ def is_onnx_domain(domain):
     if domain is None or domain == "":
         return True
     return False
+
+
+@contextmanager
+def set_log_level(logger, level):
+    """ Override current logger level within context. """
+    current_level = logger.getEffectiveLevel()
+    logger.setLevel(level)
+
+    try:
+        yield logger
+    finally:
+        logger.setLevel(current_level)

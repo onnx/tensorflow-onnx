@@ -19,7 +19,7 @@ import tf2onnx
 from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("onnx_opset.tensor")
 
 # pylint: disable=unused-argument,missing-docstring,unused-variable

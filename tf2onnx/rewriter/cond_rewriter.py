@@ -13,7 +13,7 @@ from collections import OrderedDict
 from enum import Enum
 from tf2onnx import utils
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.cond_rewriter_base")
 
 

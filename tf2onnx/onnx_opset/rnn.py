@@ -15,7 +15,7 @@ import numpy as np
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("onnx_opset.rnn")
 
 

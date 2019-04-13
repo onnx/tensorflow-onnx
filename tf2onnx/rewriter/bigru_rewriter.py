@@ -18,7 +18,7 @@ from tf2onnx.rewriter.bilstm_rewriter import slice_bilstm_for_original_lstm_cons
      get_reverse_nodes_after_y_output, get_np_val_for_const, _process_single_init_node
 
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.bigru_rewriter")
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring

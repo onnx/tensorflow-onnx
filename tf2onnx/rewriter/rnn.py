@@ -20,7 +20,7 @@ from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.rnn")
 
 

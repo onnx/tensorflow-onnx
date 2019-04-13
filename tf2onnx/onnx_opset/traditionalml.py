@@ -11,7 +11,7 @@ from __future__ import unicode_literals
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("onnx_opset.traditional")
 
 # pylint: disable=unused-argument,missing-docstring

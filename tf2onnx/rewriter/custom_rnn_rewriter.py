@@ -17,7 +17,7 @@ from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_rnn_scope_name, pars
 from tf2onnx.tfonnx import utils
 
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.custom_rnn_rewriter")
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,broad-except,protected-access

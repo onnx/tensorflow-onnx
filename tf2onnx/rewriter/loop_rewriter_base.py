@@ -17,7 +17,7 @@ from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_arra
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.utils import TensorValueInfo
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.loop_rewriter_base")
 INVALID_INPUT_ID = utils.make_name("invalid_input_id")
 

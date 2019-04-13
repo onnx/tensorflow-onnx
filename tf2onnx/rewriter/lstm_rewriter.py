@@ -19,7 +19,7 @@ from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.lstm_rewriter")
 
 

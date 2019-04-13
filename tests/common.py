@@ -4,6 +4,7 @@
 """ test common utilities."""
 
 import argparse
+import logging
 import os
 import sys
 import unittest
@@ -114,7 +115,10 @@ def get_test_config():
 
 
 def unittest_main():
-    print(get_test_config())
+    config = get_test_config()
+    logging.basicConfig(level=logging.WARNING)
+    with utils.set_log_level(logging.getLogger(), logging.INFO) as logger:
+        logger.info(config)
     unittest.main()
 
 

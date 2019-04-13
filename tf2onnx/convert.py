@@ -10,6 +10,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
+import logging
 import tensorflow as tf
 
 from tf2onnx import constants, loader, utils
@@ -79,6 +80,7 @@ def default_custom_op_handler(ctx, node, name, args):
 
 def main():
     args = get_args()
+    logging.basicConfig(level=logging.INFO)
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.

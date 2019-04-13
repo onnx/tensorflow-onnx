@@ -15,7 +15,7 @@ import numpy as np
 from tf2onnx import utils
 from tf2onnx.rewriter.rnn_utils import is_reverse_op
 
-logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger("tf2onnx.rewriter.bilstm_rewriter")
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
