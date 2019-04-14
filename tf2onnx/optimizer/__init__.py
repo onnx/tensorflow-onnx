@@ -28,11 +28,11 @@ _optimizers = OrderedDict([
 ])
 
 
-def optimize_graph(graph, debug=False):
+def optimize_graph(graph):
     try:
         opts = _get_optimizers()
         for opt in opts.values():
-            graph = opt(debug=debug).optimize(graph)
+            graph = opt().optimize(graph)
 
         graph.update_proto()
         return graph

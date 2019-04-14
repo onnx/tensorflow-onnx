@@ -34,3 +34,6 @@ NCHW_TO_NHWC = [0, 2, 3, 1]
 NHWC_TO_NCHW = [0, 3, 1, 2]
 HWCN_TO_NCHW = [3, 2, 0, 1]
 NCHW_TO_HWCN = [2, 3, 1, 0]
+
+# Environment variables
+ENV_TF2ONNX_DEBUG_MODE = "TF2ONNX_DEBUG_MODE"

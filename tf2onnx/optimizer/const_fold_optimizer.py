@@ -26,8 +26,8 @@ def _register_func(op_type):
 
 class ConstFoldOptimizer(GraphOptimizerBase):
 
-    def __init__(self, debug=False):  # pylint: disable=useless-super-delegation
-        super(ConstFoldOptimizer, self).__init__(debug)
+    def __init__(self):  # pylint: disable=useless-super-delegation
+        super(ConstFoldOptimizer, self).__init__()
 
     def _optimize(self, graph):
         return self._apply_optimization(graph, self._optimize_at_current_graph_level)

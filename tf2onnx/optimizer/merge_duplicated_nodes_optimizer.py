@@ -20,8 +20,8 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     """Remove duplicate nodes.
     """
 
-    def __init__(self, debug=False):
-        super(MergeDuplicatedNodesOptimizer, self).__init__(debug)
+    def __init__(self):
+        super(MergeDuplicatedNodesOptimizer, self).__init__()
         # used internally
         self._graph_can_be_optimized = True
 

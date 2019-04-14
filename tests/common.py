@@ -31,7 +31,6 @@ class TestConfig(object):
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.backend_version = self._get_backend_version()
         self.log_level = logging.WARNING
-        self.is_debug_mode = False
         self.temp_dir = utils.get_temp_directory()
 
     @property
@@ -45,6 +44,10 @@ class TestConfig(object):
     @property
     def is_caffe2_backend(self):
         return self.backend == "caffe2"
+
+    @property
+    def is_debug_mode(self):
+        return utils.is_debug_mode()
 
     def _get_tf_version(self):
         import tensorflow as tf
@@ -92,11 +95,13 @@ class TestConfig(object):
             parser.add_argument("unittest_args", nargs='*')
 
             args = parser.parse_args()
+            if args.debug:
+                utils.set_debug_mode(True)
+
             config.backend = args.backend
             config.opset = args.opset
             config.target = args.target.split(',')
             config.log_level = logging.get_verbosity_level(args.verbose, config.log_level)
-            config.is_debug_mode = args.debug
             if args.temp_dir:
                 config.temp_dir = args.temp_dir
 

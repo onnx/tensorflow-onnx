@@ -4,16 +4,24 @@
 """Graph Optimizer Base"""
 
 from __future__ import unicode_literals
-import logging
+
+from tf2onnx import logging, utils
 
 
 class GraphOptimizerBase(object):
     """optimizer graph to improve performance
     """
 
-    def __init__(self, debug=False):
-        self._debug = debug
+    def __init__(self):
         self._logger = logging.getLogger('.'.join(__name__.split('.')[:-1] + [self.__class__.__name__]))
+
+    @property
+    def logger(self):
+        return self._logger
+
+    @property
+    def is_debug_mode(self):
+        return utils.is_debug_mode()
 
     def optimize(self, graph):
         original_node_statistics = graph.dump_node_statistics()
@@ -25,10 +33,6 @@ class GraphOptimizerBase(object):
 
     def _optimize(self, graph):
         raise NotImplementedError
-
-    @property
-    def logger(self):
-        return self._logger
 
     @staticmethod
     def _apply_optimization(graph, optimize_func):

@@ -34,8 +34,8 @@ def is_useless_transpose(transpose_node):
 class TransposeOptimizer(GraphOptimizerBase):
     """Transpose Optimizer."""
 
-    def __init__(self, debug=False):
-        super(TransposeOptimizer, self).__init__(debug)
+    def __init__(self):
+        super(TransposeOptimizer, self).__init__()
 
         self._handler_map = {}
         self._force_stop = {}

@@ -38,6 +38,7 @@ def get_args():
                         help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
+    parser.add_argument("--debug", help="debug mode", action="store_true")
     parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
                         action="store_true")
     # experimental
@@ -81,6 +82,8 @@ def default_custom_op_handler(ctx, node, name, args):
 def main():
     args = get_args()
     logging.basicConfig(level=logging.get_verbosity_level(args.verbose))
+    if args.debug:
+        utils.set_debug_mode(True)
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.

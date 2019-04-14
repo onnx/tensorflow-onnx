@@ -16,8 +16,8 @@ from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 class IdentityOptimizer(GraphOptimizerBase):
     """Identity Optimizer."""
 
-    def __init__(self, debug=False):
-        super(IdentityOptimizer, self).__init__(debug)
+    def __init__(self):
+        super(IdentityOptimizer, self).__init__()
         self._g = None
 
     def optimize(self, graph):
