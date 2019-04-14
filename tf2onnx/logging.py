@@ -17,6 +17,8 @@ from . import constants
 
 VERBOSE = 15
 
+_logging.addLevelName(VERBOSE, "VERBOSE")
+
 
 def _verbose(self, message, *args, **kwargs):
     if self.isEnabledFor(VERBOSE):
@@ -51,9 +53,9 @@ _VERBOSITY_TO_LEVEL = {
 }
 
 
-def get_adjusted_level(verbosity, raw_level=INFO):
-    """ If verbosity is specified, return corresponding level, otherwise, return raw_level. """
-    return _VERBOSITY_TO_LEVEL.get(verbosity, raw_level)
+def get_verbosity_level(verbosity, default_level=INFO):
+    """ If verbosity is specified, return corresponding level, otherwise, return default_level. """
+    return _VERBOSITY_TO_LEVEL.get(verbosity, default_level)
 
 
 def set_level(level):

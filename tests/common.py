@@ -95,7 +95,7 @@ class TestConfig(object):
             config.backend = args.backend
             config.opset = args.opset
             config.target = args.target.split(',')
-            config.log_level = logging.get_adjusted_level(args.verbose, config.log_level)
+            config.log_level = logging.get_verbosity_level(args.verbose, config.log_level)
             config.is_debug_mode = args.debug
             if args.temp_dir:
                 config.temp_dir = args.temp_dir

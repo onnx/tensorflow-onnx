@@ -80,7 +80,7 @@ def default_custom_op_handler(ctx, node, name, args):
 
 def main():
     args = get_args()
-    logging.basicConfig(level=logging.get_adjusted_level(args.verbose))
+    logging.basicConfig(level=logging.get_verbosity_level(args.verbose))
 
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.

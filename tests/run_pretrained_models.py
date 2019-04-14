@@ -371,7 +371,7 @@ def tests_from_yaml(fname):
 
 def main():
     args = get_args()
-    logging.basicConfig(level=logging.get_adjusted_level(args.verbose))
+    logging.basicConfig(level=logging.get_verbosity_level(args.verbose))
 
     Test.cache_dir = args.cache
     Test.target = args.target
