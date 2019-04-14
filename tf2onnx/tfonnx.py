@@ -10,7 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import collections
-import logging
 import sys
 import traceback
 
@@ -23,12 +22,12 @@ from tensorflow.tools.graph_transforms import TransformGraph
 import tf2onnx
 import tf2onnx.onnx_opset  # pylint: disable=unused-import
 import tf2onnx.custom_opsets  # pylint: disable=unused-import
-from tf2onnx import constants, schemas, utils, handler
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape_for_graph
 from tf2onnx.utils import port_name
+from . import constants, logging, schemas, utils, handler
 
 logger = logging.getLogger(__name__)
 
@@ -669,7 +668,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Args:
             tf_graph: tensorflow graph
             continue_on_error: if an op can't be processed (aka there is no mapping), continue
-            verbose: print summary stats
+            verbose: print summary stats (deprecated)
             target: list of workarounds applied to help certain platforms
             opset: the opset to be used (int, default is latest)
             custom_op_handlers: dictionary of custom ops handlers
@@ -682,6 +681,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
+    # TODO: remove verbose argument in future release
+    if verbose:
+        logger.warning("Argument verbose for process_tf_graph is deprecated. Please use --verbose option instead.")
+    del verbose
+
     opset = utils.find_opset(opset)
     print("using tensorflow={}, onnx={}, opset={}, tfonnx={}/{}".format(
         tf.__version__, utils.get_onnx_version(), opset,
@@ -795,10 +799,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     g.update_proto()
 
-    if verbose:
-        print("tensorflow ops: {}".format(op_cnt))
-        print("tensorflow attr: {}".format(attr_cnt))
-        print("onnx mapped: {}".format(mapped_op))
-        print("onnx unmapped: {}".format(unmapped_op))
+    logger.verbose(
+        "Summay Stats:\n"
+        "\ttensorflow ops: {}\n"
+        "\ttensorflow attr: {}\n"
+        "\tonnx mapped: {}\n"
+        "\tonnx unmapped: {}".format(op_cnt, attr_cnt, mapped_op, unmapped_op))
 
     return g

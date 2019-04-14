@@ -7,18 +7,20 @@ tf2onnx.rewriter.custom_rnn_rewriter - custom rnn support
 
 from __future__ import division
 from __future__ import print_function
+
 import logging
 import sys
 import traceback
+
 from onnx import onnx_pb
 import numpy as np
+
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_rnn_scope_name, parse_rnn_loop
-from tf2onnx.tfonnx import utils
-
-
+from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,broad-except,protected-access
 
@@ -159,7 +161,6 @@ class CustomRnnRewriter(LoopRewriterBase):
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, scan_node.output[index])
             index += 1
 
-
     def _adapt_scan_sequence_input_or_output(self, target_name, input_id, handle_output=False):
         nodes_to_add = []
         shape_node = self.g.make_node("Shape", [input_id])
@@ -198,7 +199,7 @@ class CustomRnnRewriter(LoopRewriterBase):
             else:
                 # add a fake batch size : 1
                 fake_batch_size_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
-                                                         np.array([1,], dtype=np.int64))
+                                                         np.array([1], dtype=np.int64))
                 nodes_to_add.append(fake_batch_size_node)
                 new_shape_node = self.g.make_node("Concat",
                                                   [fake_batch_size_node.output[0], shape_node.output[0]],

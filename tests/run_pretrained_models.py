@@ -153,7 +153,7 @@ class Test(object):
 
     def to_onnx(self, tf_graph, opset=None, extra_opset=None, shape_override=None, input_names=None):
         """Convert graph to tensorflow."""
-        return process_tf_graph(tf_graph, continue_on_error=False, verbose=True, opset=opset,
+        return process_tf_graph(tf_graph, continue_on_error=False, opset=opset,
                                 extra_opset=extra_opset, target=Test.target, shape_override=shape_override,
                                 input_names=input_names, output_names=self.output_names)
 

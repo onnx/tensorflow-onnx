@@ -7,16 +7,17 @@ tf2onnx.rewriter.loop_rewriter - generic loop support
 
 from __future__ import division
 from __future__ import print_function
+
 import logging
 import sys
 import traceback
+
 from onnx import TensorProto
 import numpy as np
+
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
-from tf2onnx.tfonnx import utils
-
-
+from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
 

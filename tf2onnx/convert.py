@@ -112,7 +112,6 @@ def main():
     with tf.Session(graph=tf_graph):
         g = process_tf_graph(tf_graph,
                              continue_on_error=args.continue_on_error,
-                             verbose=args.verbose,
                              target=args.target,
                              opset=args.opset,
                              custom_op_handlers=custom_ops,
