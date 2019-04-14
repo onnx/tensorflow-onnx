@@ -47,15 +47,15 @@ def basicConfig(**kwargs):  # pylint: disable=invalid-name, function-redefined
     set_tf_verbosity(_logging.getLogger().getEffectiveLevel())
 
 
-_VERBOSITY_TO_LEVEL = {
-    1: VERBOSE,
-    2: DEBUG
-}
+_VERBOSITY_TO_LEVEL = [INFO, VERBOSE, DEBUG]
 
 
 def get_verbosity_level(verbosity, default_level=INFO):
     """ If verbosity is specified, return corresponding level, otherwise, return default_level. """
-    return _VERBOSITY_TO_LEVEL.get(verbosity, default_level)
+    if verbosity is None:
+        return default_level
+    verbosity = min(max(0, verbosity), len(_VERBOSITY_TO_LEVEL) - 1)
+    return _VERBOSITY_TO_LEVEL[verbosity]
 
 
 def set_level(level):
