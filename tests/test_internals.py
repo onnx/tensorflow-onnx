@@ -52,13 +52,12 @@ def onnx_pretty(g, args=None):
 class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
     def setUp(self):
         super().setUp()
-        arg = namedtuple("Arg", "input inputs outputs verbose")
-        self._args0 = arg(input="test", inputs=[], outputs=["output:0"], verbose=False)
-        self._args1 = arg(input="test", inputs=["input:0"], outputs=["output:0"], verbose=False)
-        self._args2 = arg(input="test", inputs=["input1:0", "input2:0"], outputs=["output:0"], verbose=False)
-        self._args3 = arg(input="test", inputs=["input1:0", "input2:0", "prob:0"], outputs=["output:0"], verbose=False)
-        self._args4 = arg(input="test", inputs=["input1:0", "input2:0"], outputs=["output1:0", "output2:0"],
-                          verbose=False)
+        arg = namedtuple("Arg", "input inputs outputs")
+        self._args0 = arg(input="test", inputs=[], outputs=["output:0"])
+        self._args1 = arg(input="test", inputs=["input:0"], outputs=["output:0"])
+        self._args2 = arg(input="test", inputs=["input1:0", "input2:0"], outputs=["output:0"])
+        self._args3 = arg(input="test", inputs=["input1:0", "input2:0", "prob:0"], outputs=["output:0"])
+        self._args4 = arg(input="test", inputs=["input1:0", "input2:0"], outputs=["output1:0", "output2:0"])
 
     @staticmethod
     def sample_net():

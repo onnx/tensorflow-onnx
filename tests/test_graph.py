@@ -95,17 +95,15 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
 
     def setUp(self):
         super().setUp()
-        arg = namedtuple("Arg", "input inputs outputs verbose continue_on_error")
-        self._args0 = arg(input="test", inputs=[], outputs=["output:0"],
-                          verbose=False, continue_on_error=False)
-        self._args1 = arg(input="test", inputs=["input:0"], outputs=["output:0"],
-                          verbose=False, continue_on_error=False)
+        arg = namedtuple("Arg", "input inputs outputs continue_on_error")
+        self._args0 = arg(input="test", inputs=[], outputs=["output:0"], continue_on_error=False)
+        self._args1 = arg(input="test", inputs=["input:0"], outputs=["output:0"], continue_on_error=False)
         self._args2 = arg(input="test", inputs=["input1:0", "input2:0"], outputs=["output:0"],
-                          verbose=False, continue_on_error=False)
+                          continue_on_error=False)
         self._args3 = arg(input="test", inputs=["input1:0", "input2:0", "prob:0"], outputs=["output:0"],
-                          verbose=False, continue_on_error=False)
+                          continue_on_error=False)
         self._args4 = arg(input="test", inputs=["input1:0", "input2:0"], outputs=["output1:0", "output2:0"],
-                          verbose=False, continue_on_error=False)
+                          continue_on_error=False)
 
     def test_abs(self):
         with tf.Session() as sess:
