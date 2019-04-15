@@ -17,8 +17,8 @@ from onnx.onnx_pb import TensorProto
 
 import tf2onnx
 from tf2onnx import constants, utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
-
 
 logger = logging.getLogger(__name__)
 
@@ -228,23 +228,55 @@ class ConcatV2:
 class Slice:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
-        # T output = Slice(T input, Index begin, Index size, @type Index)
-        # T output = Slice(T data, @INTS axes, @INTS ends, @INTS starts)
-        starts = node.inputs[1].get_tensor_value()
-        sizes = node.inputs[2].get_tensor_value()
-        ends = []
-        for start, size in zip(starts, sizes):
-            # get all elements
-            if size == -1:
-                dtype = ctx.get_dtype(node.input[1])
-                utils.make_sure(dtype, "dtype of {} is None".format(node.input[1]))
-                ends.append(np.iinfo(dtype).max)
-            else:
-                ends.append(start + size)
-        ctx.remove_input(node, node.input[2])
-        ctx.remove_input(node, node.input[1])
-        node.set_attr("starts", starts)
-        node.set_attr("ends", ends)
+        cls._convert_since_4(ctx, node, **kwargs)
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls._convert_since_4(ctx, node, **kwargs)
+
+    @classmethod
+    def _convert_since_4(cls, ctx, node, **kwargs):
+        # T output = Slice(T input, Index begin, Index size)
+        # T output = Slice(T input, Tind starts, Tind ends, Tind axes, Tind steps)
+        # "ends" are exclusive, "axes" and "steps" are optional, their default val are [0, ...] and 1
+        input_tensor = node.input[0]
+        starts = node.input[1]
+        size = node.input[2]
+        # in tf, size can be -1 which means all elem are taken, so size can't be added starts directly.
+        # the way to make sure size are not less than 0: set "sizes"'s elem to be int_max if elem val is -1
+        size_dtype = ctx.get_dtype(size)
+        size_np_dtype = utils.map_onnx_to_numpy_type(size_dtype)
+        if ctx.get_node_by_output(size).is_const() and ctx.get_node_by_output(starts).is_const():
+            starts = ctx.get_node_by_output(starts).get_tensor_value()
+            sizes = ctx.get_node_by_output(size).get_tensor_value()
+            ends = []
+            for start, size in zip(starts, sizes):
+                # get all elements
+                if size == -1:
+                    dtype = ctx.get_dtype(node.input[1])
+                    utils.make_sure(dtype, "dtype of {} is None".format(node.input[1]))
+                    utils.make_sure(dtype, "dtype of {} is None".format(node.input[1]))
+                    ends.append(np.iinfo(dtype).max)
+                else:
+                    ends.append(start + size)
+
+        else:
+            neg_one_val = np.array([-1]).astype(size_np_dtype)
+            neg_one = ctx.make_const(utils.make_name("const"), neg_one_val).output[0]
+
+            int_max_val = np.array([utils.get_max_value(size_np_dtype)]).astype(size_np_dtype)
+            int_max = ctx.make_const(utils.make_name("largest_int_val"), int_max_val).output[0]
+
+            size_are_neg_one_flag = ctx.make_node("Equal", [neg_one, size]).output[0]
+            size_are_neg_one_flag = ctx.make_node("Cast", [size_are_neg_one_flag], attr={"to": size_dtype}).output[0]
+            value_to_add = ctx.make_node("Mul", [int_max, size_are_neg_one_flag]).output[0]
+            size_processed = ctx.make_node("Add", [size, value_to_add]).output[0]
+            ends = ctx.make_node("Add", [starts, size_processed]).output[0]
+
+        ctx.remove_node(node.name)
+        inputs_map = {"data": input_tensor, "starts": starts, "ends": ends}
+        kwargs = {**inputs_map, "outputs": node.output}
+        _ = GraphBuilder(ctx).make_slice(kwargs, name=node.name)
 
 
 @tf_op("Gather")
@@ -311,15 +343,14 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     # reshape indices into [sum(indices[:-1]), indices[-1]]
     indices_shape = ctx.make_node("Shape", [indices], dtypes=[TensorProto.INT64])
     indices_size = ctx.make_node("Size", [indices])
-    inner_shape = ctx.make_node("Slice",
-                                [indices_shape.output[0]],
-                                attr={"axes": [0], "ends": [INT64_MAX], "starts": [-1]},
-                                dtypes=[TensorProto.INT64])
+    attr = {"axes": [0], "ends": [INT64_MAX], "starts": [-1]}
+    inputs_map = {"data": indices_shape.output[0], **attr}
+    inner_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     outter_shape = ctx.make_node("Div",
-                                 [indices_size.output[0], inner_shape.output[0]],
+                                 [indices_size.output[0], inner_shape],
                                  dtypes=[TensorProto.INT64])
     flatten_shape = ctx.make_node("Concat",
-                                  [outter_shape.output[0], inner_shape.output[0]],
+                                  [outter_shape.output[0], inner_shape],
                                   attr={"axis": 0},
                                   dtypes=[TensorProto.INT64])
     flatten_indices = ctx.make_node("Reshape", [indices, flatten_shape.output[0]])
@@ -370,25 +401,21 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
                                       [inner_loop_shape.output[0], one_const.output[0]],
                                       attr={"axis": 0},
                                       dtypes=[TensorProto.INT64])
-    output_inner_shape = ctx.make_node("Slice",
-                                       [inner_loop_shape_.output[0]],
-                                       attr={"axes": [0], "ends": [INT64_MAX], "starts": [1]},
-                                       dtypes=[TensorProto.INT64])
-
-    indices_outter_shape = ctx.make_node("Slice",
-                                         [indices_shape.output[0]],
-                                         attr={"axes": [0], "ends": [-1], "starts": [0]},
-                                         dtypes=[TensorProto.INT64])
+    attr = {"axes": [0], "ends": [INT64_MAX], "starts": [1]}
+    inputs_map = {"data": inner_loop_shape_.output[0], **attr}
+    output_inner_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
+    attr = {"axes": [0], "ends": [-1], "starts": [0]}
+    inputs_map = {"data": indices_shape.output[0], **attr}
+    indices_outter_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     output_shape_ = ctx.make_node("Concat",
-                                  [indices_outter_shape.output[0], output_inner_shape.output[0]],
+                                  [indices_outter_shape, output_inner_shape],
                                   attr={"axis": 0},
                                   dtypes=[TensorProto.INT64])
-    output_shape = ctx.make_node("Slice",
-                                 [output_shape_.output[0]],
-                                 attr={"axes": [0], "ends": [-1], "starts": [0]},
-                                 dtypes=[TensorProto.INT64])
+    attr = {"axes": [0], "ends": [-1], "starts": [0]}
+    inputs_map = {"data": output_shape_.output[0], **attr}
+    output_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     ctx.make_node("Reshape",
-                  [gathernd_loop.output[1], output_shape.output[0]],
+                  [gathernd_loop.output[1], output_shape],
                   outputs=[output],
                   shapes=shapes,
                   dtypes=dtypes)
@@ -558,13 +585,15 @@ class StridedSlice:
             else:
                 new_end.append(end_item)
 
-        node.set_attr("starts", new_begin)
-        node.set_attr("ends", new_end)
-        node.set_attr("axes", axes)
-        node.type = "Slice"
-        ctx.remove_input(node, node.input[3])
-        ctx.remove_input(node, node.input[2])
-        ctx.remove_input(node, node.input[1])
+        out_dtypes = [ctx.get_dtype(node.output[0])]
+        out_shapes = [ctx.get_shape(node.output[0])]
+        ctx.remove_node(node.name)
+
+        attr = {"starts": new_begin, "ends": new_end, "axes": axes}
+        inputs_map = {"data": node.input[0], **attr}
+        kwargs = {**inputs_map, "outputs": node.output}
+        node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
+        node = ctx.get_node_by_output(node)
         nodes = [node]
         if needs_squeeze:
             name = utils.make_name(node.name)
@@ -746,7 +775,7 @@ class OneHot:
         # in ONNX, op's schema is (input, depth, value, @int axis), meaning of "value" is [off-value, on-value]
         # onnxruntime only supports int64
         output_dtype = ctx.get_dtype(node.input[2])
-        if ctx.is_target(constants.TARGET_RS6) \
+        if ctx.is_target(constants.TARGET_RS6)\
             and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
             logger.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
             cls.version_5(ctx, node, **kwargs)
@@ -762,21 +791,25 @@ class OneHot:
         off_on_value = ctx.make_node("Concat", [off_value, on_value], attr={"axis": 0}).output[0]
 
         indices = node.input[0]
-        if ctx.is_target(constants.TARGET_RS6) and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
+        if ctx.is_target(constants.TARGET_RS6) \
+           and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
             indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
         node.input[0] = indices
 
-        if ctx.is_target(constants.TARGET_RS6) and ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64:
+        if ctx.is_target(constants.TARGET_RS6) \
+           and ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64:
             depth = ctx.make_node("Cast", [depth], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
         node.input[1] = depth
 
-        if ctx.is_target(constants.TARGET_RS6) and output_dtype != onnx_pb.TensorProto.INT64:
+        if ctx.is_target(constants.TARGET_RS6)\
+           and output_dtype != onnx_pb.TensorProto.INT64:
             off_on_value = ctx.make_node("Cast", [off_on_value], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
         node.input[2] = off_on_value
 
         del node.input[3]
 
-        if ctx.is_target(constants.TARGET_RS6) and output_dtype != onnx_pb.TensorProto.INT64:
+        if ctx.is_target(constants.TARGET_RS6)\
+           and output_dtype != onnx_pb.TensorProto.INT64:
             new_node_name = utils.make_name("onehot_output")
             new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
             ctx.set_dtype(new_node.output[0], output_dtype)
@@ -810,6 +843,10 @@ class IsNan:
 class BatchToSpace:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
+        cls._convert_since_4(ctx, node, **kwargs)
+
+    @classmethod
+    def _convert_since_4(cls, ctx, node, **kwargs):
         # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
         # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
         # and we only support 4D here, so the data format is NHWC
@@ -824,7 +861,6 @@ class BatchToSpace:
         utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
                         "only support same blocksize at different dims")
 
-        ctx.remove_node(node.name)
         # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
         trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
         reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
@@ -842,8 +878,13 @@ class BatchToSpace:
             else:
                 ends.append(np.iinfo(np.int32).max)
 
-        ctx.make_node("Slice", trans2.output, attr={"axes": slice_axis, "ends": ends, "starts": starts},
-                      name=node.name, outputs=node.output)
+        attr = {"axes": slice_axis, "ends": ends, "starts": starts}
+        inputs_map = {"data": trans2.output[0], **attr}
+        kwargs = {**inputs_map, "outputs": node.output}
+        dtypes = [ctx.get_dtype(node.output[0])]
+        shapes = [ctx.get_shape(node.output[0])]
+        ctx.remove_node(node.name)
+        GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
 
 
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")

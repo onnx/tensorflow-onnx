@@ -464,3 +464,7 @@ def is_debug_mode():
 def set_debug_mode(enabled):
     global _is_debug_mode
     _is_debug_mode = enabled
+
+
+def get_max_value(np_dtype):
+    return np.iinfo(np_dtype).max

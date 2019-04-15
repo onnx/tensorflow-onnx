@@ -945,6 +945,42 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "Slice in opset 10 can accept dymaic 'start' and 'ends'")
+    def test_slice_with_non_const(self):
+        x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)
+        t1 = np.array([0, 1], dtype=np.int32)
+        t2 = np.array([2, 2], dtype=np.int32)
+        x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        t1_ = tf.placeholder(tf.int32, t1.shape, name=_TFINPUT1)
+        t2_ = tf.placeholder(tf.int32, t2.shape, name=_TFINPUT2)
+        x_ = tf.slice(x0, t1_, t2_)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: t1, _INPUT2: t2})
+
+    @check_opset_min_version(10, "Slice in opset 10 can accept dymaic 'start' and 'ends'")
+    def test_slice_with_size_is_negative_one(self):
+        x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)
+        t1 = np.array([0, 1], dtype=np.int32)
+        # input "size" contains -1
+        t2 = np.array([2, -1], dtype=np.int32)
+        x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        t1_ = tf.placeholder(tf.int32, t1.shape, name=_TFINPUT1)
+        t2_ = tf.placeholder(tf.int32, t2.shape, name=_TFINPUT2)
+        x_ = tf.slice(x0, t1_, t2_)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: t1, _INPUT2: t2})
+
+    @skip_caffe2_backend()
+    def test_slice1(self):
+        # FIXME: only 1 dimension supported by caffe2 and msrt
+        x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]], [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
+        t1 = tf.constant([1, 0, 0], dtype=tf.int32)
+        t2 = tf.constant([1, 1, 3], dtype=tf.int32)
+        x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.slice(x0, t1, t2)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def test_split(self):
         x_val = np.linspace(1.0, 5 * 30.0, 5 * 30).astype(np.float32).reshape(5, 30)
         x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
@@ -1100,17 +1136,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
         x_ = tf.reduce_mean(x)
-        _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
-    @unittest.skip("")
-    def test_slice1(self):
-        # FIXME: only 1 dimension supported by caffe2 and msrt
-        x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]], [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
-        t1 = tf.constant([1, 0, 0], dtype=tf.int32)
-        t2 = tf.constant([1, 1, 3], dtype=tf.int32)
-        x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
-        x_ = tf.slice(x0, t1, t2)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
@@ -2077,6 +2102,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         input_x = tf.placeholder(dtype=tf.float32, shape=input_val.shape, name=_TFINPUT)  # NHWC
         _ = tf.space_to_batch_nd(input_x, block_size, pad, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
+
 
 if __name__ == '__main__':
     unittest_main()

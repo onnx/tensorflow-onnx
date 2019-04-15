@@ -469,7 +469,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 
 
 def rewrite_incomplete_type_support_rs6(g, ops):
-    return rewrite_incomplete_type_support(g, ops, [
+    impacted_ops = [
         "Div",
         "Greater",
         "IsNaN",
@@ -482,7 +482,13 @@ def rewrite_incomplete_type_support_rs6(g, ops):
         "Tile",
         "Transpose",
         "Where"
-    ])
+    ]
+    # TODO: logic to insert cast has bug, not all inputs of one node need cast
+    # for example, slice's input "starts" doesn't need it.
+    if g.opset == 10:
+        impacted_ops.remove("Slice")
+
+    return rewrite_incomplete_type_support(g, ops, impacted_ops)
 
 
 def rewrite_conv2d_with_pad(g, ops):
