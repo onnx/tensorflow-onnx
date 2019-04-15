@@ -370,6 +370,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # here we set it False to test PlaceholderWithDefault bug: https://github.com/onnx/tensorflow-onnx/pull/446
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False)
 
+    @check_tf_min_version("1.13")
+    def test_nn_dropout_with_rate(self):
+        rate = tf.placeholder_with_default(0., (), "rate")
+        x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
+        # Define a scope for reusing the variables
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name="input_1")
+        x_ = tf.identity(x)
+
+        fc1 = tf.nn.dropout(x_, rate=rate)
+
+        _ = tf.identity(fc1, name="output")
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False)
+
     def test_conv2d_with_input_transpose(self):
         x_shape = [2, 32, 32, 3]
         kernel_shape = [3, 3, 3, 3]
@@ -784,13 +800,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @skip_caffe2_backend("fails on caffe2 with dim issue")
     @check_onnxruntime_incompatibility("Mul")
     def test_leaky_relu(self):
-        for alpha in [0.1, -0.1, 1.0, -1.0, 10.0, -10.0]:
-            x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
-            x = tf.placeholder(tf.float32, [None] * x_val.ndim, name=_TFINPUT)
-            x_ = tf.nn.leaky_relu(x, alpha)
-            _ = tf.identity(x_, name=_TFOUTPUT)
-            self._run_test_case([_OUTPUT], {_INPUT: x_val})
-            tf.reset_default_graph()
+        x_types = [np.float32, np.int32, np.int64]
+        for x_type in x_types:
+            x_val = 1000 * np.random.random_sample([1000, 100]).astype(x_type)
+            for alpha in [0.1, -0.1, 1.0, -1.0]:
+                x = tf.placeholder(x_val.dtype, [None] * x_val.ndim, name=_TFINPUT)
+                x_ = tf.nn.leaky_relu(x, alpha)
+                _ = tf.identity(x_, name=_TFOUTPUT)
+                self._run_test_case([_OUTPUT], {_INPUT: x_val})
+                tf.reset_default_graph()
 
     @check_onnxruntime_incompatibility("Elu")
     def test_elu(self):
