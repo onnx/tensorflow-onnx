@@ -176,6 +176,13 @@ You call it for example with:
 python tests/run_pretrained_models.py --backend onnxruntime --config tests/run_pretrained_models.yaml --perf perf.csv
 ```
 
+### <a name="save_pretrained_model"></a>Tool to save pre-trained model
+
+We provide an [utility](tools/save_pretrained_model.py) to save pre-trained model along with its config.
+Put `save_pretrained_model(sess, outputs, feed_inputs, save_dir, model_name)` in your last testing epoch and the pre-trained model and config will be saved under `save_dir/to_onnx`. 
+Please refer to the example in [tools/save_pretrained_model.py](tools/save_pretrained_model.py) for more information.
+Note the minimum required Tensorflow version is r1.6.
+
 # Using the Python API
 ## TensorFlow to ONNX conversion
 In some cases it will be useful to convert the models from TensorFlow to ONNX from a python script. You can use the following API:
