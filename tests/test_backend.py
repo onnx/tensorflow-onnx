@@ -2117,5 +2117,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
                 tf.reset_default_graph()
 
+    @check_opset_min_version(10, "NonMaxSuppression")
+    def test_non_max_suppression(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+        boxes = tf.placeholder(tf.float32, shape=[None, 4], name=_TFINPUT)
+        scores = tf.placeholder(tf.float32, shape=[None], name=_TFINPUT1)
+        res1 = tf.image.non_max_suppression(boxes, scores, max_output_size=int(box_num / 2))
+        res2 = tf.image.non_max_suppression(boxes, scores, max_output_size=0)
+        _ = tf.identity(res1, name=_TFOUTPUT)
+        _ = tf.identity(res2, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+
 if __name__ == '__main__':
     unittest_main()
