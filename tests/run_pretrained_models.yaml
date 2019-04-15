@@ -32,9 +32,29 @@ saved_model_with_redundant_inputs:
   model_type: saved_model
   input_get: get_ramp
   inputs:
+    "X:0": [1, 10]
     "Placeholder:0": [1, 10]
   outputs:
     - Add:0
+
+graphdef_with_redundant_inputs:
+  model: tests/models/regression/graphdef/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 10]
+    "Placeholder:0": [1, 10]
+  outputs:
+    - Add:0
+
+checkpoint_with_redundant_inputs:
+  model: tests/models/regression/checkpoint/model.meta
+  model_type: checkpoint
+  input_get: get_ramp
+  inputs:
+    "X:0": [1]
+    "Placeholder:0": [1, 10]
+  outputs:
+    - pred:0
 
 benchtf-fc:
   model: tests/models/fc-layers/frozen.pb

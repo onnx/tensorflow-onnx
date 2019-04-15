@@ -222,18 +222,20 @@ class Test(object):
             dir_name = os.path.dirname(self.local)
         print("\tdownloaded", model_path)
 
-        inputs = list(self.input_names.keys())
+        input_names = list(self.input_names.keys())
         outputs = self.output_names
         if self.model_type in ["checkpoint"]:
-            graph_def, inputs, outputs = loader.from_checkpoint(model_path, inputs, outputs)
+            graph_def, input_names, outputs = loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
-            graph_def, inputs, outputs = loader.from_saved_model(model_path, inputs, outputs)
+            graph_def, input_names, outputs = loader.from_saved_model(model_path, input_names, outputs)
         else:
-            graph_def, inputs, outputs = loader.from_graphdef(model_path, inputs, outputs)
+            graph_def, input_names, outputs = loader.from_graphdef(model_path, input_names, outputs)
 
         # create the input data
         inputs = {}
         for k, v in self.input_names.items():
+            if k not in input_names:
+                continue
             if isinstance(v, six.text_type) and v.startswith("np."):
                 inputs[k] = eval(v)  # pylint: disable=eval-used
             else:
@@ -312,10 +314,12 @@ class Test(object):
                     print("\tResults: OK")
                 return True
             except Exception as ex:
-                print("\tResults: ", ex)
+                tb = traceback.format_exc()
+                print("\tResults", ex, tb)
 
         except Exception as ex:
-            print("\trun_onnx", "FAIL", ex)
+            tb = traceback.format_exc()
+            print("\trun_onnx", "FAIL", ex, tb)
 
         return False
 
@@ -399,7 +403,8 @@ def main():
                              fold_const=args.fold_const)
         except Exception as ex:
             ret = None
-            print(ex)
+            tb = traceback.format_exc()
+            print(ex, tb)
         finally:
             if not args.debug:
                 utils.delete_directory(TEMP_DIR)

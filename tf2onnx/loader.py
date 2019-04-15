@@ -38,6 +38,20 @@ def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=T
         return frozen_graph
 
 
+def remove_redundant_inputs(frozen_graph, input_names):
+    """Remove redundant inputs not in frozen graph."""
+    frozen_inputs = []
+    # get inputs in frozen graph
+    for n in frozen_graph.node:
+        for inp in input_names:
+            if utils.node_name(inp) == n.name:
+                frozen_inputs.append(inp)
+    deleted_inputs = list(set(input_names) - set(frozen_inputs))
+    if deleted_inputs:
+        log.warning("inputs [%s] is not in frozen graph, delete them", ",".join(deleted_inputs))
+    return frozen_inputs
+
+
 def from_graphdef(model_path, input_names, output_names):
     """Load tensorflow graph from graphdef."""
     # make sure we start with clean default graph
@@ -48,6 +62,7 @@ def from_graphdef(model_path, input_names, output_names):
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def, name='')
             frozen_graph = freeze_session(sess, output_names=output_names)
+    input_names = remove_redundant_inputs(frozen_graph, input_names)
     # clean up
     tf.reset_default_graph()
     return frozen_graph, input_names, output_names
@@ -63,6 +78,7 @@ def from_checkpoint(model_path, input_names, output_names):
         # restore from model_path minus the ".meta"
         saver.restore(sess, model_path[:-5])
         frozen_graph = freeze_session(sess, output_names=output_names)
+    input_names = remove_redundant_inputs(frozen_graph, input_names)
     # clean up
     tf.reset_default_graph()
     return frozen_graph, input_names, output_names
@@ -93,15 +109,9 @@ def from_saved_model(model_path, input_names, output_names):
             for _, output_tensor in sorted(outputs_tensor_info.items()):
                 outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
         frozen_graph = freeze_session(sess, output_names=list(outputs.keys()))
-        frozen_inputs = []
-        # get inputs in frozen graph
-        for n in frozen_graph.node:
-            for inp, _ in inputs.items():
-                if utils.node_name(inp) == n.name:
-                    frozen_inputs.append(inp)
-        deleted_inputs = list(set(inputs.keys()) - set(frozen_inputs))
-        if deleted_inputs:
-            log.warning("inputs [%s] is not in frozen graph, delete them", ",".join(deleted_inputs))
+    if input_names is None:
+        input_names = inputs.keys()
+    input_names = remove_redundant_inputs(frozen_graph, input_names)
     # clean up
     tf.reset_default_graph()
-    return frozen_graph, frozen_inputs, outputs.keys()
+    return frozen_graph, input_names, outputs.keys()
