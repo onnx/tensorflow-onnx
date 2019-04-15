@@ -124,11 +124,11 @@ def _append_message(reason, message):
     return reason
 
 
-def check_tf_max_version(max_required_version, message=""):
+def check_tf_max_version(max_accepted_version, message=""):
     """ Skip if tf_version > max_required_version """
     config = get_test_config()
-    reason = _append_message("conversion requires tf <= {}".format(max_required_version), message)
-    return unittest.skipIf(config.tf_version > LooseVersion(max_required_version), reason)
+    reason = _append_message("conversion requires tf <= {}".format(max_accepted_version), message)
+    return unittest.skipIf(config.tf_version > LooseVersion(max_accepted_version), reason)
 
 
 def check_tf_min_version(min_required_version, message=""):
