@@ -475,6 +475,8 @@ def rewrite_incomplete_type_support_rs6(g, ops):
         "Div",
         "Greater",
         "IsNaN",
+        "Less",
+        "Max",
         "Min",
         "ReduceSum",
         "Slice",
