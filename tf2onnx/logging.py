@@ -66,6 +66,9 @@ def set_level(level):
 
 def set_tf_verbosity(level):
     """ Set TF logging verbosity."""
+    # TF log is too verbose, adjust it
+    level = WARNING if level >= VERBOSE else level
+
     tf.logging.set_verbosity(level)
 
     # TF_CPP_MIN_LOG_LEVEL:
