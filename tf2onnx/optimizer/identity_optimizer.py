@@ -7,7 +7,7 @@
 
 from __future__ import unicode_literals
 
-from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
+from .optimizer_base import GraphOptimizerBase
 
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
@@ -16,39 +16,20 @@ from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
 class IdentityOptimizer(GraphOptimizerBase):
     """Identity Optimizer."""
 
-    def __init__(self):
+    def __init__(self):  # pylint: disable=useless-super-delegation
         super(IdentityOptimizer, self).__init__()
-        self._g = None
 
-    def optimize(self, graph):
-        self._g = graph
-        previous_counter = self._g.dump_node_statistics()
-        self._optimize_recursively(self._g)
-        current_counter = self._g.dump_node_statistics()
-        identity_cnt = current_counter["Identity"]
-        self.logger.info(" %d identity op(s) left", identity_cnt)
-        self._print_stat_diff(previous_counter, current_counter)
-        return self._g
+    def _optimize(self, graph):
+        return self._apply_optimization(graph, self._optimize_at_current_graph_level)
 
-    def _optimize_recursively(self, g):
-        self._optimize(g)
-        nodes = [n for n in g.get_nodes()]
-        for n in nodes:
-            body_graphs = n.get_body_graphs()
-            if body_graphs:
-                for attr, b_g in body_graphs.items():
-                    self.logger.debug("start handling subgraph of %s's attribute %s", n.name, attr)
-                    self._optimize_recursively(b_g)
-                    self.logger.debug("finish handling subgraph of %s's attribute %s", n.name, attr)
-
-    def _optimize(self, g):
+    def _optimize_at_current_graph_level(self, g):
         has_update = True
         while has_update:
             has_update = False
             nodes = [n for n in g.get_nodes() if n.type == "Identity"]
             for n in nodes:
                 if n.graph is None:
-                    self.logger.info("node has been removed from this graph, skip")
+                    self.logger.debug("node has been removed from this graph, skip")
                     continue
 
                 graph_outputs = set(n.output).intersection(g.outputs)
@@ -58,8 +39,7 @@ class IdentityOptimizer(GraphOptimizerBase):
                 else:
                     ret = self._handle_non_graph_output_identity(g, n)
                 has_update = ret
-
-        self._g.topological_sort(self._g.get_nodes())
+        return g
 
     @staticmethod
     def _handle_non_graph_output_identity(graph, identity):

@@ -85,6 +85,8 @@ def main():
     if args.debug:
         utils.set_debug_mode(True)
 
+    logger = logging.getLogger(constants.TF2ONNX_PACKAGE_NAME)
+
     # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
     # support unknown dimensions.
     utils.ONNX_UNKNOWN_DIMENSION = args.unknown_dim
@@ -126,11 +128,8 @@ def main():
 
     model_proto = g.make_model("converted from {}".format(model_path))
 
-    new_model_proto = GraphUtil.optimize_model_proto(model_proto)
-    if new_model_proto:
-        model_proto = new_model_proto
-    else:
-        print("NON-CRITICAL, optimizers are not applied successfully")
+    logger.info("\n")
+    model_proto = GraphUtil.optimize_model_proto(model_proto)
 
     # write onnx graph
     if args.output:

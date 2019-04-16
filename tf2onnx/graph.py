@@ -12,8 +12,6 @@ from __future__ import unicode_literals
 import collections
 import copy
 import logging
-import sys
-import traceback
 import six
 import numpy as np
 
@@ -1065,27 +1063,18 @@ class GraphUtil(object):
         """Optimize the model proto, for example: eliminating all useless Transpose pairs.
 
         Returns:
-            model proto after optimization, if optimizer run successfully
-            or None, if exceptions happens
+            model proto after optimization
         """
-        try:
-            kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
-            graph = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
-            graph = GraphUtil.optimize_graph(graph)
-            model_proto = graph.make_model(onnx_model_proto.graph.doc_string,
-                                           graph_name=onnx_model_proto.graph.name, **kwargs)
+        kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
+        graph = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
+        graph = GraphUtil.optimize_graph(graph)
+        model_proto = graph.make_model(onnx_model_proto.graph.doc_string,
+                                       graph_name=onnx_model_proto.graph.name, **kwargs)
 
-            if onnx_model_proto.metadata_props:
-                metadata_props = {p.key: p.value for p in onnx_model_proto.metadata_props}
-                helper.set_model_props(model_proto, metadata_props)
-            return model_proto
-        except Exception:
-            # sometimes, onnx shape inference will fail for some reason, in this case,
-            # we just log the error, and skip the transpose optimizer.
-            type_, value_, traceback_ = sys.exc_info()
-            ex_ext = traceback.format_exception(type_, value_, traceback_)
-            print("NON-CRITICAL error in optimizer: ", ex_ext)
-            return None
+        if onnx_model_proto.metadata_props:
+            metadata_props = {p.key: p.value for p in onnx_model_proto.metadata_props}
+            helper.set_model_props(model_proto, metadata_props)
+        return model_proto
 
     @staticmethod
     def get_onnx_model_properties(onnx_model_proto):
