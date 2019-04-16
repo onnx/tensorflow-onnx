@@ -11,10 +11,10 @@ from collections import defaultdict
 
 from distutils.version import LooseVersion
 from parameterized import parameterized
-from tf2onnx import constants, utils
+from tf2onnx import constants, logging, utils
 
 __all__ = ["TestConfig", "get_test_config", "unittest_main", "check_onnxruntime_backend",
-           "check_tf_min_version", "skip_tf_versions", "check_onnxruntime_min_version",
+           "check_tf_min_version", "check_tf_max_version", "skip_tf_versions", "check_onnxruntime_min_version",
            "check_opset_min_version", "check_target", "skip_caffe2_backend", "skip_onnxruntime_backend",
            "skip_opset", "check_onnxruntime_incompatibility", "validate_const_node",
            "group_nodes_by_type", "test_ms_domain", "check_node_domain"]
@@ -30,7 +30,7 @@ class TestConfig(object):
         self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(constants.DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.backend_version = self._get_backend_version()
-        self.is_debug_mode = False
+        self.log_level = logging.WARNING
         self.temp_dir = utils.get_temp_directory()
 
     @property
@@ -44,6 +44,10 @@ class TestConfig(object):
     @property
     def is_caffe2_backend(self):
         return self.backend == "caffe2"
+
+    @property
+    def is_debug_mode(self):
+        return utils.is_debug_mode()
 
     def _get_tf_version(self):
         import tensorflow as tf
@@ -85,15 +89,19 @@ class TestConfig(object):
             parser.add_argument("--opset", type=int, default=config.opset, help="opset to test against")
             parser.add_argument("--target", default=",".join(config.target), choices=constants.POSSIBLE_TARGETS,
                                 help="target platform")
+            parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
             parser.add_argument("--debug", help="output debugging information", action="store_true")
             parser.add_argument("--temp_dir", help="temp dir")
             parser.add_argument("unittest_args", nargs='*')
 
             args = parser.parse_args()
+            if args.debug:
+                utils.set_debug_mode(True)
+
             config.backend = args.backend
             config.opset = args.opset
             config.target = args.target.split(',')
-            config.is_debug_mode = args.debug
+            config.log_level = logging.get_verbosity_level(args.verbose, config.log_level)
             if args.temp_dir:
                 config.temp_dir = args.temp_dir
 
@@ -114,7 +122,10 @@ def get_test_config():
 
 
 def unittest_main():
-    print(get_test_config())
+    config = get_test_config()
+    logging.basicConfig(level=config.log_level)
+    with logging.set_scope_level(logging.INFO) as logger:
+        logger.info(config)
     unittest.main()
 
 
@@ -122,6 +133,13 @@ def _append_message(reason, message):
     if message:
         reason = reason + ": " + message
     return reason
+
+
+def check_tf_max_version(max_accepted_version, message=""):
+    """ Skip if tf_version > max_required_version """
+    config = get_test_config()
+    reason = _append_message("conversion requires tf <= {}".format(max_accepted_version), message)
+    return unittest.skipIf(config.tf_version > LooseVersion(max_accepted_version), reason)
 
 
 def check_tf_min_version(min_required_version, message=""):

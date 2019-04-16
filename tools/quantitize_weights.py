@@ -15,7 +15,7 @@ from onnx import ModelProto, helper, onnx_pb, numpy_helper
 
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("quantitize_weights")
+logger = logging.getLogger("quantitize_weights")
 
 
 def _get_args():
@@ -99,7 +99,7 @@ def quantitize_graph(g, verbose=False):
         remove.append(i)
         name = w.name
         if verbose:
-            log.info("quantitizing %s", name)
+            logger.info("quantitizing %s", name)
         w_quant, zp, scale = eight_bit_quantitize(w_np)
         nw = numpy_helper.from_array(w_quant, name=name)
         if verbose:
@@ -109,9 +109,9 @@ def quantitize_graph(g, verbose=False):
             for j in [1.0, 5.0, 10.0, 20.0]:
                 above_rtol = np.sum(rtol > np.abs(j * w_np / 100.)) / w_np.size
                 s["> " + str(j) + "%"] = "{:.2f}".format(100. * above_rtol)
-            log.info("above_rtol: %s", str(s))
-            log.info("raw:   %s", stats(w_np))
-            log.info("quant: %s", stats(w_dequant))
+            logger.info("above_rtol: %s", str(s))
+            logger.info("raw:   %s", stats(w_np))
+            logger.info("quant: %s", stats(w_dequant))
         output_name = _compose_quantitize(nodes, new_weights, zp, scale, name)
         remap[name] = output_name
         quantitized_weights.append(nw)

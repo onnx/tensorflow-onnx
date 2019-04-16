@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.tf2onnx.onnx_opset.math
+math
 """
 
 from __future__ import division
@@ -17,8 +17,8 @@ from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("onnx_opset.math")
+
+logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring
 
@@ -32,8 +32,8 @@ class RealDiv(common.BroadcastOp):
     pass
 
 
-@tf_op(["Abs", "Ceil", "Elu", "Exp", "Floor", "Log", "LogSoftmax", "Neg", "Relu", "Sigmoid", "Sqrt", "Tanh",
-        "Softplus", "Softsign", "Reciprocal"])
+@tf_op(["Abs", "Ceil", "Elu", "Exp", "Floor", "LeakyRelu", "Log", "LogSoftmax", "Neg", "Relu", "Sigmoid", "Sqrt",
+        "Tanh", "Softplus", "Softsign", "Reciprocal"])
 class DirectOp:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):

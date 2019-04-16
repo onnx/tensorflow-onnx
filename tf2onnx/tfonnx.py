@@ -10,7 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import collections
-import logging
 import sys
 import traceback
 
@@ -21,17 +20,16 @@ from tensorflow.python.framework import graph_util
 from tensorflow.tools.graph_transforms import TransformGraph
 
 import tf2onnx
-import tf2onnx.onnx_opset # pylint: disable=unused-import
-import tf2onnx.custom_opsets # pylint: disable=unused-import
-from tf2onnx import constants, schemas, utils, handler
+import tf2onnx.onnx_opset  # pylint: disable=unused-import
+import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape_for_graph
 from tf2onnx.utils import port_name
+from . import constants, logging, schemas, utils, handler
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx")
+logger = logging.getLogger(__name__)
 
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
@@ -115,7 +113,7 @@ def tflist_to_onnx(node_list, shape_override):
                 onnx_node = helper.make_node(node.type, input_names, output_names, name=node.name, **attr)
                 onnx_nodes.append(onnx_node)
             except Exception as ex:
-                log.error("pass1 convert failed for %s, ex=%s", node, ex)
+                logger.error("pass1 convert failed for %s, ex=%s", node, ex)
                 raise
 
     return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes
@@ -349,9 +347,9 @@ def rewrite_constant_fold(g, ops):
                         break
                     inputs.append(node.get_tensor_value(as_list=False))
 
-                log.debug("op name %s, %s, %s", op.name, len(op.input), len(inputs))
+                logger.debug("op name %s, %s, %s", op.name, len(op.input), len(inputs))
                 if inputs and len(op.input) == len(inputs):
-                    log.info("folding node type=%s, name=%s" % (op.type, op.name))
+                    logger.info("folding node type=%s, name=%s" % (op.type, op.name))
                     if op.type == "Cast":
                         dst = op.get_attr_int("to")
                         np_type = tf2onnx.utils.map_onnx_to_numpy_type(dst)
@@ -380,11 +378,11 @@ def rewrite_constant_fold(g, ops):
                     new_output_name = new_node_name
                     old_output_name = op.output[0]
                     old_node_name = op.name
-                    log.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
+                    logger.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
                     ops[idx] = g.make_const(new_node_name, val)
                     ref_cnt_per_node[new_node_name] = ref_cnt_per_node[old_node_name]
 
-                    log.debug("replace old output [%s] with new output [%s]", old_output_name, new_output_name)
+                    logger.debug("replace old output [%s] with new output [%s]", old_output_name, new_output_name)
                     # need to re-write the consumers input name to use the const name
                     consumers = g.find_output_consumers(old_output_name)
                     if consumers:
@@ -400,7 +398,7 @@ def rewrite_constant_fold(g, ops):
                     keep_looking = True
             except Exception as ex:
                 tb = traceback.format_exc()  # pylint: disable=bare-except
-                log.info("exception: %s, details: %s", ex, tb)
+                logger.info("exception: %s, details: %s", ex, tb)
                 # ignore errors
 
         # pylint: enable=too-many-nested-blocks
@@ -432,12 +430,12 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                 input_name = op.input[i]
                 dtype = g.get_dtype(input_name)
                 if dtype is None:
-                    log.warning("adding Cast for op %s (type is %s)' input: %s, dtype should not be None",
-                                op.name, op.type, input_name)
+                    logger.warning("adding Cast for op %s (type is %s)' input: %s, dtype should not be None",
+                                   op.name, op.type, input_name)
 
                 if dtype != onnx_pb.TensorProto.FLOAT:
                     output_dtype = dtype
-                    log.debug("insert cast for node %s on input %s", op.name, input_name)
+                    logger.debug("insert cast for node %s on input %s", op.name, input_name)
                     if input_node and input_node.type == "Cast" \
                             and len(g.find_output_consumers(input_node.output[0])) == 1:
                         input_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
@@ -452,8 +450,8 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                 # insert reverse cast if needed
                 for output_name in op.output:
                     name = utils.make_name(op.name)
-                    log.debug("insert cast back for node %s on output %s [dtype=%s]", op.name, output_name,
-                              output_dtype)
+                    logger.debug("insert cast back for node %s on output %s [dtype=%s]", op.name, output_name,
+                                 output_dtype)
                     output_cast = g.insert_new_node_on_output("Cast", output_name, name=name)
                     output_cast.set_attr("to", output_dtype)
                     g.set_dtype(output_cast.output[0], output_dtype)
@@ -473,7 +471,11 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, [
         "Div",
+        "Greater",
         "IsNaN",
+        "Less",
+        "Max",
+        "Min",
         "ReduceSum",
         "Slice",
         "Split",
@@ -507,7 +509,7 @@ def rewrite_conv2d_with_pad(g, ops):
         if conv.get_attr("padding") == "SAME":
             continue
 
-        log.debug("merge pad [%s] into conv [%s]", pad.name, conv.name)
+        logger.debug("merge pad [%s] into conv [%s]", pad.name, conv.name)
         paddings_val = np.array(paddings.get_tensor_value())
         # can't pad on batch or channel dimensions
         if np.any(paddings_val[0]) or np.any(paddings_val[3]):
@@ -533,7 +535,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
     ops = [n for n in g.get_nodes()]
     for node in ops:
         if node.need_skip():
-            log.debug("explicitly skip node " + node.name)
+            logger.debug("explicitly skip node " + node.name)
             continue
 
         op = node.type
@@ -555,7 +557,7 @@ def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
             body_graphs = node.get_body_graphs()
             if body_graphs:
                 for attr, b_g in body_graphs.items():
-                    log.debug("start handling subgraph of %s's attribute %s", node.name, attr)
+                    logger.debug("start handling subgraph of %s's attribute %s", node.name, attr)
                     b_g.topological_sort(b_g.get_nodes())
                     # we assume only ONNX nodes have subgraph defined in pre-rewriters.
                     # that means, if we create node having subgraphs in this step, the
@@ -563,16 +565,16 @@ def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
                     m_ops, unm_ops = tensorflow_onnx_mapping(b_g, continue_on_error, ops_mapping)
                     mapped_op += m_ops
                     unmapped_op += unm_ops
-                    log.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
+                    logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
 
             func(g, node, **kwargs)
             node.skip_conversion = True
         except Exception as ex:
             type_, value_, traceback_ = sys.exc_info()
-            log.error("node %s: exception %s" % (node.name, ex))
+            logger.error("node %s: exception %s" % (node.name, ex))
             ex_ext = traceback.format_exception(type_, value_, traceback_)
             if continue_on_error:
-                log.info(ex_ext)
+                logger.info(ex_ext)
             else:
                 raise ex
 
@@ -587,7 +589,7 @@ def transpose_inputs(ctx, inputs_as_nchw):
             if output_name in inputs_as_nchw:
                 shape = ctx.get_shape(output_name)
                 if len(shape) != len(constants.NCHW_TO_NHWC):
-                    log.warning("transpose_input for %s: shape must be rank 4, ignored" % output_name)
+                    logger.warning("transpose_input for %s: shape must be rank 4, ignored" % output_name)
                     ops.append(node)
                     continue
                 # insert transpose
@@ -645,10 +647,10 @@ def run_rewriters(g, funcs, continue_on_error):
             g.reset_nodes(ops)
         except Exception as ex:
             type_, value_, traceback_ = sys.exc_info()
-            log.error("rewriter %s: exception %s", func, ex)
+            logger.error("rewriter %s: exception %s", func, ex)
             ex_ext = traceback.format_exception(type_, value_, traceback_)
             if continue_on_error:
-                log.info(ex_ext)
+                logger.info(ex_ext)
             else:
                 raise ex
 
@@ -666,7 +668,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Args:
             tf_graph: tensorflow graph
             continue_on_error: if an op can't be processed (aka there is no mapping), continue
-            verbose: print summary stats
+            verbose: print summary stats (deprecated)
             target: list of workarounds applied to help certain platforms
             opset: the opset to be used (int, default is latest)
             custom_op_handlers: dictionary of custom ops handlers
@@ -679,15 +681,20 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
+    # TODO: remove verbose argument in future release
+    if verbose:
+        logger.warning("Argument verbose for process_tf_graph is deprecated. Please use --verbose option instead.")
+    del verbose
+
     opset = utils.find_opset(opset)
     print("using tensorflow={}, onnx={}, opset={}, tfonnx={}/{}".format(
         tf.__version__, utils.get_onnx_version(), opset,
         tf2onnx.__version__, tf2onnx.version.git_version[:6]))
 
     if opset > schemas.get_max_supported_opset_version():
-        log.warning("currently installed onnx package %s is too low to support opset %s, "
-                    "please upgrade onnx package to avoid potential conversion issue.",
-                    utils.get_onnx_version(), opset)
+        logger.warning("currently installed onnx package %s is too low to support opset %s, "
+                       "please upgrade onnx package to avoid potential conversion issue.",
+                       utils.get_onnx_version(), opset)
 
     if shape_override is None:
         shape_override = {}
@@ -708,9 +715,9 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         # check output existence in case user passed in wrong output ids
         non_exists = set(io_to_check) - set(output_shapes.keys())
         if non_exists:
-            log.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed"
-                      "in format: input/output_node_name:port_id. Problematical inputs/outputs are: %s \n",
-                      non_exists)
+            logger.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed"
+                         "in format: input/output_node_name:port_id. Problematical inputs/outputs are: %s \n",
+                         non_exists)
             raise ValueError("Inputs/Outputs Not Found")
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
@@ -792,10 +799,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     g.update_proto()
 
-    if verbose:
-        print("tensorflow ops: {}".format(op_cnt))
-        print("tensorflow attr: {}".format(attr_cnt))
-        print("onnx mapped: {}".format(mapped_op))
-        print("onnx unmapped: {}".format(unmapped_op))
+    logger.verbose(
+        "Summay Stats:\n"
+        "\ttensorflow ops: {}\n"
+        "\ttensorflow attr: {}\n"
+        "\tonnx mapped: {}\n"
+        "\tonnx unmapped: {}".format(op_cnt, attr_cnt, mapped_op, unmapped_op))
 
     return g

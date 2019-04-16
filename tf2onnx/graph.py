@@ -23,8 +23,8 @@ from tf2onnx.utils import port_name, find_opset
 from tf2onnx import optimizer
 from tf2onnx.schemas import get_schema
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("graph")
+
+logger = logging.getLogger(__name__)
 
 
 # todo(pengwa): remove protected-access later
@@ -90,8 +90,8 @@ class Node(object):
         """Return onnx valid attributes"""
         schema = get_schema(self.type, self.graph.opset, self.domain)
         if schema is None and not (self.is_const() or self.is_graph_input()):
-            log.debug("Node %s uses non-stardard onnx op <%s, %s>, skip attribute check",
-                      self.name, self.domain, self.type)
+            logger.debug("Node %s uses non-stardard onnx op <%s, %s>, skip attribute check",
+                         self.name, self.domain, self.type)
         onnx_attrs = {}
         for a in self._attr.values():
             if schema is None or schema.has_attribute(a.name):
@@ -414,8 +414,9 @@ class Graph(object):
         else:
             onnx_tensor = helper.make_tensor(name, utils.map_numpy_to_onnx_dtype(np_val.dtype),
                                              np_val.shape, np_val, raw=False)
+        dtype = onnx_tensor.data_type
         node = self.make_node("Const", [], outputs=[name], name=name, attr={"value": onnx_tensor},
-                              skip_conversion=skip_conversion)
+                              skip_conversion=skip_conversion, dtypes=[dtype])
         self.set_shape(name, np_val.shape)
         self.set_dtype(name, utils.map_numpy_to_onnx_dtype(np_val.dtype))
         return node
@@ -1056,11 +1057,11 @@ class GraphUtil(object):
     """Utilities for Graph manipulation."""
 
     @staticmethod
-    def optimize_graph(graph, debug=False):
-        return optimizer.optimize_graph(graph, debug)
+    def optimize_graph(graph):
+        return optimizer.optimize_graph(graph)
 
     @staticmethod
-    def optimize_model_proto(onnx_model_proto, debug=False):
+    def optimize_model_proto(onnx_model_proto):
         """Optimize the model proto, for example: eliminating all useless Transpose pairs.
 
         Returns:
@@ -1070,7 +1071,7 @@ class GraphUtil(object):
         try:
             kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
             graph = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
-            graph = GraphUtil.optimize_graph(graph, debug)
+            graph = GraphUtil.optimize_graph(graph)
             model_proto = graph.make_model(onnx_model_proto.graph.doc_string,
                                            graph_name=onnx_model_proto.graph.name, **kwargs)
 

@@ -6,7 +6,6 @@
 from __future__ import unicode_literals
 from collections import defaultdict
 
-
 import numpy as np
 
 from tf2onnx import utils
@@ -35,8 +34,8 @@ def is_useless_transpose(transpose_node):
 class TransposeOptimizer(GraphOptimizerBase):
     """Transpose Optimizer."""
 
-    def __init__(self, debug=False):
-        super(TransposeOptimizer, self).__init__("TransposeOptimizer", debug)
+    def __init__(self):
+        super(TransposeOptimizer, self).__init__()
 
         self._handler_map = {}
         self._force_stop = {}
@@ -80,6 +79,9 @@ class TransposeOptimizer(GraphOptimizerBase):
             if op.type == "Transpose":
                 input_shape = self._g.get_shape(op.input[0])
                 if not input_shape:
+                    continue
+                # reshape only supports one dime is -1
+                if input_shape.count(-1) > 1:
                     continue
 
                 new_shape = []
@@ -155,17 +157,17 @@ class TransposeOptimizer(GraphOptimizerBase):
             if "stop" in self._force_stop and self._force_stop["stop"] == 1:
                 break
 
-        self.log.debug("finish after " + str(iteration_cnt) + " iteration(s)")
+        self.logger.debug("finish after " + str(iteration_cnt) + " iteration(s)")
 
         self.merge_duplicated_transposes()
         self.post_optimize_action()
 
         current_counter = self._g.dump_node_statistics()
         transpose_cnt = current_counter["Transpose"]
-        self.log.info(" %d transpose op(s) left", transpose_cnt)
+        self.logger.info(" %d transpose op(s) left", transpose_cnt)
         self._print_stat_diff(previous_counter, current_counter)
         if transpose_cnt > 2:
-            self.log.warning("please try add --fold_const to help remove more transpose")
+            self.logger.warning("please try add --fold_const to help remove more transpose")
         return self._g
 
     def _initialize_handlers(self):
@@ -216,7 +218,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 self._g.remove_node(n.name)
             return True
 
-        self.log.debug("input transpose does not have single consumer, skipping...")
+        self.logger.debug("input transpose does not have single consumer, skipping...")
         return False
 
     # get the input index of transpose op in node's inputs.
@@ -254,13 +256,13 @@ class TransposeOptimizer(GraphOptimizerBase):
     # otherwise, it means that we skip handling since it is not in our support set
     def _handle_nhwc_tranpose(self, trans):
         if trans.output[0] in self._g.outputs:
-            self.log.debug("%s connects to graph outputs, skip", trans.output[0])
+            self.logger.debug("%s connects to graph outputs, skip", trans.output[0])
             return False
         out_nodes = self._g.find_output_consumers(trans.output[0])
         if len(out_nodes) == 1:
             p = out_nodes[0]
             if p.name in self._output_names:
-                self.log.debug("cannot move transpose down since it met output node %s", p.name)
+                self.logger.debug("cannot move transpose down since it met output node %s", p.name)
                 return False
 
             if p.type in self._handler_map:

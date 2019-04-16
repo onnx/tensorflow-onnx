@@ -16,8 +16,8 @@ from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher # pylint: disable=
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx.rewriter.rnn_utils")
+
+logger = logging.getLogger(__name__)
 
 
 class REWRITER_RESULT(Enum):
@@ -235,12 +235,12 @@ def parse_rnn_loop(graph, loop_properties, rnn_scope, while_context_scope):
             iteration_var = val
 
     if not found_time or is_rnn_out_ta is False:
-        log.debug("this should not be a dynamic_rnn loop, found_time: %s, is_rnn_out_ta: %s",
-                  found_time, is_rnn_out_ta)
+        logger.debug("this should not be a dynamic_rnn loop, found_time: %s, is_rnn_out_ta: %s",
+                     found_time, is_rnn_out_ta)
         return None
 
     if not loop_properties.tensor_array_inputs:
-        log.debug("this should not be a dynamic_rnn loop, no ta input is found")
+        logger.debug("this should not be a dynamic_rnn loop, no ta input is found")
         return None
 
     return time_var, iteration_var
@@ -257,9 +257,9 @@ def get_weights_from_const_node(g, node):
     if temp and temp.type == 'Const':
         val = temp.get_tensor_value(as_list=False)
         dtype = utils.map_onnx_to_numpy_type(g.get_dtype(temp.output[0]))
-        log.debug("found weights %s", temp.name)
+        logger.debug("found weights %s", temp.name)
     else:
-        log.debug("weight node seems not to be Const, skip, node name is %s", temp.name)
+        logger.debug("weight node seems not to be Const, skip, node name is %s", temp.name)
         return None
 
     return RnnWeight(node, val, dtype)

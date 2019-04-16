@@ -19,8 +19,8 @@ from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx.rewriter.lstm_rewriter")
+
+logger = logging.getLogger(__name__)
 
 
 class LSTMUnitRewriter(UnitRnnRewriterBase):
@@ -43,9 +43,9 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
             cell_match = self._match_cell(context, cell_type)
             if cell_match:
                 self.lstm_cell_type = cell_type
-                log.debug("parsing unit is %s", cell_type)
+                logger.debug("parsing unit is %s", cell_type)
                 return cell_match
-        log.debug("cannot parse unit")
+        logger.debug("cannot parse unit")
         return None
 
     def get_weight_and_bias(self, context):
@@ -61,13 +61,13 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         w_node = cell_match.get_op("cell_kernel")
         w = get_weights_from_const_node(self.g, w_node)
         if not w:
-            log.warning("Cannot find weight, SKIP")
+            logger.warning("Cannot find weight, SKIP")
             return None
 
         b_node = cell_match.get_op("cell_bias")
         b = get_weights_from_const_node(self.g, b_node)
         if not b or b.value.shape[0] != w.value.shape[1]:
-            log.warning("cell_kernel and cell_bias's dimension doesn't match, SKIP")
+            logger.warning("cell_kernel and cell_bias's dimension doesn't match, SKIP")
             return None
 
         lstm_block_cell = cell_match.get_op("lstm_block_cell")
@@ -95,13 +95,13 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         # for bias_add data format
         bias_add = match.get_op("bias_add")
         if bias_add.data_format != "NHWC":
-            log.debug("BiasAdd data_format is not NHWC, SKIP")
+            logger.debug("BiasAdd data_format is not NHWC, SKIP")
             return None
 
         b_e = match.get_op("cell_bias")
         b = get_weights_from_const_node(self.g, b_e)
         if not b or b.value.shape[0] != w.value.shape[1]:
-            log.warning("cell_kernel and cell_bias's dimensions does not match, skip")
+            logger.warning("cell_kernel and cell_bias's dimensions does not match, skip")
             return None
 
         ft_bias_node = match.get_op("ft_bias")
@@ -171,7 +171,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         ct_concat = [c for c in self.g.find_output_consumers(ct) if is_concat_op(c)]
         ht_concat = [c for c in self.g.find_output_consumers(ht) if is_concat_op(c)]
         if len(ct_concat) != 1 or len(ht_concat) != 1 or ct_concat[0] != ht_concat[0]:
-            log.debug("failed to find ct-ht concat")
+            logger.debug("failed to find ct-ht concat")
             return None
         ct_ht_shared_output = ct_concat[0].output[0]
 
@@ -181,7 +181,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         ct_slice = [c for c in ct_identity_consumer.inputs if is_slice_op(c)]
         ht_slice = [c for c in ht_identity_consumer.inputs if is_slice_op(c)]
         if len(ct_slice) != 1 or len(ht_slice) != 1:
-            log.debug("failed to find slice op before identity consumers")
+            logger.debug("failed to find slice op before identity consumers")
             return None
         consumers.extend([ct_slice[0], ht_slice[0]])
 
@@ -200,7 +200,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         # output is no more than 1
         outputs = context.loop_properties.scan_outputs_exits
         if len(outputs) > 1:
-            log.debug("found %d outputs for lstm: %s", len(outputs), outputs)
+            logger.debug("found %d outputs for lstm: %s", len(outputs), outputs)
             return False
         return True
 

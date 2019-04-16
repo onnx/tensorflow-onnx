@@ -20,13 +20,14 @@ def _register_func(op_type):
     def _internal_fun(func):
         _func_map[op_type] = func
         return func
+
     return _internal_fun
 
 
 class ConstFoldOptimizer(GraphOptimizerBase):
 
-    def __init__(self, debug=False):
-        super(ConstFoldOptimizer, self).__init__("ConstFoldOptimizer", debug)
+    def __init__(self):  # pylint: disable=useless-super-delegation
+        super(ConstFoldOptimizer, self).__init__()
 
     def _optimize(self, graph):
         return self._apply_optimization(graph, self._optimize_at_current_graph_level)
@@ -68,7 +69,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
                 const_outputs = process_func(node, graph)
                 self._replace_node_with_const(node, graph, const_outputs)
                 return True
-        self.log.debug("need to add function to fold op %s whose op_type is %s", node.name, node.type)
+        self.logger.debug("need to add function to fold op %s whose op_type is %s", node.name, node.type)
         return False
 
     @staticmethod

@@ -188,7 +188,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 mp = tf.nn.max_pool(x, ksize, strides, padding=padding)
                 _ = tf.identity(mp, name=_TFOUTPUT)
 
-                self.log.debug(str(p))
+                self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @unittest.skipIf(get_test_config().is_onnxruntime_backend and get_test_config().backend_version == "0.2.1",
@@ -207,7 +207,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 mp = tf.nn.avg_pool(x, ksize, strides, padding=padding)
                 _ = tf.identity(mp, name=_TFOUTPUT)
 
-                self.log.debug(str(p))
+                self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-06)
 
     def _conv_test(self, x_val, w, strides=None, padding="VALID", dilations=None, rtol=1e-07):
@@ -368,6 +368,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         # when constant_fold is enabled, PlaceholderWithDefault will be folded into either a const or a placeholder.
         # here we set it False to test PlaceholderWithDefault bug: https://github.com/onnx/tensorflow-onnx/pull/446
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False)
+
+    @check_tf_min_version("1.13")
+    def test_nn_dropout_with_rate(self):
+        rate = tf.placeholder_with_default(0., (), "rate")
+        x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
+        # Define a scope for reusing the variables
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name="input_1")
+        x_ = tf.identity(x)
+
+        fc1 = tf.nn.dropout(x_, rate=rate)
+
+        _ = tf.identity(fc1, name="output")
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False)
 
     def test_conv2d_with_input_transpose(self):
@@ -783,10 +799,25 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("fails on caffe2 with dim issue")
     @check_onnxruntime_incompatibility("Mul")
-    def test_leaky_relu(self):
-        for alpha in [0.1, -0.1, 1.0, -1.0, 10.0, -10.0]:
-            x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
-            x = tf.placeholder(tf.float32, [None] * x_val.ndim, name=_TFINPUT)
+    @check_tf_min_version("1.6")
+    def test_leaky_relu_int(self):
+        # starting from tf 1.6, leaky_relu supports `feature` x of int type
+        x_types = [np.int32, np.int64]
+        for x_type in x_types:
+            x_val = 1000 * np.random.random_sample([1000, 100]).astype(x_type)
+            for alpha in [0.1, -0.1, 1.0, -1.0]:
+                x = tf.placeholder(x_val.dtype, [None] * x_val.ndim, name=_TFINPUT)
+                x_ = tf.nn.leaky_relu(x, alpha)
+                _ = tf.identity(x_, name=_TFOUTPUT)
+                self._run_test_case([_OUTPUT], {_INPUT: x_val})
+                tf.reset_default_graph()
+
+    @skip_caffe2_backend("fails on caffe2 with dim issue")
+    @check_onnxruntime_incompatibility("Mul")
+    def test_leaky_relu_float(self):
+        x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
+        for alpha in [0.1, -0.1, 1.0, -1.0]:
+            x = tf.placeholder(x_val.dtype, [None] * x_val.ndim, name=_TFINPUT)
             x_ = tf.nn.leaky_relu(x, alpha)
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
@@ -1107,7 +1138,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             paddings = tf.constant(pad)
             op = tf.pad(x, paddings, mode)
             _ = tf.identity(op, name=_TFOUTPUT)
-            self.log.debug(str(p))
+            self.logger.debug(str(p))
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @skip_caffe2_backend()

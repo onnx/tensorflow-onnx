@@ -161,7 +161,7 @@ optional arguments:
   --tests TESTS      tests to run
   --backend BACKEND  backend to use
   --config           yaml config file
-  --verbose          verbose output
+  --verbose          verbose output, option is additive
   --opset OPSET      target opset to use
   --perf csv-file    capture performance numbers or tensorflow and onnx runtime
   --debug            dump generated graph with shape info
@@ -175,6 +175,13 @@ You call it for example with:
 ```
 python tests/run_pretrained_models.py --backend onnxruntime --config tests/run_pretrained_models.yaml --perf perf.csv
 ```
+
+### <a name="save_pretrained_model"></a>Tool to save pre-trained model
+
+We provide an [utility](tools/save_pretrained_model.py) to save pre-trained model along with its config.
+Put `save_pretrained_model(sess, outputs, feed_inputs, save_dir, model_name)` in your last testing epoch and the pre-trained model and config will be saved under `save_dir/to_onnx`. 
+Please refer to the example in [tools/save_pretrained_model.py](tools/save_pretrained_model.py) for more information.
+Note the minimum required Tensorflow version is r1.6.
 
 # Using the Python API
 ## TensorFlow to ONNX conversion
@@ -192,7 +199,7 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
         Args:
             tf_graph: tensorflow graph
             continue_on_error: if an op can't be processed (aka there is no mapping), continue
-            verbose: print summary stats
+            verbose: print summary stats (deprecated)
             target: list of workarounds applied to help certain platforms
             opset: the opset to be used (int, default is latest)
             custom_op_handlers: dictionary of custom ops handlers
