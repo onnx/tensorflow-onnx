@@ -13,7 +13,6 @@ import os
 import sys
 import tarfile
 import time
-import traceback
 import zipfile
 
 import PIL.Image
@@ -186,7 +185,7 @@ class Test(object):
         """Run test against msrt-next backend."""
         import onnxruntime as rt
         model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True)
-        print("\t\t" + model_path)
+        logger.info("Model saved to %s", model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
         if self.perf:
@@ -201,12 +200,13 @@ class Test(object):
         os.makedirs(outdir, exist_ok=True)
         model_path = os.path.join(outdir, name + ".onnx")
         utils.save_protobuf(model_path, model_proto)
-        print("\tcreated", model_path)
+        logger.info("Created %s", model_path)
 
     def run_test(self, name, backend="caffe2", onnx_file=None, opset=None, extra_opset=None,
                  perf=None, fold_const=None):
         """Run complete test against backend."""
-        print(name)
+        logger.info("===================================")
+        logger.info("Running %s", name)
         self.perf = perf
 
         # get the model
@@ -216,7 +216,7 @@ class Test(object):
         else:
             model_path = self.local
             dir_name = os.path.dirname(self.local)
-        print("\tdownloaded", model_path)
+        logger.info("Downloaded to %s", model_path)
 
         input_names = list(self.input_names.keys())
         outputs = self.output_names
@@ -261,29 +261,24 @@ class Test(object):
 
             # run the model with tensorflow
             if self.skip_tensorflow:
-                print("\ttensorflow", "SKIPPED")
+                logger.info("TensorFlow SKIPPED")
             else:
                 tf_results = self.run_tensorflow(sess, inputs)
-                print("\ttensorflow", "OK")
+                logger.info("TensorFlow OK")
             model_proto = None
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, extra_opset=extra_opset,
                                           shape_override=shape_override, input_names=inputs.keys())
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
-                new_model_proto = optimizer.optimize_graph(onnx_graph).make_model("optimized")
-                if new_model_proto:
-                    model_proto = new_model_proto
-                else:
-                    print("\tNON-CRITICAL, optimizers are not applied successfully")
-                print("\tto_onnx", "OK")
+                model_proto = optimizer.optimize_graph(onnx_graph).make_model("optimized")
+                logger.info("To_ONNX, OK")
                 if utils.is_debug_mode():
                     onnx_graph.dump_graph()
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
-            except Exception as ex:
-                tb = traceback.format_exc()
-                print("\tto_onnx", "FAIL", ex, tb)
+            except Exception:
+                logger.error("To_ONNX FAIL", exc_info=1)
 
         try:
             onnx_results = None
@@ -295,11 +290,11 @@ class Test(object):
                 onnx_results = self.run_onnxruntime(name, model_proto, inputs)
             else:
                 raise ValueError("unknown backend")
-            print("\trun_onnx OK")
+            logger.info("Run_ONNX OK")
 
             try:
                 if self.skip_tensorflow:
-                    print("\tResults: skipped tensorflow")
+                    logger.info("Results: skipped tensorflow")
                 else:
                     if self.check_only_shape:
                         for tf_res, onnx_res in zip(tf_results, onnx_results):
@@ -307,15 +302,13 @@ class Test(object):
                     else:
                         for tf_res, onnx_res in zip(tf_results, onnx_results):
                             np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
-                    print("\tResults: OK")
+                    logger.info("Results: OK")
                 return True
-            except Exception as ex:
-                tb = traceback.format_exc()
-                print("\tResults", ex, tb)
+            except Exception:
+                logger.error("Results", exc_info=1)
 
-        except Exception as ex:
-            tb = traceback.format_exc()
-            print("\trun_onnx", "FAIL", ex, tb)
+        except Exception:
+            logger.error("Run_ONNX FAIL", exc_info=1)
 
         return False
 
@@ -379,7 +372,7 @@ def main():
     Test.target = args.target
     tests = tests_from_yaml(args.config)
     if args.list:
-        print(sorted(tests.keys()))
+        logger.info(sorted(tests.keys()))
         return 0
     if args.tests:
         test_keys = args.tests.split(",")
@@ -397,17 +390,17 @@ def main():
             ret = t.run_test(test, backend=args.backend, onnx_file=args.onnx_file,
                              opset=args.opset, extra_opset=args.extra_opset, perf=args.perf,
                              fold_const=args.fold_const)
-        except Exception as ex:
+        except Exception:
+            logger.error("Failed to run %s", test, exc_info=1)
             ret = None
-            tb = traceback.format_exc()
-            print(ex, tb)
         finally:
             if not utils.is_debug_mode():
                 utils.delete_directory(TEMP_DIR)
         if not ret:
             failed += 1
 
-    print("=== RESULT: {} failed of {}, backend={}".format(failed, count, args.backend))
+    logger.info("===================================")
+    logger.info("RESULT: %s failed of %s, backend=%s", failed, count, args.backend)
 
     if args.perf:
         with open(args.perf, "w") as f:
