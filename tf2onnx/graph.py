@@ -434,6 +434,9 @@ class Graph(object):
         if name is None:
             name = utils.make_name(op_type)
 
+        if domain is None:
+            domain = 'ai.onnx'
+
         if op_name_scope:
             name = "_".join([op_name_scope, name])
 
