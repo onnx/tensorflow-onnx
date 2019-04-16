@@ -799,8 +799,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("fails on caffe2 with dim issue")
     @check_onnxruntime_incompatibility("Mul")
-    def test_leaky_relu(self):
-        x_types = [np.float32, np.int32, np.int64]
+    @check_tf_min_version("1.6")
+    def test_leaky_relu_int(self):
+        # starting from tf 1.6, leaky_relu supports `feature` x of int type
+        x_types = [np.int32, np.int64]
         for x_type in x_types:
             x_val = 1000 * np.random.random_sample([1000, 100]).astype(x_type)
             for alpha in [0.1, -0.1, 1.0, -1.0]:
@@ -809,6 +811,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 _ = tf.identity(x_, name=_TFOUTPUT)
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
                 tf.reset_default_graph()
+
+    @skip_caffe2_backend("fails on caffe2 with dim issue")
+    @check_onnxruntime_incompatibility("Mul")
+    def test_leaky_relu_float(self):
+        x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
+        for alpha in [0.1, -0.1, 1.0, -1.0]:
+            x = tf.placeholder(x_val.dtype, [None] * x_val.ndim, name=_TFINPUT)
+            x_ = tf.nn.leaky_relu(x, alpha)
+            _ = tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+            tf.reset_default_graph()
 
     @check_onnxruntime_incompatibility("Elu")
     def test_elu(self):
