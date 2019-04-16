@@ -14,7 +14,7 @@ from parameterized import parameterized
 from tf2onnx import constants, logging, utils
 
 __all__ = ["TestConfig", "get_test_config", "unittest_main", "check_onnxruntime_backend",
-           "check_tf_min_version", "skip_tf_versions", "check_onnxruntime_min_version",
+           "check_tf_min_version", "check_tf_max_version", "skip_tf_versions", "check_onnxruntime_min_version",
            "check_opset_min_version", "check_target", "skip_caffe2_backend", "skip_onnxruntime_backend",
            "skip_opset", "check_onnxruntime_incompatibility", "validate_const_node",
            "group_nodes_by_type", "test_ms_domain", "check_node_domain"]
