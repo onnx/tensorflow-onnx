@@ -161,7 +161,7 @@ optional arguments:
   --tests TESTS      tests to run
   --backend BACKEND  backend to use
   --config           yaml config file
-  --verbose          verbose output
+  --verbose          verbose output, option is additive
   --opset OPSET      target opset to use
   --perf csv-file    capture performance numbers or tensorflow and onnx runtime
   --debug            dump generated graph with shape info
@@ -199,7 +199,7 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
         Args:
             tf_graph: tensorflow graph
             continue_on_error: if an op can't be processed (aka there is no mapping), continue
-            verbose: print summary stats
+            verbose: print summary stats (deprecated)
             target: list of workarounds applied to help certain platforms
             opset: the opset to be used (int, default is latest)
             custom_op_handlers: dictionary of custom ops handlers

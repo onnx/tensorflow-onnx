@@ -15,8 +15,8 @@ from tf2onnx import utils
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
 
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx.shape_inference")
+
+logger = logging.getLogger(__name__)
 
 direct_ops = [
     "Cast",
@@ -81,7 +81,7 @@ def infer_shape_for_node(g, node):
             no_shape.append(i)
 
     if not are_all_input_shape_ready:
-        log.debug("node %s has inputs don't have shape specified, they are: %s", node.name, no_shape)
+        logger.debug("node %s has inputs don't have shape specified, they are: %s", node.name, no_shape)
         return False
 
     if node.type in direct_ops:
@@ -105,7 +105,7 @@ def infer_shape_for_node(g, node):
 
         if new_shape is not None:
             g.set_shape(node.output[0], new_shape)
-            log.debug("set placeholder node [%s] with new shape %s", node.output[0], new_shape)
+            logger.debug("set placeholder node [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
 
@@ -141,7 +141,7 @@ def infer_shape_for_node(g, node):
             new_shape += s1[axis + 1:]
 
         g.set_shape(node.output[0], new_shape)
-        log.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
+        logger.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
         return True
 
     if node.type == "Gather":
@@ -175,7 +175,7 @@ def infer_shape_for_node(g, node):
                 new_shape.append(shape[i])
 
         g.set_shape(node.output[0], new_shape)
-        log.debug("set %s node [%s] with new shape %s", node.type, node.output[0], new_shape)
+        logger.debug("set %s node [%s] with new shape %s", node.type, node.output[0], new_shape)
         return True
 
     if node.type == "ExpandDims":
@@ -191,7 +191,7 @@ def infer_shape_for_node(g, node):
 
         new_shape = input_shape[:dim] + [1] + input_shape[dim:]
         g.set_shape(node.output[0], new_shape)
-        log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+        logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
         return True
 
     return False
@@ -207,7 +207,7 @@ def infer_input_shapes(g, node):
             if new_shape is not None:
                 g.set_shape(node.input[1], new_shape)
                 g.set_shape(node.input[2], new_shape)
-                log.debug("set [%s, %s] with new shape %s", node.input[1], node.input[2], new_shape)
+                logger.debug("set [%s, %s] with new shape %s", node.input[1], node.input[2], new_shape)
                 return True
     return False
 
@@ -224,7 +224,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
             g.set_shape(node.input[0], new_shape)
             g.set_shape(node.input[1], new_shape)
             g.set_shape(node.output[0], new_shape)
-            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
 
@@ -233,8 +233,8 @@ def infer_output_shapes_with_partial_inputs(g, node):
         if new_shape is not None:
             g.set_shape(node.output[0], new_shape)
             g.set_shape(node.output[1], new_shape)
-            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
-            log.debug("set [%s] with new shape %s", node.output[1], new_shape)
+            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            logger.debug("set [%s] with new shape %s", node.output[1], new_shape)
             return True
         return False
 
@@ -246,7 +246,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
             g.set_shape(node.output[0], new_shape)
             g.set_shape(node.input[1], new_shape)
             g.set_shape(node.input[2], new_shape)
-            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
 
@@ -265,10 +265,10 @@ def infer_output_shapes_with_partial_inputs(g, node):
         for i in node.input:
             if not g.get_shape(i):
                 g.set_shape(i, input_shape)
-                log.debug("set [%s] with new shape %s", i, input_shape)
+                logger.debug("set [%s] with new shape %s", i, input_shape)
         new_shape = input_shape[:axis] + [len(node.input)] + input_shape[axis:]
         g.set_shape(node.output[0], new_shape)
-        log.debug("set Pack node [%s] with new shape %s", node.output[0], new_shape)
+        logger.debug("set Pack node [%s] with new shape %s", node.output[0], new_shape)
         return True
 
     if node.type == "TensorArrayGatherV3":
@@ -293,7 +293,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
         if shape is not None:
             new_shape = [-1] + shape
             g.set_shape(node.output[0], new_shape)
-            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
 
@@ -314,7 +314,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
         new_shape = value_shape_before_scatter[1:]
         if new_shape is not None:
             g.set_shape(node.output[0], new_shape)
-            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
 
@@ -325,7 +325,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
             new_shape = g.get_shape(node.input[1])
         if new_shape is not None:
             g.set_shape(node.output[0], new_shape)
-            log.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
             return True
         return False
 
@@ -336,7 +336,7 @@ def set_shape_from_input(g, input_id, output_id):
     new_shape = g.get_shape(input_id)
     if new_shape is not None:
         g.set_shape(output_id, new_shape)
-        log.debug("set [%s] with new shape %s", output_id, new_shape)
+        logger.debug("set [%s] with new shape %s", output_id, new_shape)
         return True
     return False
 
@@ -347,7 +347,7 @@ def set_shape_from_inputs_broadcast(g, input_ids, output_id):
     new_shape = broadcast_shape_inference(s1, s2)
     if new_shape is not None:
         g.set_shape(output_id, new_shape)
-        log.debug("set [%s] with new shape %s", output_id, new_shape)
+        logger.debug("set [%s] with new shape %s", output_id, new_shape)
         return True
     return False
 
@@ -386,7 +386,7 @@ def broadcast_shape_inference(shape_0, shape_1):
         elif shape_1[i] == -1:
             new_shape[i] = shape_0[i]
         else:
-            log.warning("two shapes not possible to broadcast, %s, %s", shape_0, shape_1)
+            logger.warning("two shapes not possible to broadcast, %s, %s", shape_0, shape_1)
             return None
         i -= 1
     return new_shape

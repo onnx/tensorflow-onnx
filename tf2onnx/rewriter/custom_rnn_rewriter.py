@@ -7,18 +7,20 @@ tf2onnx.rewriter.custom_rnn_rewriter - custom rnn support
 
 from __future__ import division
 from __future__ import print_function
+
 import logging
 import sys
 import traceback
+
 from onnx import onnx_pb
 import numpy as np
+
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_rnn_scope_name, parse_rnn_loop
-from tf2onnx.tfonnx import utils
+from tf2onnx import utils
 
+logger = logging.getLogger(__name__)
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx.rewriter.custom_rnn_rewriter")
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,broad-except,protected-access
 
@@ -36,7 +38,7 @@ class CustomRnnRewriter(LoopRewriterBase):
         return CustomRnnContext()
 
     def run(self):
-        log.debug("enter custom rnn rewriter")
+        logger.debug("enter custom rnn rewriter")
         return self.run_internal()
 
     def need_rewrite(self, context):
@@ -45,20 +47,20 @@ class CustomRnnRewriter(LoopRewriterBase):
         res = parse_rnn_loop(self.g, context.loop_properties, context.rnn_scope,
                              context.while_context_scope)
         if not res:
-            log.debug("skip the loop due to parse_rnn_loop failed")
+            logger.debug("skip the loop due to parse_rnn_loop failed")
             return False
 
         time_var, iteration_var = res
         context.time_var = time_var
         context.iteration_var = iteration_var
-        log.debug("time var %s - enter input id (%s) shape: %s, output (%s) shape: %s", time_var.enter_name,
-                  time_var.enter_input_id, self.g.get_shape(time_var.enter_input_id),
-                  time_var.switch_true_identity_output.id, time_var.switch_true_identity_output.shape)
+        logger.debug("time var %s - enter input id (%s) shape: %s, output (%s) shape: %s", time_var.enter_name,
+                     time_var.enter_input_id, self.g.get_shape(time_var.enter_input_id),
+                     time_var.switch_true_identity_output.id, time_var.switch_true_identity_output.shape)
 
         return True
 
     def rewrite(self, context):
-        log.debug("enter rewrite function")
+        logger.debug("enter rewrite function")
         try:
             scan_props = context.loop_properties
 
@@ -89,7 +91,7 @@ class CustomRnnRewriter(LoopRewriterBase):
             scan_node = self._create_scan_node(context, scan_props,
                                                state_inputs_initial_values + scan_inputs_initial_values)
             if not scan_node:
-                log.error("failed to create scan node during rewrite")
+                logger.error("failed to create scan node during rewrite")
                 return REWRITER_RESULT.FAIL
 
             scan_node.set_body_graph_as_attr("body", scan_body_g)
@@ -99,11 +101,11 @@ class CustomRnnRewriter(LoopRewriterBase):
 
         except Exception as ex:
             tb = traceback.format_exc()
-            log.error("custom rnn rewrite failed, due to exception: %s, details:%s", ex, tb)
+            logger.error("custom rnn rewrite failed, due to exception: %s, details:%s", ex, tb)
             return REWRITER_RESULT.FAIL
 
     def _create_scan_node(self, context, scan_props, init_values):
-        log.debug("create scan node")
+        logger.debug("create scan node")
         # reuse original output connection id (e.g. Exit_XXX), so we don't need set shape.
         loop_outputs_shapes = []
         loop_outputs_dtypes = []
@@ -136,7 +138,7 @@ class CustomRnnRewriter(LoopRewriterBase):
         return scan_node
 
     def _connect_scan_with_output(self, context, scan_node):
-        log.debug("connect scan output with the graph")
+        logger.debug("connect scan output with the graph")
 
         index = 0
         for out_tensor_value_info in context.loop_properties.state_outputs_exits:
@@ -158,7 +160,6 @@ class CustomRnnRewriter(LoopRewriterBase):
                 else:  # since opset 9
                     self.g.replace_all_inputs(self.g.get_nodes(), out_tensor_value_info.id, scan_node.output[index])
             index += 1
-
 
     def _adapt_scan_sequence_input_or_output(self, target_name, input_id, handle_output=False):
         nodes_to_add = []
@@ -198,7 +199,7 @@ class CustomRnnRewriter(LoopRewriterBase):
             else:
                 # add a fake batch size : 1
                 fake_batch_size_node = self.g.make_const(utils.make_name(target_name + "_target_shape"),
-                                                         np.array([1,], dtype=np.int64))
+                                                         np.array([1], dtype=np.int64))
                 nodes_to_add.append(fake_batch_size_node)
                 new_shape_node = self.g.make_node("Concat",
                                                   [fake_batch_size_node.output[0], shape_node.output[0]],
@@ -211,6 +212,6 @@ class CustomRnnRewriter(LoopRewriterBase):
                                         dtypes=[self.g.get_dtype(input_id)],
                                         op_name_scope=target_name)
         nodes_to_add.append(reshape_node)
-        log.debug("create Reshape for scan output %s, with output shape %s",
-                  reshape_node.output[0], new_shape)
+        logger.debug("create Reshape for scan output %s, with output shape %s",
+                     reshape_node.output[0], new_shape)
         return nodes_to_add

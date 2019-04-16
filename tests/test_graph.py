@@ -7,8 +7,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import os
-import unittest
 from collections import namedtuple
 
 import numpy as np
@@ -17,14 +15,14 @@ import graphviz as gv
 import tensorflow as tf
 from onnx import helper
 
-import tf2onnx
 from tf2onnx import constants, utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.handler import tf_op
 
-from common import get_test_config, unittest_main, check_tf_min_version, check_tf_max_version
+from backend_test_base import Tf2OnnxBackendTestBase
+from common import unittest_main, check_tf_min_version, check_tf_max_version
 
 
 # pylint: disable=missing-docstring,unused-argument,unused-variable
@@ -91,32 +89,21 @@ def onnx_pretty(g, args=None):
     return helper.printable_graph(model_proto.graph)
 
 
-class Tf2OnnxGraphTests(unittest.TestCase):
+class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
     """Test cases."""
     maxDiff = None
 
     def setUp(self):
-        """Setup test."""
-        # reset name generation on every test
-        # suppress log info of tensorflow so that result of test can be seen much easier
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-        tf.logging.set_verbosity(tf.logging.WARN)
-
-        self.config = get_test_config()
-
-        tf2onnx.utils.INTERNAL_NAME = 1
-        tf.reset_default_graph()
-        arg = namedtuple("Arg", "input inputs outputs verbose continue_on_error")
-        self._args0 = arg(input="test", inputs=[], outputs=["output:0"],
-                          verbose=False, continue_on_error=False)
-        self._args1 = arg(input="test", inputs=["input:0"], outputs=["output:0"],
-                          verbose=False, continue_on_error=False)
+        super().setUp()
+        arg = namedtuple("Arg", "input inputs outputs continue_on_error")
+        self._args0 = arg(input="test", inputs=[], outputs=["output:0"], continue_on_error=False)
+        self._args1 = arg(input="test", inputs=["input:0"], outputs=["output:0"], continue_on_error=False)
         self._args2 = arg(input="test", inputs=["input1:0", "input2:0"], outputs=["output:0"],
-                          verbose=False, continue_on_error=False)
+                          continue_on_error=False)
         self._args3 = arg(input="test", inputs=["input1:0", "input2:0", "prob:0"], outputs=["output:0"],
-                          verbose=False, continue_on_error=False)
+                          continue_on_error=False)
         self._args4 = arg(input="test", inputs=["input1:0", "input2:0"], outputs=["output1:0", "output2:0"],
-                          verbose=False, continue_on_error=False)
+                          continue_on_error=False)
 
     def test_abs(self):
         with tf.Session() as sess:

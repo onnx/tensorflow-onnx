@@ -15,16 +15,16 @@ import numpy as np
 from tf2onnx import utils
 from tf2onnx.rewriter.rnn_utils import is_reverse_op
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx.rewriter.bilstm_rewriter")
+
+logger = logging.getLogger(__name__)
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
 def process_bilstm(g, bi_lstms):
     for fw, bw in bi_lstms:
         input_id = fw[0]
-        log.debug("=========================")
-        log.debug("start handling potential bidirectional lstm %s", input_id)
+        logger.debug("=========================")
+        logger.debug("start handling potential bidirectional lstm %s", input_id)
 
         lstm_fw = fw[1]
         lstm_bw = bw[1]
@@ -44,7 +44,7 @@ def process_bilstm(g, bi_lstms):
             if len(lstm_fw.inputs) > 4:
                 h_node, c_node = process_ch_init_nodes(g, lstm_fw, lstm_bw, all_nodes)
         else:
-            log.error("fw, bw lstm inputs num is not consistent. stop")
+            logger.error("fw, bw lstm inputs num is not consistent. stop")
             continue
 
         # create node
@@ -67,13 +67,13 @@ def process_bilstm(g, bi_lstms):
         if lstm_fw.get_attr("hidden_size").i == lstm_bw.get_attr("hidden_size").i:
             hidden_size = lstm_fw.get_attr("hidden_size").i
         else:
-            log.error("fw and bw has different hidden_size, skip")
+            logger.error("fw and bw has different hidden_size, skip")
             continue
 
         attr = {"direction": direction, "hidden_size": hidden_size}
         bi_lstm_node = g.make_node("LSTM", lstm_inputs, attr=attr, output_count=3)
         all_nodes.append(bi_lstm_node)
-        log.debug("processing output nodes")
+        logger.debug("processing output nodes")
 
         to_remove = [lstm_fw.name, lstm_fw.input[1], lstm_fw.input[2], lstm_fw.input[3],
                      lstm_bw.name, lstm_bw.input[1], lstm_bw.input[2], lstm_bw.input[3]]
@@ -90,7 +90,7 @@ def process_bilstm(g, bi_lstms):
         # this is guaranteed by dynamic_rnn logic.
         old_x_has_lstm_as_consumer = [n for n in old_x_consumers if n.type == "LSTM"]
         if not old_x_has_lstm_as_consumer:
-            log.debug("plan to remove useless reverse op in bw")
+            logger.debug("plan to remove useless reverse op in bw")
             reverse_node = g.get_node_by_output(lstm_bw_old_x)
 
             if reverse_node.type == "Transpose":
@@ -118,7 +118,7 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
             raise ValueError("should not happen y_output is not followed with reverse node")
 
         for r_op in reverse_nodes:
-            log.debug("remove reverse op called %s", r_op.name)
+            logger.debug("remove reverse op called %s", r_op.name)
             g.replace_all_inputs(all_nodes, r_op.output[0], r_op.input[0])
             to_remove.append(r_op.name)
     elif lstm_output_index in [1, 2]:
@@ -194,10 +194,10 @@ def rewrite_bidirectional_lstms(g, ops):
             if g.find_output_consumers(n.output[0]) and not get_reverse_nodes_after_y_output(g, n):
                 continue
 
-            log.debug("find bw lstm %s", input_id)
+            logger.debug("find bw lstm %s", input_id)
             bw_lstm[input_id] = [input_id, n]
         else:
-            log.debug("find fw lstm %s", input_id)
+            logger.debug("find fw lstm %s", input_id)
             fw_lstm[input_id] = [input_id, n]
 
     bilstm_input = list(set(fw_lstm.keys()).intersection(bw_lstm.keys()))
@@ -221,18 +221,18 @@ def get_reverse_nodes_after_y_output(g, lstm_bw):
             elif is_reverse_op(trans_nodes[0]):
                 reverse_nodes = trans_nodes
             else:
-                log.debug("not found reverse op, unexpected")
+                logger.debug("not found reverse op, unexpected")
                 return None
 
             are_all_reverse = all([is_reverse_op(r_op) for r_op in reverse_nodes])
             if are_all_reverse:
                 return reverse_nodes
 
-            log.debug("bw y output is used followed by reverse node")
+            logger.debug("bw y output is used followed by reverse node")
             return None
 
-        log.debug("unexpected number of transpose after LSTM 1st output:%s", s_cnt)
+        logger.debug("unexpected number of transpose after LSTM 1st output:%s", s_cnt)
         return None
 
-    log.debug("unexpected number of squeeze following LSTM 1st output:%s", s_cnt)
+    logger.debug("unexpected number of squeeze following LSTM 1st output:%s", s_cnt)
     return None

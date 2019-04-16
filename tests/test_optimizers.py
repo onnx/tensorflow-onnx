@@ -14,6 +14,7 @@ from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, group_nodes_by_type
 
+
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 
 class OptimizerTests(Tf2OnnxBackendTestBase):
@@ -34,8 +35,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         current = GraphUtil.get_node_count_from_onnx_graph(new_proto.graph)
 
         self.assertTrue(current[op_type] == remaining_op_num,
-                        msg="Expect " + str(remaining_op_num) + " " + op_type + " ops left, but actually " +
-                        str(current[op_type]) + " left")
+                        msg="Expect " + str(remaining_op_num) + " " + op_type + " ops left, but actually " + str(
+                            current[op_type]) + " left")
 
         if self.config.is_onnxruntime_backend:
             expected = self.run_onnxruntime(origin_model_path, onnx_feed_dict, output_names_with_port)
@@ -179,14 +180,13 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         graph.outputs = [identity_op.input[0]]
         graph.remove_node(identity_op.name)
 
-        optimized_graph = GraphUtil.optimize_graph(graph, "onnx-tests")
+        optimized_graph = GraphUtil.optimize_graph(graph)
 
         self.assertTrue(optimized_graph, msg="graph after optimizer should not be None")
 
         trans_cnt = len(group_nodes_by_type(optimized_graph)["Transpose"])
 
-        self.assertTrue(trans_cnt == 1, msg="Expect 1 Transpose ops left, but actually " +
-                        str(trans_cnt) + " left")
+        self.assertTrue(trans_cnt == 1, msg="Expect 1 Transpose ops left, but actually " + str(trans_cnt) + " left")
 
     # Tranpose Optimizer Tests End
 
@@ -292,7 +292,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
              ],
             [helper.make_tensor_value_info("loop_cond_output", TensorProto.BOOL, ()),
              helper.make_tensor_value_info("loop_var_out_1", TensorProto.FLOAT, ())
-            ],
+             ],
         )
         # sub graph ends
 
@@ -394,7 +394,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_merge_duplicated_nodes_compare(["value1", "mask", "value2"],
-                                                {"X": np.random.randn(5,).astype(np.float32)},
+                                                {"X": np.random.randn(5).astype(np.float32)},
                                                 model_proto,
                                                 op_type="Dropout", remaining_op_num=2)
 
@@ -417,9 +417,10 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         )
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
-        self.run_merge_duplicated_nodes_compare(["res"], {"X": np.random.randn(5,).astype(np.float32)},
+        self.run_merge_duplicated_nodes_compare(["res"], {"X": np.random.randn(5).astype(np.float32)},
                                                 model_proto,
                                                 op_type="Log", remaining_op_num=3)
+
     # Merge Duplicated Nodes Optimizer Tests End
 
     # Const Fold Optimizer Tests Start

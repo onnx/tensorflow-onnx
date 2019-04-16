@@ -437,3 +437,21 @@ def is_onnx_domain(domain):
     if domain is None or domain == "":
         return True
     return False
+
+
+def parse_bool(val):
+    if val is None:
+        return False
+    return val.lower() in ("yes", "true", "t", "y", "1")
+
+
+_is_debug_mode = parse_bool(os.environ.get(constants.ENV_TF2ONNX_DEBUG_MODE))
+
+
+def is_debug_mode():
+    return _is_debug_mode
+
+
+def set_debug_mode(enabled):
+    global _is_debug_mode
+    _is_debug_mode = enabled

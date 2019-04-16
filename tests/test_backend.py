@@ -188,7 +188,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 mp = tf.nn.max_pool(x, ksize, strides, padding=padding)
                 _ = tf.identity(mp, name=_TFOUTPUT)
 
-                self.log.debug(str(p))
+                self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @unittest.skipIf(get_test_config().is_onnxruntime_backend and get_test_config().backend_version == "0.2.1",
@@ -207,7 +207,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 mp = tf.nn.avg_pool(x, ksize, strides, padding=padding)
                 _ = tf.identity(mp, name=_TFOUTPUT)
 
-                self.log.debug(str(p))
+                self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-06)
 
     def _conv_test(self, x_val, w, strides=None, padding="VALID", dilations=None, rtol=1e-07):
@@ -1125,7 +1125,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             paddings = tf.constant(pad)
             op = tf.pad(x, paddings, mode)
             _ = tf.identity(op, name=_TFOUTPUT)
-            self.log.debug(str(p))
+            self.logger.debug(str(p))
             self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @skip_caffe2_backend()

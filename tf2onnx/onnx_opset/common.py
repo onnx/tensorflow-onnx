@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 """
-tf2onnx.tf2onnx.onnx_opset.math
+common
 """
 
 from __future__ import division
@@ -13,8 +13,8 @@ import logging
 
 from tf2onnx import constants
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("onnx_opset.common")
+
+logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring
 

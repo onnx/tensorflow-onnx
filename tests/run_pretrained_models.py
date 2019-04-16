@@ -15,7 +15,6 @@ import tarfile
 import time
 import traceback
 import zipfile
-import logging
 
 import PIL.Image
 import numpy as np
@@ -28,15 +27,12 @@ import tensorflow.contrib.rnn  # pylint: disable=unused-import
 import yaml
 
 import tf2onnx
-from tf2onnx import loader
-from tf2onnx import utils
-from tf2onnx import optimizer
+from tf2onnx import loader, logging, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx")
+logger = logging.getLogger("run_pretrained")
 
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
 PERFITER = 1000
@@ -157,7 +153,7 @@ class Test(object):
 
     def to_onnx(self, tf_graph, opset=None, extra_opset=None, shape_override=None, input_names=None):
         """Convert graph to tensorflow."""
-        return process_tf_graph(tf_graph, continue_on_error=False, verbose=True, opset=opset,
+        return process_tf_graph(tf_graph, continue_on_error=False, opset=opset,
                                 extra_opset=extra_opset, target=Test.target, shape_override=shape_override,
                                 input_names=input_names, output_names=self.output_names)
 
@@ -207,7 +203,7 @@ class Test(object):
         utils.save_protobuf(model_path, model_proto)
         print("\tcreated", model_path)
 
-    def run_test(self, name, backend="caffe2", debug=False, onnx_file=None, opset=None, extra_opset=None,
+    def run_test(self, name, backend="caffe2", onnx_file=None, opset=None, extra_opset=None,
                  perf=None, fold_const=None):
         """Run complete test against backend."""
         print(name)
@@ -245,7 +241,7 @@ class Test(object):
                 inputs[k] = v
 
         graph_def = tf2onnx.tfonnx.tf_optimize(inputs.keys(), self.output_names, graph_def, fold_const)
-        if debug:
+        if utils.is_debug_mode():
             utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
@@ -257,7 +253,7 @@ class Test(object):
                 dtype = tf.as_dtype(t.dtype).name
                 v = inputs[k]
                 if dtype != v.dtype:
-                    log.warning("input dtype doesn't match tensorflow's")
+                    logger.warning("input dtype doesn't match tensorflow's")
                     inputs[k] = np.array(v, dtype=dtype)
             if self.force_input_shape:
                 for k, v in inputs.items():
@@ -275,13 +271,13 @@ class Test(object):
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, extra_opset=extra_opset,
                                           shape_override=shape_override, input_names=inputs.keys())
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
-                new_model_proto = optimizer.optimize_graph(onnx_graph, debug=debug).make_model("optimized")
+                new_model_proto = optimizer.optimize_graph(onnx_graph).make_model("optimized")
                 if new_model_proto:
                     model_proto = new_model_proto
                 else:
                     print("\tNON-CRITICAL, optimizers are not applied successfully")
                 print("\tto_onnx", "OK")
-                if debug:
+                if utils.is_debug_mode():
                     onnx_graph.dump_graph()
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
@@ -333,11 +329,11 @@ def get_args():
     parser.add_argument("--target", default="", help="target platform")
     parser.add_argument("--backend", default="onnxruntime",
                         choices=["caffe2", "onnxmsrtnext", "onnxruntime"], help="backend to use")
-    parser.add_argument("--verbose", help="verbose output", action="store_true")
     parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
-    parser.add_argument("--debug", help="debug vlog", action="store_true")
+    parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
+    parser.add_argument("--debug", help="debug mode", action="store_true")
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
     parser.add_argument("--perf", help="capture performance numbers")
@@ -374,11 +370,11 @@ def tests_from_yaml(fname):
 
 
 def main():
-    # suppress log info of tensorflow so that result of test can be seen much easier
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    tf.logging.set_verbosity(tf.logging.WARN)
-
     args = get_args()
+    logging.basicConfig(level=logging.get_verbosity_level(args.verbose))
+    if args.debug:
+        utils.set_debug_mode(True)
+
     Test.cache_dir = args.cache
     Test.target = args.target
     tests = tests_from_yaml(args.config)
@@ -398,7 +394,7 @@ def main():
             continue
         count += 1
         try:
-            ret = t.run_test(test, backend=args.backend, debug=args.debug, onnx_file=args.onnx_file,
+            ret = t.run_test(test, backend=args.backend, onnx_file=args.onnx_file,
                              opset=args.opset, extra_opset=args.extra_opset, perf=args.perf,
                              fold_const=args.fold_const)
         except Exception as ex:
@@ -406,7 +402,7 @@ def main():
             tb = traceback.format_exc()
             print(ex, tb)
         finally:
-            if not args.debug:
+            if not utils.is_debug_mode():
                 utils.delete_directory(TEMP_DIR)
         if not ret:
             failed += 1

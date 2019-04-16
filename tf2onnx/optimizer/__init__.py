@@ -15,7 +15,6 @@ from tf2onnx.optimizer.identity_optimizer import IdentityOptimizer
 from tf2onnx.optimizer.merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
 from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
 
-
 # pylint: disable=missing-docstring, broad-except
 
 # optimizer sequence need to be considered carefully
@@ -29,11 +28,11 @@ _optimizers = OrderedDict([
 ])
 
 
-def optimize_graph(graph, debug=False):
+def optimize_graph(graph):
     try:
         opts = _get_optimizers()
         for opt in opts.values():
-            graph = opt(debug=debug).optimize(graph)
+            graph = opt().optimize(graph)
 
         graph.update_proto()
         return graph

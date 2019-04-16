@@ -18,8 +18,8 @@ from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx.rewriter.gru_rewriter")
+
+logger = logging.getLogger(__name__)
 
 
 class GRUUnitRewriter(UnitRnnRewriterBase):
@@ -36,9 +36,9 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
             cell_match = self._match_cell(context, cell_type)
             if cell_match:
                 self.gru_cell_type = cell_type
-                log.debug("parsing unit is %s", cell_type)
+                logger.debug("parsing unit is %s", cell_type)
                 return cell_match
-        log.debug("cannot parse unit")
+        logger.debug("cannot parse unit")
         return None
 
     def get_weight_and_bias(self, context):
@@ -49,10 +49,10 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         hidden_kernel = get_weights_from_const_node(self.g, match.get_op("hidden_kernel"))
         hidden_bias = get_weights_from_const_node(self.g, match.get_op("hidden_bias"))
         if not all([gate_kernel, gate_bias, hidden_kernel, hidden_bias]):
-            log.debug("rnn weights check failed, skip")
+            logger.debug("rnn weights check failed, skip")
             return None
 
-        log.debug("find needed weights")
+        logger.debug("find needed weights")
         res = {"gate_kernel": gate_kernel,
                "gate_bias": gate_bias,
                "hidden_kernel": hidden_kernel,
@@ -91,13 +91,13 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         other_state_variables_num = len(context.loop_properties.state_variables) - \
             len(context.state_variables)
         if other_state_variables_num > 2:
-            log.debug("found %d other state variables", other_state_variables_num)
+            logger.debug("found %d other state variables", other_state_variables_num)
             return False
 
         # output should be no more than 1
         outputs = context.loop_properties.scan_outputs_exits
         if len(outputs) > 1:
-            log.debug("found %d outputs for gru: %s", len(outputs), outputs)
+            logger.debug("found %d outputs for gru: %s", len(outputs), outputs)
             return False
         return True
 
@@ -200,7 +200,7 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         # in onnx, output shape is: [number_directions, batch, hidden]
         exit_output_id = context.state_variables["state"].exit_output.id
         if not exit_output_id:
-            log.debug("no one consume state variable")
+            logger.debug("no one consume state variable")
             return
         output_id = context.rnn_node.output[1]
         gru_state_shape = self.g.get_shape(output_id)

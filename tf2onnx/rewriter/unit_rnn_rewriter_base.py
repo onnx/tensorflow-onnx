@@ -16,8 +16,8 @@ from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_pattern, \
 from tf2onnx.graph_matcher import GraphMatcher
 
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("tf2onnx.rewriter.unit_rnn_rewriter_base")
+
+logger = logging.getLogger(__name__)
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,broad-except,protected-access
@@ -58,7 +58,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         return UnitRnnContext()
 
     def run(self):
-        log.debug("enter unit rnn rewriter base")
+        logger.debug("enter unit rnn rewriter base")
         return self.run_internal()
 
     def need_rewrite(self, context):
@@ -66,15 +66,15 @@ class UnitRnnRewriterBase(LoopRewriterBase):
 
         if not parse_rnn_loop(self.g, context.loop_properties, context.rnn_scope,
                               context.while_context_scope):
-            log.debug("parse_rnn_loop failed, SKIP")
+            logger.debug("parse_rnn_loop failed, SKIP")
             return False
 
         if not self.parse_unit_rnn(context):
-            log.debug("failed to parse unit rnn, SKIP")
+            logger.debug("failed to parse unit rnn, SKIP")
             return False
 
         if not self.is_valid(context):
-            log.debug("parsed rnn is not valid, SKIP")
+            logger.debug("parsed rnn is not valid, SKIP")
             return False
         return True
 
@@ -90,41 +90,41 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         4 input_x
         5 attributes, e.g., activation_alpha, activation_beta... optional
         """
-        log.debug("parse unit rnn")
+        logger.debug("parse unit rnn")
 
-        log.debug("match unit cell against loop body graph")
+        logger.debug("match unit cell against loop body graph")
         cell_match = self.find_cell(context)
         if not cell_match:
-            log.debug('failed to match cell pattern')
+            logger.debug('failed to match cell pattern')
             return False
         context.cell_match = cell_match
 
-        log.debug("get_weight_and_bias starts")
+        logger.debug("get_weight_and_bias starts")
         weights = self.get_weight_and_bias(context)
         if not weights:
-            log.debug("rnn weights check failed, SKIP")
+            logger.debug("rnn weights check failed, SKIP")
             return False
         context.weights = weights
 
         if not self.get_state_variables(context):
-            log.debug("no cell variable initializers found, SKIP")
+            logger.debug("no cell variable initializers found, SKIP")
             return False
 
         seq_len_node = self.find_sequence_length_node(context)
         if seq_len_node:
-            log.debug("find sequence node: %s", seq_len_node.name)
+            logger.debug("find sequence node: %s", seq_len_node.name)
             context.seq_len_node = seq_len_node
 
         # require exact one input
         inputs = context.loop_properties.scan_inputs_initial_values
         if len(inputs) != 1:
-            log.debug("found %d inputs for the unit rnn: %s",
-                      len(inputs), inputs)
+            logger.debug("found %d inputs for the unit rnn: %s",
+                         len(inputs), inputs)
             return False
         context.onnx_input_ids["X"] = inputs[0]
 
         if not self.parse_attributes(context):
-            log.debug("wrong attributes found")
+            logger.debug("wrong attributes found")
             return False
 
         return True
@@ -160,25 +160,25 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         return True
 
     def rewrite(self, context):
-        log.debug("enter unit rnn rewrite function")
+        logger.debug("enter unit rnn rewrite function")
 
-        log.debug("process the weights/bias/ft_bias, to fit onnx weights/bias requirements")
+        logger.debug("process the weights/bias/ft_bias, to fit onnx weights/bias requirements")
         self.process_weights_and_bias(context)
 
         self.process_seq_length(context)
 
         self.process_var_init_nodes(context)
 
-        log.debug("start to build new rnn node")
+        logger.debug("start to build new rnn node")
 
         rnn_node = self.create_rnn_node(context)
         context.rnn_node = rnn_node
 
-        log.debug("start to handle outputs")
+        logger.debug("start to handle outputs")
         # format of ONNX output is different with tf
         self.process_outputs(context)
 
-        log.debug("rewrite successfully")
+        logger.debug("rewrite successfully")
         return REWRITER_RESULT.OK
 
     def get_state_variables(self, context):
@@ -194,10 +194,10 @@ class UnitRnnRewriterBase(LoopRewriterBase):
                 finder = funcs[0]
                 state_variable = finder(context)
                 if state_variable:
-                    log.debug("found state variable %s", var_name)
+                    logger.debug("found state variable %s", var_name)
                     context.state_variables[var_name] = state_variable
                 else:
-                    log.debug("failed to get state variable %s", var_name)
+                    logger.debug("failed to get state variable %s", var_name)
                     can_handle = False
                     break
             if can_handle:
@@ -210,7 +210,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         state_variable = list(context.state_variables.values())[0]
         next_iter_input_node = self.g.get_node_by_output(state_variable.next_iteration_input.id)
         if not is_select_op(next_iter_input_node):
-            log.debug("no sequence length node is given")
+            logger.debug("no sequence length node is given")
             return None
         matcher = GraphMatcher(seq_len_pattern)
         match_result = matcher.match_op(next_iter_input_node)
@@ -265,18 +265,18 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         for var_name, funcs in self.state_variable_handler.items():
             output_connector = funcs[1]
             output_connector(context)
-            log.debug("connect output of %s to graph", var_name)
+            logger.debug("connect output of %s to graph", var_name)
 
         self.connect_unit_rnn_output_to_graph(context)
 
     def connect_unit_rnn_output_to_graph(self, context):
         outputs = context.loop_properties.scan_outputs_exits
         if not outputs:
-            log.debug("no one consume output")
+            logger.debug("no one consume output")
             return
 
         gather_output_id = outputs[0].id
-        log.debug("found output for rnn: %s", gather_output_id)
+        logger.debug("found output for rnn: %s", gather_output_id)
 
         # in tf batch major mode, output shape is : [batch, time, hidden]
         # in time major mode, output shape is: [time, batch, hidden]
@@ -313,7 +313,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
             next_iteration_input = select[0].output[0]
             switch_true_identity_consumers.append(select[0])
 
-        log.debug(
+        logger.debug(
             "try to find state variable from [%s, %s]",
             next_iteration_input,
             switch_true_identity_consumers
@@ -329,6 +329,6 @@ class UnitRnnRewriterBase(LoopRewriterBase):
 
         state_variables = context.loop_properties.get_variables(checker)
         if len(state_variables) != 1:
-            log.debug("found %d state variables", len(state_variables))
+            logger.debug("found %d state variables", len(state_variables))
             return None
         return state_variables[0]
