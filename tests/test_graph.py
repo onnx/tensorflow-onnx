@@ -22,7 +22,7 @@ from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.handler import tf_op
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import get_test_config, unittest_main, check_tf_min_version, check_tf_max_version
+from common import unittest_main, check_tf_min_version, check_tf_max_version
 
 
 # pylint: disable=missing-docstring,unused-argument,unused-variable

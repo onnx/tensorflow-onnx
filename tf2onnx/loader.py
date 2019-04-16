@@ -15,8 +15,8 @@ from tensorflow.python.framework.graph_util import convert_variables_to_constant
 
 from tf2onnx import utils
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument
 
