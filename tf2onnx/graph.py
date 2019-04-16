@@ -21,7 +21,6 @@ from tf2onnx.utils import port_name, find_opset
 from tf2onnx import optimizer
 from tf2onnx.schemas import get_schema
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -1037,18 +1036,19 @@ class Graph(object):
 
     def delete_unused_nodes(self, outputs_name):
         """Delete nodes not in subgraph ending with output_names."""
-        if outputs_name:
-            # we need keep those placeholders that are used as input of Loop's body graph.
-            # some of them are not used in the graph, but still need be there to keep the graph complete.
-            related_nodes = self.extract_sub_graph_nodes(outputs_name, ignore_unused_placeholder=False)
-            for node in related_nodes:
-                attr_body_graphs = node.get_body_graphs()
-                if attr_body_graphs:
-                    for _, body_graph in attr_body_graphs.items():
-                        body_graph.delete_unused_nodes(body_graph.outputs)
-            self.reset_nodes(related_nodes)
-        else:
-            print("WARNING: outputs not specified, delete_unused_nodes not taking effect.")
+        if not outputs_name:
+            logger.debug("Outputs not specified, delete_unused_nodes not taking effect.")
+            return
+
+        # we need keep those placeholders that are used as input of Loop's body graph.
+        # some of them are not used in the graph, but still need be there to keep the graph complete.
+        related_nodes = self.extract_sub_graph_nodes(outputs_name, ignore_unused_placeholder=False)
+        for node in related_nodes:
+            attr_body_graphs = node.get_body_graphs()
+            if attr_body_graphs:
+                for _, body_graph in attr_body_graphs.items():
+                    body_graph.delete_unused_nodes(body_graph.outputs)
+        self.reset_nodes(related_nodes)
 
 
 class GraphUtil(object):

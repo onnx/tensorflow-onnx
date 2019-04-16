@@ -128,13 +128,17 @@ def main():
 
     model_proto = g.make_model("converted from {}".format(model_path))
 
-    logger.info("\n")
+    logger.info("")
     model_proto = GraphUtil.optimize_model_proto(model_proto)
 
     # write onnx graph
+    logger.info("")
+    logger.info("Successfully converted TensorFlow model %s to ONNX", model_path)
     if args.output:
         utils.save_protobuf(args.output, model_proto)
-        print("\nComplete successfully, the onnx model is generated at " + args.output)
+        logger.info("ONNX model is saved at %s", args.output)
+    else:
+        logger.info("To export ONNX model to file, please run with `--output` option")
 
 
 if __name__ == "__main__":
