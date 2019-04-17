@@ -6,7 +6,7 @@ parameters:
   tf_versions: ['']
   onnx_versions: ['']
   onnx_opsets: ['']
-  onnx_backends: {onnxruntime: ['']}
+  onnx_backends: {onnxruntime: ['0.3.0']}
   job: {}
   run_setup: 'True'
 
@@ -27,31 +27,55 @@ jobs:
         ${{ each python_version in parameters.python_versions }}:
           ${{ each tf_version in parameters.tf_versions }}:
             ${{ each onnx_version in parameters.onnx_versions }}:
-              ${{ each onnx_opset in parameters.onnx_opsets }}:
-                ${{ each onnx_backend in parameters.onnx_backends }}:
-                  ${{ each onnx_backend_version in onnx_backend.value }}:
-                    ${{ format('{0} python{1} tf{2} onnx{3} opset{4} {5}{6}', platform, python_version, tf_version, onnx_version, onnx_opset, onnx_backend.key, onnx_backend_version) }}:
-                      CI_PYTHON_VERSION: '${{ python_version }}'
-                      CI_TF_VERSION: '${{ tf_version }}'
-                      CI_ONNX_VERSION: '${{ onnx_version }}'
-                      CI_ONNX_OPSET: '${{ onnx_opset }}'
-                      CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
-                      CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
+              ${{ each onnx_backend in parameters.onnx_backends }}:
+                ${{ each onnx_backend_version in onnx_backend.value }}:
+                  ${{ each onnx_opset in parameters.onnx_opsets }}:
+                    ${{ if ne(onnx_opset, '') }}:
+                      ${{ format('{0} python{1} tf{2} onnx{3} opset{4} {5}{6}', platform, python_version, tf_version, onnx_version, onnx_opset, onnx_backend.key, onnx_backend_version) }}:
+                        CI_PYTHON_VERSION: '${{ python_version }}'
+                        CI_TF_VERSION: '${{ tf_version }}'
+                        CI_ONNX_VERSION: '${{ onnx_version }}'
+                        CI_ONNX_OPSET: '${{ onnx_opset }}'
+                        CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
+                        CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
 
-                      ${{ if eq(tf_version, '') }}:
-                        CI_PIP_TF_NAME: 'tensorflow'
-                      ${{ if ne(tf_version, '') }}:
-                        CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
+                        ${{ if eq(tf_version, '') }}:
+                          CI_PIP_TF_NAME: 'tensorflow'
+                        ${{ if ne(tf_version, '') }}:
+                          CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
 
-                      ${{ if eq(onnx_version, '') }}:
-                        CI_PIP_ONNX_NAME: 'onnx'
-                      ${{ if ne(onnx_version, '') }}:
-                        CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
+                        ${{ if eq(onnx_version, '') }}:
+                          CI_PIP_ONNX_NAME: 'onnx'
+                        ${{ if ne(onnx_version, '') }}:
+                          CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
 
-                      ${{ if eq(onnx_backend_version, '') }}:
-                        CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                      ${{ if ne(onnx_backend_version, '') }}:
-                        CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                        ${{ if eq(onnx_backend_version, '') }}:
+                          CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                        ${{ if ne(onnx_backend_version, '') }}:
+                          CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+
+                    ${{ if eq(onnx_opset, '') }}:
+                      ${{ format('{0} python{1} tf{2} onnx{3} {4}{5}', platform, python_version, tf_version, onnx_version, onnx_backend.key, onnx_backend_version) }}:
+                        CI_PYTHON_VERSION: '${{ python_version }}'
+                        CI_TF_VERSION: '${{ tf_version }}'
+                        CI_ONNX_VERSION: '${{ onnx_version }}'
+                        CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
+                        CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
+
+                        ${{ if eq(tf_version, '') }}:
+                          CI_PIP_TF_NAME: 'tensorflow'
+                        ${{ if ne(tf_version, '') }}:
+                          CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
+
+                        ${{ if eq(onnx_version, '') }}:
+                          CI_PIP_ONNX_NAME: 'onnx'
+                        ${{ if ne(onnx_version, '') }}:
+                          CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
+
+                        ${{ if eq(onnx_backend_version, '') }}:
+                          CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                        ${{ if ne(onnx_backend_version, '') }}:
+                          CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
 
     # Insert all properties other than pool/steps/strategy
     ${{ each pair in parameters.job }}:
