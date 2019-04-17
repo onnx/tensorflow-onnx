@@ -129,10 +129,9 @@ class TransposeOptimizer(GraphOptimizerBase):
         # dangling transpose nodes can be deleted
         graph.delete_unused_nodes(graph.outputs)
 
-    def optimize(self, graph):
+    def _optimize(self, graph):
         self._g = graph
         self.pre_optimize_action()
-        previous_counter = self._g.dump_node_statistics()
         no_action = False
         iteration_cnt = 0
         while not no_action:
@@ -161,10 +160,6 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         self.merge_duplicated_transposes()
         self.post_optimize_action()
-
-        current_counter = self._g.dump_node_statistics()
-        transpose_cnt = current_counter["Transpose"]
-        self._print_stat_diff(previous_counter, current_counter)
         return self._g
 
     def _initialize_handlers(self):

@@ -17,12 +17,12 @@ from .. import logging
 
 # optimizer sequence need to be considered carefully
 _optimizers = OrderedDict([
-    ("reduce_transpose", TransposeOptimizer),
+    ("optimize_transpose", TransposeOptimizer),
     ("fold_constants", ConstFoldOptimizer),
-    # merge_duplication should be used after reduce_transpose
-    # for reduce_transpose may have some trans nodes that can be merge
+    # merge_duplication should be used after optimize_transpose
+    # for optimize_transpose may have some trans nodes that can be merge
     ("merge_duplication", MergeDuplicatedNodesOptimizer),
-    ("reduce_identity", IdentityOptimizer),
+    ("remove_identity", IdentityOptimizer),
 ])
 
 

@@ -26,7 +26,7 @@ class GraphOptimizerBase(object):
         return utils.is_debug_mode()
 
     def optimize(self, graph):
-        """ Optimize graph, return optimized graph """
+        """ Optimize graph, return optimized graph. """
         before = graph.dump_node_statistics()
 
         graph = self._optimize(graph)
@@ -38,6 +38,7 @@ class GraphOptimizerBase(object):
         return graph
 
     def _optimize(self, graph):
+        """ Derived class should override this function. """
         raise NotImplementedError
 
     @staticmethod
