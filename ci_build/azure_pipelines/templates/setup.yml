@@ -31,7 +31,7 @@ steps:
 - bash: |
     site_dir=$(python -c "import site; print(site.getsitepackages()[1])")
     echo "##vso[task.prependpath]$site_dir\numpy\.libs"
-  displayName: 'Fix numpy path'
+  displayName: 'Fix Numpy Path'
   condition: and(succeeded(), in(variables['Agent.OS'], 'Windows_NT'))
 
 - bash: env
