@@ -34,6 +34,7 @@ def get_inputs_for_current_iteration(g, input_id, iter_index):
 def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_shape, trip_count_input_ids,
                            rank, loop_name):
     g = parent_g.create_new_graph_with_same_config()
+    g.parent_graph = parent_g
     iter_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
     fake_var_name = utils.make_name("fake_var")
@@ -117,6 +118,7 @@ def create_if_op(g, input_ids, output_data_type, output_shape):
 
 def create_body_graph_for_if_branch(parent_g, data_type, output_shape, chosen_cur_cond_val_out_name, op_name):
     g = parent_g.create_new_graph_with_same_config()
+    g.parent_graph = parent_g
     name = utils.make_name("Identity")
     g.make_node(
         'Identity',
@@ -204,13 +206,14 @@ def make_range_non_const(ctx, start, limit, delta, output, scope_name, shape, dt
 
     # body
     g = ctx.create_new_graph_with_same_config()
-    g.make_node("Identity", ["cond"], outputs=["cond_out"])
-    g.make_node("Add", ["prev", delta], outputs=["current"], name=utils.make_name("add"))
-    g.make_node("Identity", ["prev"], outputs=["range"])
-
+    g.parent_graph = ctx
     g.add_graph_input("i", TensorProto.INT64, [])
     g.add_graph_input("cond", TensorProto.BOOL, [])
     g.add_graph_input("prev", dtype, [])
+
+    g.make_node("Identity", ["cond"], outputs=["cond_out"])
+    g.make_node("Add", ["prev", delta], outputs=["current"], name=utils.make_name("add"))
+    g.make_node("Identity", ["prev"], outputs=["range"])
 
     g.add_graph_output("cond_out", TensorProto.BOOL, [])
     g.add_graph_output("current", dtype, [])
@@ -274,8 +277,9 @@ class ReverseSequence:
         input_shape = ctx.get_shape(node.input[0])
 
         g = ctx.create_new_graph_with_same_config()
-        g.make_node('Identity', ['X'], outputs=['Y'])
+        g.parent_graph = ctx
         g.add_graph_input('X', input_dtype, input_shape[2:])
+        g.make_node('Identity', ['X'], outputs=['Y'])
         g.add_graph_output('Y', input_dtype, input_shape[2:])
 
         node.set_body_graph_as_attr("body", g)

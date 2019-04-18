@@ -9,10 +9,12 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import copy
 from collections import defaultdict, OrderedDict
-from onnx import defs
+from onnx import defs, helper, TensorProto, OperatorSetIdProto, shape_inference
 
 from . import constants
+from . import utils
 
 
 class OnnxOpSchema(object):
@@ -112,3 +114,55 @@ def get_max_supported_opset_version(domain=None):
     """Get max supported opset version by current onnx package given a domain."""
     domain = domain or constants.ONNX_DOMAIN
     return _domain_opset_versions.get(domain, None)
+
+
+def infer_onnx_shape_dtype(node, input_shapes, input_dtypes, opset, initializer=None):
+    """
+    Infer shapes and dtypes for outputs of the node.
+    Sometimes, shape inference needs the values of node's inputs, so initializers are used.
+    """
+
+    def build_onnx_op(node):
+        """Build onnx op"""
+        onnx_node = helper.make_node(node.type, node.input, node.output, name=node.name)
+        # deal with attributes
+        attr = []
+        attr_graphs = node.get_body_graphs()
+        if attr_graphs:
+            for attr_name, sub_graph in attr_graphs.items():
+                copied_sub_graph = copy.deepcopy(sub_graph)
+                graph_proto = copied_sub_graph.make_graph("graph for " + node.name + " " + attr_name)
+                attr.append(helper.make_attribute(attr_name, graph_proto))
+        attr.extend([a for a in node.attr_onnx.values()])
+        if attr:
+            onnx_node.attribute.extend(attr)
+        return onnx_node
+
+    shapes = {}
+    dtypes = {}
+    inputs = []
+    outputs = []
+    for inp, shape, dtype in zip(node.input, input_shapes, input_dtypes):
+        inputs.append(utils.make_onnx_inputs_outputs(inp, dtype, shape))
+    for output in node.output:
+        outputs.append(utils.make_onnx_inputs_outputs(output, TensorProto.UNDEFINED, None))
+    graph_def = helper.make_graph([build_onnx_op(node)], "infer-graph", inputs, outputs, initializer=initializer)
+    imp = OperatorSetIdProto()
+    imp.version = opset
+    model_def = helper.make_model(graph_def, opset_imports=[imp])
+
+    inferred_model = shape_inference.infer_shapes(model_def)
+    for output in inferred_model.graph.output:
+        tensor_type = output.type.tensor_type
+        if tensor_type.HasField("elem_type"):
+            dtypes[output.name] = tensor_type.elem_type
+        else:
+            dtypes[output.name] = TensorProto.UNDEFINED
+        # 0 in shapes of onnx means unknown which is -1 in our convertor
+        if tensor_type.HasField("shape"):
+            shapes[output.name] = [
+                dim.dim_value if dim.dim_value != 0 else utils.ONNX_UNKNOWN_DIMENSION for dim in tensor_type.shape.dim
+            ]
+        else:
+            shapes[output.name] = None
+    return shapes, dtypes

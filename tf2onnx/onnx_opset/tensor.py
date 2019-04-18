@@ -283,14 +283,15 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
 
     # body graph creation
     g = ctx.create_new_graph_with_same_config()
+    g.add_graph_input(trip_name, TensorProto.INT64, [])
+    g.add_graph_input(cond_name, TensorProto.BOOL, [])
+    g.add_graph_input(cur_name, dtype, [])
+    g.parent_graph = ctx
+
     index_i = g.make_node("Gather", [index.output[0], trip_name], attr={"axis": 0})
     gather = g.make_node("Gather", [cur_name, index_i.output[0]], attr={"axis": 0})
     g.make_node("Squeeze", [gather.output[0]], attr={"axes": [0]}, outputs=[result_name])
     g.make_node("Identity", [cond_name], outputs=[cond_out_name])
-
-    g.add_graph_input(trip_name, TensorProto.INT64, [])
-    g.add_graph_input(cond_name, TensorProto.BOOL, [])
-    g.add_graph_input(cur_name, dtype, [])
 
     g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
     g.add_graph_output(result_name, dtype, [])
@@ -337,6 +338,11 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     dummy_out_name = utils.make_name("dummy_out")
     result_name = utils.make_name("res")
 
+    g.add_graph_input(trip_name, TensorProto.INT64, [])
+    g.add_graph_input(cond_name, TensorProto.BOOL, [])
+    g.add_graph_input(dummy_name, t_params, [])
+    g.parent_graph = ctx
+
     index = g.make_node("Gather", [flatten_indices.output[0], trip_name], attr={"axis": 0})
     index_squeeze = g.make_node("Squeeze", [index.output[0]], attr={"axes": [0]})
     # inner loop to gather result
@@ -344,10 +350,6 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     g.make_node("Identity", [cond_name], outputs=[cond_out_name])
     g.make_node("Identity", [dummy_name], outputs=[dummy_out_name])
     g.make_node("Identity", [inner_loop.output[0]], outputs=[result_name])
-
-    g.add_graph_input(trip_name, TensorProto.INT64, [])
-    g.add_graph_input(cond_name, TensorProto.BOOL, [])
-    g.add_graph_input(dummy_name, t_params, [])
 
     g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
     g.add_graph_output(dummy_out_name, t_params, [])
