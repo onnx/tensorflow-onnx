@@ -9,5 +9,5 @@ jobs:
     job:
       steps:
       - template: 'unit_test.yml'
-      parameters:
-          onnx_opsets: ['10', '9', '8', '7']
+        parameters:
+            onnx_opsets: ['10', '9', '8', '7']
