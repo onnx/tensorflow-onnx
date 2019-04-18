@@ -4,10 +4,9 @@ jobs:
 - template: 'templates/job_generator.yml'
   parameters:
     platforms: ['linux', 'windows', 'mac']
-    tf_versions: ['1.12', '1.11', '1.10', '1.9', '1.8', '1.7', '1.6', '1.5']
+    python_versions: ['3.6', '3.5']
+    tf_versions: ['1.13.1', '1.12', '1.11', '1.10', '1.9', '1.8', '1.7', '1.6', '1.5']
     onnx_opsets: ['9', '8', '7']
-    onnx_backends:
-      onnxruntime: ['0.3.0']
     job:
       steps:
       - template: 'pretrained_model_test.yml'

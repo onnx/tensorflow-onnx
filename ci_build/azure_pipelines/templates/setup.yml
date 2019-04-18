@@ -13,10 +13,9 @@ steps:
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
 
-    # HACK: before onnxruntime nightly package is ready, install onnxruntime from pypi test
-    if [[ $CI_ONNXRUNTIME_FROM_PYPI_TEST == "true" ]] ;
+    if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
     then
-      pip install --index-url https://test.pypi.org/simple/ onnxruntime --force-reinstall
+      pip install --index-url https://test.pypi.org/simple/ ort-nightly --force-reinstall
     fi
 
     python setup.py install
@@ -31,7 +30,7 @@ steps:
 - bash: |
     site_dir=$(python -c "import site; print(site.getsitepackages()[1])")
     echo "##vso[task.prependpath]$site_dir\numpy\.libs"
-  displayName: 'Fix numpy path'
+  displayName: 'Fix Numpy Path'
   condition: and(succeeded(), in(variables['Agent.OS'], 'Windows_NT'))
 
 - bash: env

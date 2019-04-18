@@ -41,7 +41,7 @@ For pytorch/caffe2, follow the instructions here:
 We tested with pytorch/caffe2 and onnxruntime and unit tests are passing for those.
 
 ## Supported Tensorflow and Python Versions
-We tested with tensorflow 1.5-1.12 and anaconda **3.5,3.6**.
+We tested with tensorflow 1.5-1.13 and anaconda **3.5,3.6**.
 
 # Installation
 ## From pypi

@@ -1,15 +1,13 @@
 # Test against latest onnxruntime nightly package
 
-# TODO: change onnxruntime package name when nightly package is ready
-
 jobs:
 - template: 'templates/job_generator.yml'
   parameters:
-    tf_versions: ['1.12']
-    onnx_opsets: ['9']
+    tf_versions: ['1.13.1']
     onnx_backends:
       onnxruntime: ['']
     job:
-      displayName: 'unit_test'
       steps:
       - template: 'unit_test.yml'
+      parameters:
+          onnx_opsets: ['10', '9', '8', '7']

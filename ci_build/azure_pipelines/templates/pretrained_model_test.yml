@@ -5,7 +5,7 @@ steps:
     set -x
     status=0
     # TODO: fix unity model path
-    # python tests/run_pretrained_models.py --backend $(CI_ONNX_BACKEND) --opset $(CI_ONNX_OPSET) --config tests/unity.yaml || status=$?
-    python tests/run_pretrained_models.py --backend $(CI_ONNX_BACKEND) --opset $(CI_ONNX_OPSET) --config tests/run_pretrained_models.yaml || status=$?
+    # python tests/run_pretrained_models.py --backend $CI_ONNX_BACKEND --opset $CI_ONNX_OPSET --config tests/unity.yaml || status=$?
+    python tests/run_pretrained_models.py --backend $CI_ONNX_BACKEND --opset $CI_ONNX_OPSET --config tests/run_pretrained_models.yaml || status=$?
     exit $status
   displayName: 'Test Pre-trained Model'
