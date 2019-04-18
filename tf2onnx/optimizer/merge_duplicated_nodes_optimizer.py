@@ -9,7 +9,7 @@
 
 from collections import defaultdict, namedtuple
 
-from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
+from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
 

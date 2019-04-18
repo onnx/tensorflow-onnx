@@ -47,15 +47,15 @@ def basicConfig(**kwargs):  # pylint: disable=invalid-name, function-redefined
     set_tf_verbosity(_logging.getLogger().getEffectiveLevel())
 
 
-_VERBOSITY_TO_LEVEL = [INFO, VERBOSE, DEBUG]
+_LOG_LEVELS = [FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG]
 
 
-def get_verbosity_level(verbosity, default_level=INFO):
+def get_verbosity_level(verbosity, base_level=INFO):
     """ If verbosity is specified, return corresponding level, otherwise, return default_level. """
     if verbosity is None:
-        return default_level
-    verbosity = min(max(0, verbosity), len(_VERBOSITY_TO_LEVEL) - 1)
-    return _VERBOSITY_TO_LEVEL[verbosity]
+        return base_level
+    verbosity = min(max(0, verbosity) + _LOG_LEVELS.index(base_level), len(_LOG_LEVELS) - 1)
+    return _LOG_LEVELS[verbosity]
 
 
 def set_level(level):
@@ -66,6 +66,9 @@ def set_level(level):
 
 def set_tf_verbosity(level):
     """ Set TF logging verbosity."""
+    # TF log is too verbose, adjust it
+    level = WARNING if level >= VERBOSE else level
+
     tf.logging.set_verbosity(level)
 
     # TF_CPP_MIN_LOG_LEVEL:

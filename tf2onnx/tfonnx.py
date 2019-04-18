@@ -686,13 +686,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         logger.warning("Argument verbose for process_tf_graph is deprecated. Please use --verbose option instead.")
     del verbose
 
-    opset = utils.find_opset(opset)
-    print("using tensorflow={}, onnx={}, opset={}, tfonnx={}/{}".format(
-        tf.__version__, utils.get_onnx_version(), opset,
-        tf2onnx.__version__, tf2onnx.version.git_version[:6]))
+    logger.info("Using tensorflow=%s, onnx=%s, tf2onnx=%s/%s",
+                tf.__version__, utils.get_onnx_version(), tf2onnx.__version__, tf2onnx.version.git_version[:6])
 
+    opset = utils.find_opset(opset)
+    logger.info("Using opset <onnx, %s>", opset)
     if opset > schemas.get_max_supported_opset_version():
-        logger.warning("currently installed onnx package %s is too low to support opset %s, "
+        logger.warning("Currently installed onnx package %s is too low to support opset %s, "
                        "please upgrade onnx package to avoid potential conversion issue.",
                        utils.get_onnx_version(), opset)
 

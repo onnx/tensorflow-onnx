@@ -6,8 +6,8 @@
    for example, input of transpose node is const then we can do transpose statically instead of at runtime
 """
 
-from tf2onnx.optimizer.optimizer_base import GraphOptimizerBase
-from tf2onnx import utils
+from .. import utils
+from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
 

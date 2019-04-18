@@ -5,7 +5,9 @@
 
 from __future__ import unicode_literals
 
-from tf2onnx import logging, utils
+import copy
+
+from .. import logging, utils
 
 
 class GraphOptimizerBase(object):
@@ -24,14 +26,19 @@ class GraphOptimizerBase(object):
         return utils.is_debug_mode()
 
     def optimize(self, graph):
-        original_node_statistics = graph.dump_node_statistics()
+        """ Optimize graph, return optimized graph. """
+        before = graph.dump_node_statistics()
+
         graph = self._optimize(graph)
+        graph.update_proto()
         graph.delete_unused_nodes(graph.outputs)
-        node_statistics = graph.dump_node_statistics()
-        self._print_stat_diff(original_node_statistics, node_statistics)
+
+        after = graph.dump_node_statistics()
+        self._print_stat_diff(before, after)
         return graph
 
     def _optimize(self, graph):
+        """ Derived class should override this function. """
         raise NotImplementedError
 
     @staticmethod
@@ -48,14 +55,13 @@ class GraphOptimizerBase(object):
             body_graphs = node.get_body_graphs()
             if body_graphs:
                 for attr, b_g in body_graphs.items():
-                    b_g = optimize_func(b_g)
+                    b_g = GraphOptimizerBase._apply_optimization(b_g, optimize_func)
                     node.set_body_graph_as_attr(attr, b_g)
         return graph
 
-    def _print_stat_diff(self, nodes_original, nodes_after_optimized):
-        nodes_after_optimized.subtract(nodes_original)
-        res = {}
-        for key, value in nodes_after_optimized.items():
-            if value != 0:
-                res[key] = value
-        self.logger.info("the optimization gain is %s", res)
+    def _print_stat_diff(self, before, after):
+        diff = copy.deepcopy(after)
+        diff.subtract(before)
+        diff = ["{} {} ({}->{})".format(k, str(v) if v < 0 else '+' + str(v), before.get(k, 0), after.get(k, 0))
+                for k, v in diff.most_common() if v != 0]
+        self.logger.verbose(', '.join(diff) if diff else "no change")
