@@ -948,7 +948,7 @@ class NonMaxSuppression:
         ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
         ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
         ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnx_pb.TensorProto.INT64)
-        # replace original node with nonmaxsurppress + slice + squeeze +cast
+        # replace original node with nonmaxsurppress + slice + squeeze + cast
         dtypes = [ctx.get_dtype(node.output[0])]
         shapes = [ctx.get_shape(node.output[0])]
         ctx.remove_node(node.name)

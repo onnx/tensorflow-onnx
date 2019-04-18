@@ -479,7 +479,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         self._g.remove_node(trans.name)
         self._g.remove_node(node.name)
         shape_node = self._g.make_node("Shape", [trans.input[0]])
-        const_node = self._g.make_const("Const", np.array(trans.get_attr("perm").ints))
+        const_node = self._g.make_const(utils.make_name("Const"), np.array(trans.get_attr("perm").ints))
         gather_node = self._g.make_node("Gather", [shape_node.output[0], const_node.output[0]], outputs=node.output)
         self._g.set_shape(gather_node.output[0], output_shape)
         self._g.set_dtype(gather_node.output[0], output_dtype)

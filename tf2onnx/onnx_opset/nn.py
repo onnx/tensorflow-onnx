@@ -464,14 +464,15 @@ class ResizeX:
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
-        cls._convert_since_9(ctx, node, **kwargs)
+        cls._convert_since_9(ctx, node, node_type="Upsample")
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
-        cls._convert_since_9(ctx, node, **kwargs)
+        cls._convert_since_9(ctx, node, node_type="Resize")
 
     @classmethod
-    def _convert_since_9(cls, ctx, node, **kwargs):
+    def _convert_since_9(cls, ctx, node, node_type):
+
         # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
         # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
         # wants the input to be NHWC - adjust target_shape to this.
@@ -505,7 +506,7 @@ class ResizeX:
             scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
         input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": [0, 3, 1, 2]})
-        upsample = ctx.make_node("Upsample", [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
+        upsample = ctx.make_node(node_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
