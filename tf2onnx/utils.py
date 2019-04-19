@@ -165,6 +165,8 @@ def get_tf_tensor_data(tensor):
         is_raw = True
     elif tensor.float_val:
         data = tensor.float_val
+    elif tensor.half_val:
+        data = tensor.half_val
     elif tensor.dcomplex_val:
         data = tensor.dcomplex_val
     elif tensor.int_val:
