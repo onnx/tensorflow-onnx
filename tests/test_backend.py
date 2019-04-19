@@ -1182,6 +1182,33 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {}, check_value=False, check_shape=True)
 
     @skip_caffe2_backend()
+    def test_randomuniform_dyn_shape(self):
+        # test for dynamic shape coming from a shape op
+        x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
+        x = tf.placeholder(x_val.dtype, name=_TFINPUT)
+        x_ = tf.stack([x, x])
+        x_ = tf.identity(x_)
+        x_ = tf.shape(x_, name="shape")
+        x_ = tf.random_uniform(x_, name="rand", dtype=tf.float32)
+        x_ = tf.identity(x_)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
+
+    @skip_caffe2_backend()
+    def test_randomuniform_calc_shape(self):
+        # test for dynamic shape coming from some subgraph
+        x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
+        x = tf.placeholder(x_val.dtype, [None, 3], name=_TFINPUT)
+        x_ = tf.identity(x)
+        x_ = tf.shape(x_, name="shape")[1:]
+        x_ = tf.random_uniform(x_, name="rand", dtype=tf.float32)
+        x_ = tf.identity(x_)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
+
+    @skip_caffe2_backend()
     def test_argminmax(self):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
