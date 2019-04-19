@@ -86,8 +86,8 @@ def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output, to_delete):
             # In many cases there is a shape op in tensorflow before RandomUniform and
             # to make that work for onnx we just need to remove the shape op.
             new_node = g.make_node("RandomUniformLike", inputs=[shape_node.input[0]], name=op_name,
-                               attr={"low": tmin, "high": tmax, "dtype": dtype},
-                               shapes=shape, dtypes=[dtype])
+                                   attr={"low": tmin, "high": tmax, "dtype": dtype},
+                                   shapes=shape, dtypes=[dtype])
         else:
             # if the shape is calculated we need to create a tensor so RandomUniformLike
             # can take the shape from there. Pre opset9 this is somewhat hacky because there is
@@ -104,6 +104,6 @@ def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output, to_delete):
             func(g, fill_node)
             # and use RandomUniformLike to create the random tensor
             new_node = g.make_node("RandomUniformLike", inputs=[fill_node.output[0]], name=op_name,
-                               attr={"low": tmin, "high": tmax, "dtype": dtype},
-                               shapes=shape, dtypes=[dtype])
+                                   attr={"low": tmin, "high": tmax, "dtype": dtype},
+                                   shapes=shape, dtypes=[dtype])
     return new_node
