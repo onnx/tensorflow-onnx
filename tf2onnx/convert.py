@@ -14,7 +14,7 @@ import tensorflow as tf
 
 from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize
-from . import constants, loader, logging, utils
+from tf2onnx import constants, loader, logging, utils
 
 
 # pylint: disable=unused-argument
