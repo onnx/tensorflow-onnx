@@ -35,7 +35,8 @@ class ShapeInferenceTests(Tf2OnnxBackendTestBase):
         raised = False
         try:
             results = self.run_backend(graph, outputs, feed_dict)
-        except:  # pylint: disable=bare-except
+        except Exception as ex:  # pylint: disable=broad-except
+            self.logger.error(ex)
             raised = True
         self.assertFalse(raised)
 
@@ -45,7 +46,8 @@ class ShapeInferenceTests(Tf2OnnxBackendTestBase):
             inferred_shape = tuple(graph.get_shape(inferred))
             try:
                 utils.merge_shapes(actual_shape, inferred_shape)
-            except:  # pylint: disable=bare-except
+            except Exception as ex:  # pylint: disable=broad-except
+                self.logger.error(ex)
                 raised = True
             self.assertFalse(raised)
 
@@ -271,7 +273,7 @@ class ShapeInferenceTests(Tf2OnnxBackendTestBase):
         self._run_test_case(graph, self._generate_random_inputs(inputs, shapes, dtypes))
 
         graph = self._create_empty_graph([], [], [])
-        const = graph.make_const("shape", np.array([3, 5, 6]))
+        const = graph.make_const("shape", np.array([3, 5, 6], dtype=np.int64))
         node = graph.make_node("ConstantOfShape", [const.output[0]])
         graph.add_graph_output(node.output[0])
         self._run_test_case(graph, self._generate_random_inputs([], [], []))
