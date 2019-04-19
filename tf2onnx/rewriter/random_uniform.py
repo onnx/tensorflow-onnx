@@ -60,9 +60,9 @@ def rewrite_random_uniform_fold_const(g, ops):
         tmax_minus_tmin = mul.inputs[1].get_tensor_value()
         tmin = output.inputs[1].get_tensor_value()
         tmax = tmin + tmax_minus_tmin
+        to_delete = list(set(match.get_nodes()))
         new_node = create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output, to_delete)
         g.replace_all_inputs(ops, output.output[0], new_node.output[0])
-        to_delete = list(set(match.get_nodes()))
         for n in to_delete:
             g.remove_node(n.name)
 
