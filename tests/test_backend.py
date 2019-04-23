@@ -2043,5 +2043,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    def test_batch_to_spacend(self):
+        block_size = [2, 2]
+        crop = [[0, 1], [2, 1]]
+
+        input_val = np.random.random_sample([40, 3, 5, 100]).astype(np.float32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_val.shape, name=_TFINPUT)  # NHWC
+        _ = tf.batch_to_space_nd(input_x, block_size, crop, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val})
+
+    def test_space_to_batchnd(self):
+        block_size = [2, 2]
+        pad = [[0, 1], [2, 1]]
+        input_val = np.random.random_sample([40, 5, 7, 66]).astype(np.float32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_val.shape, name=_TFINPUT)  # NHWC
+        _ = tf.space_to_batch_nd(input_x, block_size, pad, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val})
+
+        tf.reset_default_graph()
+
+        pad = [[0, 0], [1, 2]]
+        input_val = np.random.random_sample([10, 6, 7, 66]).astype(np.float32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_val.shape, name=_TFINPUT)  # NHWC
+        _ = tf.space_to_batch_nd(input_x, block_size, pad, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val})
+
 if __name__ == '__main__':
     unittest_main()
