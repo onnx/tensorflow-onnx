@@ -32,7 +32,7 @@ def getLogger(name=None):  # pylint: disable=invalid-name, function-redefined
     return logger
 
 
-_SIMPLE_LOG_FORMAT = "%(levelname)s: %(message)s"
+_SIMPLE_LOG_FORMAT = "%(message)s"
 _VERBOSE_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s: %(message)s"
 
 

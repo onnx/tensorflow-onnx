@@ -315,7 +315,7 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
         all_outputs |= set(op.output)
 
         new_node = g.make_node(op.type, op.input, outputs=op.output, attr=op.attr, name=op.name,
-                               skip_conversion=op.skip_conversion, auto_infer_shape_dtype=False)
+                               skip_conversion=op.skip_conversion, infer_shape_dtype=False)
         body_graphs = op.graph.contained_graphs.pop(op.name, None)
         if body_graphs:
             for attr_name, body_graph in body_graphs.items():
@@ -334,7 +334,7 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
     new_output_names = []
     for output, shape, dtype in zip(outputs, shapes, dtypes):
         node = g.make_node("Identity", inputs=[output], op_name_scope="sub_graph_ending_node",
-                           shapes=[shape], dtypes=[dtype], auto_infer_shape_dtype=False)
+                           shapes=[shape], dtypes=[dtype], infer_shape_dtype=False)
         new_output_names.append(node.output[0])
     g.outputs = new_output_names
     return g

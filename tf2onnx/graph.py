@@ -12,12 +12,10 @@ from __future__ import unicode_literals
 import collections
 import copy
 import logging
-import traceback
 import six
 import numpy as np
 
 from onnx import helper, numpy_helper, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
-from tf2onnx import constants
 from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
 from tf2onnx import optimizer
@@ -421,7 +419,7 @@ class Graph(object):
         return node
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
-                  op_name_scope=None, name=None, shapes=None, dtypes=None, domain=None, auto_infer_shape_dtype=True):
+                  op_name_scope=None, name=None, shapes=None, dtypes=None, domain=None, infer_shape_dtype=True):
         """Make a new onnx node in the graph"""
         if attr is None:
             attr = {}
@@ -476,8 +474,8 @@ class Graph(object):
             for i in range(output_count):
                 self.set_dtype(node.output[i], dtypes[i])
 
-        if (not shapes or not dtypes) and auto_infer_shape_dtype:
-            self.update_node_shape_dtype(node, override=True)
+        if (not shapes or not dtypes) and infer_shape_dtype:
+            self.update_node_shape_dtype(node, override=False)
 
         self._nodes.append(node)
         return node
@@ -538,44 +536,42 @@ class Graph(object):
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
 
-    def update_node_shape_dtype(self, node, override=True):
-        """try the best to infer shapes and dtypes for outputs of the node"""
+    def update_node_shape_dtype(self, node, override=False):
+        """Try the best to infer shapes and dtypes for outputs of the node,
+        by default, we respect TF shapes and dtypes.
+        """
         if node.is_const() or node.is_graph_input():
             return
         # NOTE: only support onnx node for now
-        if node.domain != constants.ONNX_DOMAIN:
+        if not utils.is_onnx_domain(node.domain):
             return
 
         logger.debug("Infer shape and dtype for [%s]", node.name)
         # NOTE: shape inference for some ops need the input values of the op, e.g., Reshape
         # op needs the "Shape" value to infer output shape.
-        initializer = []
+        initializers = []
         for i, inp in enumerate(node.inputs):
             if not inp:
-                logger.warning("[%s] infer a inexistent node: [%s], please check the code", node.name, node.input[i])
+                if logger.isEnabledFor(logging.VERBOSE):
+                    logger.warning(
+                        "[%s] infer a inexistent node: [%s], please check the code",
+                        node.name, node.input[i]
+                    )
                 continue
             if inp.is_const():
                 t = inp.get_attr("value")
                 tensor = helper.get_attribute_value(t)
                 tensor.name = inp.output[0]
-                initializer.append(tensor)
+                initializers.append(tensor)
 
         input_shapes = [self.get_shape(i) for i in node.input]
         input_dtypes = [self.get_dtype(i) for i in node.input]
 
-        dtypes = {}
-        shapes = {}
-        try:
-            shapes, dtypes = infer_onnx_shape_dtype(node, input_shapes, input_dtypes, self._opset, initializer)
-        except Exception:
-            tb = traceback.format_exc()
-            logger.warning("ONNX Failed to infer shapes and dtypes for [%s, type: %s]", node.name, node.type)
-            logger.warning("Inference error: %s", tb)
+        shapes, dtypes = infer_onnx_shape_dtype(node, self._opset, input_shapes, input_dtypes, initializers)
+        if not shapes or not dtypes:
             return
 
-        for output in node.output:
-            dtype = dtypes[output]
-            shape = shapes[output]
+        for output, shape, dtype in zip(node.output, shapes, dtypes):
             if dtype == TensorProto.UNDEFINED:
                 logger.debug("Inferred dtype for [%s, type: %s] is UNDEFINED, SKIP", node.name, node.type)
             else:

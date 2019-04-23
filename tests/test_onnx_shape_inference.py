@@ -31,25 +31,12 @@ class ShapeInferenceTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, graph, feed_dict):
         """Run model with onnxruntime and compare results' shape with internal shape inference."""
         outputs = graph.outputs
-        results = []
-        raised = False
-        try:
-            results = self.run_backend(graph, outputs, feed_dict)
-        except Exception as ex:  # pylint: disable=broad-except
-            self.logger.error(ex)
-            raised = True
-        self.assertFalse(raised)
+        results = self.run_backend(graph, outputs, feed_dict)
 
-        raised = False
         for actual, inferred in zip(results, outputs):
             actual_shape = actual.shape
             inferred_shape = tuple(graph.get_shape(inferred))
-            try:
-                utils.merge_shapes(actual_shape, inferred_shape)
-            except Exception as ex:  # pylint: disable=broad-except
-                self.logger.error(ex)
-                raised = True
-            self.assertFalse(raised)
+            self.assertTrue(utils.are_shapes_compatible(actual_shape, inferred_shape))
 
             actual_dtype = actual.dtype
             inferred_dtype = utils.ONNX_TO_NUMPY_DTYPE[graph.get_dtype(inferred)]
@@ -418,6 +405,9 @@ class ShapeInferenceTests(Tf2OnnxBackendTestBase):
         output_name = utils.make_name("output")
         graph._output_shapes[output_name] = [-1, -1, 2, 3]  # pylint: disable=protected-access
         node = graph.make_node("Transpose", [INPUT1], attr={"perm": [1, 0, 2, 3]}, outputs=[output_name])
+
+        graph.update_node_shape_dtype(node, override=True)
+
         graph.add_graph_output(node.output[0])
         self._run_test_case(graph, self._generate_random_inputs(inputs, shapes, dtypes))
 

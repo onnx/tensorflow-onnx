@@ -9,12 +9,15 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import logging
 import copy
 from collections import defaultdict, OrderedDict
 from onnx import defs, helper, TensorProto, OperatorSetIdProto, shape_inference
 
 from . import constants
 from . import utils
+
+logger = logging.getLogger(__name__)
 
 
 class OnnxOpSchema(object):
@@ -116,7 +119,7 @@ def get_max_supported_opset_version(domain=None):
     return _domain_opset_versions.get(domain, None)
 
 
-def infer_onnx_shape_dtype(node, input_shapes, input_dtypes, opset, initializer=None):
+def infer_onnx_shape_dtype(node, opset_version, input_shapes, input_dtypes, initializers=None):
     """
     Infer shapes and dtypes for outputs of the node.
     Sometimes, shape inference needs the values of node's inputs, so initializers are used.
@@ -138,20 +141,29 @@ def infer_onnx_shape_dtype(node, input_shapes, input_dtypes, opset, initializer=
             onnx_node.attribute.extend(attr)
         return onnx_node
 
-    shapes = {}
-    dtypes = {}
     inputs = []
     outputs = []
     for inp, shape, dtype in zip(node.input, input_shapes, input_dtypes):
         inputs.append(utils.make_onnx_inputs_outputs(inp, dtype, shape))
     for output in node.output:
         outputs.append(utils.make_onnx_inputs_outputs(output, TensorProto.UNDEFINED, None))
-    graph_def = helper.make_graph([build_onnx_op(node)], "infer-graph", inputs, outputs, initializer=initializer)
+    graph_proto = helper.make_graph([build_onnx_op(node)], "infer-graph", inputs, outputs, initializer=initializers)
     imp = OperatorSetIdProto()
-    imp.version = opset
-    model_def = helper.make_model(graph_def, opset_imports=[imp])
+    imp.version = opset_version
+    model_proto = helper.make_model(graph_proto, opset_imports=[imp])
 
-    inferred_model = shape_inference.infer_shapes(model_def)
+    inferred_model = None
+    try:
+        inferred_model = shape_inference.infer_shapes(model_proto)
+    except Exception:  # pylint: disable=broad-except
+        logger.warning(
+            "ONNX Failed to infer shapes and dtypes for [%s, type: %s]",
+            node.name, node.type, exc_info=1
+        )
+        return None, None
+
+    shapes = {}
+    dtypes = {}
     for output in inferred_model.graph.output:
         tensor_type = output.type.tensor_type
         if tensor_type.HasField("elem_type"):
@@ -165,4 +177,15 @@ def infer_onnx_shape_dtype(node, input_shapes, input_dtypes, opset, initializer=
             ]
         else:
             shapes[output.name] = None
-    return shapes, dtypes
+    output_shapes = []
+    output_dtypes = []
+    for output in node.output:
+        if output in shapes:
+            output_shapes.append(shapes[output])
+        else:
+            output_shapes.append(None)
+        if output in dtypes:
+            output_dtypes.append(dtypes[output])
+        else:
+            output_dtypes.append(TensorProto.UNDEFINED)
+    return output_shapes, output_dtypes
