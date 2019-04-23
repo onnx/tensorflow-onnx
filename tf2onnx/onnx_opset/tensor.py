@@ -793,3 +793,77 @@ class IsNan:
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op("BatchToSpaceND", onnx_op="DepthToSpace")
+class BatchToSpace:
+    @classmethod
+    def version_4(cls, ctx, node, **kwargs):
+        # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
+        # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
+        # and we only support 4D here, so the data format is NHWC
+        # onnx op "DepthToSpace" does the same work on input tensor except that it works on "C",
+        # and it only supports NCHW
+        # T out = BatchToSpaceND(T input, int32 block_shape, int32 crops)
+        input_tensor = node.inputs[0]
+        blocksize = node.inputs[1].get_tensor_value()
+        crops = node.inputs[2].get_tensor_value()
+
+        utils.make_sure(len(ctx.get_shape(input_tensor.output[0])) == 4, "only supports 4D for now")
+        utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
+                        "only support same blocksize at different dims")
+
+        ctx.remove_node(node.name)
+        # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
+        trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
+        reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
+        trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
+
+        # implement crop logic, the data format is NHWC
+        slice_axis = [1, 2]
+        top, bottom = crops[0]
+        left, right = crops[1]
+        starts = [top, left]
+        ends = []
+        for end in [bottom, right]:
+            if end != 0:
+                ends.append(-end)
+            else:
+                ends.append(np.iinfo(np.int32).max)
+
+        ctx.make_node("Slice", trans2.output, attr={"axes": slice_axis, "ends": ends, "starts": starts},
+                      name=node.name, outputs=node.output)
+
+
+@tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")
+class SpaceToBatch:
+    @classmethod
+    def version_4(cls, ctx, node, **kwargs):
+        # https://www.tensorflow.org/api_docs/python/tf/space_to_batch_nd
+        # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
+        # and we only support 4D here, so the data format is NHWC
+        # onnx op "SpaceToDepth" does the same work on input tensor except that it works on "C",
+        # and it only supports NCHW
+        # T out = SpaceToBatchND(T input, int32 block_shape, int32 crops)
+        input_tensor = node.inputs[0]
+        blocksize = node.inputs[1].get_tensor_value()
+        paddings = node.inputs[2].get_tensor_value()
+
+        utils.make_sure(len(ctx.get_shape(input_tensor.output[0])) == 4, "only supports 4D for now")
+        utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
+                        "only support same blocksize at different dims")
+
+        ctx.remove_node(node.name)
+
+        # implement pads logic, the data format is NHWC
+        top, bottom = paddings[0]
+        left, right = paddings[1]
+        pads = [0, top, left, 0,
+                0, bottom, right, 0]
+
+        pad_op = ctx.make_node("Pad", input_tensor.output, attr={"pads": pads})
+
+        # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
+        trans1 = ctx.make_node("Transpose", pad_op.output, {"perm": [3, 0, 1, 2]})
+        reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
+        ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]}, name=node.name, outputs=node.output)
