@@ -69,7 +69,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = m.run(output_names, inputs)
         return results
 
-    def _run_backend(self, g, outputs, input_dict):
+    def run_backend(self, g, outputs, input_dict):
         model_proto = g.make_model("test")
         model_path = self.save_onnx_model(model_proto, input_dict)
 
@@ -133,7 +133,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             g = process_tf_graph(sess.graph, opset=self.config.opset, output_names=output_names_with_port,
                                  target=self.config.target, **process_args)
             g = optimizer.optimize_graph(g)
-            actual = self._run_backend(g, output_names_with_port, onnx_feed_dict)
+            actual = self.run_backend(g, output_names_with_port, onnx_feed_dict)
 
         for expected_val, actual_val in zip(expected, actual):
             if check_value:

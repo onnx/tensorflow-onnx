@@ -110,8 +110,8 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 shape_name = utils.make_name(node.name)
                 ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
                 input_name = node.input[1]
-                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
-                reshape.input.append(shape_name)
+                reshape = ctx.make_node("Reshape", [input_name, shape_name])
+                ctx.replace_input(node, input_name, reshape.output[0])
                 reshape.skip_conversion = True
             ctx.set_shape(reshape.output[0], new_kernel_shape)
 
@@ -348,8 +348,8 @@ class BiasAdd:
                 shape_name = utils.make_name(node.name)
                 ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
                 op_name = node.input[1]
-                reshape_node = ctx.insert_new_node_on_input(node, "Reshape", op_name)
-                reshape_node.input.append(shape_name)
+                reshape_node = ctx.make_node("Reshape", [op_name, shape_name])
+                ctx.replace_input(node, op_name, reshape_node.output[0])
                 ctx.set_shape(reshape_node.output[0], new_broadcast_shape)
 
 
