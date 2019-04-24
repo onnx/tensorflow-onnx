@@ -1333,12 +1333,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(6, "cast")
-    def test_topk(self):
+    def test_topk1(self):
         x_val = np.arange(3 * 2 * 3).astype("float32")
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         values, _ = tf.nn.top_k(x, 5, sorted=True)
         _ = tf.identity(values, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "TopK with dynamic K")
+    def test_topk2(self):
+        x_val = np.arange(3 * 2 * 3).astype("float32")
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        k_val = np.array(10).astype(np.int32)
+        k = tf.placeholder(tf.int32, name=_TFINPUT1)
+        values, _ = tf.nn.top_k(x, k, sorted=True)
+        _ = tf.identity(values, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: k_val})
 
     def test_stack_axis(self):
         for axis in [0, 1]:

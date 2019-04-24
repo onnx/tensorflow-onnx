@@ -611,7 +611,7 @@ class Cast:
         pass
 
 
-@tf_op("TopKV2")
+@tf_op("TopKV2", onnx_op="TopK")
 class TopKV2:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
@@ -635,6 +635,15 @@ class TopKV2:
         cast_to_int32 = ctx.make_node("Cast", [new_topk_node.output[1]], outputs=[topk_output2],
                                       name=new_cast_name, attr={"to": onnx_pb.TensorProto.INT32},
                                       shapes=[shapes[1]], dtypes=[onnx_pb.TensorProto.INT32])
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # onnx only supports input K as a 1D tesor with dtype int64
+        # while in tf, K is a 0D tensor with dtype int32
+        k_0d = node.input[1]
+        cast = ctx.make_node("Cast", [k_0d], attr={"to": onnx_pb.TensorProto.INT64})
+        k_1d = ctx.make_node("Unsqueeze", cast.output, attr={"axes": [0]})
+        ctx.replace_input(node, k_0d, k_1d.output[0])
 
 
 @tf_op("Tile")
