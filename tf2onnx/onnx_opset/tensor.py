@@ -853,6 +853,8 @@ class SpaceToBatch:
         utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
                         "only support same blocksize at different dims")
 
+        shapes = [ctx.get_shape(node.output[0])]
+        dtypes = [ctx.get_dtype(node.output[0])]
         ctx.remove_node(node.name)
 
         # implement pads logic, the data format is NHWC
@@ -866,4 +868,5 @@ class SpaceToBatch:
         # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
         trans1 = ctx.make_node("Transpose", pad_op.output, {"perm": [3, 0, 1, 2]})
         reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
-        ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]}, name=node.name, outputs=node.output)
+        ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]}, name=node.name, outputs=node.output,
+                      shapes=shapes, dtypes=dtypes)
