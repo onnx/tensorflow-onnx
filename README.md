@@ -1,14 +1,14 @@
 tf2onnx - convert TensorFlow models to ONNX models.
 ========
 
-![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)
+[![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build?definitionId=16&branchName=master)
 
 # Supported ONNX version
-tensorflow-onnx will use the onnx version installed on your system and installs the latest onnx version if none is found.
+tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-By default we use opset 7 for the resulting onnx graph since most runtimes will support opset 7. Opset 7 was introduced in onnx-1.2.
+By default we use opset 7 for the resulting ONNX graph since most runtimes will support opset 7. Opset 7 was introduced in onnx-1.2.
 
-With the release of onnx-1.3 there is now opset 8 - to create an onnx graph for opset 8 use in the command line ```--opset 8```.
+Newer releases of ONNX support higher opsets. For example, to create an ONNX graph for opset 8 use in the command line ```--opset 8```.
 
 # Status
 We support many TensorFlow models. Support for Fully Connected and Convolutional networks is mature. Dynamic LSTM/GRU/Attention networks should work but the code for this is evolving. 
