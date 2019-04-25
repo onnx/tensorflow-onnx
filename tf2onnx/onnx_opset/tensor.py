@@ -881,3 +881,10 @@ class SpaceToBatch:
         reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
         ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]}, name=node.name, outputs=node.output,
                       shapes=shapes, dtypes=dtypes)
+
+
+@tf_op("IsInf", onnx_op="IsInf")
+class IsInf:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        pass
