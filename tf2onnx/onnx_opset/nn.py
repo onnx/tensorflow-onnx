@@ -15,6 +15,7 @@ import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import constants, utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common, controlflow, tensor
 
@@ -463,6 +464,14 @@ class ResizeX:
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
+        cls._convert_since_9(ctx, node, **kwargs)
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls._convert_since_9(ctx, node, **kwargs)
+
+    @classmethod
+    def _convert_since_9(cls, ctx, node, **kwargs):
         # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
         # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
         # wants the input to be NHWC - adjust target_shape to this.
@@ -481,8 +490,10 @@ class ResizeX:
             scales = ctx.make_const(utils.make_name("scales"), scale_val, raw=False)
         else:
             ori_shape = ctx.make_node("Shape", [node.input[0]])
-            ori_shape_hw = ctx.make_node("Slice", ori_shape.output, {"axes": [0], "starts": [1], "ends": [3]})
-            ori_shape_hw_float = ctx.make_node("Cast", ori_shape_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
+            attr = {"axes": [0], "starts": [1], "ends": [3]}
+            inputs_map = {"data": ori_shape.output[0], **attr}
+            ori_shape_hw = GraphBuilder(ctx).make_slice(inputs_map)
+            ori_shape_hw_float = ctx.make_node("Cast", [ori_shape_hw], attr={"to": onnx_pb.TensorProto.FLOAT})
 
             target_hw = node.inputs[1]
             target_hw_float = ctx.make_node("Cast", target_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
@@ -538,12 +549,13 @@ class MatrixBandPart:
         new_line = g.make_node(op_type="Concat", inputs=[const_zero_bool.output[0], "line"],
                                attr={"axis": counter_axis},
                                dtypes=[onnx_pb.TensorProto.BOOL])
-        slice_node = g.make_node(op_type="Slice", inputs=[new_line.output[0]],
-                                 attr={"axes": [counter_axis], "starts": [0], "ends": [-1]})
+        attr = {"axes": [counter_axis], "starts": [0], "ends": [-1]}
+        inputs_map = {"data": new_line.output[0], **attr}
+        slice_node = GraphBuilder(g).make_slice(inputs_map)
 
         g.make_node("Identity", ["cond"], outputs=["cond_out"])
         g.make_node("Identity", ["line"], outputs=["res"])
-        g.make_node("Identity", [slice_node.output[0]], outputs=["line_out"])
+        g.make_node("Identity", [slice_node], outputs=["line_out"])
 
         g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
         g.add_graph_input("cond", onnx_pb.TensorProto.BOOL, [])

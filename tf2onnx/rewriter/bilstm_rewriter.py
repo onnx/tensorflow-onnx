@@ -14,7 +14,7 @@ import logging
 import numpy as np
 from tf2onnx import utils
 from tf2onnx.rewriter.rnn_utils import is_reverse_op
-
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -128,15 +128,17 @@ def slice_bilstm_for_original_lstm_consumers(g, lstm_fw, lstm_bw, bi_lstm, lstm_
 
     if fw_consumers:
         attr = {"axes": [axis], "starts": [0], "ends": [1]}
-        slice_node_fw = g.make_node("Slice", [bi_lstm.output[lstm_output_index]], attr=attr)
-        all_nodes.append(slice_node_fw)
-        g.replace_all_inputs(fw_consumers, lstm_fw.output[lstm_output_index], slice_node_fw.output[0])
+        inputs_map = {"data": bi_lstm.output[lstm_output_index], **attr}
+        slice_node_fw = GraphBuilder(g).make_slice(inputs_map)
+        all_nodes.append(g.get_node_by_output(slice_node_fw))
+        g.replace_all_inputs(fw_consumers, lstm_fw.output[lstm_output_index], slice_node_fw)
 
     if bw_consumers:
         attr = {"axes": [axis], "starts": [1], "ends": [2]}
-        slice_node_bw = g.make_node("Slice", [bi_lstm.output[lstm_output_index]], attr=attr)
-        all_nodes.append(slice_node_bw)
-        g.replace_all_inputs(bw_consumers, lstm_bw.output[lstm_output_index], slice_node_bw.output[0])
+        inputs_map = {"data": bi_lstm.output[lstm_output_index], **attr}
+        slice_node_bw = GraphBuilder(g).make_slice(inputs_map)
+        all_nodes.append(g.get_node_by_output(slice_node_bw))
+        g.replace_all_inputs(bw_consumers, lstm_bw.output[lstm_output_index], slice_node_bw)
 
 
 def check_const(g, input_id):

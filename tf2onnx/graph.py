@@ -20,6 +20,7 @@ from tf2onnx import utils, __version__
 from tf2onnx.utils import port_name, find_opset
 from tf2onnx import optimizer
 from tf2onnx.schemas import get_schema, infer_onnx_shape_dtype
+from tf2onnx import constants
 
 logger = logging.getLogger(__name__)
 
@@ -419,7 +420,8 @@ class Graph(object):
         return node
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
-                  op_name_scope=None, name=None, shapes=None, dtypes=None, domain=None, infer_shape_dtype=True):
+                  op_name_scope=None, name=None, shapes=None, dtypes=None, domain=constants.ONNX_DOMAIN,
+                  infer_shape_dtype=True):
         """Make a new onnx node in the graph"""
         if attr is None:
             attr = {}

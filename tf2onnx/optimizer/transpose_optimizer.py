@@ -452,8 +452,15 @@ class TransposeOptimizer(GraphOptimizerBase):
         return False
 
     def _slice_handler(self, trans, node):
-        axes = node.get_attr("axes").ints
-        keepdims = node.get_attr("keepdims")
+        axes = None
+        if self._g.opset < 10:
+            axes = node.get_attr("axes").ints
+        else:  # in opset 10, axes is input instead of an attribute.
+            if len(node.inputs) >= 4:
+                axes_node = node.inputs[3]
+                if axes_node.is_const():
+                    axes = axes_node.get_tensor_value(as_list=True)
+
         if axes == [0, 1, 2, 3]:
             node.set_attr("axes", [0, 2, 3, 1])
             return self._switch_transpose_and_node(node, trans)
