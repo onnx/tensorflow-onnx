@@ -887,4 +887,7 @@ class SpaceToBatch:
 class IsInf:
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
-        pass
+        node_dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
+        if node_dtype not in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]:
+            raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
