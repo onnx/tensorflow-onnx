@@ -17,7 +17,6 @@ import zipfile
 
 import PIL.Image
 import numpy as np
-import requests
 import six
 import tensorflow as tf
 # contrib ops are registered only when the module is imported, the following import statement is needed,
@@ -119,11 +118,7 @@ class Test(object):
         os.makedirs(dir_name, exist_ok=True)
         fpath = os.path.join(dir_name, fname)
         if not os.path.exists(fpath):
-            response = requests.get(url)
-            if response.status_code not in [200]:
-                response.raise_for_status()
-            with open(fpath, "wb") as f:
-                f.write(response.content)
+            utils.get_url(url, fpath)
         model_path = os.path.join(dir_name, self.local)
         if not os.path.exists(model_path):
             if ftype == 'tgz':
