@@ -12,6 +12,7 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.rnn_utils import RNNUnitType, RnnWeight, \
     is_concat_op, is_slice_op, get_weights_from_const_node
 
@@ -277,12 +278,14 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         hidden_size = context.hidden_size
 
         attr = {"axes": [1], "starts": [0], "ends": [hidden_size]}
-        slice_node1 = self.g.make_node("Slice", [input_id], attr)
-        unsqueeze_node_1 = self.g.make_node("Unsqueeze", [slice_node1.output[0]], attr={"axes": [0]})
+        inputs_map = {"data": input_id, **attr}
+        slice_node1 = GraphBuilder(self.g).make_slice(inputs_map)
+        unsqueeze_node_1 = self.g.make_node("Unsqueeze", [slice_node1], attr={"axes": [0]})
 
         attr = {"axes": [1], "starts": [hidden_size], "ends": [hidden_size*2]}
-        slice_node2 = self.g.make_node("Slice", [input_id], attr)
-        unsqueeze_node_2 = self.g.make_node("Unsqueeze", [slice_node2.output[0]], attr={"axes": [0]})
+        inputs_map = {"data": input_id, **attr}
+        slice_node2 = GraphBuilder(self.g).make_slice(inputs_map)
+        unsqueeze_node_2 = self.g.make_node("Unsqueeze", [slice_node2], attr={"axes": [0]})
 
         return unsqueeze_node_1.output[0], unsqueeze_node_2.output[0]
 

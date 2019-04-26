@@ -9,6 +9,8 @@ from __future__ import division
 from __future__ import print_function
 import logging
 from onnx import TensorProto
+
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_pattern, \
     get_rnn_scope_name, parse_rnn_loop, is_select_op, is_tensor_array_write_op, \
@@ -232,21 +234,21 @@ class UnitRnnRewriterBase(LoopRewriterBase):
             attr={"to": TensorProto.FLOAT},
             shapes=[self.g.get_shape(shape_node.output[0])]
         )
-        batchsize_node = self.g.make_node(
-            "Slice", [cast_shape_node.output[0]],
-            attr={"axes": [0], "starts": [1], "ends": [2]}
-        )
+
+        attr = {"axes": [0], "starts": [1], "ends": [2]}
+        inputs_map = {"data": cast_shape_node.output[0], **attr}
+        batchsize_node = GraphBuilder(self.g).make_slice(inputs_map)
         if not seq_len_node:
             # Tile's repeats must be INT64
             repeat_node = self.g.make_node(
-                "Cast", [batchsize_node.output[0]],
+                "Cast", [batchsize_node],
                 attr={"to": TensorProto.INT64}
             )
-            timestep_node = self.g.make_node(
-                "Slice", [cast_shape_node.output[0]],
-                attr={"axes": [0], "starts": [0], "ends": [1]}
-            )
-            tile_node = self.g.make_node("Tile", [timestep_node.output[0], repeat_node.output[0]])
+
+            attr = {"axes": [0], "starts": [0], "ends": [1]}
+            inputs_map = {"data": cast_shape_node.output[0], **attr}
+            timestep_node = GraphBuilder(self.g).make_slice(inputs_map)
+            tile_node = self.g.make_node("Tile", [timestep_node, repeat_node.output[0]])
 
             # LSTM sequence_lens needs to be int32
             seq_len_node = self.g.make_node(
