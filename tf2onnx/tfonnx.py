@@ -471,9 +471,7 @@ def rewrite_incomplete_type_support_rs5(g, ops):
 def rewrite_incomplete_type_support_rs6(g, ops):
     impacted_ops = [
         "Div",
-        "Greater",
         "IsNaN",
-        "Less",
         "Max",
         "Min",
         "ReduceSum",
