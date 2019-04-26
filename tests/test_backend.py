@@ -2103,6 +2103,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.space_to_batch_nd(input_x, block_size, pad, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
 
+    @check_opset_min_version(10, "is_inf")
+    def test_isinf(self):
+        x_types = [np.float32, np.float64]
+        for x_type in x_types:
+            x_val1 = np.array([1.0, -2.0, 3.0, -4.0], dtype=x_type)
+            x_val2 = np.array([np.inf, np.inf, np.inf, np.inf], dtype=x_type).reshape((2, 2))
+            x_val3 = np.array([1.0, np.inf, -3.0, np.inf, 5.0, np.inf, -7.0, np.inf], dtype=x_type).reshape((2, 2, 2))
+            for x_val in [x_val1, x_val2, x_val3]:
+                x = tf.placeholder(x_type, x_val.shape, name=_TFINPUT)
+                x_ = tf.is_inf(x)
+                _ = tf.identity(x_, name=_TFOUTPUT)
+                self._run_test_case([_OUTPUT], {_INPUT: x_val})
+                tf.reset_default_graph()
 
 if __name__ == '__main__':
     unittest_main()

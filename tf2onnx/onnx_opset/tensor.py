@@ -922,3 +922,13 @@ class SpaceToBatch:
         reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
         ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]}, name=node.name, outputs=node.output,
                       shapes=shapes, dtypes=dtypes)
+
+
+@tf_op("IsInf", onnx_op="IsInf")
+class IsInf:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        node_dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
+        if node_dtype not in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]:
+            raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
