@@ -2107,9 +2107,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_isinf(self):
         x_types = [np.float32, np.float64]
         for x_type in x_types:
-            x_val1 = np.array([1.0, -2.0, 3.0, -4.0], dtype=x_type).reshape((2, 2))
-            x_val2 = np.array([np.inf, np.inf, np.inf, np.inf], dtype=x_type).reshape((1, 4))
-            x_val3 = np.array([1.0, np.inf, -3.0, np.inf, 5.0, np.inf, -7.0, np.inf, 9.0], dtype=x_type).reshape((3, 3))
+            x_val1 = np.array([1.0, -2.0, 3.0, -4.0], dtype=x_type)
+            x_val2 = np.array([np.inf, np.inf, np.inf, np.inf], dtype=x_type).reshape((2, 2))
+            x_val3 = np.array([1.0, np.inf, -3.0, np.inf, 5.0, np.inf, -7.0, np.inf], dtype=x_type).reshape((2, 2, 2))
             for x_val in [x_val1, x_val2, x_val3]:
                 x = tf.placeholder(x_type, x_val.shape, name=_TFINPUT)
                 x_ = tf.is_inf(x)
