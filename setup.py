@@ -35,7 +35,7 @@ class create_version(Command):
 
     def finalize_options(self):
         pass
-        
+
     def run(self):
         with open(os.path.join(SRC_DIR, 'version.py'), 'w') as f:
             f.write(dedent('''
@@ -74,11 +74,11 @@ setup(
     version=VersionInfo.version,
     description='Tensorflow to ONNX converter',
     setup_requires=['pytest-runner'],
-    tests_require=['graphviz', 'requests', 'parameterized', 'pytest', 'pytest-cov', 'pyyaml'],
+    tests_require=['graphviz', 'parameterized', 'pytest', 'pytest-cov', 'pyyaml'],
     cmdclass=cmdclass,
     packages=find_packages(),
     author='onnx@microsoft.com',
     author_email='onnx@microsoft.com',
     url='https://github.com/onnx/tensorflow-onnx',
-    install_requires=['numpy>=1.14.1', 'onnx>=1.4.1', 'six']
+    install_requires=['numpy>=1.14.1', 'onnx>=1.4.1', 'requests', 'six']
 )

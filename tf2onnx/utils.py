@@ -13,6 +13,10 @@ import os
 import re
 import shutil
 import tempfile
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import six
 import numpy as np
 import tensorflow as tf
@@ -20,6 +24,7 @@ from tensorflow.core.framework import types_pb2, tensor_pb2
 from google.protobuf import text_format
 import onnx
 from onnx import helper, onnx_pb, defs, numpy_helper
+
 from . import constants
 
 #
@@ -468,3 +473,23 @@ def set_debug_mode(enabled):
 
 def get_max_value(np_dtype):
     return np.iinfo(np_dtype).max
+
+
+def get_url(url, path, max_retries=5):
+    """ Download url and save to path. """
+    retries = Retry(total=max_retries, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
+    adapter = HTTPAdapter(max_retries=retries)
+    session = requests.Session()
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    response = session.get(url, allow_redirects=True)
+    if response.status_code not in [200]:
+        response.raise_for_status()
+
+    dir_name = os.path.dirname(path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+
+    with open(path, "wb") as f:
+        f.write(response.content)
