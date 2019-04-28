@@ -267,7 +267,7 @@ class ShapeInferenceTests(Tf2OnnxBackendTestBase):
 
     # node with subgraph
     @check_opset_min_version(8, "Scan")
-    @skip_opset(9, "Scan")
+    @check_opset_max_version(8, "Scan")
     def test_scan(self):
         batch_size = 1
         seq_len = 16
