@@ -724,7 +724,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
-
     def test_sequeeze_no_axis_specified(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2, 1))
         x = tf.placeholder(tf.float32, [2, 2, 1], name=_TFINPUT)
@@ -982,14 +981,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_split(self):
-        x_val = np.linspace(1.0, 5 * 30.0, 5 * 30).astype(np.float32).reshape(5, 30)
+        x_val = np.linspace(1.0, 5 * 30.0, 5 * 30).astype(np.float32).reshape((5, 30))
         x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_, _, _ = tf.split(x0, [4, 15, 11], 1)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_split_with_more_outputs(self):
-        x_val = np.linspace(1.0, 5 * 30.0, 5 * 30).astype(np.float32).reshape(5, 30)
+        x_val = np.linspace(1.0, 5 * 30.0, 5 * 30).astype(np.float32).reshape((5, 30))
         x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         _, _, _ = tf.split(x0, [4, 15, 11], 1, name="split_test")
         self._run_test_case(["split_test:0", "split_test:1", "split_test:2"], {_INPUT: x_val})
@@ -1418,28 +1417,28 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice1(self):
-        x_val = np.arange(3 * 2 * 3).astype("float32").reshape(3, 2, 3)
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.strided_slice(x, [1, 0, 0], [2, 1, 3], [1, 1, 1])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_strided_slice2(self):
-        x_val = np.arange(3 * 2 * 3).astype("float32").reshape(3, 2, 3)
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.strided_slice(x, [1, 0, 0], [2, 2, 3], [1, 1, 1])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_strided_slice3(self):
-        x_val = np.arange(3 * 2 * 3).astype("float32").reshape(3, 2, 3)
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = x[1:]
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     def test_strided_slice4(self):
-        x_val = np.arange(3 * 2 * 3).astype("float32").reshape(3, 2, 3)
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = x[:2]
         _ = tf.identity(x_, name=_TFOUTPUT)
@@ -1447,7 +1446,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice5(self):
-        x_val = np.arange(3 * 2 * 3).astype("float32").reshape(3, 2, 3)
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = x[:2, 0:1, 1:]
         _ = tf.identity(x_, name=_TFOUTPUT)
@@ -1457,7 +1456,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_strided_slice6(self):
         # example from here:
         # https://www.tensorflow.org/versions/r1.0/api_docs/cc/class/tensorflow/ops/strided-slice
-        x_val = np.arange(5 * 6).astype("float32").reshape(5, 6)
+        x_val = np.arange(5 * 6).astype("float32").reshape((5, 6))
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = x[2, :]
         _ = tf.identity(x_, name=_TFOUTPUT)
@@ -1465,7 +1464,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice7(self):
-        x_val = np.arange(5 * 6).astype("float32").reshape(5, 6)
+        x_val = np.arange(5 * 6).astype("float32").reshape((5, 6))
 
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.strided_slice(x, [0, 1], [3, 4], [1, 1], begin_mask=2)
