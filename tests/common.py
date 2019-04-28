@@ -4,6 +4,7 @@
 """ test common utilities."""
 
 import argparse
+import numpy as np
 import os
 import sys
 import unittest
@@ -280,6 +281,10 @@ def check_onnxruntime_incompatibility(op):
 def validate_const_node(node, expected_val):
     if node.is_const():
         node_val = node.get_tensor_value()
+        if (isinstance(expected_val, list) and isinstance(expected_val[0], float)) \
+           or isinstance(expected_val, float):
+            np.testing.assert_allclose(expected_val, node_val)
+            return True
         return node_val == expected_val
     return False
 
