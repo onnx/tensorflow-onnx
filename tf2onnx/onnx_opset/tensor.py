@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring,unused-variable
 
+
 def _convert_shapenode_to_int64(ctx, node, input_number):
     """cast int32 shape into int64 shape."""
     name = node.input[input_number]
@@ -54,6 +55,7 @@ def _wrap_concat_with_cast(ctx, node):
             output_cast.set_attr("to", dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(output_name, output_cast.output[0])
+
 
 @tf_op(["Size", "Flatten", "Dropout"])
 class DirectOp:
@@ -296,8 +298,6 @@ class GatherV2:
         ctx.remove_input(node, node.input[2])
         node.set_attr("axis", axis)
 
-INT64_MAX = np.iinfo(np.int64).max
-
 
 def _make_gathernd_inner_loop(ctx, params, index, dtype):
     """create the inner loop for GatherNd."""
@@ -343,7 +343,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     # reshape indices into [sum(indices[:-1]), indices[-1]]
     indices_shape = ctx.make_node("Shape", [indices], dtypes=[TensorProto.INT64])
     indices_size = ctx.make_node("Size", [indices])
-    attr = {"axes": [0], "ends": [INT64_MAX], "starts": [-1]}
+    attr = {"axes": [0], "ends": [utils.get_max_value(np.int64)], "starts": [-1]}
     inputs_map = {"data": indices_shape.output[0], **attr}
     inner_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     outter_shape = ctx.make_node("Div",
@@ -401,7 +401,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
                                       [inner_loop_shape.output[0], one_const.output[0]],
                                       attr={"axis": 0},
                                       dtypes=[TensorProto.INT64])
-    attr = {"axes": [0], "ends": [INT64_MAX], "starts": [1]}
+    attr = {"axes": [0], "ends": [utils.get_max_value(np.int64)], "starts": [1]}
     inputs_map = {"data": inner_loop_shape_.output[0], **attr}
     output_inner_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     attr = {"axes": [0], "ends": [-1], "starts": [0]}
@@ -932,3 +932,29 @@ class IsInf:
         utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
         if node_dtype not in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]:
             raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
+
+
+@tf_op(["NonMaxSuppressionV2", "NonMaxSuppressionV3"], onnx_op="NonMaxSuppression")
+class NonMaxSuppression:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # int32 = NonMaxSuppressionV2(T boxes, T scores, int32 max_output_size, T iou_threshold, T score_threshold)
+        # int64 = NonMaxSuppression(T boxes, T scores, int64 max_output_size, T iou_threshold, T score_threshold),
+        # T means float32 here, the last 3 params are optional
+        # tf boxes is 2D ([boxes_num, 4]) while onnx is 3D ([num_batches, boxes_num, 4])
+        # tf scores is 1D ([boxes_num])while onnx is 2D ([num_batches, num_classes, boxes_num])
+        # onnx output is [num_selected_boxes, 3], the meaning of last dim is [batch_index, class_index, box_index]
+        # while tf's output is [num_selected_boxes]
+        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
+        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
+        ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnx_pb.TensorProto.INT64)
+        # replace original node with nonmaxsurppress + slice + squeeze + cast
+        dtypes = [ctx.get_dtype(node.output[0])]
+        shapes = [ctx.get_shape(node.output[0])]
+        ctx.remove_node(node.name)
+        new_nonmaxsurppress = ctx.make_node(node.type, node.input).output[0]
+        slice_op = GraphBuilder(ctx).make_slice({"data": new_nonmaxsurppress,
+                                                 "axes": [1], "ends": [3], "starts": [2]})
+        squeeze_op = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
+        ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
+                      name=node.name, outputs=node.output, dtypes=dtypes, shapes=shapes)

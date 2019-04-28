@@ -1529,7 +1529,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
         if self.config.opset >= 9:
-            scale_node = group_nodes_by_type(graph)["Upsample"][0].inputs[1]
+            # in opset 10, upsample is removed and resize is defined.
+            node_statistic = group_nodes_by_type(graph)
+            mapped_node = (node_statistic.get("Upsample") or node_statistic.get("Resize"))[0]
+            scale_node = mapped_node.inputs[1]
             self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 2.0, 2.0]))
 
     @check_opset_min_version(9, "resize_nearest_neighbor")
@@ -1557,7 +1560,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
         if self.config.opset >= 9:
-            scale_node = group_nodes_by_type(graph)["Upsample"][0].inputs[1]
+            # in opset 10, upsample is removed and resize is defined.
+            node_statistic = group_nodes_by_type(graph)
+            mapped_node = (node_statistic.get("Upsample") or node_statistic.get("Resize"))[0]
+            scale_node = mapped_node.inputs[1]
             self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 2.0, 2.0]))
 
     @check_opset_min_version(9, "resize_bilinear")
@@ -1572,6 +1578,35 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.image.resize_bilinear(x, x_new_size_)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
+
+    @check_opset_min_version(10, "resize scale can less than 1")
+    def test_resize_bilinear_with_non_const2(self):
+        # scales has an element larger than 1 and also has an element less that 1
+        x_shape = [3, 100, 8, 5]
+        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+
+        x_new_size = np.array([20, 16]).astype(np.int32)
+        x_new_size_ = tf.placeholder(shape=[None], dtype=tf.int32, name=_TFINPUT1)
+
+        x_ = tf.image.resize_bilinear(x, x_new_size_)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
+
+    @check_opset_min_version(10, "resize scale can less than 1")
+    def test_resize_nearest_neighbor2(self):
+        x_shape = [1, 300, 20, 2]
+        x_new_size = [30, 40]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x = tf.placeholder(tf.float32, x_shape, name=_TFINPUT)
+        x_new_size_ = tf.constant(x_new_size)
+        x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        node_statistic = group_nodes_by_type(graph)
+        mapped_node = node_statistic.get("Resize")[0]
+        scale_node = mapped_node.inputs[1]
+        self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 0.1, 2.0]))
 
     @check_opset_min_version(9, "fill")
     def test_fill_float32(self):
@@ -2116,6 +2151,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 _ = tf.identity(x_, name=_TFOUTPUT)
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
                 tf.reset_default_graph()
+
+    @check_opset_min_version(10, "NonMaxSuppression")
+    def test_non_max_suppression(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+        boxes = tf.placeholder(tf.float32, shape=[None, 4], name=_TFINPUT)
+        scores = tf.placeholder(tf.float32, shape=[None], name=_TFINPUT1)
+        res1 = tf.image.non_max_suppression(boxes, scores, max_output_size=int(box_num / 2))
+        res2 = tf.image.non_max_suppression(boxes, scores, max_output_size=0)
+        _ = tf.identity(res1, name=_TFOUTPUT)
+        _ = tf.identity(res2, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
 
 if __name__ == '__main__':
     unittest_main()

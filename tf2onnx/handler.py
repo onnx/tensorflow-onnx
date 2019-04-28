@@ -15,6 +15,7 @@ from tf2onnx import constants
 
 # pylint: disable=unused-argument,missing-docstring,invalid-name
 
+
 class tf_op:
     """Class to implement the decorator to register handlers that map tf to onnx."""
 
