@@ -953,10 +953,8 @@ class NonMaxSuppression:
         shapes = [ctx.get_shape(node.output[0])]
         ctx.remove_node(node.name)
         new_nonmaxsurppress = ctx.make_node(node.type, node.input).output[0]
-        attr = {"axes": [1], "ends": [3], "starts": [2]}
-        inputs_map = {"data": new_nonmaxsurppress, **attr}
-        slice_op = GraphBuilder(ctx).make_slice(inputs_map)
+        slice_op = GraphBuilder(ctx).make_slice({"data": new_nonmaxsurppress,
+                                                 "axes": [1], "ends": [3], "starts": [2]})
         squeeze_op = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
         ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                       name=node.name, outputs=node.output, dtypes=dtypes, shapes=shapes)
-
