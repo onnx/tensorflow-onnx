@@ -70,6 +70,11 @@ class GraphBuilder(object):
         while inputs[-1] == "":
             inputs = inputs[:-1]
 
+        if self.graph.opset >= 10:
+            dtype = self.graph.get_dtype(inputs[1])
+            for input_data in inputs[1:]:
+                utils.make_sure(dtype == self.graph.get_dtype(input_data), "dtype should be same")
+
         return self.graph.make_node(op_type="Slice", inputs=inputs, attr=attr, name=name,
                                     outputs=outputs, shapes=shapes, dtypes=dtypes).output[0]
 

@@ -532,11 +532,12 @@ class StridedSlice:
             attr = node.get_attr(attr_name)
             if attr is not None and attr.i != 0:
                 raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
-        input_shape = ctx.get_shape(node.input[0])
-        begin = node.inputs[1].get_tensor_value(as_list=False)
-        end = node.inputs[2].get_tensor_value(as_list=False)
-        strides = node.inputs[3].get_tensor_value(as_list=False)
-        max_size = np.iinfo(begin.dtype).max
+        onnx_dtype = ctx.get_dtype(node.input[1])
+        np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
+        max_size = np.iinfo(np_dtype).max
+        begin = node.inputs[1].get_tensor_value()
+        end = node.inputs[2].get_tensor_value()
+        strides = node.inputs[3].get_tensor_value()
         end_mask = node.get_attr("end_mask")
         end_mask = end_mask.i if end_mask is not None else 0
         begin_mask = node.get_attr("begin_mask")
