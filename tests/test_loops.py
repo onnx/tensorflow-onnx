@@ -8,7 +8,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import unittest
 import numpy as np
 import tensorflow as tf
 
@@ -103,7 +102,6 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "x:0", "y:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
-    @unittest.skip("bug in onnxruntime")
     def test_while_loop_with_ta_read_reference_outer_input_directly(self):
         i = tf.placeholder(tf.int32, (), name="input_1")
         inputs = tf.placeholder(tf.float32, (10,), name="input_2")

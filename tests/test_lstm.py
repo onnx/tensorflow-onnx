@@ -8,7 +8,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import unittest
 import numpy as np
 import tensorflow as tf
 
@@ -268,7 +267,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
-    @unittest.skip("FIXME: disable for now for accuracy problem")
     def test_single_dynamic_lstm_random_weights(self, state_is_tuple=True):
         hidden_size = 5
         batch_size = 6
@@ -298,7 +296,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
-    @unittest.skip("FIXME: disable for now for accuracy problem")
     def test_single_dynamic_lstm_random_weights2(self, state_is_tuple=True):
         hidden_size = 128
         batch_size = 1
