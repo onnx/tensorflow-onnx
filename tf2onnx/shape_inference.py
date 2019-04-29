@@ -121,7 +121,8 @@ def infer_shape_for_node(g, node):
         # https://www.tensorflow.org/api_docs/python/tf/gather
         shape_params = g.get_shape(node.input[0])
         shape_indices = g.get_shape(node.input[1])
-        # in lower tf version, gather only has 2 inputs
+        # gather can only have 2 inputs
+        # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/gather.html
         if len(node.input) == 3:
             axis = node.input[2].get_tensor_value()
         else:
@@ -218,7 +219,7 @@ def infer_output_shapes_with_partial_inputs(g, node):
         data_inputs = node.input[:-1]
         input_shapes = [g.get_shape(node) for node in data_inputs]
         input_shapes = [shape for shape in input_shapes if shape is not None]
-        if len(input_shapes) == 0:
+        if not input_shapes:
             logger.debug("all input shapes of concat node %s are None, can't infer its output shape", node.name)
             return False
 
