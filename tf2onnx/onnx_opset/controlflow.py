@@ -13,15 +13,13 @@ import logging
 
 import numpy as np
 
-from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
-from tf2onnx.onnx_opset.nn import spatial_map
 from tf2onnx.handler import tf_op
 from tf2onnx.utils import make_sure
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument,missing-docstring
 
@@ -239,78 +237,6 @@ class PassThroughOp:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         pass
-
-
-@tf_op("ReverseSequence")
-class ReverseSequence:
-    @classmethod
-    def version_8(cls, ctx, node, **kwargs):
-        # T output = ReverseSequence(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
-        # T output = Scan(int64 sequence_lens, variadic initial_state_and_scan_inputs, @graph body,
-        #                 @ints directions,@int num_scan_inputs)
-        seq_dim = node.get_attr("seq_dim")
-        batch_dim = node.get_attr("batch_dim")
-        batch_major = seq_dim.i == 1 and (batch_dim or batch_dim.i == 0)
-        time_major = batch_dim.i == 1 and (seq_dim or seq_dim.i == 0)
-        perm_val = None
-
-        if not batch_major and not time_major:
-            error_msg = "unsupported attributes, seq_dim:{}, batch_dim:{}".format(seq_dim, batch_dim)
-            raise ValueError(error_msg)
-
-        if time_major:
-            old_shape = ctx.get_shape(node.input[0])
-            old_dtype = ctx.get_dtype(node.input[0])
-            perm_val = [1, 0]
-            rank = len(old_shape)
-            utils.make_sure(rank >= 2, "rank of reverse_sequence input {} is at least 2".format(node.input[0]))
-            perm_val += list(range(2, rank))
-            trans_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm_val)
-            new_shape = spatial_map(old_shape, perm_val)
-            ctx.set_shape(trans_node.output[0], new_shape)
-            ctx.set_dtype(trans_node.output[0], old_dtype)
-
-        # handle batch_major input
-        node.type = "Scan"
-        node.set_attr("num_scan_inputs", 1)
-        input_dtype = ctx.get_dtype(node.input[0])
-        input_shape = ctx.get_shape(node.input[0])
-
-        g = ctx.create_new_graph_with_same_config()
-        g.parent_graph = ctx
-        g.add_graph_input('X', input_dtype, input_shape[2:])
-        g.make_node('Identity', ['X'], outputs=['Y'])
-        g.add_graph_output('Y', input_dtype, input_shape[2:])
-
-        node.set_body_graph_as_attr("body", g)
-        node.set_attr("directions", [1])  # reverse the scan input
-
-        seq_len_dtype = ctx.get_dtype(node.input[1])
-        if seq_len_dtype != onnx_pb.TensorProto.INT64:
-            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[1])
-            cast_node.set_attr("to", onnx_pb.TensorProto.INT64)
-            ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.INT64)
-            ctx.copy_shape(node.input[1], cast_node.output[0])
-
-        if time_major:
-            # get back to time_major
-            op_name = utils.make_name(node.name)
-            trans_back_node = ctx.insert_new_node_on_output("Transpose", node.output[0],
-                                                            name=op_name, perm=perm_val)
-            ctx.copy_dtype(node.output[0], trans_back_node.output[0])
-
-        tmp = node.input[0]
-        node.input[0] = node.input[1]
-        node.input[1] = tmp
-
-    @classmethod
-    def version_9(cls, ctx, node, **kwargs):
-        # T output = ReverseSequence(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
-        # we cannot easily construct reverse_sequence equivalence in opset 9, so we will not support it
-        # here. Actually using loops to do that is kind of meaningless since there will be performance
-        # issue there for sure.
-        raise NotImplementedError("ReverseSequence is not supported to convert in OPSET 9,"
-                                  " if possible please try using OPSET 8 instead.")
 
 
 @tf_op("Range")

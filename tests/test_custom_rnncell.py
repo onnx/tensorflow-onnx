@@ -416,11 +416,11 @@ class GatedGRUCell(tf.nn.rnn_cell.RNNCell):
         input_dim = inputs.get_shape()[-1]
         assert input_dim is not None, "input dimension must be defined"
         # W = tf.get_variable(name="W", shape=[input_dim, 3 * self._num_units], dtype=tf.float32)
-        W = np.arange(30.0, dtype=np.float32).reshape(2, 15)
+        W = np.arange(30.0, dtype=np.float32).reshape((2, 15))
         # U = tf.get_variable(name='U', shape=[self._num_units, 3 * self._num_units], dtype=tf.float32)
-        U = np.arange(75.0, dtype=np.float32).reshape(5, 15)
+        U = np.arange(75.0, dtype=np.float32).reshape((5, 15))
         # b = tf.get_variable(name='b', shape=[1, 3 * self._num_units], dtype=tf.float32)
-        b = np.arange(15.0, dtype=np.float32).reshape(1, 15)
+        b = np.arange(15.0, dtype=np.float32).reshape((1, 15))
 
         xw = tf.split(tf.matmul(inputs, W) + b, 3, 1)
         hu = tf.split(tf.matmul(state, U), 3, 1)
