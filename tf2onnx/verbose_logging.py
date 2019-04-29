@@ -32,7 +32,7 @@ def getLogger(name=None):  # pylint: disable=invalid-name, function-redefined
     return logger
 
 
-_SIMPLE_LOG_FORMAT = "%(message)s"
+_BASIC_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 _VERBOSE_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s: %(message)s"
 
 
@@ -41,7 +41,7 @@ def basicConfig(**kwargs):  # pylint: disable=invalid-name, function-redefined
     # Choose pre-defined format if format argument is not specified
     if "format" not in kwargs:
         level = kwargs.get("level", _logging.root.level)
-        kwargs["format"] = _SIMPLE_LOG_FORMAT if level >= INFO else _VERBOSE_LOG_FORMAT
+        kwargs["format"] = _BASIC_LOG_FORMAT if level >= INFO else _VERBOSE_LOG_FORMAT
 
     _logging.basicConfig(**kwargs)
     set_tf_verbosity(_logging.getLogger().getEffectiveLevel())
@@ -67,8 +67,7 @@ def set_level(level):
 def set_tf_verbosity(level):
     """ Set TF logging verbosity."""
     # TF log is too verbose, adjust it
-    level = WARNING if level >= VERBOSE else level
-
+    level = ERROR if level >= INFO else level
     tf.logging.set_verbosity(level)
 
     # TF_CPP_MIN_LOG_LEVEL:
