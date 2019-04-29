@@ -41,9 +41,6 @@ _TFOUTPUT1 = "output1"
 _OUTPUT1 = "output1:0"
 
 
-# pylint: disable=C0111
-
-
 def make_xval(shape):
     x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
     return x_val
@@ -54,7 +51,7 @@ def get_conv_getdata(kind=1):
         # generate all combinations (costly)
         dims = [
             ("padding", ["SAME", "VALID"]),
-            ("input_sizes", [[32, 35, 35, 288], [32, 17, 17, 1248], [1, 28, 28, 3], [32, 8, 8, 2048]]),
+            ("input_sizes", [[32, 35, 35, 3], [32, 17, 17, 3], [1, 28, 28, 3], [32, 8, 8, 3]]),
             ("filter_sizes", [[1, 3, 3, 1], [1, 2, 2, 1], [1, 5, 5, 1], [1, 1, 1, 1], [1, 5, 2, 1], [1, 2, 5, 1]]),
             ("strides", [[1, 2, 2, 1], [1, 1, 1, 1]]),
         ]
@@ -65,12 +62,12 @@ def get_conv_getdata(kind=1):
     elif kind == 1:
         # some combination to that give decent padding coverage
         data = [
-            ('SAME', [32, 35, 35, 288], [1, 3, 3, 1], [1, 2, 2, 1]),
-            ('SAME', [32, 35, 35, 288], [1, 2, 2, 1], [1, 2, 2, 1]),
-            ('SAME', [32, 35, 35, 288], [1, 1, 1, 1], [1, 1, 1, 1]),
-            ('SAME', [32, 35, 35, 288], [1, 5, 2, 1], [1, 2, 2, 1]),
-            ('SAME', [32, 35, 35, 288], [1, 2, 5, 1], [1, 2, 2, 1]),
-            ('SAME', [32, 35, 35, 288], [1, 2, 5, 1], [1, 1, 1, 1]),
+            ('SAME', [32, 35, 35, 3], [1, 3, 3, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 3], [1, 2, 2, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 3], [1, 1, 1, 1], [1, 1, 1, 1]),
+            ('SAME', [32, 35, 35, 3], [1, 5, 2, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 3], [1, 2, 5, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 35, 35, 3], [1, 2, 5, 1], [1, 1, 1, 1]),
             ('SAME', [1, 28, 28, 3], [1, 3, 3, 1], [1, 2, 2, 1]),
             ('SAME', [1, 28, 28, 3], [1, 3, 3, 1], [1, 1, 1, 1]),
             ('SAME', [1, 28, 28, 3], [1, 2, 2, 1], [1, 2, 2, 1]),
@@ -78,10 +75,10 @@ def get_conv_getdata(kind=1):
             ('SAME', [1, 28, 28, 3], [1, 5, 5, 1], [1, 2, 2, 1]),
             ('SAME', [1, 28, 28, 3], [1, 5, 5, 1], [1, 1, 1, 1]),
             ('SAME', [1, 28, 28, 3], [1, 5, 2, 1], [1, 2, 2, 1]),
-            ('SAME', [32, 8, 8, 2048], [1, 3, 3, 1], [1, 2, 2, 1]),
-            ('SAME', [32, 8, 8, 2048], [1, 3, 3, 1], [1, 1, 1, 1]),
-            ('VALID', [32, 35, 35, 288], [1, 3, 3, 1], [1, 1, 1, 1]),
-            ('VALID', [32, 35, 35, 288], [1, 2, 2, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 8, 8, 3], [1, 3, 3, 1], [1, 2, 2, 1]),
+            ('SAME', [32, 8, 8, 3], [1, 3, 3, 1], [1, 1, 1, 1]),
+            ('VALID', [32, 35, 35, 3], [1, 3, 3, 1], [1, 1, 1, 1]),
+            ('VALID', [32, 35, 35, 3], [1, 2, 2, 1], [1, 2, 2, 1]),
         ]
         for idx, v in enumerate(data):
             yield (idx,) + v
@@ -191,8 +188,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skipIf(get_test_config().is_onnxruntime_backend and get_test_config().backend_version == "0.2.1",
-                     "onnxruntime bug")
     @check_onnxruntime_incompatibility("AveragePool")
     def test_avgpool(self):
         for tf_shape in ["known", "unknown"]:
@@ -1195,7 +1190,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case([_OUTPUT], {}, check_value=False, check_shape=True)
 
-    @unittest.skip("")
+    @unittest.skip("TF RandomUniformInt is not supported")
     def test_randomuniform_int(self):
         shape = tf.constant([2, 3], name="shape")
         x_ = tf.random_uniform(shape, name="rand", dtype=tf.int32, maxval=10)
