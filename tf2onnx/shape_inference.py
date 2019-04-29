@@ -12,7 +12,6 @@ import logging
 import numpy as np
 from onnx import onnx_pb
 from tf2onnx import utils
-from tf2onnx.rewriter import rnn_utils
 
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
 
@@ -215,7 +214,7 @@ def infer_input_shapes(g, node):
 def infer_output_shapes_with_partial_inputs(g, node):
     # output shape of concat op: only the dim val of concatenated dim will be changed
     # so only partial(at least one) input shapes need to be known to infer output shape of concat node
-    if rnn_utils.is_concat_op(node):
+    if utils.is_concat_op(node):
         data_inputs = node.input[:-1]
         input_shapes = [g.get_shape(node) for node in data_inputs]
         input_shapes = [shape for shape in input_shapes if shape is not None]

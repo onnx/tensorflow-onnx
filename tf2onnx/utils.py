@@ -493,3 +493,35 @@ def get_url(url, path, max_retries=5):
 
     with open(path, "wb") as f:
         f.write(response.content)
+
+
+def is_reverse_op(op):
+    return op.type in ("ReverseV2", "ReverseSequence")
+
+
+def is_concat_op(op):
+    return op.type in ("Concat", "ConcatV2", "ConcatV3")
+
+
+def is_tensor_array_gather_op(op):
+    return op.type in ("TensorArrayGatherV2", "TensorArrayGatherV3")
+
+
+def is_tensor_array_write_op(op):
+    return op.type in ("TensorArrayWriteV2", "TensorArrayWriteV3")
+
+
+def is_tensor_array_op(op):
+    return op.type in ("TensorArrayV2", "TensorArrayV3")
+
+
+def is_loopcond_op(op):
+    return op.type == "LoopCond"
+
+
+def is_select_op(op):
+    return op.type == "Select"
+
+
+def is_slice_op(op):
+    return op.type == "Slice"

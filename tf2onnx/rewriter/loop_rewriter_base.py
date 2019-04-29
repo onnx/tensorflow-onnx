@@ -12,8 +12,8 @@ import logging
 from collections import OrderedDict
 from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.rewriter.rnn_utils import is_loopcond_op, is_tensor_array_op
-from tf2onnx.rewriter.rnn_utils import is_tensor_array_gather_op, is_tensor_array_write_op
+from tf2onnx.utils import is_loopcond_op, is_tensor_array_op
+from tf2onnx.utils import is_tensor_array_gather_op, is_tensor_array_write_op
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.utils import TensorValueInfo
 
