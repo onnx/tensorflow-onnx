@@ -13,8 +13,8 @@ import logging
 import numpy as np
 from tf2onnx import utils
 from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx.rewriter.rnn_utils import RNNUnitType, RnnWeight, \
-    is_concat_op, is_slice_op, get_weights_from_const_node
+from tf2onnx.rewriter.rnn_utils import RNNUnitType, RnnWeight, get_weights_from_const_node
+from tf2onnx.utils import is_concat_op, is_slice_op
 
 from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
 

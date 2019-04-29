@@ -9,11 +9,11 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 import logging
+import numpy as np
 from onnx import onnx_pb
 from tf2onnx import utils
 
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
-
 
 
 logger = logging.getLogger(__name__)
@@ -115,43 +115,19 @@ def infer_shape_for_node(g, node):
             return False
         return set_shape_from_input(g, shape_node.input[0], node.output[0])
 
-    if node.type == "ConcatV2":
-        axis_node = node.inputs[-1]
-        if not axis_node.is_const():
-            return False
-
-        axis = axis_node.get_tensor_value()
-        val = 0
-        data_inputs = node.input[:-1]
-        for i in data_inputs:
-            s = g.get_shape(i)
-            if s is None:
-                return False
-
-            if s[axis] == -1:
-                val = -1
-                break
-            val += s[axis]
-
-        s1 = g.get_shape(node.input[0])
-        if axis < 0:
-            axis += len(s1)
-        new_shape = s1[:axis] + [val]
-        if axis < len(s1) - 1:
-            new_shape += s1[axis + 1:]
-
-        g.set_shape(node.output[0], new_shape)
-        logger.debug("set ConcatV2 node [%s] with new shape %s", node.output[0], new_shape)
-        return True
-
     if node.type == "Gather":
         # uses the follwing link to know how to infer shape of output
         # https://www.tensorflow.org/api_docs/python/tf/gather
         shape_params = g.get_shape(node.input[0])
         shape_indices = g.get_shape(node.input[1])
-        axis = node.input[2].get_tensor_value()
+        # gather can only have 2 inputs
+        # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/gather.html
+        if len(node.input) == 3:
+            axis = node.input[2].get_tensor_value()
+        else:
+            axis = 0
 
-        shape = shape_params[:axis] + shape_indices + shape_indices[axis + 1:]
+        shape = shape_params[:axis] + shape_indices + shape_params[axis + 1:]
         g.set_shape(node.output[0], shape)
         return True
 
@@ -194,6 +170,29 @@ def infer_shape_for_node(g, node):
         logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
         return True
 
+    if node.type == "Unpack":
+        input_shape = g.get_shape(node.input[0])
+        if input_shape is None:
+            return False
+
+        axis = node.get_attr("axis").i
+        axis = axis if axis >= 0 else axis + len(input_shape)
+        # the link below says that the rank of output is "rank(input) -1",
+        # from this statement "num" must equal to input_shape[axis], and if not tf will throw a runtime error
+        # https://www.tensorflow.org/api_docs/python/tf/unstack
+        new_shape = input_shape[:axis] + input_shape[axis + 1:]
+        for output in node.output:
+            g.set_shape(output, new_shape)
+            logger.debug("set %s node [%s] with new shape %s", node.type, output, new_shape)
+        return True
+
+    if node.type in ["Minimum", "Maximum"]:
+        # ops that are elementwise and support broadcasting
+        input_shapes = [g.get_shape(node) for node in node.input]
+        new_shape = broadcast_shape_inference(*input_shapes)
+        g.set_shape(node.output[0], new_shape)
+        return True
+
     return False
 
 
@@ -213,6 +212,36 @@ def infer_input_shapes(g, node):
 
 
 def infer_output_shapes_with_partial_inputs(g, node):
+    # output shape of concat op: only the dim val of concatenated dim will be changed
+    # so only partial(at least one) input shapes need to be known to infer output shape of concat node
+    if utils.is_concat_op(node):
+        data_inputs = node.input[:-1]
+        input_shapes = [g.get_shape(node) for node in data_inputs]
+        input_shapes = [shape for shape in input_shapes if shape is not None]
+        if not input_shapes:
+            logger.debug("all input shapes of concat node %s are None, can't infer its output shape", node.name)
+            return False
+
+        new_shape = input_shapes[0]
+        axis_node = node.inputs[-1]
+        rank = len(new_shape)
+        if not axis_node.is_const():
+            g.set_shape(node.output[0], [-1] * rank)
+            return True
+
+        axis = axis_node.get_tensor_value()
+        axis = axis if axis >= 0 else axis + rank
+        new_shape[axis] = -1
+        if len(input_shapes) == len(data_inputs):  # all input shapes are known
+            concat_dim_vals = list(np.array(input_shapes)[:, axis])
+            # only when inputs' shape are known, then val of concat dim can be calculated
+            if concat_dim_vals.count(-1) == 0:
+                new_shape[axis] = sum(concat_dim_vals)
+
+        g.set_shape(node.output[0], new_shape)
+        logger.debug("set Concat node [%s] with new shape %s", node.output[0], new_shape)
+        return True
+
     if node.type == "Merge":
         s1 = g.get_shape(node.input[0])
         s2 = g.get_shape(node.input[1])

@@ -13,7 +13,7 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
-from tf2onnx.rewriter.rnn_utils import is_reverse_op
+from tf2onnx.utils import is_reverse_op
 from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)

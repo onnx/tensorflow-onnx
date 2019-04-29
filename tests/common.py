@@ -11,6 +11,7 @@ from collections import defaultdict
 
 from distutils.version import LooseVersion
 from parameterized import parameterized
+import numpy as np
 from tf2onnx import constants, logging, utils
 
 __all__ = [
@@ -280,7 +281,8 @@ def check_onnxruntime_incompatibility(op):
 def validate_const_node(node, expected_val):
     if node.is_const():
         node_val = node.get_tensor_value()
-        return node_val == expected_val
+        np.testing.assert_allclose(expected_val, node_val)
+        return True
     return False
 
 
