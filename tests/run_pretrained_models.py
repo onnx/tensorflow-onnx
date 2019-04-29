@@ -10,6 +10,7 @@ from __future__ import unicode_literals
 
 import argparse
 import os
+import re
 import sys
 import tarfile
 import time
@@ -98,8 +99,8 @@ class Test(object):
         self.force_input_shape = force_input_shape
         self.skip_tensorflow = skip_tensorflow
 
-    def download_file(self):
-        """Download file from url."""
+    def download_model(self):
+        """Download model from url."""
         cache_dir = Test.cache_dir
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
@@ -193,13 +194,13 @@ class Test(object):
 
         # get the model
         if self.url:
-            _, dir_name = self.download_file()
+            _, dir_name = self.download_model()
+            logger.info("Downloaded to %s", dir_name)
             model_path = os.path.join(dir_name, self.local)
         else:
             model_path = self.local
-            dir_name = os.path.dirname(self.local)
-        logger.info("Downloaded to %s", model_path)
 
+        logger.info("Load model from %s", model_path)
         input_names = list(self.input_names.keys())
         outputs = self.output_names
         if self.model_type in ["checkpoint"]:
@@ -324,10 +325,13 @@ def get_args():
     return args
 
 
-def tests_from_yaml(fname):
+def tests_from_yaml(path):
     """Create test class from yaml file."""
+    path = os.path.abspath(path)
+    base_dir = os.path.dirname(path)
+
     tests = {}
-    config = yaml.load(open(fname, 'r').read())
+    config = yaml.load(open(path, 'r').read())
     for k, v in config.items():
         input_func = v.get("input_get")
         input_func = _INPUT_FUNC_MAPPING[input_func]
@@ -337,7 +341,27 @@ def tests_from_yaml(fname):
             if v.get(kw) is not None:
                 kwargs[kw] = v[kw]
 
-        test = Test(v.get("url"), v.get("model"), input_func, v.get("inputs"), v.get("outputs"), **kwargs)
+        # when model is local, non-absolute path is relative to yaml directory
+        url = v.get("url")
+        model = v.get("model")
+        if not url:
+            if not os.path.isabs(model):
+                model = os.path.join(base_dir, model)
+
+        # non-absolute npy file path for np.load is relative to yaml directory
+        input_names = v.get("inputs")
+        for key in list(input_names.keys()):
+            value = input_names[key]
+            if isinstance(value, str):
+                # assume at most 1 match
+                matches = re.findall(r"np\.load\((r?['\"].*?['\"])", value)
+                if matches:
+                    npy_path = matches[0].lstrip('r').strip("'").strip('"')
+                    if not os.path.isabs(npy_path):
+                        abs_npy_path = os.path.join(base_dir, npy_path)
+                        input_names[key] = value.replace(matches[0], "r'{}'".format(abs_npy_path))
+
+        test = Test(url, model, input_func, input_names, v.get("outputs"), **kwargs)
         tests[k] = test
     return tests
 

@@ -2,7 +2,7 @@
 # simple models for basic functional test
 #
 regression-graphdef:
-  model: tests/models/regression/graphdef/frozen.pb
+  model: models/regression/graphdef/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1]
@@ -10,7 +10,7 @@ regression-graphdef:
     - pred:0
 
 regression-checkpoint:
-  model: tests/models/regression/checkpoint/model.meta
+  model: models/regression/checkpoint/model.meta
   model_type: checkpoint
   input_get: get_ramp
   inputs:
@@ -19,7 +19,7 @@ regression-checkpoint:
     - pred:0
 
 regression-saved-model:
-  model: tests/models/regression/saved_model
+  model: models/regression/saved_model
   model_type: saved_model
   input_get: get_ramp
   inputs:
@@ -28,7 +28,7 @@ regression-saved-model:
     - pred:0
 
 saved_model_with_redundant_inputs:
-  model: tests/models/saved_model_with_redundant_inputs
+  model: models/saved_model_with_redundant_inputs
   model_type: saved_model
   input_get: get_ramp
   inputs:
@@ -38,7 +38,7 @@ saved_model_with_redundant_inputs:
     - Add:0
 
 graphdef_with_redundant_inputs:
-  model: tests/models/regression/graphdef/frozen.pb
+  model: models/regression/graphdef/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1, 10]
@@ -47,7 +47,7 @@ graphdef_with_redundant_inputs:
     - Add:0
 
 checkpoint_with_redundant_inputs:
-  model: tests/models/regression/checkpoint/model.meta
+  model: models/regression/checkpoint/model.meta
   model_type: checkpoint
   input_get: get_ramp
   inputs:
@@ -57,7 +57,7 @@ checkpoint_with_redundant_inputs:
     - pred:0
 
 benchtf-fc:
-  model: tests/models/fc-layers/frozen.pb
+  model: models/fc-layers/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1, 784]
@@ -65,7 +65,7 @@ benchtf-fc:
     - output:0
 
 benchtf-conv:
-  model: tests/models/conv-layers/frozen.pb
+  model: models/conv-layers/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1, 784]
@@ -74,7 +74,7 @@ benchtf-conv:
 
 benchtf-convbn:
   disabled: true # some if from training isn't removed
-  model: tests/models/convbn-layers/frozen.pb
+  model: models/convbn-layers/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1, 784]
@@ -82,7 +82,7 @@ benchtf-convbn:
     - output:0
 
 benchtf-ae0:
-  model: tests/models/ae0/frozen.pb
+  model: models/ae0/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1, 784]
@@ -91,7 +91,7 @@ benchtf-ae0:
 
 benchtf-lstm:
   disabled: true
-  model: tests/models/lstm/frozen.pb
+  model: models/lstm/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1, 784]
@@ -100,7 +100,7 @@ benchtf-lstm:
 
 benchtf-gru:
   disabled: true
-  model: tests/models/gru/frozen.pb
+  model: models/gru/frozen.pb
   input_get: get_ramp
   inputs:
     "X:0": [1, 784]
