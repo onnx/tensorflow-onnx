@@ -112,7 +112,11 @@ class CustomRnnRewriter(LoopRewriterBase):
         loop_outputs_dtypes = []
         for tensor_value_info in scan_props.state_outputs_exits + scan_props.scan_outputs_exits:
             if tensor_value_info.id:
-                loop_outputs_shapes.append([1] + tensor_value_info.shape)
+                # in opset 8, the first dim of scan output must be batch
+                if self.g.opset == 8:
+                    loop_outputs_shapes.append([1] + tensor_value_info.shape)
+                else:
+                    loop_outputs_shapes.append(tensor_value_info.shape)
                 loop_outputs_dtypes.append(tensor_value_info.dtype)
                 n = self.g.get_node_by_output(tensor_value_info.id)
                 self.g.remove_node(n.name)
