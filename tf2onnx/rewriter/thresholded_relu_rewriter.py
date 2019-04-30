@@ -40,9 +40,6 @@ def rewrite_thresholded_relu(g, ops):
         mul_input_edge_name = _find_edge_name_between_nodes(mul_input_node, mul_node)
         if greater_input_edge_name == mul_input_edge_name:
             theta = match.get_op('theta').get_tensor_value()
-            # check disabled for now, tf requires theta to be non-negative, while onnx does not
-            # if theta < 0:
-            #     continue
             thresholded_relu = g.make_node("ThresholdedRelu", inputs=[mul_input_edge_name], attr={"alpha": theta},
                                            shapes=[g.get_shape(mul_node.output[0])],
                                            dtypes=[g.get_dtype(mul_node.output[0])])

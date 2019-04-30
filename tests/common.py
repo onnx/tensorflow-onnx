@@ -33,7 +33,8 @@ __all__ = [
     "validate_const_node",
     "group_nodes_by_type",
     "test_ms_domain",
-    "check_node_domain"
+    "check_node_domain",
+    "check_thresholded_relu_count"
 ]
 
 
@@ -303,6 +304,10 @@ def check_lstm_count(graph, expected_count):
 
 def check_gru_count(graph, expected_count):
     return check_op_count(graph, "GRU", expected_count)
+
+
+def check_thresholded_relu_count(graph, expected_count):
+    return check_op_count(graph, "ThresholdedRelu", expected_count)
 
 
 _MAX_MS_OPSET_VERSION = 1
