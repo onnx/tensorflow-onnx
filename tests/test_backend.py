@@ -2132,6 +2132,40 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(res2, name=_TFOUTPUT1)
         self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
+    def _conv1d_test(self, x_val, w, stride=None, padding="VALID", rtol=1e-07):
+        if stride is None:
+            stride = 1
+        tf.reset_default_graph()
+        kernel = tf.constant(w, dtype=tf.float32, name='k')
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        conv = tf.nn.conv1d(x, kernel, stride=stride, padding=padding)
+        _ = tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=rtol)
+
+    def test_conv1d_1(self):
+        x_val = make_xval((1, 7, 1))
+        w = np.array([2., 1., 3.], dtype=np.float32).reshape(3, 1, 1)
+        self._conv1d_test(x_val, w)
+
+    def test_conv1d_2(self):
+        x_val = make_xval((1, 7, 1))
+        w = np.array([2., 1., 3.], dtype=np.float32).reshape(3, 1, 1)
+        self._conv1d_test(x_val, w, stride=2)
+
+    def test_conv1d_3(self):
+        x_val = make_xval((1, 7, 1))
+        w = np.array([2., 1., 3.], dtype=np.float32).reshape(3, 1, 1)
+        self._conv1d_test(x_val, w, padding="SAME")
+
+    def test_conv1d_4(self):
+        x_val = make_xval((1, 7, 1))
+        w = np.array([2., 1., 3.], dtype=np.float32).reshape(3, 1, 1)
+        self._conv1d_test(x_val, w, rtol=1e-05)
+
+    def test_conv1d_5(self):
+        x_val = make_xval((1, 7, 1))
+        w = np.array([3., 3., 3.], dtype=np.float32).reshape(3, 1, 1)
+        self._conv1d_test(x_val, w)
 
 if __name__ == '__main__':
     unittest_main()

@@ -197,7 +197,7 @@ def conv_kernel_shape(ctx, node, input_idx, spatial=2):
     return kernel_shape
 
 
-@tf_op(["Conv2D", "Conv3D"])
+@tf_op(["Conv1D", "Conv2D", "Conv3D"])
 class ConvOp:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
