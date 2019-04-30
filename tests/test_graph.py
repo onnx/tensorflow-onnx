@@ -144,7 +144,7 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
         with tf.Session() as sess:
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
-            prop = tf.placeholder(tf.float32, name="prob")
+            prop = tf.placeholder(tf.float32, (), name="prob")
             x_ = tf.add(x1, x2)
             x_ = tf.nn.dropout(x_, prop)
             x_ = tf.identity(x_, name="output1")
@@ -163,7 +163,7 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
         with tf.Session() as sess:
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
             x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
-            prop = tf.placeholder(tf.float32, name="prob")
+            prop = tf.placeholder(tf.float32, (), name="prob")
             x_ = tf.add(x1, x2)
             x_ = tf.nn.dropout(x_, prop)
             x_ = tf.identity(x_, name="output1")
@@ -171,13 +171,14 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             actual = onnx_to_graphviz(g)
-            expected = 'digraph { "dropout/sub/x" [op_type=Const] "sub/x" [op_type=Const] ' \
-                       'prob [op_type=Placeholder shape="[]"] sub [op_type=Sub] "dropout/sub" [op_type=Sub] ' \
-                       'input2 [op_type=Placeholder shape="[1, 3]"] input1 [op_type=Placeholder shape="[2, 3]"] ' \
-                       'Add [op_type=Add] output1 [op_type=Identity] output2 [op_type=Identity] ' \
-                       'output [op_type=Identity] "sub/x":0 -> sub prob:0 -> sub "dropout/sub/x":0 -> ' \
-                       '"dropout/sub" sub:0 -> "dropout/sub" input1:0 -> Add input2:0 -> Add Add:0 -> ' \
-                       'output1 output1:0 -> output2 output2:0 -> output }'
+            expected = 'digraph { "sub/x" [op_type=Const] prob [op_type=Placeholder shape="[]"] ' \
+                       'sub [op_type=Sub] input2 [op_type=Placeholder shape="[1, 3]"] ' \
+                       'input1 [op_type=Placeholder shape="[2, 3]"] "dropout/sub/x" [op_type=Const] ' \
+                       '"dropout/sub" [op_type=Sub] Add [op_type=Add] output1 [op_type=Identity] ' \
+                       'output2 [op_type=Identity] output [op_type=Identity] "sub/x":0 -> sub ' \
+                       'prob:0 -> sub "dropout/sub/x":0 -> "dropout/sub" sub:0 -> "dropout/sub" ' \
+                       'input1:0 -> Add input2:0 -> Add Add:0 -> output1 output1:0 -> output2 ' \
+                       'output2:0 -> output }'
             self.assertEqual(expected, actual)
 
     def test_add(self):
@@ -214,8 +215,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
-                'digraph { Const [op_type=Const] input1 [op_type=Placeholder shape="[2, 3]"] '
-                'Sum [op_type=ReduceSum] output [op_type=Identity] input1:0 -> Sum Sum:0 -> output }',
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Sum [op_type=ReduceSum] '
+                'output [op_type=Identity] Const [op_type=Const] input1:0 -> Sum Sum:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_argminmax(self):
@@ -225,7 +226,7 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
-                'digraph { "ArgMin/dimension" [op_type=Const] input1 [op_type=Placeholder shape="[2, 3]"] '
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] "ArgMin/dimension" [op_type=Const] '
                 'ArgMin [op_type=ArgMin] output [op_type=Identity] input1:0 -> ArgMin ArgMin:0 -> output }',
                 onnx_to_graphviz(g))
 
@@ -276,12 +277,12 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
 
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
-                'digraph { input1 [op_type=Placeholder shape="[1, 4, 4, 1]"] Conv2D__3 [op_type=Transpose] '
-                '"kernel/shape" [op_type=Const] kernel__2 [op_type=Cast] k [op_type=Const] '
-                'kernel [op_type=Reshape] Conv2D__4 [op_type=Transpose] Conv2D [op_type=Conv] '
-                'Conv2D__5 [op_type=Transpose] output [op_type=Identity] input1:0 -> Conv2D__3 '
-                '"kernel/shape":0 -> kernel__2 k:0 -> kernel kernel__2:0 -> kernel kernel:0 -> Conv2D__4 '
-                'Conv2D__3:0 -> Conv2D Conv2D__4:0 -> Conv2D Conv2D:0 -> Conv2D__5 Conv2D__5:0 -> output }',
+                'digraph { "kernel/shape" [op_type=Const] kernel__2 [op_type=Cast] k [op_type=Const] '
+                'kernel [op_type=Reshape] input1 [op_type=Placeholder shape="[1, 4, 4, 1]"] Conv2D__4 '
+                '[op_type=Transpose] Conv2D__3 [op_type=Transpose] Conv2D [op_type=Conv] Conv2D__5 [op_type=Transpose] '
+                'output [op_type=Identity] "kernel/shape":0 -> kernel__2 k:0 -> kernel kernel__2:0 -> kernel '
+                'kernel:0 -> Conv2D__4 input1:0 -> Conv2D__3 Conv2D__3:0 -> Conv2D Conv2D__4:0 -> Conv2D Conv2D:0 -> '
+                'Conv2D__5 Conv2D__5:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_squeeze(self):
@@ -313,10 +314,9 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
-                'digraph { "Reshape/shape" [op_type=Const] Reshape__2 [op_type=Cast] '
-                'input1 [op_type=Placeholder shape="[2, 3]"] Reshape [op_type=Reshape] '
-                'output [op_type=Identity] "Reshape/shape":0 -> Reshape__2 input1:0 -> Reshape '
-                'Reshape__2:0 -> Reshape Reshape:0 -> output }',
+                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] "Reshape/shape" [op_type=Const] '
+                'Reshape__2 [op_type=Cast] Reshape [op_type=Reshape] output [op_type=Identity] '
+                '"Reshape/shape":0 -> Reshape__2 input1:0 -> Reshape Reshape__2:0 -> Reshape Reshape:0 -> output }',
                 onnx_to_graphviz(g))
 
     def test_custom_rewrite(self):
