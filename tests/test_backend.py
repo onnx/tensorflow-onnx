@@ -2138,5 +2138,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
 
+    @check_opset_min_version(10, "ThresholdedRelu")
+    def test_thresholded_relu(self):
+        # tf.keras.layers.ThresholdedReLU only supports `float32` for x
+        x_val = np.array([0.0, 1.0, -1.0, 2.0, -2.0, 0.5, -0.5, 1.5, -1.5], dtype=np.float32).reshape((3, 3))
+        theta_vals = [-1.0, -0.5, 0.0, 0.5, 1.0]
+        for theta_val in theta_vals:
+            x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+            t = tf.keras.layers.ThresholdedReLU(theta=theta_val)
+            x_ = t.call(x)
+            _ = tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+            tf.reset_default_graph()
+
+
 if __name__ == '__main__':
     unittest_main()

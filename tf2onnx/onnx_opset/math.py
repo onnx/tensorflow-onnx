@@ -399,3 +399,10 @@ class FloorMod:
         ctx.remove_node(node.name)
         ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+
+@tf_op("ThresholdedReLU", onnx_op="ThresholdedRelu")
+class ThresholdedRelu:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        pass
