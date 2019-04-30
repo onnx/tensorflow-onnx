@@ -2149,7 +2149,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = t.call(x)
             _ = tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case([_OUTPUT], {_INPUT: x_val},
-                                graph_validator=lambda g: check_thresholded_relu_count(g, 1))
+                                graph_validator=lambda g: check_op_count(g, "ThresholdedRelu", 1))
             tf.reset_default_graph()
 
 
