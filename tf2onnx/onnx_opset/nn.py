@@ -319,6 +319,28 @@ class PoolOp:
         add_padding(ctx, node, kernel_shape, strides)
         conv_convert_inputs(ctx, node, with_kernel=False)
 
+@tf_op(["MaxPoolWithArgmax"], onnx_op="MaxPool")
+class MaxPoolWithArgmaxOp:
+    @classmethod
+    def version_8(cls, ctx, node, **kwargs):
+        # T output = MaxPool(T input, @list(int) ksize, @list(int) strides, @string padding, @string data_format)
+
+        # Set kernel_shape attribute
+        kernel_shape = node.get_attr("ksize").ints
+        kernel_shape = [kernel_shape[1], kernel_shape[2]]
+        node.set_attr("kernel_shape", kernel_shape)
+
+        # Set strides attribute
+        strides = node.get_attr("strides").ints
+        strides = [strides[1], strides[2]]
+        node.set_attr("strides", strides)
+
+        # The input data_format is NHWC for TF MaxPoolWithArgmax
+        node.set_attr("data_format", "NHWC")
+
+        add_padding(ctx, node, kernel_shape, strides)
+        conv_convert_inputs(ctx, node, with_kernel=False, input_indices=[0], output_indices=[0, 1])
+
 
 @tf_op(["BiasAdd", "BiasAddV1"])
 class BiasAdd:
