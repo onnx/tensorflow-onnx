@@ -87,10 +87,10 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         result = onnx_to_graphviz(g)
         expected = 'digraph { Placeholder__4 [op_type=Placeholder] ' \
                    'n1 [op_type=Abs] n7 [op_type=Abs] n2 [op_type=Abs] n3 [op_type=Abs] ' \
-                   'n4 [op_type=Add] n5 [op_type=Abs] n5_graph_outputs_Identity__3 [op_type=Identity] ' \
-                   'n6 [op_type=Identity] input -> n1 n1:0 -> n7 n7:0 -> n2 n1:0 -> n3 ' \
-                   'n2:0 -> n4 n3:0 -> n4 n4:0 -> n5 n5_raw_output___2:0 -> n5_graph_outputs_Identity__3 ' \
-                   'n5_raw_output___2:0 -> n6 }'
+                   'n4 [op_type=Add] n5 [op_type=Abs] n6 [op_type=Identity] ' \
+                   'n5_graph_outputs_Identity__3 [op_type=Identity] input -> n1 n1:0 -> n7 ' \
+                   'n7:0 -> n2 n1:0 -> n3 n2:0 -> n4 n3:0 -> n4 n4:0 -> n5 n5_raw_output___2:0 -> n6 ' \
+                   'n5_raw_output___2:0 -> n5_graph_outputs_Identity__3 }'
         self.assertEqual(expected, result)
 
     def test_insert_node2(self):
@@ -102,9 +102,9 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         result = onnx_to_graphviz(g)
         expected = 'digraph { Placeholder__4 [op_type=Placeholder] n1 [op_type=Abs] n7 [op_type=Abs] ' \
                    'n3 [op_type=Abs] n2 [op_type=Abs] n4 [op_type=Add] n5 [op_type=Abs] ' \
-                   'n5_graph_outputs_Identity__3 [op_type=Identity] n6 [op_type=Identity] ' \
-                   'input -> n1 n1:0 -> n7 n7:0 -> n3 n7:0 -> n2 n2:0 -> n4 n3:0 -> n4 ' \
-                   'n4:0 -> n5 n5_raw_output___2:0 -> n5_graph_outputs_Identity__3 n5_raw_output___2:0 -> n6 }'
+                   'n6 [op_type=Identity] n5_graph_outputs_Identity__3 [op_type=Identity] ' \
+                   'input -> n1 n1:0 -> n7 n7:0 -> n3 n7:0 -> n2 n2:0 -> n4 n3:0 -> n4 n4:0 -> n5 ' \
+                   'n5_raw_output___2:0 -> n6 n5_raw_output___2:0 -> n5_graph_outputs_Identity__3 }'
         self.assertEqual(expected, result)
 
     def test_remove_input(self):
@@ -116,10 +116,10 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)
         expected = 'digraph { Placeholder__4 [op_type=Placeholder] n1 [op_type=Abs] n3 [op_type=Abs] ' \
-                   'n2 [op_type=Abs] n4 [op_type=Add] n5 [op_type=Abs] ' \
-                   'n5_graph_outputs_Identity__3 [op_type=Identity] n6 [op_type=Identity] ' \
-                   'input -> n1 n1:0 -> n3 n1:0 -> n2 n2:0 -> n4 n4:0 -> n5 ' \
-                   'n5_raw_output___2:0 -> n5_graph_outputs_Identity__3 n5_raw_output___2:0 -> n6 }'
+                   'n2 [op_type=Abs] n4 [op_type=Add] n5 [op_type=Abs] n6 [op_type=Identity] ' \
+                   'n5_graph_outputs_Identity__3 [op_type=Identity] input -> n1 n1:0 -> n3 ' \
+                   'n1:0 -> n2 n2:0 -> n4 n4:0 -> n5 n5_raw_output___2:0 -> n6 ' \
+                   'n5_raw_output___2:0 -> n5_graph_outputs_Identity__3 }'
         self.assertEqual(expected, result)
 
     def test_rewrite_subgraph(self):
@@ -145,10 +145,9 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         result = onnx_to_graphviz(g)
         expected = 'digraph { Placeholder__4 [op_type=Placeholder] n1 [op_type=Abs] ' \
                    'n3 [op_type=Abs] n2 [op_type=Abs] ReplacedOp__5 [op_type=Sub] ' \
-                   'n5_graph_outputs_Identity__3 [op_type=Identity] n6 [op_type=Identity] ' \
-                   'input -> n1 n1:0 -> n3 n1:0 -> n2 n2:0 -> ReplacedOp__5 ' \
-                   'n3:0 -> ReplacedOp__5 ReplacedOp__5:0 -> n5_graph_outputs_Identity__3 ' \
-                   'ReplacedOp__5:0 -> n6 }'
+                   'n6 [op_type=Identity] n5_graph_outputs_Identity__3 [op_type=Identity] ' \
+                   'input -> n1 n1:0 -> n3 n1:0 -> n2 n2:0 -> ReplacedOp__5 n3:0 -> ReplacedOp__5 ' \
+                   'ReplacedOp__5:0 -> n6 ReplacedOp__5:0 -> n5_graph_outputs_Identity__3 }'
         self.assertEqual(expected, result)
 
     def test_match_flipped(self):

@@ -723,6 +723,8 @@ class Graph(object):
 
     def topological_sort(self, ops):
         """Topological sort of graph."""
+        # sort by name, the result will be reversed alphabeta
+        ops.sort(key=lambda op: op.name)
 
         def _push_stack(stack, node, in_stack):
             stack.append(node)
@@ -748,7 +750,7 @@ class Graph(object):
             all_input |= set(implicit_inputs)
             # remove those empty inputs
             all_input = list(filter(lambda a: a != '', all_input))
-            for inp in all_input:
+            for inp in sorted(all_input):
                 j = self.get_node_by_output(inp)
                 utils.make_sure(j is not None, "Cannot find node with output {}".format(inp))
                 if self.parent_graph and j.name not in op_name_to_index:
