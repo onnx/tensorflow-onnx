@@ -5,6 +5,7 @@ jobs:
   parameters:
     python_versions: ['3.7', '3.6', '3.5']
     tf_versions: ['1.13.1']
+    onnx_opsets: ['']
     job:
       steps:
       - template: 'unit_test.yml'
@@ -12,6 +13,7 @@ jobs:
 - template: 'templates/job_generator.yml'
   parameters:
     tf_versions: ['1.12', '1.11', '1.10', '1.9', '1.8', '1.7', '1.6', '1.5']
+    onnx_opsets: ['']
     job:
       steps:
       - template: 'unit_test.yml'
@@ -20,6 +22,7 @@ jobs:
   parameters:
     platforms: ['windows', 'mac']
     tf_versions: ['1.13.1']
+    onnx_opsets: ['']
     job:
       steps:
       - template: 'unit_test.yml'
