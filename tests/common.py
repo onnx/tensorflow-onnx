@@ -33,7 +33,8 @@ __all__ = [
     "validate_const_node",
     "group_nodes_by_type",
     "test_ms_domain",
-    "check_node_domain"
+    "check_node_domain",
+    "check_op_count"
 ]
 
 
