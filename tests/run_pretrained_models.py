@@ -163,21 +163,8 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def run_onnxmsrtnext(self, name, model_proto, inputs):
-        """Run test against msrt-next backend."""
-        import lotus
-        model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto)
-        m = lotus.InferenceSession(model_path)
-        results = m.run(self.output_names, inputs)
-        if self.perf:
-            start = time.time()
-            for _ in range(PERFITER):
-                _ = m.run(self.output_names, inputs)
-            self.onnx_runtime = time.time() - start
-        return results
-
     def run_onnxruntime(self, name, model_proto, inputs):
-        """Run test against msrt-next backend."""
+        """Run test against onnxruntime backend."""
         import onnxruntime as rt
         model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True)
         logger.info("Model saved to %s", model_path)
@@ -279,8 +266,6 @@ class Test(object):
             onnx_results = None
             if backend == "caffe2":
                 onnx_results = self.run_caffe2(name, model_proto, inputs)
-            elif backend == "onnxmsrtnext":
-                onnx_results = self.run_onnxmsrtnext(name, model_proto, inputs)
             elif backend == "onnxruntime":
                 onnx_results = self.run_onnxruntime(name, model_proto, inputs)
             else:
@@ -316,7 +301,7 @@ def get_args():
     parser.add_argument("--tests", help="tests to run")
     parser.add_argument("--target", default="", help="target platform")
     parser.add_argument("--backend", default="onnxruntime",
-                        choices=["caffe2", "onnxmsrtnext", "onnxruntime"], help="backend to use")
+                        choices=["caffe2", "onnxruntime"], help="backend to use")
     parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")

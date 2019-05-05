@@ -55,15 +55,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = prepared_backend.run(inputs)
         return results
 
-    def run_onnxmsrtnext(self, model_path, inputs, output_names):
-        """Run test against msrt-next backend."""
-        import lotus
-        m = lotus.InferenceSession(model_path)
-        results = m.run(output_names, inputs)
-        return results
-
     def run_onnxruntime(self, model_path, inputs, output_names):
-        """Run test against msrt-next backend."""
+        """Run test against onnxruntime backend."""
         import onnxruntime as rt
         m = rt.InferenceSession(model_path)
         results = m.run(output_names, inputs)
@@ -73,9 +66,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         model_proto = g.make_model("test")
         model_path = self.save_onnx_model(model_proto, input_dict)
 
-        if self.config.backend == "onnxmsrtnext":
-            y = self.run_onnxmsrtnext(model_path, input_dict, outputs)
-        elif self.config.backend == "onnxruntime":
+        if self.config.backend == "onnxruntime":
             y = self.run_onnxruntime(model_path, input_dict, outputs)
         elif self.config.backend == "caffe2":
             y = self.run_onnxcaffe2(model_proto, input_dict)

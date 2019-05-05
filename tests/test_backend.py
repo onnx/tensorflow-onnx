@@ -512,7 +512,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_add_bcast(self):
         x1_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         x2_val = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], dtype=np.float32).reshape((2, 2, 2))
-        # if we'd broadcast 2,2 to 2,1 onnxmsrt will fail
         x1 = tf.placeholder(tf.float32, x1_val.shape, name="input")
         x2 = tf.placeholder(tf.float32, x2_val.shape, name=_TFINPUT1)
         x_ = tf.add(x1, x2)
@@ -830,8 +829,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, check_shape=True)
 
-    @unittest.skipIf(get_test_config().opset < 5 or get_test_config().backend in ["onnxmsrtnext"],
-                     "since opset 5, broken in msrtnext")
     @check_opset_min_version(6, "cast")
     def test_reshape_dynamic(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
@@ -1025,7 +1022,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend()
     def test_slice1(self):
-        # FIXME: only 1 dimension supported by caffe2 and msrt
+        # FIXME: only 1 dimension supported by caffe2
         x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]], [[5, 5, 5], [6, 6, 6]]], dtype=np.float32)
         t1 = tf.constant([1, 0, 0], dtype=tf.int32)
         t2 = tf.constant([1, 1, 3], dtype=tf.int32)
