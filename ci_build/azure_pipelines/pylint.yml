@@ -3,6 +3,7 @@
 jobs:
 - template: 'templates/job_generator.yml'
   parameters:
+    onnx_opsets: ['']
     job:
       steps:
       - bash: |

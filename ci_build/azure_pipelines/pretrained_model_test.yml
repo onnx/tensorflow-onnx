@@ -5,7 +5,6 @@ jobs:
   parameters:
     python_versions: ['3.7', '3.6', '3.5']
     tf_versions: ['1.13.1']
-    onnx_opsets: ['9', '8', '7']
     job:
       steps:
       - template: 'pretrained_model_test.yml'
@@ -14,7 +13,6 @@ jobs:
   parameters:
     platforms: ['windows', 'mac']
     tf_versions: ['1.13.1']
-    onnx_opsets: ['9', '8', '7']
     job:
       steps:
       - template: 'pretrained_model_test.yml'
