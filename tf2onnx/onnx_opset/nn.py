@@ -294,6 +294,14 @@ class DepthwiseConv2d:
 class PoolOp:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
+        cls._convert(ctx, node, **kwargs)
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls._convert(ctx, node, **kwargs)
+
+    @classmethod
+    def _convert(cls, ctx, node, **kwargs):
         # T output = MaxPool(T input, @list(int) ksize, @list(int) strides, @string padding, @string data_format)
         # T Y = MaxPool(T X, @AttrType.STRING auto_pad, @AttrType.INTS kernel_shape, @AttrType.INTS pads,
         #               @AttrType.INTS strides)
