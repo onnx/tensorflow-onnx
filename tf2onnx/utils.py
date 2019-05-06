@@ -19,8 +19,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import six
 import numpy as np
-import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
+from tensorflow.python.framework import tensor_util
 from google.protobuf import text_format
 import onnx
 from onnx import helper, onnx_pb, defs, numpy_helper
@@ -126,67 +126,24 @@ def split_nodename_and_shape(name):
 
 
 def tf_to_onnx_tensor(tensor, name=""):
-    """
-    Convert tensorflow tensor to onnx tensor.
-    Here deal with three types of tensor:
-    1. normal tensor, e.g., np.array([1,2,3], dtype=DTYPE):
-        tensor_content: raw data of [1,2,3]
-        tensor_shape.dim: [3]
-        DTYPE_val: empty
-    2. scalar tensor, e.g., np.array(1, dtype=DTYPE):
-        tensor_content: empty
-        tensor_shape.dim: [0]
-        DTYPE_val: 1
-    3. empty tensor, e.g., np.array([], dtype=DTYPE) and np.array([[]], dtype=DTYPE):
-        tensor_content: empty
-        tensor_shape.dim: [0] and [1, 0]
-        DTYPE_val: empty
-    """
-    new_type = TF_TO_ONNX_DTYPE[tensor.dtype]
-    tdim = tensor.tensor_shape.dim
-    dims = [d.size for d in tdim]
-    is_raw, data = get_tf_tensor_data(tensor)
-    # empty tensor
-    if not is_raw and data is None:
-        np_data = np.array([], dtype=map_onnx_to_numpy_type(new_type)).reshape(dims)
-        return numpy_helper.from_array(np_data, name=name)
-    make_sure(data, "tensor data isn't expected to be None or empty")
-    # scalar tensor
-    if dims == [0] and not is_raw and len(data) == 1:
-        return helper.make_tensor(name, new_type, [], data, False)
-    if not is_raw and len(data) == 1 and np.prod(dims) > 1:
-        batch_data = np.zeros(dims, dtype=map_onnx_to_numpy_type(new_type))
-        batch_data.fill(data[0])
-        return numpy_helper.from_array(batch_data, name=name)
-    return helper.make_tensor(name, new_type, dims, data, is_raw)
+    """Convert tensorflow tensor to onnx tensor."""
+    np_data = get_tf_tensor_data(tensor)
+    if np_data.dtype == np.object:
+        # assume np_data is string, numpy_helper.from_array accepts ndarray,
+        # in which each item is of str while the whole dtype is of object.
+        try:
+            np_data = np_data.astype(np.str).astype(np.object)
+        except: # pylint: disable=bare-except
+            raise RuntimeError("Not support type: {}".format(type(np_data.flat[0])))
+    return numpy_helper.from_array(np_data, name=name)
 
 
 def get_tf_tensor_data(tensor):
     """Get data from tensor."""
-    assert isinstance(tensor, tensor_pb2.TensorProto)
-    is_raw = False
-    if tensor.tensor_content:
-        data = tensor.tensor_content
-        is_raw = True
-    elif tensor.float_val:
-        data = tensor.float_val
-    elif tensor.half_val:
-        data = tensor.half_val
-    elif tensor.dcomplex_val:
-        data = tensor.dcomplex_val
-    elif tensor.int_val:
-        data = tensor.int_val
-    elif tensor.int64_val:
-        data = tensor.int64_val
-    elif tensor.bool_val:
-        data = tensor.bool_val
-    elif tensor.string_val:
-        data = tensor.string_val
-    elif tensor.dtype in [tf.int32, tf.int64, tf.float32, tf.float16]:
-        data = None
-    else:
-        raise ValueError('tensor data not supported')
-    return [is_raw, data]
+    make_sure(isinstance(tensor, tensor_pb2.TensorProto), "Require TensorProto")
+    np_data = tensor_util.MakeNdarray(tensor)
+    make_sure(isinstance(np_data, np.ndarray), "{} isn't ndarray".format(np_data))
+    return np_data
 
 
 def get_shape(node):
