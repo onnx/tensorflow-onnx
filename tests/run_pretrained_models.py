@@ -82,7 +82,7 @@ class Test(object):
     target = []
 
     def __init__(self, url, local, make_input, input_names, output_names,
-                 disabled=False, more_inputs=None, rtol=0.01, atol=1e-6,
+                 disabled=False, rtol=0.01, atol=1e-6,
                  check_only_shape=False, model_type="frozen", force_input_shape=False,
                  skip_tensorflow=False, opset_constraints=None):
         self.url = url
@@ -91,7 +91,6 @@ class Test(object):
         self.input_names = input_names
         self.output_names = output_names
         self.disabled = disabled
-        self.more_inputs = more_inputs
         self.rtol = rtol
         self.atol = atol
         self.check_only_shape = check_only_shape
@@ -212,34 +211,30 @@ class Test(object):
         else:
             graph_def, input_names, outputs = loader.from_graphdef(model_path, input_names, outputs)
 
-        # create the input data
-        inputs = {}
-        for k, v in self.input_names.items():
-            if k not in input_names:
-                continue
-            if isinstance(v, six.text_type) and v.startswith("np."):
-                inputs[k] = eval(v)  # pylint: disable=eval-used
-            else:
-                inputs[k] = self.make_input(v)
-        if self.more_inputs:
-            for k, v in self.more_inputs.items():
-                inputs[k] = v
-
-        graph_def = tf2onnx.tfonnx.tf_optimize(inputs.keys(), self.output_names, graph_def, fold_const)
+        # remove unused input names
+        input_names = list(set(input_names).intersection(self.input_names.keys()))
+        graph_def = tf2onnx.tfonnx.tf_optimize(input_names, self.output_names, graph_def, fold_const)
         if utils.is_debug_mode():
             utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
+
+        inputs = {}
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
-
-            # fix inputs if needed
-            for k in inputs.keys():  # pylint: disable=consider-iterating-dictionary
+            # create the input data
+            for k in input_names:
+                v = self.input_names[k]
                 t = sess.graph.get_tensor_by_name(k)
-                dtype = tf.as_dtype(t.dtype).name
-                v = inputs[k]
-                if dtype != v.dtype:
-                    logger.warning("input dtype doesn't match tensorflow's")
-                    inputs[k] = np.array(v, dtype=dtype)
+                expected_dtype = tf.as_dtype(t.dtype).name
+                if isinstance(v, six.text_type) and v.startswith("np."):
+                    np_value = eval(v)  # pylint: disable=eval-used
+                    if expected_dtype != np_value.dtype:
+                        logger.warning("dtype mismatch for input %s: expected=%s, actual=%s", k, expected_dtype,
+                                       np_value.dtype)
+                    inputs[k] = np_value.astype(expected_dtype)
+                else:
+                    inputs[k] = self.make_input(v).astype(expected_dtype)
+
             if self.force_input_shape:
                 for k, v in inputs.items():
                     shape_override[k] = list(v.shape)
@@ -405,7 +400,7 @@ def load_tests_from_yaml(path):
                 opset_constraints.append(c)
 
         kwargs = {}
-        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape", "model_type",
+        for kw in ["rtol", "atol", "disabled", "check_only_shape", "model_type",
                    "skip_tensorflow", "force_input_shape"]:
             if settings.get(kw) is not None:
                 kwargs[kw] = settings[kw]
