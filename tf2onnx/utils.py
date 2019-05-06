@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import tempfile
+from distutils.version import LooseVersion
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -20,7 +21,6 @@ from urllib3.util.retry import Retry
 import six
 import numpy as np
 import tensorflow as tf
-from distutils.version import LooseVersion
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
 from google.protobuf import text_format
@@ -146,6 +146,14 @@ def get_tf_tensor_data(tensor):
     np_data = tensor_util.MakeNdarray(tensor)
     make_sure(isinstance(np_data, np.ndarray), "{} isn't ndarray".format(np_data))
     return np_data
+
+
+def get_tf_const_value(op, as_list=True):
+    make_sure(is_const_op(op), "{} isn't a const op".format(op.name))
+    value = get_tf_tensor_data(op.get_attr("value"))
+    if as_list:
+        value = value.tolist()
+    return value
 
 
 def get_tf_shape(node):
@@ -498,3 +506,7 @@ def is_select_op(op):
 
 def is_slice_op(op):
     return op.type == "Slice"
+
+
+def is_const_op(op):
+    return op.type in ["Const", "ConstV2"]

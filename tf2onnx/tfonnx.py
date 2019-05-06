@@ -25,7 +25,7 @@ import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
-from tf2onnx.shape_inference import infer_shape_for_graph
+from tf2onnx.shape_inference import infer_shape_for_graph, infer_shape_for_graph_supplementary
 from tf2onnx.utils import port_name
 from . import constants, logging, schemas, utils, handler
 
@@ -704,6 +704,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             tf_graph.get_tensor_by_name(name).set_shape(shape)
 
     tf_graph = infer_shape_for_graph(tf_graph)
+    # FIXME: remove it if no long supporting TF 1.5
+    tf_graph = infer_shape_for_graph_supplementary(tf_graph)
 
     if shape_override is None:
         shape_override = {}
