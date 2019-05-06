@@ -1271,7 +1271,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_randomuniform_dyn_shape(self):
         # test for dynamic shape coming from a shape op
         x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
-        x = tf.placeholder(x_val.dtype, name=_TFINPUT)
+        x = tf.placeholder(x_val.dtype, [None, 3], name=_TFINPUT)
         x_ = tf.stack([x, x])
         x_ = tf.identity(x_)
         x_ = tf.shape(x_, name="shape")

@@ -19,6 +19,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import six
 import numpy as np
+import tensorflow as tf
+from distutils.version import LooseVersion
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
 from google.protobuf import text_format
@@ -146,20 +148,30 @@ def get_tf_tensor_data(tensor):
     return np_data
 
 
-def get_shape(node):
+def get_tf_shape(node):
     """Get shape from tensorflow node."""
-    # FIXME: do we use this?
     dims = None
     try:
         if node.type == "Const":
             shape = get_tf_node_attr(node, "value").tensor_shape
-            dims = [int(d.size) for d in shape.dim]
+            if not shape.unknown_rank:
+                dims = [int(d.size) for d in shape.dim]
         else:
             shape = get_tf_node_attr(node, "shape")
-            dims = [d.size for d in shape.dim]
+            if not shape.unknown_rank:
+                dims = [d.size for d in shape.dim]
     except:  # pylint: disable=bare-except
         pass
     return dims
+
+
+def get_shape_from_tf_output(output):
+    shape = []
+    try:
+        shape = output.get_shape().as_list()
+    except Exception:  # pylint: disable=broad-except
+        shape = None
+    return shape
 
 
 def map_tf_dtype(dtype):
@@ -397,6 +409,10 @@ def create_vague_shape_like(shape):
 
 def get_onnx_version():
     return onnx.__version__
+
+
+def get_tf_version():
+    return LooseVersion(tf.__version__)
 
 
 def make_opsetid(domain, version):

@@ -43,7 +43,7 @@ __all__ = [
 class TestConfig(object):
     def __init__(self):
         self.platform = sys.platform
-        self.tf_version = self._get_tf_version()
+        self.tf_version = utils.get_tf_version()
         self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", constants.PREFERRED_OPSET))
         self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(constants.DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
@@ -66,10 +66,6 @@ class TestConfig(object):
     @property
     def is_debug_mode(self):
         return utils.is_debug_mode()
-
-    def _get_tf_version(self):
-        import tensorflow as tf
-        return LooseVersion(tf.__version__)
 
     def _get_backend_version(self):
         version = None
