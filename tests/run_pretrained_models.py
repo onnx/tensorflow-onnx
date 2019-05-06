@@ -10,10 +10,12 @@ from __future__ import unicode_literals
 
 import argparse
 import os
+import re
 import sys
 import tarfile
 import time
 import zipfile
+from collections import namedtuple
 
 import PIL.Image
 import numpy as np
@@ -70,6 +72,8 @@ _INPUT_FUNC_MAPPING = {
     "get_ramp": get_ramp
 }
 
+OpsetConstraint = namedtuple("OpsetConstraint", "domain, min_version, max_version, excluded_version")
+
 
 class Test(object):
     """Main Test class."""
@@ -78,16 +82,15 @@ class Test(object):
     target = []
 
     def __init__(self, url, local, make_input, input_names, output_names,
-                 disabled=False, more_inputs=None, rtol=0.01, atol=1e-6,
+                 disabled=False, rtol=0.01, atol=1e-6,
                  check_only_shape=False, model_type="frozen", force_input_shape=False,
-                 skip_tensorflow=False):
+                 skip_tensorflow=False, opset_constraints=None):
         self.url = url
         self.make_input = make_input
         self.local = local
         self.input_names = input_names
         self.output_names = output_names
         self.disabled = disabled
-        self.more_inputs = more_inputs
         self.rtol = rtol
         self.atol = atol
         self.check_only_shape = check_only_shape
@@ -97,9 +100,10 @@ class Test(object):
         self.model_type = model_type
         self.force_input_shape = force_input_shape
         self.skip_tensorflow = skip_tensorflow
+        self.opset_constraints = opset_constraints
 
-    def download_file(self):
-        """Download file from url."""
+    def download_model(self):
+        """Download model from url."""
         cache_dir = Test.cache_dir
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
@@ -163,21 +167,8 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def run_onnxmsrtnext(self, name, model_proto, inputs):
-        """Run test against msrt-next backend."""
-        import lotus
-        model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto)
-        m = lotus.InferenceSession(model_path)
-        results = m.run(self.output_names, inputs)
-        if self.perf:
-            start = time.time()
-            for _ in range(PERFITER):
-                _ = m.run(self.output_names, inputs)
-            self.onnx_runtime = time.time() - start
-        return results
-
     def run_onnxruntime(self, name, model_proto, inputs):
-        """Run test against msrt-next backend."""
+        """Run test against onnxruntime backend."""
         import onnxruntime as rt
         model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True)
         logger.info("Model saved to %s", model_path)
@@ -200,19 +191,17 @@ class Test(object):
     def run_test(self, name, backend="caffe2", onnx_file=None, opset=None, extra_opset=None,
                  perf=None, fold_const=None):
         """Run complete test against backend."""
-        logger.info("===================================")
-        logger.info("Running %s", name)
         self.perf = perf
 
         # get the model
         if self.url:
-            _, dir_name = self.download_file()
+            _, dir_name = self.download_model()
+            logger.info("Downloaded to %s", dir_name)
             model_path = os.path.join(dir_name, self.local)
         else:
             model_path = self.local
-            dir_name = os.path.dirname(self.local)
-        logger.info("Downloaded to %s", model_path)
 
+        logger.info("Load model from %s", model_path)
         input_names = list(self.input_names.keys())
         outputs = self.output_names
         if self.model_type in ["checkpoint"]:
@@ -222,34 +211,30 @@ class Test(object):
         else:
             graph_def, input_names, outputs = loader.from_graphdef(model_path, input_names, outputs)
 
-        # create the input data
-        inputs = {}
-        for k, v in self.input_names.items():
-            if k not in input_names:
-                continue
-            if isinstance(v, six.text_type) and v.startswith("np."):
-                inputs[k] = eval(v)  # pylint: disable=eval-used
-            else:
-                inputs[k] = self.make_input(v)
-        if self.more_inputs:
-            for k, v in self.more_inputs.items():
-                inputs[k] = v
-
-        graph_def = tf2onnx.tfonnx.tf_optimize(inputs.keys(), self.output_names, graph_def, fold_const)
+        # remove unused input names
+        input_names = list(set(input_names).intersection(self.input_names.keys()))
+        graph_def = tf2onnx.tfonnx.tf_optimize(input_names, self.output_names, graph_def, fold_const)
         if utils.is_debug_mode():
             utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
+
+        inputs = {}
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
-
-            # fix inputs if needed
-            for k in inputs.keys():  # pylint: disable=consider-iterating-dictionary
+            # create the input data
+            for k in input_names:
+                v = self.input_names[k]
                 t = sess.graph.get_tensor_by_name(k)
-                dtype = tf.as_dtype(t.dtype).name
-                v = inputs[k]
-                if dtype != v.dtype:
-                    logger.warning("input dtype doesn't match tensorflow's")
-                    inputs[k] = np.array(v, dtype=dtype)
+                expected_dtype = tf.as_dtype(t.dtype).name
+                if isinstance(v, six.text_type) and v.startswith("np."):
+                    np_value = eval(v)  # pylint: disable=eval-used
+                    if expected_dtype != np_value.dtype:
+                        logger.warning("dtype mismatch for input %s: expected=%s, actual=%s", k, expected_dtype,
+                                       np_value.dtype)
+                    inputs[k] = np_value.astype(expected_dtype)
+                else:
+                    inputs[k] = self.make_input(v).astype(expected_dtype)
+
             if self.force_input_shape:
                 for k, v in inputs.items():
                     shape_override[k] = list(v.shape)
@@ -279,8 +264,6 @@ class Test(object):
             onnx_results = None
             if backend == "caffe2":
                 onnx_results = self.run_caffe2(name, model_proto, inputs)
-            elif backend == "onnxmsrtnext":
-                onnx_results = self.run_onnxmsrtnext(name, model_proto, inputs)
             elif backend == "onnxruntime":
                 onnx_results = self.run_onnxruntime(name, model_proto, inputs)
             else:
@@ -307,6 +290,41 @@ class Test(object):
 
         return False
 
+    def check_opset_constraints(self, opset, extra_opset=None):
+        """ Return (condition, reason) tuple, condition is True if constraints are met. """
+        if not self.opset_constraints:
+            return True, None
+
+        opsets = {"onnx": opset}
+        if extra_opset:
+            for e in extra_opset:
+                opsets[e.domain] = e.version
+
+        for constraint in self.opset_constraints:
+            domain = constraint.domain
+            opset_version = opsets.get(domain)
+            if not opset_version:
+                return False, "conversion requires opset {}".format(domain)
+
+            if constraint.min_version and opset_version < constraint.min_version:
+                reason = "conversion requires opset {} >= {}".format(domain, constraint.min_version)
+                return False, reason
+
+            if constraint.max_version and opset_version > constraint.max_version:
+                reason = "conversion requires opset {} <= {}".format(domain, constraint.max_version)
+                return False, reason
+
+            if constraint.excluded_version:
+                if utils.is_list_or_tuple(constraint.excluded_version):
+                    skip = opset_version in constraint.excluded_version
+                else:
+                    skip = opset_version == constraint.excluded_version
+                if skip:
+                    reason = "conversion requires opset {} != {}".format(domain, constraint.excluded_version)
+                    return False, reason
+
+        return True, None
+
 
 def get_args():
     """Parse commandline."""
@@ -316,7 +334,7 @@ def get_args():
     parser.add_argument("--tests", help="tests to run")
     parser.add_argument("--target", default="", help="target platform")
     parser.add_argument("--backend", default="onnxruntime",
-                        choices=["caffe2", "onnxmsrtnext", "onnxruntime"], help="backend to use")
+                        choices=["caffe2", "onnxruntime"], help="backend to use")
     parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
@@ -339,21 +357,57 @@ def get_args():
     return args
 
 
-def tests_from_yaml(fname):
+def load_tests_from_yaml(path):
     """Create test class from yaml file."""
-    tests = {}
-    config = yaml.load(open(fname, 'r').read())
-    for k, v in config.items():
-        input_func = v.get("input_get")
-        input_func = _INPUT_FUNC_MAPPING[input_func]
-        kwargs = {}
-        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape", "model_type",
-                   "skip_tensorflow", "force_input_shape"]:
-            if v.get(kw) is not None:
-                kwargs[kw] = v[kw]
+    path = os.path.abspath(path)
+    base_dir = os.path.dirname(path)
 
-        test = Test(v.get("url"), v.get("model"), input_func, v.get("inputs"), v.get("outputs"), **kwargs)
-        tests[k] = test
+    tests = {}
+    config = yaml.safe_load(open(path, 'r').read())
+    for name, settings in config.items():
+        if name in tests:
+            raise ValueError("Found duplicated test: {}".format(name))
+
+        # parse model and url, non-absolute local path is relative to yaml directory
+        model = settings.get("model")
+        url = settings.get("url")
+        if not url and not os.path.isabs(model):
+            model = os.path.join(base_dir, model)
+
+        # parse input_get
+        input_func = settings.get("input_get")
+        input_func = _INPUT_FUNC_MAPPING[input_func]
+
+        # parse inputs, non-absolute npy file path for np.load is relative to yaml directory
+        inputs = settings.get("inputs")
+        for k, v in list(inputs.items()):
+            if isinstance(v, str):
+                # assume at most 1 match
+                matches = re.findall(r"np\.load\((r?['\"].*?['\"])", v)
+                if matches:
+                    npy_path = matches[0].lstrip('r').strip("'").strip('"')
+                    if not os.path.isabs(npy_path):
+                        abs_npy_path = os.path.join(base_dir, npy_path)
+                        inputs[k] = v.replace(matches[0], "r'{}'".format(abs_npy_path))
+
+        # parse opset_constraints
+        opset_constraints = []
+        section = settings.get("opset_constraints")
+        if section:
+            for k, v in section.items():
+                c = OpsetConstraint(k, min_version=v.get("min"), max_version=v.get("max"),
+                                    excluded_version=v.get("excluded"))
+                opset_constraints.append(c)
+
+        kwargs = {}
+        for kw in ["rtol", "atol", "disabled", "check_only_shape", "model_type",
+                   "skip_tensorflow", "force_input_shape"]:
+            if settings.get(kw) is not None:
+                kwargs[kw] = settings[kw]
+
+        test = Test(url, model, input_func, inputs, settings.get("outputs"),
+                    opset_constraints=opset_constraints, **kwargs)
+        tests[name] = test
     return tests
 
 
@@ -365,7 +419,7 @@ def main():
 
     Test.cache_dir = args.cache
     Test.target = args.target
-    tests = tests_from_yaml(args.config)
+    tests = load_tests_from_yaml(args.config)
     if args.list:
         logger.info(sorted(tests.keys()))
         return 0
@@ -377,11 +431,22 @@ def main():
     failed = 0
     count = 0
     for test in test_keys:
+        logger.info("===================================")
+
         t = tests[test]
-        if args.tests is None and t.disabled and not args.include_disabled:
-            continue
+        if args.tests is None:
+            if t.disabled and not args.include_disabled:
+                logger.info("Skip %s: disabled", test)
+                continue
+
+            condition, reason = t.check_opset_constraints(args.opset, args.extra_opset)
+            if not condition:
+                logger.info("Skip %s: %s", test, reason)
+                continue
+
         count += 1
         try:
+            logger.info("Running %s", test)
             ret = t.run_test(test, backend=args.backend, onnx_file=args.onnx_file,
                              opset=args.opset, extra_opset=args.extra_opset, perf=args.perf,
                              fold_const=args.fold_const)

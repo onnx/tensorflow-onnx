@@ -102,7 +102,7 @@ class TestConfig(object):
         if "pytest" not in sys.argv[0]:
             parser = argparse.ArgumentParser()
             parser.add_argument("--backend", default=config.backend,
-                                choices=["caffe2", "onnxmsrtnext", "onnxruntime"],
+                                choices=["caffe2", "onnxruntime"],
                                 help="backend to test against")
             parser.add_argument("--opset", type=int, default=config.opset, help="opset to test against")
             parser.add_argument("--target", default=",".join(config.target), choices=constants.POSSIBLE_TARGETS,
