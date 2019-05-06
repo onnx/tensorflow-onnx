@@ -15,6 +15,7 @@ import sys
 import tarfile
 import time
 import zipfile
+from collections import namedtuple
 
 import PIL.Image
 import numpy as np
@@ -71,6 +72,8 @@ _INPUT_FUNC_MAPPING = {
     "get_ramp": get_ramp
 }
 
+OpsetConstraint = namedtuple("OpsetConstraint", "domain, min_version, max_version, excluded_version")
+
 
 class Test(object):
     """Main Test class."""
@@ -81,7 +84,7 @@ class Test(object):
     def __init__(self, url, local, make_input, input_names, output_names,
                  disabled=False, more_inputs=None, rtol=0.01, atol=1e-6,
                  check_only_shape=False, model_type="frozen", force_input_shape=False,
-                 skip_tensorflow=False):
+                 skip_tensorflow=False, opset_constraints=None):
         self.url = url
         self.make_input = make_input
         self.local = local
@@ -98,6 +101,7 @@ class Test(object):
         self.model_type = model_type
         self.force_input_shape = force_input_shape
         self.skip_tensorflow = skip_tensorflow
+        self.opset_constraints = opset_constraints
 
     def download_model(self):
         """Download model from url."""
@@ -188,8 +192,6 @@ class Test(object):
     def run_test(self, name, backend="caffe2", onnx_file=None, opset=None, extra_opset=None,
                  perf=None, fold_const=None):
         """Run complete test against backend."""
-        logger.info("===================================")
-        logger.info("Running %s", name)
         self.perf = perf
 
         # get the model
@@ -293,6 +295,41 @@ class Test(object):
 
         return False
 
+    def check_opset_constraints(self, opset, extra_opset=None):
+        """ Return (condition, reason) tuple, condition is True if constraints are met. """
+        if not self.opset_constraints:
+            return True, None
+
+        opsets = {"onnx": opset}
+        if extra_opset:
+            for e in extra_opset:
+                opsets[e.domain] = e.version
+
+        for constraint in self.opset_constraints:
+            domain = constraint.domain
+            opset_version = opsets.get(domain)
+            if not opset_version:
+                return False, "conversion requires opset {}".format(domain)
+
+            if constraint.min_version and opset_version < constraint.min_version:
+                reason = "conversion requires opset {} >= {}".format(domain, constraint.min_version)
+                return False, reason
+
+            if constraint.max_version and opset_version > constraint.max_version:
+                reason = "conversion requires opset {} <= {}".format(domain, constraint.max_version)
+                return False, reason
+
+            if constraint.excluded_version:
+                if utils.is_list_or_tuple(constraint.excluded_version):
+                    skip = opset_version in constraint.excluded_version
+                else:
+                    skip = opset_version == constraint.excluded_version
+                if skip:
+                    reason = "conversion requires opset {} != {}".format(domain, constraint.excluded_version)
+                    return False, reason
+
+        return True, None
+
 
 def get_args():
     """Parse commandline."""
@@ -325,44 +362,57 @@ def get_args():
     return args
 
 
-def tests_from_yaml(path):
+def load_tests_from_yaml(path):
     """Create test class from yaml file."""
     path = os.path.abspath(path)
     base_dir = os.path.dirname(path)
 
     tests = {}
-    config = yaml.load(open(path, 'r').read())
-    for k, v in config.items():
-        input_func = v.get("input_get")
+    config = yaml.safe_load(open(path, 'r').read())
+    for name, settings in config.items():
+        if name in tests:
+            raise ValueError("Found duplicated test: {}".format(name))
+
+        # parse model and url, non-absolute local path is relative to yaml directory
+        model = settings.get("model")
+        url = settings.get("url")
+        if not url and not os.path.isabs(model):
+            model = os.path.join(base_dir, model)
+
+        # parse input_get
+        input_func = settings.get("input_get")
         input_func = _INPUT_FUNC_MAPPING[input_func]
-        kwargs = {}
-        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape", "model_type",
-                   "skip_tensorflow", "force_input_shape"]:
-            if v.get(kw) is not None:
-                kwargs[kw] = v[kw]
 
-        # when model is local, non-absolute path is relative to yaml directory
-        url = v.get("url")
-        model = v.get("model")
-        if not url:
-            if not os.path.isabs(model):
-                model = os.path.join(base_dir, model)
-
-        # non-absolute npy file path for np.load is relative to yaml directory
-        input_names = v.get("inputs")
-        for key in list(input_names.keys()):
-            value = input_names[key]
-            if isinstance(value, str):
+        # parse inputs, non-absolute npy file path for np.load is relative to yaml directory
+        inputs = settings.get("inputs")
+        for k, v in list(inputs.items()):
+            if isinstance(v, str):
                 # assume at most 1 match
-                matches = re.findall(r"np\.load\((r?['\"].*?['\"])", value)
+                matches = re.findall(r"np\.load\((r?['\"].*?['\"])", v)
                 if matches:
                     npy_path = matches[0].lstrip('r').strip("'").strip('"')
                     if not os.path.isabs(npy_path):
                         abs_npy_path = os.path.join(base_dir, npy_path)
-                        input_names[key] = value.replace(matches[0], "r'{}'".format(abs_npy_path))
+                        inputs[k] = v.replace(matches[0], "r'{}'".format(abs_npy_path))
 
-        test = Test(url, model, input_func, input_names, v.get("outputs"), **kwargs)
-        tests[k] = test
+        # parse opset_constraints
+        opset_constraints = []
+        section = settings.get("opset_constraints")
+        if section:
+            for k, v in section.items():
+                c = OpsetConstraint(k, min_version=v.get("min"), max_version=v.get("max"),
+                                    excluded_version=v.get("excluded"))
+                opset_constraints.append(c)
+
+        kwargs = {}
+        for kw in ["rtol", "atol", "disabled", "more_inputs", "check_only_shape", "model_type",
+                   "skip_tensorflow", "force_input_shape"]:
+            if settings.get(kw) is not None:
+                kwargs[kw] = settings[kw]
+
+        test = Test(url, model, input_func, inputs, settings.get("outputs"),
+                    opset_constraints=opset_constraints, **kwargs)
+        tests[name] = test
     return tests
 
 
@@ -374,7 +424,7 @@ def main():
 
     Test.cache_dir = args.cache
     Test.target = args.target
-    tests = tests_from_yaml(args.config)
+    tests = load_tests_from_yaml(args.config)
     if args.list:
         logger.info(sorted(tests.keys()))
         return 0
@@ -386,11 +436,22 @@ def main():
     failed = 0
     count = 0
     for test in test_keys:
+        logger.info("===================================")
+
         t = tests[test]
-        if args.tests is None and t.disabled and not args.include_disabled:
-            continue
+        if args.tests is None:
+            if t.disabled and not args.include_disabled:
+                logger.info("Skip %s: disabled", test)
+                continue
+
+            condition, reason = t.check_opset_constraints(args.opset, args.extra_opset)
+            if not condition:
+                logger.info("Skip %s: %s", test, reason)
+                continue
+
         count += 1
         try:
+            logger.info("Running %s", test)
             ret = t.run_test(test, backend=args.backend, onnx_file=args.onnx_file,
                              opset=args.opset, extra_opset=args.extra_opset, perf=args.perf,
                              fold_const=args.fold_const)
