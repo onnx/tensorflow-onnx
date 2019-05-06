@@ -39,6 +39,8 @@ _TFOUTPUT = "output"
 _OUTPUT = "output:0"
 _TFOUTPUT1 = "output1"
 _OUTPUT1 = "output1:0"
+_TFOUTPUT2 = "output2"
+_OUTPUT2 = "output2:0"
 
 
 def make_xval(shape):
@@ -128,30 +130,34 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(9, "ConstantOfShape")
-    def test_eye(self):
-        # tf.eye(tf.shape)
+    def test_eye_non_const(self):
+        # tf.eye(num_rows), num_rows is not const here
         for np_dtype, tf_dtype in zip([np.int32, np.int64, np.float32, np.float64],
                                       [tf.int32, tf.int64, tf.float32, tf.float64]):
             tf.reset_default_graph()
-            x_val = np.array([[1.0, 2.0, -3.0, -4.0, 5.0]] * 2, dtype=np_dtype)
-            x = tf.placeholder(tf_dtype, shape=[None] * 2, name=_TFINPUT)
-            y_ = tf.eye(tf.shape(x)[0], dtype=tf.float32)
-            _ = tf.identity(y_, name=_TFOUTPUT)
-            y1_ = tf.eye(tf.shape(x)[1], dtype=tf.int32)
-            _ = tf.identity(y1_, name=_TFOUTPUT1)
-            self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val}, rtol=0)
+            x_val = np.array(5, dtype=np_dtype)
+            x = tf.placeholder(tf_dtype, shape=[], name=_TFINPUT)
+            y = tf.eye(x, dtype=tf.int32)
+            _ = tf.identity(y, name=_TFOUTPUT)
+            y1 = tf.eye(x, dtype=tf.int64)
+            _ = tf.identity(y1, name=_TFOUTPUT1)
+            y2 = tf.eye(x, dtype=tf.float32)
+            _ = tf.identity(y2, name=_TFOUTPUT2)
+            self._run_test_case([_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val}, rtol=0)
 
-        # tf.eye(tf.shape, tf.shape)
+        # tf.eye(num_rows, num_columns), both num_rows and num_columns are not const here
         for np_dtype, tf_dtype in zip([np.int32, np.int64, np.float32, np.float64],
                                       [tf.int32, tf.int64, tf.float32, tf.float64]):
             tf.reset_default_graph()
-            x_val = np.array([[1.0, 2.0, -3.0, -4.0, 5.0]] * 2, dtype=np_dtype)
-            x = tf.placeholder(tf_dtype, shape=[None] * 2, name=_TFINPUT)
-            y_ = tf.eye(tf.shape(x)[0], tf.shape(x)[1], dtype=tf.float32)
-            _ = tf.identity(y_, name=_TFOUTPUT)
-            y1_ = tf.eye(tf.shape(x)[0], tf.shape(x)[1], dtype=tf.int32)
-            _ = tf.identity(y1_, name=_TFOUTPUT1)
-            self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val}, rtol=0)
+            x_val = np.array([5, 10], dtype=np_dtype)
+            x = tf.placeholder(tf_dtype, shape=[2], name=_TFINPUT)
+            y = tf.eye(x[0], x[1], dtype=tf.int32)
+            _ = tf.identity(y, name=_TFOUTPUT)
+            y1 = tf.eye(x[0], x[1], dtype=tf.int64)
+            _ = tf.identity(y1, name=_TFOUTPUT1)
+            y2 = tf.eye(x[0], x[1], dtype=tf.float32)
+            _ = tf.identity(y2, name=_TFOUTPUT2)
+            self._run_test_case([_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val}, rtol=0)
 
     @check_opset_min_version(7, "trig")
     def test_trig_ops(self):

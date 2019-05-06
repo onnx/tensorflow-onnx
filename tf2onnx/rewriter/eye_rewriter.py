@@ -12,10 +12,12 @@ from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 
 def rewrite_eye(g, ops):
+    # schema of eye is eye(num_rows, num_columns=None), if num_columns not specified then it's equal to num_rows
     # tf.eye is implemented by a sub_graph which contains op "MatrixDiag" or "MatrixSetDiag" while
     # these two ops are un-supported directly in onnx
     # but onnx op EyeLike can be used to map the sub_graph
-    # "rewrite_eye" supports tf.eye(tf.shape(x)[i]) and tf.eye(tf.shape(x)[i], tf.shape(x)[j]).
+    # "rewrite_eye" supports tf.eye(non_const) and tf.eye(non_const1, non_const2).
+    # tf.eye(const) and tf.eye(const1, const2) are not supported in this rewriter
 
     # ConstantOfShape in opset 9 is used, so if opset less than 9 then do nothing
     if g.opset < 9:
@@ -24,12 +26,12 @@ def rewrite_eye(g, ops):
     pattern1 = \
         OpTypePattern("MatrixDiag", name="output_eye_matrix", inputs=[
             OpTypePattern("Fill", inputs=[
-                OpTypePattern("Const"),
+                OpTypePattern("Const", name="fill_value"),
                 OpTypePattern("ConcatV2", inputs=[
                     "*",
                     "*",
                     OpTypePattern("Pack", inputs=[
-                        OpTypePattern("Minimum", name="min_node")
+                        OpTypePattern("Minimum|Cast", name="min_or_cast")
                     ])
                 ])
             ])
@@ -38,12 +40,12 @@ def rewrite_eye(g, ops):
         OpTypePattern("MatrixSetDiag", name="output_eye_matrix", inputs=[
             OpTypePattern("Fill"),
             OpTypePattern("Fill", inputs=[
-                OpTypePattern("Const"),
+                OpTypePattern("Const", name="fill_value"),
                 OpTypePattern("ConcatV2", inputs=[
                     "*",
                     "*",
                     OpTypePattern("Pack", inputs=[
-                        OpTypePattern("Minimum", name="min_node")
+                        OpTypePattern("Minimum|Cast", name="min_or_cast")
                     ])
                 ])
             ])
@@ -53,14 +55,24 @@ def rewrite_eye(g, ops):
         matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(ops))
         for match_result in match_results:
+            if match_result.get_op("fill_value").get_tensor_value() != 1:
+                continue
+
+            min_or_cast = match_result.get_op("min_or_cast")
+            if min_or_cast.type == "Minimum":
+                min_node = min_or_cast
+            elif min_or_cast.type == "Cast" and min_or_cast.inputs[0].type == "Minimum":
+                min_node = min_or_cast.inputs[0]
+            else:
+                continue
+
+            num_rows = min_node.inputs[0]
+            num_columns = min_node.inputs[1]
+
             old_output = match_result.get_op("output_eye_matrix")
             output_dtypes = [g.get_dtype(old_output.output[0])]
             output_shapes = [g.get_shape(old_output.output[0])]
             g.remove_node(old_output.name)
-
-            min_node = match_result.get_op("min_node")
-            num_rows = min_node.inputs[0]
-            num_columns = min_node.inputs[1]
 
             # onnx op "EyeLike" need a 2D tensor, so generate it
             num_rows = g.make_node("Unsqueeze", num_rows.output, attr={"axes": [0]})
