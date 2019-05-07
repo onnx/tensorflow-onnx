@@ -1935,16 +1935,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     def test_sparse_softmax_cross_entropy_with_logits(self):
         num_class = 5
-        label_val = np.array([3, 2, 0, 4]).astype(np.int32)
-        logits_val = np.random.random((len(label_val), num_class)).astype(np.float32)
-
-        label = tf.placeholder(tf.int32, shape=[None], name=_TFINPUT)
-        logits = tf.placeholder(tf.float32, shape=[None, num_class], name=_TFINPUT1)
-
-        res1 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label, logits=logits)
-        _ = tf.identity(res1, name=_TFOUTPUT)
-
-        self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val})
+        for logic_shape in [[None, None], [None, num_class]]:
+            tf.reset_default_graph()
+            label_val = np.array([3, 2, 0, 4]).astype(np.int32)
+            logits_val = np.random.random((len(label_val), num_class)).astype(np.float32)
+            label = tf.placeholder(tf.int32, shape=[None], name=_TFINPUT)
+            logits = tf.placeholder(tf.float32, shape=logic_shape, name=_TFINPUT1)
+            res1 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label, logits=logits)
+            _ = tf.identity(res1, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val})
 
     @check_target('rs6', 'SparseSoftmaxCrossEntropyWithLogits')
     def test_sparse_softmax_cross_entropy_with_logits_large_class(self):
