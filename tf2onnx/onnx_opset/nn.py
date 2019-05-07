@@ -729,20 +729,25 @@ class SparseSoftmaxCrossEntropyWithLogits:
         logit_dtype = ctx.get_dtype(node.input[0])
 
         label_name = node.input[1]
-        label_dtype = ctx.get_dtype(label_name)
 
-        num_class = logit_shape[-1]
-        utils.make_sure(num_class != -1,
-                        "number of class should be known, otherwise subgraph to get the info is needed")
-        # int64 is used because of onnxruntime "onehot" only supports this dtype
-        depth_node = ctx.make_const(utils.make_name("onehot_depth"), np.array([num_class]).astype(np.int64))
-        values_node = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1]).astype(np.int64))
+        if logit_shape is not None and logit_shape[-1] != -1:
+            num_class = logit_shape[-1]
+            node_nme = utils.make_name("onehot_depth")
+            depth_node = ctx.make_const(node_nme, np.array([num_class]).astype(np.int64)).output[0]
+        else:
+            logit_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
+            slice_args = {"data": logit_shape,
+                          "starts": [-1], "ends": [int(utils.get_max_value(np.int32))]}
+            num_class = GraphBuilder(ctx).make_slice(kwargs=slice_args)
+            depth_node = num_class
+        values_node = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1]).astype(np.int64)).output[0]
+        label_dtype = ctx.get_dtype(label_name)
         if label_dtype != TensorProto.INT64:
             onehot_indice = ctx.make_node("Cast", [label_name], attr={"to": TensorProto.INT64}).output[0]
         else:
             onehot_indice = label_name
         label_node = ctx.make_node(op_type="OneHot",
-                                   inputs=[onehot_indice, depth_node.output[0], values_node.output[0]])
+                                   inputs=[onehot_indice, depth_node, values_node])
         # the above logic makes output dtype of label_node now always int64
         # make sure label has same dtype as logit
         if logit_dtype != TensorProto.INT64:
