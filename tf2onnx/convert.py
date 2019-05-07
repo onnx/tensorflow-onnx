@@ -109,6 +109,10 @@ def main():
         graph_def, inputs, outputs = loader.from_saved_model(args.saved_model, args.inputs, args.outputs)
         model_path = args.saved_model
 
+    if args.verbose:
+        logger.info("inputs: %s", inputs)
+        logger.info("outputs: %s", outputs)
+
     # todo: consider to enable const folding by default?
     graph_def = tf_optimize(inputs, outputs, graph_def, args.fold_const)
 

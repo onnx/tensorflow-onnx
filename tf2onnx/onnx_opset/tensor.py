@@ -59,17 +59,37 @@ def _wrap_concat_with_cast(ctx, node):
             ctx.copy_shape(output_name, output_cast.output[0])
 
 
-@tf_op(["Size", "Flatten"])
-class DirectOp:
+@tf_op("Size")
+class Size:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op("Flatten")
+class Flatten:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        # no change for us
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op("Dropout")
 class Dropout:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_6(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
         pass
 
     @classmethod
@@ -80,7 +100,7 @@ class Dropout:
 @tf_op("Identity")
 class Identity:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         if node.inputs[0].is_const():
             # should not remove the identity node if it is output of the graph
             if node.output[0] in ctx.outputs:
@@ -95,7 +115,7 @@ class Identity:
 @tf_op("Reshape")
 class Reshape:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Reshape(T tensor, Tshape shape, @type Tshape)
         # T reshaped = Reshape(T data, @INTS shape) - but takes a optional 2nd input for shape
         shape_node = node.inputs[1]
@@ -137,7 +157,7 @@ class Reshape:
 @tf_op("Squeeze")
 class Squeeze:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Squeeze(T input, @list(int) squeeze_dims)
         # T squeezed = Squeeze(T data, @AttrType.INTS axes), axes are list of positive integers.
         axis = node.get_attr("axis")
@@ -166,7 +186,7 @@ class Squeeze:
 @tf_op("Transpose")
 class Transpose:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T y = Transpose(T x, Tperm perm, @type Tperm)
         # T transposed = Transpose(T data, @INTS perm)
         if len(node.input) > 1:
@@ -188,7 +208,7 @@ class Transpose:
 @tf_op("Concat")
 class Concat:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # old concat op has axis as input[0]
         node.type = "Concat"
         axis_node = node.inputs[0]
@@ -209,7 +229,7 @@ class Concat:
 @tf_op("ConcatV2")
 class ConcatV2:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = ConcatV2(T values, Tidx axis, @int N, @type Tidx)
         # T concat_result = Concat(T inputs, @INT axis)
         # if any input is empty, remove the input and concat the others
@@ -220,7 +240,7 @@ class ConcatV2:
                 ctx.remove_input(node, node.input[i])
         # all inputs are deleted
         if not node.input:
-            raise RuntimeError("all inputs of {} are empty".format(name))
+            raise RuntimeError("all inputs of {} are empty".format(node.name))
 
         axis_node = node.inputs[-1]
         utils.make_sure(axis_node.is_const(), "{} needs to be const".format(axis_node.name))
@@ -242,15 +262,7 @@ class ConcatV2:
 @tf_op("Slice")
 class Slice:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        cls._convert_since_4(ctx, node, **kwargs)
-
-    @classmethod
-    def version_10(cls, ctx, node, **kwargs):
-        cls._convert_since_4(ctx, node, **kwargs)
-
-    @classmethod
-    def _convert_since_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Slice(T input, Index begin, Index size)
         # T output = Slice(T input, Tind starts, Tind ends, Tind axes, Tind steps)
         # "ends" are exclusive, "axes" and "steps" are optional, their default val are [0, ...] and 1
@@ -293,18 +305,22 @@ class Slice:
         kwargs = {**inputs_map, "outputs": node.output}
         _ = GraphBuilder(ctx).make_slice(kwargs, name=node.name)
 
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Gather")
 class Gather:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Gather"
 
 
 @tf_op("GatherV2")
 class GatherV2:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # for GatherV2 axis come as input
         node.type = "Gather"
         axis = node.inputs[2].get_tensor_value()
@@ -437,7 +453,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
 @tf_op("GatherNd")
 class GatherNd:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # Tparams output = GatherNd(Tparams params, Tidx indices)
         params = node.input[0]
         indices = node.input[1]
@@ -454,18 +470,22 @@ class GatherNd:
 @tf_op("Split")
 class Split:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Split(int32 split_dim, T value, @int num_split)
         # T outputs = Split(T input, @INT axis, @INTS split)
         split_dims = node.inputs[0].get_tensor_value()
         ctx.remove_input(node, node.input[0])
         node.set_attr("axis", split_dims)
 
+    @classmethod
+    def version_2(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("SplitV")
 class SplitV:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = SplitV(T value, Tlen size_splits, int32 split_dim, @int num_split, @type Tlen)
         # T outputs = Split(T input, @INT axis, @INTS split)
         node.type = "Split"
@@ -476,11 +496,15 @@ class SplitV:
         node.set_attr("split", split)
         node.set_attr("axis", split_dims)
 
+    @classmethod
+    def version_2(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("ExpandDims")
 class ExpandDims:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = ExpandDims(T input, Tdim dim, @type Tdim)
         # T reshaped = Reshape-1(T data, @ints consumed_inputs, @int64 shape)
         # T expanded = Unsqueeze-1(T data, @ints axes)
@@ -511,7 +535,6 @@ class ExpandDims:
         # T output = ExpandDims(T input, Tdim dim, @type Tdim), dim is 0-D scalar.
         # T reshaped = Reshape-5(T data, int64 shape)
         # T expanded = Unsqueeze-1(T data, @ints axes)
-        # FIXME: this was in the OPSET5 table
         shape = ctx.get_shape(node.output[0])
         if shape is not None and shape.count(-1) < 2:
             # tensorflow already infers the output shape so we can just take it
@@ -538,7 +561,7 @@ class ExpandDims:
 @tf_op("StridedSlice")
 class StridedSlice:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # for now we implement common cases. Things like strides!=1 are not mappable to onnx.
         not_supported_attr = ["new_axis_mask"]
         for attr_name in not_supported_attr:
@@ -642,7 +665,7 @@ class StridedSlice:
 @tf_op("Cast")
 class Cast:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # DstT y = Cast(SrcT x, @type SrcT, @type DstT)
         # T2 output = Cast(T1 input, @STRING to)
         dst = node.get_attr("to")
@@ -650,14 +673,18 @@ class Cast:
         node.set_attr("to", dst)
 
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_6(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
         pass
 
 
 @tf_op("TopKV2", onnx_op="TopK")
 class TopKV2:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T values, int32 indices = TopKV2(T input, int32 k, @bool sorted=true, @realnumbertype T)
         # T values, I indices = TopK(T x, @int axis=-1, @int k). I: int64
         topk_node_name = node.name
@@ -692,7 +719,7 @@ class TopKV2:
 @tf_op("Tile")
 class Tile:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # onnx wants shape input to be int64
         _convert_shapenode_to_int64(ctx, node, 1)
 
@@ -700,7 +727,7 @@ class Tile:
 @tf_op("Pack")
 class Pack:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx pack op
         axis = node.get_attr("axis").i
         if axis < 0:
@@ -730,7 +757,7 @@ class Pack:
 @tf_op("Unpack")
 class Unpack:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx unpack op
         axis = node.get_attr("axis").i
         # split the tensor into n outputs
@@ -746,7 +773,7 @@ class Unpack:
 @tf_op("OneHot")
 class OneHot:
     @classmethod
-    def version_5(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # until there is no onehot op in onnx, a workaround using gather from eye
         indices_name = node.input[0]
         indices_shape = ctx.get_shape(indices_name)
@@ -833,7 +860,7 @@ class OneHot:
 @tf_op("Shape")
 class Shape:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # out_type output = Shape(T input, @int32|int64 out_type), out_type by default int32
         # int64 output = Shape(T input)
         dtype = ctx.get_dtype(node.output[0])
@@ -856,11 +883,7 @@ class IsNan:
 @tf_op("BatchToSpaceND", onnx_op="DepthToSpace")
 class BatchToSpace:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        cls._convert_since_4(ctx, node, **kwargs)
-
-    @classmethod
-    def _convert_since_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
         # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
         # and we only support 4D here, so the data format is NHWC
@@ -904,7 +927,7 @@ class BatchToSpace:
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")
 class SpaceToBatch:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # https://www.tensorflow.org/api_docs/python/tf/space_to_batch_nd
         # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
         # and we only support 4D here, so the data format is NHWC
@@ -1063,8 +1086,7 @@ class ReverseSequence:
             "ReverseSequence",
             node.input,
             outputs=node.output,
-            attr={"batch_axis": batch_dim, "time_axis": seq_dim}
-        )
+            attr={"batch_axis": batch_dim, "time_axis": seq_dim})
 
         seq_len_dtype = ctx.get_dtype(node.input[1])
         utils.make_sure(seq_len_dtype is not None, "dtype of {} is None".format(node.input[1]))

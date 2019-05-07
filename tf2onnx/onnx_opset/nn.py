@@ -200,7 +200,7 @@ def conv_kernel_shape(ctx, node, input_idx, spatial=2):
 @tf_op(["Conv1D", "Conv2D", "Conv3D"])
 class ConvOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Conv2D(T input, T filter, @list(int) strides, @bool use_cudnn_on_gpu,
         #                       @string padding, @string data_format)
         # T Y = Conv(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
@@ -216,7 +216,7 @@ class ConvOp:
 @tf_op("Conv2DBackpropInput")
 class ConvTranspose:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Conv2DBackpropInput(int32 input_sizes, T filter, T out_backprop,
         #    @list(int) strides, @bool use_cudnn_on_gpu, @string padding, @string data_format, @list(int) dilations)
         # T Y = ConvTranspose(T X, T W, T B, @STRING auto_pad, @INTS dilations,
@@ -250,7 +250,7 @@ class ConvTranspose:
 @tf_op(["DepthwiseConv2d", "DepthwiseConv2dNative"])
 class DepthwiseConv2d:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = DepthwiseConv2dNative(T input, T filter, @list(int) strides, @string padding, @string data_format)
         # T Y = ConvTranspose(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
         #        @AttrType.INTS kernel_shape, @AttrType.INTS output_shape, @AttrType.INTS pads, @AttrType.INTS strides)
@@ -293,7 +293,7 @@ class DepthwiseConv2d:
 @tf_op(["MaxPool", "MaxPoolV2"], onnx_op="MaxPool")
 class PoolOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         cls._convert(ctx, node, **kwargs)
 
     @classmethod
@@ -331,12 +331,12 @@ class PoolOp:
 @tf_op(["BiasAdd", "BiasAddV1"])
 class BiasAdd:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = BiasAdd(T value, T bias, @string data_format)
         # T output = BiasAddV1(T value, T bias)
         # TODO: for now use add. We may need to convert to NCHW.
         node.type = "Add"
-        common.BroadcastOp.version_4(ctx, node, **kwargs)
+        common.BroadcastOp.version_1(ctx, node, **kwargs)
 
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
@@ -344,7 +344,7 @@ class BiasAdd:
         # T output = BiasAddV1(T value, T bias)
         # According TF bias_add definition, the input dim is always only 1.
         node.type = "Add"
-        common.BroadcastOp.version_7(ctx, node, **kwargs)
+        common.BroadcastOp.version_6(ctx, node, **kwargs)
 
         # on NHWC, bias will broadcast from largest dim, which is default onnx Add op broadcast behavior.
         if not node.is_nhwc():
@@ -365,7 +365,7 @@ class BiasAdd:
 @tf_op(["Pad", "PadV2", "MirrorPad"])
 class Pad:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Pad"
         # T output = Pad(T input, int32 paddings, @type Tpaddings), CONST model using default value
         #  or PadV2(T input, int32 paddings, T constant_value, @type Tpaddings), CONST mode - default value specified
@@ -405,7 +405,7 @@ class Pad:
 @tf_op(["FusedBatchNorm", "FusedBatchNormV2"])
 class BatchNorm:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_6(cls, ctx, node, **kwargs):
         node.type = "BatchNormalization"
         # tf inputs: x, scale, bias, mean, variance
         # tf outputs: y, batch_mean, batch_var
@@ -440,18 +440,23 @@ class BatchNorm:
             ctx.make_const(new_val_node_name, new_var_value)
             node.input[4] = new_val_node_name
 
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        # is_test was removed - no change for us
+        cls.version_6(ctx, node, **kwargs)
+
 
 @tf_op(["SpaceToDepth", "DepthToSpace"])
 class SpaceToDepth:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         block_size = node.get_attr("block_size")
         node.set_attr("blocksize", block_size.i)
         conv_convert_inputs(ctx, node, with_kernel=False)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
-class ResizeX:
+class Resize:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         mode = "linear" if node.type == "ResizeBilinear" else "nearest"
