@@ -59,10 +59,21 @@ def _wrap_concat_with_cast(ctx, node):
             ctx.copy_shape(output_name, output_cast.output[0])
 
 
-@tf_op(["Size", "Flatten", "Dropout"])
+@tf_op(["Size", "Flatten"])
 class DirectOp:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("Dropout")
+class Dropout:
+    @classmethod
+    def version_4(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
         pass
 
 
