@@ -107,7 +107,7 @@ class CondRewriter:
             false_output = cond_context.false_branch_context.output[i]
             true_shape = self.g.get_shape(true_output)
             utils.make_sure(true_shape is not None, "Shape of {} is None".format(true_output))
-            true_rank  = len(true_shape)
+            true_rank = len(true_shape)
             true_dtype = self.g.get_dtype(true_output)
             false_shape = self.g.get_shape(false_output)
             utils.make_sure(false_shape is not None, "Shape of {} is None".format(false_output))
