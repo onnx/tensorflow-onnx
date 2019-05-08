@@ -87,6 +87,17 @@ def get_conv_getdata(kind=1):
     else:
         raise ValueError("kind not known")
 
+def get_maxpoolwithargmax_getdata():
+    data = [
+        ('SAME', [1, 3, 3, 1], [1, 3, 3, 1], [1, 2, 2, 1]),
+        ('SAME', [1, 5, 5, 1], [1, 4, 4, 1], [1, 2, 2, 1]),
+        ('SAME', [1, 10, 5, 1], [1, 2, 2, 1], [1, 2, 2, 1]),
+        ('SAME', [1, 10, 5, 1], [1, 4, 4, 1], [1, 1, 1, 1]),
+        ('VALID', [1, 3, 3, 1], [1, 3, 3, 1], [1, 2, 2, 1]),
+        ('VALID', [1, 5, 5, 1], [1, 4, 4, 1], [1, 2, 2, 1]),
+    ]
+    for idx, v in enumerate(data):
+        yield (idx,) + v
 
 class BackendTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, output_names_with_port, feed_dict, **kwargs):
@@ -2236,6 +2247,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                 graph_validator=lambda g: check_op_count(g, "ThresholdedRelu", 1))
             tf.reset_default_graph()
 
+    @check_tf_min_version("1.13")
+    @check_opset_min_version(8, "MaxPoolWithArgmax")
+    def test_maxpoolwithargmax(self):
+        for tf_shape in ["known", "unknown"]:
+            tf.reset_default_graph()
+            for p in get_maxpoolwithargmax_getdata():
+                _, padding, x_shape, ksize, strides = p
+                tf.reset_default_graph()
+                x_val = make_xval(x_shape)
+                if tf_shape == "known":
+                    x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+                else:
+                    x = tf.placeholder(tf.float32, shape=[None] * x_val.ndim, name=_TFINPUT)
+                mp = tf.nn.max_pool_with_argmax(x, ksize, strides, padding=padding)
+                _ = tf.identity(mp[0], name=_TFOUTPUT)
+                _ = tf.identity(mp[1], name=_TFOUTPUT1)
+                self.logger.debug(str(p))
+                self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
 if __name__ == '__main__':
     unittest_main()
