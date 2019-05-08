@@ -297,7 +297,7 @@ def infer_shape_for_op_supplementary(op):
         return set_shape_from_inputs_broadcast(op.inputs, op.outputs[0])
 
     if op.type == "RandomUniform":
-        shape_op = op.inputs[0]
+        shape_op = op.inputs[0].op
         if not shape_op or shape_op.type != "Shape":
             return False
         return set_shape_from_input(shape_op.inputs[0], op.outputs[0])
@@ -349,7 +349,7 @@ def infer_shape_for_op_supplementary(op):
     if op.type == "ExpandDims":
         # https://www.tensorflow.org/api_docs/python/tf/expand_dims
         input_shape = utils.get_shape_from_tf_output(op.inputs[0])
-        dim_op = op.inputs[1]
+        dim_op = op.inputs[1].op
         if input_shape is None or not utils.is_const_op(dim_op):
             return False
 
