@@ -106,16 +106,21 @@ class CondRewriter:
             true_output = cond_context.true_branch_context.output[i]
             false_output = cond_context.false_branch_context.output[i]
             true_shape = self.g.get_shape(true_output)
+            utils.make_sure(true_shape is not None, "Shape of {} is None".format(true_output))
+            true_rank = len(true_shape)
             true_dtype = self.g.get_dtype(true_output)
             false_shape = self.g.get_shape(false_output)
+            utils.make_sure(false_shape is not None, "Shape of {} is None".format(false_output))
+            false_rank = len(false_shape)
             false_dtype = self.g.get_dtype(false_output)
-            if not utils.are_shapes_compatible(true_shape, false_shape):
+            # just require rank is equal
+            if true_rank != false_rank:
                 raise RuntimeError(
-                    "the shape of outputs {} and {} mismatch: {}, {}".format(
+                    "the rank of outputs {} and {} mismatch: {}, {}".format(
                         true_output,
                         false_output,
-                        true_shape,
-                        false_shape
+                        true_rank,
+                        false_rank
                     )
                 )
             if true_dtype != false_dtype:
@@ -127,10 +132,7 @@ class CondRewriter:
                         false_dtype
                     )
                 )
-            # in tf, the shape of different branched can be different,
-            # for example output shape of branch A can be [-1] while branch B can be [1].
-            # Under this case, we should set output shape to be [-1]
-            output_shapes.append(utils.create_vague_shape_like(utils.merge_shapes(true_shape, false_shape)))
+            output_shapes.append(utils.create_vague_shape_like(true_shape))
             output_dtypes.append(true_dtype)
         return output_shapes, output_dtypes
 
