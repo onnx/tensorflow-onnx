@@ -245,6 +245,7 @@ class Test(object):
             else:
                 tf_results = self.run_tensorflow(sess, inputs)
                 logger.info("TensorFlow OK")
+
             model_proto = None
             try:
                 # convert model to onnx
@@ -253,12 +254,11 @@ class Test(object):
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
                 model_proto = optimizer.optimize_graph(onnx_graph).make_model("optimized")
                 logger.info("To_ONNX, OK")
-                if utils.is_debug_mode():
-                    onnx_graph.dump_graph()
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
             except Exception:
                 logger.error("To_ONNX FAIL", exc_info=1)
+                return False
 
         try:
             onnx_results = None
