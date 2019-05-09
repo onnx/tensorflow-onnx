@@ -11,6 +11,7 @@ from __future__ import unicode_literals
 import logging
 import os
 from distutils.version import LooseVersion
+from collections import defaultdict
 
 import tensorflow as tf
 from tf2onnx import utils
@@ -21,11 +22,50 @@ from tf2onnx import utils
 logger = logging.getLogger(__name__)
 
 
-def tf_cpp_infer_shape(tf_graph):
-    """Invoke tensorflow cpp shape inference by re-importing graph_def."""
+def infer_shape(tf_graph, shape_override):
+    """Infer shape for TF graph with shape_override set first."""
+    if shape_override:
+        for name, shape in shape_override.items():
+            tf_graph.get_tensor_by_name(name).set_shape(shape)
+        tf_graph = reload_tf_graph(tf_graph)
+
+    tf_graph = infer_shape_for_graph(tf_graph)
+
+    op_outputs_with_none_shape = check_shape_for_tf_graph(tf_graph)
+    if op_outputs_with_none_shape:
+        if utils.get_tf_version() > LooseVersion("1.5.0"):
+            for op, outs in op_outputs_with_none_shape.items():
+                logger.warning(
+                    "Cannot infer shape for %s: %s",
+                    op, ",".join(outs)
+                )
+        tf_graph = infer_shape_for_graph_legacy(tf_graph)
+
+    return tf_graph
+
+
+def check_shape_for_tf_graph(tf_graph):
+    """
+    Check whether TF graph misses any shape,
+    and return all ops with None shape outputs for TF graph.
+    """
+    op_outputs_mapping_none_shape = defaultdict(list)
+    for op in tf_graph.get_operations():
+        for out in op.outputs:
+            if utils.get_tf_tensor_shape(out) is None:
+                op_outputs_mapping_none_shape[op.name].append(out.name)
+    return op_outputs_mapping_none_shape
+
+
+def reload_tf_graph(tf_graph):
+    """Invoke tensorflow cpp shape inference by reloading graph_def."""
     # invoke c api if tf version is below 1.8
     if utils.get_tf_version() < LooseVersion("1.8"):
-        os.environ["TF_C_API_GRAPH_CONSTRUCTION"] = "1"
+        logger.debug(
+            "On TF < 1.8, graph is constructed by python API, " \
+            "which doesn't invoke shape inference, please set " \
+            "TF_C_API_GRAPH_CONSTRUCTION=1 to enable it"
+        )
 
     graph_def = tf_graph.as_graph_def(add_shapes=True)
     with tf.Graph().as_default() as inferred_graph:
@@ -44,26 +84,26 @@ def infer_shape_for_graph(tf_graph):
         1. in tf.cond, outputs of two branches have the same rank.
         2. in tf.while_loop, loop variables don't change their rank.
     """
-    no_shape_updated = True
-    while no_shape_updated:
-        no_shape_updated = False
+    shape_updated = True
+    while shape_updated:
+        shape_updated = False
         for o in tf_graph.get_operations():
             updated = infer_shape_for_op(o)
             if updated:
-                no_shape_updated = True
-        tf_graph = tf_cpp_infer_shape(tf_graph)
+                shape_updated = True
+        tf_graph = reload_tf_graph(tf_graph)
     return tf_graph
 
 
 def infer_shape_for_op(op):
-    has_unknown_output_shape = any(utils.get_shape_from_tf_output(out) is None for out in op.outputs)
+    has_unknown_output_shape = any(utils.get_tf_tensor_shape(out) is None for out in op.outputs)
 
     if not has_unknown_output_shape:
         return False
 
     if op.type == "Placeholder":
         # if placeholder shape is not found, try to get it from "shape" attribute.
-        attr_shape = utils.get_tf_shape(op)
+        attr_shape = utils.get_tf_shape_attr(op)
         if attr_shape is not None:
             new_shape = list(attr_shape)
             op.outputs[0].set_shape(new_shape)
@@ -74,8 +114,8 @@ def infer_shape_for_op(op):
         return True
 
     if op.type == "Merge":
-        s1 = utils.get_shape_from_tf_output(op.inputs[0])
-        s2 = utils.get_shape_from_tf_output(op.inputs[1])
+        s1 = utils.get_tf_tensor_shape(op.inputs[0])
+        s2 = utils.get_tf_tensor_shape(op.inputs[1])
         new_shape = None
         if s1 is None and s2 is None:
             return False
@@ -109,7 +149,7 @@ def infer_shape_for_op(op):
         return True
 
     if op.type == "Switch":
-        new_shape = utils.get_shape_from_tf_output(op.inputs[0])
+        new_shape = utils.get_tf_tensor_shape(op.inputs[0])
         if new_shape is not None:
             op.outputs[0].set_shape(new_shape)
             op.outputs[1].set_shape(new_shape)
@@ -119,7 +159,7 @@ def infer_shape_for_op(op):
         return False
 
     if op.type == "Enter":
-        new_shape = utils.get_shape_from_tf_output(op.inputs[0])
+        new_shape = utils.get_tf_tensor_shape(op.inputs[0])
         if new_shape is not None:
             op.outputs[0].set_shape(new_shape)
             logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
@@ -142,8 +182,7 @@ def infer_shape_for_op(op):
         if not tensor_array_write_op:
             return False
         # get TensorArray shape from input tensor of the found TensorArrayWrite op
-        # value_op = tensor_array_write_op.inputs[2].op
-        shape = utils.get_shape_from_tf_output(tensor_array_write_op.inputs[2])
+        shape = utils.get_tf_tensor_shape(tensor_array_write_op.inputs[2])
         # update TensorArray's shape info
         if shape is not None:
             new_shape = [None] + shape
@@ -153,7 +192,10 @@ def infer_shape_for_op(op):
         return False
 
     if op.type == "TensorArrayReadV3":
-        # Read an element from the TensorArray into output value.
+        # TensorArrayRead reads an element from the TensorArray into output value.
+        # The TensorArray's shape can be got from TensorArrayScatter.
+        # So the process is: first find TensorArrayScatter's shape and then TensorArray's
+        # and finally take its last n-1 dim.
         flow_in_op = op.inputs[2].op
         if flow_in_op.type != "Enter":
             return False
@@ -162,7 +204,7 @@ def infer_shape_for_op(op):
         if scatter_op.type != "TensorArrayScatterV3":
             return False
 
-        value_shape_before_scatter = utils.get_shape_from_tf_output(scatter_op.inputs[2])
+        value_shape_before_scatter = utils.get_tf_tensor_shape(scatter_op.inputs[2])
         if value_shape_before_scatter is None:
             return False
 
@@ -215,10 +257,10 @@ def _merge_shapes_for_tf(shape1, shape2):
     return merged
 
 
-################################################################
-####   Below is the supplementary for tf shape inference    ####
-####          and a subtitute for TF 1.5.0                  ####
-################################################################
+######################################################################
+####   Below is our old tf shape inference as a supplementary     ####
+####            and a subtitute for TF 1.5.0                      ####
+######################################################################
 
 direct_ops = [
     "Cast",
@@ -245,24 +287,24 @@ broadcast_ops = [
 ]
 
 
-def infer_shape_for_graph_supplementary(tf_graph):
-    no_shape_updated = True
-    while no_shape_updated:
-        no_shape_updated = False
+def infer_shape_for_graph_legacy(tf_graph):
+    shape_updated = True
+    while shape_updated:
+        shape_updated = False
         for op in tf_graph.get_operations():
-            updated = infer_shape_for_op_supplementary(op)
+            updated = infer_shape_for_op_legacy(op)
             if updated:
-                no_shape_updated = True
+                shape_updated = True
 
     return tf_graph
 
 
-def infer_shape_for_op_supplementary(op):
+def infer_shape_for_op_legacy(op):
     # invoke tf shape inference first
     infer_shape_for_op(op)
 
-    has_unknown_input_shape = any(utils.get_shape_from_tf_output(inp) is None for inp in op.inputs)
-    has_unknown_output_shape = any(utils.get_shape_from_tf_output(out) is None for out in op.outputs)
+    has_unknown_input_shape = any(utils.get_tf_tensor_shape(inp) is None for inp in op.inputs)
+    has_unknown_output_shape = any(utils.get_tf_tensor_shape(out) is None for out in op.outputs)
 
     # an input shape may be inferred from op output or other input shapes
     # try to infer it first
@@ -282,7 +324,7 @@ def infer_shape_for_op_supplementary(op):
     are_all_input_shape_ready = True
     no_shape = []
     for i in op.inputs:
-        if utils.get_shape_from_tf_output(i) is None:
+        if utils.get_tf_tensor_shape(i) is None:
             are_all_input_shape_ready = False
             no_shape.append(i.name)
 
@@ -305,13 +347,13 @@ def infer_shape_for_op_supplementary(op):
     if op.type == "Gather":
         # uses the follwing link to know how to infer shape of output
         # https://www.tensorflow.org/api_docs/python/tf/gather
-        shape_params = utils.get_shape_from_tf_output(op.inputs[0])
-        shape_indices = utils.get_shape_from_tf_output(op.inputs[1])
+        shape_params = utils.get_tf_tensor_shape(op.inputs[0])
+        shape_indices = utils.get_tf_tensor_shape(op.inputs[1])
         # gather can only have 2 inputs
         # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/gather.html
         if len(op.inputs) == 3:
             axis_op = op.inputs[2].op
-            if not utils.is_const_op(axis_op):
+            if not utils.is_tf_const_op(axis_op):
                 return False
             axis = utils.get_tf_const_value(axis_op)
         else:
@@ -323,13 +365,13 @@ def infer_shape_for_op_supplementary(op):
 
     if op.type in ["All", "Any", "Max", "Min"]:
         axis_op = op.inputs[1].op
-        if not utils.is_const_op(axis_op):
+        if not utils.is_tf_const_op(axis_op):
             return False
         axis = utils.get_tf_const_value(axis_op)
         if not isinstance(axis, list):
             axis = [axis]
         keep_dims = op.get_attr("keep_dims")
-        shape = utils.get_shape_from_tf_output(op.inputs[0])
+        shape = utils.get_tf_tensor_shape(op.inputs[0])
         for i, _ in enumerate(axis):
             if axis[i] < 0:
                 axis[i] += len(shape)
@@ -348,9 +390,9 @@ def infer_shape_for_op_supplementary(op):
 
     if op.type == "ExpandDims":
         # https://www.tensorflow.org/api_docs/python/tf/expand_dims
-        input_shape = utils.get_shape_from_tf_output(op.inputs[0])
+        input_shape = utils.get_tf_tensor_shape(op.inputs[0])
         dim_op = op.inputs[1].op
-        if input_shape is None or not utils.is_const_op(dim_op):
+        if input_shape is None or not utils.is_tf_const_op(dim_op):
             return False
 
         dim = utils.get_tf_const_value(dim_op)
@@ -363,7 +405,7 @@ def infer_shape_for_op_supplementary(op):
         return True
 
     if op.type == "Unpack":
-        input_shape = utils.get_shape_from_tf_output(op.inputs[0])
+        input_shape = utils.get_tf_tensor_shape(op.inputs[0])
         if input_shape is None:
             return False
 
@@ -380,7 +422,7 @@ def infer_shape_for_op_supplementary(op):
 
     if op.type in ["Minimum", "Maximum"]:
         # ops that are elementwise and support broadcasting
-        input_shapes = [utils.get_shape_from_tf_output(op) for op in op.inputs]
+        input_shapes = [utils.get_tf_tensor_shape(op) for op in op.inputs]
         new_shape = broadcast_shape_inference(*input_shapes)
         op.outputs[0].set_shape(new_shape)
         return True
@@ -390,8 +432,8 @@ def infer_shape_for_op_supplementary(op):
 
 def infer_input_shapes(op):
     if op.type == "Select":
-        shape_t = utils.get_shape_from_tf_output(op.inputs[1])
-        shape_e = utils.get_shape_from_tf_output(op.inputs[2])
+        shape_t = utils.get_tf_tensor_shape(op.inputs[1])
+        shape_e = utils.get_tf_tensor_shape(op.inputs[2])
         # copy shape if t OR e does not have a shape, no update if t AND e both have shapes
         if shape_t is None or shape_e is None:
             new_shape = shape_t or shape_e
@@ -406,9 +448,9 @@ def infer_input_shapes(op):
 def infer_output_shapes_with_partial_inputs(op):
     # output shape of concat op: only the dim val of concatenated dim will be changed
     # so only partial(at least one) input shapes need to be known to infer output shape of concat op
-    if utils.is_concat_op(op):
+    if utils.is_tf_concat_op(op):
         data_inputs = op.inputs[:-1]
-        input_shapes = [utils.get_shape_from_tf_output(inp) for inp in data_inputs]
+        input_shapes = [utils.get_tf_tensor_shape(inp) for inp in data_inputs]
         input_shapes = [shape for shape in input_shapes if shape is not None]
         if not input_shapes:
             logger.debug("all input shapes of concat op %s are None, can't infer its output shape", op.name)
@@ -417,7 +459,7 @@ def infer_output_shapes_with_partial_inputs(op):
         new_shape = input_shapes[0]
         axis_op = op.inputs[-1]
         rank = len(new_shape)
-        if not utils.is_const_op(axis_op):
+        if not utils.is_tf_const_op(axis_op):
             op.outputs[0].set_shape([-1] * rank)
             return True
 
@@ -435,9 +477,9 @@ def infer_output_shapes_with_partial_inputs(op):
         return True
 
     if op.type == "Select":
-        new_shape = utils.get_shape_from_tf_output(op.inputs[1])
+        new_shape = utils.get_tf_tensor_shape(op.inputs[1])
         if new_shape is None:
-            new_shape = utils.get_shape_from_tf_output(op.inputs[2])
+            new_shape = utils.get_tf_tensor_shape(op.inputs[2])
         if new_shape is not None:
             op.outputs[0].set_shape(new_shape)
             op.inputs[1].set_shape(new_shape)
@@ -450,7 +492,7 @@ def infer_output_shapes_with_partial_inputs(op):
         axis = op.get_attr("axis")
         input_shape = None
         for i in op.inputs:
-            s = utils.get_shape_from_tf_output(i)
+            s = utils.get_tf_tensor_shape(i)
             if s is not None:
                 input_shape = s
                 break
@@ -459,7 +501,7 @@ def infer_output_shapes_with_partial_inputs(op):
         if axis < 0:
             axis += len(input_shape)
         for i in op.inputs:
-            if not utils.get_shape_from_tf_output(i):
+            if not utils.get_tf_tensor_shape(i):
                 i.set_shape(input_shape)
                 logger.debug("set [%s] with new shape %s", i.name, input_shape)
         new_shape = input_shape[:axis] + [len(op.inputs)] + input_shape[axis:]
@@ -469,9 +511,9 @@ def infer_output_shapes_with_partial_inputs(op):
 
     if op.type == "Pow":
         # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/pow
-        new_shape = utils.get_shape_from_tf_output(op.inputs[0])
+        new_shape = utils.get_tf_tensor_shape(op.inputs[0])
         if new_shape is None:
-            new_shape = utils.get_shape_from_tf_output(op.inputs[1])
+            new_shape = utils.get_tf_tensor_shape(op.inputs[1])
         if new_shape is not None:
             op.outputs[0].set_shape(new_shape)
             logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
@@ -482,7 +524,7 @@ def infer_output_shapes_with_partial_inputs(op):
 
 
 def set_shape_from_input(input_tensor, output_tensor):
-    new_shape = utils.get_shape_from_tf_output(input_tensor)
+    new_shape = utils.get_tf_tensor_shape(input_tensor)
     if new_shape is not None:
         output_tensor.set_shape(new_shape)
         logger.debug("set [%s] with new shape %s", output_tensor.name, new_shape)
@@ -491,8 +533,8 @@ def set_shape_from_input(input_tensor, output_tensor):
 
 
 def set_shape_from_inputs_broadcast(input_tensors, output_tensor):
-    s1 = utils.get_shape_from_tf_output(input_tensors[0])
-    s2 = utils.get_shape_from_tf_output(input_tensors[1])
+    s1 = utils.get_tf_tensor_shape(input_tensors[0])
+    s2 = utils.get_tf_tensor_shape(input_tensors[1])
     new_shape = broadcast_shape_inference(s1, s2)
     if new_shape is not None:
         output_tensor.set_shape(new_shape)

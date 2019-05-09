@@ -149,34 +149,37 @@ def get_tf_tensor_data(tensor):
 
 
 def get_tf_const_value(op, as_list=True):
-    make_sure(is_const_op(op), "{} isn't a const op".format(op.name))
+    """
+    If as_list=True, return the array as a (possibly nested) list.
+    Otherwise, return data of type np.ndarray.
+
+    If a tensor is a scalar having value 1,
+        when as_list=False, return np.array(1), type is <class 'numpy.ndarray'>
+        when as_list=True, return 1, type is <class 'int'>.
+    """
+    make_sure(is_tf_const_op(op), "{} isn't a const op".format(op.name))
     value = get_tf_tensor_data(op.get_attr("value"))
     if as_list:
         value = value.tolist()
     return value
 
 
-def get_tf_shape(node):
-    """Get shape from tensorflow node."""
+def get_tf_shape_attr(node):
+    """Get shape from tensorflow attr "shape"."""
     dims = None
     try:
-        if node.type == "Const":
-            shape = get_tf_node_attr(node, "value").tensor_shape
-            if not shape.unknown_rank:
-                dims = [int(d.size) for d in shape.dim]
-        else:
-            shape = get_tf_node_attr(node, "shape")
-            if not shape.unknown_rank:
-                dims = [d.size for d in shape.dim]
+        shape = get_tf_node_attr(node, "shape")
+        if not shape.unknown_rank:
+            dims = [int(d.size) for d in shape.dim]
     except:  # pylint: disable=bare-except
         pass
     return dims
 
 
-def get_shape_from_tf_output(output):
+def get_tf_tensor_shape(tensor):
     shape = []
     try:
-        shape = output.get_shape().as_list()
+        shape = tensor.get_shape().as_list()
     except Exception:  # pylint: disable=broad-except
         shape = None
     return shape
@@ -476,37 +479,37 @@ def get_url(url, path, max_retries=5):
         f.write(response.content)
 
 
-def is_reverse_op(op):
+def is_tf_reverse_op(op):
     return op.type in ("ReverseV2", "ReverseSequence")
 
 
-def is_concat_op(op):
+def is_tf_concat_op(op):
     return op.type in ("Concat", "ConcatV2", "ConcatV3")
 
 
-def is_tensor_array_gather_op(op):
+def is_tf_tensor_array_gather_op(op):
     return op.type in ("TensorArrayGatherV2", "TensorArrayGatherV3")
 
 
-def is_tensor_array_write_op(op):
+def is_tf_tensor_array_write_op(op):
     return op.type in ("TensorArrayWriteV2", "TensorArrayWriteV3")
 
 
-def is_tensor_array_op(op):
+def is_tf_tensor_array_op(op):
     return op.type in ("TensorArrayV2", "TensorArrayV3")
 
 
-def is_loopcond_op(op):
+def is_tf_loopcond_op(op):
     return op.type == "LoopCond"
 
 
-def is_select_op(op):
+def is_tf_select_op(op):
     return op.type == "Select"
 
 
-def is_slice_op(op):
+def is_tf_slice_op(op):
     return op.type == "Slice"
 
 
-def is_const_op(op):
+def is_tf_const_op(op):
     return op.type in ["Const", "ConstV2"]

@@ -68,9 +68,9 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
     def _compare_shape_for_op(self, op1, op2):
         """Align outputs of op2 to op1."""
         for out1, out2 in zip(op1.outputs, op2.outputs):
-            expected_shape = utils.get_shape_from_tf_output(out1)
+            expected_shape = utils.get_tf_tensor_shape(out1)
             if out1 is not None:
-                actual_shape = utils.get_shape_from_tf_output(out2)
+                actual_shape = utils.get_tf_tensor_shape(out2)
                 self.assertTrue(utils.are_shapes_compatible(expected_shape, actual_shape))
 
     def test_while_loop_with_ta_read_and_write(self):

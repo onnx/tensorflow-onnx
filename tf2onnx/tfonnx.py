@@ -25,7 +25,7 @@ import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
-from tf2onnx.shape_inference import infer_shape_for_graph, infer_shape_for_graph_supplementary
+from tf2onnx.shape_inference import infer_shape
 from tf2onnx.utils import port_name
 from . import constants, logging, schemas, utils, handler
 
@@ -63,7 +63,7 @@ def tflist_to_onnx(node_list, shape_override):
         for out in node.outputs:
             shape = shape_override.get(out.name)
             if shape is None:
-                shape = utils.get_shape_from_tf_output(out)
+                shape = utils.get_tf_tensor_shape(out)
             dtypes[out.name] = utils.map_tf_dtype(out.dtype)
             output_shapes[out.name] = shape
 
@@ -86,13 +86,11 @@ def tflist_to_onnx(node_list, shape_override):
                 # out_idx is used by ListDiff
                 attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
             elif a == "shape":
-                shape = utils.get_tf_shape(node)
+                shape = utils.get_tf_shape_attr(node)
                 if shape is not None:
                     attr[a] = shape
             elif a == "Tperm":
                 pass
-            elif a == "_output_shapes":
-                attr[a] = utils.get_tf_shape(node)
             elif a == "value":
                 onnx_tensor = utils.tf_to_onnx_tensor(utils.get_tf_node_attr(node, a), name=port_name(node.name))
                 attr[a] = onnx_tensor
@@ -699,13 +697,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                        "please upgrade onnx package to avoid potential conversion issue.",
                        utils.get_onnx_version(), opset)
 
-    if shape_override:
-        for name, shape in shape_override.items():
-            tf_graph.get_tensor_by_name(name).set_shape(shape)
-
-    tf_graph = infer_shape_for_graph(tf_graph)
-    # FIXME: remove it if no long supporting TF 1.5
-    tf_graph = infer_shape_for_graph_supplementary(tf_graph)
+    tf_graph = infer_shape(tf_graph, shape_override)
 
     if shape_override is None:
         shape_override = {}

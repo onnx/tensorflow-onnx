@@ -12,8 +12,8 @@ import logging
 from collections import OrderedDict
 from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.utils import is_loopcond_op, is_tensor_array_op
-from tf2onnx.utils import is_tensor_array_gather_op, is_tensor_array_write_op
+from tf2onnx.utils import is_tf_loopcond_op, is_tf_tensor_array_op
+from tf2onnx.utils import is_tf_tensor_array_gather_op, is_tf_tensor_array_write_op
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.utils import TensorValueInfo
 
@@ -195,7 +195,7 @@ class LoopRewriterBase(object):
     def run_internal(self):
         loopcond_ops = []
         for op in self.g.get_nodes():
-            if is_loopcond_op(op):
+            if is_tf_loopcond_op(op):
                 loopcond_ops.append(op)
 
         # self.g.get_nodes may change inside this loop so that we parse all LoopCond first
@@ -316,7 +316,7 @@ class LoopRewriterBase(object):
 
             if val.is_tensor_array:
                 # connect NextIteration to an invalid node, to cut off an ending node of the cell.
-                ta_write_nodes = [n for n in self.g.get_nodes() if is_tensor_array_write_op(n)]
+                ta_write_nodes = [n for n in self.g.get_nodes() if is_tf_tensor_array_write_op(n)]
                 self.g.replace_all_inputs(ta_write_nodes, val.next_iteration_input.id, INVALID_INPUT_ID)
             else:
                 # connect NextIteration to an invalid node, to cut off an ending node of the cell.
@@ -376,11 +376,11 @@ class LoopRewriterBase(object):
 
         is_ta = False
         ta_index_id = None
-        if is_tensor_array_op(self.g.get_node_by_output(target_node_input_id)):
+        if is_tf_tensor_array_op(self.g.get_node_by_output(target_node_input_id)):
             is_ta = True
 
             ta_write_node = self.g.get_node_by_output(last_iteration_output_id)
-            utils.make_sure(is_tensor_array_write_op(ta_write_node), "ta nextiteration is not following ta write op")
+            utils.make_sure(is_tf_tensor_array_write_op(ta_write_node), "ta nextiteration is not following ta write op")
             last_iteration_output_id = ta_write_node.input[2]
             ta_index_id = ta_write_node.input[1]
 
@@ -388,7 +388,7 @@ class LoopRewriterBase(object):
             # ta.write(), then ta.stack(), because this is the most frequent usage pattern.
             if exit_output_id:
                 exit_consumers = self.g.find_output_consumers(exit_output_id)
-                ta_gather_node = [n for n in exit_consumers if is_tensor_array_gather_op(n)][0]
+                ta_gather_node = [n for n in exit_consumers if is_tf_tensor_array_gather_op(n)][0]
 
                 # update exit output id, treat the gather output as ta's output
                 exit_output_id = ta_gather_node.output[0]
