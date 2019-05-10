@@ -2266,5 +2266,39 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
+
+# feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
+# convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=False,
+# check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None
+class CumSumTests(Tf2OnnxBackendTestBase):
+    @check_opset_min_version(7, "MatMul")
+    def test_cumsum_1d(self):
+        # only compatible with dtype `float32`
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((4))
+        axis_val = np.array(0).astype(np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        axis = tf.constant(axis_val, dtype=tf.int32, name='axis')
+        x_ = tf.cumsum(x, axis)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self.run_test_case({_INPUT: x_val}, [], [_OUTPUT], **{
+            'constant_fold': False
+        })
+        tf.reset_default_graph()
+
+    @check_opset_min_version(7, "MatMul")
+    def test_cumsum_2d(self):
+        # only compatible with dtype `float32`
+        x_val = np.array([[1.0, 2.0, 3.0], [4.0, 3.0, 2.0]], dtype=np.float32).reshape((2, 3))
+        axis_val = np.array(0).astype(np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        axis = tf.constant(axis_val, dtype=tf.int32, name='axis')
+        x_ = tf.cumsum(x, axis)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self.run_test_case({_INPUT: x_val}, [], [_OUTPUT], **{
+            'constant_fold': False
+        })
+        tf.reset_default_graph()
+
+
 if __name__ == '__main__':
     unittest_main()
