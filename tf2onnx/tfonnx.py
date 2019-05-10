@@ -533,11 +533,14 @@ def rewrite_conv2d_with_pad(g, ops):
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
+    logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
 
     ops = [n for n in g.get_nodes()]
     for node in ops:
+        logger.debug("Process node: %s\n%s", node.name, node.summary)
+
         if node.need_skip():
             logger.debug("explicitly skip node " + node.name)
             continue
@@ -574,12 +577,8 @@ def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
             func(g, node, **kwargs)
             node.skip_conversion = True
         except Exception as ex:
-            type_, value_, traceback_ = sys.exc_info()
-            logger.error("node %s: exception %s" % (node.name, ex))
-            ex_ext = traceback.format_exception(type_, value_, traceback_)
-            if continue_on_error:
-                logger.info(ex_ext)
-            else:
+            logger.error("Failed to convert node %s\n%s", node.name, node.summary, exc_info=1)
+            if not continue_on_error:
                 raise ex
 
     return mapped_op, unmapped_op

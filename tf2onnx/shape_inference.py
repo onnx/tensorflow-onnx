@@ -26,6 +26,7 @@ direct_ops = [
     "Identity",
     "LogicalNot",
     "ReverseSequence",
+    "Relu6",
     "Sigmoid",
     "Square",
     "Tanh"

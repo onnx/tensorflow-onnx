@@ -19,8 +19,8 @@ from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common, controlflow, tensor
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument,missing-docstring,unused-variable
 
@@ -151,8 +151,10 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
                 output_shape = spatial_map(output_shape, constants.NHWC_TO_NCHW)
             # calculate pads
             if any(input_shape[i + 2] == -1 or output_shape[i + 2] == -1 for i in range(spatial)):
-                logger.debug("node %s has unknown dim %d for pads calculation, fallback to auto_pad",
-                             node.name, input_shape)
+                logger.debug(
+                    "node %s has unknown dim for pads calculation, fallback to auto_pad: "
+                    "input_shape=%s, output_shape=%s",
+                    node.name, input_shape, output_shape)
                 node.set_attr("auto_pad", "SAME_UPPER")
             else:
                 for i in range(spatial):
@@ -326,6 +328,7 @@ class PoolOp:
         conv_dims_attr(node, "dilations")
         add_padding(ctx, node, kernel_shape, strides)
         conv_convert_inputs(ctx, node, with_kernel=False)
+
 
 @tf_op(["MaxPoolWithArgmax"], onnx_op="MaxPool")
 class MaxPoolWithArgmaxOp:
