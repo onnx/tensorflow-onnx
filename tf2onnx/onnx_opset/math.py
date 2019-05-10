@@ -399,3 +399,9 @@ class FloorMod:
         ctx.remove_node(node.name)
         ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+@tf_op("Selu")
+class Selu:
+    @classmethod
+    def version_4(cls, ctx, node, **kwargs):
+        pass
