@@ -163,8 +163,9 @@ class Node(object):
         if self.input:
             lines.append("Inputs:")
             for name in self.input:
-                lines.append("\t{}={}, {}, {}".format(name, g.get_node_by_output(name).type, g.get_shape(name),
-                                                      g.get_dtype(name)))
+                node = g.get_node_by_output(name)
+                op = node.type if node else "N/A"
+                lines.append("\t{}={}, {}, {}".format(name, op, g.get_shape(name), g.get_dtype(name)))
 
         if self.output:
             for name in self.output:
@@ -457,7 +458,7 @@ class Graph(object):
         if op_name_scope:
             name = "_".join([op_name_scope, name])
 
-        logger.debug("Making node: %s", name)
+        logger.debug("Making node: Name=%s, OP=%s", name, op_type)
 
         if outputs is None:
             outputs = [name + ":" + str(i) for i in range(output_count)]
