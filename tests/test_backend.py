@@ -2266,5 +2266,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "Selu")
+    def test_selu(self):
+        x_val = np.random.random_sample([3]).astype(np.float32)
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        y = tf.nn.selu(x)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
 if __name__ == '__main__':
     unittest_main()
