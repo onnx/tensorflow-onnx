@@ -422,6 +422,7 @@ class CumSum:
         reverse = node.get_attr_int("reverse")
         input_0 = node.input[0]
         output_0 = node.output[0]
+        node_name = node.name
         ctx.remove_node(node.name)
 
         tri_matrix = CumSum.get_matrix(dims[axis], exclusive, reverse, dtype)
@@ -429,14 +430,14 @@ class CumSum:
 
         if axis == rank - 1:
             #  no need to transpose
-            ctx.make_node(op_type="MatMul", inputs=[node.input[0], matmul_input2], outputs=output_0)
+            ctx.make_node(op_type="MatMul", name=node_name, inputs=[node.input[0], matmul_input2], outputs=[output_0])
         else:
             #  we need to apply transpose
             fw_perm, bw_perm = CumSum.get_perms(rank, axis)
             tpose1 = ctx.make_node(op_type="Transpose", inputs=[input_0])
             tpose1.set_attr('perm', fw_perm)
             matmul = ctx.make_node(op_type="MatMul", inputs=[tpose1.output[0], matmul_input2])
-            tpose2 = ctx.make_node(op_type="Transpose", inputs=[matmul.output[0]], outputs=output_0)
+            tpose2 = ctx.make_node(op_type="Transpose", name=node_name, inputs=[matmul.output[0]], outputs=[output_0])
             tpose2.set_attr('perm', bw_perm)
 
     @classmethod

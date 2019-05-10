@@ -2299,6 +2299,90 @@ class CumSumTests(Tf2OnnxBackendTestBase):
         })
         tf.reset_default_graph()
 
+    @check_opset_min_version(7, "MatMul")
+    def test_cumsum_3d(self):
+        # only compatible with dtype `float32`
+        x_val = np.arange(0, 2*3*4, dtype=np.float32).reshape((2, 3, 4))
+        axis_val = np.array(0).astype(np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        axis = tf.constant(axis_val, dtype=tf.int32, name='axis')
+        x_ = tf.cumsum(x, axis)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self.run_test_case({_INPUT: x_val}, [], [_OUTPUT], **{
+            'constant_fold': False
+        })
+        tf.reset_default_graph()
+
+    @check_opset_min_version(7, "MatMul")
+    def test_cumsum_3d_axis_1(self):
+        # only compatible with dtype `float32`
+        x_val = np.arange(0, 2*3*4, dtype=np.float32).reshape((2, 3, 4))
+        axis_val = np.array(1).astype(np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        axis = tf.constant(axis_val, dtype=tf.int32, name='axis')
+        x_ = tf.cumsum(x, axis)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self.run_test_case({_INPUT: x_val}, [], [_OUTPUT], **{
+            'constant_fold': False
+        })
+        tf.reset_default_graph()
+
+    @check_opset_min_version(7, "MatMul")
+    def test_cumsum_3d_axis_2(self):
+        # only compatible with dtype `float32`
+        x_val = np.arange(0, 2*3*4, dtype=np.float32).reshape((2, 3, 4))
+        axis_val = np.array(2).astype(np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        axis = tf.constant(axis_val, dtype=tf.int32, name='axis')
+        x_ = tf.cumsum(x, axis)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self.run_test_case({_INPUT: x_val}, [], [_OUTPUT], **{
+            'constant_fold': False
+        })
+        tf.reset_default_graph()
+
+    @check_opset_min_version(7, "MatMul")
+    def test_cumsum_3d_exclusive(self):
+        # only compatible with dtype `float32`
+        x_val = np.arange(0, 2*3*4, dtype=np.float32).reshape((2, 3, 4))
+        axis_val = np.array(0).astype(np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        axis = tf.constant(axis_val, dtype=tf.int32, name='axis')
+        x_ = tf.cumsum(x, axis, exclusive=True)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self.run_test_case({_INPUT: x_val}, [], [_OUTPUT], **{
+            'constant_fold': False
+        })
+        tf.reset_default_graph()
+
+    @check_opset_min_version(7, "MatMul")
+    def test_cumsum_3d_reverse(self):
+        # only compatible with dtype `float32`
+        x_val = np.arange(0, 2*3*4, dtype=np.float32).reshape((2, 3, 4))
+        axis_val = np.array(0).astype(np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        axis = tf.constant(axis_val, dtype=tf.int32, name='axis')
+        x_ = tf.cumsum(x, axis, reverse=True)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self.run_test_case({_INPUT: x_val}, [], [_OUTPUT], **{
+            'constant_fold': False
+        })
+        tf.reset_default_graph()
+
+    @check_opset_min_version(7, "MatMul")
+    def test_cumsum_3d_exclusive_reverse(self):
+        # only compatible with dtype `float32`
+        x_val = np.arange(0, 2*3*4, dtype=np.float32).reshape((2, 3, 4))
+        axis_val = np.array(0).astype(np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        axis = tf.constant(axis_val, dtype=tf.int32, name='axis')
+        x_ = tf.cumsum(x, axis, exclusive=True, reverse=True)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self.run_test_case({_INPUT: x_val}, [], [_OUTPUT], **{
+            'constant_fold': False
+        })
+        tf.reset_default_graph()
+
 
 if __name__ == '__main__':
     unittest_main()
