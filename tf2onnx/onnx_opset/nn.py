@@ -707,22 +707,30 @@ class SoftmaxCrossEntropyWithLogits:
 
 
 def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
-    label_dtype = ctx.get_dtype(label.output[0])
-    logit_dtype = ctx.get_dtype(logit.output[0])
+    logit = logit.output[0]
+    label = label.output[0]
+    label_dtype = ctx.get_dtype(label)
+    logit_dtype = ctx.get_dtype(logit)
     utils.make_sure(label_dtype == logit_dtype, "the following logic only works on same dtype of label and logit")
 
-    log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=logit.output)
-    # implement tf.multiply(-1, tf.reduce_sum(tf.multiply(label, log_softmax), axis=1))
-    mul1 = ctx.make_node(op_type="Mul", inputs=[label.output[0], log_softmax.output[0]])
-    reduce_sum = ctx.make_node(op_type="ReduceSum", inputs=[mul1.output[0]], attr={"axes": [-1]})
+    # when label is onehot, logic "tf.multiply(-1, tf.reduce_sum(tf.multiply(label, log_softmax), axis=1))" is equal to
+    # "-log(q_i)" where i is the selected index specified by label, q_i = logic_i/sum, the detail process is as follows:
+    # logit_exp=exp(logit) >> sum = tf.reduce_sum(logit_exp, axis = -1), masked_sum = reduce_sum(mul(logit_exp, mul))
+    # >> -log(masked_sum/sum)
+    logit_exp = ctx.make_node(op_type="Exp", inputs=[logit]).output[0]
+    logit_exp_sum = ctx.make_node(op_type="ReduceSum", inputs=[logit_exp], attr={"axes": [-1], "keepdims": 0}).output[0]
+    masked = ctx.make_node(op_type="Mul", inputs=[label, logit_exp]).output[0]
+    masked_sum = ctx.make_node(op_type="ReduceSum", inputs=[masked], attr={"axes": [-1], "keepdims": 0}).output[0]
+    probability = ctx.make_node(op_type="Div", inputs=[masked_sum, logit_exp_sum]).output[0]
+    log_prob = ctx.make_node(op_type="Log", inputs=[probability]).output[0]
     const_negative_one = ctx.make_const(name=utils.make_name("const_negative_one"),
-                                        np_val=np.array(-1).astype(utils.ONNX_TO_NUMPY_DTYPE[logit_dtype]))
-    mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum.output[0]])
+                                        np_val=np.array(-1).astype(utils.ONNX_TO_NUMPY_DTYPE[logit_dtype])).output[0]
+
     shapes = tf_ori_node.output_shapes
     dtypes = tf_ori_node.output_dtypes
     ctx.remove_node(tf_ori_node.name)
-    ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], attr={"axes": [1]},
-                  outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
+    res = ctx.make_node(op_type="Mul", inputs=[log_prob, const_negative_one],
+                        outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 @tf_op("SparseSoftmaxCrossEntropyWithLogits")
@@ -797,4 +805,4 @@ class SparseSoftmaxCrossEntropyWithLogits:
         if logit_dtype != TensorProto.INT64:
             label_node = ctx.make_node("Cast", label_node.output, attr={"to": logit_dtype}, dtypes=[logit_dtype])
 
-            _make_sparse_softmax_cross_entropy_with_logits(ctx, label_node, logit_node, node)
+        _make_sparse_softmax_cross_entropy_with_logits(ctx, label_node, logit_node, node)
