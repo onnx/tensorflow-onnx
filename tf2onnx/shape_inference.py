@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 def infer_shape(tf_graph, shape_override):
     """Infer shape for TF graph with shape_override set first."""
     if shape_override:
+        logger.info("Apply shape override:")
         for name, shape in shape_override.items():
+            logger.info("\tSet %s shape to %s", name, shape)
             tf_graph.get_tensor_by_name(name).set_shape(shape)
         tf_graph = reload_tf_graph(tf_graph)
 
