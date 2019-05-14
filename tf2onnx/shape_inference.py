@@ -136,7 +136,7 @@ def infer_shape_for_op(op):
                 logger.warning("Shapes of Merge %s have different ranks: %s, %s", op.name, len(s1), len(s2))
                 return False
 
-            logger.warning("Inputs of Merge %s have different shapes: %s, %s, but the same rank", op.name, s1, s2)
+            logger.debug("Inputs of Merge %s have different shapes: %s, %s, but the same rank", op.name, s1, s2)
             new_shape = _merge_shapes_for_tf(s1, s2)
             op.outputs[0].set_shape(new_shape)
             logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
