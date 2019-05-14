@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import sys
 import logging
 
 import numpy as np
@@ -356,7 +357,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     # reshape indices into [sum(indices[:-1]), indices[-1]]
     indices_shape = ctx.make_node("Shape", [indices], dtypes=[TensorProto.INT64])
     indices_size = ctx.make_node("Size", [indices])
-    attr = {"axes": [0], "ends": [utils.get_max_value(np.int64)], "starts": [-1]}
+    attr = {"axes": [0], "ends": [sys.maxsize], "starts": [-1]}
     inputs_map = {"data": indices_shape.output[0], **attr}
     inner_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     outter_shape = ctx.make_node("Div",
@@ -414,7 +415,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
                                       [inner_loop_shape.output[0], one_const.output[0]],
                                       attr={"axis": 0},
                                       dtypes=[TensorProto.INT64])
-    attr = {"axes": [0], "ends": [utils.get_max_value(np.int64)], "starts": [1]}
+    attr = {"axes": [0], "ends": [sys.maxsize], "starts": [1]}
     inputs_map = {"data": inner_loop_shape_.output[0], **attr}
     output_inner_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     attr = {"axes": [0], "ends": [-1], "starts": [0]}
