@@ -12,7 +12,7 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main
+from common import unittest_main, check_tf_min_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -195,6 +195,24 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output_0:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
         tf.reset_default_graph()
+
+    @check_tf_min_version("1.9")
+    def test_simple_while_loop_var_shape(self):
+        # test for while_loop with variant shape variables
+        # may not meet ONNX Loop spec
+        i = tf.placeholder(tf.int32, (1), name="input_1")
+        const = tf.constant(np.array([2], dtype=np.int32))
+
+        c = lambda i: tf.reduce_all(tf.shape(i) < 10)
+        b = lambda i: tf.concat([i, const], 0)
+        r = tf.while_loop(c, b, [i], shape_invariants=[tf.TensorShape([None])])
+
+        _ = tf.identity(r, name="output")
+        input_names_with_port = ["input_1:0"]
+        feed_dict = {"input_1:0": np.array([0], dtype=np.int32)}
+
+        output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
 
 if __name__ == '__main__':

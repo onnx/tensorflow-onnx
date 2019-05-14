@@ -21,7 +21,7 @@ INPUT2 = "input2"
 INPUT3 = "input3"
 
 
-class ShapeInferenceTests(Tf2OnnxBackendTestBase):
+class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
     """
     Test shape inference, it's just a subset of all cases that can be inferred shape.
     For more information, please refer to onnx shape inference test:

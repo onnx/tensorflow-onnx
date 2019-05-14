@@ -14,7 +14,7 @@ from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_pattern, \
     get_rnn_scope_name, parse_rnn_loop, seq_len_pattern
-from tf2onnx.utils import is_select_op, is_tensor_array_write_op
+from tf2onnx.utils import is_tf_select_op, is_tf_tensor_array_write_op
 from tf2onnx.graph_matcher import GraphMatcher
 
 
@@ -210,7 +210,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         # get any state variable
         state_variable = list(context.state_variables.values())[0]
         next_iter_input_node = self.g.get_node_by_output(state_variable.next_iteration_input.id)
-        if not is_select_op(next_iter_input_node):
+        if not is_tf_select_op(next_iter_input_node):
             logger.debug("no sequence length node is given")
             return None
         matcher = GraphMatcher(seq_len_pattern)
@@ -302,10 +302,10 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         # find all select not followed by TensorArrayWrite
         select = []
         for c in self.g.find_output_consumers(next_iteration_input):
-            if not is_select_op(c):
+            if not is_tf_select_op(c):
                 continue
             out_ta_writer = [
-                o for o in self.g.find_output_consumers(c.output[0]) if is_tensor_array_write_op(o)
+                o for o in self.g.find_output_consumers(c.output[0]) if is_tf_tensor_array_write_op(o)
             ]
             if out_ta_writer:
                 continue

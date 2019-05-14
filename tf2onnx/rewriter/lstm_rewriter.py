@@ -14,7 +14,7 @@ import numpy as np
 from tf2onnx import utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.rnn_utils import RNNUnitType, RnnWeight, get_weights_from_const_node
-from tf2onnx.utils import is_concat_op, is_slice_op
+from tf2onnx.utils import is_tf_concat_op, is_tf_slice_op
 
 from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
 
@@ -169,8 +169,8 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         lstm_cell = context.cell_match
         ct = lstm_cell.get_op("ct").output[0]
         ht = lstm_cell.get_op("ht").output[0]
-        ct_concat = [c for c in self.g.find_output_consumers(ct) if is_concat_op(c)]
-        ht_concat = [c for c in self.g.find_output_consumers(ht) if is_concat_op(c)]
+        ct_concat = [c for c in self.g.find_output_consumers(ct) if is_tf_concat_op(c)]
+        ht_concat = [c for c in self.g.find_output_consumers(ht) if is_tf_concat_op(c)]
         if len(ct_concat) != 1 or len(ht_concat) != 1 or ct_concat[0] != ht_concat[0]:
             logger.debug("failed to find ct-ht concat")
             return None
@@ -179,8 +179,8 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         consumers = []
         ct_identity_consumer = lstm_cell.get_op("ct_identity_consumer")
         ht_identity_consumer = lstm_cell.get_op("xh")
-        ct_slice = [c for c in ct_identity_consumer.inputs if is_slice_op(c)]
-        ht_slice = [c for c in ht_identity_consumer.inputs if is_slice_op(c)]
+        ct_slice = [c for c in ct_identity_consumer.inputs if is_tf_slice_op(c)]
+        ht_slice = [c for c in ht_identity_consumer.inputs if is_tf_slice_op(c)]
         if len(ct_slice) != 1 or len(ht_slice) != 1:
             logger.debug("failed to find slice op before identity consumers")
             return None
