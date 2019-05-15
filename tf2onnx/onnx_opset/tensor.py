@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import sys
 import logging
 
 import numpy as np
@@ -174,12 +175,10 @@ class Transpose:
             if perm.is_const():
                 # perms is passed as const
                 dims = perm.get_tensor_value()
+                ctx.remove_input(node, node.input[1])
+                node.set_attr("perm", dims)
             else:
-                # calculate perms from shape
-                shape = ctx.get_shape(node.input[1])
-                dims = [i for i in range(len(shape) - 1, -1)]
-            ctx.remove_input(node, node.input[1])
-            node.set_attr("perm", dims)
+                utils.make_sure(False, "perm can't be dynamic in ONNX")
         else:
             # graph rewrite moved perm to attribute
             pass
@@ -356,7 +355,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     # reshape indices into [sum(indices[:-1]), indices[-1]]
     indices_shape = ctx.make_node("Shape", [indices], dtypes=[TensorProto.INT64])
     indices_size = ctx.make_node("Size", [indices])
-    attr = {"axes": [0], "ends": [utils.get_max_value(np.int64)], "starts": [-1]}
+    attr = {"axes": [0], "ends": [sys.maxsize], "starts": [-1]}
     inputs_map = {"data": indices_shape.output[0], **attr}
     inner_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     outter_shape = ctx.make_node("Div",
@@ -414,7 +413,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
                                       [inner_loop_shape.output[0], one_const.output[0]],
                                       attr={"axis": 0},
                                       dtypes=[TensorProto.INT64])
-    attr = {"axes": [0], "ends": [utils.get_max_value(np.int64)], "starts": [1]}
+    attr = {"axes": [0], "ends": [sys.maxsize], "starts": [1]}
     inputs_map = {"data": inner_loop_shape_.output[0], **attr}
     output_inner_shape = GraphBuilder(ctx).make_slice(inputs_map, dtypes=[TensorProto.INT64])
     attr = {"axes": [0], "ends": [-1], "starts": [0]}
