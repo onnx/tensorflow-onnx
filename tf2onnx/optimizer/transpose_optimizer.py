@@ -60,7 +60,9 @@ class TransposeOptimizer(GraphOptimizerBase):
             target_t = reshape_op.inputs[0].get_tensor_value(as_list=False)
             target_shape = reshape_op.inputs[1].get_tensor_value(as_list=False)
             new_data = np.reshape(target_t, tuple(target_shape))
-            const_name = utils.port_name(utils.make_name("Const"))
+            const_name = reshape_op.output[0]
+            self._g.remove_node(reshape_op.name)
+            self._g.make_const(const_name, new_data)
 
             # point all children nodes inputs to the new node
             for output_name in reshape_op.output:
@@ -68,8 +70,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                     for i, name in enumerate(child.input):
                         if name == output_name:
                             child.input[i] = const_name
-            self._g.make_const(const_name, new_data)
-            self._g.remove_node(reshape_op.name)
+
             self._g.topological_sort(self._g.get_nodes())
 
     def post_optimize_action(self):
