@@ -175,12 +175,10 @@ class Transpose:
             if perm.is_const():
                 # perms is passed as const
                 dims = perm.get_tensor_value()
+                ctx.remove_input(node, node.input[1])
+                node.set_attr("perm", dims)
             else:
-                # calculate perms from shape
-                shape = ctx.get_shape(node.input[1])
-                dims = [i for i in range(len(shape) - 1, -1)]
-            ctx.remove_input(node, node.input[1])
-            node.set_attr("perm", dims)
+                utils.make_sure(False, "perm can't be dynamic in ONNX")
         else:
             # graph rewrite moved perm to attribute
             pass
