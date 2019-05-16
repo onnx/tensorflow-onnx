@@ -6,9 +6,9 @@ tf2onnx - convert TensorFlow models to ONNX models.
 # Supported ONNX version
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-By default we use opset 7 for the resulting ONNX graph since most runtimes will support opset 7. Opset 7 was introduced in onnx-1.2.
+We support opset 6 to 10. By default we use opset 7 for the resulting ONNX graph since most runtimes will support opset 7.
 
-Newer releases of ONNX support higher opsets. For example, to create an ONNX graph for opset 8 use in the command line ```--opset 8```.
+If you want the graph to be generated with a newer opset, use ```--opset``` in the command line, for example ```--opset 10```.
 
 # Status
 We support many TensorFlow models. Support for Fully Connected and Convolutional networks is mature. Dynamic LSTM/GRU/Attention networks should work but the code for this is evolving. 
@@ -41,7 +41,7 @@ For pytorch/caffe2, follow the instructions here:
 We tested with pytorch/caffe2 and onnxruntime and unit tests are passing for those.
 
 ## Supported Tensorflow and Python Versions
-We tested with tensorflow 1.5-1.13 and anaconda **3.5,3.6**.
+We are testing with tensorflow 1.5-1.13 and anaconda **3.5,3.6,3.7**.
 
 # Installation
 ## From pypi
@@ -55,7 +55,7 @@ python setup.py install
 or 
 python setup.py develop
 ```
-tensorflow-onnx requires onnx-1.2.2 or better and will install/upgrade onnx if needed.
+tensorflow-onnx requires onnx-1.5 or better and will install/upgrade onnx if needed.
 
 To create a distribution:
 ```
@@ -69,10 +69,10 @@ names with ```--inputs INPUTS``` and ```--outputs OUTPUTS```.
 
 ```
 python -m tf2onnx.convert 
-    --input SOURCE_GRAPHDEF_PB
-    --graphdef SOURCE_GRAPHDEF_PB
-    --checkpoint SOURCE_CHECKPOINT
-    --saved-model SOURCE_SAVED_MODEL
+    [--input SOURCE_GRAPHDEF_PB]
+    [--graphdef SOURCE_GRAPHDEF_PB]
+    [--checkpoint SOURCE_CHECKPOINT]
+    [--saved-model SOURCE_SAVED_MODEL]
     [--output TARGET_ONNX_MODEL]
     [--inputs GRAPH_INPUTS]
     [--outputs GRAPH_OUTPUS]
