@@ -36,3 +36,22 @@ class Range:
         utils.make_sure(dtype is not None, "Tidx of %s is None", node.name)
         ctx.remove_node(node.name)
         make_range(ctx, node.input[0], node.input[1], node.input[2], node.output[0], node.name, shape, dtype)
+
+
+@tf_op("Cumsum")
+class CumSum:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        attrs = {}
+        exclusive = node.get_attr('exclusive')
+        if exclusive:
+            attrs['exclusive'] = exclusive.i
+        reverse = node.get_attr('reverse')
+        if reverse:
+            attrs['reverse'] = reverse.i
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("CumSum", inputs=node.input, outputs=node.output, name=node.name,
+                      shapes=shapes, dtypes=dtypes,
+                      domain=constants.MICROSOFT_DOMAIN, attr=attrs)

@@ -554,7 +554,7 @@ class Graph(object):
         initializers = []
         for i, inp in enumerate(node.inputs):
             if not inp:
-                if logger.isEnabledFor(logging.VERBOSE):
+                if logger.isEnabledFor(logging.DEBUG):
                     logger.warning(
                         "[%s] infer a inexistent node: [%s], please check the code",
                         node.name, node.input[i]
