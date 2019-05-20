@@ -92,7 +92,8 @@ def infer_shape_for_graph(tf_graph):
             updated = infer_shape_for_op(o)
             if updated:
                 shape_updated = True
-        tf_graph = reload_tf_graph(tf_graph)
+        if shape_updated:
+            tf_graph = reload_tf_graph(tf_graph)
     return tf_graph
 
 
