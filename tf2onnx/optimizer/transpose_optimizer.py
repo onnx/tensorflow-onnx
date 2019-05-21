@@ -131,6 +131,9 @@ class TransposeOptimizer(GraphOptimizerBase):
         graph.delete_unused_nodes(graph.outputs)
 
     def _optimize(self, graph):
+        return self._apply_optimization(graph, self._optimize_at_current_graph_level)
+
+    def _optimize_at_current_graph_level(self, graph):
         self._g = graph
         self.pre_optimize_action()
         no_action = False
