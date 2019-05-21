@@ -183,6 +183,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Shape": self._shape_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
+            "Squeeze": self._squeeze_handler,
             "Tanh": self._simple_through_handler,
             "Transpose": self._transpose_handler,
         }
@@ -432,6 +433,45 @@ class TransposeOptimizer(GraphOptimizerBase):
         # Todo: need handle cases where Slit node has more than 1 outputs.
         if self._handle_node_having_branches(node):
             node.set_attr("axis", 1)
+            return True
+        return False
+
+    def _squeeze_handler(self, trans, node):
+        def _calculate_new_attr(ori_perm, ori_squeeze_axes):
+            new_squeeze_axes = sorted([ori_perm[i] for i in ori_squeeze_axes])
+            # calculate output shape after trans and squeeze
+            input_shape = "abcd"
+            shape_after_trans = [input_shape[i] for i in ori_perm]
+            output_shape = [shape_after_trans[i] for i in range(4) if i not in ori_squeeze_axes]
+            # calculate new_perm
+            # after switch, the output shape should be same, using this condtion we can figure the new perm
+            shape_after_squeeze = [input_shape[i] for i in range(4) if i not in new_squeeze_axes]
+            new_perm = [shape_after_squeeze.index(i) for i in output_shape]
+
+            return new_perm, new_squeeze_axes
+
+        if not self._nodes_has_single_consumer_node([trans]):
+            return False
+
+        if node.get_attr("axes"):
+            squeeze_axes = sorted(list(node.get_attr("axes").ints))
+            trans_perm = list(trans.get_attr("perm").ints)
+            squeeze_shape = self._g.get_shape(node.output[0])
+            # switch tran and squeeze
+            # 1 switch
+            ops = self._g.get_nodes()
+            self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
+            node.input[0] = trans.input[0]
+            trans.input[0] = node.output[0]
+            # 2 correct attr of nodes
+            new_perm, new_squeeze_axes = _calculate_new_attr(ori_perm=trans_perm, ori_squeeze_axes=squeeze_axes)
+            trans.set_attr("perm", new_perm)
+            node.set_attr("axes", new_squeeze_axes)
+            # 3 set shape
+            self._g.set_shape(trans.output[0], squeeze_shape)
+            input_shape = self._g.get_shape(node.input[0])
+            new_squeeze_output_shape = [input_shape[i] for i in range(4) if i not in new_squeeze_axes]
+            self._g.set_shape(node.output[0], new_squeeze_output_shape)
             return True
         return False
 
