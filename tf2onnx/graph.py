@@ -578,8 +578,8 @@ class Graph(object):
         # op needs the "Shape" value to infer output shape.
         initializers = []
         for i, inp in enumerate(node.inputs):
-            if not inp:
-                if logger.isEnabledFor(logging.VERBOSE):
+            if inp is None:
+                if logger.isEnabledFor(logging.INFO):
                     logger.warning(
                         "[%s] infer a inexistent node: [%s], please check the code",
                         node.name, node.input[i]

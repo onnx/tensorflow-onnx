@@ -93,6 +93,7 @@ class TensorValueInfo(object):
 
 
 ONNX_UNKNOWN_DIMENSION = -1
+ONNX_EMPTY_INPUT = ""
 
 # index for internally generated names
 INTERNAL_NAME = 1
