@@ -278,14 +278,6 @@ class TransposeOptimizer(GraphOptimizerBase):
         self._g.replace_all_inputs(self._g.get_nodes(), trans.output[0], trans.input[0])
         self._g.remove_node(trans.name)
 
-    def _nodes_has_single_consumer_node(self, nodes):
-        for n in nodes:
-            for output in n.output:
-                cnt = len(set(self._g.find_output_consumers(output)))
-                if cnt != 1:
-                    return False
-        return True
-
     def _get_non_nchw_transpose_output_nodes(self, node):
         # we just support node having 1 output, we need consider cases where node has more than 1 outputs
         assert len(node.output) == 1

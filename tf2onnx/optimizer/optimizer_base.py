@@ -65,3 +65,11 @@ class GraphOptimizerBase(object):
         diff = ["{} {} ({}->{})".format(k, str(v) if v < 0 else '+' + str(v), before.get(k, 0), after.get(k, 0))
                 for k, v in sorted(diff.items()) if v != 0]
         self.logger.verbose(', '.join(diff) if diff else "no change")
+
+    def _nodes_has_single_consumer_node(self, nodes):
+        for n in nodes:
+            for output in n.output:
+                cnt = len(set(self._g.find_output_consumers(output)))
+                if cnt != 1:
+                    return False
+        return True
