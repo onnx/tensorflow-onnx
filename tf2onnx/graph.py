@@ -136,8 +136,12 @@ class Node(object):
         self.set_attr("data_format", val)
 
     def is_nhwc(self):
-        """Return True if node is in NCHW format."""
+        """Return True if node is in NHWC format."""
         return self.data_format == "NHWC"
+
+    def is_nchw(self):
+        """Return True if node is in NCHW format."""
+        return self.data_format == "NCHW"
 
     def is_const(self):
         """Return True if node is a constant."""

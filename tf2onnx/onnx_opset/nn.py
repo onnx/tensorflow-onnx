@@ -301,25 +301,28 @@ class PoolOp:
         # T Y = MaxPool(T X, @AttrType.STRING auto_pad, @AttrType.INTS kernel_shape, @AttrType.INTS pads,
         #               @AttrType.INTS strides)
         # above seems wrong - input[1] is ksize, input[2] is strides
+        # stride and ksize in tf is not always NHWC, so watch out when converting into onnx's HCHW
         if len(node.input) < 3:
-            kernel_shape = node.get_attr("ksize").ints
-            kernel_shape = [kernel_shape[1], kernel_shape[2]]
-            node.set_attr("kernel_shape", kernel_shape)
-            strides = conv_dims_attr(node, "strides")
+            kernel_shape_tf = node.get_attr("ksize").ints
+            strides_tf = node.get_attr("strides").ints
         else:
-            kernel_shape = node.inputs[1].get_tensor_value()
-            kernel_shape = [kernel_shape[1], kernel_shape[2]]
-            node.set_attr("kernel_shape", kernel_shape)
-
-            strides = node.inputs[2].get_tensor_value()
-            strides = [strides[1], strides[2]]
-            node.set_attr("strides", strides)
-
+            kernel_shape_tf = node.inputs[1].get_tensor_value()
+            strides_tf = node.inputs[2].get_tensor_value()
             ctx.remove_input(node, node.input[2])
             ctx.remove_input(node, node.input[1])
 
+        if node.is_nhwc():
+            kernel_shape_hw = kernel_shape_tf[1:3]
+            strides_hw = strides_tf[1:3]
+        elif node.is_nchw():
+            kernel_shape_hw = kernel_shape_tf[2:4]
+            strides_hw = strides_tf[2:4]
+        else:
+            logger.warning("unexpected data format, please check it")
+        node.set_attr("kernel_shape", kernel_shape_hw)
+        node.set_attr("strides", strides_hw)
         conv_dims_attr(node, "dilations")
-        add_padding(ctx, node, kernel_shape, strides)
+        add_padding(ctx, node, kernel_shape_hw, strides_hw)
         conv_convert_inputs(ctx, node, with_kernel=False)
 
 

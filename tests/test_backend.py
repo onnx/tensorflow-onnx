@@ -258,6 +258,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @skip_if_tf_cpu("only tf_gpu can run maxpool with NCHW format")
+    def test_maxpool_gpu(self):
+        # make sure converter behaves well when data format is NCHW
+        # and when data format is NCHW, only gpu version of tensorflow can run it.
+        ksize = [1, 1, 2, 2]
+        strides = [1, 1, 2, 2]
+        x_val = make_xval([1, 3, 50, 80])
+        for padding in ["SAME", "VALID"]:
+            x = tf.placeholder(tf.float32, shape=[None] * 4, name=_TFINPUT)
+            mp = tf.nn.max_pool(x, ksize, strides, padding=padding, data_format="NCHW")
+            _ = tf.identity(mp, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     @check_onnxruntime_incompatibility("AveragePool")
     def test_avgpool(self):
         for tf_shape in ["known", "unknown"]:
