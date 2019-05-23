@@ -32,6 +32,7 @@ class LoopOptimizer(GraphOptimizerBase):
                 has_update_tmp = self._try_move_transpose_out_of_body_graph(n)
                 if has_update_tmp:
                     has_update = True
+                    self.graph_been_opt = True
         return g
 
     @staticmethod

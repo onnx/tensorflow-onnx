@@ -147,6 +147,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 if is_nhwc_transpose(n):
                     if self._handle_nhwc_tranpose(n):
                         no_action = False
+                        self.graph_been_opt = True
                         iteration_cnt += 1
                         # need break, because handler may change nodes set, making the n stale object
                         # referencing already deleted elements

@@ -32,6 +32,8 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
         while self._graph_can_be_optimized:
             self._graph_can_be_optimized = False
             self._merge_duplicated_nodes(graph)
+            if self._graph_can_be_optimized:
+                self.graph_been_opt = True
         return graph
 
     def _merge_duplicated_nodes(self, graph):

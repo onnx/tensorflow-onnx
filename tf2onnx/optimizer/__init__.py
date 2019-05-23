@@ -39,14 +39,21 @@ def optimize_graph(graph):
 
     before = graph.dump_node_statistics()
     opts = _get_optimizers()
-    for name, factory in opts.items():
-        try:
-            logger.verbose("Apply %s", name)
-            current = copy.deepcopy(graph)
-            graph = factory().optimize(current)
-        except Exception:  # pylint: disable=broad-except
-            # if current optimizer fails, continue with other optimizers
-            logger.warning("Failed to apply %s", name, exc_info=1)
+    continue_flag = True
+    while continue_flag:
+        continue_flag = False
+        for name, factory in opts.items():
+            try:
+                logger.verbose("Apply %s", name)
+                current = copy.deepcopy(graph)
+                opt = factory()
+                graph = opt.optimize(current)
+                if not continue_flag:
+                    continue_flag = opt.graph_been_opt
+
+            except Exception:  # pylint: disable=broad-except
+                # if current optimizer fails, continue with other optimizers
+                logger.warning("Failed to apply %s", name, exc_info=1)
 
     after = graph.dump_node_statistics()
     diff = copy.deepcopy(after)
