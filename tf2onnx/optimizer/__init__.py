@@ -13,12 +13,14 @@ from .const_fold_optimizer import ConstFoldOptimizer
 from .identity_optimizer import IdentityOptimizer
 from .merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
 from .transpose_optimizer import TransposeOptimizer
+from .loop_optimizer import LoopOptimizer
 from .. import logging
 
 # optimizer sequence need to be considered carefully
 _optimizers = OrderedDict([
     ("optimize_transpose", TransposeOptimizer),
     ("fold_constants", ConstFoldOptimizer),
+    ("loop_optimizer", LoopOptimizer),
     # merge_duplication should be used after optimize_transpose
     # for optimize_transpose may have some trans nodes that can be merge
     ("merge_duplication", MergeDuplicatedNodesOptimizer),
