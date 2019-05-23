@@ -56,6 +56,15 @@ checkpoint_with_redundant_inputs:
   outputs:
     - pred:0
 
+assign-saved-model:
+  model: models/assign
+  model_type: saved_model
+  input_get: get_ramp
+  inputs:
+    "X:0": []
+  outputs:
+    - output:0
+
 benchtf-fc:
   model: models/fc-layers/frozen.pb
   input_get: get_ramp

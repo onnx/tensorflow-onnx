@@ -35,6 +35,7 @@ def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=T
                 node.device = ""
         frozen_graph = convert_variables_to_constants(sess, input_graph_def,
                                                       output_names, freeze_var_names)
+        substitute_variable_related_ops(frozen_graph)
         return frozen_graph
 
 
@@ -52,6 +53,39 @@ def remove_redundant_inputs(frozen_graph, input_names):
     return frozen_inputs
 
 
+def substitute_variable_related_ops(graph_def):
+    """Substitute variable-related ops."""
+    for node in graph_def.node:
+        if node.op == 'RefSwitch':
+            logger.warning("substitute [%s %s] with a Switch op", node.name, node.op)
+            node.op = 'Switch'
+            for index in xrange(len(node.input)):
+                if 'moving_' in node.input[index]:
+                    node.input[index] = node.input[index] + '/read'
+        elif node.op == 'AssignSub':
+            logger.warning("substitute [%s %s] with a Sub op", node.name, node.op)
+            node.op = 'Sub'
+            if 'use_locking' in node.attr:
+                del node.attr['use_locking']
+        elif node.op == 'AssignAdd':
+            logger.warning("substitute [%s %s] with an Add op", node.name, node.op)
+            node.op = 'Add'
+            if 'use_locking' in node.attr:
+                del node.attr['use_locking']
+        elif node.op == 'Assign':
+            logger.warning("substitute [%s %s] with an Identity op", node.name, node.op)
+            node.op = 'Identity'
+            if 'use_locking' in node.attr:
+                del node.attr['use_locking']
+            if 'validate_shape' in node.attr:
+                del node.attr['validate_shape']
+            if len(node.input) == 2:
+                # input0: ref: Should be from a Variable node. May be uninitialized.
+                # input1: value: The value to be assigned to the variable.
+                node.input[0] = node.input[1]
+                del node.input[1]
+
+
 def from_graphdef(model_path, input_names, output_names):
     """Load tensorflow graph from graphdef."""
     # make sure we start with clean default graph
@@ -60,6 +94,8 @@ def from_graphdef(model_path, input_names, output_names):
         graph_def = tf.GraphDef()
         with tf.gfile.GFile(model_path, 'rb') as f:
             graph_def.ParseFromString(f.read())
+            # in case can't import graph_def
+            substitute_variable_related_ops(graph_def)
             tf.import_graph_def(graph_def, name='')
             frozen_graph = freeze_session(sess, output_names=output_names)
     input_names = remove_redundant_inputs(frozen_graph, input_names)
