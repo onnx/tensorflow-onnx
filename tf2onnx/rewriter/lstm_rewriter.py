@@ -320,9 +320,13 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         context.attributes["direction"] = "forward"
         context.attributes["hidden_size"] = context.hidden_size
         inputs = context.onnx_input_ids
+        # sequence len input is optional
+        seq_len_input = utils.ONNX_EMPTY_INPUT
+        if inputs["sequence_lens"]:
+            seq_len_input = inputs["sequence_lens"]
         lstm_inputs = [
             inputs["X"], inputs["W"], inputs["R"], inputs["B"],
-            inputs["sequence_lens"], inputs["initial_h"], inputs["initial_c"]]
+            seq_len_input, inputs["initial_h"], inputs["initial_c"]]
 
         x_shape = self.g.get_shape(lstm_inputs[0])
         x_seq_length = x_shape[0]
