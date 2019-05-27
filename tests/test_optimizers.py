@@ -188,6 +188,43 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         self.assertTrue(trans_cnt == 1, msg="Expect 1 Transpose ops left, but actually " + str(trans_cnt) + " left")
 
+    def test_trans_can_be_replaced_with_reshape1(self):
+        # test trans-NHWC
+        input_shapes_np = [(2, 3, 4, 1), (2, 1, 1, 4), (2, 3, 4, 1)]
+        input_shapes = [(2, 3, 4, 1), (2, 1, 1, 4), (2, -1, -1, 1)]
+        perm = (0, 3, 1, 2)
+        for input_shape_np, input_shape in zip(input_shapes_np, input_shapes):
+            result_shape = [input_shape[i] for i in perm]
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
+            graph = helper.make_graph(
+                [node1],
+                "test_trans_can_be_replaced_with_reshape",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+                [helper.make_tensor_value_info("Y", TensorProto.FLOAT, result_shape)],
+            )
+
+            model_proto = helper.make_model(graph, producer_name="onnx-tests")
+            self.run_transpose_compare(["Y"], {"X": np.random.randn(*input_shape_np).astype(np.float32)},
+                                       model_proto, remaining_transpose_num=0)
+
+    def test_trans_can_be_replaced_with_reshape2(self):
+        # test trans-NCHW
+        input_shapes_np = [(2, 1, 3, 4), (2, 4, 1, 1), (2, 1, 3, 4)]
+        input_shapes = [(2, 1, 3, 4), (2, 4, 1, 1), (2, 1, -1, -1)]
+        perm = (0, 2, 3, 1)
+        for input_shape_np, input_shape in zip(input_shapes_np, input_shapes):
+            result_shape = [input_shape[i] for i in perm]
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
+            graph = helper.make_graph(
+                [node1],
+                "test_trans_can_be_replaced_with_reshape",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+                [helper.make_tensor_value_info("Y", TensorProto.FLOAT, result_shape)],
+            )
+
+            model_proto = helper.make_model(graph, producer_name="onnx-tests")
+            self.run_transpose_compare(["Y"], {"X": np.random.randn(*input_shape_np).astype(np.float32)},
+                                       model_proto, remaining_transpose_num=0)
     # Tranpose Optimizer Tests End
 
     # Identity Optimizer Tests Start
