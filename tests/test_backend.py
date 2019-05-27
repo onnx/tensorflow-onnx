@@ -1417,6 +1417,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_onnxruntime_min_version("0.5.0", "topk-10's shape inference function has a bug")
     @check_opset_min_version(6, "cast")
     def test_topk1(self):
         x_val = np.arange(3 * 2 * 3).astype("float32")
