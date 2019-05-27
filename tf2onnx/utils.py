@@ -460,6 +460,10 @@ def get_max_value(np_dtype):
     return np.iinfo(np_dtype).max
 
 
+def get_min_value(np_dtype):
+    return np.iinfo(np_dtype).min
+
+
 def get_url(url, path, max_retries=5):
     """ Download url and save to path. """
     retries = Retry(total=max_retries, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
