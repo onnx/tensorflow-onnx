@@ -93,6 +93,14 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         graph.remove_node(node.name)
 
     @staticmethod
+    @_register_func("Cast")
+    def _fold_cast(node, graph):
+        const_val = node.inputs[0].get_tensor_value(as_list=False)
+        np_dtype = utils.ONNX_TO_NUMPY_DTYPE[node.get_attr("to").i]
+        const_val_after_cast = const_val.astype(np_dtype)
+        return [const_val_after_cast]
+
+    @staticmethod
     @_register_func("Transpose")
     def _fold_transpose(node, graph) -> list:
         const_val = node.inputs[0].get_tensor_value(as_list=False)
@@ -100,3 +108,27 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         perm = perm_attr.ints if perm_attr else None
         const_val_after_trans = const_val.transpose(perm)
         return [const_val_after_trans]
+
+    @staticmethod
+    @_register_func("Unsqueeze")
+    def _fold_unsqueeze(node, graph):
+        """
+        numpy expand_dims only supports to unsqueeze one dim one time, so reshape is used to simplify the logic
+        """
+        const_val = node.inputs[0].get_tensor_value(as_list=False)
+        axes = list(node.get_attr("axes").ints)
+        utils.make_sure(all(axis >= 0 for axis in axes), "onnx spec says it only supports positive axis")
+        shape_in = const_val.shape
+        dims_out = len(shape_in) + len(axes)
+        # calculate the shape of output accroding to onnx Unsqueeze's spec
+        # https://github.com/onnx/onnx/blob/master/docs/Operators.md#Unsqueeze
+        shape_in = iter(shape_in)
+        shape_out = [None] * dims_out
+        for ind in axes:
+            shape_out[ind] = 1
+        for ind, val in enumerate(shape_out):
+            if val is None:
+                shape_out[ind] = next(shape_in)
+
+        const_val_after_unsqueeze = const_val.reshape(shape_out)
+        return [const_val_after_unsqueeze]
