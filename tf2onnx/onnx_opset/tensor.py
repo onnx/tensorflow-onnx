@@ -649,8 +649,9 @@ class StridedSlice:
         strides = node.inputs[3]
         strides_val = strides.get_tensor_value()
         if begin.is_const() and end.is_const() and strides.is_const() \
-                and np.all(strides_val == 1):
+                and all(val == 1 for val in strides_val):
             cls.version_4(ctx, node, **kwargs)
+            return
 
         not_supported_attr = ["new_axis_mask"]
         for attr_name in not_supported_attr:
@@ -697,6 +698,7 @@ class StridedSlice:
             mask = (shrink_axis_mask >> idx) & 1
             if mask != 0:
                 shrink_strided_mask[idx] = max_size
+                new_end_mask[idx] = max_size
                 needs_squeeze.append(idx)
                 continue
 
