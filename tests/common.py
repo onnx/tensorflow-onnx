@@ -12,6 +12,7 @@ from collections import defaultdict
 from distutils.version import LooseVersion
 from parameterized import parameterized
 import numpy as np
+import tensorflow as tf
 from tf2onnx import constants, logging, utils
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "check_tf_min_version",
     "check_tf_max_version",
     "skip_tf_versions",
+    "skip_tf_cpu",
     "check_onnxruntime_min_version",
     "check_opset_min_version",
     "check_opset_max_version",
@@ -179,6 +181,15 @@ def skip_tf_versions(excluded_versions, message=""):
         condition = True
 
     return unittest.skipIf(condition, reason)
+
+
+def is_tf_gpu():
+    return tf.test.is_gpu_available()
+
+
+def skip_tf_cpu(message=""):
+    is_tf_cpu = not is_tf_gpu()
+    return unittest.skipIf(is_tf_cpu, message)
 
 
 def check_opset_min_version(min_required_version, message=""):
