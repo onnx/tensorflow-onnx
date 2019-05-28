@@ -131,6 +131,9 @@ class TransposeOptimizer(GraphOptimizerBase):
         graph.delete_unused_nodes(graph.outputs)
 
     def _optimize(self, graph):
+        return self._apply_optimization(graph, self._optimize_at_current_graph_level)
+
+    def _optimize_at_current_graph_level(self, graph):
         self._g = graph
         self.pre_optimize_action()
         no_action = False
@@ -190,7 +193,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         # make sure node's all input transpose all have only 1 consumer node,
         # otherwise, it would impact their other output nodes
-        if self._transpose_has_single_consumer_node(node.inputs):
+        if self._nodes_has_single_consumer_node(node.inputs):
             self._create_transpose_pairs_after_node(node)
             input_transposes = node.inputs
             for n in input_transposes:
@@ -226,7 +229,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     # the assumption is: both node and trans have only 1 output
     def _switch_transpose_and_node(self, node, trans):
-        if not self._transpose_has_single_consumer_node([trans]):
+        if not self._nodes_has_single_consumer_node([trans]):
             return False
 
         input_index = self._get_input_index_for_trans(node, trans)
@@ -274,13 +277,12 @@ class TransposeOptimizer(GraphOptimizerBase):
         self._g.replace_all_inputs(self._g.get_nodes(), trans.output[0], trans.input[0])
         self._g.remove_node(trans.name)
 
-    def _transpose_has_single_consumer_node(self, trans_nodes):
-        result = True
-        for n in trans_nodes:
-            cnt = len(set(self._g.find_output_consumers(n.output[0])))
-            result = result and cnt == 1
-            if not result:
-                return False
+    def _nodes_has_single_consumer_node(self, nodes):
+        for n in nodes:
+            for output in n.output:
+                cnt = len(set(self._g.find_output_consumers(output)))
+                if cnt != 1:
+                    return False
         return True
 
     def _get_non_nchw_transpose_output_nodes(self, node):
@@ -472,7 +474,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _shape_handler(self, trans, node):
         # input > trans > shape  can be changed into  input > shape > gather
-        if not self._transpose_has_single_consumer_node([trans]):
+        if not self._nodes_has_single_consumer_node([trans]):
             return False
 
         output_shape = self._g.get_shape(node.output[0])
