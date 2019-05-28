@@ -139,10 +139,6 @@ class Node(object):
         """Return True if node is in NHWC format."""
         return self.data_format == "NHWC"
 
-    def is_nchw(self):
-        """Return True if node is in NCHW format."""
-        return self.data_format == "NCHW"
-
     def is_const(self):
         """Return True if node is a constant."""
         return self.type in ["Const", "ConstV2"]

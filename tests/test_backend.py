@@ -258,7 +258,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @skip_if_tf_cpu("only tf_gpu can run maxpool with NCHW format")
+    @skip_tf_cpu("only tf_gpu can run maxpool with NCHW format")
     def test_maxpool_gpu(self):
         # make sure converter behaves well when data format is NCHW
         # and when data format is NCHW, only gpu version of tensorflow can run it.

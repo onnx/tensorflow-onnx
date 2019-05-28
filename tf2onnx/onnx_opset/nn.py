@@ -314,11 +314,9 @@ class PoolOp:
         if node.is_nhwc():
             kernel_shape_hw = kernel_shape_tf[1:3]
             strides_hw = strides_tf[1:3]
-        elif node.is_nchw():
+        else:
             kernel_shape_hw = kernel_shape_tf[2:4]
             strides_hw = strides_tf[2:4]
-        else:
-            logger.warning("unexpected data format, please check it")
         node.set_attr("kernel_shape", kernel_shape_hw)
         node.set_attr("strides", strides_hw)
         conv_dims_attr(node, "dilations")

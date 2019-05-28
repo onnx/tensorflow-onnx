@@ -23,7 +23,7 @@ __all__ = [
     "check_tf_min_version",
     "check_tf_max_version",
     "skip_tf_versions",
-    "skip_if_tf_cpu",
+    "skip_tf_cpu",
     "check_onnxruntime_min_version",
     "check_opset_min_version",
     "check_opset_max_version",
@@ -187,7 +187,7 @@ def is_tf_gpu():
     return tf.test.is_gpu_available()
 
 
-def skip_if_tf_cpu(message=""):
+def skip_tf_cpu(message=""):
     is_tf_cpu = not is_tf_gpu()
     return unittest.skipIf(is_tf_cpu, message)
 
