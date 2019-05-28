@@ -74,40 +74,40 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.topological_sort(self._g.get_nodes())
 
     def post_optimize_action(self):
+        def _calculate_new_shape(graph, op):
+            input_shape = graph.get_shape(op.input[0])
+            if input_shape.count(-1) <= 1:
+                if is_nchw_transpose(op):
+                    new_shape = [input_shape[0], input_shape[3], input_shape[1], input_shape[2]]
+                else:
+                    new_shape = [input_shape[0], input_shape[2], input_shape[3], input_shape[1]]
+                return graph.make_const(utils.make_name("new_shape"), np.array(new_shape, dtype=np.int64)).output[0]
+
+            # reshape requires tha output shape can only contain one -1, if not some extra op needed.
+            input_shape = graph.make_node("Shape", [op.input[0]]).output[0]
+            if is_nchw_transpose(op):
+                indice = graph.make_const(utils.make_name("indice"), np.array([0, 3, 1, 2])).output[0]
+            else:
+                indice = graph.make_const(utils.make_name("indice"), np.array([0, 2, 3, 1])).output[0]
+
+            return graph.make_node("Gather", [input_shape, indice]).output[0]
+
         nodes = self.nodes
         # if channel==1 or height==width==1, replace transpose with reshape
+        # replacing trans with reshape is because transpose will copy data even if this transpose doesn't nothing
         for op in nodes:
             if op.type == "Transpose":
                 input_shape = self._g.get_shape(op.input[0])
                 if not input_shape:
                     continue
-                # reshape only supports one dime is -1
-                if input_shape.count(-1) > 1:
-                    continue
 
-                new_shape = []
-                # when transpose is NHWC_TO_NCHW
-                if is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1] == 1 and input_shape[2] == 1)):
-                    new_shape = [input_shape[0], input_shape[3], input_shape[1], input_shape[2]]
-                # when transpose is NCHW_TO_NHWC
-                if is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2] == 1 and input_shape[3] == 1)):
-                    new_shape = [input_shape[0], input_shape[2], input_shape[3], input_shape[1]]
-                if new_shape:
-                    out_nodes = self._g.find_output_consumers(op.output[0])
-                    need_insert_reshape = False
-                    for out_node in out_nodes:
-                        if out_node.type != "Reshape":
-                            need_insert_reshape = True
-                    if need_insert_reshape:
-                        op_name = utils.make_name("reshape")
-                        shape_name = utils.make_name(op_name)
-                        self._g.make_const(shape_name, np.array(new_shape, dtype=np.int64))
-                        self._g.remove_node(op.name)
-                        self._g.make_node("Reshape", inputs=[op.input[0], shape_name], outputs=op.output,
-                                          name=op_name)
-                    else:
-                        self._remove_useless_tranpose(op)
-        self._g.topological_sort(self._g.get_nodes())
+                if (is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1:3] == [1, 1])))\
+                   or (is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2:4] == [1, 1]))):
+                    new_shape = _calculate_new_shape(self._g, op)
+                    # replace transpose with reshape
+                    self._g.remove_node(op.name)
+                    self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output)
+                    self._g.topological_sort(self._g.get_nodes())
 
     def merge_duplicated_transposes(self):
         # strategy used in previous procedure is to move transpose nodes down if possible,
