@@ -54,8 +54,8 @@ class TrigOpSinceOpset9:
         pass
 
 
-def make_minmax_op(ctx, op_type, inputs, outputs,
-                   output_shapes=None, output_dtypes=None):
+def make_min_or_max_op(ctx, op_type, inputs, outputs,
+                       output_shapes=None, output_dtypes=None):
     # support more dtype
     supported_dtypes = [
         onnx_pb.TensorProto.FLOAT,
@@ -123,7 +123,7 @@ class MinMaxOp:
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        make_minmax_op(ctx, node.type, node.input, node.output, shapes, dtypes)
+        make_min_or_max_op(ctx, node.type, node.input, node.output, shapes, dtypes)
 
 
 @tf_op("Softmax")

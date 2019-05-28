@@ -647,9 +647,8 @@ class StridedSlice:
         begin = node.inputs[1]
         end = node.inputs[2]
         strides = node.inputs[3]
-        strides_val = strides.get_tensor_value()
         if begin.is_const() and end.is_const() and strides.is_const() \
-                and all(val == 1 for val in strides_val):
+                and all(val == 1 for val in strides.get_tensor_value()):
             cls.version_4(ctx, node, **kwargs)
             return
 
@@ -747,7 +746,7 @@ class StridedSlice:
                     np.array(new_end_mask, dtype=np_dtype)
                 )
                 end_output = utils.make_name("{}__end".format(node.name))
-                math.make_minmax_op(ctx, "Max", [end.output[0], end_mask_const.output[0]], [end_output])
+                math.make_min_or_max_op(ctx, "Max", [end.output[0], end_mask_const.output[0]], [end_output])
         # mask strides for shrink
         shrink_strided_mask = np.array(shrink_strided_mask, dtype=np_dtype)
         strides_output = strides.output[0]
@@ -764,7 +763,7 @@ class StridedSlice:
                     np.array(shrink_strided_mask, dtype=np_dtype)
                 )
                 strides_output = utils.make_name("{}__strides".format(node.name))
-                math.make_minmax_op(
+                math.make_min_or_max_op(
                     ctx, "Max",
                     [strides.output[0], shrink_strided_mask_const.output[0]],
                     [strides_output]
