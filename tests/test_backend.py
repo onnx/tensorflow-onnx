@@ -258,6 +258,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @skip_tf_cpu("only tf_gpu can run maxpool with NCHW format")
+    def test_maxpool_gpu(self):
+        # make sure converter behaves well when data format is NCHW
+        # and when data format is NCHW, only gpu version of tensorflow can run it.
+        ksize = [1, 1, 2, 2]
+        strides = [1, 1, 2, 2]
+        x_val = make_xval([1, 3, 50, 80])
+        for padding in ["SAME", "VALID"]:
+            x = tf.placeholder(tf.float32, shape=[None] * 4, name=_TFINPUT)
+            mp = tf.nn.max_pool(x, ksize, strides, padding=padding, data_format="NCHW")
+            _ = tf.identity(mp, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     @check_onnxruntime_incompatibility("AveragePool")
     def test_avgpool(self):
         for tf_shape in ["known", "unknown"]:
@@ -900,10 +913,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
 
-    @check_onnxruntime_incompatibility("Max")
     def test_relu6(self):
-        x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
-        x = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+        x_val = np.array([0.5, 1.0, -0.5, -1.0, 6, 7], dtype=np.float32).reshape((2, 3))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         x_ = tf.nn.relu6(x)
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
@@ -1271,7 +1283,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_randomuniform_dyn_shape(self):
         # test for dynamic shape coming from a shape op
         x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
-        x = tf.placeholder(x_val.dtype, name=_TFINPUT)
+        x = tf.placeholder(x_val.dtype, [None, 3], name=_TFINPUT)
         x_ = tf.stack([x, x])
         x_ = tf.identity(x_)
         x_ = tf.shape(x_, name="shape")
@@ -1418,6 +1430,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_onnxruntime_min_version("0.5.0", "topk-10's shape inference function has a bug")
     @check_opset_min_version(6, "cast")
     def test_topk1(self):
         x_val = np.arange(3 * 2 * 3).astype("float32")
@@ -2377,6 +2390,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             'constant_fold': False
         })
         tf.reset_default_graph()
+
+    @check_opset_min_version(10, "Selu")
+    def test_selu(self):
+        x_val = np.random.random_sample([3]).astype(np.float32)
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        y = tf.nn.selu(x)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
 
 if __name__ == '__main__':

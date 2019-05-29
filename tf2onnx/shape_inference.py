@@ -9,8 +9,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 import logging
-import numpy as np
-from onnx import onnx_pb
+from distutils.version import LooseVersion
+from collections import defaultdict
+
+import tensorflow as tf
 from tf2onnx import utils
 
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
@@ -18,14 +20,258 @@ from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
 
+
+def infer_shape(tf_graph, shape_override):
+    """Infer shape for TF graph with shape_override set first."""
+    if shape_override:
+        logger.info("Apply shape override:")
+        for name, shape in shape_override.items():
+            logger.info("\tSet %s shape to %s", name, shape)
+            tf_graph.get_tensor_by_name(name).set_shape(shape)
+        tf_graph = reload_tf_graph(tf_graph)
+
+    tf_graph = infer_shape_for_graph(tf_graph)
+
+    op_outputs_with_none_shape = check_shape_for_tf_graph(tf_graph)
+    if op_outputs_with_none_shape:
+        if utils.get_tf_version() > LooseVersion("1.5.0"):
+            for op, outs in op_outputs_with_none_shape.items():
+                logger.warning(
+                    "Cannot infer shape for %s: %s",
+                    op, ",".join(outs)
+                )
+        tf_graph = infer_shape_for_graph_legacy(tf_graph)
+
+    return tf_graph
+
+
+def check_shape_for_tf_graph(tf_graph):
+    """
+    Check whether TF graph misses any shape,
+    and return all ops with None shape outputs for TF graph.
+    """
+    op_outputs_mapping_none_shape = defaultdict(list)
+    for op in tf_graph.get_operations():
+        for out in op.outputs:
+            if utils.get_tf_tensor_shape(out) is None:
+                op_outputs_mapping_none_shape[op.name].append(out.name)
+    return op_outputs_mapping_none_shape
+
+
+def reload_tf_graph(tf_graph):
+    """Invoke tensorflow cpp shape inference by reloading graph_def."""
+    # invoke c api if tf version is below 1.8
+    if utils.get_tf_version() < LooseVersion("1.8"):
+        logger.debug(
+            "On TF < 1.8, graph is constructed by python API, " \
+            "which doesn't invoke shape inference, please set " \
+            "TF_C_API_GRAPH_CONSTRUCTION=1 to enable it"
+        )
+
+    graph_def = tf_graph.as_graph_def(add_shapes=True)
+    with tf.Graph().as_default() as inferred_graph:
+        tf.import_graph_def(graph_def, name="")
+    return inferred_graph
+
+
+def infer_shape_for_graph(tf_graph):
+    """
+    Infer shape for Tensorflow ops.
+    Tensorflow explicitly sets shape for some ops in python code, such as Switch, Merge and TensorArrayGather.
+    These shapes may be lost after freezing TF graph to graph_def without add_shapes=True.
+    To bring these shapes back, we implement our own shape inference for these control flow ops based on one assumption:
+    **outputs of Merge op have the same shape (at least the same rank) of its inputs**.
+    With this assumption, our shape inference can handle:
+        1. in tf.cond, outputs of two branches have the same rank.
+        2. in tf.while_loop, loop variables don't change their rank.
+    """
+    shape_updated = True
+    while shape_updated:
+        shape_updated = False
+        for o in tf_graph.get_operations():
+            updated = infer_shape_for_op(o)
+            if updated:
+                shape_updated = True
+        if shape_updated:
+            tf_graph = reload_tf_graph(tf_graph)
+    return tf_graph
+
+
+def infer_shape_for_op(op):
+    has_unknown_output_shape = any(utils.get_tf_tensor_shape(out) is None for out in op.outputs)
+
+    if not has_unknown_output_shape:
+        return False
+
+    if op.type == "Placeholder":
+        # if placeholder shape is not found, try to get it from "shape" attribute.
+        attr_shape = utils.get_tf_shape_attr(op)
+        if attr_shape is not None:
+            new_shape = list(attr_shape)
+            op.outputs[0].set_shape(new_shape)
+            logger.debug("set placeholder op [%s] with new shape %s", op.outputs[0].name, new_shape)
+            return True
+        logger.warning("Shape of placeholder %s is unknown, treated it as a scalar", op.name)
+        op.outputs[0].set_shape([])
+        return True
+
+    if op.type == "Merge":
+        s1 = utils.get_tf_tensor_shape(op.inputs[0])
+        s2 = utils.get_tf_tensor_shape(op.inputs[1])
+        new_shape = None
+        if s1 is None and s2 is None:
+            return False
+        if s1 is None and s2 is not None:
+            new_shape = s2
+        if s1 is not None and s2 is None:
+            new_shape = s1
+
+        if new_shape is not None:
+            op.inputs[0].set_shape(new_shape)
+            op.inputs[1].set_shape(new_shape)
+            op.outputs[0].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
+            return True
+
+        # inputs' shapes both exist
+        if s1 != s2:
+            if len(s1) != len(s2):
+                logger.warning("Shapes of Merge %s have different ranks: %s, %s", op.name, len(s1), len(s2))
+                return False
+
+            logger.debug("Inputs of Merge %s have different shapes: %s, %s, but the same rank", op.name, s1, s2)
+            new_shape = _merge_shapes_for_tf(s1, s2)
+            op.outputs[0].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
+        else:
+            new_shape = s1
+            op.outputs[0].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
+
+        return True
+
+    if op.type == "Switch":
+        new_shape = utils.get_tf_tensor_shape(op.inputs[0])
+        if new_shape is not None:
+            op.outputs[0].set_shape(new_shape)
+            op.outputs[1].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[1].name, new_shape)
+            return True
+        return False
+
+    if op.type == "Enter":
+        new_shape = utils.get_tf_tensor_shape(op.inputs[0])
+        if new_shape is not None:
+            op.outputs[0].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
+            return True
+        return False
+
+    if op.type == "TensorArrayGatherV3":
+        # TensorArrayGatherV3's output: all of the elem in the TensorArray,
+        # concatenated along a new axis (the new dimension 0), so shape of TensorArray should be found first.
+        # And TensorArrayWrite will write elem to TensorArray, so shape of TensorArray can be got from TensorArrayWrite
+        # so the process is: first find TensorArrayWrite and then get TensorArray's shape,
+        # and finally add one dim to the shape is shape of TensorArrayGather
+
+        handle_op = op.inputs[0].op
+        if handle_op.type != "TensorArrayV3":
+            return False
+
+        # find TensorArrayWrite
+        tensor_array_write_op = _find_tensorarray_write(handle_op)
+        if not tensor_array_write_op:
+            return False
+        # get TensorArray shape from input tensor of the found TensorArrayWrite op
+        shape = utils.get_tf_tensor_shape(tensor_array_write_op.inputs[2])
+        # update TensorArray's shape info
+        if shape is not None:
+            new_shape = [None] + shape
+            op.outputs[0].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
+            return True
+        return False
+
+    if op.type == "TensorArrayReadV3":
+        # TensorArrayRead reads an element from the TensorArray into output value.
+        # The TensorArray's shape can be got from TensorArrayScatter.
+        # So the process is: first find TensorArrayScatter's shape and then TensorArray's
+        # and finally take its last n-1 dim.
+        flow_in_op = op.inputs[2].op
+        if flow_in_op.type != "Enter":
+            return False
+
+        scatter_op = flow_in_op.inputs[0].op
+        if scatter_op.type != "TensorArrayScatterV3":
+            return False
+
+        value_shape_before_scatter = utils.get_tf_tensor_shape(scatter_op.inputs[2])
+        if value_shape_before_scatter is None:
+            return False
+
+        new_shape = value_shape_before_scatter[1:]
+        if new_shape is not None:
+            op.outputs[0].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
+            return True
+        return False
+
+    return False
+
+
+def _find_tensorarray_write(op):
+    utils.make_sure(op.type == "TensorArrayV3", "op should be tensorarray")
+
+    tensor_array_consumers = op.outputs[0].consumers()
+    for i in tensor_array_consumers:
+        if i.type == "Enter":
+            consumer_ops = i.outputs[0].consumers()
+            for j in consumer_ops:
+                if j.type == "TensorArrayWriteV3":
+                    return j
+    return None
+
+
+def _merge_shapes_for_tf(shape1, shape2):
+    """
+    Merge 2 shapes, return merged shape, set unknown for dims with different values.
+    Raise exception for mismatch.
+    """
+    if shape1 is None:
+        return shape2
+    if shape2 is None:
+        return shape1
+
+    utils.make_sure(utils.is_list_or_tuple(shape1), "invalid type for shape1")
+    utils.make_sure(utils.is_list_or_tuple(shape2), "invalid type for shape2")
+    utils.make_sure(len(shape1) == len(shape2), "shapes rank mismatch: shape1=%s, shape2=%s", shape1, shape2)
+
+    merged = []
+    for d1, d2 in zip(shape1, shape2):
+        d = d1
+        if d1 is None:
+            d = d2
+        elif not d2 is None:
+            # None means unknown in tensorflow
+            d = None
+        merged.append(d)
+    return merged
+
+
+######################################################################
+####   Below is our old tf shape inference as a supplementary     ####
+####            and a subtitute for TF 1.5.0                      ####
+######################################################################
+
 direct_ops = [
     "Cast",
-    "Enter",
     "Exit",
     "Floor",
     "Identity",
     "LogicalNot",
     "ReverseSequence",
+    "Relu6",
     "Sigmoid",
     "Square",
     "Tanh"
@@ -44,100 +290,91 @@ broadcast_ops = [
 ]
 
 
-def infer_shape_for_graph(g):
-    no_shape_updated = True
-    while no_shape_updated:
-        no_shape_updated = False
-        for o in g.get_nodes():
-            updated = infer_shape_for_node(g, o)
+def infer_shape_for_graph_legacy(tf_graph):
+    shape_updated = True
+    while shape_updated:
+        shape_updated = False
+        for op in tf_graph.get_operations():
+            updated = infer_shape_for_op_legacy(op)
             if updated:
-                no_shape_updated = True
+                shape_updated = True
+
+    return tf_graph
 
 
-def infer_shape_for_node(g, node):
-    has_unknown_input_shape = any(g.get_shape(i) is None for i in node.input)
-    has_unknown_output_shape = any(g.get_shape(o) is None for o in node.output)
+def infer_shape_for_op_legacy(op):
+    # invoke tf shape inference first
+    infer_shape_for_op(op)
 
-    # an input shape may be inferred from node output or other input shapes
+    has_unknown_input_shape = any(utils.get_tf_tensor_shape(inp) is None for inp in op.inputs)
+    has_unknown_output_shape = any(utils.get_tf_tensor_shape(out) is None for out in op.outputs)
+
+    # an input shape may be inferred from op output or other input shapes
     # try to infer it first
     if has_unknown_input_shape:
-        if infer_input_shapes(g, node):
+        if infer_input_shapes(op):
             return True
 
     if not has_unknown_output_shape:
         return False
 
     # for those ops, we don't expect all input shapes available to infer output shapes.
-    ret = infer_output_shapes_with_partial_inputs(g, node)
+    ret = infer_output_shapes_with_partial_inputs(op)
     if ret is not None:
         return ret
 
     # for ops, we need all input shapes ready to infer output shapes.
     are_all_input_shape_ready = True
     no_shape = []
-    for i in node.input:
-        if g.get_shape(i) is None:
+    for i in op.inputs:
+        if utils.get_tf_tensor_shape(i) is None:
             are_all_input_shape_ready = False
-            no_shape.append(i)
+            no_shape.append(i.name)
 
     if not are_all_input_shape_ready:
-        logger.debug("node %s has inputs don't have shape specified, they are: %s", node.name, no_shape)
+        logger.debug("op %s has inputs don't have shape specified, they are: %s", op.name, no_shape)
         return False
 
-    if node.type in direct_ops:
-        return set_shape_from_input(g, node.input[0], node.output[0])
+    if op.type in direct_ops:
+        return set_shape_from_input(op.inputs[0], op.outputs[0])
 
-    if node.type in broadcast_ops:
-        return set_shape_from_inputs_broadcast(g, node.input, node.output[0])
+    if op.type in broadcast_ops:
+        return set_shape_from_inputs_broadcast(op.inputs, op.outputs[0])
 
-    if node.type == "Placeholder":
-        # if placeholder shape is not found, try to get it from "shape" attribute.
-        shape_attr = node.get_attr("shape")
-        new_shape = None
-        if shape_attr.type == onnx_pb.TensorProto.INT32:
-            new_shape = list(shape_attr.ints)
-        elif shape_attr.type == onnx_pb.TensorProto.FLOAT:
-            # for scalar placeholder, it's type is float
-            val = list(shape_attr.floats)
-            if val:
-                raise ValueError("placeholder shape has floats value, and not scalar value")
-            new_shape = ()
-
-        if new_shape is not None:
-            g.set_shape(node.output[0], new_shape)
-            logger.debug("set placeholder node [%s] with new shape %s", node.output[0], new_shape)
-            return True
-        return False
-
-    if node.type == "RandomUniform":
-        shape_node = node.inputs[0]
-        if not shape_node or shape_node.type != "Shape":
+    if op.type == "RandomUniform":
+        shape_op = op.inputs[0].op
+        if not shape_op or shape_op.type != "Shape":
             return False
-        return set_shape_from_input(g, shape_node.input[0], node.output[0])
+        return set_shape_from_input(shape_op.inputs[0], op.outputs[0])
 
-    if node.type == "Gather":
+    if op.type == "Gather":
         # uses the follwing link to know how to infer shape of output
         # https://www.tensorflow.org/api_docs/python/tf/gather
-        shape_params = g.get_shape(node.input[0])
-        shape_indices = g.get_shape(node.input[1])
+        shape_params = utils.get_tf_tensor_shape(op.inputs[0])
+        shape_indices = utils.get_tf_tensor_shape(op.inputs[1])
         # gather can only have 2 inputs
         # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/gather.html
-        if len(node.input) == 3:
-            axis = node.input[2].get_tensor_value()
+        if len(op.inputs) == 3:
+            axis_op = op.inputs[2].op
+            if not utils.is_tf_const_op(axis_op):
+                return False
+            axis = utils.get_tf_const_value(axis_op)
         else:
             axis = 0
 
         shape = shape_params[:axis] + shape_indices + shape_params[axis + 1:]
-        g.set_shape(node.output[0], shape)
+        op.outputs[0].set_shape(shape)
         return True
 
-    if node.type in ["All", "Any", "Max", "Min"]:
-        axis_node = node.inputs[1]
-        axis = axis_node.get_tensor_value()
+    if op.type in ["All", "Any", "Max", "Min"]:
+        axis_op = op.inputs[1].op
+        if not utils.is_tf_const_op(axis_op):
+            return False
+        axis = utils.get_tf_const_value(axis_op)
         if not isinstance(axis, list):
             axis = [axis]
-        keep_dims = node.get_attr_int("keep_dims")
-        shape = g.get_shape(node.input[0])
+        keep_dims = op.get_attr("keep_dims")
+        shape = utils.get_tf_tensor_shape(op.inputs[0])
         for i, _ in enumerate(axis):
             if axis[i] < 0:
                 axis[i] += len(shape)
@@ -150,86 +387,86 @@ def infer_shape_for_node(g, node):
             else:
                 new_shape.append(shape[i])
 
-        g.set_shape(node.output[0], new_shape)
-        logger.debug("set %s node [%s] with new shape %s", node.type, node.output[0], new_shape)
+        op.outputs[0].set_shape(new_shape)
+        logger.debug("set %s op [%s] with new shape %s", op.type, op.outputs[0].name, new_shape)
         return True
 
-    if node.type == "ExpandDims":
+    if op.type == "ExpandDims":
         # https://www.tensorflow.org/api_docs/python/tf/expand_dims
-        input_shape = g.get_shape(node.input[0])
-        dim_node = node.inputs[1]
-        if input_shape is None or not dim_node.is_const():
+        input_shape = utils.get_tf_tensor_shape(op.inputs[0])
+        dim_op = op.inputs[1].op
+        if input_shape is None or not utils.is_tf_const_op(dim_op):
             return False
 
-        dim = dim_node.get_tensor_value()
+        dim = utils.get_tf_const_value(dim_op)
         if dim < 0:
             dim = dim + len(input_shape) + 1
 
         new_shape = input_shape[:dim] + [1] + input_shape[dim:]
-        g.set_shape(node.output[0], new_shape)
-        logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
+        op.outputs[0].set_shape(new_shape)
+        logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
         return True
 
-    if node.type == "Unpack":
-        input_shape = g.get_shape(node.input[0])
+    if op.type == "Unpack":
+        input_shape = utils.get_tf_tensor_shape(op.inputs[0])
         if input_shape is None:
             return False
 
-        axis = node.get_attr("axis").i
+        axis = op.get_attr("axis")
         axis = axis if axis >= 0 else axis + len(input_shape)
         # the link below says that the rank of output is "rank(input) -1",
         # from this statement "num" must equal to input_shape[axis], and if not tf will throw a runtime error
         # https://www.tensorflow.org/api_docs/python/tf/unstack
         new_shape = input_shape[:axis] + input_shape[axis + 1:]
-        for output in node.output:
-            g.set_shape(output, new_shape)
-            logger.debug("set %s node [%s] with new shape %s", node.type, output, new_shape)
+        for output in op.outputs:
+            output.set_shape(new_shape)
+            logger.debug("set %s op [%s] with new shape %s", op.type, output.name, new_shape)
         return True
 
-    if node.type in ["Minimum", "Maximum"]:
+    if op.type in ["Minimum", "Maximum"]:
         # ops that are elementwise and support broadcasting
-        input_shapes = [g.get_shape(node) for node in node.input]
+        input_shapes = [utils.get_tf_tensor_shape(op) for op in op.inputs]
         new_shape = broadcast_shape_inference(*input_shapes)
-        g.set_shape(node.output[0], new_shape)
+        op.outputs[0].set_shape(new_shape)
         return True
 
     return False
 
 
-def infer_input_shapes(g, node):
-    if node.type == "Select":
-        shape_t = g.get_shape(node.input[1])
-        shape_e = g.get_shape(node.input[2])
+def infer_input_shapes(op):
+    if op.type == "Select":
+        shape_t = utils.get_tf_tensor_shape(op.inputs[1])
+        shape_e = utils.get_tf_tensor_shape(op.inputs[2])
         # copy shape if t OR e does not have a shape, no update if t AND e both have shapes
         if shape_t is None or shape_e is None:
             new_shape = shape_t or shape_e
             if new_shape is not None:
-                g.set_shape(node.input[1], new_shape)
-                g.set_shape(node.input[2], new_shape)
-                logger.debug("set [%s, %s] with new shape %s", node.input[1], node.input[2], new_shape)
+                op.inputs[1].set_shape(new_shape)
+                op.inputs[2].set_shape(new_shape)
+                logger.debug("set [%s, %s] with new shape %s", op.inputs[1].name, op.inputs[2].name, new_shape)
                 return True
     return False
 
 
-def infer_output_shapes_with_partial_inputs(g, node):
+def infer_output_shapes_with_partial_inputs(op):
     # output shape of concat op: only the dim val of concatenated dim will be changed
-    # so only partial(at least one) input shapes need to be known to infer output shape of concat node
-    if utils.is_concat_op(node):
-        data_inputs = node.input[:-1]
-        input_shapes = [g.get_shape(node) for node in data_inputs]
+    # so only partial(at least one) input shapes need to be known to infer output shape of concat op
+    if utils.is_tf_concat_op(op):
+        data_inputs = op.inputs[:-1]
+        input_shapes = [utils.get_tf_tensor_shape(inp) for inp in data_inputs]
         input_shapes = [shape for shape in input_shapes if shape is not None]
         if not input_shapes:
-            logger.debug("all input shapes of concat node %s are None, can't infer its output shape", node.name)
+            logger.debug("all input shapes of concat op %s are None, can't infer its output shape", op.name)
             return False
 
         new_shape = input_shapes[0]
-        axis_node = node.inputs[-1]
+        axis_op = op.inputs[-1]
         rank = len(new_shape)
-        if not axis_node.is_const():
-            g.set_shape(node.output[0], [-1] * rank)
+        if not utils.is_tf_const_op(axis_op):
+            op.outputs[0].set_shape([-1] * rank)
             return True
 
-        axis = axis_node.get_tensor_value()
+        axis = utils.get_tf_const_value(axis_op)
         axis = axis if axis >= 0 else axis + rank
         new_shape[axis] = -1
         if len(input_shapes) == len(data_inputs):  # all input shapes are known
@@ -238,52 +475,27 @@ def infer_output_shapes_with_partial_inputs(g, node):
             if concat_dim_vals.count(-1) == 0:
                 new_shape[axis] = sum(concat_dim_vals)
 
-        g.set_shape(node.output[0], new_shape)
-        logger.debug("set Concat node [%s] with new shape %s", node.output[0], new_shape)
+        op.outputs[0].set_shape(new_shape)
+        logger.debug("set Concat op [%s] with new shape %s", op.outputs[0].name, new_shape)
         return True
 
-    if node.type == "Merge":
-        s1 = g.get_shape(node.input[0])
-        s2 = g.get_shape(node.input[1])
-        new_shape = s1
-        if s1 is None:
-            new_shape = s2
-
-        if new_shape is not None:
-            g.set_shape(node.input[0], new_shape)
-            g.set_shape(node.input[1], new_shape)
-            g.set_shape(node.output[0], new_shape)
-            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
-            return True
-        return False
-
-    if node.type == "Switch":
-        new_shape = g.get_shape(node.input[0])
-        if new_shape is not None:
-            g.set_shape(node.output[0], new_shape)
-            g.set_shape(node.output[1], new_shape)
-            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
-            logger.debug("set [%s] with new shape %s", node.output[1], new_shape)
-            return True
-        return False
-
-    if node.type == "Select":
-        new_shape = g.get_shape(node.input[1])
+    if op.type == "Select":
+        new_shape = utils.get_tf_tensor_shape(op.inputs[1])
         if new_shape is None:
-            new_shape = g.get_shape(node.input[2])
+            new_shape = utils.get_tf_tensor_shape(op.inputs[2])
         if new_shape is not None:
-            g.set_shape(node.output[0], new_shape)
-            g.set_shape(node.input[1], new_shape)
-            g.set_shape(node.input[2], new_shape)
-            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            op.outputs[0].set_shape(new_shape)
+            op.inputs[1].set_shape(new_shape)
+            op.inputs[2].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
             return True
         return False
 
-    if node.type == "Pack":
-        axis = node.get_attr("axis").i
+    if op.type == "Pack":
+        axis = op.get_attr("axis")
         input_shape = None
-        for i in node.input:
-            s = g.get_shape(i)
+        for i in op.inputs:
+            s = utils.get_tf_tensor_shape(i)
             if s is not None:
                 input_shape = s
                 break
@@ -291,92 +503,45 @@ def infer_output_shapes_with_partial_inputs(g, node):
             return False
         if axis < 0:
             axis += len(input_shape)
-        for i in node.input:
-            if not g.get_shape(i):
-                g.set_shape(i, input_shape)
-                logger.debug("set [%s] with new shape %s", i, input_shape)
-        new_shape = input_shape[:axis] + [len(node.input)] + input_shape[axis:]
-        g.set_shape(node.output[0], new_shape)
-        logger.debug("set Pack node [%s] with new shape %s", node.output[0], new_shape)
+        for i in op.inputs:
+            if not utils.get_tf_tensor_shape(i):
+                i.set_shape(input_shape)
+                logger.debug("set [%s] with new shape %s", i.name, input_shape)
+        new_shape = input_shape[:axis] + [len(op.inputs)] + input_shape[axis:]
+        op.outputs[0].set_shape(new_shape)
+        logger.debug("set Pack op [%s] with new shape %s", op.outputs[0].name, new_shape)
         return True
 
-    if node.type == "TensorArrayGatherV3":
-        # TensorArrayGatherV3's output: all of the elem in the TensorArray,
-        # concatenated along a new axis (the new dimension 0), so shape of TensorArray should be found first.
-        # And TensorArrayWrite will write elem to TensorArray, so shape of TensorArray can be got from TensorArrayWrite
-        # so the process is: first find TensorArrayWrite and then get TensorArray's shape,
-        # and finally add one dim to the shape is shape of TensorArrayGather
-
-        handle_node = node.inputs[0]
-        if handle_node.type != "TensorArrayV3":
-            return False
-
-        # find TensorArrayWrite
-        tensor_array_write_node = _find_tensorarray_write(g, handle_node)
-        if not tensor_array_write_node:
-            return False
-        # get TensorArray shape from input tensor of the found TensorArrayWrite node
-        value_node = tensor_array_write_node.inputs[2]
-        shape = g.get_shape(value_node.output[0])
-        # update TensorArray's shape info
-        if shape is not None:
-            new_shape = [-1] + shape
-            g.set_shape(node.output[0], new_shape)
-            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
-            return True
-        return False
-
-    if node.type == "TensorArrayReadV3":
-        # Read an element from the TensorArray into output value.
-        flow_in_node = node.inputs[2]
-        if flow_in_node.type != "Enter":
-            return False
-
-        scatter_node = flow_in_node.inputs[0]
-        if scatter_node.type != "TensorArrayScatterV3":
-            return False
-
-        value_shape_before_scatter = g.get_shape(scatter_node.input[2])
-        if value_shape_before_scatter is None:
-            return False
-
-        new_shape = value_shape_before_scatter[1:]
-        if new_shape is not None:
-            g.set_shape(node.output[0], new_shape)
-            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
-            return True
-        return False
-
-    if node.type == "Pow":
+    if op.type == "Pow":
         # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/pow
-        new_shape = g.get_shape(node.input[0])
+        new_shape = utils.get_tf_tensor_shape(op.inputs[0])
         if new_shape is None:
-            new_shape = g.get_shape(node.input[1])
+            new_shape = utils.get_tf_tensor_shape(op.inputs[1])
         if new_shape is not None:
-            g.set_shape(node.output[0], new_shape)
-            logger.debug("set [%s] with new shape %s", node.output[0], new_shape)
+            op.outputs[0].set_shape(new_shape)
+            logger.debug("set [%s] with new shape %s", op.outputs[0].name, new_shape)
             return True
         return False
 
     return None
 
 
-def set_shape_from_input(g, input_id, output_id):
-    new_shape = g.get_shape(input_id)
+def set_shape_from_input(input_tensor, output_tensor):
+    new_shape = utils.get_tf_tensor_shape(input_tensor)
     if new_shape is not None:
-        g.set_shape(output_id, new_shape)
-        logger.debug("set [%s] with new shape %s", output_id, new_shape)
+        output_tensor.set_shape(new_shape)
+        logger.debug("set [%s] with new shape %s", output_tensor.name, new_shape)
         return True
     return False
 
 
-def set_shape_from_inputs_broadcast(g, input_ids, output_id):
-    s1 = g.get_shape(input_ids[0])
-    s2 = g.get_shape(input_ids[1])
+def set_shape_from_inputs_broadcast(input_tensors, output_tensor):
+    s1 = utils.get_tf_tensor_shape(input_tensors[0])
+    s2 = utils.get_tf_tensor_shape(input_tensors[1])
     new_shape = broadcast_shape_inference(s1, s2)
     if new_shape is not None:
-        g.set_shape(output_id, new_shape)
-        logger.debug("set [%s] with new shape %s", output_id, new_shape)
+        output_tensor.set_shape(new_shape)
+        logger.debug("set [%s] with new shape %s", output_tensor.name, new_shape)
         return True
     return False
 
@@ -419,16 +584,3 @@ def broadcast_shape_inference(shape_0, shape_1):
             return None
         i -= 1
     return new_shape
-
-
-def _find_tensorarray_write(graph, node):
-    utils.make_sure(node.type == "TensorArrayV3", "node should be tensorarray")
-
-    tensor_array_consumers = graph.find_output_consumers(node.output[0])
-    for i in tensor_array_consumers:
-        if i.type == "Enter":
-            consumer_nodes = graph.find_output_consumers(i.output[0])
-            for j in consumer_nodes:
-                if j.type == "TensorArrayWriteV3":
-                    return j
-    return None

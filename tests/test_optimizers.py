@@ -188,6 +188,43 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         self.assertTrue(trans_cnt == 1, msg="Expect 1 Transpose ops left, but actually " + str(trans_cnt) + " left")
 
+    def test_trans_can_be_replaced_with_reshape1(self):
+        # test trans-NHWC
+        input_shapes_np = [(2, 3, 4, 1), (2, 1, 1, 4), (2, 3, 4, 1)]
+        input_shapes = [(2, 3, 4, 1), (2, 1, 1, 4), (2, -1, -1, 1)]
+        perm = (0, 3, 1, 2)
+        for input_shape_np, input_shape in zip(input_shapes_np, input_shapes):
+            result_shape = [input_shape[i] for i in perm]
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
+            graph = helper.make_graph(
+                [node1],
+                "test_trans_can_be_replaced_with_reshape",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+                [helper.make_tensor_value_info("Y", TensorProto.FLOAT, result_shape)],
+            )
+
+            model_proto = helper.make_model(graph, producer_name="onnx-tests")
+            self.run_transpose_compare(["Y"], {"X": np.random.randn(*input_shape_np).astype(np.float32)},
+                                       model_proto, remaining_transpose_num=0)
+
+    def test_trans_can_be_replaced_with_reshape2(self):
+        # test trans-NCHW
+        input_shapes_np = [(2, 1, 3, 4), (2, 4, 1, 1), (2, 1, 3, 4)]
+        input_shapes = [(2, 1, 3, 4), (2, 4, 1, 1), (2, 1, -1, -1)]
+        perm = (0, 2, 3, 1)
+        for input_shape_np, input_shape in zip(input_shapes_np, input_shapes):
+            result_shape = [input_shape[i] for i in perm]
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
+            graph = helper.make_graph(
+                [node1],
+                "test_trans_can_be_replaced_with_reshape",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+                [helper.make_tensor_value_info("Y", TensorProto.FLOAT, result_shape)],
+            )
+
+            model_proto = helper.make_model(graph, producer_name="onnx-tests")
+            self.run_transpose_compare(["Y"], {"X": np.random.randn(*input_shape_np).astype(np.float32)},
+                                       model_proto, remaining_transpose_num=0)
     # Tranpose Optimizer Tests End
 
     # Identity Optimizer Tests Start
@@ -484,6 +521,44 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["res"], {},
                                    model_proto, remaining_transpose_num=0)
+
+    def test_const_fold_unsqueeze_with_const(self):
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Unsqueeze", ["const"], ["value1"], axes=[0, 2, 3])
+        node3 = helper.make_node("Add", ["value1", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_const_fold_unsqueeze_with_const",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1,))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 6, 1, 1, 6))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(1).astype(np.float32)}, model_proto,
+                             "Unsqueeze", 0)
+
+    def test_const_fold_cast_with_const(self):
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Cast", ["const"], ["value1"], to=TensorProto.INT64)
+        node3 = helper.make_node("Add", ["value1", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_const_fold_cast_with_const",
+            [helper.make_tensor_value_info("X", TensorProto.INT64, shape)],
+            [helper.make_tensor_value_info("res", TensorProto.INT64, shape)],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.int64)}, model_proto,
+                             "Cast", 0)
     # Const Fold Optimizer Tests End
 
 

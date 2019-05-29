@@ -13,7 +13,7 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
-from tf2onnx.utils import is_reverse_op
+from tf2onnx.utils import is_tf_reverse_op
 from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
@@ -186,7 +186,7 @@ def rewrite_bidirectional_lstms(g, ops):
             input_id = temp.input[0]
             temp = temp.inputs[0]
 
-        if is_reverse_op(temp):
+        if is_tf_reverse_op(temp):
             input_id = temp.input[0]
             is_backward_lstm = True
 
@@ -220,13 +220,13 @@ def get_reverse_nodes_after_y_output(g, lstm_bw):
         if len(trans_nodes) == 1:
             if trans_nodes[0].type == "Transpose":
                 reverse_nodes = g.find_output_consumers(trans_nodes[0].output[0])
-            elif is_reverse_op(trans_nodes[0]):
+            elif is_tf_reverse_op(trans_nodes[0]):
                 reverse_nodes = trans_nodes
             else:
                 logger.debug("not found reverse op, unexpected")
                 return None
 
-            are_all_reverse = all([is_reverse_op(r_op) for r_op in reverse_nodes])
+            are_all_reverse = all([is_tf_reverse_op(r_op) for r_op in reverse_nodes])
             if are_all_reverse:
                 return reverse_nodes
 

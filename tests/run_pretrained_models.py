@@ -170,7 +170,8 @@ class Test(object):
     def run_onnxruntime(self, name, model_proto, inputs):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
-        model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True)
+        model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True,
+                                           as_text=utils.is_debug_mode())
         logger.info("Model saved to %s", model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)
@@ -245,20 +246,20 @@ class Test(object):
             else:
                 tf_results = self.run_tensorflow(sess, inputs)
                 logger.info("TensorFlow OK")
+
             model_proto = None
             try:
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, extra_opset=extra_opset,
                                           shape_override=shape_override, input_names=inputs.keys())
+                onnx_graph = optimizer.optimize_graph(onnx_graph)
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
-                model_proto = optimizer.optimize_graph(onnx_graph).make_model("optimized")
                 logger.info("To_ONNX, OK")
-                if utils.is_debug_mode():
-                    onnx_graph.dump_graph()
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
             except Exception:
                 logger.error("To_ONNX FAIL", exc_info=1)
+                return False
 
         try:
             onnx_results = None

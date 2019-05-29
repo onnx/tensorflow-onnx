@@ -26,13 +26,6 @@ class REWRITER_RESULT(Enum):
     FAIL = 3
 
 
-class RnnWeight:
-    def __init__(self, node, np_val, np_dtype):
-        self.node = node
-        self.value = np_val
-        self.dtype = np_dtype
-
-
 # TensorFlow LSTMCell/BasicLSTMCell computation graph matching
 xc_pattern = OpTypePattern('Split', inputs=[
     OpTypePattern("Const"), # axis for split
@@ -121,6 +114,50 @@ grucell_pattern = \
     ])
 
 
+cudnn_compatible_grucell_pattern = \
+    OpTypePattern("Add", name="cell_output", inputs=[
+        OpTypePattern("Mul", inputs=[
+            OpTypePattern("Sub", inputs=[
+                OpTypePattern("Const"),  # 1-u
+                gru_split_pattern
+            ]),
+            OpTypePattern("*", name="optional_activation", inputs=[
+                OpTypePattern("Add", inputs=[
+                    OpTypePattern("Mul", inputs=[
+                        gru_split_pattern,
+                        OpTypePattern("BiasAdd", inputs=[
+                            OpTypePattern("Enter", inputs=[
+                                OpTypePattern("*", name="hidden_state_bias")
+                            ]),
+                            OpTypePattern("MatMul", inputs=[
+                                OpTypePattern("Enter", inputs=[
+                                    OpTypePattern("*", name="hidden_state_kernel"),
+                                ]),
+                                OpTypePattern("Identity")
+                            ])
+                        ])
+                    ]),
+                    OpTypePattern("BiasAdd", inputs=[
+                        OpTypePattern("Enter", inputs=[
+                            OpTypePattern("*", name="hidden_input_bias")
+                        ]),
+                        OpTypePattern("MatMul", inputs=[
+                            OpTypePattern("Enter", inputs=[
+                                OpTypePattern("*", name="hidden_input_kernel"),
+                            ]),
+                            OpTypePattern("*")
+                        ])
+                    ])
+                ])
+            ])
+        ]),
+        OpTypePattern("Mul", inputs=[
+            gru_split_pattern,
+            OpTypePattern("Identity")
+        ])
+    ])
+
+
 grublockcell_pattern = OpTypePattern("GRUBlockCell", name="gru_block_cell", inputs=[
     OpTypePattern("*"),
     OpTypePattern("*"),
@@ -174,13 +211,15 @@ class RNNUnitType(Enum):
     LSTMBlockCell = 1
     GRUCell = 2
     GRUBlockCell = 3
+    CudnnCompatibleGRUCell = 4
 
 
 rnn_cell_patterns = {
     RNNUnitType.LSTMCell: lstmcell_pattern,
     RNNUnitType.LSTMBlockCell: lstmblockcell_pattern,
     RNNUnitType.GRUCell: grucell_pattern,
-    RNNUnitType.GRUBlockCell: grublockcell_pattern
+    RNNUnitType.GRUBlockCell: grublockcell_pattern,
+    RNNUnitType.CudnnCompatibleGRUCell: cudnn_compatible_grucell_pattern
 }
 
 
@@ -249,7 +288,6 @@ def parse_rnn_loop(graph, loop_properties, rnn_scope, while_context_scope):
 def get_weights_from_const_node(g, node):
     temp = node
     val = None
-    dtype = None
     # this would help ignore Identity in non-const_folded graph.
     while temp.type == 'Identity':
         temp = temp.inputs[0]
@@ -257,9 +295,10 @@ def get_weights_from_const_node(g, node):
     if temp and temp.type == 'Const':
         val = temp.get_tensor_value(as_list=False)
         dtype = utils.map_onnx_to_numpy_type(g.get_dtype(temp.output[0]))
+        val = val.astype(dtype)
         logger.debug("found weights %s", temp.name)
     else:
         logger.debug("weight node seems not to be Const, skip, node name is %s", temp.name)
         return None
 
-    return RnnWeight(node, val, dtype)
+    return val

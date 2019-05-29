@@ -268,7 +268,7 @@ class Select:
         make_sure(true_data_shape is not None, "select true data shape cannot be None")
 
         condition_shape = ctx.get_shape(node.input[0])
-        utils.make_sure(condition_shape is not None, "condition shape is None")
+        utils.make_sure(condition_shape is not None, "Shape of {} is None".format(node.input[0]))
         rank = len(condition_shape)
 
         utils.make_sure(rank >= 0, "rank should be >= 0")

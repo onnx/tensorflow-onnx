@@ -19,8 +19,8 @@ from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common, controlflow, tensor
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument,missing-docstring,unused-variable
 
@@ -55,11 +55,10 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
         # transpose input if needed, no need to record shapes on input
         for idx in input_indices:
             parent = node.inputs[idx]
-            if node.inputs[idx].is_const():
-                # if input is a constant, transpose that one
-                if not parent.data_format:
-                    val = parent.get_tensor_value(as_list=False)
-                    parent.set_tensor_value(val.transpose(constants.NHWC_TO_NCHW))
+            if node.inputs[idx].is_const() and len(ctx.find_output_consumers(node.input[1])) == 1:
+                # if input is a constant, transpose that one if we are the only consumer
+                val = parent.get_tensor_value(as_list=False)
+                parent.set_tensor_value(val.transpose(constants.NHWC_TO_NCHW))
             else:
                 # if input comes from a op, insert transpose op
                 input_name = node.input[idx]
@@ -70,7 +69,6 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 if shape is not None:
                     new_shape = spatial_map(shape, constants.NHWC_TO_NCHW)
                     ctx.set_shape(transpose.output[0], new_shape)
-            parent.data_format = "NCHW"
 
     # kernel must to be transposed
     if with_kernel:
@@ -78,14 +76,11 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
         need_transpose = True
         if node.inputs[1].is_const():
             # kernel is const - transpose the const if we are the only consumer of const
-            # TODO: maybe we should make a copy of the const, or look at the other consumers
-            # if they'd want a transose as well.
             consumers = ctx.find_output_consumers(node.input[1])
             if len(consumers) == 1:
                 val = parent.get_tensor_value(as_list=False)
                 val = val.transpose(constants.HWCN_TO_NCHW)
                 parent.set_tensor_value(val)
-                parent.data_format = "NCHW"
                 need_transpose = False
 
         if need_transpose:
@@ -93,10 +88,8 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
             transpose.set_attr("perm", constants.HWCN_TO_NCHW)
             transpose.skip_conversion = True
-            ctx.copy_shape(input_name, transpose.output[0])
             new_shape = spatial_map(ctx.get_shape(input_name), constants.HWCN_TO_NCHW)
             ctx.set_shape(transpose.output[0], new_shape)
-            parent.data_format = "NCHW"
 
         # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
         if new_kernel_shape:
@@ -129,7 +122,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             ctx.set_shape(transpose.output[0], output_shape)
             # Transpose TF NHWC shape back to NCHW shape for current ONNX conv node output
             ctx.set_shape(output_name, spatial_map(output_shape, constants.NHWC_TO_NCHW))
-            node.data_format = "NCHW"
+        node.data_format = "NCHW"
 
 
 def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
@@ -151,8 +144,10 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
                 output_shape = spatial_map(output_shape, constants.NHWC_TO_NCHW)
             # calculate pads
             if any(input_shape[i + 2] == -1 or output_shape[i + 2] == -1 for i in range(spatial)):
-                logger.debug("node %s has unknown dim %d for pads calculation, fallback to auto_pad",
-                             node.name, input_shape)
+                logger.debug(
+                    "node %s has unknown dim for pads calculation, fallback to auto_pad: "
+                    "input_shape=%s, output_shape=%s",
+                    node.name, input_shape, output_shape)
                 node.set_attr("auto_pad", "SAME_UPPER")
             else:
                 for i in range(spatial):
@@ -306,26 +301,28 @@ class PoolOp:
         # T Y = MaxPool(T X, @AttrType.STRING auto_pad, @AttrType.INTS kernel_shape, @AttrType.INTS pads,
         #               @AttrType.INTS strides)
         # above seems wrong - input[1] is ksize, input[2] is strides
+        # stride and ksize in tf is not always NHWC, so watch out when converting into onnx's HCHW
         if len(node.input) < 3:
-            kernel_shape = node.get_attr("ksize").ints
-            kernel_shape = [kernel_shape[1], kernel_shape[2]]
-            node.set_attr("kernel_shape", kernel_shape)
-            strides = conv_dims_attr(node, "strides")
+            kernel_shape_tf = node.get_attr("ksize").ints
+            strides_tf = node.get_attr("strides").ints
         else:
-            kernel_shape = node.inputs[1].get_tensor_value()
-            kernel_shape = [kernel_shape[1], kernel_shape[2]]
-            node.set_attr("kernel_shape", kernel_shape)
-
-            strides = node.inputs[2].get_tensor_value()
-            strides = [strides[1], strides[2]]
-            node.set_attr("strides", strides)
-
+            kernel_shape_tf = node.inputs[1].get_tensor_value()
+            strides_tf = node.inputs[2].get_tensor_value()
             ctx.remove_input(node, node.input[2])
             ctx.remove_input(node, node.input[1])
 
+        if node.is_nhwc():
+            kernel_shape_hw = kernel_shape_tf[1:3]
+            strides_hw = strides_tf[1:3]
+        else:
+            kernel_shape_hw = kernel_shape_tf[2:4]
+            strides_hw = strides_tf[2:4]
+        node.set_attr("kernel_shape", kernel_shape_hw)
+        node.set_attr("strides", strides_hw)
         conv_dims_attr(node, "dilations")
-        add_padding(ctx, node, kernel_shape, strides)
+        add_padding(ctx, node, kernel_shape_hw, strides_hw)
         conv_convert_inputs(ctx, node, with_kernel=False)
+
 
 @tf_op(["MaxPoolWithArgmax"], onnx_op="MaxPool")
 class MaxPoolWithArgmaxOp:
@@ -703,6 +700,33 @@ class SoftmaxCrossEntropyWithLogits:
         _make_softmax_cross_entropy_with_logits(ctx, labels, logits, node)
 
 
+def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
+    logit = logit.output[0]
+    label = label.output[0]
+    label_dtype = ctx.get_dtype(label)
+    logit_dtype = ctx.get_dtype(logit)
+    utils.make_sure(label_dtype == logit_dtype, "the following logic only works on same dtype of label and logit")
+
+    # when label is onehot, logic "tf.multiply(-1, tf.reduce_sum(tf.multiply(label, log_softmax), axis=1))" is equal to
+    # "-log(q_i)" where i is the selected index specified by label, q_i = logic_i/sum, the detail process is as follows:
+    # logit_exp=exp(logit) >> sum = tf.reduce_sum(logit_exp, axis = -1), masked_sum = reduce_sum(mul(logit_exp, mul))
+    # >> -log(masked_sum/sum)
+    logit_exp = ctx.make_node(op_type="Exp", inputs=[logit]).output[0]
+    logit_exp_sum = ctx.make_node(op_type="ReduceSum", inputs=[logit_exp], attr={"axes": [-1], "keepdims": 0}).output[0]
+    masked = ctx.make_node(op_type="Mul", inputs=[label, logit_exp]).output[0]
+    masked_sum = ctx.make_node(op_type="ReduceSum", inputs=[masked], attr={"axes": [-1], "keepdims": 0}).output[0]
+    probability = ctx.make_node(op_type="Div", inputs=[masked_sum, logit_exp_sum]).output[0]
+    log_prob = ctx.make_node(op_type="Log", inputs=[probability]).output[0]
+    const_negative_one = ctx.make_const(name=utils.make_name("const_negative_one"),
+                                        np_val=np.array(-1).astype(utils.ONNX_TO_NUMPY_DTYPE[logit_dtype])).output[0]
+
+    shapes = tf_ori_node.output_shapes
+    dtypes = tf_ori_node.output_dtypes
+    ctx.remove_node(tf_ori_node.name)
+    res = ctx.make_node(op_type="Mul", inputs=[log_prob, const_negative_one],
+                        outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
+
+
 @tf_op("SparseSoftmaxCrossEntropyWithLogits")
 class SparseSoftmaxCrossEntropyWithLogits:
     @classmethod
@@ -775,4 +799,4 @@ class SparseSoftmaxCrossEntropyWithLogits:
         if logit_dtype != TensorProto.INT64:
             label_node = ctx.make_node("Cast", label_node.output, attr={"to": logit_dtype}, dtypes=[logit_dtype])
 
-        _make_softmax_cross_entropy_with_logits(ctx, label_node, logit_node, node)
+        _make_sparse_softmax_cross_entropy_with_logits(ctx, label_node, logit_node, node)

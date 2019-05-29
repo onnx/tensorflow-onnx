@@ -50,7 +50,7 @@ def optimize_graph(graph):
     diff = copy.deepcopy(after)
     diff.subtract(before)
     diff = ["{} {} ({}->{})".format(k, str(v) if v < 0 else '+' + str(v), before.get(k, 0), after.get(k, 0))
-            for k, v in diff.most_common() if v != 0]
+            for k, v in sorted(diff.items()) if v != 0]
     logger.info("After optimization: %s", ', '.join(diff) if diff else "no change")
 
     return graph

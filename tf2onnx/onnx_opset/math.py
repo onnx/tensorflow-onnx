@@ -136,10 +136,10 @@ class Relu6:
     @classmethod
     def version_4(cls, ctx, node, **kwargs):
         # relu6 = min(max(features, 0), 6)
-        node.type = "Relu"
-        clip_name = utils.make_name(node.name)
-        clip_node = ctx.insert_new_node_on_output("Clip", node.output[0], name=clip_name, min=0.0, max=6.0)
-        ctx.copy_shape(node.output[0], clip_node.output[0])
+        # relu6 = min(max(features, 0), 6)
+        node.type = "Clip"
+        node.set_attr("min", 0.0)
+        node.set_attr("max", 6.0)
 
 
 @tf_op("Rsqrt")
@@ -400,3 +400,9 @@ class FloorMod:
         ctx.remove_node(node.name)
         ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+@tf_op("Selu")
+class Selu:
+    @classmethod
+    def version_4(cls, ctx, node, **kwargs):
+        pass
