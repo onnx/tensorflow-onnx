@@ -481,6 +481,7 @@ class ResizeX:
         # wants the input to be NHWC - adjust target_shape to this.
         n, h, w, c = shape
         nh, nw = target_shape
+        utils.make_sure(all(i != -1 for i in [nh, nw]), "h and w need to be known")
         # scaler is nchw
         scaler = [1., 1., float(nh) / h, float(nw) / w]
         node.set_attr("scales", scaler)
