@@ -554,6 +554,69 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
+    def test_dynamic_multi_bilstm_with_same_input_state_is_tuple(self):
+        self.internal_test_dynamic_multi_bilstm_with_same_input(True)
+
+    def test_dynamic_multi_bilstm_with_same_input_state_is_list(self):
+        self.internal_test_dynamic_multi_bilstm_with_same_input(False)
+
+    def internal_test_dynamic_multi_bilstm_with_same_input(self, state_is_tuple):
+        units = 5
+        batch_size = 1
+        x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
+        x_val = np.stack([x_val] * batch_size)
+
+        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
+        initializer = init_ops.constant_initializer(0.5)
+
+        cell1 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple
+        )
+        cell2 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple
+        )
+        outputs_1, cell_state_1 = tf.nn.bidirectional_dynamic_rnn(
+            cell1,
+            cell2,
+            x,
+            dtype=tf.float32,
+            scope="bilstm_1"
+        )
+
+        units = 10
+        cell1 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple
+        )
+        cell2 = rnn.LSTMCell(
+            units,
+            initializer=initializer,
+            state_is_tuple=state_is_tuple
+        )
+        outputs_2, cell_state_2 = tf.nn.bidirectional_dynamic_rnn(
+            cell1,
+            cell2,
+            x,
+            dtype=tf.float32,
+            scope="bilstm_2"
+        )
+
+        _ = tf.identity(outputs_1, name="output_1")
+        _ = tf.identity(cell_state_1, name="cell_state_1")
+        _ = tf.identity(outputs_2, name="output_2")
+        _ = tf.identity(cell_state_2, name="cell_state_2")
+
+        feed_dict = {"input_1:0": x_val}
+        input_names_with_port = ["input_1:0"]
+        output_names_with_port = ["output_1:0", "cell_state_1:0", "output_2:0", "cell_state_2:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
+                           graph_validator=lambda g: check_lstm_count(g, 2))
+
 
 if __name__ == '__main__':
     unittest_main()

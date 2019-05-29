@@ -6,10 +6,13 @@ tf2onnx.rewriter.rnn_utils - rnn support
 """
 
 from __future__ import unicode_literals
+from collections import defaultdict
+from enum import Enum
 
 import logging
-from enum import Enum
+import numpy as np
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher # pylint: disable=unused-import
 
 
@@ -302,3 +305,185 @@ def get_weights_from_const_node(g, node):
         return None
 
     return val
+
+
+######################################################
+####      Utilities for bidirectional rnn      #######
+######################################################
+class ONNX_RNN_TYPE(Enum):
+    GRU = 0
+    LSTM = 1
+
+
+onnx_rnn_type_mapping = {
+    ONNX_RNN_TYPE.GRU: "GRU",
+    ONNX_RNN_TYPE.LSTM: "LSTM"
+}
+
+
+def find_bidirectional_rnns(g, ops, rnn_type):
+    """
+    find possible bidirectional rnns, return: list of tuple,
+    format of tuple is (fw onnx rnn node, bw onnx rnn node).
+    """
+    fw_rnns = defaultdict(list)
+    bw_rnns = defaultdict(list)
+    for n in g.get_nodes():
+        if n.type != onnx_rnn_type_mapping[rnn_type]:
+            continue
+
+        input_id = n.input[0]
+        temp = n.inputs[0]
+        is_bw_from_input = False
+        if temp.type == "Transpose":
+            input_id = temp.input[0]
+            temp = temp.inputs[0]
+
+        if utils.is_reverse_op(temp):
+            input_id = temp.input[0]
+            is_bw_from_input = True
+
+        if is_bw_from_input:
+            logger.debug("find bw rnn %s", input_id)
+            bw_rnns[input_id].append(n)
+        else:
+            logger.debug("find fw rnn %s", input_id)
+            fw_rnns[input_id].append(n)
+
+    # when fw_rnn has same input as bw_rnn, then it may be a bi rnn
+    birnn_input = list(set(fw_rnns.keys()).intersection(bw_rnns.keys()))
+    bi_rnns = []
+    for inp in birnn_input:
+        fw_rnn = fw_rnns[inp]
+        bw_rnn = bw_rnns[inp]
+        # when bi-rnn 1st output are unused, only single birnn is support
+        if len(fw_rnn) == 1 and len(bw_rnn) == 1 and \
+                not g.find_output_consumers(fw_rnn[0].output[0]) and \
+                not g.find_output_consumers(bw_rnn[0].output[0]):
+            bi_rnns.append((fw_rnn[0], bw_rnn[0]))
+            continue
+
+        for fw_n in fw_rnn:
+            for bw_n in bw_rnn:
+                if belong_to_birnn(g, fw_n, bw_n):
+                    logger.debug("found birnn comprising %s and %s", fw_n.name, bw_n.name)
+                    bi_rnns.append((fw_n, bw_n))
+    return bi_rnns
+
+
+def belong_to_birnn(g, fw_rnn, bw_rnn):
+    """check fw_rnn, bw_rnn are part of the same birnn"""
+    if not g.find_output_consumers(fw_rnn.output[0]) or \
+            not g.find_output_consumers(bw_rnn.output[0]):
+        logger.warning("cannot support birnn with unused 1st output, please check them by yourself.")
+        return False
+
+    is_bw_for_fw, fw_output_id = check_birnn_output_after_y(g, fw_rnn)
+    if is_bw_for_fw:
+        logger.warning("forward rnn %s is followed by Reverse op", fw_rnn.name)
+        return False
+    is_bw_for_bw, bw_output_id = check_birnn_output_after_y(g, bw_rnn)
+    if not is_bw_for_bw and bw_output_id:
+        logger.warning("backward rnn %s isn't followed by Reverse op", bw_rnn.name)
+        return False
+
+    # pair of bi-rnn must share the same concat or pack as output consumer
+    common_consumer = g.find_common_consumers(fw_output_id, bw_output_id)
+    if len(common_consumer) == 1 and \
+            (utils.is_concat_op(common_consumer[0]) or common_consumer[0].type == "Pack"):
+        return True
+    return False
+
+
+def check_birnn_output_after_y(g, rnn):
+    """
+    get the output following the 1st output of bi-rnn op before Concat or Pack op.
+    and check if rnn is bw, that is, followed by Reverse
+    """
+    is_bw = False
+    real_output = rnn
+    bw_consumers = g.find_output_consumers(rnn.output[0])
+    if not bw_consumers:
+        logger.debug("no one consume 1st output of %s", rnn.name)
+        return is_bw, real_output
+
+    squeeze_nodes = [c for c in bw_consumers if c.type == "Squeeze"]
+    s_cnt = len(squeeze_nodes)
+    if s_cnt == 1:
+        s = squeeze_nodes[0]
+        trans_nodes = g.find_output_consumers(s.output[0])
+        if len(trans_nodes) == 1 and trans_nodes[0].type == "Transpose":
+            real_output = trans_nodes[0].output[0]
+        else:
+            real_output = s.output[0]
+    else:
+        logger.debug("unexpected number of squeeze following RNN 1st output:%s", s_cnt)
+
+    reverse_nodes = g.find_output_consumers(real_output)
+    if len(reverse_nodes) == 1 and utils.is_reverse_op(reverse_nodes[0]):
+        is_bw = True
+        real_output = reverse_nodes[0].output[0]
+
+    return is_bw, real_output
+
+
+def get_np_val_for_const(g, node, input_index):
+    return node.inputs[input_index].get_tensor_value(as_list=False)
+
+
+def check_const(g, input_id):
+    node = g.get_node_by_output(input_id)
+    if node and node.is_const():
+        return (True, node.get_tensor_value(as_list=False))
+    return (None, None)
+
+
+def process_single_init_node(g, fw_init_input_id, bw_init_input_id, to_append):
+    fw_init_is_const, init_fw_val = check_const(g, fw_init_input_id)
+    bw_init_is_const, init_bw_val = check_const(g, bw_init_input_id)
+    if fw_init_is_const and bw_init_is_const:
+        initial_val = np.concatenate((init_fw_val, init_bw_val), axis=0)
+        init_name = utils.make_name("initial")
+        init_node = g.make_const(init_name, initial_val, skip_conversion=True)
+    else:
+        init_node = g.make_node("Concat", [fw_init_input_id, bw_init_input_id], attr={"axis": 0})
+
+    to_append.append(init_node)
+    return init_node
+
+
+def slice_birnn_for_original_rnn_consumers(g, rnn_fw, rnn_bw, bi_rnn, rnn_output_index, all_nodes, to_remove):
+    fw_consumers = g.find_output_consumers(rnn_fw.output[rnn_output_index])
+    bw_consumers = g.find_output_consumers(rnn_bw.output[rnn_output_index])
+    if not fw_consumers and not bw_consumers:
+        return
+
+    if rnn_output_index == 0:
+        axis = 1
+        # remove reverse op for rnn_bw
+        _, real_output = check_birnn_output_after_y(g, rnn_bw)
+        reverse_node = g.get_node_by_output(real_output)
+        if not reverse_node or not utils.is_reverse_op(reverse_node):
+            raise ValueError("should not happen y_output is not followed with reverse node")
+
+        logger.debug("remove reverse op called %s", reverse_node.name)
+        g.replace_all_inputs(all_nodes, reverse_node.output[0], reverse_node.input[0])
+        to_remove.append(reverse_node.name)
+    elif rnn_output_index in [1, 2]:
+        axis = 0
+    else:
+        raise ValueError("rnn only should has 3 outputs.")
+
+    if fw_consumers:
+        attr = {"axes": [axis], "starts": [0], "ends": [1]}
+        inputs_map = {"data": bi_rnn.output[rnn_output_index], **attr}
+        slice_node_fw = GraphBuilder(g).make_slice(inputs_map)
+        all_nodes.append(g.get_node_by_output(slice_node_fw))
+        g.replace_all_inputs(fw_consumers, rnn_fw.output[rnn_output_index], slice_node_fw)
+
+    if bw_consumers:
+        attr = {"axes": [axis], "starts": [1], "ends": [2]}
+        inputs_map = {"data": bi_rnn.output[rnn_output_index], **attr}
+        slice_node_bw = GraphBuilder(g).make_slice(inputs_map)
+        all_nodes.append(g.get_node_by_output(slice_node_bw))
+        g.replace_all_inputs(bw_consumers, rnn_bw.output[rnn_output_index], slice_node_bw)

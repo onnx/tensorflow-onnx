@@ -13,10 +13,8 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
-from tf2onnx.utils import is_tf_reverse_op
-from tf2onnx.rewriter.bilstm_rewriter import slice_bilstm_for_original_lstm_consumers,\
-     get_reverse_nodes_after_y_output, get_np_val_for_const, _process_single_init_node
-
+from tf2onnx.rewriter.rnn_utils import find_bidirectional_rnns, ONNX_RNN_TYPE, get_np_val_for_const, \
+    process_single_init_node, slice_birnn_for_original_rnn_consumers
 
 
 logger = logging.getLogger(__name__)
@@ -24,13 +22,9 @@ logger = logging.getLogger(__name__)
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
 def process_bigru(g, bi_grus):
-    for fw, bw in bi_grus:
-        input_id = fw[0]
+    for gru_fw, gru_bw in bi_grus:
         logger.debug("=========================")
-        logger.debug("start handling potential bidirectional gru %s", input_id)
-
-        gru_fw = fw[1]
-        gru_bw = bw[1]
+        logger.debug("start handling potential bidirectional gru: %s, %s", gru_fw.name, gru_bw.name)
 
         w_fw = get_np_val_for_const(g, gru_fw, 1)
         w_bw = get_np_val_for_const(g, gru_bw, 1)
@@ -102,80 +96,25 @@ def process_bigru(g, bi_grus):
 
         to_remove = [gru_fw.name, gru_fw.input[1], gru_fw.input[2], gru_fw.input[3],
                      gru_bw.name, gru_bw.input[1], gru_bw.input[2], gru_bw.input[3]]
-        slice_bilstm_for_original_lstm_consumers(
+        slice_birnn_for_original_rnn_consumers(
             g, gru_fw, gru_bw, bi_gru_node, 0, all_nodes, to_remove)
-        slice_bilstm_for_original_lstm_consumers(
+        slice_birnn_for_original_rnn_consumers(
             g, gru_fw, gru_bw, bi_gru_node, 1, all_nodes, to_remove)
-
-        gru_bw_old_x = gru_bw.input[0]
 
         for n in to_remove:
             g.remove_node(n)
-
-        old_x_consumers = g.find_output_consumers(gru_bw_old_x)
-        # the transpose/reverse here must be followed by GRU if it is still useful.
-        # this is guaranteed by dynamic_rnn logic.
-        old_x_has_gru_as_consumer = [
-            n for n in old_x_consumers if n.type == "GRU"]
-        if not old_x_has_gru_as_consumer:
-            logger.debug("plan to remove useless reverse op in bw")
-            reverse_node = g.get_node_by_output(gru_bw_old_x)
-
-            if reverse_node.type == "Transpose":
-                reverse_node = reverse_node.inputs[0]
-
-            g.replace_all_inputs(
-                g.get_nodes(), reverse_node.output[0], reverse_node.input[0])
-            g.remove_node(reverse_node.name)
-        else:
-            raise ValueError(
-                "Reverse is still used by GRU as input, cannot remove")
 
     return g.get_nodes()
 
 
 def process_init_nodes(g, gru_fw, gru_bw, to_append):
-    initializer_node = _process_single_init_node(
+    initializer_node = process_single_init_node(
         g, gru_fw.input[5], gru_bw.input[5], to_append)
 
     return initializer_node
 
 
 def rewrite_bidirectional_grus(g, ops):
-    """
-        return: list of tuple, format of tuple is
-        ((fw input_id, fw onnx gru node), (bw input_id, bw onnx gru node)), and fw input_id equals to bw input_id
-    """
-    fw_gru = {}
-    bw_gru = {}
-    for n in g.get_nodes():
-        if n.type != "GRU":
-            continue
-        input_id = n.input[0]
-        temp = n.inputs[0]
-        is_backward_gru = False
-        if temp.type == "Transpose":
-            input_id = temp.input[0]
-            temp = temp.inputs[0]
-
-        if is_tf_reverse_op(temp):
-            input_id = temp.input[0]
-            is_backward_gru = True
-
-        if is_backward_gru:
-            # if output 0 is consumed, and there is no reverse after the gru output.
-            # it's not reversed gru
-            if g.find_output_consumers(n.output[0]) and not get_reverse_nodes_after_y_output(g, n):
-                continue
-            logger.debug("find bw gru %s", input_id)
-            bw_gru[input_id] = [input_id, n]
-        else:
-            logger.debug("find fw gru %s", input_id)
-            fw_gru[input_id] = [input_id, n]
-
-    # when fw_gru has same input as bw_gru, then it may be a bi gru
-    bigru_input = list(set(fw_gru.keys()).intersection(bw_gru.keys()))
-    bi_grus = [(fw_gru[input_id], bw_gru[input_id])
-               for input_id in bigru_input]
+    bi_grus = find_bidirectional_rnns(g, ops, ONNX_RNN_TYPE.GRU)
 
     return process_bigru(g, bi_grus)

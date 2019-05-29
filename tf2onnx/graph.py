@@ -1036,6 +1036,15 @@ class Graph(object):
                     nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
+    def find_common_consumers(self, *outputs):
+        if not outputs:
+            return False
+
+        common_consumer = set.intersection(
+            *[set(self.find_output_consumers(out)) for out in outputs]
+        )
+        return list(common_consumer)
+
     @staticmethod
     def replace_all_inputs(ops, old_input, new_input):
         """Replace all inputs pointing to old_input with new_input."""
