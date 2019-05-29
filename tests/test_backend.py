@@ -2269,7 +2269,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_onnxruntime_min_version('0.5.0', message="Requires onnxruntime version 0.5.0 or above")
     def test_cumsum_1d(self):
         # only compatible with dtype `float32`
-        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((4))
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((4,1,1))
         axis_val = np.array(0).astype(np.int32)
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         axis = tf.constant(axis_val, dtype=tf.int32, name='axis')

@@ -55,3 +55,15 @@ class CumSum:
         ctx.make_node("CumSum", inputs=node.input, outputs=node.output, name=node.name,
                       shapes=shapes, dtypes=dtypes,
                       domain=constants.MICROSOFT_DOMAIN, attr=attrs)
+
+
+@tf_op("Round")
+class Round:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("CumSum", inputs=node.input, outputs=node.output, name=node.name,
+                      shapes=shapes, dtypes=dtypes,
+                      domain=constants.MICROSOFT_DOMAIN)

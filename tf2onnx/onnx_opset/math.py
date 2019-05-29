@@ -10,9 +10,10 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import logging
+import sys
 
 import numpy as np
-from onnx import onnx_pb
+from onnx import onnx_pb, numpy_helper, TensorProto
 from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
