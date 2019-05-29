@@ -1564,6 +1564,87 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "Slice")
+    @skip_caffe2_backend("multiple dims not supported")
+    def test_strided_slice_dynamic_1(self):
+        # simple case
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
+        y_val = np.array([0, 1, 2], dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = tf.strided_slice(x, y, [2, 2, 3], [1, 1, 1])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(10, "Slice")
+    @skip_caffe2_backend("multiple dims not supported")
+    def test_strided_slice_dynamic_2(self):
+        # int32
+        x_val = np.arange(3 * 2 * 3).astype("int32").reshape((3, 2, 3))
+        y_val = np.array([0, 1, 2], dtype=np.int32)
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = tf.strided_slice(x, y, [2, 2, 3], [1, 1, 1])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(10, "Slice")
+    @skip_caffe2_backend("multiple dims not supported")
+    def test_strided_slice_dynamic_3(self):
+        # common usage, ellipsis_mask
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
+        y_val = np.array(1, dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = x[y:2, :, :]
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(10, "Slice")
+    @skip_caffe2_backend("multiple dims not supported")
+    def test_strided_slice_dynamic_4(self):
+        # begin_mask, end_mask
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
+        y_val = np.array(1, dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = x[y:, :y]
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(10, "Slice")
+    @skip_caffe2_backend("multiple dims not supported")
+    def test_strided_slice_dynamic_5(self):
+        # only slice the first axis
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
+        y_val = np.array(1, dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = x[y:2]
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(10, "Slice")
+    @skip_caffe2_backend("multiple dims not supported")
+    def test_strided_slice_dynamic_6(self):
+        # shrink mask
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
+        y_val = np.array(1, dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = x[y]
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+        tf.reset_default_graph()
+        x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
+        y_val = np.array(-1, dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = x[y]
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
     @skip_caffe2_backend("fails with schema error")
     @check_opset_min_version(7, "batchnorm")
     def test_batchnorm(self):
