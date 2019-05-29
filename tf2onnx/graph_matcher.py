@@ -20,8 +20,12 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import copy
+import logging
 
 import six
+
+
+logger = logging.getLogger(__name__)
 
 
 class OpTypePattern(object):
@@ -157,6 +161,12 @@ class GraphMatcher(object):
 
         if pattern.op_type != '*':
             if op is None or op.type not in pattern.op_type.split('|'):
+                logger.debug(
+                    "mismatched type at %s: [%s, %s]",
+                    op.name if op else "None",
+                    pattern.op_type,
+                    op.type if op else "None"
+                )
                 return False
 
         self._match_result.add(pattern, op, tensor)
@@ -167,6 +177,12 @@ class GraphMatcher(object):
             return True
 
         if not op or len(op.inputs) != len(pattern.inputs):
+            logger.debug(
+                "mismatched input number at %s: [%s, %s]",
+                op.name if op else "None",
+                len(pattern.inputs),
+                len(op.inputs)
+            )
             return False
 
         if self._allow_reorder:
@@ -203,6 +219,7 @@ class GraphMatcher(object):
           Returns a `MatchResult` if `op` matches the pattern; otherwise, returns
           None.
         """
+        logger.debug("match %s against the pattern", op.name)
         self._match_result = MatchResult()
         if not self._match_pattern(self._pattern, op, tensor=None):
             return None

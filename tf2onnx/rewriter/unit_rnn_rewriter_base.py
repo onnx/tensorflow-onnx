@@ -59,7 +59,6 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         return UnitRnnContext()
 
     def run(self):
-        logger.debug("enter unit rnn rewriter base")
         return self.run_internal()
 
     def need_rewrite(self, context):
