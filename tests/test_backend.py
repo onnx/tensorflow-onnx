@@ -1412,9 +1412,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, [None, 3, 3], name=_TFINPUT)
         x_ = tf.layers.flatten(x)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val},
+                            graph_validator=lambda g: check_op_count(g, "Flatten", 1))
 
+    @skip_caffe2_backend("issue undefined dim 1")
     def test_flatten1(self):
+        x_val = np.array([[[[1, 2, 3], [4, 5, 6], [7, 8, 9]]]], dtype=np.float32)
+        x = tf.placeholder(tf.float32, [None, 1, 3, 3], name=_TFINPUT)
+        x_ = tf.layers.flatten(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val},
+                            graph_validator=lambda g: check_op_count(g, "Flatten", 1))
+
+    def test_flatten2(self):
         x_val = np.array([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], dtype=np.float32)
         x = tf.placeholder(tf.float32, [1, 3, 3], name=_TFINPUT)
         x_ = tf.layers.flatten(x)

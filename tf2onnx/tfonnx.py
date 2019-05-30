@@ -276,7 +276,7 @@ def rewrite_flatten(g, ops):
             end = slice_node.inputs[2].get_tensor_value(as_list=False)
             strides = slice_node.inputs[3].get_tensor_value(as_list=False)
             need_rewrite = np.array_equal(begin, [0]) and len(end) == 1 and \
-                           np.array_equal(strides, [1]) and end[0] - begin[0] == len(input_shape) - 2
+                           np.array_equal(strides, [1]) and end[0] - begin[0] == 1
             if not need_rewrite:
                 continue
 
