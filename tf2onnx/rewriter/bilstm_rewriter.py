@@ -13,8 +13,7 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
-from tf2onnx.rewriter.rnn_utils import find_bidirectional_rnns, ONNX_RNN_TYPE, \
-    get_np_val_for_const, process_single_init_node, slice_birnn_for_original_rnn_consumers
+from tf2onnx.rewriter import rnn_utils
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +24,12 @@ def process_bilstm(g, bi_lstms):
         logger.debug("=========================")
         logger.debug("start handling potential bidirectional lstm: %s, %s", lstm_fw.name, lstm_bw.name)
 
-        w_fw = get_np_val_for_const(g, lstm_fw, 1)
-        w_bw = get_np_val_for_const(g, lstm_bw, 1)
-        r_fw = get_np_val_for_const(g, lstm_fw, 2)
-        r_bw = get_np_val_for_const(g, lstm_bw, 2)
-        b_fw = get_np_val_for_const(g, lstm_fw, 3)
-        b_bw = get_np_val_for_const(g, lstm_bw, 3)
+        w_fw = rnn_utils.get_np_val_for_const(g, lstm_fw, 1)
+        w_bw = rnn_utils.get_np_val_for_const(g, lstm_bw, 1)
+        r_fw = rnn_utils.get_np_val_for_const(g, lstm_fw, 2)
+        r_bw = rnn_utils.get_np_val_for_const(g, lstm_bw, 2)
+        b_fw = rnn_utils.get_np_val_for_const(g, lstm_fw, 3)
+        b_bw = rnn_utils.get_np_val_for_const(g, lstm_bw, 3)
         W = np.concatenate((w_fw, w_bw), axis=0)
         R = np.concatenate((r_fw, r_bw), axis=0)
         B = np.concatenate((b_fw, b_bw), axis=0)
@@ -59,38 +58,45 @@ def process_bilstm(g, bi_lstms):
         if len(lstm_fw.inputs) > 4:
             lstm_inputs.extend([lstm_fw.input[4], h_node.output[0], c_node.output[0]])
 
-        direction = "bidirectional"
-        if lstm_fw.get_attr("hidden_size").i == lstm_bw.get_attr("hidden_size").i:
-            hidden_size = lstm_fw.get_attr("hidden_size").i
-        else:
-            logger.error("fw and bw has different hidden_size, skip")
-            continue
+        attr = {"direction": "bidirectional"}
+        for name in rnn_utils.onnx_rnn_attr_mapping[rnn_utils.ONNX_RNN_TYPE.LSTM]:
+            attr_val = lstm_fw.get_attr_value(name)
+            if attr_val:
+                attr[name] = attr_val
 
-        attr = {"direction": direction, "hidden_size": hidden_size}
         bi_lstm_node = g.make_node("LSTM", lstm_inputs, attr=attr, output_count=3)
         all_nodes.append(bi_lstm_node)
         logger.debug("processing output nodes")
 
         to_remove = [lstm_fw.name, lstm_fw.input[1], lstm_fw.input[2], lstm_fw.input[3],
                      lstm_bw.name, lstm_bw.input[1], lstm_bw.input[2], lstm_bw.input[3]]
-        slice_birnn_for_original_rnn_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 0, all_nodes, to_remove)
-        slice_birnn_for_original_rnn_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 1, all_nodes, to_remove)
-        slice_birnn_for_original_rnn_consumers(g, lstm_fw, lstm_bw, bi_lstm_node, 2, all_nodes, to_remove)
+        rnn_utils.slice_birnn_for_original_rnn_consumers(
+            g, lstm_fw, lstm_bw, bi_lstm_node, 0, all_nodes, to_remove
+        )
+        rnn_utils.slice_birnn_for_original_rnn_consumers(
+            g, lstm_fw, lstm_bw, bi_lstm_node, 1, all_nodes, to_remove
+        )
+        rnn_utils.slice_birnn_for_original_rnn_consumers(
+            g, lstm_fw, lstm_bw, bi_lstm_node, 2, all_nodes, to_remove
+        )
 
+        lstm_bw_old_x = lstm_bw.input[0]
         for n in to_remove:
             g.remove_node(n)
+
+        rnn_utils.remove_reverse_in_bw_input(g, lstm_bw_old_x, rnn_utils.ONNX_RNN_TYPE.LSTM)
 
     return g.get_nodes()
 
 
 def process_ch_init_nodes(g, lstm_fw, lstm_bw, to_append):
-    h_node = process_single_init_node(g, lstm_fw.input[5], lstm_bw.input[5], to_append)
-    c_node = process_single_init_node(g, lstm_fw.input[6], lstm_bw.input[6], to_append)
+    h_node = rnn_utils.process_single_init_node(g, lstm_fw.input[5], lstm_bw.input[5], to_append)
+    c_node = rnn_utils.process_single_init_node(g, lstm_fw.input[6], lstm_bw.input[6], to_append)
 
     return h_node, c_node
 
 
 def rewrite_bidirectional_lstms(g, ops):
-    bi_lstms = find_bidirectional_rnns(g, ops, ONNX_RNN_TYPE.LSTM)
+    bi_lstms = rnn_utils.find_bidirectional_rnns(g, ops, rnn_utils.ONNX_RNN_TYPE.LSTM)
 
     return process_bilstm(g, bi_lstms)
