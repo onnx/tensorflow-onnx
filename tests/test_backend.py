@@ -2480,6 +2480,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(y, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_onnxruntime_min_version('0.5.0', message="Requires onnxruntime version 0.5.0 or above")
+    def test_round(self):
+        # only compatible with dtype `float32`
+        x_val = np.array([-3.8, -3.5, -3.2, -2.8, -2.5, -2.2, -0.5, 0.0, 0.5, 2.1, 2.5, 2.9, 3.1, 3.5, 3.9]).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.round(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
 
 if __name__ == '__main__':
     unittest_main()
