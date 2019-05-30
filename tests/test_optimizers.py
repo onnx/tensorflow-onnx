@@ -50,6 +50,21 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             self.assertEqual(expected_val.shape, actual_val.shape)
 
         return new_proto
+
+    @staticmethod
+    def _make_onnx_const(np_val, output_name):
+        node = helper.make_node(
+            'Constant',
+            inputs=[],
+            outputs=[output_name],
+            value=helper.make_tensor(
+                name=output_name,
+                data_type=utils.map_numpy_to_onnx_dtype(np_val.dtype),
+                dims=np_val.shape,
+                vals=np_val.flatten().astype(np_val.dtype),
+            ),
+        )
+        return node
     # Tranpose Optimizer Tests Start
 
     def run_transpose_compare(self, output_names_with_port, onnx_feed_dict, origin_proto,
@@ -302,6 +317,55 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 1, 1, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_with_loop(self):
+        def _define_loop_graph(external_inputs):
+            # external_inputs: external node which will be used by this graph
+            # graph without loop carried
+            # computation
+            # for(...){a = external_inputs[i]; b = trans(a), c = squeeze(b)}, c is scan output
+            node1 = helper.make_node("Gather", [external_inputs[0], "loop_iter_num"], ["Y0"])
+            node2 = helper.make_node("Transpose", ["Y0"], ["Z0"], perm=[0, 2, 3, 1])
+            # graph output
+            node3 = helper.make_node("Squeeze", ["Z0"], ["scan_output"], axes=[0])
+            node4 = helper.make_node("Identity", ["loop_condition"], ["loop_cond_output"])
+            node5 = helper.make_node("Identity", ["loop_condition"], ["loop_carried_output"])
+
+            graph = helper.make_graph(
+                [node1, node2, node3, node4, node5],
+                "loop_subgraph",
+                [helper.make_tensor_value_info("loop_iter_num", TensorProto.INT64, (1,)),  # iteration_num
+                 helper.make_tensor_value_info("loop_condition", TensorProto.BOOL, ()),  # condition
+                 helper.make_tensor_value_info("loop_carried", TensorProto.BOOL, ())  # loop_carried
+                 ],
+                [helper.make_tensor_value_info("loop_cond_output", TensorProto.BOOL, ()),
+                 helper.make_tensor_value_info("loop_carried_output", TensorProto.BOOL, ()),
+                 helper.make_tensor_value_info("scan_output", TensorProto.FLOAT, ["unknown"] * 3)
+                 ],
+            )
+            return graph
+
+        def _make_loop(external_inputs, outputs):
+            trip_cnt = self._make_onnx_const(np.array(10, dtype=np.int64), "trip_cnt")
+            cond = self._make_onnx_const(np.array(True, dtype=np.bool), "cond")
+            sub_graph = _define_loop_graph(external_inputs)
+            loop_node = helper.make_node("Loop", ["trip_cnt", "cond", "cond"], outputs,
+                                         name="loop", body=sub_graph)
+            return trip_cnt, cond, loop_node
+
+        nodes = _make_loop(["array"], ["loop_carried", "scan_out"])
+        res = helper.make_node("Transpose", ["scan_out"], ["Y"], perm=[0, 3, 1, 2], name="trans")
+
+        graph = helper.make_graph(
+            [*nodes, res],
+            "transpose_with_loop",
+            [helper.make_tensor_value_info("array", TensorProto.FLOAT, ["unknow"] * 4)],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["unknow"] * 4)],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Y"], {"array": np.random.randn(10, 3, 4, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
     def test_trans_output_as_graph_outputs(self):
