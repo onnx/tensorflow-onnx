@@ -946,9 +946,17 @@ class OneHot:
         output_dtype = ctx.get_dtype(node.input[2])
         if ctx.is_target(constants.TARGET_RS6) \
                 and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
-            logger.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
-            cls.version_5(ctx, node, **kwargs)
-            return
+            onoff = node.input[2]
+            onoff = ctx.make_node("Cast", [onoff], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
+            node.input[2] = onoff
+            logger.info("Casting on_value (%s) to int64", node.input[2])
+            onoff = node.input[3]
+            onoff = ctx.make_node("Cast", [onoff], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
+            node.input[3] = onoff
+            logger.info("Casting off_value (%s)to int64", node.input[3])
+            # logger.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
+            # cls.version_5(ctx, node, **kwargs)
+            # return
 
         depth = node.input[1]
         depth = ctx.make_node("Unsqueeze", [depth], attr={"axes": [0]}).output[0]

@@ -64,6 +64,6 @@ class Round:
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node("CumSum", inputs=node.input, outputs=node.output, name=node.name,
+        ctx.make_node("Round", inputs=node.input, outputs=node.output, name=node.name,
                       shapes=shapes, dtypes=dtypes,
                       domain=constants.MICROSOFT_DOMAIN)
