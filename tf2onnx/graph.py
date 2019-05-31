@@ -179,17 +179,29 @@ class Node(object):
         attr = self.attr.get(name, default)
         return attr
 
+    def get_attr_value(self, name, default=None):
+        attr = self.get_attr(name)
+        if attr:
+            return helper.get_attribute_value(attr)
+        return default
+
     def get_attr_int(self, name):
         """Get attribute value as int."""
-        attr = self.get_attr(name)
-        utils.make_sure(attr is not None, "attribute %s is None", name)
-        attr = attr.i
-        return attr
+        attr_int = self.get_attr_value(name)
+        utils.make_sure(
+            attr_int is not None and isinstance(attr_int, int),
+            "attribute %s is None", name
+        )
+        return attr_int
 
     def get_attr_str(self, name, encoding="utf-8"):
         """Get attribute value as string."""
-        attr = self.get_attr(name)
-        return attr.s.decode(encoding) if attr else None
+        attr_str = self.get_attr_value(name)
+        utils.make_sure(
+            attr_str is not None and isinstance(attr_str, bytes),
+            "attribute %s is None", name
+        )
+        return attr_str.decode(encoding)
 
     def set_attr(self, name, value):
         self.attr[name] = helper.make_attribute(name, value)
