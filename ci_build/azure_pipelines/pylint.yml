@@ -10,5 +10,5 @@ jobs:
           set -ex
           pip install pylint
           pip freeze
-          pylint --rcfile=tools/pylintrc --ignore=version.py --disable=cyclic-import tf2onnx tests/*.py tools
+          pylint --rcfile=tools/pylintrc --ignore=version.py --disable=cyclic-import tf2onnx tests/*.py tools -j 0
         displayName: 'Pylint'
