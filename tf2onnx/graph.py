@@ -14,6 +14,7 @@ import copy
 import logging
 import six
 import numpy as np
+import onnx
 
 from onnx import helper, numpy_helper, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
 from tf2onnx import utils, __version__
@@ -866,7 +867,11 @@ class Graph(object):
             initializers.append(tensor)
 
         # create input_tensor_values
-        input_ids = [op.output[0] for op in placeholder_ops + const_ops]
+        input_ids = [op.output[0] for op in placeholder_ops]
+        # onnx below IR 4 requires initializer should be in inputs
+        if onnx.IR_VERSION < 4:
+            input_ids += [op.output[0] for op in const_ops]
+
         input_tensor_values = self.make_onnx_graph_io(input_ids)
 
         # create output_tensor_values
