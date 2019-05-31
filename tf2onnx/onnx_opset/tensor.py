@@ -20,7 +20,7 @@ import tf2onnx
 from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
-from tf2onnx.onnx_opset import nn
+from tf2onnx.onnx_opset import nn, math
 
 logger = logging.getLogger(__name__)
 
@@ -636,6 +636,162 @@ class StridedSlice:
             ctx.set_dtype(cast_node.output[0], input_dtype)
             ctx.copy_shape(node.output[0], cast_node.output[0])
             nodes.append(cast_node)
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # T output = Slice(T input, Index begin, Index end, Index strides
+        #                 @int begin_mask, @int end_mask, @int ellipsis_mask
+        #                 @int shrink_axis_mask, @int new_axis_mask)
+        # T output = Slice(T input, Tind starts, Tind ends, Tind axes, Tind steps)
+        # "ends" are exclusive, "axes" and "steps" are optional, their default val are [0, ...] and 1
+        begin = node.inputs[1]
+        end = node.inputs[2]
+        strides = node.inputs[3]
+        if begin.is_const() and end.is_const() and strides.is_const() \
+                and all(val == 1 for val in strides.get_tensor_value()):
+            cls.version_4(ctx, node, **kwargs)
+            return
+
+        not_supported_attr = ["new_axis_mask"]
+        for attr_name in not_supported_attr:
+            attr = node.get_attr(attr_name)
+            if attr is not None and attr.i != 0:
+                raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
+        onnx_dtype = ctx.get_dtype(node.input[1])
+        np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
+
+        # NOTE: Max op only supports float32, deal with overflow when cast back to int32
+        # enable it after Max supports int32 and int64
+        # max_size = utils.get_max_value(np_dtype)
+        # min_size = utils.get_min_value(np_dtype)
+        max_size = 1e9
+        min_size = -1e9
+
+        end_mask = node.get_attr("end_mask")
+        end_mask = end_mask.i if end_mask is not None else 0
+        begin_mask = node.get_attr("begin_mask")
+        begin_mask = begin_mask.i if begin_mask is not None else 0
+        ellipsis_mask = node.get_attr("ellipsis_mask")
+        ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
+        shrink_axis_mask = node.get_attr("shrink_axis_mask")
+        shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
+        input_shape = ctx.get_shape(node.input[1]) or \
+            ctx.get_shape(node.input[2]) or \
+            ctx.get_shape(node.input[3])
+        utils.make_sure(input_shape, "StridedSlice op {} requires the shape of begin/end/strides".format(node.name))
+        input_rank = input_shape[0]
+        # use in onnx graph to mask begin
+        new_begin_mask = [1] * input_rank
+        # use in onnx graph to mask end
+        new_end_mask = [min_size] * input_rank
+        # for shrink mask, if shrink mask is 1, set stride to be max_size
+        shrink_strided_mask = [min_size] * input_rank
+        # onnx slice op can't remove a axis, track axis and add a squeeze op if needed
+        needs_squeeze = []
+        for idx in range(input_rank):
+            if (ellipsis_mask >> idx) & 1:
+                new_begin_mask[idx] = 0
+                new_end_mask[idx] = max_size
+                continue
+
+            mask = (shrink_axis_mask >> idx) & 1
+            if mask != 0:
+                shrink_strided_mask[idx] = max_size
+                new_end_mask[idx] = max_size
+                needs_squeeze.append(idx)
+                continue
+
+            mask = (begin_mask >> idx) & 1
+            if mask != 0:
+                new_begin_mask[idx] = 0
+
+            mask = (end_mask >> idx) & 1
+            if mask != 0:
+                new_end_mask[idx] = max_size
+
+        out_dtypes = [ctx.get_dtype(node.output[0])]
+        out_shapes = [ctx.get_shape(node.output[0])]
+        ctx.remove_node(node.name)
+
+        # mask begin
+        new_begin_mask = np.array(new_begin_mask, dtype=np_dtype)
+        if not np.all(new_begin_mask == 1):
+            if begin.is_const():
+                begin = ctx.make_const(
+                    utils.make_name("begin_masked"),
+                    begin.get_tensor_value(as_list=False) * new_begin_mask
+                )
+            else:
+                begin_mask_const = ctx.make_const(
+                    utils.make_name("begin_mask"),
+                    new_begin_mask
+                )
+                begin = ctx.make_node(
+                    "Mul", [begin.output[0], begin_mask_const.output[0]],
+                    op_name_scope=node.name
+                )
+        # mask end
+        new_end_mask = np.array(new_end_mask, dtype=np_dtype)
+        end_output = end.output[0]
+        if not np.all(new_end_mask == min_size):
+            if end.is_const():
+                end = ctx.make_const(
+                    utils.make_name("end_masked"),
+                    np.maximum(end.get_tensor_value(as_list=False), new_end_mask)
+                )
+                end_output = end.output[0]
+            else:
+                end_mask_const = ctx.make_const(
+                    utils.make_name("end_mask"),
+                    np.array(new_end_mask, dtype=np_dtype)
+                )
+                end_output = utils.make_name("{}__end".format(node.name))
+                math.make_min_or_max_op(ctx, "Max", [end.output[0], end_mask_const.output[0]], [end_output])
+        # mask strides for shrink
+        shrink_strided_mask = np.array(shrink_strided_mask, dtype=np_dtype)
+        strides_output = strides.output[0]
+        if not np.all(shrink_strided_mask == min_size):
+            if strides.is_const():
+                strides = ctx.make_const(
+                    utils.make_name("strides_masked"),
+                    np.maximum(strides.get_tensor_value(as_list=False), shrink_strided_mask)
+                )
+                strides_output = strides.output[0]
+            else:
+                shrink_strided_mask_const = ctx.make_const(
+                    utils.make_name("strides_mask"),
+                    np.array(shrink_strided_mask, dtype=np_dtype)
+                )
+                strides_output = utils.make_name("{}__strides".format(node.name))
+                math.make_min_or_max_op(
+                    ctx, "Max",
+                    [strides.output[0], shrink_strided_mask_const.output[0]],
+                    [strides_output]
+                )
+        # create axes input
+        axes_const = ctx.make_const(
+            utils.make_name("slice_axes"),
+            np.arange(input_rank, dtype=np_dtype)
+        )
+        axes_output = axes_const.output[0]
+
+        inputs_map = {
+            "data": node.input[0],
+            "starts": begin.output[0],
+            "ends": end_output,
+            "steps": strides_output,
+            "axes": axes_output
+        }
+        kwargs = {**inputs_map, "outputs": node.output}
+        node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
+        node = ctx.get_node_by_output(node)
+        if needs_squeeze:
+            name = utils.make_name(node.name)
+            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+            squeeze_node.set_attr("axes", needs_squeeze)
+            input_dtype = ctx.get_dtype(node.output[0])
+            ctx.set_dtype(squeeze_node.output[0], input_dtype)
+            ctx.copy_shape(node.output[0], squeeze_node.output[0])
 
 
 @tf_op("Cast")
