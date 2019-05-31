@@ -11,10 +11,12 @@ from collections import Counter
 import logging
 import os
 import sys
+import copy
 
 from google.protobuf import text_format
 import tensorflow as tf
 from tensorflow.python.framework import graph_util
+from tensorflow.core.framework import attr_value_pb2, graph_pb2, node_def_pb2
 
 # pylint: disable=missing-docstring
 
@@ -167,23 +169,120 @@ class main(object):
             logging.info("\t%s = %s", op, count)
 
     @staticmethod
-    def extract_sub_graph(input_path, output_path=None, dest_nodes=None):
-        if not output_path:
-            output_path = append_file_name_suffix(input_path, "sub")
-
+    def extract_sub_graph(input_path, dest_nodes=None, output_path=None,
+                          src_nodes=None, name_prefix=""):
+        """
+        Extract the subgraph within the boundary defined by dest_nodes and src_nodes if name_prefix is provided
+        or the subgraph comprising all nodes with name that starts with name_prefix.
+        dest_nodes/src_nodes and name_prefix aren't compatible. You only need to supply one of them.
+        """
         logging.info("load from %s", input_path)
         graph_def = load_graph_def_from_pb(input_path)
         logging.info("\ttotal node = %s", len(graph_def.node))
 
-        if dest_nodes:
-            dest_nodes = dest_nodes.split(',')
+        if (dest_nodes or src_nodes) and name_prefix:
+            raise RuntimeError("dest_nodes/src_nodes and name_prefix are incompatible.")
+        if not name_prefix:
+            if not dest_nodes:
+                _, dest_nodes, _ = get_graph_def_io_nodes(graph_def)
         else:
-            _, dest_nodes = get_graph_def_io_nodes(graph_def)
+            dest_nodes = []
+            for node in graph_def.node:
+                if node.name.startswith(name_prefix):
+                    dest_nodes.append(node.name)
+        if not src_nodes:
+            src_nodes = []
 
-        graph_def = graph_util.extract_sub_graph(graph_def, dest_nodes)
+        if not isinstance(dest_nodes, list):
+            raise TypeError("dest_nodes must be a list.")
+        if not isinstance(src_nodes, list):
+            raise TypeError("src_nodes must be a list.")
+
+        def extract_graph_summary(graph_def):
+            """Extracts useful information from the graph and returns them."""
+            name_to_input_name = {}  # Keyed by the dest node name.
+            name_to_node = {}  # Keyed by node name.
+
+            # Keeps track of node sequences. It is important to still output the
+            # operations in the original order.
+            name_to_seq_num = {}  # Keyed by node name.
+            seq = 0
+            for node in graph_def.node:
+                n = get_node_name(node.name)
+                name_to_node[n] = node
+                name_to_input_name[n] = [get_node_name(x) for x in node.input]
+                name_to_seq_num[n] = seq
+                seq += 1
+            return name_to_input_name, name_to_node, name_to_seq_num
+
+
+        def assert_nodes_are_present(name_to_node, nodes):
+            """Assert that nodes are present in the graph."""
+            for d in nodes:
+                assert d in name_to_node, "%s is not in graph" % d
+
+
+        def bfs_for_reachable_nodes(target_nodes, name_to_input_name, checker=None):
+            """Breadth first search for reachable nodes from target nodes."""
+            nodes_to_keep = set()
+            # Breadth first search to find all the nodes that we should keep.
+            next_to_visit = target_nodes[:]
+            while next_to_visit:
+                n = next_to_visit[0]
+                del next_to_visit[0]
+                if n in nodes_to_keep:
+                    # Already visited this node.
+                    continue
+                if not checker or checker(n):
+                    nodes_to_keep.add(n)
+                    next_to_visit += name_to_input_name[n]
+            return nodes_to_keep
+
+        name_to_input_name, name_to_node, name_to_seq_num = extract_graph_summary(
+            graph_def)
+        assert_nodes_are_present(name_to_node, dest_nodes)
+        assert_nodes_are_present(name_to_node, src_nodes)
+
+        src_ops = []
+        def node_checker(n):
+            if not n.startswith(name_prefix) or n in src_nodes:
+                src_ops.append(name_to_node[n])
+                return False
+            return True
+        nodes_to_keep = bfs_for_reachable_nodes(dest_nodes, name_to_input_name, checker=node_checker)
+
+        nodes_to_keep_list = sorted(
+            list(nodes_to_keep), key=lambda n: name_to_seq_num[n])
+        # Now construct the output GraphDef
+        out = graph_pb2.GraphDef()
+        for n in nodes_to_keep_list:
+            out.node.extend([copy.deepcopy(name_to_node[n])])
+
+        # create placeholder
+        with tf.Graph().as_default() as tf_graph:
+            tf.import_graph_def(graph_def, name="")
+        for op in src_ops:
+            placeholder_node = node_def_pb2.NodeDef()
+            placeholder_node.op = "Placeholder"
+            placeholder_node.name = op.name
+            if str(op.attr["dtype"]):
+                placeholder_node.attr["dtype"].CopyFrom(op.attr["dtype"])
+            elif str(op.attr["T"]):
+                placeholder_node.attr["dtype"].CopyFrom(op.attr["T"])
+            shape = graph_util.tensor_shape_from_node_def_name(tf_graph, op.name)
+            placeholder_node.attr["shape"].CopyFrom(
+                attr_value_pb2.AttrValue(shape=shape.as_proto())
+            )
+            out.node.extend([placeholder_node])
+
+        out.library.CopyFrom(graph_def.library)
+        out.versions.CopyFrom(graph_def.versions)
+
+        if not output_path:
+            output_path = append_file_name_suffix(input_path, "sub")
         logging.info("save to %s", output_path)
-        logging.info("\ttotal node = %s", len(graph_def.node))
-        save_graph_def(graph_def, output_path)
+        logging.info("\ttotal node = %s", len(out.node))
+        save_graph_def(out, output_path)
 
 
 if __name__ == "__main__":
@@ -219,7 +318,13 @@ if __name__ == "__main__":
     subparser = subparsers.add_parser("extract", help="extract sub-graph")
     subparser.add_argument("--input", dest="input_path", required=True, help="input pb path")
     subparser.add_argument("--output", dest="output_path", help="output pb path")
-    subparser.add_argument("--dest_nodes", help="dest nodes")
+    subparser.add_argument("--dest_nodes", help="dest nodes", default=None, action="append")
+    subparser.add_argument("--src_nodes", help="source nodes", default=None, action="append")
+    subparser.add_argument(
+        "--name_prefix",
+        help="prefix of name scope, incompatible with dest_nodes/src_nodes",
+        default=None
+    )
     subparser.set_defaults(func=main.extract_sub_graph)
 
     if len(sys.argv) <= 2:
