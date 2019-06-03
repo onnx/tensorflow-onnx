@@ -12,7 +12,7 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main
+from common import unittest_main, check_opset_min_version, check_tf_min_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -266,6 +266,52 @@ class CondTests(Tf2OnnxBackendTestBase):
         input_names_with_port = ["input_1:0", "input_2:0"]
         output_names_with_port = ["output:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
+
+    @check_tf_min_version("1.8", "shape inference for Reshape op screws up")
+    @check_opset_min_version(9, "ConstantOfShape")
+    def test_cond_with_different_output_shape(self):
+        input_shape = (10, 5, 20)
+        inputs = tf.placeholder(tf.float32, input_shape, name="input")
+
+        shape = tf.placeholder(tf.int32, (len(input_shape),), name="shape")
+        # cheat onnx shape inference
+        inputs = tf.reshape(inputs, shape)
+
+        def pad_tensor(t, length):
+            """Pads the input tensor with 0s along the first dimension up to the length.
+
+            Args:
+              t: the input tensor, assuming the rank is at least 1.
+              length: a tensor of shape [1]  or an integer, indicating the first dimension
+                of the input tensor t after padding, assuming length <= t.shape[0].
+
+            Returns:
+              padded_t: the padded tensor, whose first dimension is length. If the length
+                is an integer, the first dimension of padded_t is set to length
+                statically.
+            """
+            t_rank = tf.rank(t)
+            t_shape = tf.shape(t)
+            t_d0 = t_shape[0]
+            pad_d0 = tf.expand_dims(length - t_d0, 0)
+            pad_shape = tf.cond(
+                # shape is [3], depending on input shape
+                tf.greater(t_rank, 1), lambda: tf.concat([pad_d0, t_shape[1:]], 0),
+                # shape is always [1]
+                lambda: tf.expand_dims(length - t_d0, 0))
+            padded_t = tf.concat([t, tf.zeros(pad_shape, dtype=t.dtype)], 0)
+            return padded_t
+
+        output = pad_tensor(inputs, 20)
+        _ = tf.identity(output, name="output")
+        input_names_with_port = ["input:0", "shape:0"]
+        feed_dict = {
+            "input:0": np.ones(input_shape, dtype=np.float32),
+            "shape:0": np.array(input_shape, dtype=np.int32)
+        }
+
+        output_names_with_port = ["output:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
 
 if __name__ == '__main__':

@@ -65,62 +65,76 @@ class TrigOpSinceOpset9:
         pass
 
 
+def make_min_or_max_op(ctx, op_type, inputs, outputs,
+                       output_shapes=None, output_dtypes=None):
+    # support more dtype
+    supported_dtypes = [
+        onnx_pb.TensorProto.FLOAT,
+        onnx_pb.TensorProto.FLOAT16,
+        onnx_pb.TensorProto.DOUBLE
+    ]
+    target_dtype = onnx_pb.TensorProto.FLOAT
+    need_cast = False
+    cast_inputs = []
+    for inp in inputs:
+        dtype = ctx.get_dtype(inp)
+        utils.make_sure(dtype is not None, "dtype of {} is None".format(inp))
+        if dtype not in supported_dtypes:
+            cast_inp = ctx.make_node("Cast", [inp], attr={"to": target_dtype})
+            cast_inputs.append(cast_inp.output[0])
+            need_cast = True
+        else:
+            cast_inputs.append(inp)
+    node = ctx.make_node(op_type, cast_inputs, shapes=output_shapes)
+    actual_outputs = node.output
+    if need_cast:
+        origin_dtype = ctx.get_dtype(inputs[0])
+        if output_dtypes is not None:
+            origin_dtype = output_dtypes[0]
+        ctx.set_dtype(node.output[0], target_dtype)
+        cast_name = utils.make_name(node.name)
+        cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)
+        ctx.set_dtype(cast_node.output[0], origin_dtype)
+        ctx.copy_shape(node.output[0], cast_node.output[0])
+        actual_outputs = cast_node.output
+    ctx.make_node("Identity", actual_outputs, outputs=outputs,
+                  shapes=output_shapes, dtypes=output_dtypes)
+
+    # tensorflow minimum/maximum does support broadcast, onnx < opset 8 does not.
+    # handle this by doing something like:
+    # y = min(x1, add(x2, sub(x1, x1))), where x1, x2 are the inputs and x2 is a scalar
+    # this will create a tensor of zeros of the shape of x1, adds x2 to it (which broadcasts) and use that for min.
+    shapeo = ctx.get_shape(node.output[0])
+    needs_broadcast_op = []
+    has_correct_shape = []
+    if ctx.opset < 8:
+        for i, input_name in enumerate(node.input):
+            if ctx.get_shape(input_name) != shapeo:
+                needs_broadcast_op.append(i)
+            else:
+                has_correct_shape.append(input_name)
+    if needs_broadcast_op:
+        has_correct_shape = has_correct_shape[0]
+        for i in needs_broadcast_op:
+            input_node = node.inputs[i]
+            # get a tensor with zeros (since there is no Fill op as of opset8)
+            sub_node = ctx.make_node("Sub", [has_correct_shape, has_correct_shape],
+                                     op_name_scope=input_node.name)
+            # use add as 'broadcast' op
+            add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
+                                     op_name_scope=input_node.name)
+            node.input[i] = add_node.output[0]
+
+
 @tf_op("Minimum", onnx_op="Min")
 @tf_op("Maximum", onnx_op="Max")
 class MinMaxOp:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        # tensorflow minimum/maximum does support broadcast, onnx < opset 8 does not.
-        # handle this by doing something like:
-        # y = min(x1, add(x2, sub(x1, x1))), where x1, x2 are the inputs and x2 is a scalar
-        # this will create a tensor of zeros of the shape of x1, adds x2 to it (which broadcasts) and use that for min.
-        # support more dtype
-        supported_dtypes = [
-            onnx_pb.TensorProto.FLOAT,
-            onnx_pb.TensorProto.FLOAT16,
-            onnx_pb.TensorProto.DOUBLE
-        ]
-        target_dtype = onnx_pb.TensorProto.FLOAT
-        need_cast = False
-        for inp in node.input:
-            dtype = ctx.get_dtype(inp)
-            utils.make_sure(dtype is not None, "dtype of {} is None".format(inp))
-            if dtype not in supported_dtypes:
-                inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=target_dtype)
-                ctx.copy_shape(inp, inp_cast.output[0])
-                ctx.set_dtype(inp_cast.output[0], target_dtype)
-                need_cast = True
-        if need_cast:
-            origin_dtype = ctx.get_dtype(node.output[0])
-            utils.make_sure(origin_dtype is not None, "dtype of {} is None".format(node.output[0]))
-            ctx.set_dtype(node.output[0], target_dtype)
-            cast_name = utils.make_name(node.name)
-            cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)
-            ctx.set_dtype(cast_node.output[0], origin_dtype)
-            ctx.copy_shape(node.output[0], cast_node.output[0])
-            to_replace = [n for n in ctx.get_nodes() if n != cast_node]
-            ctx.replace_all_inputs(to_replace, node.output[0], cast_node.output[0])
-
-        shapeo = ctx.get_shape(node.output[0])
-        needs_broadcast_op = []
-        has_correct_shape = []
-        if ctx.opset < 8:
-            for i, input_name in enumerate(node.input):
-                if ctx.get_shape(input_name) != shapeo:
-                    needs_broadcast_op.append(i)
-                else:
-                    has_correct_shape.append(input_name)
-        if needs_broadcast_op:
-            has_correct_shape = has_correct_shape[0]
-            for i in needs_broadcast_op:
-                input_node = node.inputs[i]
-                # get a tensor with zeros (since there is no Fill op as of opset8)
-                sub_node = ctx.make_node("Sub", [has_correct_shape, has_correct_shape],
-                                         op_name_scope=input_node.name)
-                # use add as 'broadcast' op
-                add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
-                                         op_name_scope=input_node.name)
-                node.input[i] = add_node.output[0]
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        make_min_or_max_op(ctx, node.type, node.input, node.output, shapes, dtypes)
 
 
 @tf_op("Softmax")
@@ -146,10 +160,10 @@ class Relu6:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # relu6 = min(max(features, 0), 6)
-        node.type = "Relu"
-        clip_name = utils.make_name(node.name)
-        clip_node = ctx.insert_new_node_on_output("Clip", node.output[0], name=clip_name, min=0.0, max=6.0)
-        ctx.copy_shape(node.output[0], clip_node.output[0])
+        # relu6 = min(max(features, 0), 6)
+        node.type = "Clip"
+        node.set_attr("min", 0.0)
+        node.set_attr("max", 6.0)
 
 
 @tf_op("Rsqrt")
@@ -409,3 +423,9 @@ class FloorMod:
         ctx.remove_node(node.name)
         ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+@tf_op("Selu")
+class Selu:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        pass

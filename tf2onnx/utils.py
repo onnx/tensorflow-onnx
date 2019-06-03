@@ -13,12 +13,14 @@ import os
 import re
 import shutil
 import tempfile
+from distutils.version import LooseVersion
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import six
 import numpy as np
+import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
 from google.protobuf import text_format
@@ -91,6 +93,7 @@ class TensorValueInfo(object):
 
 
 ONNX_UNKNOWN_DIMENSION = -1
+ONNX_EMPTY_INPUT = ""
 
 # index for internally generated names
 INTERNAL_NAME = 1
@@ -146,20 +149,41 @@ def get_tf_tensor_data(tensor):
     return np_data
 
 
-def get_shape(node):
-    """Get shape from tensorflow node."""
-    # FIXME: do we use this?
+def get_tf_const_value(op, as_list=True):
+    """
+    If as_list=True, return the array as a (possibly nested) list.
+    Otherwise, return data of type np.ndarray.
+
+    If a tensor is a scalar having value 1,
+        when as_list=False, return np.array(1), type is <class 'numpy.ndarray'>
+        when as_list=True, return 1, type is <class 'int'>.
+    """
+    make_sure(is_tf_const_op(op), "{} isn't a const op".format(op.name))
+    value = get_tf_tensor_data(op.get_attr("value"))
+    if as_list:
+        value = value.tolist()
+    return value
+
+
+def get_tf_shape_attr(node):
+    """Get shape from tensorflow attr "shape"."""
     dims = None
     try:
-        if node.type == "Const":
-            shape = get_tf_node_attr(node, "value").tensor_shape
+        shape = get_tf_node_attr(node, "shape")
+        if not shape.unknown_rank:
             dims = [int(d.size) for d in shape.dim]
-        else:
-            shape = get_tf_node_attr(node, "shape")
-            dims = [d.size for d in shape.dim]
     except:  # pylint: disable=bare-except
         pass
     return dims
+
+
+def get_tf_tensor_shape(tensor):
+    shape = []
+    try:
+        shape = tensor.get_shape().as_list()
+    except Exception:  # pylint: disable=broad-except
+        shape = None
+    return shape
 
 
 def map_tf_dtype(dtype):
@@ -399,6 +423,10 @@ def get_onnx_version():
     return onnx.__version__
 
 
+def get_tf_version():
+    return LooseVersion(tf.__version__)
+
+
 def make_opsetid(domain, version):
     make_sure(isinstance(version, int), "version must be an integer")
     return helper.make_opsetid(domain, version)
@@ -432,6 +460,10 @@ def get_max_value(np_dtype):
     return np.iinfo(np_dtype).max
 
 
+def get_min_value(np_dtype):
+    return np.iinfo(np_dtype).min
+
+
 def get_url(url, path, max_retries=5):
     """ Download url and save to path. """
     retries = Retry(total=max_retries, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
@@ -452,33 +484,37 @@ def get_url(url, path, max_retries=5):
         f.write(response.content)
 
 
-def is_reverse_op(op):
+def is_tf_reverse_op(op):
     return op.type in ("ReverseV2", "ReverseSequence")
 
 
-def is_concat_op(op):
+def is_tf_concat_op(op):
     return op.type in ("Concat", "ConcatV2", "ConcatV3")
 
 
-def is_tensor_array_gather_op(op):
+def is_tf_tensor_array_gather_op(op):
     return op.type in ("TensorArrayGatherV2", "TensorArrayGatherV3")
 
 
-def is_tensor_array_write_op(op):
+def is_tf_tensor_array_write_op(op):
     return op.type in ("TensorArrayWriteV2", "TensorArrayWriteV3")
 
 
-def is_tensor_array_op(op):
+def is_tf_tensor_array_op(op):
     return op.type in ("TensorArrayV2", "TensorArrayV3")
 
 
-def is_loopcond_op(op):
+def is_tf_loopcond_op(op):
     return op.type == "LoopCond"
 
 
-def is_select_op(op):
+def is_tf_select_op(op):
     return op.type == "Select"
 
 
-def is_slice_op(op):
+def is_tf_slice_op(op):
     return op.type == "Slice"
+
+
+def is_tf_const_op(op):
+    return op.type in ["Const", "ConstV2"]

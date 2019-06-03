@@ -29,7 +29,7 @@ def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=T
         freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
         output_names = output_names or []
         output_names += [v.op.name for v in tf.global_variables()]
-        input_graph_def = graph.as_graph_def()
+        input_graph_def = graph.as_graph_def(add_shapes=True)
         if clear_devices:
             for node in input_graph_def.node:
                 node.device = ""

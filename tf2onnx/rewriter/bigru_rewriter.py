@@ -13,7 +13,7 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
-from tf2onnx.utils import is_reverse_op
+from tf2onnx.utils import is_tf_reverse_op
 from tf2onnx.rewriter.bilstm_rewriter import slice_bilstm_for_original_lstm_consumers,\
      get_reverse_nodes_after_y_output, get_np_val_for_const, _process_single_init_node
 
@@ -68,10 +68,26 @@ def process_bigru(g, bi_grus):
             gru_inputs.extend([gru_fw.input[4], initializer_node.output[0]])
 
         direction = "bidirectional"
-        if gru_fw.get_attr("hidden_size").i == gru_bw.get_attr("hidden_size").i:
-            hidden_size = gru_fw.get_attr("hidden_size").i
-        else:
-            logger.error("fw and bw has different hidden_size, skip")
+        # FIXME: put forth the following checks, do the same in bi-lstm
+        attr = {}
+        attr_map = {
+            "clip": "f",
+            "hidden_size": "i",
+            "linear_before_reset": "i"
+        }
+        matched = True
+        for name, key in attr_map.items():
+            fw_attr = gru_fw.get_attr(name)
+            bw_attr = gru_bw.get_attr(name)
+            if not fw_attr and not bw_attr:
+                continue
+            if fw_attr and bw_attr and getattr(fw_attr, key) == getattr(bw_attr, key):
+                attr[name] = getattr(fw_attr, key)
+            else:
+                logger.error("fw and bw has different %s: %s, %s, skip", name, fw_attr, bw_attr)
+                matched = False
+                break
+        if not matched:
             continue
         # activation has to be took care
         # attr here is proto
@@ -79,8 +95,7 @@ def process_bigru(g, bi_grus):
                        for act in gru_fw.get_attr("activations").strings]
         activations += [act.decode("utf-8")
                         for act in gru_bw.get_attr("activations").strings]
-        attr = {"direction": direction, "hidden_size": hidden_size,
-                "activations": activations}
+        attr.update({"direction": direction, "activations": activations})
         bi_gru_node = g.make_node("GRU", gru_inputs, attr=attr, output_count=2)
         all_nodes.append(bi_gru_node)
         logger.debug("processing output nodes")
@@ -143,7 +158,7 @@ def rewrite_bidirectional_grus(g, ops):
             input_id = temp.input[0]
             temp = temp.inputs[0]
 
-        if is_reverse_op(temp):
+        if is_tf_reverse_op(temp):
             input_id = temp.input[0]
             is_backward_gru = True
 

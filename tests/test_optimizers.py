@@ -49,12 +49,19 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             self.assertEqual(expected_val.dtype, actual_val.dtype)
             self.assertEqual(expected_val.shape, actual_val.shape)
 
+        return new_proto
     # Tranpose Optimizer Tests Start
 
     def run_transpose_compare(self, output_names_with_port, onnx_feed_dict, origin_proto,
                               remaining_transpose_num=None, debug=False, rtol=1e-07):
-        self.run_and_compare(output_names_with_port, onnx_feed_dict, origin_proto, op_type="Transpose",
-                             remaining_op_num=remaining_transpose_num, debug=debug, rtol=rtol)
+        return self.run_and_compare(output_names_with_port, onnx_feed_dict, origin_proto, op_type="Transpose",
+                                    remaining_op_num=remaining_transpose_num, debug=debug, rtol=rtol)
+
+    def check_transpose_perm(self, model_proto, expected_perm):
+        for node in model_proto.graph.node:
+            if node.op_type == "Transpose":
+                perm = list(node.attribute[0].ints)
+                self.assertEqual(perm, expected_perm)
 
     def test_transpose_relu(self):
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -162,6 +169,72 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["Z"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=1)
 
+    def test_transpose_with_squeeze1(self):
+        # squeeze the first dim
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        node2 = helper.make_node("Squeeze", ["Y"], ["Z"], name="squeeze", axes=[0])
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "transpose_with_squeeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (4, 5, 3))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        model_after_opt = self.run_transpose_compare(["Z"], {"X": np.random.randn(1, 3, 4, 5).astype(np.float32)},
+                                                     model_proto, remaining_transpose_num=1)
+        self.check_transpose_perm(model_after_opt, [1, 2, 0])
+
+    def test_transpose_with_squeeze2(self):
+        # squeeze the second dim
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        node2 = helper.make_node("Squeeze", ["Y"], ["Z"], name="squeeze", axes=[1])
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "transpose_with_squeeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 4, 1, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 5, 4))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        model_after_opt = self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 4, 1, 5).astype(np.float32)},
+                                                     model_proto, remaining_transpose_num=1)
+        self.check_transpose_perm(model_after_opt, [0, 2, 1])
+
+    def test_transpose_with_squeeze3(self):
+        # squeeze the last dim
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        node2 = helper.make_node("Squeeze", ["Y"], ["Z"], name="squeeze", axes=[3])
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "transpose_with_squeeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 1, 4, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 4, 5))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 1, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_with_squeeze4(self):
+        # squeeze the two dims
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        node2 = helper.make_node("Squeeze", ["Y"], ["Z"], name="squeeze", axes=[1, 3])
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "transpose_with_squeeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 1, 1, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 5))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 1, 1, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
     def test_trans_output_as_graph_outputs(self):
         """
         If transpose's output is graph's output, don't optimize it.
@@ -188,6 +261,43 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         self.assertTrue(trans_cnt == 1, msg="Expect 1 Transpose ops left, but actually " + str(trans_cnt) + " left")
 
+    def test_trans_can_be_replaced_with_reshape1(self):
+        # test trans-NHWC
+        input_shapes_np = [(2, 3, 4, 1), (2, 1, 1, 4), (2, 3, 4, 1)]
+        input_shapes = [(2, 3, 4, 1), (2, 1, 1, 4), (2, -1, -1, 1)]
+        perm = (0, 3, 1, 2)
+        for input_shape_np, input_shape in zip(input_shapes_np, input_shapes):
+            result_shape = [input_shape[i] for i in perm]
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
+            graph = helper.make_graph(
+                [node1],
+                "test_trans_can_be_replaced_with_reshape",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+                [helper.make_tensor_value_info("Y", TensorProto.FLOAT, result_shape)],
+            )
+
+            model_proto = helper.make_model(graph, producer_name="onnx-tests")
+            self.run_transpose_compare(["Y"], {"X": np.random.randn(*input_shape_np).astype(np.float32)},
+                                       model_proto, remaining_transpose_num=0)
+
+    def test_trans_can_be_replaced_with_reshape2(self):
+        # test trans-NCHW
+        input_shapes_np = [(2, 1, 3, 4), (2, 4, 1, 1), (2, 1, 3, 4)]
+        input_shapes = [(2, 1, 3, 4), (2, 4, 1, 1), (2, 1, -1, -1)]
+        perm = (0, 2, 3, 1)
+        for input_shape_np, input_shape in zip(input_shapes_np, input_shapes):
+            result_shape = [input_shape[i] for i in perm]
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
+            graph = helper.make_graph(
+                [node1],
+                "test_trans_can_be_replaced_with_reshape",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+                [helper.make_tensor_value_info("Y", TensorProto.FLOAT, result_shape)],
+            )
+
+            model_proto = helper.make_model(graph, producer_name="onnx-tests")
+            self.run_transpose_compare(["Y"], {"X": np.random.randn(*input_shape_np).astype(np.float32)},
+                                       model_proto, remaining_transpose_num=0)
     # Tranpose Optimizer Tests End
 
     # Identity Optimizer Tests Start
@@ -484,6 +594,44 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["res"], {},
                                    model_proto, remaining_transpose_num=0)
+
+    def test_const_fold_unsqueeze_with_const(self):
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Unsqueeze", ["const"], ["value1"], axes=[0, 2, 3])
+        node3 = helper.make_node("Add", ["value1", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_const_fold_unsqueeze_with_const",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1,))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 6, 1, 1, 6))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(1).astype(np.float32)}, model_proto,
+                             "Unsqueeze", 0)
+
+    def test_const_fold_cast_with_const(self):
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Cast", ["const"], ["value1"], to=TensorProto.INT64)
+        node3 = helper.make_node("Add", ["value1", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_const_fold_cast_with_const",
+            [helper.make_tensor_value_info("X", TensorProto.INT64, shape)],
+            [helper.make_tensor_value_info("res", TensorProto.INT64, shape)],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.int64)}, model_proto,
+                             "Cast", 0)
     # Const Fold Optimizer Tests End
 
 

@@ -8,13 +8,11 @@ tf2onnx.rewriter.unit_rnn_rewriter_base
 from __future__ import division
 from __future__ import print_function
 import logging
-from onnx import TensorProto
 
-from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_pattern, \
     get_rnn_scope_name, parse_rnn_loop, seq_len_pattern
-from tf2onnx.utils import is_select_op, is_tensor_array_write_op
+from tf2onnx.utils import is_tf_select_op, is_tf_tensor_array_write_op
 from tf2onnx.graph_matcher import GraphMatcher
 
 
@@ -36,7 +34,9 @@ class UnitRnnContext(Context):
         self.hidden_size = None
 
         self.attributes = {} # onnx attributes
-        self.onnx_input_ids = {}  # onnx inputs: [X, W, R, B, sequence_lens, initial_h, initial_c, P]
+        # onnx inputs: [X, W, R, B, sequence_lens, initial_h, initial_c, P],
+        # sequence_lens is optional, i.e., None
+        self.onnx_input_ids = {}
 
 
 class UnitRnnRewriterBase(LoopRewriterBase):
@@ -59,7 +59,6 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         return UnitRnnContext()
 
     def run(self):
-        logger.debug("enter unit rnn rewriter base")
         return self.run_internal()
 
     def need_rewrite(self, context):
@@ -114,7 +113,9 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         seq_len_node = self.find_sequence_length_node(context)
         if seq_len_node:
             logger.debug("find sequence node: %s", seq_len_node.name)
-            context.seq_len_node = seq_len_node
+            context.onnx_input_ids["sequence_lens"] = seq_len_node.output[0]
+        else:
+            context.onnx_input_ids["sequence_lens"] = None
 
         # require exact one input
         inputs = context.loop_properties.scan_inputs_initial_values
@@ -166,8 +167,6 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         logger.debug("process the weights/bias/ft_bias, to fit onnx weights/bias requirements")
         self.process_weights_and_bias(context)
 
-        self.process_seq_length(context)
-
         self.process_var_init_nodes(context)
 
         logger.debug("start to build new rnn node")
@@ -210,7 +209,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         # get any state variable
         state_variable = list(context.state_variables.values())[0]
         next_iter_input_node = self.g.get_node_by_output(state_variable.next_iteration_input.id)
-        if not is_select_op(next_iter_input_node):
+        if not is_tf_select_op(next_iter_input_node):
             logger.debug("no sequence length node is given")
             return None
         matcher = GraphMatcher(seq_len_pattern)
@@ -221,40 +220,6 @@ class UnitRnnRewriterBase(LoopRewriterBase):
 
     def process_weights_and_bias(self, context):
         raise NotImplementedError()
-
-    def process_seq_length(self, context):
-        # output: [time step, batch size, input size]
-        seq_len_node = context.seq_len_node
-        shape_node = self.g.make_node("Shape", [context.onnx_input_ids["X"]])
-        # LSTMCell only allow inputs of [batch size, input_size], so we assume dynamic_rnn has 3 dims.
-        # Slice cannot support Int64 in OPSET 7, so we cast here.
-        cast_shape_node = self.g.make_node(
-            "Cast", [shape_node.output[0]],
-            attr={"to": TensorProto.FLOAT},
-            shapes=[self.g.get_shape(shape_node.output[0])]
-        )
-
-        attr = {"axes": [0], "starts": [1], "ends": [2]}
-        inputs_map = {"data": cast_shape_node.output[0], **attr}
-        batchsize_node = GraphBuilder(self.g).make_slice(inputs_map)
-        if not seq_len_node:
-            # Tile's repeats must be INT64
-            repeat_node = self.g.make_node(
-                "Cast", [batchsize_node],
-                attr={"to": TensorProto.INT64}
-            )
-
-            attr = {"axes": [0], "starts": [0], "ends": [1]}
-            inputs_map = {"data": cast_shape_node.output[0], **attr}
-            timestep_node = GraphBuilder(self.g).make_slice(inputs_map)
-            tile_node = self.g.make_node("Tile", [timestep_node, repeat_node.output[0]])
-
-            # LSTM sequence_lens needs to be int32
-            seq_len_node = self.g.make_node(
-                "Cast", [tile_node.output[0]],
-                attr={"to": TensorProto.INT32}
-            )
-        context.onnx_input_ids["sequence_lens"] = seq_len_node.output[0]
 
     def process_var_init_nodes(self, context):
         raise NotImplementedError()
@@ -302,10 +267,10 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         # find all select not followed by TensorArrayWrite
         select = []
         for c in self.g.find_output_consumers(next_iteration_input):
-            if not is_select_op(c):
+            if not is_tf_select_op(c):
                 continue
             out_ta_writer = [
-                o for o in self.g.find_output_consumers(c.output[0]) if is_tensor_array_write_op(o)
+                o for o in self.g.find_output_consumers(c.output[0]) if is_tf_tensor_array_write_op(o)
             ]
             if out_ta_writer:
                 continue

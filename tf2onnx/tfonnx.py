@@ -25,7 +25,7 @@ import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
-from tf2onnx.shape_inference import infer_shape_for_graph
+from tf2onnx.shape_inference import infer_shape
 from tf2onnx.utils import port_name
 from . import constants, logging, schemas, utils, handler
 
@@ -47,7 +47,7 @@ def tflist_to_onnx(node_list, shape_override):
     ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
                     "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels", "Tindex", "element_shape"]
+                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -63,10 +63,7 @@ def tflist_to_onnx(node_list, shape_override):
         for out in node.outputs:
             shape = shape_override.get(out.name)
             if shape is None:
-                try:
-                    shape = out.get_shape().as_list()
-                except Exception as ex:
-                    shape = None
+                shape = utils.get_tf_tensor_shape(out)
             dtypes[out.name] = utils.map_tf_dtype(out.dtype)
             output_shapes[out.name] = shape
 
@@ -89,11 +86,11 @@ def tflist_to_onnx(node_list, shape_override):
                 # out_idx is used by ListDiff
                 attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
             elif a == "shape":
-                attr[a] = utils.get_shape(node)
+                shape = utils.get_tf_shape_attr(node)
+                if shape is not None:
+                    attr[a] = shape
             elif a == "Tperm":
                 pass
-            elif a == "_output_shapes":
-                attr[a] = utils.get_shape(node)
             elif a == "value":
                 onnx_tensor = utils.tf_to_onnx_tensor(utils.get_tf_node_attr(node, a), name=port_name(node.name))
                 attr[a] = onnx_tensor
@@ -533,11 +530,14 @@ def rewrite_conv2d_with_pad(g, ops):
 
 
 def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
+    logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
 
     ops = [n for n in g.get_nodes()]
     for node in ops:
+        logger.debug("Process node: %s\n%s", node.name, node.summary)
+
         if node.need_skip():
             logger.debug("explicitly skip node " + node.name)
             continue
@@ -574,12 +574,8 @@ def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
             func(g, node, **kwargs)
             node.skip_conversion = True
         except Exception as ex:
-            type_, value_, traceback_ = sys.exc_info()
-            logger.error("node %s: exception %s" % (node.name, ex))
-            ex_ext = traceback.format_exception(type_, value_, traceback_)
-            if continue_on_error:
-                logger.info(ex_ext)
-            else:
+            logger.error("Failed to convert node %s\n%s", node.name, node.summary, exc_info=1)
+            if not continue_on_error:
                 raise ex
 
     return mapped_op, unmapped_op
@@ -700,6 +696,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                        "please upgrade onnx package to avoid potential conversion issue.",
                        utils.get_onnx_version(), opset)
 
+    tf_graph = infer_shape(tf_graph, shape_override)
+
     if shape_override is None:
         shape_override = {}
     if inputs_as_nchw is None:
@@ -761,8 +759,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             new_handler.register_compat_handler(compat_handler, 1)
             custom_opset[k] = (compat_handler, kwargs)
         ops_mapping.update(custom_opset)
-
-    infer_shape_for_graph(g)
 
     if inputs_as_nchw:
         transpose_inputs(g, inputs_as_nchw)
