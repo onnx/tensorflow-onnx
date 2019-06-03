@@ -672,7 +672,7 @@ class StridedSlice:
         strides = node.inputs[3]
         if begin.is_const() and end.is_const() and strides.is_const() \
                 and all(val == 1 for val in strides.get_tensor_value()):
-            cls.version_4(ctx, node, **kwargs)
+            cls.version_1(ctx, node, **kwargs)
             return
 
         not_supported_attr = ["new_axis_mask"]
