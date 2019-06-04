@@ -1476,11 +1476,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("Space2Depth not implemented")
     def test_space_to_depth(self):
-        self._test_reorganize_data(tf.space_to_depth, [1, 2, 2, 1])
+        self._test_reorganize_data(tf.space_to_depth, [1, 28, 28, 3])
 
-    @skip_caffe2_backend("Space2Depth not implemented")
+    @skip_caffe2_backend("Depth2Space not implemented")
     def test_depth_to_space(self):
-        self._test_reorganize_data(tf.depth_to_space, [1, 1, 1, 4])
+        self._test_reorganize_data(tf.depth_to_space, [1, 14, 14, 12])
 
     def _test_reorganize_data_gpu(self, op, shape):
         x_val = make_xval(shape)
@@ -1489,15 +1489,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    @skip_tf_cpu("only tf_gpu can run maxpool with NCHW format")
+    @skip_tf_cpu("only tf_gpu can run Space2Depth with NCHW format")
     @skip_caffe2_backend("Space2Depth not implemented")
     def test_space_to_depth_gpu(self):
-        self._test_reorganize_data_gpu(tf.space_to_depth, [1, 1, 2, 2])
+        self._test_reorganize_data_gpu(tf.space_to_depth, [1, 3, 50, 80])
 
-    @skip_tf_cpu("only tf_gpu can run maxpool with NCHW format")
-    @skip_caffe2_backend("Space2Depth not implemented")
+    @skip_tf_cpu("only tf_gpu can run Depth2Space with NCHW format")
+    @skip_caffe2_backend("Depth2Space not implemented")
     def test_depth_to_space_gpu(self):
-        self._test_reorganize_data_gpu(tf.depth_to_space, [1, 4, 1, 1])
+        self._test_reorganize_data_gpu(tf.depth_to_space, [1, 120, 25, 40])
 
     @check_opset_min_version(6, "addn")
     def test_addn(self):
