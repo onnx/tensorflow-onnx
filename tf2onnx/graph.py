@@ -868,8 +868,11 @@ class Graph(object):
 
         # create input_tensor_values
         input_ids = [op.output[0] for op in placeholder_ops]
-        # onnx below IR 4 requires initializer should be in inputs
-        if onnx.IR_VERSION < 4:
+        # onnx with IR version below 4 requires initializer should be in inputs.
+        # here we check opset version rather than IR version for the reason:
+        # https://github.com/onnx/tensorflow-onnx/pull/557
+        # opset 9 come with IR 4.
+        if self.opset < 9:
             input_ids += [op.output[0] for op in const_ops]
 
         input_tensor_values = self.make_onnx_graph_io(input_ids)
