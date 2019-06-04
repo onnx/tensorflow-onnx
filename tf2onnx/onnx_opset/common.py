@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class BroadcastOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """Elementwise Ops with broadcast flag."""
         shape0 = ctx.get_shape(node.input[0])
         shape1 = ctx.get_shape(node.input[1])
@@ -44,7 +44,7 @@ class BroadcastOp:
             node.set_attr("broadcast", 0)
 
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_6(cls, ctx, node, **kwargs):
         """Elementwise Ops with broadcast flag."""
         shape0 = ctx.get_shape(node.input[0])
         shape1 = ctx.get_shape(node.input[1])
