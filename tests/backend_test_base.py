@@ -58,8 +58,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_onnxruntime(self, model_path, inputs, output_names):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
-        m = rt.InferenceSession(model_path)
-        results = m.run(output_names, inputs)
+        session = rt.InferenceSession(model_path)
+        session.set_graph_optimization_level(0)
+        results = session.run(output_names, inputs)
         return results
 
     def run_backend(self, g, outputs, input_dict):
@@ -126,13 +127,21 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             g = optimizer.optimize_graph(g)
             actual = self.run_backend(g, output_names_with_port, onnx_feed_dict)
 
-        for expected_val, actual_val in zip(expected, actual):
-            if check_value:
-                self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
-            if check_dtype:
-                self.assertEqual(expected_val.dtype, actual_val.dtype)
-            if check_shape:
-                self.assertEqual(expected_val.shape, actual_val.shape)
+        assertion_failed = False
+        for i in range(0, len(output_names_with_port)):
+            try:
+                if check_value:
+                    self.assertAllClose(expected[i], actual[i], rtol=rtol, atol=atol)
+                if check_dtype:
+                    self.assertEqual(expected[i].dtype, actual[i].dtype)
+                if check_shape:
+                    self.assertEqual(expected[i].shape, actual[i].shape)
+                self.logger.info('%s results: OK', output_names_with_port[i])
+            except AssertionError as ae:
+                self.logger.error("%s results don't match: %s", output_names_with_port[i], ae)
+                assertion_failed = True
+        if assertion_failed:
+            self.assert_(False, 'Result validation failed')
 
         if graph_validator:
             self.assertTrue(graph_validator(g))

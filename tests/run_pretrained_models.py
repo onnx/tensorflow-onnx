@@ -275,13 +275,19 @@ class Test(object):
                 if self.skip_tensorflow:
                     logger.info("Results: skipped tensorflow")
                 else:
-                    if self.check_only_shape:
-                        for tf_res, onnx_res in zip(tf_results, onnx_results):
-                            np.testing.assert_array_equal(tf_res.shape, onnx_res.shape)
-                    else:
-                        for tf_res, onnx_res in zip(tf_results, onnx_results):
-                            np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
-                    logger.info("Results: OK")
+                    assertion_failed = False
+                    for i in range(0, len(self.output_names)):
+                        try:
+                            if self.check_only_shape:
+                                np.testing.assert_array_equal(tf_results[i].shape, onnx_results[i].shape)
+                            else:
+                                np.testing.assert_allclose(tf_results[i], onnx_results[i], rtol=self.rtol, atol=self.atol)
+                            logger.info('%s results: OK', self.output_names[i])
+                        except AssertionError as ae:
+                            logger.error("%s results don't match: %s", self.output_names[i], ae)
+                            assertion_failed = True
+                    if assertion_failed:
+                        self.assert_(False, 'Result validation failed')
                 return True
             except Exception:
                 logger.error("Results", exc_info=1)
