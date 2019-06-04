@@ -32,11 +32,22 @@ class RealDiv(common.BroadcastOp):
     pass
 
 
-@tf_op(["Abs", "Ceil", "Elu", "Exp", "Floor", "LeakyRelu", "Log", "LogSoftmax", "Neg", "Relu", "Sigmoid", "Sqrt",
-        "Tanh", "Softplus", "Softsign", "Reciprocal"])
+@tf_op(["LeakyRelu", "LogSoftmax", "Softplus", "Softsign"])
+class DirectOpSinceOpset1:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op(["Abs", "Ceil", "Elu", "Exp", "Floor", "Log", "Neg", "Relu", "Sigmoid", "Sqrt",
+        "Tanh", "Reciprocal"])
 class DirectOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_6(cls, ctx, node, **kwargs):
         pass
 
 
@@ -119,7 +130,7 @@ def make_min_or_max_op(ctx, op_type, inputs, outputs,
 @tf_op("Maximum", onnx_op="Max")
 class MinMaxOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
@@ -129,7 +140,7 @@ class MinMaxOp:
 @tf_op("Softmax")
 class Softmax:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Softmax(T logits). The axis softmax would be performed on is always on -1.
         # T output = Softmax(T input, @int axis). Default axis is 1.
         logits_rank = len(ctx.get_shape(node.input[0]))
@@ -139,7 +150,7 @@ class Softmax:
 @tf_op("Square")
 class Square:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Mul"
         node.input.append(node.input[0])
 
@@ -147,7 +158,7 @@ class Square:
 @tf_op("Relu6")
 class Relu6:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # relu6 = min(max(features, 0), 6)
         # relu6 = min(max(features, 0), 6)
         node.type = "Clip"
@@ -158,7 +169,7 @@ class Relu6:
 @tf_op("Rsqrt")
 class Rsqrt:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Sqrt"
         op_name = utils.make_name(node.name)
         reciprocal = ctx.insert_new_node_on_output("Reciprocal", node.output[0], name=op_name)
@@ -168,7 +179,7 @@ class Rsqrt:
 @tf_op("SquaredDifference")
 class SquaredDifference:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Sub"
         op_name = utils.make_name(node.name)
         mul = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
@@ -178,7 +189,7 @@ class SquaredDifference:
 @tf_op("Sign")
 class Sign:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """Sign op."""
         # T sign = Sign(T Input)
         node_dtype = ctx.get_dtype(node.output[0])
@@ -214,7 +225,7 @@ class Sign:
 @tf_op("Pow")
 class Pow:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         if ctx.is_target(constants.TARGET_CAFFE2):
             # workaround a bug in caffe2 pre Feb2018, pow(a, b) becomes np.exp(np.log(a) * b)
             node.type = "Log"
@@ -226,7 +237,7 @@ class Pow:
             op_name = utils.make_name(node.name)
             exp_op = ctx.insert_new_node_on_output("Exp", mul_op.output[0], name=op_name)
             ctx.copy_shape(node.output[0], exp_op.output[0])
-            BroadcastOp.version_4(ctx, mul_op, **kwargs)
+            BroadcastOp.version_1(ctx, mul_op, **kwargs)
 
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
@@ -236,8 +247,7 @@ class Pow:
 @tf_op("LRN")
 class LRN:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        # FIXME: numerical results are not correct
+    def version_1(cls, ctx, node, **kwargs):
         # ONNX: Each input value is divided by (bias+(alpha/size)*sum(xi^2 for every xi in the local region))^beta
         # TF: sqr_sum[a, b, c, d] = sum(input[a, b, c, d - depth_radius : d + depth_radius + 1] ** 2)
         #     output = input / (bias + alpha * sqr_sum) ** beta
@@ -252,7 +262,7 @@ class LRN:
 @tf_op(["MatMul", "BatchMatMul"])
 class MatMul:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # tensorflow allows transpose and conjugated. If found, insert the required transpose.
         # We could use Gemm as well but tensorflow does not pass bias in matmul.
         node.type = "MatMul"
@@ -299,7 +309,7 @@ class MatMul:
 @tf_op("Erf")
 class Erf:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """Error function."""
         # constant names
         a1 = "erf_a1"
@@ -417,5 +427,5 @@ class FloorMod:
 @tf_op("Selu")
 class Selu:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         pass

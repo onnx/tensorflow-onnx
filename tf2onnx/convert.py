@@ -10,6 +10,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
+import sys
+
 import tensorflow as tf
 
 from tf2onnx.graph import GraphUtil
@@ -19,13 +21,29 @@ from tf2onnx import constants, loader, logging, utils
 
 # pylint: disable=unused-argument
 
+_HELP_TEXT = """
+Usage Examples:
+
+python -m tf2onnx.convert --saved_model saved_model_dir --output model.onnx
+python -m tf2onnx.convert --input frozen_graph.pb  --inputs X:0 --outputs output:0 --output model.onnx
+python -m tf2onnx.convert --checkpoint checkpoint.meta  --inputs X:0 --outputs output:0 --output model.onnx
+
+For help and additional information see:
+    https://github.com/onnx/tensorflow-onnx
+
+If you run into issues, open an issue here:
+    https://github.com/onnx/tensorflow-onnx/issues
+"""
+
 
 def get_args():
     """Parse commandline."""
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Convert tensorflow graphs to ONNX.",
+                                     formatter_class=argparse.RawDescriptionHelpFormatter, epilog=_HELP_TEXT)
     parser.add_argument("--input", help="input from graphdef")
     parser.add_argument("--graphdef", help="input from graphdef")
     parser.add_argument("--saved-model", help="input from saved model")
+    parser.add_argument("--signature_def", help="signature_def from saved model to use")
     parser.add_argument("--checkpoint", help="input from checkpoint")
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names")
@@ -43,8 +61,6 @@ def get_args():
                         action="store_true")
     # experimental
     parser.add_argument("--inputs-as-nchw", help="transpose inputs as from nhwc to nchw")
-    # depreciated, going to be removed some time in the future
-    parser.add_argument("--unknown-dim", type=int, default=-1, help="default for unknown dimensions")
     args = parser.parse_args()
 
     args.shape_override = None
@@ -53,9 +69,10 @@ def get_args():
         args.graphdef = args.input
     if args.graphdef or args.checkpoint:
         if not args.input and not args.outputs:
-            raise ValueError("graphdef and checkpoint models need to provide inputs and outputs")
+            parser.error("graphdef and checkpoint models need to provide inputs and outputs")
     if not any([args.graphdef, args.checkpoint, args.saved_model]):
-        raise ValueError("need input as graphdef, checkpoint or saved_model")
+        parser.print_help()
+        sys.exit(1)
     if args.inputs:
         args.inputs, args.shape_override = utils.split_nodename_and_shape(args.inputs)
     if args.outputs:
@@ -64,11 +81,12 @@ def get_args():
         args.inputs_as_nchw = args.inputs_as_nchw.split(",")
     if args.target:
         args.target = args.target.split(",")
-
+    if args.signature_def:
+        args.signature_def = [args.signature_def]
     if args.extra_opset:
         tokens = args.extra_opset.split(':')
         if len(tokens) != 2:
-            raise ValueError("invalid extra_opset argument")
+            parser.error("invalid extra_opset argument")
         args.extra_opset = [utils.make_opsetid(tokens[0], int(tokens[1]))]
 
     return args
@@ -87,10 +105,6 @@ def main():
 
     logger = logging.getLogger(constants.TF2ONNX_PACKAGE_NAME)
 
-    # override unknown dimensions from -1 to 1 (aka batchsize 1) since not every runtime does
-    # support unknown dimensions.
-    utils.ONNX_UNKNOWN_DIMENSION = args.unknown_dim
-
     extra_opset = args.extra_opset or []
     custom_ops = {}
     if args.custom_ops:
@@ -106,8 +120,13 @@ def main():
         graph_def, inputs, outputs = loader.from_checkpoint(args.checkpoint, args.inputs, args.outputs)
         model_path = args.checkpoint
     if args.saved_model:
-        graph_def, inputs, outputs = loader.from_saved_model(args.saved_model, args.inputs, args.outputs)
+        graph_def, inputs, outputs = loader.from_saved_model(
+            args.saved_model, args.inputs, args.outputs, args.signature_def)
         model_path = args.saved_model
+
+    if args.verbose:
+        logger.info("inputs: %s", inputs)
+        logger.info("outputs: %s", outputs)
 
     # todo: consider to enable const folding by default?
     graph_def = tf_optimize(inputs, outputs, graph_def, args.fold_const)
