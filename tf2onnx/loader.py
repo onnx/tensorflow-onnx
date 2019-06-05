@@ -84,7 +84,7 @@ def from_checkpoint(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def from_saved_model(model_path, input_names, output_names):
+def from_saved_model(model_path, input_names, output_names, signatures=None):
     """Load tensorflow graph from saved_model."""
     # make sure we start with clean default graph
     tf.reset_default_graph()
@@ -101,7 +101,18 @@ def from_saved_model(model_path, input_names, output_names):
 
     with tf.Session() as sess:
         meta_graph_def = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
-        for k in meta_graph_def.signature_def.keys():
+
+        if signatures is None:
+            signatures = []
+            for k in meta_graph_def.signature_def.keys():
+                if k.startswith("_"):
+                    # consider signatures starting with '_' private
+                    continue
+                signatures.append(k)
+            if len(signatures) > 1:
+                logger.warning("found multiple signatures %s in saved_model, pass --signature_def in command line",
+                               signatures)
+        for k in signatures:
             inputs_tensor_info = get_signature_def(meta_graph_def, k).inputs
             for _, input_tensor in sorted(inputs_tensor_info.items()):
                 inputs[input_tensor.name] = sess.graph.get_tensor_by_name(input_tensor.name)
