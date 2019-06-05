@@ -9,6 +9,7 @@ from __future__ import unicode_literals
 from collections import OrderedDict
 import copy
 
+from tf2onnx.optimizer.merge_consts import MergeConstsOptimizer
 from .const_fold_optimizer import ConstFoldOptimizer
 from .identity_optimizer import IdentityOptimizer
 from .merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
@@ -21,6 +22,7 @@ _optimizers = OrderedDict([
     ("fold_constants", ConstFoldOptimizer),
     # merge_duplication should be used after optimize_transpose
     # for optimize_transpose may have some trans nodes that can be merge
+    ('merge_constants', MergeConstsOptimizer),
     ("merge_duplication", MergeDuplicatedNodesOptimizer),
     ("remove_identity", IdentityOptimizer),
 ])
