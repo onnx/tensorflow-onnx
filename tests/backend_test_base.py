@@ -59,7 +59,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
         session = rt.InferenceSession(model_path)
-        session.set_graph_optimization_level(0)
+        if self.config.is_debug_mode:
+            session.set_graph_optimization_level(0)
         results = session.run(output_names, inputs)
         return results
 
