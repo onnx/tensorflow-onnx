@@ -1957,6 +1957,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @skip_opset(9, "ReverseV2")
+    def test_reverse_v2(self):
+        x_val = np.array([[[[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]],
+                            [[12, 13, 14, 15], [16, 17, 18, 19], [20, 21, 22, 23]]]],
+                            dtype=np.float32)
+        x = tf.placeholder(tf.float32, [1, 2, 3, 4], name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[1])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        # tf.reset_default_graph()
+
     @check_opset_min_version(8, "where")
     def test_where(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.float32)

@@ -1248,3 +1248,105 @@ class ReverseSequence:
         target_dtype = TensorProto.INT64
         if seq_len_dtype != target_dtype:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=target_dtype)
+
+
+@tf_op("ReverseV2")
+class ReverseV2:
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        raise NotImplementedError("ReverseV2 is not supported to convert in OPSET 9,"
+                                  " if possible please try using OPSET>=10 instead.")
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # ! TF Reverse supports a tensor of up to 8-D
+        # input_shape = node.input.shape
+
+        # The number of dimensions specified in axis may be 0 or more entries.
+        print(node.summary) # RV2 summary
+
+        axes_node = node.inputs[1]
+        axes = axes_node.get_tensor_value() # Is a Python list
+        len_axes = len(axes)
+
+        # Store input and output parameters of the ReverseV2 node.
+        rv2_axis_input_name = node.input[1]
+        rv2_in_names = [node.input[0]]
+        rv2_out_name = node.output
+        output_shape = ctx.get_shape(node.output[0])
+        rv2_node_name = node.name
+
+        # Remove ReverseV2 node from graph
+        ctx.remove_node(rv2_node_name)
+
+        # List to keep track of input names.
+        inputs = [rv2_in_names]
+
+        # # Create Shape node
+        # new_node = ctx.make_node(
+        #     "Shape",
+        #     inputs=[rv2_in_name],
+        #     op_name_scope=rv2_node_name,
+        # )
+
+        # shape_output_name = new_node.output[0]
+
+        # # Split shape results
+        # split_out_names = ['output_' + str(i) for i in range(len_axes)]
+
+        # new_node = ctx.make_node(
+        #     "Split",
+        #     inputs=[shape_output_name],
+        #     outputs=split_out_names,
+        #     op_name_scope=rv2_node_name,
+        # )
+
+        for i in range(len_axes):
+            print('\n#### Adding RS for RV2, for axis', axes[i])
+
+            output_name = None if (i < len_axes - 1) else rv2_out_name
+            input_names = inputs[-1]
+
+            if axes[i] == 0:
+                new_node = ctx.make_node(
+                    "Identity",
+                    inputs=input_names[0],
+                    op_name_scope=rv2_node_name,
+                    outputs=output_name,
+                    shapes=[output_shape]
+                )
+
+            elif axes[i] == 1:
+                # Requires 1 ReverseSequence node
+                # and      1 Constant node (for seq_len)
+
+                seq_list = [output_shape[1]] * output_shape[0]
+                seq_array = np.asarray(seq_list)
+
+                const_node_name = rv2_node_name + '_Const' + str(i)
+                new_const_node = ctx.make_const(name=const_node_name, np_val=seq_array)
+                const_output_name = new_const_node.output[0]
+                inputs[-1].append(const_output_name)
+                input_names = inputs[-1]
+                
+                new_node = ctx.make_node(
+                    "ReverseSequence",
+                    inputs=input_names,
+                    op_name_scope=rv2_node_name,
+                    outputs=output_name,
+                    shapes=[output_shape],
+                    attr={"batch_axis": 0, "time_axis": 1}
+                )
+
+            output_name = new_node.output[0]
+            inputs.append([output_name, rv2_axis_input_name])
+
+            if axes[i] != 0:
+                axis_dtype = ctx.get_dtype(input_names[1])
+                utils.make_sure(axis_dtype is not None, "dtype of {} is None".format(input_names[1]))
+                target_dtype = TensorProto.INT64
+                if axis_dtype != target_dtype:
+                    ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[1], to=target_dtype)
+
+            print(new_node.summary)
+
