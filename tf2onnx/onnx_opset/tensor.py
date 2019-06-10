@@ -1259,18 +1259,12 @@ class ReverseV2:
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
-        # ! TF Reverse supports a tensor of up to 8-D
-        # input_shape = node.input.shape
-
-        # The number of dimensions specified in axis may be 0 or more entries.
-        print(node.summary) # RV2 summary
 
         axes_node = node.inputs[1]
         axes = axes_node.get_tensor_value() # Is a Python list
         len_axes = len(axes)
 
         # Store input and output parameters of the ReverseV2 node.
-        rv2_axis_input_name = node.input[1]
         rv2_in_names = [node.input[0]]
         rv2_out_name = node.output
         output_shape = ctx.get_shape(node.output[0])
@@ -1283,6 +1277,11 @@ class ReverseV2:
         # List to keep track of input names.
         inputs = [rv2_in_names]
 
+        # Empty axis vector
+        if len_axes == 0:
+            # Add an identity block?
+            pass
+
         def ensure_seq_len_dtype(ctx, node):
             """Ensure that the dtype of seq_len is INT64"""
 
@@ -1293,14 +1292,14 @@ class ReverseV2:
                 ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=target_dtype)
 
         perm = None
+        new_node = None
 
         for i in range(len_axes):
             axis = axes[i]
-            print('\n#### Adding RS for RV2, for axis', axis)   # TODO: Delete
 
             output_name = None if (i < len_axes - 1) else rv2_out_name
             input_names = inputs[-1]
-            
+
             perm = list(range(len_shape))
 
             if axis > 0:
@@ -1316,15 +1315,11 @@ class ReverseV2:
                     attr={"perm": perm}
                 )
 
-                out_name = new_node.output[0]
-                inputs.append([out_name])
+                inputs.append([new_node.output[0]])
                 input_names = inputs[-1]
-
-                print(new_node.summary) # TODO: Delete
 
             # Add a Constant node (seq_len) for ReverseSequence
             seq_list = [output_shape[axis]] * output_shape[perm[1]]
-            print('#### SEQ_LEN:', seq_list) # TODO: Delete
             seq_array = np.asarray(seq_list)
 
             const_seq_name = rv2_node_name + '_Const' + str(i)
@@ -1332,8 +1327,6 @@ class ReverseV2:
             const_seq_output = new_node.output[0]
             inputs[-1].append(const_seq_output)
             input_names = inputs[-1]
-
-            print(new_node.summary) # TODO: Delete
 
             # Add a ReverseSequence node
             new_node = ctx.make_node(
@@ -1346,11 +1339,8 @@ class ReverseV2:
 
             ensure_seq_len_dtype(ctx, new_node)
 
-            out_name = new_node.output[0]
-            inputs.append([out_name])
+            inputs.append([new_node.output[0]])
             input_names = inputs[-1]
-
-            print(new_node.summary) # TODO: Delete
 
             if axis > 0:
                 # Add a Transpose node to reset shape.
@@ -1362,11 +1352,5 @@ class ReverseV2:
                     attr={"perm": perm}
                 )
 
-                out_name = new_node.output[0]
-                inputs.append([out_name])
-
-                print(new_node.summary) # TODO: Delete
-
-            out_name = new_node.output[0]
-            inputs.append([out_name])
+            inputs.append([new_node.output[0]])
 
