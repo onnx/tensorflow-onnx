@@ -307,6 +307,14 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.replace_input(consumer, node.output[0], nhwc_node.output[0])
 
     def _create_transpose_pairs_before_node(self, node):
+        def shape_after_expand(ori_shape):
+            # according to broadcasting rule to expand shape to 4D
+            utils.make_sure(ori_shape.count(-1) <= 1, "shape can contain one -1 at most")
+            ori_rank = len(ori_shape)
+            utils.make_sure(ori_rank <= 4, "ONNX only supports 4D data")
+            new_shape = [1]*(4-ori_rank) + ori_shape
+            return new_shape
+
         non_nhwc_trans_inputs = []
         for input_id, n in zip(node.input, node.inputs):
             if not is_nhwc_transpose(n):
@@ -316,7 +324,16 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nhwc_trans_consumers
         for input_id, n in non_nhwc_trans_inputs:
-            nchw_node = self._g.make_node("Transpose", [input_id], attr={"perm": [0, 3, 1, 2]})
+            shape = self._g.get_shape(n.output[0])
+            if len(shape) == 4:
+                nchw_node = self._g.make_node("Transpose", [input_id], attr={"perm": [0, 3, 1, 2]})
+            else:
+                shape_4d = shape_after_expand(shape)
+                shape_const = self._g.make_const(utils.make_name("reshape_shape"),
+                                                 np_val=np.array(shape_4d, np.int64)).output[0]
+                reshape = self._g.make_node("Reshape", [input_id, shape_const]).output[0]
+                nchw_node = self._g.make_node("Transpose", [reshape], attr={"perm": [0, 3, 1, 2]})
+
             nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
             self._g.replace_input(node, input_id, nhwc_node.output[0])
 
