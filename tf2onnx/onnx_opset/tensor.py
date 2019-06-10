@@ -1292,18 +1292,22 @@ class ReverseV2:
             if seq_len_dtype != target_dtype:
                 ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=target_dtype)
 
+        perm = None
+
         for i in range(len_axes):
-            print('\n#### Adding RS for RV2, for axis', axes[i])
+            axis = axes[i]
+            print('\n#### Adding RS for RV2, for axis', axis)   # TODO: Delete
 
             output_name = None if (i < len_axes - 1) else rv2_out_name
             input_names = inputs[-1]
+            
+            perm = list(range(len_shape))
 
-            if axes[i] == 0:
+            if axis > 0:
+                # Permutation list for Transpose node.
+                perm[axis], perm[0] = perm[0], perm[axis]
 
                 # Add a Transpose node.
-                perm = list(range(len_shape))
-                perm[0], perm[1] = perm[1], perm[0]
-
                 new_node = ctx.make_node(
                     "Transpose",
                     inputs=input_names,
@@ -1316,39 +1320,40 @@ class ReverseV2:
                 inputs.append([out_name])
                 input_names = inputs[-1]
 
-                print(new_node.summary)
+                print(new_node.summary) # TODO: Delete
 
-                # Add a Constant node for seq_len for ReverseSequence
-                seq_list = [output_shape[0]] * output_shape[1]
-                seq_array = np.asarray(seq_list)
+            # Add a Constant node (seq_len) for ReverseSequence
+            seq_list = [output_shape[axis]] * output_shape[perm[1]]
+            print('#### SEQ_LEN:', seq_list) # TODO: Delete
+            seq_array = np.asarray(seq_list)
 
-                const_seq_name = rv2_node_name + '_Const' + str(i)
-                new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
-                const_seq_output = new_node.output[0]
-                inputs[-1].append(const_seq_output)
-                input_names = inputs[-1]
+            const_seq_name = rv2_node_name + '_Const' + str(i)
+            new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
+            const_seq_output = new_node.output[0]
+            inputs[-1].append(const_seq_output)
+            input_names = inputs[-1]
 
-                print(new_node.summary)
+            print(new_node.summary) # TODO: Delete
 
-                # Add a ReverseSequence node
-                new_node = ctx.make_node(
-                    "ReverseSequence",
-                    inputs=input_names,
-                    op_name_scope=rv2_node_name,
-                    outputs=None,
-                    attr={"batch_axis": 0, "time_axis": 1}
-                )
+            # Add a ReverseSequence node
+            new_node = ctx.make_node(
+                "ReverseSequence",
+                inputs=input_names,
+                op_name_scope=rv2_node_name,
+                outputs=None if axis > 0 else output_name,
+                attr={"batch_axis": 1, "time_axis": 0}
+            )
 
-                ensure_seq_len_dtype(ctx, new_node)
+            ensure_seq_len_dtype(ctx, new_node)
 
-                out_name = new_node.output[0]
-                inputs.append([out_name])
-                input_names = inputs[-1]
+            out_name = new_node.output[0]
+            inputs.append([out_name])
+            input_names = inputs[-1]
 
-                print(new_node.summary)
+            print(new_node.summary) # TODO: Delete
 
-                # Add a Transpose node to get back original shape.
-
+            if axis > 0:
+                # Add a Transpose node to reset shape.
                 new_node = ctx.make_node(
                     "Transpose",
                     inputs=input_names,
@@ -1360,7 +1365,7 @@ class ReverseV2:
                 out_name = new_node.output[0]
                 inputs.append([out_name])
 
-                print(new_node.summary)
+                print(new_node.summary) # TODO: Delete
 
             out_name = new_node.output[0]
             inputs.append([out_name])
