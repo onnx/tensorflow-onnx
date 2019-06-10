@@ -95,8 +95,6 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
 
     @staticmethod
     def _are_attr_equal(a, b):
-        if len(a) == 0 and len(b) == 0:
-            return True
         if len(a) != len(b):
             return False
         for k, v in a.items():
@@ -106,11 +104,13 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
                     v.type == onnx_pb.AttributeProto.FLOATS or \
                     v.type == onnx_pb.AttributeProto.INTS or \
                     v.type == onnx_pb.AttributeProto.STRINGS:
-                return v == b[k]
+                if v != b[k]:
+                    return False
             elif v.type == onnx_pb.AttributeProto.TENSOR:
                 t1 = v.t
                 t2 = b[k].t
-                return t1.dims == t2.dims and t1.data_type == t2.data_type and t1.raw_data == t2.raw_data
+                if not (t1.dims == t2.dims and t1.data_type == t2.data_type and t1.raw_data == t2.raw_data):
+                    return False
             elif v.type == onnx_pb.AttributeProto.TENSORS:
                 if len(v.ts) != len(b[k].ts):
                     return False
@@ -119,13 +119,14 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
                     t2 = b[k].ts[i]
                     if not (t1.dims == t2.dims and t1.data_type == t2.data_type and t1.raw_data == t2.raw_data):
                         return False
-                return True
             elif v.type == onnx_pb.AttributeProto.GRAPH:
                 # TODO provide implementation which skips doc_string and name
                 # TODO We need an equals() method for each Node and every Proto object
                 # TODO Using that graphs (and their nodes) could be compared recursively
-                return v == b[k]
+                if not v == b[k]:
+                    return False
             elif v.type == onnx_pb.AttributeProto.GRAPHS:
                 # TODO provide implementation which skips doc_string and name
-                return v == b[k]
+                if not v == b[k]:
+                    return False
         return True
