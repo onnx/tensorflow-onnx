@@ -1261,7 +1261,7 @@ class ReverseV2:
     def version_10(cls, ctx, node, **kwargs):
 
         axes_node = node.inputs[1]
-        axes = axes_node.get_tensor_value() # Is a Python list
+        axes = axes_node.get_tensor_value() # Is a Python list.
         len_axes = len(axes)
 
         # Store input and output parameters of the ReverseV2 node.
@@ -1271,86 +1271,88 @@ class ReverseV2:
         len_shape = len(output_shape)
         rv2_node_name = node.name
 
-        # Remove ReverseV2 node from graph
+        # Remove ReverseV2 node from graph.
         ctx.remove_node(rv2_node_name)
 
         # List to keep track of input names.
         inputs = [rv2_in_names]
 
-        # Empty axis vector
-        if len_axes == 0:
-            # Add an identity block?
-            pass
-
-        def ensure_seq_len_dtype(ctx, node):
-            """Ensure that the dtype of seq_len is INT64"""
-
-            seq_len_dtype = ctx.get_dtype(node.input[1])
-            utils.make_sure(seq_len_dtype is not None, "dtype of {} is None".format(node.input[1]))
-            target_dtype = TensorProto.INT64
-            if seq_len_dtype != target_dtype:
-                ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=target_dtype)
-
-        perm = None
         new_node = None
 
-        for i in range(len_axes):
-            axis = axes[i]
+        # Empty axis vector.
+        if len_axes == 0:
+            # Replace ReverseV2 with an identity block.
+            new_node = ctx.make_node(
+                "Identity",
+                inputs=inputs[-1],
+                outputs=rv2_out_name,
+                op_name_scope=rv2_node_name,
+            )
 
-            output_name = None if (i < len_axes - 1) else rv2_out_name
-            input_names = inputs[-1]
+        else:
+            # Add ReverseSequence nodes for each element of axis.
+            for i in range(len_axes):
+                axis = axes[i]
 
-            perm = list(range(len_shape))
+                output_name = None if (i < len_axes - 1) else rv2_out_name
+                input_names = inputs[-1]
 
-            if axis > 0:
-                # Permutation list for Transpose node.
-                perm[axis], perm[0] = perm[0], perm[axis]
+                perm = list(range(len_shape))
 
-                # Add a Transpose node.
+                if axis > 0:
+                    # Permutation list for Transpose node.
+                    perm[axis], perm[0] = perm[0], perm[axis]
+
+                    # Add a Transpose node.
+                    new_node = ctx.make_node(
+                        "Transpose",
+                        inputs=input_names,
+                        op_name_scope=rv2_node_name,
+                        outputs=None,
+                        attr={"perm": perm}
+                    )
+
+                    inputs.append([new_node.output[0]])
+                    input_names = inputs[-1]
+
+                # Add a Constant node (seq_len) for ReverseSequence.
+                seq_list = [output_shape[axis]] * output_shape[perm[1]]
+                seq_array = np.asarray(seq_list)
+
+                const_seq_name = rv2_node_name + '_Const' + str(i)
+                new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
+                const_seq_output = new_node.output[0]
+                inputs[-1].append(const_seq_output)
+                input_names = inputs[-1]
+
+                # Add a ReverseSequence node.
                 new_node = ctx.make_node(
-                    "Transpose",
+                    "ReverseSequence",
                     inputs=input_names,
                     op_name_scope=rv2_node_name,
-                    outputs=None,
-                    attr={"perm": perm}
+                    outputs=None if axis > 0 else output_name,
+                    attr={"batch_axis": 1, "time_axis": 0}
                 )
+
+                # Ensure that the dtype of seq_len is INT64.
+                seq_len_dtype = ctx.get_dtype(new_node.input[1])
+                utils.make_sure(seq_len_dtype is not None, "dtype of {} is None".format(node.input[1]))
+                target_dtype = TensorProto.INT64
+                if seq_len_dtype != target_dtype:
+                    ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[1], to=target_dtype)
 
                 inputs.append([new_node.output[0]])
                 input_names = inputs[-1]
 
-            # Add a Constant node (seq_len) for ReverseSequence
-            seq_list = [output_shape[axis]] * output_shape[perm[1]]
-            seq_array = np.asarray(seq_list)
+                if axis > 0:
+                    # Add a Transpose node to reset shape.
+                    new_node = ctx.make_node(
+                        "Transpose",
+                        inputs=input_names,
+                        op_name_scope=rv2_node_name,
+                        outputs=output_name,
+                        attr={"perm": perm}
+                    )
 
-            const_seq_name = rv2_node_name + '_Const' + str(i)
-            new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
-            const_seq_output = new_node.output[0]
-            inputs[-1].append(const_seq_output)
-            input_names = inputs[-1]
-
-            # Add a ReverseSequence node
-            new_node = ctx.make_node(
-                "ReverseSequence",
-                inputs=input_names,
-                op_name_scope=rv2_node_name,
-                outputs=None if axis > 0 else output_name,
-                attr={"batch_axis": 1, "time_axis": 0}
-            )
-
-            ensure_seq_len_dtype(ctx, new_node)
-
-            inputs.append([new_node.output[0]])
-            input_names = inputs[-1]
-
-            if axis > 0:
-                # Add a Transpose node to reset shape.
-                new_node = ctx.make_node(
-                    "Transpose",
-                    inputs=input_names,
-                    op_name_scope=rv2_node_name,
-                    outputs=output_name,
-                    attr={"perm": perm}
-                )
-
-            inputs.append([new_node.output[0]])
+                inputs.append([new_node.output[0]])
 
