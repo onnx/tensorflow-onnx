@@ -1963,7 +1963,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             [[12, 13, 14, 15], [16, 17, 18, 19], [20, 21, 22, 23]]]],
                             dtype=np.float32)
         x = tf.placeholder(tf.float32, [1, 2, 3, 4], name=_TFINPUT)
-        x_ = tf.reverse_v2(x, axis=[1])
+        x_ = tf.reverse_v2(x, axis=[0])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
         # tf.reset_default_graph()

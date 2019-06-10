@@ -1274,6 +1274,7 @@ class ReverseV2:
         rv2_in_names = [node.input[0]]
         rv2_out_name = node.output
         output_shape = ctx.get_shape(node.output[0])
+        len_shape = len(output_shape)
         rv2_node_name = node.name
 
         # Remove ReverseV2 node from graph
@@ -1282,24 +1283,14 @@ class ReverseV2:
         # List to keep track of input names.
         inputs = [rv2_in_names]
 
-        # # Create Shape node
-        # new_node = ctx.make_node(
-        #     "Shape",
-        #     inputs=[rv2_in_name],
-        #     op_name_scope=rv2_node_name,
-        # )
+        def ensure_seq_len_dtype(ctx, node):
+            """Ensure that the dtype of seq_len is INT64"""
 
-        # shape_output_name = new_node.output[0]
-
-        # # Split shape results
-        # split_out_names = ['output_' + str(i) for i in range(len_axes)]
-
-        # new_node = ctx.make_node(
-        #     "Split",
-        #     inputs=[shape_output_name],
-        #     outputs=split_out_names,
-        #     op_name_scope=rv2_node_name,
-        # )
+            seq_len_dtype = ctx.get_dtype(node.input[1])
+            utils.make_sure(seq_len_dtype is not None, "dtype of {} is None".format(node.input[1]))
+            target_dtype = TensorProto.INT64
+            if seq_len_dtype != target_dtype:
+                ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=target_dtype)
 
         for i in range(len_axes):
             print('\n#### Adding RS for RV2, for axis', axes[i])
@@ -1308,45 +1299,69 @@ class ReverseV2:
             input_names = inputs[-1]
 
             if axes[i] == 0:
+
+                # Add a Transpose node.
+                perm = list(range(len_shape))
+                perm[0], perm[1] = perm[1], perm[0]
+
                 new_node = ctx.make_node(
-                    "Identity",
-                    inputs=input_names[0],
+                    "Transpose",
+                    inputs=input_names,
                     op_name_scope=rv2_node_name,
-                    outputs=output_name,
-                    shapes=[output_shape]
+                    outputs=None,
+                    attr={"perm": perm}
                 )
 
-            elif axes[i] == 1:
-                # Requires 1 ReverseSequence node
-                # and      1 Constant node (for seq_len)
+                out_name = new_node.output[0]
+                inputs.append([out_name])
+                input_names = inputs[-1]
 
-                seq_list = [output_shape[1]] * output_shape[0]
+                print(new_node.summary)
+
+                # Add a Constant node for seq_len for ReverseSequence
+                seq_list = [output_shape[0]] * output_shape[1]
                 seq_array = np.asarray(seq_list)
 
-                const_node_name = rv2_node_name + '_Const' + str(i)
-                new_const_node = ctx.make_const(name=const_node_name, np_val=seq_array)
-                const_output_name = new_const_node.output[0]
-                inputs[-1].append(const_output_name)
+                const_seq_name = rv2_node_name + '_Const' + str(i)
+                new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
+                const_seq_output = new_node.output[0]
+                inputs[-1].append(const_seq_output)
                 input_names = inputs[-1]
-                
+
+                print(new_node.summary)
+
+                # Add a ReverseSequence node
                 new_node = ctx.make_node(
                     "ReverseSequence",
                     inputs=input_names,
                     op_name_scope=rv2_node_name,
-                    outputs=output_name,
-                    shapes=[output_shape],
+                    outputs=None,
                     attr={"batch_axis": 0, "time_axis": 1}
                 )
 
-            output_name = new_node.output[0]
-            inputs.append([output_name, rv2_axis_input_name])
+                ensure_seq_len_dtype(ctx, new_node)
 
-            if axes[i] != 0:
-                axis_dtype = ctx.get_dtype(input_names[1])
-                utils.make_sure(axis_dtype is not None, "dtype of {} is None".format(input_names[1]))
-                target_dtype = TensorProto.INT64
-                if axis_dtype != target_dtype:
-                    ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[1], to=target_dtype)
+                out_name = new_node.output[0]
+                inputs.append([out_name])
+                input_names = inputs[-1]
 
-            print(new_node.summary)
+                print(new_node.summary)
+
+                # Add a Transpose node to get back original shape.
+
+                new_node = ctx.make_node(
+                    "Transpose",
+                    inputs=input_names,
+                    op_name_scope=rv2_node_name,
+                    outputs=output_name,
+                    attr={"perm": perm}
+                )
+
+                out_name = new_node.output[0]
+                inputs.append([out_name])
+
+                print(new_node.summary)
+
+            out_name = new_node.output[0]
+            inputs.append([out_name])
 
