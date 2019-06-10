@@ -636,49 +636,22 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
     # Merge Constants Optimizer Tests Start
     def test_merge_consts(self):
-        value = np.array([1., 2., 3., 4.]).astype(np.float32)
-        shape = value.shape
-        value_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
-                                          vals=value)
-        const_nodes = [
-            helper.make_node("Constant", [], ["const"+str(i)], value=value_tensor) for i in range(3)
-        ]
-
-        neg_nodes = [
-            helper.make_node("Neg", ["const" +str(i)], ["neg"+str(i)]) for i in range(3)
-        ]
-
-        concat_node = helper.make_node('Concat', [n.output[0] for n in neg_nodes], ['concat'], axis=0)
-        all_nodes = [concat_node] + const_nodes + neg_nodes
-        graph = helper.make_graph(
-            all_nodes,
-            "test_merge_consts",
-            [],
-            [helper.make_tensor_value_info("concat", TensorProto.FLOAT, [12])],
-        )
-
-        model_proto = helper.make_model(graph, producer_name="onnx-tests")
-        self.run_and_compare(["concat"], {}, model_proto,
-                             "Concat", 1)
-
-    def test_merge_consts2(self):
             reshape_value = np.array([1, 2, 3, 4]).astype(np.int64)
             input_shape = [2, 3, 4]
-            value_tensor = helper.make_tensor(name='const_tensor',
-                                              data_type=TensorProto.INT64,
-                                              dims=reshape_value.shape,
-                                              vals=reshape_value)
-            const_nodes = [
-                helper.make_node("Constant", [], ['const' + str(i)], value=value_tensor) for i in range(3)
-            ]
+            value_tensors = []
+            const_nodes = []
+            reshape_nodes = []
+            transpose_nodes = []
+            for i in range(3):
 
-            reshape_nodes = [
-                helper.make_node('Reshape', ['input', 'const' + str(i)], ['reshape' + str(i)]) for i in range(3)
-            ]
-
-            transpose_nodes = [
-                helper.make_node("Transpose", ["reshape" + str(i)], ["transpose" + str(i)], perm=[0, 3, 1, 2]) for i in range(3)
-            ]
+                value_tensors.append(helper.make_tensor(name='const_tensor' + str(i),
+                                       data_type=TensorProto.INT64,
+                                       dims=reshape_value.shape,
+                                       vals=reshape_value))
+                const_nodes.append(helper.make_node("Constant", [], ['const' + str(i)], value=value_tensors[i]))
+                reshape_nodes.append(helper.make_node('Reshape', ['input', 'const' + str(i)], ['reshape' + str(i)]))
+                transpose_nodes.append(helper.make_node("Transpose", ["reshape" + str(i)], ["transpose" + str(i)],
+                                                        perm=[0, 3, 1, 2]))
 
             # concat_node = helper.make_node('Concat', [n.output[0] for n in neg_nodes], ['concat'], axis=0)
             graph = helper.make_graph(

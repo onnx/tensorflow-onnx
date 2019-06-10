@@ -9,6 +9,8 @@
 
 from collections import defaultdict, namedtuple
 
+from onnx import onnx_pb
+
 from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
@@ -57,7 +59,7 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
             unprocessed_node = []
             nodes_to_process = [nodes_group[0]]
             for node in nodes_group[1:]:
-                if node.attr == nodes_to_process[0].attr:
+                if self._are_attr_equal(node.attr, nodes_to_process[0].attr):
                     nodes_to_process.append(node)
                 else:
                     unprocessed_node.append(node)
@@ -90,3 +92,40 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     @staticmethod
     def _len_of_node_output(node):
         return len(node.output)
+
+    @staticmethod
+    def _are_attr_equal(a, b):
+        if len(a) == 0 and len(b) == 0:
+            return True
+        if len(a) != len(b):
+            return False
+        for k, v in a.items():
+            if v.type == onnx_pb.AttributeProto.FLOAT or \
+                    v.type == onnx_pb.AttributeProto.INT or \
+                    v.type == onnx_pb.AttributeProto.STRING or \
+                    v.type == onnx_pb.AttributeProto.FLOATS or \
+                    v.type == onnx_pb.AttributeProto.INTS or \
+                    v.type == onnx_pb.AttributeProto.STRINGS:
+                return v == b[k]
+            elif v.type == onnx_pb.AttributeProto.TENSOR:
+                t1 = v.t
+                t2 = b[k].t
+                return t1.dims == t2.dims and t1.data_type == t2.data_type and t1.raw_data == t2.raw_data
+            elif v.type == onnx_pb.AttributeProto.TENSORS:
+                if len(v.ts) != len(b[k].ts):
+                    return False
+                for i in range(len(v.ts)):
+                    t1 = v.ts[i]
+                    t2 = b[k].ts[i]
+                    if not (t1.dims == t2.dims and t1.data_type == t2.data_type and t1.raw_data == t2.raw_data):
+                        return False
+                return True
+            elif v.type == onnx_pb.AttributeProto.GRAPH:
+                # TODO provide implementation which skips doc_string and name
+                # TODO We need an equals() method for each Node and every Proto object
+                # TODO Using that graphs (and their nodes) could be compared recursively
+                return v == b[k]
+            elif v.type == onnx_pb.AttributeProto.GRAPHS:
+                # TODO provide implementation which skips doc_string and name
+                return v == b[k]
+        return True
