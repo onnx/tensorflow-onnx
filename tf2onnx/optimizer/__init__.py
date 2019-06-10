@@ -9,7 +9,6 @@ from __future__ import unicode_literals
 from collections import OrderedDict
 import copy
 
-from .merge_consts import MergeConstsOptimizer
 from .const_fold_optimizer import ConstFoldOptimizer
 from .identity_optimizer import IdentityOptimizer
 from .merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
