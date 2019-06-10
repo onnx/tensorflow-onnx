@@ -1996,6 +1996,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.reverse_v2(x, axis=[0, 1, 2])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val_shape = [5, 5, 9, 7, 8, 9]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, [5, 5, 9, 7, 8, 9], name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[0, 1, 4, 3, 5])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(8, "where")
     def test_where(self):
