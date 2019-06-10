@@ -120,10 +120,10 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
     def parse_attributes(self, context):
         # in tf, only activation of hidden gate is optional, input and update gate always use sigmoid
         match = context.cell_match
-        activations = ["sigmoid", "Tanh"]
+        activations = ["Sigmoid", "Tanh"]
         if self.gru_cell_type == RNNUnitType.GRUCell:
             activation_op = match.get_op("optional_activation")
-            activations = ["sigmoid", activation_op.type]
+            activations = ["Sigmoid", activation_op.type]
         context.attributes["activations"] = activations
         return True
 
