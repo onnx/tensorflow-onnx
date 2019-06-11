@@ -1292,12 +1292,11 @@ class ReverseV2:
         else:
             # Add ReverseSequence nodes for each element of axis.
             for i in range(len_axes):
+
                 axis = axes[i]
-
-                output_name = None if (i < len_axes - 1) else rv2_out_name
                 input_names = inputs[-1]
-
                 perm = list(range(len_shape))
+                output_name = None if (i < len_axes - 1) else rv2_out_name
 
                 if axis > 0:
                     # Permutation list for Transpose node.
@@ -1321,16 +1320,20 @@ class ReverseV2:
 
                 const_seq_name = rv2_node_name + '_Const' + str(i)
                 new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
-                const_seq_output = new_node.output[0]
-                inputs[-1].append(const_seq_output)
+                inputs[-1].append(new_node.output[0])
                 input_names = inputs[-1]
 
                 # Add a ReverseSequence node.
+
+                # If axis is not 0 then the output is fed to a new Transpose node.
+                # Else                             is fed to the output of RV2 or next RS.
+                rs_out_name = None if axis > 0 else output_name
+
                 new_node = ctx.make_node(
                     "ReverseSequence",
                     inputs=input_names,
                     op_name_scope=rv2_node_name,
-                    outputs=None if axis > 0 else output_name,
+                    outputs=rs_out_name,
                     attr={"batch_axis": 1, "time_axis": 0}
                 )
 
