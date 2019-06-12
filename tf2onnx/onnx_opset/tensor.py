@@ -567,6 +567,7 @@ class StridedSlice:
             attr = node.get_attr(attr_name)
             if attr is not None and attr.i != 0:
                 raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
+
         onnx_dtype = ctx.get_dtype(node.input[1])
         np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
         max_size = np.iinfo(np_dtype).max
@@ -586,16 +587,26 @@ class StridedSlice:
         axes = []
         # onnx slice op can't remove a axis, track axis and add a squeeze op if needed
         needs_squeeze = []
+        # ellipsis: one bit at most can be 1. An ellipsis implicitly creates as many range specifications as
+        # necessary to fully specify the sliced range for every dimension.
+        # For example for a 4-dimensional tensor foo the slice foo[2, ..., 5:8] implies foo[2, :, :, 5:8]
+        # NOTE: we ignore those axes denoted by ellipsis using `axes` attribute
+        ellipsis_gap = 0
         for idx, begin_item in enumerate(begin):
-            end_item = end[idx]
             if strides[idx] != 1:
                 raise ValueError("StridedSlice: only strides=1 is supported")
-            axes.append(idx)
-
             if (ellipsis_mask >> idx) & 1:
-                new_begin.append(0)
-                new_end.append(max_size)
+                input_shape = ctx.get_shape(node.input[0])
+                utils.make_sure(
+                    input_shape is not None,
+                    "StridedSlice op {} requires the shape of input".format(node.name)
+                )
+                ellipsis_gap = len(input_shape) - len(begin)
                 continue
+
+            # ignore ellipsis axes
+            axes.append(idx + ellipsis_gap)
+            end_item = end[idx]
 
             # an implicit condition is stride == 1 (checked in above)
             if begin_item < 0 and end_item == 0:
@@ -606,7 +617,7 @@ class StridedSlice:
                 new_begin.append(begin_item)
                 end_item = begin_item + 1 if begin_item != -1 else max_size
                 new_end.append(end_item)
-                needs_squeeze.append(idx)
+                needs_squeeze.append(idx + ellipsis_gap)
                 continue
 
             mask = (begin_mask >> idx) & 1
@@ -698,30 +709,46 @@ class StridedSlice:
         ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
         shrink_axis_mask = node.get_attr("shrink_axis_mask")
         shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
-        input_shape = ctx.get_shape(node.input[1]) or \
+        param_shape = ctx.get_shape(node.input[1]) or \
             ctx.get_shape(node.input[2]) or \
             ctx.get_shape(node.input[3])
-        utils.make_sure(input_shape, "StridedSlice op {} requires the shape of begin/end/strides".format(node.name))
-        input_rank = input_shape[0]
+        utils.make_sure(
+            param_shape is not None,
+            "StridedSlice op {} requires the shape of begin/end/strides".format(node.name)
+        )
+        param_rank = param_shape[0]
         # use in onnx graph to mask begin
-        new_begin_mask = [1] * input_rank
+        new_begin_mask = [1] * param_rank
         # use in onnx graph to mask end
-        new_end_mask = [min_size] * input_rank
+        new_end_mask = [min_size] * param_rank
         # for shrink mask, if shrink mask is 1, set stride to be max_size
-        shrink_strided_mask = [min_size] * input_rank
+        shrink_strided_mask = [min_size] * param_rank
+        axes = []
         # onnx slice op can't remove a axis, track axis and add a squeeze op if needed
         needs_squeeze = []
-        for idx in range(input_rank):
+        ellipsis_gap = 0
+        for idx in range(param_rank):
             if (ellipsis_mask >> idx) & 1:
+                input_shape = ctx.get_shape(node.input[0])
+                utils.make_sure(
+                    input_shape is not None,
+                    "StridedSlice op {} requires the shape of input".format(node.name)
+                )
+                ellipsis_gap = len(input_shape) - param_rank
+                # handle the redundant param
                 new_begin_mask[idx] = 0
                 new_end_mask[idx] = max_size
+                axes.append(idx)
                 continue
+
+            # ignore ellipsis axes
+            axes.append(idx + ellipsis_gap)
 
             mask = (shrink_axis_mask >> idx) & 1
             if mask != 0:
                 shrink_strided_mask[idx] = max_size
                 new_end_mask[idx] = max_size
-                needs_squeeze.append(idx)
+                needs_squeeze.append(idx + ellipsis_gap)
                 continue
 
             mask = (begin_mask >> idx) & 1
@@ -794,7 +821,7 @@ class StridedSlice:
         # create axes input
         axes_const = ctx.make_const(
             utils.make_name("slice_axes"),
-            np.arange(input_rank, dtype=np_dtype)
+            np.array(axes, dtype=np_dtype)
         )
         axes_output = axes_const.output[0]
 
@@ -974,7 +1001,7 @@ class OneHot:
         if ctx.is_target(constants.TARGET_RS6) \
                 and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
             logger.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
-            cls.version_5(ctx, node, **kwargs)
+            cls.version_1(ctx, node, **kwargs)
             return
 
         depth = node.input[1]
