@@ -24,14 +24,14 @@ logger = logging.getLogger(__name__)
 @tf_op(["Const", "ConstV2"])
 class DirectOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         pass
 
 
 @tf_op(["RandomNormal", "RandomUniform", "RandomNormalLike", "RandomUniformLike"])
 class PassThroughOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         pass
 
 
@@ -125,7 +125,7 @@ class Multinomial:
 @tf_op("ZerosLike")
 class ZerosLike:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = ZerosLike(T x)
         # when params "dtype" used, tf will call another op "Fill" instead, so Cast is not needed here.
         input_dtype = ctx.get_dtype(node.input[0])

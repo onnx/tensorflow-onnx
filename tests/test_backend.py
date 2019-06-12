@@ -288,6 +288,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.logger.debug(str(p))
                 self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-06)
 
+    @check_onnxruntime_incompatibility("AveragePool")
+    @skip_tf_cpu("only tf_gpu can run avgpool with NCHW format")
+    def test_avgpool_gpu(self):
+        ksize = [1, 1, 2, 2]
+        strides = [1, 1, 2, 2]
+        x_val = make_xval([1, 3, 50, 80])
+        for padding in ["SAME", "VALID"]:
+            x = tf.placeholder(tf.float32, shape=[None] * 4, name=_TFINPUT)
+            mp = tf.nn.avg_pool(x, ksize, strides, padding=padding, data_format="NCHW")
+            _ = tf.identity(mp, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def _conv_test(self, x_val, w, strides=None, padding="VALID", dilations=None, rtol=1e-07):
         if strides is None:
             strides = _STRIDE1x1
@@ -782,7 +794,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
-    @check_onnxruntime_incompatibility("Equal")
     def test_equal(self):
         x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
         x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
@@ -798,6 +809,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x1 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
         x2 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT1)
         mi = tf.equal(x1, x2)
+        _ = tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
+    def test_not_equal(self):
+        x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
+        x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
+        x1 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT)
+        x2 = tf.placeholder(tf.int32, [2, 2], name=_TFINPUT1)
+        mi = tf.not_equal(x1, x2)
+        _ = tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
+        tf.reset_default_graph()
+        x_val1 = np.array([4, 2, 4, 1], dtype=np.float32).reshape((2, 2))
+        x_val2 = np.array([2, 4, 4, 1], dtype=np.float32).reshape((2, 2))
+        x1 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT)
+        x2 = tf.placeholder(tf.float32, [2, 2], name=_TFINPUT1)
+        mi = tf.not_equal(x1, x2)
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
@@ -1336,11 +1365,12 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(7, "sign")
     def test_sign(self):
-        x_val1 = np.array([1, 2, 0, -1, 0, -2], dtype=np.int32).reshape((2, 3))
-        x_val2 = np.array([1, 2, 0, -1, 0, -2], dtype=np.int64).reshape((2, 3))
-        x_val3 = np.array([1.0, 2.0, 0.0, -1.0, 0.0, -2.0], dtype=np.float32).reshape((2, 3))
-        for x_val in [x_val1, x_val2, x_val3]:
+        x_vals = [np.array([1.0, 2.0, 0.0, -1.0, 0.0, -2.0], dtype=np.float32).reshape((2, 3)),
+                  np.array([1, 2, 0, -1, 0, -2], dtype=np.int32).reshape((2, 3)),
+                  np.array([1, 2, 0, -1, 0, -2], dtype=np.int64).reshape((2, 3))]
+        for x_val in x_vals:
             x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
             x_ = tf.sign(x)
             _ = tf.identity(x_, name=_TFOUTPUT)
@@ -1412,9 +1442,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, [None, 3, 3], name=_TFINPUT)
         x_ = tf.layers.flatten(x)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val},
+                            graph_validator=lambda g: check_op_count(g, "Flatten", 1))
 
+    @skip_caffe2_backend("issue undefined dim 1")
     def test_flatten1(self):
+        x_val = np.array([[[[1, 2, 3], [4, 5, 6], [7, 8, 9]]]], dtype=np.float32)
+        x = tf.placeholder(tf.float32, [None, 1, 3, 3], name=_TFINPUT)
+        x_ = tf.layers.flatten(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val},
+                            graph_validator=lambda g: check_op_count(g, "Flatten", 1))
+
+    def test_flatten2(self):
         x_val = np.array([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], dtype=np.float32)
         x = tf.placeholder(tf.float32, [1, 3, 3], name=_TFINPUT)
         x_ = tf.layers.flatten(x)
@@ -2055,6 +2095,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
             self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val}, atol=1e-5)
 
+    @check_opset_min_version(7, "sparse_softmax_cross_entropy_with_logits")
     def test_sparse_softmax_cross_entropy_with_logits(self):
         num_class = 5
         for logic_shape in [[None, None], [None, num_class]]:
@@ -2204,6 +2245,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
+    @check_opset_min_version(7, "fill")
     def test_zeros_like(self):
         input_val = np.random.random_sample([10, 20]).astype(np.float32)
         input_x = tf.placeholder(dtype=tf.float32, shape=[None] * input_val.ndim, name=_TFINPUT)

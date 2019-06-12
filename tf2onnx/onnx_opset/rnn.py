@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 @tf_op("LSTMBlockCell")
 class LSTMBlockCell:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """
         Args:
           x: A `Tensor`. Must be one of the following types: `float32`.
@@ -155,3 +155,7 @@ class LSTMBlockCell:
         replace_output(node.output[4], ci_node.output[0])
         replace_output(node.output[5], co_node.output[0])
         replace_output(node.output[6], h_node.output[0])
+
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)

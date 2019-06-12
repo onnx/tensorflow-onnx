@@ -34,10 +34,10 @@ def _add_cast_to_inputs(graph, node, supported_dtypes, target_dtype):
             graph.set_dtype(inp_cast.output[0], target_dtype)
 
 
-@tf_op(["LogicalNot", "NotEqual"], onnx_op="Not")
+@tf_op("LogicalNot", onnx_op="Not")
 class DirectOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         pass
 
 
@@ -47,29 +47,44 @@ class BroadcastOp(common.BroadcastOp):
     pass
 
 
-@tf_op("Equal")
+@tf_op(["Equal", "NotEqual"])
 class Equal:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        common.BroadcastOp.version_4(ctx, node, **kwargs)
+    def version_1(cls, ctx, node, **kwargs):
+        need_not = node.type == "NotEqual"
+        common.BroadcastOp.version_1(ctx, node, **kwargs)
+        if need_not:
+            node.type = "Equal"
+            output_name = node.output[0]
+            not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
+            ctx.copy_shape(output_name, not_node.output[0])
+            ctx.copy_dtype(output_name, not_node.output[0])
 
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         # T2 output = Equal(T1, x, T1 y), T1 \in {bool, int32, int64}
+        need_not = node.type == "NotEqual"
         supported_dtypes = [
             TensorProto.BOOL,
             TensorProto.INT32,
             TensorProto.INT64
         ]
+        # FIXME: casting is not the same as equal
         target_dtype = TensorProto.INT32
         _add_cast_to_inputs(ctx, node, supported_dtypes, target_dtype)
+        if need_not:
+            node.type = "Equal"
+            output_name = node.output[0]
+            not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
+            ctx.copy_shape(output_name, not_node.output[0])
+            ctx.copy_dtype(output_name, not_node.output[0])
 
 
 @tf_op(["Greater", "Less"])
 class GreaterLess:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        common.BroadcastOp.version_4(ctx, node, **kwargs)
+    def version_1(cls, ctx, node, **kwargs):
+        common.BroadcastOp.version_1(ctx, node, **kwargs)
 
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
