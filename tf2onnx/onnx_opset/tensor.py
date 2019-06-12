@@ -1294,6 +1294,11 @@ class ReverseV2:
             for i in range(len_axes):
 
                 axis = axes[i]
+
+                # For negative indices use the positive counterpart.
+                if axis < 0:
+                    axis += len_shape
+
                 input_names = inputs[-1]
                 perm = list(range(len_shape))
                 output_name = None if (i < len_axes - 1) else rv2_out_name
