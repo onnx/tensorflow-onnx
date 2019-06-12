@@ -90,26 +90,47 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                          }
             self.run_transpose_compare(["res"], feed_dict, model_proto, remaining_transpose_num=1)
 
-    def test_transpose_with_add(self):
+    def test_transpose_with_add1(self):
         # when transpose follows with a broadcasting op
         # reshape is needed when switching transpose with this op and op need broadcast its inputs
         node1 = helper.make_node("Transpose", ["input_data1"], ["Y"], perm=[0, 2, 3, 1], name="trans")
         node2 = helper.make_node("Add", ["Y", "input_data2"], ["Z"], name="add")
+        node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans2")
 
         graph = helper.make_graph(
-            [node1, node2],
+            [node1, node2, node3],
             "transpose_with_shape",
             [helper.make_tensor_value_info("input_data1", TensorProto.FLOAT, (2, 3, 4, 5)),
              helper.make_tensor_value_info("input_data2", TensorProto.FLOAT, (3,)),
              ],
-            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, [2, 4, 5, 3])],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (2, 3, 4, 5))],
         )
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         feed_dict = {"input_data1": np.random.randn(2, 3, 4, 5).astype(np.float32),
                      "input_data2": np.random.randn(3).astype(np.float32),
                      }
-        self.run_transpose_compare(["Z"], feed_dict, model_proto, remaining_transpose_num=1)
+        self.run_transpose_compare(["res"], feed_dict, model_proto, remaining_transpose_num=0)
+
+    def test_transpose_with_add2(self):
+        node1 = helper.make_node("Transpose", ["input_data1"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        node2 = helper.make_node("Add", ["Y", "input_data2"], ["Z"], name="add")
+        node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans2")
+
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "transpose_with_shape",
+            [helper.make_tensor_value_info("input_data1", TensorProto.FLOAT, (2, 3, 4, 5)),
+             helper.make_tensor_value_info("input_data2", TensorProto.FLOAT, (2, 4, 5, 3)),
+             ],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (2, 3, 4, 5))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        feed_dict = {"input_data1": np.random.randn(2, 3, 4, 5).astype(np.float32),
+                     "input_data2": np.random.randn(2, 4, 5, 3).astype(np.float32),
+                     }
+        self.run_transpose_compare(["res"], feed_dict, model_proto, remaining_transpose_num=1)
 
     def test_transpose_relu(self):
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")

@@ -9,6 +9,7 @@ from collections import defaultdict
 import numpy as np
 
 from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW
+import onnx
 from .. import utils
 from .optimizer_base import GraphOptimizerBase
 
@@ -308,7 +309,8 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _create_transpose_pairs_before_node(self, node):
         def shape_after_expand(ori_shape):
-            # according to broadcasting rule to expand shape to 4D
+            # according to broadcasting rule to expand shape to 4D while not tile the tensor here
+            # still count on the broadcasting op to tile the tensor
             utils.make_sure(ori_shape.count(-1) <= 1, "shape can contain one -1 at most")
             ori_rank = len(ori_shape)
             utils.make_sure(ori_rank <= 4, "ONNX only supports 4D data")
@@ -324,16 +326,28 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nhwc_trans_consumers
         for input_id, n in non_nhwc_trans_inputs:
-            shape = self._g.get_shape(n.output[0])
-            if len(shape) == 4:
-                nchw_node = self._g.make_node("Transpose", [input_id], attr={"perm": [0, 3, 1, 2]})
+            shape = self._g.get_shape(input_id)
+            # if rank of n is not 4, then we need to insert a reshape op before inserting a transpose
+            # for example shape of n is [x, y], then output shape of reshape will be [1, 1, x, y]
+            if shape is None:
+                const_4 = self._g.make_const(utils.make_name("const_4"), np.array([4], np.int64)).output[0]
+                tensor_1 = onnx.helper.make_tensor("value", onnx.TensorProto.INT64, [1], [1])
+                shape_node = self._g.make_node("Shape", [input_id]).output[0]
+                rank_node = self._g.make_node("Shape", [shape_node]).output[0]
+                expand_rank = self._g.make_node("Sub", [const_4, rank_node]).output[0]
+                array_fill_1 = self._g.make_node("ConstantOfShape", [expand_rank], attr={"value": tensor_1}).output[0]
+                new_shape = self._g.make_node("Concat", [array_fill_1, shape_node], attr={"axis": 0}).output[0]
+                reshape = self._g.make_node("Reshape", [input_id, new_shape]).output[0]
+                input_of_new_trans = reshape
+            elif len(shape) == 4:
+                input_of_new_trans = input_id
             else:
                 shape_4d = shape_after_expand(shape)
-                shape_const = self._g.make_const(utils.make_name("reshape_shape"),
-                                                 np_val=np.array(shape_4d, np.int64)).output[0]
-                reshape = self._g.make_node("Reshape", [input_id, shape_const]).output[0]
-                nchw_node = self._g.make_node("Transpose", [reshape], attr={"perm": [0, 3, 1, 2]})
+                const = self._g.make_const(utils.make_name("reshape_shape"), np.array(shape_4d, np.int64)).output[0]
+                reshape = self._g.make_node("Reshape", [input_id, const]).output[0]
+                input_of_new_trans = reshape
 
+            nchw_node = self._g.make_node("Transpose", [input_of_new_trans], attr={"perm": [0, 3, 1, 2]})
             nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
             self._g.replace_input(node, input_id, nhwc_node.output[0])
 
