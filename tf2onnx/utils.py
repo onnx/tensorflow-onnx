@@ -518,3 +518,67 @@ def is_tf_slice_op(op):
 
 def is_tf_const_op(op):
     return op.type in ["Const", "ConstV2"]
+
+
+def are_attr_equal(a, b):
+    if len(a) == 0 and len(b) == 0:
+        return True
+    if len(a) != len(b):
+        return False
+    for k, v in a.items():
+        if v.type == onnx_pb.AttributeProto.TENSOR:
+            if not are_tensors_equal(v.t, b[k].t):
+                return False
+        elif v.type == onnx_pb.AttributeProto.TENSORS:
+            if not are_tensor_lists_equal(v.tensors, b[k].tensors):
+                return False
+        elif v.type == onnx_pb.AttributeProto.GRAPH:
+            if not are_graphs_equal(v.g, b[k].g):
+                return False
+        elif v.type == onnx_pb.AttributeProto.GRAPHS:
+            if not are_graph_lists_equal(v.graphs, b[k].graphs):
+                return False
+        else:
+            if v != b[k]:
+                return False
+    return True
+
+
+def are_tensors_equal(t1, t2):
+    if t1.dims == t2.dims and \
+            t1.data_type == t2.data_type and \
+            t1.float_data == t2.float_data and \
+            t1.int32_data == t2.int32_data and \
+            t1.int64_data == t2.int64_data and \
+            t1.double_data == t2.double_data and \
+            t1.uint64_data == t2.uint64_data and \
+            t1.string_data == t2.string_data and \
+            t1.raw_data == t2.raw_data:
+        return True
+    return False
+
+
+def are_tensor_lists_equal(tlist1, tlist2):
+    if len(tlist1) != len(tlist2):
+        return False
+    for i in range(len(tlist1)):
+        if not are_tensors_equal(tlist1[i], tlist2[i]):
+            return False
+    return True
+
+
+def are_graphs_equal(g1, g2):
+    return g1.node == g2.node and \
+           are_tensor_lists_equal(g1.initializer, g2.initializer) and \
+           g1.input == g2.input and \
+           g1.output == g2.output and \
+           g1.value_info == g2.value_info
+
+
+def are_graph_lists_equal(glist1, glist2):
+    if len(glist1) != len(glist2):
+        return False
+    for i in range(len(glist1)):
+        if not are_graphs_equal(glist1[i], glist2[i]):
+            return False
+    return True
