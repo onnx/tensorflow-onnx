@@ -1330,19 +1330,14 @@ class ReverseV2:
                         attr={"perm": curr_perm}
                     )
 
-                    print(new_node.summary) # TODO: DELETE
-
-                    print()
-                    print('#### CURR_PERM:', curr_perm)
-                    print('#### PREV_PERM:', prev_perm)
-                    print()
-
                     prev_perm = curr_perm.copy()
 
                     inputs.append([new_node.output[0]])
 
                 # Add a Constant node (seq_len) for ReverseSequence.
-                seq_list = [output_shape[axis]] * output_shape[curr_perm[1]]
+                rs_batch_size = output_shape[1] if new_node is None \
+                    else ctx.get_shape(new_node.output[0])[1]
+                seq_list = [output_shape[axis]] * rs_batch_size
                 seq_array = np.asarray(seq_list)
 
                 const_seq_name = rv2_node_name + '_Const' + str(i)
@@ -1350,6 +1345,12 @@ class ReverseV2:
                 inputs[-1].append(new_node.output[0])
 
                 print(new_node.summary + '\n') # TODO: DELETE
+
+                print()
+                print('#### PERM:', curr_perm)
+                print('#### SHAPE:', output_shape)
+                print('#### SEQ LIST:', seq_list) # TODO: DELETE
+                print()
 
                 # Add a ReverseSequence node.
 
@@ -1384,21 +1385,14 @@ class ReverseV2:
             # axis value is greater than zero (0).
             if axes[-1] > 0:
 
-                print()
-                print('#### CURR_PERM:', curr_perm)
-                print()
-
                 # If axis is a constant other than zero, then
                 # the previous permutation list is used.
                 # 
                 # Else ---
                 if len_axes != 1:
-                    print('#### LOOP DESC_AXIS:', axes[::-1][1:])
                     for i, ax in enumerate(axes[::-1][1:]):
                         curr_perm[0], curr_perm[ax] = \
                             curr_perm[ax], curr_perm[0]
-
-                        print('#### CURR_PERM:', curr_perm)
                 
                 print()
 
@@ -1411,4 +1405,3 @@ class ReverseV2:
                     attr={"perm": curr_perm}
                 )
 
-                print(new_node.summary + '\n') # TODO: DELETE
