@@ -1260,8 +1260,6 @@ class ReverseV2:
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
 
-        print('\n#### NEW GRAPH\n') # TODO: DELETE
-
         axes_node = node.inputs[1]
         axes = axes_node.get_tensor_value() # Is a Python list.
         len_axes = len(axes)
@@ -1291,8 +1289,6 @@ class ReverseV2:
                 op_name_scope=rv2_node_name,
             )
 
-            print(new_node.summary + '\n') # TODO: DELETE
-
         else:
             orig_perm = list(range(len_shape))
             prev_perm = orig_perm.copy()
@@ -1305,17 +1301,13 @@ class ReverseV2:
                     axes[i] += len_shape
             
             axes = sorted(axes)
-            # Sort the axis list in decreasing order
-            desc_axes = sorted(axes, reverse=True)
 
             # Add ReverseSequence nodes for each element of axis.
             for i in range(len_axes):
 
                 axis = axes[i]
-                print('#### AXIS:', axis)
 
                 curr_perm = orig_perm.copy()
-
                 # Permutation indices relative to original tensor.
                 curr_perm[axis], curr_perm[0] = curr_perm[0], curr_perm[axis]
 
@@ -1335,22 +1327,18 @@ class ReverseV2:
                     inputs.append([new_node.output[0]])
 
                 # Add a Constant node (seq_len) for ReverseSequence.
+
+                # Index 1 for the shape should not return 0
+                # since the input must have rank >= 2.
                 rs_batch_size = output_shape[1] if new_node is None \
                     else ctx.get_shape(new_node.output[0])[1]
+
                 seq_list = [output_shape[axis]] * rs_batch_size
                 seq_array = np.asarray(seq_list)
 
                 const_seq_name = rv2_node_name + '_Const' + str(i)
                 new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
                 inputs[-1].append(new_node.output[0])
-
-                print(new_node.summary + '\n') # TODO: DELETE
-
-                print()
-                print('#### PERM:', curr_perm)
-                print('#### SHAPE:', output_shape)
-                print('#### SEQ LIST:', seq_list) # TODO: DELETE
-                print()
 
                 # Add a ReverseSequence node.
 
@@ -1377,12 +1365,10 @@ class ReverseV2:
                 if seq_len_dtype != target_dtype:
                     ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[1], to=target_dtype)
 
-                print(new_node.summary + '\n') # TODO: DELETE
-
                 inputs.append([new_node.output[0]])
 
-            # Additional transpose block is required if the biggest
-            # axis value is greater than zero (0).
+            # Additional transpose block is required if the largest
+            # value in axis is greater than zero (0).
             if axes[-1] > 0:
 
                 # If axis is a constant other than zero, then
