@@ -1260,6 +1260,8 @@ class ReverseV2:
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
 
+        print('\n#### NEW GRAPH\n') # TODO: DELETE
+
         axes_node = node.inputs[1]
         axes = axes_node.get_tensor_value() # Is a Python list.
         len_axes = len(axes)
@@ -1289,54 +1291,79 @@ class ReverseV2:
                 op_name_scope=rv2_node_name,
             )
 
+            print(new_node.summary + '\n') # TODO: DELETE
+
         else:
+            orig_perm = list(range(len_shape))
+            prev_perm = orig_perm.copy()
+            curr_perm = []
+            final_perm = orig_perm.copy()
+
+            # For negative indices use the positive counterpart.
+            for i, ax in enumerate(axes):
+                if ax < 0:
+                    axes[i] += len_shape
+            
+            axes = sorted(axes)
+            # Sort the axis list in decreasing order
+            desc_axes = sorted(axes, reverse=True)
+
             # Add ReverseSequence nodes for each element of axis.
             for i in range(len_axes):
 
                 axis = axes[i]
+                print('#### AXIS:', axis)
 
-                # For negative indices use the positive counterpart.
-                if axis < 0:
-                    axis += len_shape
+                curr_perm = orig_perm.copy()
 
-                input_names = inputs[-1]
-                perm = list(range(len_shape))
-                output_name = None if (i < len_axes - 1) else rv2_out_name
+                # Permutation indices relative to original tensor.
+                curr_perm[axis], curr_perm[0] = curr_perm[0], curr_perm[axis]
 
-                if axis > 0:
-                    # Permutation list for Transpose node.
-                    perm[axis], perm[0] = perm[0], perm[axis]
-
-                    # Add a Transpose node.
+                # Add a Transpose node.
+                if curr_perm != prev_perm:
+                    # Permutation indices for the transpose node relative to IN tensor shape.
                     new_node = ctx.make_node(
                         "Transpose",
-                        inputs=input_names,
+                        inputs=inputs[-1],
                         op_name_scope=rv2_node_name,
                         outputs=None,
-                        attr={"perm": perm}
+                        attr={"perm": curr_perm}
                     )
 
+                    print(new_node.summary) # TODO: DELETE
+
+                    print()
+                    print('#### CURR_PERM:', curr_perm)
+                    print('#### PREV_PERM:', prev_perm)
+                    print()
+
+                    prev_perm = curr_perm.copy()
+
                     inputs.append([new_node.output[0]])
-                    input_names = inputs[-1]
 
                 # Add a Constant node (seq_len) for ReverseSequence.
-                seq_list = [output_shape[axis]] * output_shape[perm[1]]
+                seq_list = [output_shape[axis]] * output_shape[curr_perm[1]]
                 seq_array = np.asarray(seq_list)
 
                 const_seq_name = rv2_node_name + '_Const' + str(i)
                 new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
                 inputs[-1].append(new_node.output[0])
-                input_names = inputs[-1]
+
+                print(new_node.summary + '\n') # TODO: DELETE
 
                 # Add a ReverseSequence node.
 
-                # If axis is not 0 then the output is fed to a new Transpose node.
-                # Else                             is fed to the output of RV2 or next RS.
-                rs_out_name = None if axis > 0 else output_name
+                # If processing for the final axis and the tensor shape permutation is
+                # original then the output is fed to the output of the ReverseV2 node.
+                #
+                # Else a new output is created which is fed to a Transpose node.
+                rs_out_name = rv2_out_name if \
+                    ((i == len_axes - 1) and (curr_perm == orig_perm)) \
+                        else None
 
                 new_node = ctx.make_node(
                     "ReverseSequence",
-                    inputs=input_names,
+                    inputs=inputs[-1],
                     op_name_scope=rv2_node_name,
                     outputs=rs_out_name,
                     attr={"batch_axis": 1, "time_axis": 0}
@@ -1349,18 +1376,39 @@ class ReverseV2:
                 if seq_len_dtype != target_dtype:
                     ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[1], to=target_dtype)
 
-                inputs.append([new_node.output[0]])
-                input_names = inputs[-1]
-
-                if axis > 0:
-                    # Add a Transpose node to reset shape.
-                    new_node = ctx.make_node(
-                        "Transpose",
-                        inputs=input_names,
-                        op_name_scope=rv2_node_name,
-                        outputs=output_name,
-                        attr={"perm": perm}
-                    )
+                print(new_node.summary + '\n') # TODO: DELETE
 
                 inputs.append([new_node.output[0]])
 
+            # Additional transpose block is required if the biggest
+            # axis value is greater than zero (0).
+            if axes[-1] > 0:
+
+                print()
+                print('#### CURR_PERM:', curr_perm)
+                print()
+
+                # If axis is a constant other than zero, then
+                # the previous permutation list is used.
+                # 
+                # Else ---
+                if len_axes != 1:
+                    print('#### LOOP DESC_AXIS:', axes[::-1][1:])
+                    for i, ax in enumerate(axes[::-1][1:]):
+                        curr_perm[0], curr_perm[ax] = \
+                            curr_perm[ax], curr_perm[0]
+
+                        print('#### CURR_PERM:', curr_perm)
+                
+                print()
+
+                # Add a Transpose node to restore shape.
+                new_node = ctx.make_node(
+                    "Transpose",
+                    inputs=inputs[-1],
+                    op_name_scope=rv2_node_name,
+                    outputs=rv2_out_name,
+                    attr={"perm": curr_perm}
+                )
+
+                print(new_node.summary + '\n') # TODO: DELETE
