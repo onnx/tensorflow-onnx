@@ -1290,17 +1290,15 @@ class ReverseV2:
             )
 
         else:
-            orig_perm = list(range(len_shape))
-            prev_perm = orig_perm.copy()
-            curr_perm = []
-            final_perm = orig_perm.copy()
-
             # For negative indices use the positive counterpart.
             for i, ax in enumerate(axes):
                 if ax < 0:
                     axes[i] += len_shape
             
             axes = sorted(axes)
+
+            orig_perm = list(range(len_shape))
+            curr_perm = []
 
             # Add ReverseSequence nodes for each element of axis.
             for i in range(len_axes):
@@ -1311,8 +1309,8 @@ class ReverseV2:
                 # Permutation indices relative to original tensor.
                 curr_perm[axis], curr_perm[0] = curr_perm[0], curr_perm[axis]
 
-                # Add a Transpose node.
-                if curr_perm != prev_perm:
+                # Add a Transpose node if the axis != 0 (finish first due to sort).
+                if axis != 0:
                     # Permutation indices for the transpose node relative to IN tensor shape.
                     new_node = ctx.make_node(
                         "Transpose",
@@ -1321,8 +1319,6 @@ class ReverseV2:
                         outputs=None,
                         attr={"perm": curr_perm}
                     )
-
-                    prev_perm = curr_perm.copy()
 
                     inputs.append([new_node.output[0]])
 
@@ -1374,7 +1370,7 @@ class ReverseV2:
                 # If axis is a constant other than zero, then
                 # the previous permutation list is used.
                 # 
-                # Else ---
+                # Else compute the required permutation list.
                 if len_axes != 1:
                     for i, ax in enumerate(axes[::-1][1:]):
                         curr_perm[0], curr_perm[ax] = \
