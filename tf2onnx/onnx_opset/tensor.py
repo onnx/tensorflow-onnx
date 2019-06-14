@@ -1083,13 +1083,11 @@ class BatchToSpace:
         shapes = ctx.get_shape(node.output[0])
 
         if len(ctx.get_shape(input_tensor.output[0])) == 3:
-            # add a reshape op to convert output into 3d
+            # add a squeeze op to convert output into 3d
             kwargs = {**inputs_map}
             ctx.remove_node(node.name)
             slice1 = GraphBuilder(ctx).make_slice(kwargs)
-            shape_name = utils.make_name(node.name)
-            ctx.make_const(shape_name, np.array(shapes, dtype=np.int64))
-            ctx.make_node("Reshape", [slice1, shape_name], outputs=node.output, name=node.name, dtypes=dtypes)
+            ctx.make_node("Squeeze", [slice1], {"axes": [3]}, outputs=node.output, name=node.name, dtypes=dtypes)
         else:
             kwargs = {**inputs_map, "outputs": node.output}
             ctx.remove_node(node.name)
