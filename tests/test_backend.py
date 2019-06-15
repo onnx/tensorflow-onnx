@@ -1957,42 +1957,40 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+
     @skip_opset(9, "ReverseV2")
-    def test_reverse_v2(self):
+    def test_reversev2_constant_axis(self):
         # Tests for constant axis.
-        x_val = np.array([[[[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]],
-                            [[12, 13, 14, 15], [16, 17, 18, 19], [20, 21, 22, 23]]]],
-                            dtype=np.float32)
-        x = tf.placeholder(tf.float32, [1, 2, 3, 4], name=_TFINPUT)
+        x_val_shape = [1, 2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
         x_ = tf.reverse_v2(x, axis=[3])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
         tf.reset_default_graph()
 
         # Empty axis vector.
-        x_val = np.array([[[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]],
-                            [[12, 13, 14, 15], [16, 17, 18, 19], [20, 21, 22, 23]]],
-                            dtype=np.float32)
-        x = tf.placeholder(tf.float32, [2, 3, 4], name=_TFINPUT)
+        x_val_shape = [2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
         x_ = tf.reverse_v2(x, axis=[])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-        tf.reset_default_graph()
 
-        # Tests for len(axis) > 1
-        x_val = np.array([[[[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]],
-                            [[12, 13, 14, 15], [16, 17, 18, 19], [20, 21, 22, 23]]]],
-                            dtype=np.float32)
-        x = tf.placeholder(tf.float32, [1, 2, 3, 4], name=_TFINPUT)
+
+    @skip_opset(9, "ReverseV2")
+    def test_reversev2_vector_axis(self):
+        x_val_shape = [1, 2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
         x_ = tf.reverse_v2(x, axis=[0, -3, 2, 3])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
         tf.reset_default_graph()
 
-        x_val = np.array([[[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]],
-                            [[12, 13, 14, 15], [16, 17, 18, 19], [20, 21, 22, 23]]],
-                            dtype=np.float32)
-        x = tf.placeholder(tf.float32, [2, 3, 4], name=_TFINPUT)
+        x_val_shape = [2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
         x_ = tf.reverse_v2(x, axis=[-3, 1, 2])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
@@ -2004,21 +2002,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.reverse_v2(x, axis=[0, 1, -2, 3, 5])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-        tf.reset_default_graph()
 
+
+    @skip_opset(9, "ReverseV2")
+    def test_reversev2_1D_tensor(self):
         # For tensors with 1 dimension and no axis to reverse.
         # Adds an identity block.
-        x_val = np.array([1, 2, 3, 4],
-                            dtype=np.float32)
-        x = tf.placeholder(tf.float32, [4], name=_TFINPUT)
+        x_val_shape = [4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
         x_ = tf.reverse_v2(x, axis=[])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-        tf.reset_default_graph()
 
         ## For tensors with 1 dimension and axis = [0]
         ## RESULT: 'input' must have rank >= 2
-        
+
         # x_val = np.array([1, 2, 3, 4],
         #                     dtype=np.float32)
         # x = tf.placeholder(tf.float32, [4], name=_TFINPUT)
