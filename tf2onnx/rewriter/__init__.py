@@ -14,6 +14,7 @@ from tf2onnx.rewriter.thresholded_relu_rewriter import rewrite_thresholded_relu
 from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direction_lstm, \
     rewrite_single_direction_gru, rewrite_bi_direction_gru, \
     rewrite_custom_rnn_cell, rewrite_generic_loop
+from tf2onnx.rewriter.tensor_array_read_rewriter import rewrite_tensor_array_read
 
 __all__ = [
     "rewrite_cond",
@@ -27,5 +28,6 @@ __all__ = [
     "rewrite_single_direction_gru",
     "rewrite_bi_direction_gru",
     "rewrite_custom_rnn_cell",
-    "rewrite_generic_loop"
+    "rewrite_generic_loop",
+    "rewrite_tensor_array_read"
 ]

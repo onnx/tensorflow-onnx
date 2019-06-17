@@ -199,12 +199,15 @@ def infer_shape_for_op(op):
         # So the process is: first find TensorArrayScatter's shape and then TensorArray's
         # and finally take its last n-1 dim.
         flow_in_op = op.inputs[2].op
-        if flow_in_op.type != "Enter":
-            return False
-
-        scatter_op = flow_in_op.inputs[0].op
-        if scatter_op.type != "TensorArrayScatterV3":
-            return False
+        if flow_in_op.type == "Enter":
+            scatter_op = flow_in_op.inputs[0].op
+            if scatter_op.type != "TensorArrayScatterV3":
+                return False
+        else:
+            if flow_in_op.type == "TensorArrayScatterV3":
+                scatter_op = flow_in_op
+            else:
+                return False
 
         value_shape_before_scatter = utils.get_tf_tensor_shape(scatter_op.inputs[2])
         if value_shape_before_scatter is None:

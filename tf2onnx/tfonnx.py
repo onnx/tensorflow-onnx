@@ -771,7 +771,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                  rewrite_leakyrelu, rewrite_thresholded_relu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_bi_direction_gru,
-                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond
+                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond,
+                 rewrite_tensor_array_read
                  ]
 
     if custom_rewriter is not None:
