@@ -544,7 +544,7 @@ class Resize:
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node("Transpose", upsample.output, {"perm": [0, 2, 3, 1]},
+        ctx.make_node("Transpose", upsample.output, {"perm": constants.NCHW_TO_NHWC},
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 

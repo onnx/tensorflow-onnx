@@ -8,6 +8,7 @@ from collections import defaultdict
 
 import numpy as np
 
+from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW
 from .. import utils
 from .optimizer_base import GraphOptimizerBase
 
@@ -18,7 +19,7 @@ from .optimizer_base import GraphOptimizerBase
 
 def is_nhwc_transpose(transpose_node):
     perm_attr = transpose_node.get_attr('perm')
-    return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints == [0, 2, 3, 1]
+    return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints == NCHW_TO_NHWC
 
 
 def is_nchw_transpose(transpose_node):
@@ -88,7 +89,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             if is_nchw_transpose(op):
                 indice = graph.make_const(utils.make_name("indice"), np.array([0, 3, 1, 2])).output[0]
             else:
-                indice = graph.make_const(utils.make_name("indice"), np.array([0, 2, 3, 1])).output[0]
+                indice = graph.make_const(utils.make_name("indice"), np.array(NCHW_TO_NHWC)).output[0]
 
             return graph.make_node("Gather", [input_shape, indice]).output[0]
 
@@ -302,7 +303,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nchw_trans_consumers
         for consumer in non_nchw_trans_consumers:
             nchw_node = self._g.make_node("Transpose", [node.output[0]], attr={"perm": [0, 3, 1, 2]})
-            nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
+            nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": NCHW_TO_NHWC})
             self._g.replace_input(consumer, node.output[0], nhwc_node.output[0])
 
     def _create_transpose_pairs_before_node(self, node):
@@ -505,7 +506,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                     axes = axes_node.get_tensor_value(as_list=True)
 
         if axes == [0, 1, 2, 3]:
-            node.set_attr("axes", [0, 2, 3, 1])
+            node.set_attr("axes", NCHW_TO_NHWC)
             return self._switch_transpose_and_node(node, trans)
         return False
 
