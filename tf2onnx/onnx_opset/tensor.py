@@ -1255,7 +1255,6 @@ class ReverseV2:
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
         # T output = ReverseV2(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
-        # 
         # Implement tensorflow ReverseV2 op using multiple ReverseSequence (for each axis)
         # and Transpose ops. Each axis can be reversed only once (in tf) and so we compute the
         # transpose for each axis (other than 0), feed the tensor to a ReverseSequence node and
@@ -1264,7 +1263,7 @@ class ReverseV2:
         axes_node = node.inputs[1]
         axes = axes_node.get_tensor_value(as_list=False)
         # Current support is for when axis is a 1D tensor.
-        utils.make_sure(len(axes.shape) is 1 \
+        utils.make_sure(len(axes.shape) == 1 \
             , "Currently no support for reverseV2 tensor axis")
 
         axes = axes.tolist()
@@ -1400,4 +1399,3 @@ class ReverseV2:
                     dtypes=rv2_output_dtypes,
                     attr={"perm": curr_perm}
                 )
-
