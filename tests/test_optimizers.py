@@ -63,6 +63,33 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                 perm = list(node.attribute[0].ints)
                 self.assertEqual(perm, expected_perm)
 
+    def test_transpose_with_concat(self):
+        input_shape = (2, 3, 4, 5)
+        perm = [0, 3, 1, 2]
+        input_shape_with_trans = [input_shape[i] for i in perm]
+        for axis in [0, 1, 2, 3]:
+            output_before_trans = list(input_shape)
+            output_before_trans[axis] *= 2
+            output_shape = [output_before_trans[i] for i in [0, 3, 1, 2]]
+            node1 = helper.make_node("Transpose", ["input_data1"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+            node2 = helper.make_node("Concat", ["Y", "input_data2"], ["Z"], axis=axis, name="concat")
+            node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans2")
+
+            graph = helper.make_graph(
+                [node1, node2, node3],
+                "test_transpose_with_concat",
+                [helper.make_tensor_value_info("input_data1", TensorProto.FLOAT, input_shape_with_trans),
+                 helper.make_tensor_value_info("input_data2", TensorProto.FLOAT, input_shape),
+                 ],
+                [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+            )
+
+            model_proto = helper.make_model(graph, producer_name="onnx-tests")
+            feed_dict = {"input_data1": np.random.randn(*input_shape_with_trans).astype(np.float32),
+                         "input_data2": np.random.randn(*input_shape).astype(np.float32),
+                         }
+            self.run_transpose_compare(["res"], feed_dict, model_proto, remaining_transpose_num=1)
+
     def test_transpose_relu(self):
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
         node2 = helper.make_node("Relu", ["Y"], ["Z"], name="relu")
