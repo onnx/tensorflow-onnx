@@ -489,13 +489,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             process_args={"inputs_as_nchw": [_INPUT]},
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
 
-    @unittest.skip("")
-    def test_lrn(self):
-        # FIXME: numerical results are not correct
+    def test_lrn_default(self):
         x_shape = [1, 3, 4, 3]
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
-        _ = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
-        op = tf.nn.local_response_normalization(x_val)
+        x_ = tf.placeholder(tf.float32, shape=x_shape, name=_TFINPUT)
+        op = tf.nn.local_response_normalization(x_)
+        _ = tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
+
+    def test_lrn(self):
+        # can't set bias = 0
+        x_shape = [1, 2, 2, 8]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_ = tf.placeholder(tf.float32, shape=x_shape, name=_TFINPUT)
+        op = tf.nn.local_response_normalization(x_, depth_radius=4, bias=2, alpha=2, beta=1)
         _ = tf.identity(op, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
 

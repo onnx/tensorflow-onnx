@@ -253,10 +253,17 @@ class LRN:
         #     output = input / (bias + alpha * sqr_sum) ** beta
         depth_radius = node.get_attr("depth_radius")
         if depth_radius:
-            size = depth_radius.i
+            size = depth_radius.i * 2 + 1
         else:
-            size = 5
+            # by default, depth_radius is 5 in tensorflow
+            size = 5 * 2 + 1
+
         node.set_attr("size", size)
+        node.set_attr("alpha", size * node.get_attr("alpha").f)
+
+        ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
+        op_name = utils.make_name(node.name)
+        ctx.insert_new_node_on_output("Transpose", node.output[0], perm=constants.NCHW_TO_NHWC, name=op_name)
 
 
 @tf_op(["MatMul", "BatchMatMul"])
