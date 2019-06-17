@@ -1257,9 +1257,9 @@ class ReverseV2:
         # T output = ReverseV2(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
         # 
         # Implement tensorflow ReverseV2 op using multiple ReverseSequence (for each axis)
-        # and Transpose ops. We sort the axis vector at the start. Each axis can be reversed only
-        # once (in tf) and so we can compute the transpose for each axis (other than 0), feed the
-        # tensor to a ReverseSequence node and finally transpose again to get back the original shape. 
+        # and Transpose ops. Each axis can be reversed only once (in tf) and so we compute the
+        # transpose for each axis (other than 0), feed the tensor to a ReverseSequence node and
+        # finally transpose again to get back the original shape.
 
         axes_node = node.inputs[1]
         axes = axes_node.get_tensor_value(as_list=False)
@@ -1281,8 +1281,8 @@ class ReverseV2:
 
         rv2_node_name = node.name
         # ReverseV2 has a single output.
-        rv2_output_dtypes = [ctx.get_dtype(node.output[0])]
-        rv2_output_shapes = [ctx.get_shape(node.output[0])]
+        rv2_output_dtypes = node.output_dtypes
+        rv2_output_shapes = node.output_shapes
 
         const_name_root = rv2_node_name + '_Const'
 

@@ -1958,7 +1958,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
 
-    @skip_opset(9, "ReverseV2")
+    @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_constant_axis(self):
         # Tests for constant axis.
         x_val_shape = [1, 2, 3, 4]
@@ -1978,7 +1978,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
 
-    @skip_opset(9, "ReverseV2")
+    @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_vector_axis(self):
         x_val_shape = [1, 2, 3, 4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
@@ -2004,7 +2004,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
 
-    @skip_opset(9, "ReverseV2")
+    @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_1D_tensor(self):
         # For tensors with 1 dimension and no axis to reverse.
         # Adds an identity block.
@@ -2014,16 +2014,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.reverse_v2(x, axis=[])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
-        ## For tensors with 1 dimension and axis = [0]
-        ## RESULT: 'input' must have rank >= 2
-
-        # x_val = np.array([1, 2, 3, 4],
-        #                     dtype=np.float32)
-        # x = tf.placeholder(tf.float32, [4], name=_TFINPUT)
-        # x_ = tf.reverse_v2(x, axis=[0])
-        # _ = tf.identity(x_, name=_TFOUTPUT)
-        # self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
 
     @check_opset_min_version(8, "where")
