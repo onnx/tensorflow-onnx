@@ -340,7 +340,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
                                      shapes=[[x_seq_length, num_direction, x_batch_size, context.hidden_size],
                                              [num_direction, x_batch_size, context.hidden_size],
                                              [num_direction, x_batch_size, context.hidden_size]],
-                                     dtypes=[out_dtype, out_dtype, out_dtype])
+                                     dtypes=[out_dtype, out_dtype, out_dtype], op_name_scope=context.rnn_scope)
         return lstm_node
 
     def _connect_lstm_yh_to_graph(self, context):

@@ -120,10 +120,10 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
     def parse_attributes(self, context):
         # in tf, only activation of hidden gate is optional, input and update gate always use sigmoid
         match = context.cell_match
-        activations = ["sigmoid", "Tanh"]
+        activations = ["Sigmoid", "Tanh"]
         if self.gru_cell_type == RNNUnitType.GRUCell:
             activation_op = match.get_op("optional_activation")
-            activations = ["sigmoid", activation_op.type]
+            activations = ["Sigmoid", activation_op.type]
         context.attributes["activations"] = activations
         return True
 
@@ -239,7 +239,7 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         gru_node = self.g.make_node("GRU", gru_inputs, attr=context.attributes, output_count=2,
                                     shapes=[[x_seq_length, num_direction, x_batch_size, context.hidden_size],
                                             [num_direction, x_batch_size, context.hidden_size]],
-                                    dtypes=[out_dtype, out_dtype])
+                                    dtypes=[out_dtype, out_dtype], op_name_scope=context.rnn_scope)
         return gru_node
 
     def _connect_gru_state_to_graph(self, context):

@@ -301,7 +301,7 @@ class PoolOp:
         # T Y = MaxPool(T X, @AttrType.STRING auto_pad, @AttrType.INTS kernel_shape, @AttrType.INTS pads,
         #               @AttrType.INTS strides)
         # above seems wrong - input[1] is ksize, input[2] is strides
-        # stride and ksize in tf is not always NHWC, so watch out when converting into onnx's HCHW
+        # stride and ksize in tf is not always NHWC, so watch out when converting into onnx's NCHW
         if len(node.input) < 3:
             kernel_shape_tf = node.get_attr("ksize").ints
             strides_tf = node.get_attr("strides").ints

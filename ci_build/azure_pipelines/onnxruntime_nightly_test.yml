@@ -12,3 +12,6 @@ jobs:
       - template: 'unit_test.yml'
         parameters:
             onnx_opsets: ['10', '9', '8', '7']
+    report_coverage: 'True'
+
+- template: 'templates/combine_test_coverage.yml'
