@@ -174,6 +174,9 @@ class Node(object):
 
         return '\n'.join(lines)
 
+    def has_attr(self, name):
+        return True if name in self.attr else False
+
     def get_attr(self, name, default=None):
         """Get raw attribute value."""
         attr = self.attr.get(name, default)

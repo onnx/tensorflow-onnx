@@ -35,7 +35,7 @@ from tf2onnx.tfonnx import process_tf_graph
 logger = logging.getLogger("run_pretrained")
 
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
-PERFITER = 1000
+PERFITER = 10
 
 
 def get_beach(shape):
@@ -173,7 +173,10 @@ class Test(object):
         model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True,
                                            as_text=utils.is_debug_mode())
         logger.info("Model saved to %s", model_path)
-        m = rt.InferenceSession(model_path)
+        options = rt.SessionOptions()
+        if self.perf and self.debug:
+            options.enable_profiling = True
+        m = rt.InferenceSession(model_path, options)
         results = m.run(self.output_names, inputs)
         if self.perf:
             start = time.time()
