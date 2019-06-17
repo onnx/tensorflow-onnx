@@ -1073,16 +1073,17 @@ class BatchToSpace:
         # and it only supports NCHW
         # T out = BatchToSpaceND(T input, int32 block_shape, int32 crops)
         input_tensor = node.inputs[0]
+        input_shape = ctx.get_shape(input_tensor.output[0])
         blocksize = node.inputs[1].get_tensor_value()
         crops = node.inputs[2].get_tensor_value()
 
-        utils.make_sure(len(ctx.get_shape(input_tensor.output[0])) in (4, 3),
+        utils.make_sure(len(input_shape) in (4, 3),
                         "only supports 3D and 4D for now")
         utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
                         "only support same blocksize at different dims")
 
         # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
-        if len(ctx.get_shape(input_tensor.output[0])) == 3:
+        if len(input_shape) == 3:
             # insert automatically an Unsqueeze op if the input is 3d
             unsqz1 = ctx.make_node("Unsqueeze", input_tensor.output, {"axes": [3]})
             trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
@@ -1105,19 +1106,20 @@ class BatchToSpace:
 
         attr = {"axes": slice_axis, "ends": ends, "starts": starts}
         inputs_map = {"data": trans2.output[0], **attr}
-        dtypes = [ctx.get_dtype(node.output[0])]
-        shapes = ctx.get_shape(node.output[0])
+        dtypes = node.output_dtypes
+        shapes = node.output_shapes
 
-        if len(ctx.get_shape(input_tensor.output[0])) == 3:
+        if len(input_shape) == 3:
             # add a squeeze op to convert output into 3d
             kwargs = {**inputs_map}
             ctx.remove_node(node.name)
             slice1 = GraphBuilder(ctx).make_slice(kwargs)
-            ctx.make_node("Squeeze", [slice1], {"axes": [3]}, outputs=node.output, name=node.name, dtypes=dtypes)
+            ctx.make_node("Squeeze", [slice1], {"axes": [3]},
+                          outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
         else:
             kwargs = {**inputs_map, "outputs": node.output}
             ctx.remove_node(node.name)
-            GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=[shapes])
+            GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
 
 
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")
