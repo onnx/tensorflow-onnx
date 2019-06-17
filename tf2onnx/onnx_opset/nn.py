@@ -231,7 +231,7 @@ class ConvTranspose:
             new_output_shape = [output_shape[2], output_shape[3]]
             input_hw = [input_shape[2], input_shape[3]]
 
-        utils.make_sure(all(i != -1 for i in new_output_shape), "output h and w need to be known")
+        utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
         utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
                         "output h and w cannot be smaller than input h and w.")
 
