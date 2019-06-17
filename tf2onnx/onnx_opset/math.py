@@ -262,7 +262,7 @@ class LRN:
 
         ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=[0, 3, 1, 2])
         op_name = utils.make_name(node.name)
-        ctx.insert_new_node_on_output("Transpose", node.output[0], perm=[0, 2, 3, 1],name=op_name)
+        ctx.insert_new_node_on_output("Transpose", node.output[0], perm=[0, 2, 3, 1], name=op_name)
 
 
 @tf_op(["MatMul", "BatchMatMul"])
