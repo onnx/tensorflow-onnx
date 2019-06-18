@@ -604,9 +604,13 @@ class TransposeOptimizer(GraphOptimizerBase):
             reshape_val = node.inputs[1].get_tensor_value(as_list=True)
             if len(reshape_val) == 4 and trans.has_attr('original-perm'):
                 # restore original perm
-                trans.set_attr('perm', list(trans.get_attr('original-perm').ints))
+                original_perm = list(trans.get_attr('original-perm').ints)
+                trans.set_attr('perm', original_perm)
                 trans.attr.pop('original-perm', None)
                 # push down Transpose
+                reverse_perm = get_reverse_perm(original_perm)
+                reshape_val = transpose_shape(reverse_perm, reshape_val)
+                node.inputs[1].set_tensor_value(np.array(reshape_val).astype(np.int64))
                 self._switch_transpose_and_node(node, trans)
                 return True
         return False

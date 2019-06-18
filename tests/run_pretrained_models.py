@@ -174,8 +174,6 @@ class Test(object):
                                            as_text=utils.is_debug_mode())
         logger.info("Model saved to %s", model_path)
         options = rt.SessionOptions()
-        if self.perf and self.debug:
-            options.enable_profiling = True
         m = rt.InferenceSession(model_path, options)
         results = m.run(self.output_names, inputs)
         if self.perf:
@@ -257,8 +255,8 @@ class Test(object):
                                           shape_override=shape_override, input_names=inputs.keys())
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
                 self.create_onnx_file(name + '_original', model_proto, inputs, TEMP_DIR)
-                #onnx_graph = optimizer.optimize_graph(onnx_graph)
-                #model_proto = onnx_graph.make_model("converted from tf2onnx")
+                onnx_graph = optimizer.optimize_graph(onnx_graph)
+                model_proto = onnx_graph.make_model("converted from tf2onnx")
                 logger.info("To_ONNX, OK")
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
