@@ -386,7 +386,9 @@ class TransposeOptimizer(GraphOptimizerBase):
             if self._nodes_has_single_consumer_node([node]):
                 return self._switch_transpose_and_binary_broadcasting_node(node, 1, trans)
             return False
-        return self._handle_node_having_branches(node)
+        # for now avoid replicating up
+        # return self._handle_node_having_branches(node)
+        return False
 
     def _transpose_handler(self, trans, node):
         if is_nchw_transpose(node):

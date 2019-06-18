@@ -255,8 +255,10 @@ class Test(object):
                 # convert model to onnx
                 onnx_graph = self.to_onnx(sess.graph, opset=opset, extra_opset=extra_opset,
                                           shape_override=shape_override, input_names=inputs.keys())
-                onnx_graph = optimizer.optimize_graph(onnx_graph)
                 model_proto = onnx_graph.make_model("converted from tf2onnx")
+                self.create_onnx_file(name + '_original', model_proto, inputs, TEMP_DIR)
+                #onnx_graph = optimizer.optimize_graph(onnx_graph)
+                #model_proto = onnx_graph.make_model("converted from tf2onnx")
                 logger.info("To_ONNX, OK")
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file)
