@@ -13,7 +13,9 @@ from collections import OrderedDict
 from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.utils import is_tf_loopcond_op, is_tf_tensor_array_op
-from tf2onnx.utils import is_tf_tensor_array_gather_op, is_tf_tensor_array_write_op
+from tf2onnx.utils import is_tf_tensor_array_gather_op, \
+    is_tf_tensor_array_write_op, \
+    is_tf_tensor_array_read_op
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.utils import TensorValueInfo
 
@@ -388,10 +390,24 @@ class LoopRewriterBase(object):
             # ta.write(), then ta.stack(), because this is the most frequent usage pattern.
             if exit_output_id:
                 exit_consumers = self.g.find_output_consumers(exit_output_id)
-                ta_gather_node = [n for n in exit_consumers if is_tf_tensor_array_gather_op(n)][0]
-
-                # update exit output id, treat the gather output as ta's output
-                exit_output_id = ta_gather_node.output[0]
+                # output of while_loop, which is a data flow, can be consumed by TensorArrayxxx.
+                # here we only support TensorArrayGather and TensorArrayRead.
+                exit_output_id = None
+                for n in exit_consumers:
+                    if is_tf_tensor_array_gather_op(n):
+                        if not exit_output_id:
+                            exit_output_id = n.output[0]
+                        else:
+                            self.g.replace_all_inputs(
+                                self.g.get_nodes(), n.output[0], exit_output_id
+                            )
+                    if is_tf_tensor_array_read_op(n):
+                        if not exit_output_id:
+                            exit_output_id = n.input[2]
+                        else:
+                            self.g.replace_input(
+                                n, n.input[2], exit_output_id
+                            )
 
         loop_var = LoopVariable(enter_node.name, target_node_input_id, last_iteration_output_id,
                                 switch_true_identity_output, exit_output_id, is_ta, ta_index_id, self.g)

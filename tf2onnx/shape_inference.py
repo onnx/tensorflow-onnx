@@ -195,16 +195,32 @@ def infer_shape_for_op(op):
 
     if op.type == "TensorArrayReadV3":
         # TensorArrayRead reads an element from the TensorArray into output value.
-        # The TensorArray's shape can be got from TensorArrayScatter.
-        # So the process is: first find TensorArrayScatter's shape and then TensorArray's
-        # and finally take its last n-1 dim.
-        flow_in_op = op.inputs[2].op
-        if flow_in_op.type != "Enter":
-            return False
+        # The TensorArray's shape can be got from either TensorArrayScatter or TensorArrayWrite.
+        # So the process is: first find TensorArrayScatter's or TensorArrayWrite's shape and
+        # then TensorArray's and finally take its last n-1 dim.
 
-        scatter_op = flow_in_op.inputs[0].op
-        if scatter_op.type != "TensorArrayScatterV3":
-            return False
+        handle_op = op.inputs[0].op
+        if handle_op.type == "TensorArrayV3":
+            # find TensorArrayWrite
+            tensor_array_write_op = _find_tensorarray_write(handle_op)
+            if tensor_array_write_op:
+                # get TensorArray shape from input tensor of the found TensorArrayWrite op
+                shape = utils.get_tf_tensor_shape(tensor_array_write_op.inputs[2])
+                if shape is not None:
+                    op.outputs[0].set_shape(shape)
+                    logger.debug("set [%s] with new shape %s", op.outputs[0].name, shape)
+                    return True
+
+        flow_in_op = op.inputs[2].op
+        if flow_in_op.type == "Enter":
+            scatter_op = flow_in_op.inputs[0].op
+            if scatter_op.type != "TensorArrayScatterV3":
+                return False
+        else:
+            if flow_in_op.type == "TensorArrayScatterV3":
+                scatter_op = flow_in_op
+            else:
+                return False
 
         value_shape_before_scatter = utils.get_tf_tensor_shape(scatter_op.inputs[2])
         if value_shape_before_scatter is None:

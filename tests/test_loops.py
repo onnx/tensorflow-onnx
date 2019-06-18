@@ -160,6 +160,91 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "output_ta:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    def test_while_loop_with_ta_reader_outside_1(self):
+        # TensorArrayRead after while_loop, consuming data flow from TensorArrayWrite
+        i = tf.placeholder(tf.int32, (), name="input_1")
+        inputs = tf.placeholder(tf.float32, (10,), name="input_2")
+
+        inputs_2 = tf.identity(inputs)
+        input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_2)
+        output_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+        c = lambda i, *_: tf.logical_and(tf.less(i, 10), i >= 0)
+
+        def b(i, out_ta):
+            new_i = tf.add(i, 1)
+            x = input_ta.read(i)
+            x = x + 3
+            # start from index 0
+            out_ta_new = out_ta.write(i, x)
+            return new_i, out_ta_new
+
+        i_final, out_final = tf.while_loop(c, b, [i, output_ta])
+        _ = tf.identity(i_final, name="i")
+        _ = tf.identity(out_final.read(0), name="output_item")
+        _ = tf.identity(out_final.read(2), name="output_ta")
+        input_names_with_port = ["input_1:0", "input_2:0"]
+        feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
+                     "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
+
+        output_names_with_port = ["i:0", "output_item:0", "output_ta:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+
+        tf.reset_default_graph()
+        i = tf.placeholder(tf.int32, (), name="input_1")
+        inputs = tf.placeholder(tf.float32, (10,), name="input_2")
+
+        inputs_2 = tf.identity(inputs)
+        input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_2)
+        # clear_after_read = False allows both of TensorArrayRead and TensorArrayGather
+        output_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True, clear_after_read=False)
+
+        c = lambda i, *_: tf.logical_and(tf.less(i, 10), i >= 0)
+
+        i_final, out_final = tf.while_loop(c, b, [i, output_ta])
+        _ = tf.identity(i_final, name="i")
+        _ = tf.identity(out_final.read(0), name="output_item")
+        _ = tf.identity(out_final.stack(), name="output_ta")
+        input_names_with_port = ["input_1:0", "input_2:0"]
+        feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
+                     "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
+
+        output_names_with_port = ["i:0", "output_item:0", "output_ta:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+
+    def test_while_loop_with_ta_reader_outside_2(self):
+        # TensorArrayRead before while_loop
+        i = tf.placeholder(tf.int32, (), name="input_1")
+        inputs = tf.placeholder(tf.float32, (10,), name="input_2")
+
+        inputs_2 = tf.identity(inputs)
+        input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_2)
+        output_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+        item_0 = input_ta.read(i)
+        i = i + 5
+
+        c = lambda i, *_: tf.logical_and(tf.less(i, 10), i >= 0)
+
+        def b(i, out_ta):
+            new_i = tf.add(i, 1)
+            x = input_ta.read(i)
+            x = x + 3
+            # start from index 0
+            out_ta_new = out_ta.write(i - 5, x)
+            return new_i, out_ta_new
+
+        i_final, out_final = tf.while_loop(c, b, [i, output_ta])
+        _ = tf.identity(i_final, name="i")
+        _ = tf.identity(out_final.stack(), name="output_ta")
+        _ = tf.identity(item_0, name="output_item_0")
+        input_names_with_port = ["input_1:0", "input_2:0"]
+        feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
+                     "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
+
+        output_names_with_port = ["i:0", "output_ta:0", "output_item_0:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+
     def test_map_fn(self):
         def fn0(elem):
             res = elem + elem * elem

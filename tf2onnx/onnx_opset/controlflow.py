@@ -352,3 +352,59 @@ class Where:
                                                        node.output[0], name=utils.make_name("where_op_added"))
         ctx.copy_shape(node.output[0], transpose_node.output[0])
         ctx.copy_dtype(node.output[0], transpose_node.output[0])
+
+
+# NOTE(wayuanho): TensorArrayxxx are some TF ops handling a dynamic array of tensor.
+# There is no counterparts of TensorArrayxxx in Onnx, so we just regard its data flow as tensor.
+@tf_op(["TensorArrayV2", "TensorArrayV3"])
+class TensorArray:
+    """TensorArray initializes a dynamic array, just ignore it."""
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        logger.warning(
+            "[%s: TensorArrayV3] outside while_loop is not an usual usage. Removing it may cause issues.",
+            node.name
+        )
+        ctx.remove_node(node.name)
+
+
+@tf_op(["TensorArrayReadV2", "TensorArrayReadV3"])
+class TensorArrayRead:
+    """TensorArrayRead read an element from flow_in, convert it to a Gather op that fetches items from the flow_in."""
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        logger.warning(
+            "[%s: TensorArrayReadV3] outside while_loop is not an usual usage.",
+            node.name
+        )
+        index = node.input[1]
+        flow_in = node.input[2]
+        output = node.output[0]
+        output_shapes = node.output_shapes
+        output_dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+
+        # replace by Gather
+        unsqueeze_index = ctx.make_node("Unsqueeze", [index], attr={"axes": [0]})
+        gather = ctx.make_node("Gather", [flow_in, unsqueeze_index.output[0]])
+        ctx.make_node(
+            "Squeeze", [gather.output[0]], outputs=[output], attr={"axes": [0]},
+            shapes=output_shapes, dtypes=output_dtypes, op_name_scope=node.name,
+        )
+
+
+@tf_op(["TensorArrayScatterV2", "TensorArrayScatterV3"])
+class TensorArrayScatter:
+    """
+    TensorArrayScatter scatter value into a dynamic array initialized by TensorArray, and pass down its data flow.
+    Just redirect the input value to the output flow.
+    """
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        logger.warning(
+            "[%s: TensorArrayScatterV3] outside while_loop is not an usual usage.",
+            node.name
+        )
+        # redirect input `value`
+        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], node.input[2])
+        ctx.remove_node(node.name)
