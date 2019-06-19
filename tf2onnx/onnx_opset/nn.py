@@ -538,13 +538,13 @@ class Resize:
             # scales is nchw
             scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
-        input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": [0, 3, 1, 2]})
+        input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
         upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node("Transpose", upsample.output, {"perm": [0, 2, 3, 1]},
+        ctx.make_node("Transpose", upsample.output, {"perm": constants.NCHW_TO_NHWC},
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 
