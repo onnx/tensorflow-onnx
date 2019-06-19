@@ -216,6 +216,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Squeeze": self._squeeze_handler,
             "Tanh": self._simple_through_handler,
             "Transpose": self._transpose_handler,
+            "Unsqueeze": self._unsqueeze_handler,
         }
 
     def _handle_node_having_branches(self, node):
@@ -602,15 +603,64 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _reshape_handler(self, trans, node):
         if node.inputs[1].is_const():
             reshape_val = node.inputs[1].get_tensor_value(as_list=True)
-            if len(reshape_val) == 4 and trans.has_attr('original-perm'):
-                # restore original perm
-                original_perm = list(trans.get_attr('original-perm').ints)
-                trans.set_attr('perm', original_perm)
-                trans.attr.pop('original-perm', None)
+            if len(reshape_val) == 4:
+                perm = list(trans.get_attr('perm').ints)
+                if trans.has_attr('original-perm'):
+                    # restore original perm
+                    perm = list(trans.get_attr('original-perm').ints)
+                    trans.attr.pop('original-perm', None)
+                if len(perm) != 4:
+                    return False
+                trans.set_attr('perm', perm)
                 # push down Transpose
-                reverse_perm = get_reverse_perm(original_perm)
+                reverse_perm = get_reverse_perm(perm)
                 reshape_val = transpose_shape(reverse_perm, reshape_val)
                 node.inputs[1].set_tensor_value(np.array(reshape_val).astype(np.int64))
                 self._switch_transpose_and_node(node, trans)
                 return True
         return False
+
+    def _unsqueeze_handler(self, trans, node):
+        def _calculate_unsqueeze_axis(ori_perm, ori_unsqueeze_axes):
+            new_unsqueeze_axes = sorted([ori_perm[i] for i in ori_unsqueeze_axes])
+            # calculate output shape after trans and squeeze
+            input_shape = [chr(i + ord('a')) for i in range(len(ori_perm))]
+            shape_after_transpose = [input_shape[i] for i in ori_perm]
+            shape_after_unsqueeze = shape_after_transpose.copy()
+            for i in ori_unsqueeze_axes:
+                shape_after_unsqueeze.insert(i, chr(len(ori_perm) + 1))
+            # calculate new_perm
+            # after switch, the output shape should be same, using this condition we can figure the new perm
+            new_shape_after_unsqueeze = input_shape.copy()
+            for i in new_unsqueeze_axes:
+                new_shape_after_unsqueeze.insert(i, chr(len(ori_perm) + 1))
+            new_perm = [new_shape_after_unsqueeze.index(i) for i in shape_after_unsqueeze]
+
+            return new_perm, new_unsqueeze_axes
+
+        if not self._nodes_has_single_consumer_node([trans]):
+            return False
+
+        axes = sorted(list(node.get_attr("axes").ints))
+        perm = list(trans.get_attr("perm").ints)
+        unsqueeze_shape = self._g.get_shape(node.output[0])
+        # switch tran and squeeze
+        # 1 switch
+        ops = self._g.get_nodes()
+        self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
+        node.input[0] = trans.input[0]
+        trans.input[0] = node.output[0]
+        # 2 correct attr of nodes
+        new_perm, new_unsqueeze_axes = _calculate_unsqueeze_axis(perm, axes)
+        trans.set_attr("perm", new_perm)
+        if trans.has_attr('original-perm'):
+            trans.attr.pop("original-perm", None)
+        node.set_attr("axes", new_unsqueeze_axes)
+        # 3 set shape
+        self._g.set_shape(trans.output[0], unsqueeze_shape)
+        input_shape = self._g.get_shape(node.input[0])
+        new_unsqueeze_output_shape = input_shape.copy()
+        for i in new_unsqueeze_axes:
+            new_unsqueeze_output_shape.insert(i, 1)
+        self._g.set_shape(node.output[0], new_unsqueeze_output_shape)
+        return True
