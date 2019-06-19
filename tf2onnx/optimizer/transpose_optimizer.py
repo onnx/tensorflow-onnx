@@ -50,6 +50,7 @@ def get_reverse_perm(perm):
 def transpose_shape(perm, shape):
     return [shape[i] for i in perm]
 
+
 def is_useless_transpose(transpose_node):
     perm_attr = transpose_node.get_attr('perm')
     return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints == list(range(len(perm_attr.ints)))
@@ -101,42 +102,50 @@ class TransposeOptimizer(GraphOptimizerBase):
         def _calculate_new_shape(graph, op):
             input_shape = graph.get_shape(op.input[0])
             if input_shape.count(-1) <= 1:
-                # it is known that the op is a Transpose node
-                # if is_nchw_transpose(op):
-                #     new_shape = [input_shape[0], input_shape[3], input_shape[1], input_shape[2]]
-                # else:
-                #     new_shape = [input_shape[0], input_shape[2], input_shape[3], input_shape[1]]
                 perm = list(op.get_attr('perm').ints)
                 new_shape = transpose_shape(perm, input_shape)
                 return graph.make_const(utils.make_name("new_shape"), np.array(new_shape, dtype=np.int64)).output[0]
 
             # reshape requires tha output shape can only contain one -1, if not some extra op needed.
             input_shape = graph.make_node("Shape", [op.input[0]]).output[0]
-            # if is_nchw_transpose(op):
-            #     indice = graph.make_const(utils.make_name("indice"), np.array([0, 3, 1, 2])).output[0]
-            # else:
-            #     indice = graph.make_const(utils.make_name("indice"), np.array([0, 2, 3, 1])).output[0]
             perm = list(op.get_attr('perm').ints)
             indices = graph.make_const(utils.make_name("indices"), np.array(perm)).output[0]
 
             return graph.make_node("Gather", [input_shape, indices]).output[0]
 
+        def check_transpose_replaceable_with_reshape(shape, perm):
+            shuffled = []
+            shifted = []
+            index = 0
+            for i in range(len(perm)):
+                if perm[i] != index:
+                    shuffled.append(perm[i])
+                else:
+                    if index != i:
+                        shifted.append(perm[i])
+                    index += 1
+            return all([shape[i] == 1 for i in shuffled]) or all([shape[i] == 1 for i in shifted])
+
         nodes = self.nodes
-        # if channel==1 or height==width==1, replace transpose with reshape
+        # if all of input dimensions are not shuffled at all
+        # or if the shuffled dimensions are all of size 1
+        # or if the shifted dimensions are all of size 1
+        # then replace Transpose with a Reshape
         # replacing trans with reshape is because transpose will copy data even if this transpose doesn't nothing
-#         for op in nodes:
-#             if op.type == "Transpose":
-#                 input_shape = self._g.get_shape(op.input[0])
-#                 if not input_shape:
-#                     continue
-# # FIXME
-#                 if (is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1:3] == [1, 1])))\
-#                    or (is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2:4] == [1, 1]))):
-#                     new_shape = _calculate_new_shape(self._g, op)
-#                     # replace transpose with reshape
-#                     self._g.remove_node(op.name)
-#                     self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output)
-#                     self._g.topological_sort(self._g.get_nodes())
+        for op in nodes:
+            if op.type == "Transpose":
+                input_shape = self._g.get_shape(op.input[0])
+                perm = list(reversed(range(len(input_shape))))
+                if op.has_attr('perm'):
+                    perm = list(op.get_attr('perm').ints)
+                if not input_shape:
+                    continue
+                if check_transpose_replaceable_with_reshape(input_shape, perm):
+                    new_shape = _calculate_new_shape(self._g, op)
+                    # replace transpose with reshape
+                    self._g.remove_node(op.name)
+                    self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output)
+                    self._g.topological_sort(self._g.get_nodes())
 
     def merge_duplicated_transposes(self):
         # strategy used in previous procedure is to move transpose nodes down if possible,
@@ -488,9 +497,10 @@ class TransposeOptimizer(GraphOptimizerBase):
             node.set_attr('axis', axis)
             # fix the output for concat
             shape = self._g.get_shape(node.output[0])
-            reverse_perm = get_reverse_perm(perm)
-            shape = transpose_shape(reverse_perm, shape)
-            self._g.set_shape(node.output[0], shape)
+            if shape:
+                reverse_perm = get_reverse_perm(perm)
+                shape = transpose_shape(reverse_perm, shape)
+                self._g.set_shape(node.output[0], shape)
             self._g.insert_new_node_on_output("Transpose", node.output[0], utils.make_name('transpose'), domain=None, **trans.attr)
             for input_node in input_nodes:
                 # rewrite the input Transpose nodes to make them ready for removal
@@ -608,10 +618,10 @@ class TransposeOptimizer(GraphOptimizerBase):
                 if trans.has_attr('original-perm'):
                     # restore original perm
                     perm = list(trans.get_attr('original-perm').ints)
+                    trans.set_attr('perm', perm)
                     trans.attr.pop('original-perm', None)
                 if len(perm) != 4:
                     return False
-                trans.set_attr('perm', perm)
                 # push down Transpose
                 reverse_perm = get_reverse_perm(perm)
                 reshape_val = transpose_shape(reverse_perm, reshape_val)
@@ -644,7 +654,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         axes = sorted(list(node.get_attr("axes").ints))
         perm = list(trans.get_attr("perm").ints)
         unsqueeze_shape = self._g.get_shape(node.output[0])
-        # switch tran and squeeze
+        # switch tran and unsqueeze
         # 1 switch
         ops = self._g.get_nodes()
         self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
