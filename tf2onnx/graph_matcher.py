@@ -161,7 +161,8 @@ class GraphMatcher(object):
             pattern tree.
 
         Returns:
-          True if an TF expression rooted at `op` matches `pattern`.
+          if matched return True and match_list whose elem is [pattern, op, tensor]
+          else return False
         the condition that op is matched with pattern:
         1 op is same:
           if pattern.op_type is None or *, then treat as same
@@ -170,21 +171,21 @@ class GraphMatcher(object):
           if not pattern.inputs, then treat as same
           otherwise, iteratively compare input nodes with pattern.
         """
-
+        match_list = []
         if pattern.op_type is None:
-            return True
+            return True, match_list
 
         if self._is_op_type_same(op, pattern):
-            self._match_result.add(pattern, op, tensor)
+            match_list.append([pattern, op, tensor])
         else:
-            return False
+            return False, match_list
 
         if not pattern.inputs:
             # If pattern.inputs is empty, skips the rest and accepts all the inputs.
-            return True
+            return True, match_list
 
         if not op or len(op.inputs) != len(pattern.inputs):
-            return False
+            return False, match_list
 
         if self._allow_reorder:
             inputs = [None] * len(op.inputs)
@@ -203,12 +204,17 @@ class GraphMatcher(object):
         else:
             pat = list(zip(op.inputs, pattern.inputs))
 
-        ret = []
+        match_flag_of_inputs = []
         for input_tensor, input_pattern in pat:
             # print("MATCHING", input_pattern.op_type, input_tensor.type)
-            r = self._match_pattern(input_pattern, input_tensor, input_tensor)
-            ret.append(r)
-        return all(ret)
+            flag, match_list_of_input = self._match_pattern(input_pattern, input_tensor, input_tensor)
+            match_flag_of_inputs.append(flag)
+            match_list.extend(match_list_of_input)
+        return all(match_flag_of_inputs), match_list
+
+    def _parse_match_list_to_match_result(self, match_list):
+        for pattern, op, tensor in match_list:
+            self._match_result.add(pattern, op, tensor)
 
     def match_op(self, op):
         """Matches `op` against `self._pattern`.
@@ -221,8 +227,10 @@ class GraphMatcher(object):
           None.
         """
         self._match_result = MatchResult()
-        if not self._match_pattern(self._pattern, op, tensor=None):
+        match_flag, match_list = self._match_pattern(self._pattern, op, tensor=None)
+        if not match_flag:
             return None
+        self._parse_match_list_to_match_result(match_list)
         return self._match_result
 
     def match_ops(self, ops):
