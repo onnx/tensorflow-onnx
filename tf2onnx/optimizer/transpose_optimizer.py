@@ -7,7 +7,7 @@ from __future__ import unicode_literals
 from collections import defaultdict
 
 import numpy as np
-
+import onnx
 from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW
 from .. import utils
 from .optimizer_base import GraphOptimizerBase
@@ -191,8 +191,8 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _handle_node_having_branches(self, node):
         # create transpose pairs if some input are not.
-        self._create_transpose_pairs_before_node(node)
-
+        if not self._create_transpose_pairs_before_node(node):
+            return False
         # make sure node's all input transpose all have only 1 consumer node,
         # otherwise, it would impact their other output nodes
         if self._nodes_has_single_consumer_node(node.inputs):
@@ -307,6 +307,16 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.replace_input(consumer, node.output[0], nhwc_node.output[0])
 
     def _create_transpose_pairs_before_node(self, node):
+        def shape_after_expand(ori_shape):
+            # according to broadcasting rule to expand shape to 4D while not tile the tensor here
+            # still count on the broadcasting op to tile the tensor
+            if ori_shape.count(-1) >= 2:
+                self.logger.warning("%s shape can contain one -1 at most, otherwise reshape op can't work", node.name)
+                return None
+            ori_rank = len(ori_shape)
+            new_shape = [1]*(4-ori_rank) + ori_shape
+            return new_shape
+
         non_nhwc_trans_inputs = []
         for input_id, n in zip(node.input, node.inputs):
             if not is_nhwc_transpose(n):
@@ -315,10 +325,42 @@ class TransposeOptimizer(GraphOptimizerBase):
                     non_nhwc_trans_inputs.append([input_id, n])
 
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nhwc_trans_consumers
+        shape_unknow = [input_id for input_id, _ in non_nhwc_trans_inputs if self._g.get_shape(input_id) is None]
+        if shape_unknow:
+            if self._g.opset <= 9:
+                msg = "%s 's shape is unknown, ConstantOfShape will be used which exists in version 9 or higher" \
+                      "while graph's opset version is %s" % (shape_unknow, self._g.opset)
+                self.logger.warning(msg)
+                return False
+
         for input_id, n in non_nhwc_trans_inputs:
-            nchw_node = self._g.make_node("Transpose", [input_id], attr={"perm": [0, 3, 1, 2]})
-            nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": [0, 2, 3, 1]})
+            shape = self._g.get_shape(input_id)
+            # if rank of n is not 4, then we need to insert a reshape op before inserting a transpose
+            # for example shape of n is [x, y], then output shape of reshape will be [1, 1, x, y]
+            if shape is None:
+                const_4 = self._g.make_const(utils.make_name("const_4"), np.array([4], np.int64)).output[0]
+                tensor_1 = onnx.helper.make_tensor("value", onnx.TensorProto.INT64, [1], [1])
+                shape_node = self._g.make_node("Shape", [input_id]).output[0]
+                rank_node = self._g.make_node("Shape", [shape_node]).output[0]
+                expand_rank = self._g.make_node("Sub", [const_4, rank_node]).output[0]
+                array_fill_1 = self._g.make_node("ConstantOfShape", [expand_rank], attr={"value": tensor_1}).output[0]
+                new_shape = self._g.make_node("Concat", [array_fill_1, shape_node], attr={"axis": 0}).output[0]
+                reshape = self._g.make_node("Reshape", [input_id, new_shape]).output[0]
+                input_of_new_trans = reshape
+            elif len(shape) == 4:
+                input_of_new_trans = input_id
+            else:
+                shape_4d = shape_after_expand(shape)
+                if shape_4d is None:
+                    return False
+                const = self._g.make_const(utils.make_name("reshape_shape"), np.array(shape_4d, np.int64)).output[0]
+                reshape = self._g.make_node("Reshape", [input_id, const]).output[0]
+                input_of_new_trans = reshape
+
+            nchw_node = self._g.make_node("Transpose", [input_of_new_trans], attr={"perm": NHWC_TO_NCHW})
+            nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": NCHW_TO_NHWC})
             self._g.replace_input(node, input_id, nhwc_node.output[0])
+        return True
 
     def _add_handler(self, trans, node):
         if node.inputs[1].is_const():
