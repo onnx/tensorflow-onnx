@@ -426,12 +426,8 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _concat_handler(self, trans, node):
         if self._handle_node_having_branches(node):
-            perm = trans.get_attr("perm").ints
-            axis_attr = node.get_attr("axis")
-            if axis_attr:
-                axis = axis_attr.i  # fix
-            else:
-                axis = 0
+            perm = trans.get_attr_value("perm")
+            axis = node.get_attr_value("axis", 0)
             new_axis = perm[axis]
             node.set_attr("axis", new_axis)
             return True
