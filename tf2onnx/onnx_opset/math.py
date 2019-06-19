@@ -262,6 +262,7 @@ class LRN:
         node.set_attr("alpha", size * node.get_attr("alpha").f)
 
         ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
+        ctx.update_node_shape_dtype(node, override=True)
         op_name = utils.make_name(node.name)
         ctx.insert_new_node_on_output("Transpose", node.output[0], perm=constants.NCHW_TO_NHWC, name=op_name)
 
