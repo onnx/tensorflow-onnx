@@ -19,10 +19,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import copy
-
+from itertools import permutations
 import six
-
 
 
 class OpTypePattern(object):
@@ -188,29 +186,24 @@ class GraphMatcher(object):
             return False, match_list
 
         if self._allow_reorder:
-            inputs = [None] * len(op.inputs)
-            wanted = copy.copy(pattern.inputs)
-            for idx, i in enumerate(op.inputs):
-                for j in range(len(wanted)):  # pylint: disable=consider-using-enumerate
-                    if i.type == wanted[j].op_type:
-                        inputs[idx] = wanted[j]
-                        del wanted[j]
-                        break
-            for idx, i in enumerate(inputs):
-                if i is None:
-                    inputs[idx] = wanted[0]
-                    del wanted[0]
-            pat = list(zip(op.inputs, inputs))
+            pattern_inputs_list = permutations(pattern.inputs)
         else:
-            pat = list(zip(op.inputs, pattern.inputs))
+            pattern_inputs_list = [pattern.inputs]
 
-        match_flag_of_inputs = []
-        for input_tensor, input_pattern in pat:
-            # print("MATCHING", input_pattern.op_type, input_tensor.type)
-            flag, match_list_of_input = self._match_pattern(input_pattern, input_tensor, input_tensor)
-            match_flag_of_inputs.append(flag)
-            match_list.extend(match_list_of_input)
-        return all(match_flag_of_inputs), match_list
+        for possible_pattern_inputs in pattern_inputs_list:
+            pat = list(zip(op.inputs, possible_pattern_inputs))
+            match_flag_of_inputs = []
+            match_lists_of_inputs = []
+            for input_tensor, input_pattern in pat:
+                # print("MATCHING", input_pattern.op_type, input_tensor.type)
+                flag, match_list_of_input = self._match_pattern(input_pattern, input_tensor, input_tensor)
+                match_flag_of_inputs.append(flag)
+                match_lists_of_inputs.extend(match_list_of_input)
+
+            if all(match_flag_of_inputs):
+                match_list.extend(match_lists_of_inputs)
+                return True, match_list
+        return False, match_list
 
     def _parse_match_list_to_match_result(self, match_list):
         for pattern, op, tensor in match_list:
