@@ -137,6 +137,16 @@ class GraphMatcher(object):
         self._pattern = pattern
         self._allow_reorder = allow_reorder
 
+    @staticmethod
+    def _is_op_type_same(op, pattern):
+        if pattern.op_type == "*":
+            return True
+
+        if op.type in pattern.op_type.split('|'):
+            return True
+
+        return False
+
     def _match_pattern(self, pattern, op, tensor):
         """Returns whether an TF expression rooted at `op` matches `pattern`.
 
@@ -152,16 +162,22 @@ class GraphMatcher(object):
 
         Returns:
           True if an TF expression rooted at `op` matches `pattern`.
+        the condition that op is matched with pattern:
+        1 op is same:
+          if pattern.op_type is None or *, then treat as same
+          or op.type in pattern.op_type.split("|")
+        2 op.inputs are same with pattern.inputs:
+          if not pattern.inputs, then treat as same
+          otherwise, iteratively compare input nodes with pattern.
         """
+
         if pattern.op_type is None:
             return True
 
-        if pattern.op_type != '*':
-            if op is None or op.type not in pattern.op_type.split('|'):
-                return False
-
-        self._match_result.add(pattern, op, tensor)
-        # print("matched", ",".join([op.type + "|" + op.name for op in self._match_result.get_nodes()]))
+        if self._is_op_type_same(op, pattern):
+            self._match_result.add(pattern, op, tensor)
+        else:
+            return False
 
         if not pattern.inputs:
             # If pattern.inputs is empty, skips the rest and accepts all the inputs.
