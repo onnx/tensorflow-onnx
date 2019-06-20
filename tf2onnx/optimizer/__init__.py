@@ -48,8 +48,7 @@ def optimize_graph(graph):
                 current = copy.deepcopy(graph)
                 opt = factory()
                 graph = opt.optimize(current)
-                if not continue_flag:
-                    continue_flag = opt.graph_been_opt
+                continue_flag = continue_flag or opt.graph_been_opt
 
             except Exception:  # pylint: disable=broad-except
                 # if current optimizer fails, continue with other optimizers
