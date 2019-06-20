@@ -22,8 +22,8 @@ def is_nhwc_transpose(transpose_node):
                    (perm_attr and perm_attr.ints == [0, 2, 3, 1])
                    or
                    (
-                           transpose_node.has_attr('original-perm') and
-                           transpose_node.get_attr("original-perm").ints == [0, 2, 3, 1]
+                           transpose_node.has_attr('original_perm') and
+                           transpose_node.get_attr("original_perm").ints == [0, 2, 3, 1]
                    )
            )
 
@@ -34,8 +34,8 @@ def is_nchw_transpose(transpose_node):
                    (perm_attr and perm_attr.ints == [0, 3, 1, 2])
                    or
                    (
-                           transpose_node.has_attr('original-perm') and
-                           transpose_node.get_attr("original-perm").ints == [0, 3, 1, 2]
+                           transpose_node.has_attr('original_perm') and
+                           transpose_node.get_attr("original_perm").ints == [0, 3, 1, 2]
                    )
            )
 
@@ -547,7 +547,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             # 2 correct attr of nodes
             new_perm, new_squeeze_axes = _calculate_new_attr(ori_perm=trans_perm, ori_squeeze_axes=squeeze_axes)
             trans.set_attr("perm", new_perm)
-            trans.set_attr("original-perm", trans_perm)
+            trans.set_attr("original_perm", trans_perm)
             node.set_attr("axes", new_squeeze_axes)
             # 3 set shape
             self._g.set_shape(trans.output[0], squeeze_shape)
@@ -615,11 +615,11 @@ class TransposeOptimizer(GraphOptimizerBase):
             reshape_val = node.inputs[1].get_tensor_value(as_list=True)
             if len(reshape_val) == 4:
                 perm = list(trans.get_attr('perm').ints)
-                if trans.has_attr('original-perm'):
+                if trans.has_attr('original_perm'):
                     # restore original perm
-                    perm = list(trans.get_attr('original-perm').ints)
+                    perm = list(trans.get_attr('original_perm').ints)
                     trans.set_attr('perm', perm)
-                    trans.attr.pop('original-perm', None)
+                    trans.attr.pop('original_perm', None)
                 if len(perm) != 4:
                     return False
                 # push down Transpose
@@ -663,8 +663,8 @@ class TransposeOptimizer(GraphOptimizerBase):
         # 2 correct attr of nodes
         new_perm, new_unsqueeze_axes = _calculate_unsqueeze_axis(perm, axes)
         trans.set_attr("perm", new_perm)
-        if trans.has_attr('original-perm'):
-            trans.attr.pop("original-perm", None)
+        if trans.has_attr('original_perm'):
+            trans.attr.pop("original_perm", None)
         node.set_attr("axes", new_unsqueeze_axes)
         # 3 set shape
         self._g.set_shape(trans.output[0], unsqueeze_shape)

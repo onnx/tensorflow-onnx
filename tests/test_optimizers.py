@@ -308,9 +308,13 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=1)
 
     def test_transpose_with_squeeze_add_mul_concat(self):
+        input_shape = [4, 3, 1, 5]
+        reshape_shape = [4, 2, 5, -1]
+        output_shape = [4, 3, 2, 5]
+
         const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), [2.0])
         const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
-        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2,), [2.0, 3.0])
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (1,), [3.0])
         const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
 
         nodes = []
@@ -322,7 +326,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             nodes.append(helper.make_node("Relu", ["mul" + str(i)], ["relu" + str(i)], name="relu" + str(i)))
 
         concat = helper.make_node("Concat", ["relu" + str(i) for i in range(2)], ["concat"], name="concat", axis=1)
-        reshape_dims = helper.make_tensor("const_1", TensorProto.INT64, (4,), [3, 2, -1, 5])
+        reshape_dims = helper.make_tensor("reshape_dims", TensorProto.INT64, (4,), reshape_shape)
         reshape_dims_node = helper.make_node("Constant", [], ["reshape_dims"], value=reshape_dims, name="reshape_dims")
         reshape = helper.make_node("Reshape", ['concat', 'reshape_dims'], ['reshape'], name="reshape")
         transpose = helper.make_node("Transpose", ["reshape"], ["trans3"], perm=[0, 3, 1, 2], name="trans3")
@@ -330,36 +334,37 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         graph = helper.make_graph(
             [const_1_node, const_2_node, concat, transpose, identity] + nodes + [reshape_dims_node, reshape],
             "transpose_with_squeeze_add_mul_concat",
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 4, 1, 5))],
-            [helper.make_tensor_value_info("output", TensorProto.FLOAT, (3, 5, 2, 4))],
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("output", TensorProto.FLOAT, output_shape)],
         )
 
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
-        self.run_transpose_compare(["output"], {"X": np.random.randn(3, 4, 1, 5).astype(np.float32)},
+        self.run_transpose_compare(["output"],
+                                   {"X": np.arange(np.prod(input_shape)).reshape(input_shape).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
     def test_transpose_and_reshape(self):
-        input_shapes = [(2, 3, 4, 5), (1, 2, 3, 5), (1, 5, 2, 3), (2, 1, 5, 3)]
-        reshape_shapes = [(1, 2, -1, 5), (2, -1, 5, 1), (1, 5, 2, -1)]
-        for i in range(len(input_shapes)):
-            for j in range(len(reshape_shapes)):
-                perm = [0, 3, 1, 2]
-                transpose = helper.make_node("Transpose", ["X"], ["transpose"], perm=perm, name=None)
-                reshape_dims = helper.make_tensor("const_1", TensorProto.INT64, (4,), reshape_shapes[j])
-                reshape_dims_node = helper.make_node("Constant", [], ["reshape_dims"], value=reshape_dims, name=None)
-                reshape = helper.make_node("Reshape", ['transpose', 'reshape_dims'], ['reshape'], name=None)
-                identity = helper.make_node('Identity', ["reshape"], ["output"], name="id-1")
-                output_shape = reshape_shape(transpose_shape(perm, input_shapes[i]), reshape_shapes[j])
-                graph = helper.make_graph(
-                    [transpose, identity, reshape_dims_node, reshape],
-                    "transpose_with_squeeze_add_mul_concat",
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shapes[i])],
-                    [helper.make_tensor_value_info("output", TensorProto.FLOAT, output_shape)],
-                )
-
-                model_proto = helper.make_model(graph, producer_name="onnx-tests")
-                self.run_transpose_compare(["output"], {"X": np.random.randn(*input_shapes[i]).astype(np.float32)},
-                                           model_proto, remaining_transpose_num=1)
+        input_shape = [1, 2, 1, 5]
+        reshape_shape = [1, 1, 5, -1]
+        output_shape = [1, 2, 1, 5]
+        transpose = helper.make_node("Transpose", ["X"], ["transpose"], name=None,
+                                     perm=[0, 2, 3, 1])
+        squeeze = helper.make_node("Squeeze", ["transpose"], ["squeeze"], name=None, axes=[1])
+        reshape_dims = helper.make_tensor("reshape_dims", TensorProto.INT64, (4,), reshape_shape)
+        reshape_dims_node = helper.make_node("Constant", [], ["reshape_dims"], value=reshape_dims, name=None)
+        reshape = helper.make_node("Reshape", ['squeeze', 'reshape_dims'], ['reshape'], name=None)
+        transpose2 = helper.make_node("Transpose", ["reshape"], ["trans2"], perm=[0, 3, 1, 2], name=None)
+        identity = helper.make_node('Identity', ["trans2"], ["output"], name=None)
+        graph = helper.make_graph(
+            [transpose, squeeze, reshape_dims_node, reshape, transpose2, identity],
+            "transpose_with_squeeze_add_mul_concat",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("output", TensorProto.FLOAT, output_shape)],
+        )
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["output"],
+                                   {"X": np.arange(np.prod(input_shape)).reshape(input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
 
     def test_transpose_with_unsqueeze(self):
         input_shapes = [[2, 3, 4], [4, 3, 2]]
