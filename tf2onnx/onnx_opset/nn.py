@@ -220,13 +220,21 @@ class ConvTranspose:
         node.type = "ConvTranspose"
         # Note: inputs are reversed from what one would expect.
         kernel_shape = conv_kernel_shape(ctx, node, 1)
+        input_shape = ctx.get_shape(node.input[2])
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
         output_shape = ctx.get_shape(node.output[0])
         if node.is_nhwc():
             new_output_shape = [output_shape[1], output_shape[2]]
+            input_hw = [input_shape[1], input_shape[2]]
         else:
             new_output_shape = [output_shape[2], output_shape[3]]
+            input_hw = [input_shape[2], input_shape[3]]
+
+        utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
+        utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
+                        "output h and w cannot be smaller than input h and w.")
+
         node.set_attr("output_shape", new_output_shape)
 
         strides = conv_dims_attr(node, "strides")
