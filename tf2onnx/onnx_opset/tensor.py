@@ -1256,9 +1256,10 @@ class ReverseV2:
     def version_10(cls, ctx, node, **kwargs):
         # T output = ReverseV2(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
         # Implement tensorflow ReverseV2 op using multiple ReverseSequence (for each axis)
-        # and Transpose ops. Each axis can be reversed only once (in tf) and so we compute the
-        # transpose for each axis (other than 0), feed the tensor to a ReverseSequence node and
-        # finally transpose again to get back the original shape.
+        # and Transpose ops. We sort the axis vector (if non-empty) at the start. Each axis can
+        # be reversed only once (in tf) and so we can compute the transpose for each axis
+        # (other than 0), feed the tensor to a ReverseSequence node and finally transpose again
+        # to get back the original shape.
 
         axes_node = node.inputs[1]
         axes = axes_node.get_tensor_value(as_list=False)
@@ -1310,6 +1311,8 @@ class ReverseV2:
             for i, ax in enumerate(axes):
                 if ax < 0:
                     axes[i] += input_rank
+
+            axes = sorted(axes)
 
             orig_perm = list(range(input_rank))
             curr_perm = []
