@@ -1167,15 +1167,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
         tf.reset_default_graph()
 
-        # disable this case for ms domain due to onnxruntime range-1 issue
-        # https://github.com/Microsoft/onnxruntime/issues/730
-        if not (extra_opset and extra_opset.domain == constants.MICROSOFT_DOMAIN):
-            x = tf.range(3.0, 3.0, 5)
-            _ = tf.identity(x, name=_TFOUTPUT)
-            g = self._run_test_case([_OUTPUT], {}, process_args=process_args)
-            self.assertTrue(extra_opset is None
-                            or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
-            tf.reset_default_graph()
+        # disable this case due to onnxruntime loop issue
+        # https://github.com/microsoft/onnxruntime/issues/1272
+        # x = tf.range(3.0, 3.0, 5)
+        # _ = tf.identity(x, name=_TFOUTPUT)
+        # g = self._run_test_case([_OUTPUT], {}, process_args=process_args)
+        # self.assertTrue(extra_opset is None
+        #                 or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
+        # tf.reset_default_graph()
 
         delta_val = np.array(1.5, dtype=np.float32)
         delta = tf.placeholder(tf.float32, shape=(), name=_TFINPUT)
