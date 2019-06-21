@@ -2015,6 +2015,65 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+
+    @check_opset_min_version(10, "ReverseSequence")
+    def test_reversev2_constant_axis(self):
+        # Tests for constant axis.
+        x_val_shape = [1, 2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[3])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        # Empty axis vector.
+        x_val_shape = [2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+
+    @check_opset_min_version(10, "ReverseSequence")
+    def test_reversev2_vector_axis(self):
+        x_val_shape = [1, 2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[0, -3, 2, 3])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val_shape = [2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[-3, 1, 2])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val_shape = [5, 5, 9, 7, 8, 9]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, [5, 5, 9, 7, 8, 9], name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[0, 1, -2, 3, 5])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+
+    @check_opset_min_version(10, "ReverseSequence")
+    def test_reversev2_1D_tensor(self):
+        # For tensors with 1 dimension and no axis to reverse.
+        # Adds an identity block.
+        x_val_shape = [4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+
     @check_opset_min_version(8, "where")
     def test_where(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.float32)
