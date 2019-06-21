@@ -1,6 +1,12 @@
+"""
+tool to list tensorflow op to onnx op mapping in markdown
+"""
+
 import argparse
-from tf2onnx.handler import tf_op
+
 from collections import OrderedDict
+
+from tf2onnx.handler import tf_op
 
 parser = argparse.ArgumentParser()
 parser.add_argument('filename',
@@ -30,6 +36,3 @@ with open(args.filename, 'w+') as doc_file:
         # Document support status according to the gathered mapping.
         for tf_op, supported_versions in tf_op_to_versions.items():
             doc_file.write("| {} | {} |\n".format(tf_op, supported_versions))
-
-    doc_file.close()
-
