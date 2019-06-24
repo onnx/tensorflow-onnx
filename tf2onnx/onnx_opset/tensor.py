@@ -1258,10 +1258,8 @@ class ReverseSequence:
         utils.make_sure(seq_dim is not None, "sequence dim must be given in {}".format(node.name))
         seq_dim = seq_dim.i
         batch_dim = node.get_attr("batch_dim")
-        if batch_dim is not None:
-            batch_dim = batch_dim.i
-        else:
-            batch_dim = 0
+        #batch_dim is set by default 0 in tf
+        batch_dim = batch_dim.i
 
         ctx.remove_node(node.name)
         node = ctx.make_node(
