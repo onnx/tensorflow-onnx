@@ -2361,7 +2361,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     def test_batch_to_spacend(self):
         block_size = [2, 2]
-        crop = [[0, 1], [2, 1]]
+        crop = [[1, 0], [2, 1]]
 
         input_val = np.random.random_sample([40, 3, 5, 100]).astype(np.float32)
         input_x = tf.placeholder(dtype=tf.float32, shape=input_val.shape, name=_TFINPUT)  # NHWC
