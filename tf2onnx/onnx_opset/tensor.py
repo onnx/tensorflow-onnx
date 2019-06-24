@@ -941,7 +941,12 @@ class Unpack:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx unpack op
+        # squeeze does not support negative axis
         axis = node.get_attr("axis").i
+        if axis < 0:
+            shape = ctx.get_shape(node.input[0])
+            utils.make_sure(shape is not None, "shape of unpack input is None: {}".format(node.input[0]))
+            axis += len(shape)
         # split the tensor into n outputs
         node.type = "Split"
         # for each output we need to squeeze axis
