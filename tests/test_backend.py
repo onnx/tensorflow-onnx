@@ -2182,7 +2182,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val}, rtol=1e-6)
 
-    @skip_onnxruntime_backend("onnxruntime Slice did not supported BOOL")
     def test_matrix_band_part(self):
         input_val = np.random.randint(0, 666, (10, 15)).astype(np.int32)
         input_x = tf.placeholder(dtype=tf.int32, shape=[None, None], name=_TFINPUT)
@@ -2192,7 +2191,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-    @skip_onnxruntime_backend("onnxruntime Slice did not supported BOOL.")
     def test_matrix_band_part_2(self):
         input_val = np.random.randint(0, 666, (1, 1)).astype(np.int32)
         input_x = tf.placeholder(dtype=tf.int32, shape=[None, None], name=_TFINPUT)
