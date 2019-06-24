@@ -601,7 +601,7 @@ def transpose_inputs(ctx, inputs_as_nchw):
                 ops.append(transpose)
                 ops.append(node)
                 continue
-            ops.append(node)
+        ops.append(node)
     ctx.reset_nodes(ops)
 
 
