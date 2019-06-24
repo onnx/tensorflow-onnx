@@ -1047,6 +1047,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    def test_slice_neg_size(self):
+        x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)
+        t1 = tf.constant([0, 1], dtype=tf.int32)
+        t2 = tf.constant([-1, 2], dtype=tf.int32)
+        x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.slice(x0, t1, t2)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(10, "Slice in opset 10 can accept dymaic 'start' and 'ends'")
     def test_slice_with_non_const(self):
         x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)
