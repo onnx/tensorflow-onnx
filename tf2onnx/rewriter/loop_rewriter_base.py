@@ -295,9 +295,11 @@ class LoopRewriterBase(object):
             loop_var = context.loop_properties.all_variables[enter_node.name]
 
             # cut off connection between condition graph and Merge node.
+            # replace condition graph's inputs to be cell graph's outputs, because we want condition graph
+            # to consumer cell graph outputs.
             non_switch_consumers = [n for n in self.g.find_output_consumers(merge_node.output[0]) if n.type != "Switch"]
             self.g.replace_all_inputs(non_switch_consumers, merge_node.output[0],
-                                      loop_var.switch_true_identity_output.id)
+                                      loop_var.next_iteration_input.id)
             dependent_vars.append(loop_var)
 
         # cut off connection between condition graph and LoopCond node.
