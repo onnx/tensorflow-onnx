@@ -141,7 +141,7 @@ class Node(object):
 
     def is_const(self):
         """Return True if node is a constant."""
-        return self.type in ["Const", "ConstV2"]
+        return self.type in ["Const", "ConstV2", "Constant"]
 
     def is_graph_input(self):
         return self.type in ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
@@ -844,7 +844,6 @@ class Graph(object):
         for op in self.get_nodes():
             if op.is_const():
                 const_ops.append(op)
-                continue
             elif op.is_graph_input():
                 if op not in self._order_sensitive_inputs:
                     order_non_sensitive_placeholders.append(op)
@@ -854,7 +853,6 @@ class Graph(object):
 
         # create initializers for placeholder with default nodes
         initializers = []
-        placeholder_default_const_ops = []
         for op in placeholder_ops:
             if op.type == "PlaceholderWithDefault":
                 utils.make_sure(op.inputs[0] is not None, "Cannot find node with output {}".format(op.input[0]))
@@ -864,18 +862,24 @@ class Graph(object):
                 value = op.inputs[0].get_tensor_value(as_list=False)
                 tensor = numpy_helper.from_array(value, op.output[0])
                 initializers.append(tensor)
-                placeholder_default_const_ops.append(op.inputs[0])
+                const_ops.remove(op.inputs[0])
+                ops.remove(op.inputs[0])
 
         # create initializers for constant nodes
-        const_ops = [op for op in const_ops if op not in placeholder_default_const_ops]
         for op in const_ops:
-            # not to use numpy_helper.from_array to create a new tensor
-            # because sometimes onnx will have a bug that only check the tensor data in specific field
-            # such as at upsample it only checks the float_data field.
-            t = op.get_attr("value")
-            tensor = helper.get_attribute_value(t)
-            tensor.name = op.output[0]
-            initializers.append(tensor)
+            # Constant support more dtypes after opset 9
+            if self.opset < 9:
+                # not to use numpy_helper.from_array to create a new tensor
+                # because sometimes onnx will have a bug that only check the tensor data in specific field
+                # such as at upsample it only checks the float_data field.
+                t = op.get_attr("value")
+                tensor = helper.get_attribute_value(t)
+                tensor.name = op.output[0]
+                initializers.append(tensor)
+                ops.remove(op)
+            else:
+                op.type = "Constant"
+                op.update_proto()
 
         # create input_tensor_values
         input_ids = [op.output[0] for op in placeholder_ops]

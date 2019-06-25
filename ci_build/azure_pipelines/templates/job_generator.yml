@@ -9,73 +9,83 @@ parameters:
   onnx_backends: {onnxruntime: ['0.4.0']}
   job: {}
   run_setup: 'True'
+  report_coverage: 'False'
+  artifact_name: 'single_test_coverage'
 
 jobs:
-- ${{ each platform in parameters.platforms }}:
   - job: ${{ parameters.job.name }}
     pool:
-      ${{ if eq(platform, 'linux') }}:
-        vmImage: 'ubuntu-16.04'
-      ${{ if eq(platform, 'windows') }}:
-        vmImage: 'vs2017-win2016'
-      ${{ if eq(platform, 'mac') }}:
-        vmImage: 'macOS-10.13'
+        vmImage: $(CI_VM_IMAGE)
 
     # Generate matrix
     strategy:
       matrix:
-        ${{ each python_version in parameters.python_versions }}:
-          ${{ each tf_version in parameters.tf_versions }}:
-            ${{ each onnx_version in parameters.onnx_versions }}:
-              ${{ each onnx_backend in parameters.onnx_backends }}:
-                ${{ each onnx_backend_version in onnx_backend.value }}:
-                  ${{ each onnx_opset in parameters.onnx_opsets }}:
-                    ${{ if ne(onnx_opset, '') }}:
-                      ${{ format('{0} python{1} tf{2} onnx{3} opset{4} {5}{6}', platform, python_version, tf_version, onnx_version, onnx_opset, onnx_backend.key, onnx_backend_version) }}:
-                        CI_PYTHON_VERSION: '${{ python_version }}'
-                        CI_TF_VERSION: '${{ tf_version }}'
-                        CI_ONNX_VERSION: '${{ onnx_version }}'
-                        CI_ONNX_OPSET: '${{ onnx_opset }}'
-                        CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
-                        CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
+        ${{ each platform in parameters.platforms }}:
+          ${{ each python_version in parameters.python_versions }}:
+            ${{ each tf_version in parameters.tf_versions }}:
+              ${{ each onnx_version in parameters.onnx_versions }}:
+                ${{ each onnx_backend in parameters.onnx_backends }}:
+                  ${{ each onnx_backend_version in onnx_backend.value }}:
+                    ${{ each onnx_opset in parameters.onnx_opsets }}:
+                      ${{ if ne(onnx_opset, '') }}:
+                        ${{ format('{0} python{1} tf{2} onnx{3} opset{4} {5}{6}', platform, python_version, tf_version, onnx_version, onnx_opset, onnx_backend.key, onnx_backend_version) }}:
+                          ${{ if eq(platform, 'linux') }}:
+                            CI_VM_IMAGE: 'ubuntu-16.04'
+                          ${{ if eq(platform, 'windows') }}:
+                            CI_VM_IMAGE: 'vs2017-win2016'
+                          ${{ if eq(platform, 'mac') }}:
+                            CI_VM_IMAGE: 'macOS-10.13'
+                          CI_PYTHON_VERSION: '${{ python_version }}'
+                          CI_TF_VERSION: '${{ tf_version }}'
+                          CI_ONNX_VERSION: '${{ onnx_version }}'
+                          CI_ONNX_OPSET: '${{ onnx_opset }}'
+                          CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
+                          CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
 
-                        ${{ if eq(tf_version, '') }}:
-                          CI_PIP_TF_NAME: 'tensorflow'
-                        ${{ if ne(tf_version, '') }}:
-                          CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
+                          ${{ if eq(tf_version, '') }}:
+                            CI_PIP_TF_NAME: 'tensorflow'
+                          ${{ if ne(tf_version, '') }}:
+                            CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
 
-                        ${{ if eq(onnx_version, '') }}:
-                          CI_PIP_ONNX_NAME: 'onnx'
-                        ${{ if ne(onnx_version, '') }}:
-                          CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
+                          ${{ if eq(onnx_version, '') }}:
+                            CI_PIP_ONNX_NAME: 'onnx'
+                          ${{ if ne(onnx_version, '') }}:
+                            CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
 
-                        ${{ if eq(onnx_backend_version, '') }}:
-                          CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                        ${{ if ne(onnx_backend_version, '') }}:
-                          CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                          ${{ if eq(onnx_backend_version, '') }}:
+                            CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                          ${{ if ne(onnx_backend_version, '') }}:
+                            CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
 
-                    ${{ if eq(onnx_opset, '') }}:
-                      ${{ format('{0} python{1} tf{2} onnx{3} {4}{5}', platform, python_version, tf_version, onnx_version, onnx_backend.key, onnx_backend_version) }}:
-                        CI_PYTHON_VERSION: '${{ python_version }}'
-                        CI_TF_VERSION: '${{ tf_version }}'
-                        CI_ONNX_VERSION: '${{ onnx_version }}'
-                        CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
-                        CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
+                      ${{ if eq(onnx_opset, '') }}:
+                        ${{ format('{0} python{1} tf{2} onnx{3} {4}{5}', platform, python_version, tf_version, onnx_version, onnx_backend.key, onnx_backend_version) }}:
+                          ${{ if eq(platform, 'linux') }}:
+                            CI_VM_IMAGE: 'ubuntu-16.04'
+                          ${{ if eq(platform, 'windows') }}:
+                            CI_VM_IMAGE: 'vs2017-win2016'
+                          ${{ if eq(platform, 'mac') }}:
+                            CI_VM_IMAGE: 'macOS-10.13'
+                          CI_PLATFORM: '${{ platform }}'
+                          CI_PYTHON_VERSION: '${{ python_version }}'
+                          CI_TF_VERSION: '${{ tf_version }}'
+                          CI_ONNX_VERSION: '${{ onnx_version }}'
+                          CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
+                          CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
 
-                        ${{ if eq(tf_version, '') }}:
-                          CI_PIP_TF_NAME: 'tensorflow'
-                        ${{ if ne(tf_version, '') }}:
-                          CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
+                          ${{ if eq(tf_version, '') }}:
+                            CI_PIP_TF_NAME: 'tensorflow'
+                          ${{ if ne(tf_version, '') }}:
+                            CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
 
-                        ${{ if eq(onnx_version, '') }}:
-                          CI_PIP_ONNX_NAME: 'onnx'
-                        ${{ if ne(onnx_version, '') }}:
-                          CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
+                          ${{ if eq(onnx_version, '') }}:
+                            CI_PIP_ONNX_NAME: 'onnx'
+                          ${{ if ne(onnx_version, '') }}:
+                            CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
 
-                        ${{ if eq(onnx_backend_version, '') }}:
-                          CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                        ${{ if ne(onnx_backend_version, '') }}:
-                          CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                          ${{ if eq(onnx_backend_version, '') }}:
+                            CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                          ${{ if ne(onnx_backend_version, '') }}:
+                            CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
 
     # Insert all properties other than pool/steps/strategy
     ${{ each pair in parameters.job }}:
@@ -108,3 +118,19 @@ jobs:
 
     # Insert original steps
     - ${{ parameters.job.steps }}
+
+    # Report and publish test coverage
+    # Save source path for combining coverage cross platform
+    - bash: |
+        coverage report
+        mv .coverage ${BUILD_ARTIFACTSTAGINGDIRECTORY}/.coverage.${CI_PLATFORM}_python${CI_PYTHON_VERSION}_tf${CI_TF_VERSION}_onnx${CI_ONNX_VERSION}_${CI_ONNX_BACKEND}${CI_ONNX_VERSION}
+        echo "  ${SYSTEM_DEFAULTWORKINGDIRECTORY}" > ${BUILD_ARTIFACTSTAGINGDIRECTORY}/.coveragerc_paths.${CI_PLATFORM}_python${CI_PYTHON_VERSION}_tf${CI_TF_VERSION}_onnx${CI_ONNX_VERSION}_${CI_ONNX_BACKEND}${CI_ONNX_VERSION}
+      condition: and(succeededOrFailed(), eq(${{ parameters.report_coverage }}, 'True'))
+      displayName: 'Report Single Test Coverage'
+
+    - task: PublishBuildArtifacts@1
+      condition: succeeded()
+      inputs:
+        pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: '${{ parameters.artifact_name }}'
+      displayName: 'Deploy Single Test Coverage'

@@ -529,10 +529,11 @@ def rewrite_conv2d_with_pad(g, ops):
     return ops
 
 
-def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
+def tensorflow_onnx_mapping(g, ops_mapping):
     logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
+    exceptions = []
 
     ops = [n for n in g.get_nodes()]
     for node in ops:
@@ -545,40 +546,39 @@ def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
         op = node.type
         map_info = ops_mapping.get(op)
         if map_info is None:
-            if continue_on_error:
-                unmapped_op[op] += 1
-                continue
-            else:
-                raise ValueError("tensorflow op " + op + " is not supported")
+            unmapped_op[op] += 1
+            logger.error("Tensorflow op [%s: %s] is not supported", node.name, op)
+            continue
         mapped_op[op] += 1
+
         func, kwargs = map_info
         if kwargs:
             # if there is a onnx_op key we'll map the old type to a new type
             onnx_op = kwargs.get("onnx_op")
             if onnx_op:
                 node.type = onnx_op
-        try:
-            body_graphs = node.get_body_graphs()
-            if body_graphs:
-                for attr, b_g in body_graphs.items():
-                    logger.debug("start handling subgraph of %s's attribute %s", node.name, attr)
-                    b_g.topological_sort(b_g.get_nodes())
-                    # we assume only ONNX nodes have subgraph defined in pre-rewriters.
-                    # that means, if we create node having subgraphs in this step, the
-                    # created subgraphs' nodes won't be mapped.
-                    m_ops, unm_ops = tensorflow_onnx_mapping(b_g, continue_on_error, ops_mapping)
-                    mapped_op += m_ops
-                    unmapped_op += unm_ops
-                    logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
+        body_graphs = node.get_body_graphs()
+        if body_graphs:
+            for attr, b_g in body_graphs.items():
+                logger.debug("start handling subgraph of %s's attribute %s", node.name, attr)
+                b_g.topological_sort(b_g.get_nodes())
+                # we assume only ONNX nodes have subgraph defined in pre-rewriters.
+                # that means, if we create node having subgraphs in this step, the
+                # created subgraphs' nodes won't be mapped.
+                m_ops, unm_ops, body_exceptions = tensorflow_onnx_mapping(b_g, ops_mapping)
+                mapped_op += m_ops
+                unmapped_op += unm_ops
+                exceptions.extend(body_exceptions)
+                logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
 
+        try:
             func(g, node, **kwargs)
             node.skip_conversion = True
         except Exception as ex:
             logger.error("Failed to convert node %s\n%s", node.name, node.summary, exc_info=1)
-            if not continue_on_error:
-                raise ex
+            exceptions.append(ex)
 
-    return mapped_op, unmapped_op
+    return mapped_op, unmapped_op, exceptions
 
 
 def transpose_inputs(ctx, inputs_as_nchw):
@@ -601,7 +601,7 @@ def transpose_inputs(ctx, inputs_as_nchw):
                 ops.append(transpose)
                 ops.append(node)
                 continue
-            ops.append(node)
+        ops.append(node)
     ctx.reset_nodes(ops)
 
 
@@ -783,7 +783,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     g.delete_unused_nodes(output_names)
     topological_sort(g, continue_on_error)
 
-    mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error, ops_mapping)
+    mapped_op, unmapped_op, exceptions = tensorflow_onnx_mapping(g, ops_mapping)
+    if unmapped_op:
+        logger.error("Unsupported ops: %s", unmapped_op)
+    if exceptions and not continue_on_error:
+        raise exceptions[0]
 
     # post-processing rewriters
     late_rewriters = []

@@ -941,7 +941,12 @@ class Unpack:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx unpack op
+        # squeeze does not support negative axis
         axis = node.get_attr("axis").i
+        if axis < 0:
+            shape = ctx.get_shape(node.input[0])
+            utils.make_sure(shape is not None, "shape of unpack input is None: {}".format(node.input[0]))
+            axis += len(shape)
         # split the tensor into n outputs
         node.type = "Split"
         # for each output we need to squeeze axis
@@ -1068,20 +1073,27 @@ class BatchToSpace:
     def version_1(cls, ctx, node, **kwargs):
         # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
         # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
-        # and we only support 4D here, so the data format is NHWC
+        # and we only support 3D and 4D here, and the data format is NHC and NHWC
         # onnx op "DepthToSpace" does the same work on input tensor except that it works on "C",
         # and it only supports NCHW
         # T out = BatchToSpaceND(T input, int32 block_shape, int32 crops)
         input_tensor = node.inputs[0]
+        input_shape = ctx.get_shape(input_tensor.output[0])
         blocksize = node.inputs[1].get_tensor_value()
         crops = node.inputs[2].get_tensor_value()
 
-        utils.make_sure(len(ctx.get_shape(input_tensor.output[0])) == 4, "only supports 4D for now")
+        utils.make_sure(len(input_shape) in (4, 3),
+                        "only supports 3D and 4D for now")
         utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
                         "only support same blocksize at different dims")
 
         # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
-        trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
+        if len(input_shape) == 3:
+            # insert automatically an Unsqueeze op if the input is 3d
+            unsqz1 = ctx.make_node("Unsqueeze", input_tensor.output, {"axes": [3]})
+            trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
+        else:
+            trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
         reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
         trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
 
@@ -1099,11 +1111,20 @@ class BatchToSpace:
 
         attr = {"axes": slice_axis, "ends": ends, "starts": starts}
         inputs_map = {"data": trans2.output[0], **attr}
-        kwargs = {**inputs_map, "outputs": node.output}
-        dtypes = [ctx.get_dtype(node.output[0])]
-        shapes = [ctx.get_shape(node.output[0])]
-        ctx.remove_node(node.name)
-        GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
+        dtypes = node.output_dtypes
+        shapes = node.output_shapes
+
+        if len(input_shape) == 3:
+            # add a squeeze op to convert output into 3d
+            kwargs = {**inputs_map}
+            ctx.remove_node(node.name)
+            slice1 = GraphBuilder(ctx).make_slice(kwargs)
+            ctx.make_node("Squeeze", [slice1], {"axes": [3]},
+                          outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
+        else:
+            kwargs = {**inputs_map, "outputs": node.output}
+            ctx.remove_node(node.name)
+            GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
 
 
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")
@@ -1275,3 +1296,157 @@ class ReverseSequence:
         target_dtype = TensorProto.INT64
         if seq_len_dtype != target_dtype:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=target_dtype)
+
+
+@tf_op("ReverseV2")
+class ReverseV2:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # T output = ReverseV2(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
+        # Implement tensorflow ReverseV2 op using multiple ReverseSequence (for each axis)
+        # and Transpose ops. We sort the axis vector (if non-empty) at the start. Each axis can
+        # be reversed only once (in tf) and so we can compute the transpose for each axis
+        # (other than 0), feed the tensor to a ReverseSequence node and finally transpose again
+        # to get back the original shape.
+
+        axes_node = node.inputs[1]
+        axes = axes_node.get_tensor_value(as_list=False)
+        # Current support is for when axis is a 1D tensor.
+        utils.make_sure(len(axes.shape) == 1 \
+            , "Currently no support for reverseV2 tensor axis")
+
+        axes = axes.tolist()
+        len_axes = len(axes)
+
+        # Store input and output parameters of the ReverseV2 node.
+        rv2_in_names = [node.input[0]]
+
+        input_shape = ctx.get_shape(node.input[0])
+        # Make sure input shape is not None
+        utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
+
+        input_rank = len(input_shape)
+
+        rv2_node_name = node.name
+        # ReverseV2 has a single output.
+        rv2_output_dtypes = node.output_dtypes
+        rv2_output_shapes = node.output_shapes
+
+        const_name_root = rv2_node_name + '_Const'
+
+        # Remove ReverseV2 node from graph.
+        ctx.remove_node(rv2_node_name)
+
+        # Variable to store input names for the next node.
+        inputs = rv2_in_names
+
+        new_node = None
+
+        # Empty axis vector.
+        if len_axes == 0:
+            # Replace ReverseV2 with an identity block.
+            new_node = ctx.make_node(
+                "Identity",
+                inputs=inputs,
+                outputs=node.output,
+                shapes=rv2_output_shapes,
+                dtypes=rv2_output_dtypes,
+                op_name_scope=rv2_node_name,
+            )
+
+        else:
+            # For negative indices use the positive counterpart.
+            for i, ax in enumerate(axes):
+                if ax < 0:
+                    axes[i] += input_rank
+
+            axes = sorted(axes)
+
+            orig_perm = list(range(input_rank))
+            curr_perm = []
+
+            # Add ReverseSequence nodes for each element of axis.
+            for i in range(len_axes):
+
+                axis = axes[i]
+
+                curr_perm = orig_perm.copy()
+                # Permutation indices relative to original tensor.
+                curr_perm[axis], curr_perm[0] = curr_perm[0], curr_perm[axis]
+
+                # Add a Transpose node if the axis != 0 (finish first due to sort).
+                if axis != 0:
+                    # Permutation indices for the transpose node relative to IN tensor shape.
+                    new_node = ctx.make_node(
+                        "Transpose",
+                        inputs=inputs,
+                        op_name_scope=rv2_node_name,
+                        dtypes=rv2_output_dtypes,
+                        attr={"perm": curr_perm}
+                    )
+
+                    inputs = [new_node.output[0]]
+
+                # Add a Constant node (seq_len) for ReverseSequence.
+
+                # Index 1 for the shape should not return 0
+                # since the input must have rank >= 2.
+                rs_batch_size = ctx.get_shape(inputs[-1])[1]
+
+                # Make sure rs_batch_size and input_shape[axis] are not -1 each
+                utils.make_sure(input_shape[axis] is not -1 \
+                    , "shape of axis {} is unknown".format(axis))
+                utils.make_sure(rs_batch_size is not -1 \
+                    , "ReverseSequence batch size for axis {} is unknown".format(axis))
+
+                seq_list = [input_shape[axis]] * rs_batch_size
+                seq_array = np.asarray(seq_list, dtype=np.int64) # dtype should be int64
+
+                const_seq_name = utils.make_name(const_name_root)
+                new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
+                inputs.append(new_node.output[0])
+
+                # Add a ReverseSequence node.
+
+                # If processing for the final axis and the tensor shape permutation is
+                # original then the output is fed to the output of the ReverseV2 node.
+                #
+                # Else a new output is created which is fed to a Transpose node.
+                rs_out_name = node.output if \
+                    ((i == len_axes - 1) and (curr_perm == orig_perm)) \
+                        else None
+
+                rs_out_shapes = None if rs_out_name is None else rv2_output_shapes
+
+                new_node = ctx.make_node(
+                    "ReverseSequence",
+                    inputs=inputs,
+                    op_name_scope=rv2_node_name,
+                    outputs=rs_out_name,
+                    shapes=rs_out_shapes,
+                    dtypes=rv2_output_dtypes,
+                    attr={"batch_axis": 1, "time_axis": 0}
+                )
+
+                inputs = [new_node.output[0]]
+
+            # Additional transpose block is required if the current
+            # permutation list is not the original one.
+            if curr_perm != orig_perm:
+
+                # Compute the required permutation list.
+                if len_axes != 1:
+                    for i, ax in enumerate(axes[::-1][1:]):
+                        curr_perm[0], curr_perm[ax] = \
+                            curr_perm[ax], curr_perm[0]
+
+                # Add a Transpose node to restore shape.
+                new_node = ctx.make_node(
+                    "Transpose",
+                    inputs=inputs,
+                    op_name_scope=rv2_node_name,
+                    outputs=node.output,
+                    shapes=rv2_output_shapes,
+                    dtypes=rv2_output_dtypes,
+                    attr={"perm": curr_perm}
+                )

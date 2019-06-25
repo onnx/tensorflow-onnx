@@ -8,7 +8,7 @@ steps:
   - bash: |
       export TF2ONNX_TEST_BACKEND=$CI_ONNX_BACKEND
       export TF2ONNX_TEST_OPSET=$CI_ONNX_OPSET
-      python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests
+      python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
     timeoutInMinutes: 5
     displayName: ${{ format('Run UnitTest - Opset{0}', onnx_opset) }}
     condition: succeededOrFailed()

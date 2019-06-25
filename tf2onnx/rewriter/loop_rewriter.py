@@ -45,21 +45,19 @@ class LoopRewriter(LoopRewriterBase):
             cell_g_info = context.cell_graph
             cond_g_info = context.cond_graph
 
-            # todo(pengwa): we don't check the case where loop body won't be executed at all.
+            # create a dummy loop to calculate the init condition
+            init_cond_output = self._create_subgraph_initial_cond(cond_g_info)
 
             ## create Loop body graph with existing nodes
-
-            # replace condition graph's inputs to be cell graph's outputs, because we want condition graph
-            # to consumer cell graph outputs.
-            for loop_var in cond_g_info.dependent_vars:
-                self.g.replace_all_inputs(cond_g_info.nodes, loop_var.switch_true_identity_output.id,
-                                          loop_var.next_iteration_input.id)
 
             body_nodes = set(cell_g_info.nodes + cond_g_info.nodes)
             body_outputs = cond_g_info.outputs + cell_g_info.outputs
             for out_tensor_value_info in body_outputs:
                 shape = out_tensor_value_info.shape
-                utils.make_sure(shape is not None, "Shape of {} is None".format(out_tensor_value_info.id))
+                utils.make_sure(
+                    shape is not None,
+                    "Conversion of Loop requries output shape [{}] exists".format(out_tensor_value_info.id)
+                )
                 out_tensor_value_info.shape = utils.create_vague_shape_like(shape)
 
             loop_body_g = LoopRewriterBase.construct_graph_from_nodes(self.g, body_nodes, body_outputs)
@@ -90,7 +88,7 @@ class LoopRewriter(LoopRewriterBase):
                 loop_body_g.replace_all_inputs(loop_body_g.get_nodes(), input_ta.consumer.id, data_node.output[0])
 
             ## create Loop node
-            loop_node = self._create_loop_node(context, loop_props)
+            loop_node = self._create_loop_node(context, loop_props, init_cond_output)
             if not loop_node:
                 logger.error("failed to create loop node during rewrite")
                 return REWRITER_RESULT.FAIL
@@ -104,7 +102,48 @@ class LoopRewriter(LoopRewriterBase):
             logger.error("loop rewrite failed, due to exception: %s, details:%s", ex, tb)
             return REWRITER_RESULT.FAIL
 
-    def _create_loop_node(self, context, loop_props):
+    def _create_subgraph_initial_cond(self, cond_graph):
+        """Create subgraph to calculate initial cond."""
+        # copy condition subgraph to parent graph
+        copied_nodes = []
+        name_scope = utils.make_name("copy")
+        for node in cond_graph.nodes:
+            new_name = "{}/{}".format(name_scope, node.name)
+            new_outputs = ["{}/{}".format(name_scope, out) for out in node.output]
+            # some inputs are out of cond_graph.nodes, keep them intact
+            new_inputs = []
+            for inp in node.input:
+                if self.g.get_node_by_output(inp) in cond_graph.nodes:
+                    new_inputs.append("{}/{}".format(name_scope, inp))
+                else:
+                    new_inputs.append(inp)
+
+            new_node = self.g.make_node(
+                node.type, new_inputs, outputs=new_outputs,
+                attr=node.attr, name=new_name,
+                shapes=node.output_shapes, dtypes=node.output_dtypes,
+                skip_conversion=node.skip_conversion, infer_shape_dtype=False
+            )
+            body_graphs = node.graph.contained_graphs.pop(node.name, None)
+            if body_graphs:
+                for attr_name, body_graph in body_graphs.items():
+                    body_graph.parent_graph = g
+                    new_node.set_body_graph_as_attr(attr_name, body_graph)
+            copied_nodes.append(new_node)
+
+        # replace all inputs of condition graph by initializer (enter_input)
+        for loop_var in cond_graph.dependent_vars:
+            self.g.replace_all_inputs(
+                copied_nodes,
+                loop_var.next_iteration_input.id,
+                loop_var.enter_input_id
+            )
+        init_cond_output = "{}/{}".format(name_scope, cond_graph.outputs[0].id)
+        self.g.set_dtype(init_cond_output, cond_graph.outputs[0].dtype)
+        self.g.set_shape(init_cond_output, cond_graph.outputs[0].shape)
+        return init_cond_output
+
+    def _create_loop_node(self, context, loop_props, init_cond_output):
         loop_outputs = []
         loop_output_shapes = []
         loop_output_dtypes = []
@@ -123,8 +162,7 @@ class LoopRewriter(LoopRewriterBase):
         # trip count and cond are not used, giving them values just because bug
         # (https://github.com/Microsoft/onnxruntime/issues/255) of onnxruntime.
         trip_cnt = self.g.make_const(utils.make_name("trip_count"), np.array(sys.maxsize, dtype=np.int64))
-        cond = self.g.make_const(utils.make_name("cond"), np.array(True, dtype=np.bool))
-        loop_node = self.g.make_node("Loop", [trip_cnt.output[0]] + [cond.output[0]] +
+        loop_node = self.g.make_node("Loop", [trip_cnt.output[0]] + [init_cond_output] +
                                      loop_props.state_inputs_initial_values,  # ONNX Loop support state inputs only
                                      outputs=loop_outputs, op_name_scope="generic_loop",
                                      shapes=loop_output_shapes, dtypes=loop_output_dtypes,

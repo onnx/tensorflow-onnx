@@ -42,6 +42,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
                     continue
                 if self._fold_node(op, graph):
                     graph_changed = True
+                    self.graph_been_opt = True
         return graph
 
     @staticmethod
