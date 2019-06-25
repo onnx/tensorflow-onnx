@@ -17,6 +17,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 
@@ -87,6 +88,7 @@ def get_conv_getdata(kind=1):
     else:
         raise ValueError("kind not known")
 
+
 def get_maxpoolwithargmax_getdata():
     data = [
         ('SAME', [1, 3, 3, 1], [1, 3, 3, 1], [1, 2, 2, 1]),
@@ -98,6 +100,7 @@ def get_maxpoolwithargmax_getdata():
     ]
     for idx, v in enumerate(data):
         yield (idx,) + v
+
 
 class BackendTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, output_names_with_port, feed_dict, **kwargs):
@@ -2014,7 +2017,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_constant_axis(self):
         # Tests for constant axis.
@@ -2033,7 +2035,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.reverse_v2(x, axis=[])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
 
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_vector_axis(self):
@@ -2060,7 +2061,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_1D_tensor(self):
         # For tensors with 1 dimension and no axis to reverse.
@@ -2071,7 +2071,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_ = tf.reverse_v2(x, axis=[])
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
 
     @check_opset_min_version(8, "where")
     def test_where(self):
@@ -2551,6 +2550,37 @@ class BackendTests(Tf2OnnxBackendTestBase):
         y = tf.nn.selu(x)
         _ = tf.identity(y, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_graph_matcher(self):
+        shape = [2, 6]
+        x_val = np.random.random(shape).astype(np.float32)
+        y_val = np.random.random(shape).astype(np.float32)
+        z_val = np.random.random(shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, shape, name=_TFINPUT)
+        y = tf.placeholder(tf.float32, shape, name=_TFINPUT1)
+        z = tf.placeholder(tf.float32, shape, name=_TFINPUT2)
+        tmp1 = x + y
+        tmp2 = x - y
+        tmp3 = tf.multiply(tmp1, z)
+        tmp4 = tf.multiply(tmp2, z)
+        _ = tf.add(tmp4, tmp3, name=_TFOUTPUT)
+        onnx_graph = self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+        pattern = \
+            OpTypePattern('Add', name='output', inputs=[
+                OpTypePattern('Mul', inputs=[
+                    OpTypePattern('Add', name='input1'),
+                    OpTypePattern('*', name='input2')]),
+                OpTypePattern('Mul', inputs=[
+                    OpTypePattern('Sub', name='input1'),
+                    OpTypePattern('*', name='input2')])])
+
+        matcher = GraphMatcher(pattern, allow_reorder=False)
+        match_results = list(matcher.match_ops(onnx_graph.get_nodes()))
+        self.assertTrue(len(match_results) == 0)
+        matcher = GraphMatcher(pattern, allow_reorder=True)
+        match_results = list(matcher.match_ops(onnx_graph.get_nodes()))
+        self.assertTrue(len(match_results) == 1)
+
 
 if __name__ == '__main__':
     unittest_main()
