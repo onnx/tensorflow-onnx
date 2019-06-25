@@ -8,9 +8,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import unittest
+
 import numpy as np
 import tensorflow as tf
-import unittest
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, check_tf_min_version

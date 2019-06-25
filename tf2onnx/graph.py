@@ -1183,16 +1183,12 @@ class Graph(object):
 
     def delete_nodes_without_dependency(self, to_delete):
         """Delete nodes in `to_delete` without third-party dependency."""
+        delete_set = set(to_delete)
         for n in to_delete:
-            can_delete = True
+            out_consumers = set()
             for out in n.output:
-                if not can_delete:
-                    break
-                for consumer in self.find_output_consumers(out):
-                    if consumer not in to_delete:
-                        can_delete = False
-                        break
-            if can_delete:
+                out_consumers |= set(self.find_output_consumers(out))
+            if out_consumers.issubset(delete_set):
                 self.remove_node(n.name)
 
 
