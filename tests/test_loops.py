@@ -10,6 +10,7 @@ from __future__ import unicode_literals
 
 import numpy as np
 import tensorflow as tf
+import unittest
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, check_tf_min_version
@@ -160,6 +161,9 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "output_ta:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @unittest.skip(
+        "disable this case due to onnxruntime loop issue: https://github.com/microsoft/onnxruntime/issues/1272"
+    )
     def test_while_loop_with_cond_init_false(self):
         i = tf.placeholder(tf.int32, (), name="input_1")
         inputs = tf.placeholder(tf.float32, (10,), name="input_2")
