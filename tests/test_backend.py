@@ -105,7 +105,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kwargs["constant_fold"] = False
         return self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
 
-    def _test_expand_dims(self, idx):
+    def _test_expand_dims_known_rank(self, idx):
         tf.reset_default_graph()
         x_val = make_xval([3, 4])
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
@@ -113,16 +113,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(op, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    def test_expand_dims(self):
+    def test_expand_dims_known_rank(self):
         for i in [-1, 0, 1, -2]:
-            self._test_expand_dims(i)
-
-    def test_expand_dims_dynamic_inputs(self):
-        x_val = make_xval([3, 4])
-        x = tf.placeholder(tf.float32, shape=[None, None], name=_TFINPUT)
-        op = tf.expand_dims(x, 0)
-        _ = tf.identity(op, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+            self._test_expand_dims_known_rank(i)
 
     def test_expand_dims_one_unknown_rank(self):
         tf.reset_default_graph()
@@ -132,13 +125,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(op, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
-    def test_expand_dims_more_unknown_rank(self):
+    def _test_expand_dims_more_unknown_rank(self, idx):
         tf.reset_default_graph()
         x_val = make_xval([3, 4])
         x = tf.placeholder(tf.float32, shape=[None, None], name=_TFINPUT)
-        op = tf.expand_dims(x, 0)
+        op = tf.expand_dims(x, idx)
         _ = tf.identity(op, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    def test_expand_dims_more_unknown_rank(self):
+        for i in [-1, 0, 1, -2]:
+            self._test_expand_dims_more_unknown_rank(i)
 
     @check_opset_min_version(9, "ConstantOfShape")
     def test_eye_non_const1(self):
