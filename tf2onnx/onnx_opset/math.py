@@ -251,12 +251,19 @@ class LRN:
         # ONNX: Each input value is divided by (bias+(alpha/size)*sum(xi^2 for every xi in the local region))^beta
         # TF: sqr_sum[a, b, c, d] = sum(input[a, b, c, d - depth_radius : d + depth_radius + 1] ** 2)
         #     output = input / (bias + alpha * sqr_sum) ** beta
-        depth_radius = node.get_attr("depth_radius")
-        if depth_radius:
-            size = depth_radius.i
-        else:
-            size = 5
+        size = node.get_attr_value("depth_radius") * 2 + 1
+
         node.set_attr("size", size)
+        node.set_attr("alpha", size * node.get_attr("alpha").f)
+
+        shapes = node.output_shapes[0]
+        dtypes = node.output_dtypes[0]
+
+        ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
+        ctx.update_node_shape_dtype(node, override=True)
+        op_name = utils.make_name(node.name)
+        ctx.insert_new_node_on_output("Transpose", node.output[0], perm=constants.NCHW_TO_NHWC,
+                                      name=op_name, shapes=shapes, dtypes=dtypes)
 
 
 @tf_op(["MatMul", "BatchMatMul"])
