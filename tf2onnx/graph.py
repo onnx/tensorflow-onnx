@@ -575,6 +575,18 @@ class Graph(object):
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
 
+    def check_integrity(self):
+        """
+        Check graph integrity. Every node's input needs to associate with a node.
+        Return broken outputs.
+        """
+        broken_outputs = set()
+        for node in self.get_nodes():
+            for inp in node.input:
+                if self.get_node_by_output(inp) is None:
+                    broken_outputs.add(inp)
+        return list(broken_outputs)
+
     def update_node_shape_dtype(self, node, override=False):
         """Try the best to infer shapes and dtypes for outputs of the node,
         by default, we respect TF shapes and dtypes.
@@ -591,7 +603,7 @@ class Graph(object):
         initializers = []
         for i, inp in enumerate(node.inputs):
             if inp is None:
-                if logger.isEnabledFor(logging.INFO):
+                if logger.isEnabledFor(constants.VERBOSE):
                     logger.warning(
                         "[%s] infer a inexistent node: [%s], please check the code",
                         node.name, node.input[i]
@@ -1168,6 +1180,20 @@ class Graph(object):
                 for _, body_graph in attr_body_graphs.items():
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
+
+    def delete_nodes_without_dependency(self, to_delete):
+        """Delete nodes in `to_delete` without third-party dependency."""
+        for n in to_delete:
+            can_delete = True
+            for out in n.output:
+                if not can_delete:
+                    break
+                for consumer in self.find_output_consumers(out):
+                    if consumer not in to_delete:
+                        can_delete = False
+                        break
+            if can_delete:
+                self.remove_node(n.name)
 
 
 class GraphUtil(object):

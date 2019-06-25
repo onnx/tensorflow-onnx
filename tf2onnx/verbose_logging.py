@@ -15,14 +15,12 @@ import tensorflow as tf
 
 from . import constants
 
-VERBOSE = 15
-
-_logging.addLevelName(VERBOSE, "VERBOSE")
+_logging.addLevelName(constants.VERBOSE, "VERBOSE")
 
 
 def _verbose(self, message, *args, **kwargs):
-    if self.isEnabledFor(VERBOSE):
-        self._log(VERBOSE, message, args, **kwargs)  # pylint: disable=protected-access
+    if self.isEnabledFor(constants.VERBOSE):
+        self._log(constants.VERBOSE, message, args, **kwargs)  # pylint: disable=protected-access
 
 
 def getLogger(name=None):  # pylint: disable=invalid-name, function-redefined
@@ -47,7 +45,7 @@ def basicConfig(**kwargs):  # pylint: disable=invalid-name, function-redefined
     set_tf_verbosity(_logging.getLogger().getEffectiveLevel())
 
 
-_LOG_LEVELS = [FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG]
+_LOG_LEVELS = [FATAL, ERROR, WARNING, INFO, constants.VERBOSE, DEBUG]
 
 
 def get_verbosity_level(verbosity, base_level=INFO):
