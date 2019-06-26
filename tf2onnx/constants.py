@@ -37,6 +37,3 @@ NCHW_TO_HWCN = [2, 3, 1, 0]
 
 # Environment variables
 ENV_TF2ONNX_DEBUG_MODE = "TF2ONNX_DEBUG_MODE"
-
-# Logging level
-VERBOSE = 15

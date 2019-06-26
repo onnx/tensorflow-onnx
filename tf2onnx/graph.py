@@ -603,7 +603,7 @@ class Graph(object):
         initializers = []
         for i, inp in enumerate(node.inputs):
             if inp is None:
-                if logger.isEnabledFor(constants.VERBOSE):
+                if logger.isEnabledFor(logging.INFO):
                     logger.warning(
                         "[%s] infer a inexistent node: [%s], please check the code",
                         node.name, node.input[i]
@@ -1181,10 +1181,10 @@ class Graph(object):
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
 
-    def delete_nodes_without_dependency(self, to_delete):
-        """Delete nodes in `to_delete` without third-party dependency."""
+    def safe_remove_nodes(self, to_delete):
+        """Delete nodes in `to_delete` without third-party node consuming it."""
         delete_set = set(to_delete)
-        for n in to_delete:
+        for n in delete_set:
             out_consumers = set()
             for out in n.output:
                 out_consumers |= set(self.find_output_consumers(out))

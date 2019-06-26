@@ -45,5 +45,5 @@ def rewrite_thresholded_relu(g, ops):
                                            dtypes=[g.get_dtype(mul_node.output[0])])
             g.replace_all_inputs(ops, mul_node.output[0], thresholded_relu.output[0])
             to_delete = [cast_node, mul_node]
-            g.delete_nodes_without_dependency(to_delete)
+            g.safe_remove_nodes(to_delete)
     return ops

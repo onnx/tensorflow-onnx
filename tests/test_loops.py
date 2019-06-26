@@ -8,13 +8,11 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import unittest
-
 import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version
+from common import unittest_main, check_tf_min_version, check_onnxruntime_min_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -162,7 +160,8 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "output_ta:0"]
         self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
-    @unittest.skip(
+    @check_onnxruntime_min_version(
+        "0.5.0",
         "disable this case due to onnxruntime loop issue: https://github.com/microsoft/onnxruntime/issues/1272"
     )
     def test_while_loop_with_cond_init_false(self):

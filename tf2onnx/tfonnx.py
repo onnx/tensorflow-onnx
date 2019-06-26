@@ -141,8 +141,8 @@ def rewrite_transpose(g, ops):
         dims = [i for i in range(len(shape) - 1, -1, -1)]
         output.set_attr("perm", dims)
         g.remove_input(output, output.input[1])
-        to_delete = [n for n in set(match.get_nodes()) if n != output]
-        g.delete_nodes_without_dependency(to_delete)
+        to_delete = [n for n in match.get_nodes() if n != output]
+        g.safe_remove_nodes(to_delete)
     return ops
 
 
@@ -174,7 +174,7 @@ def rewrite_random_normal(g, ops):
                                    attr={"shape": shape, "mean": mean, "scale": 1.0, "dtype": dtype})
 
         g.replace_all_inputs(ops, output.output[0], new_node.output[0])
-        g.delete_nodes_without_dependency(set(match.get_nodes()))
+        g.safe_remove_nodes(match.get_nodes())
     return ops
 
 
@@ -206,7 +206,7 @@ def rewrite_dropout(g, ops):
             dtypes=[g.get_dtype(inputs2.input[0])]
         )
         g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
-        g.delete_nodes_without_dependency(set(match.get_nodes()))
+        g.safe_remove_nodes(match.get_nodes())
 
     # remove dropout if its ratio is 1.0
     for node in g.get_nodes():
@@ -291,8 +291,8 @@ def rewrite_flatten(g, ops):
 
             g.set_shape(out_name, input_shape[:-2] + [new_dim])
             g.replace_all_inputs(ops, reshape_node.output[0], out_name)
-            to_delete = [n for n in set(match.get_nodes()) if n != input_node]
-            g.delete_nodes_without_dependency(to_delete)
+            to_delete = [n for n in match.get_nodes() if n != input_node]
+            g.safe_remove_nodes(to_delete)
 
     return ops
 
@@ -649,7 +649,7 @@ def run_rewriters(g, funcs, continue_on_error):
             else:
                 raise ex
 
-        if logger.isEnabledFor(constants.VERBOSE):
+        if utils.is_debug_mode():
             broken_outputs = g.check_integrity()
             if broken_outputs:
                 logging.error(

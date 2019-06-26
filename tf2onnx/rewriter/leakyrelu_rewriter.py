@@ -43,7 +43,7 @@ def rewrite_leakyrelu(g, ops):
             ops.append(leakyrelu)
             g.replace_all_inputs(ops, max_node.output[0], leakyrelu.output[0])
             to_delete = [max_node, mul_node]
-            g.delete_nodes_without_dependency(to_delete)
+            g.safe_remove_nodes(to_delete)
 
     return ops
 
