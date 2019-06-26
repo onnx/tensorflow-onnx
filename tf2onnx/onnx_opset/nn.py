@@ -220,13 +220,21 @@ class ConvTranspose:
         node.type = "ConvTranspose"
         # Note: inputs are reversed from what one would expect.
         kernel_shape = conv_kernel_shape(ctx, node, 1)
+        input_shape = ctx.get_shape(node.input[2])
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
         output_shape = ctx.get_shape(node.output[0])
         if node.is_nhwc():
             new_output_shape = [output_shape[1], output_shape[2]]
+            input_hw = [input_shape[1], input_shape[2]]
         else:
             new_output_shape = [output_shape[2], output_shape[3]]
+            input_hw = [input_shape[2], input_shape[3]]
+
+        utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
+        utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
+                        "output h and w cannot be smaller than input h and w.")
+
         node.set_attr("output_shape", new_output_shape)
 
         strides = conv_dims_attr(node, "strides")
@@ -538,13 +546,13 @@ class Resize:
             # scales is nchw
             scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
-        input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": [0, 3, 1, 2]})
+        input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
         upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node("Transpose", upsample.output, {"perm": [0, 2, 3, 1]},
+        ctx.make_node("Transpose", upsample.output, {"perm": constants.NCHW_TO_NHWC},
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 

@@ -16,6 +16,7 @@ class GraphOptimizerBase(object):
 
     def __init__(self):
         self._logger = logging.getLogger('.'.join(__name__.split('.')[:-1] + [self.__class__.__name__]))
+        self._graph_been_opt = False
 
     @property
     def logger(self):
@@ -24,6 +25,14 @@ class GraphOptimizerBase(object):
     @property
     def is_debug_mode(self):
         return utils.is_debug_mode()
+
+    @property
+    def graph_been_opt(self):
+        return self._graph_been_opt
+
+    @graph_been_opt.setter
+    def graph_been_opt(self, value):
+        self._graph_been_opt = value
 
     def optimize(self, graph):
         """ Optimize graph, return optimized graph. """

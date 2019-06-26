@@ -39,6 +39,8 @@ class IdentityOptimizer(GraphOptimizerBase):
                 else:
                     ret = self._handle_non_graph_output_identity(g, n)
                 has_update = ret
+                if ret:
+                    self.graph_been_opt = True
         return g
 
     @staticmethod
