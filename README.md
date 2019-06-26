@@ -1,7 +1,8 @@
 tf2onnx - Convert TensorFlow models to ONNX.
 ========
 
-[![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build?definitionId=16&branchName=master)
+[![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master&label=CI+Build)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master)
+[![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master&label=Full+Matrix)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master)
 
 # Supported ONNX version
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
