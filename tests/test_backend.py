@@ -927,6 +927,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("fails on caffe2 with dim issue")
     @check_onnxruntime_incompatibility("Mul")
+    def test_leaky_relu_with_dependency(self):
+        x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
+        x = tf.placeholder(x_val.dtype, [None] * x_val.ndim, name=_TFINPUT)
+        # simulate leaky_relu
+        alpha = tf.constant(0.5)
+        y = alpha * x
+        x_ = tf.maximum(y, x)
+        dependency = y - 1
+
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        _ = tf.identity(dependency, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+    @skip_caffe2_backend("fails on caffe2 with dim issue")
+    @check_onnxruntime_incompatibility("Mul")
     def test_leaky_relu_float(self):
         x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
         for alpha in [0.1, -0.1, 1.0, -1.0]:
