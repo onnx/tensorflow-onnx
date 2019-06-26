@@ -207,6 +207,32 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
+    def test_transpose_max_input_non_const(self):
+        const_1_val = [2.0]
+        const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), const_1_val)
+        const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
+
+        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32).reshape(120).tolist()
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val)
+        const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
+
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node2 = helper.make_node("Max", ["Y", "non_const", "const_2", "const_1"], ["Z"], name="max")
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [const_1_node, const_2_node, node1, node2, node3],
+            "Max-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5)),
+             helper.make_tensor_value_info("non_const", TensorProto.FLOAT, (2, 4, 5, 3))],
+            [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, (2, 3, 4, 5))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32),
+                                            "non_const": np.random.randn(2, 4, 5, 3).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=1)
+
     def test_transpose_merge(self):
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
         node1 = helper.make_node("Transpose", ["X"], ["Y_1"], perm=[0, 2, 3, 1], name="trans_1")
@@ -393,6 +419,31 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                 model_proto = helper.make_model(graph, producer_name="onnx-tests")
                 self.run_transpose_compare(["res"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                            model_proto, remaining_transpose_num=0)
+
+    def test_trans_with_sub_input_non_const(self):
+        io_shape = [2, 3, 4, 5]
+        non_const_shapes = [[2, 4, 5, 3], [4, 5, 3], [5, 3]]
+        for trans_is_first_input in [True, False]:
+            for non_const_shape in non_const_shapes:
+                node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_a")
+                if trans_is_first_input:
+                    node2 = helper.make_node("Sub", ["Y", "non_const"], ["Z"], name="sub")
+                else:
+                    node2 = helper.make_node("Sub", ["non_const", "Y"], ["Z"], name="sub")
+
+                node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_b")
+                graph = helper.make_graph(
+                    [node1, node2, node3],
+                    "test_trans_with_sub_input_non_const",
+                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, io_shape),
+                     helper.make_tensor_value_info("non_const", TensorProto.FLOAT, non_const_shape)],
+                    [helper.make_tensor_value_info("res", TensorProto.FLOAT, io_shape)],
+                )
+
+                model_proto = helper.make_model(graph, producer_name="onnx-tests")
+                self.run_transpose_compare(["res"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32),
+                                                     "non_const": np.random.randn(*non_const_shape).astype(np.float32)},
+                                           model_proto, remaining_transpose_num=1)
 
     def test_trans_output_as_graph_outputs(self):
         """
