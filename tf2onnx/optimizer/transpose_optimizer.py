@@ -398,31 +398,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         return False
 
     def _maxmin_handler(self, trans, node):
-        input_index = self._get_input_index_for_trans(node, trans)
-        all_other_inputs = [input_id for i, input_id in enumerate(node.input) if i != input_index]
-
-        all_other_inputs_const = all([self._g.get_node_by_output(i).is_const() for i in all_other_inputs])
-        if all_other_inputs_const is False:
-            return False
-
-        shapes = [len(self._g.get_shape(i)) for i in all_other_inputs]
-        shapes_not_one_and_four = [s for s in shapes if s not in [1, 4]]
-        if shapes_not_one_and_four:
-            return False
-
-        for i in all_other_inputs:
-            target_node = self._g.get_node_by_output(i)
-            numpy_val = target_node.get_tensor_value(as_list=False)
-            rank = numpy_val.ndim
-            if rank == 4:
-                transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
-                target_node.set_tensor_value(transposed_val)
-            elif rank == 1:  # scalar
-                # do nothing
-                pass
-            else:
-                raise ValueError("find rank !=1 and rank !=4, should not go here.")
-        return self._switch_transpose_and_node(node, trans)
+        return self._handle_node_having_branches(node)
 
     def _mul_handler(self, trans, node):
         multiplier_input_id = None
