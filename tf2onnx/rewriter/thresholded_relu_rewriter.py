@@ -43,9 +43,7 @@ def rewrite_thresholded_relu(g, ops):
             thresholded_relu = g.make_node("ThresholdedRelu", inputs=[mul_input_edge_name], attr={"alpha": theta},
                                            shapes=[g.get_shape(mul_node.output[0])],
                                            dtypes=[g.get_dtype(mul_node.output[0])])
-            ops.remove(greater_node)
-            ops.remove(cast_node)
-            ops.remove(mul_node)
-            ops.append(thresholded_relu)
             g.replace_all_inputs(ops, mul_node.output[0], thresholded_relu.output[0])
+            to_delete = [cast_node, mul_node]
+            g.safe_remove_nodes(to_delete)
     return ops

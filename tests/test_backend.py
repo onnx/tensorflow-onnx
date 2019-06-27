@@ -17,6 +17,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants
+from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 
@@ -87,6 +88,7 @@ def get_conv_getdata(kind=1):
     else:
         raise ValueError("kind not known")
 
+
 def get_maxpoolwithargmax_getdata():
     data = [
         ('SAME', [1, 3, 3, 1], [1, 3, 3, 1], [1, 2, 2, 1]),
@@ -98,6 +100,7 @@ def get_maxpoolwithargmax_getdata():
     ]
     for idx, v in enumerate(data):
         yield (idx,) + v
+
 
 class BackendTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, output_names_with_port, feed_dict, **kwargs):
@@ -924,6 +927,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend("fails on caffe2 with dim issue")
     @check_onnxruntime_incompatibility("Mul")
+    def test_leaky_relu_with_dependency(self):
+        x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
+        x = tf.placeholder(x_val.dtype, [None] * x_val.ndim, name=_TFINPUT)
+        # simulate leaky_relu
+        alpha = tf.constant(0.5)
+        y = alpha * x
+        x_ = tf.maximum(y, x)
+        dependency = y - 1
+
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        _ = tf.identity(dependency, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+    @skip_caffe2_backend("fails on caffe2 with dim issue")
+    @check_onnxruntime_incompatibility("Mul")
     def test_leaky_relu_float(self):
         x_val = 1000 * np.random.random_sample([1000, 100]).astype(np.float32)
         for alpha in [0.1, -0.1, 1.0, -1.0]:
@@ -1167,15 +1186,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
         tf.reset_default_graph()
 
-        # disable this case for ms domain due to onnxruntime range-1 issue
-        # https://github.com/Microsoft/onnxruntime/issues/730
-        if not (extra_opset and extra_opset.domain == constants.MICROSOFT_DOMAIN):
-            x = tf.range(3.0, 3.0, 5)
-            _ = tf.identity(x, name=_TFOUTPUT)
-            g = self._run_test_case([_OUTPUT], {}, process_args=process_args)
-            self.assertTrue(extra_opset is None
-                            or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
-            tf.reset_default_graph()
+        # disable this case due to onnxruntime loop issue
+        # https://github.com/microsoft/onnxruntime/issues/1272
+        # x = tf.range(3.0, 3.0, 5)
+        # _ = tf.identity(x, name=_TFOUTPUT)
+        # g = self._run_test_case([_OUTPUT], {}, process_args=process_args)
+        # self.assertTrue(extra_opset is None
+        #                 or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
+        # tf.reset_default_graph()
 
         delta_val = np.array(1.5, dtype=np.float32)
         delta = tf.placeholder(tf.float32, shape=(), name=_TFINPUT)
@@ -2015,6 +2033,61 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "ReverseSequence")
+    def test_reversev2_constant_axis(self):
+        # Tests for constant axis.
+        x_val_shape = [1, 2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[3])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        # Empty axis vector.
+        x_val_shape = [2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "ReverseSequence")
+    def test_reversev2_vector_axis(self):
+        x_val_shape = [1, 2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[0, -3, 2, 3])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val_shape = [2, 3, 4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[-3, 1, 2])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+
+        x_val_shape = [5, 5, 9, 7, 8, 9]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, [5, 5, 9, 7, 8, 9], name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[0, 1, -2, 3, 5])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "ReverseSequence")
+    def test_reversev2_1D_tensor(self):
+        # For tensors with 1 dimension and no axis to reverse.
+        # Adds an identity block.
+        x_val_shape = [4]
+        x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, x_val_shape, name=_TFINPUT)
+        x_ = tf.reverse_v2(x, axis=[])
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(8, "where")
     def test_where(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.float32)
@@ -2503,7 +2576,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val1 = np.random.rand(m, n).astype("float32")
         x_val2 = np.random.rand(n, k).astype("float32")
         x_val3 = np.random.rand(m, k).astype("float32")
-
         a = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
         b = tf.placeholder(tf.float32, x_val2.shape, name=_TFINPUT1)
         c = tf.placeholder(tf.float32, x_val3.shape, name=_TFINPUT2)
@@ -2513,8 +2585,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         mul2 = tf.multiply(beta, c)
         x_ = mul1 + mul2
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
-                            graph_validator=lambda g: check_op_count(g, "Gemm", 1))
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3}, graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
     # test for gemm pattern1: alpha*A*B + C
     def test_gemm_pattern1(self):
@@ -2525,15 +2596,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val1 = np.random.rand(m, n).astype("float32")
         x_val2 = np.random.rand(n, k).astype("float32")
         x_val3 = np.random.rand(m, k).astype("float32")
-
         a = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
         b = tf.placeholder(tf.float32, x_val2.shape, name=_TFINPUT1)
         c = tf.placeholder(tf.float32, x_val3.shape, name=_TFINPUT2)
         alpha = tf.constant(1.0)
         x_ = tf.multiply(alpha, tf.matmul(a, b)) + c
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
-                        graph_validator=lambda g: check_op_count(g, "Gemm", 1))
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3}, graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
     # test for gemm pattern2: A*B + beta*C
     def test_gemm_pattern2(self):
@@ -2544,15 +2613,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val1 = np.random.rand(m, n).astype("float32")
         x_val2 = np.random.rand(n, k).astype("float32")
         x_val3 = np.random.rand(m, k).astype("float32")
-
         a = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
         b = tf.placeholder(tf.float32, x_val2.shape, name=_TFINPUT1)
         c = tf.placeholder(tf.float32, x_val3.shape, name=_TFINPUT2)
         beta = tf.constant(2.0)
         x_ = tf.matmul(a, b) + tf.multiply(beta, c)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
-                            graph_validator=lambda g: check_op_count(g, "Gemm", 1))
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3}, graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
     # test for gemm pattern3: A*B + C
     def test_gemm_pattern3(self):
@@ -2563,14 +2630,43 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val1 = np.random.rand(m, n).astype("float32")
         x_val2 = np.random.rand(n, k).astype("float32")
         x_val3 = np.random.rand(m, k).astype("float32")
-
         a = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
         b = tf.placeholder(tf.float32, x_val2.shape, name=_TFINPUT1)
         c = tf.placeholder(tf.float32, x_val3.shape, name=_TFINPUT2)
         x_ = tf.matmul(a, b) + c
         _ = tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
-                            graph_validator=lambda g: check_op_count(g, "Gemm", 1))
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3}, graph_validator=lambda g: check_op_count(g, "Gemm", 1))
+
+    def test_graph_matcher(self):
+        shape = [2, 6]
+        x_val = np.random.random(shape).astype(np.float32)
+        y_val = np.random.random(shape).astype(np.float32)
+        z_val = np.random.random(shape).astype(np.float32)
+        x = tf.placeholder(tf.float32, shape, name=_TFINPUT)
+        y = tf.placeholder(tf.float32, shape, name=_TFINPUT1)
+        z = tf.placeholder(tf.float32, shape, name=_TFINPUT2)
+        tmp1 = x + y
+        tmp2 = x - y
+        tmp3 = tf.multiply(tmp1, z)
+        tmp4 = tf.multiply(tmp2, z)
+        _ = tf.add(tmp4, tmp3, name=_TFOUTPUT)
+        onnx_graph = self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+        pattern = \
+            OpTypePattern('Add', name='output', inputs=[
+                OpTypePattern('Mul', inputs=[
+                    OpTypePattern('Add', name='input1'),
+                    OpTypePattern('*', name='input2')]),
+                OpTypePattern('Mul', inputs=[
+                    OpTypePattern('Sub', name='input1'),
+                    OpTypePattern('*', name='input2')])])
+
+        matcher = GraphMatcher(pattern, allow_reorder=False)
+        match_results = list(matcher.match_ops(onnx_graph.get_nodes()))
+        self.assertTrue(len(match_results) == 0)
+        matcher = GraphMatcher(pattern, allow_reorder=True)
+        match_results = list(matcher.match_ops(onnx_graph.get_nodes()))
+        self.assertTrue(len(match_results) == 1)
+
 
 if __name__ == '__main__':
     unittest_main()

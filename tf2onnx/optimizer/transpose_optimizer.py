@@ -147,6 +147,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 if is_nhwc_transpose(n):
                     if self._handle_nhwc_tranpose(n):
                         no_action = False
+                        self.graph_been_opt = True
                         iteration_cnt += 1
                         # need break, because handler may change nodes set, making the n stale object
                         # referencing already deleted elements
@@ -185,6 +186,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Slice": self._slice_handler,
             "Split": self._split_handler,
             "Squeeze": self._squeeze_handler,
+            "Sub": self._sub_handler,
             "Tanh": self._simple_through_handler,
             "Transpose": self._transpose_handler,
         }
@@ -520,6 +522,9 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.set_shape(node.output[0], new_squeeze_output_shape)
             return True
         return False
+
+    def _sub_handler(self, trans, node):
+        return self._handle_node_having_branches(node)
 
     def _pad_handler(self, trans, node):
         # [N-start, H-start, W-start, C-start, N-end, H-end,  W-end, C-end]

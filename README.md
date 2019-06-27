@@ -17,6 +17,8 @@ A list of models that we use for testing can be found [here](tests/run_pretraine
 Supported RNN classes and APIs: LSTMCell, BasicLSTMCell, GRUCell, GRUBlockCell, MultiRNNCell, and user defined RNN cells inheriting rnn_cell_impl.RNNCell, used along with DropoutWrapper, BahdanauAttention, AttentionWrapper.
 Check [tips](examples/rnn_tips.md) when converting RNN models.
 
+You find a list of supported Tensorflow ops and their mapping to ONNX [here](support_status.md).
+
 Tensorflow has broad functionality and occacional mapping it to ONNX creates issues.
 The common issues we run into we try to document here [Troubleshooting Guide](Troubleshooting.md).
 

@@ -141,7 +141,7 @@ class Node(object):
 
     def is_const(self):
         """Return True if node is a constant."""
-        return self.type in ["Const", "ConstV2"]
+        return self.type in ["Const", "ConstV2", "Constant"]
 
     def is_graph_input(self):
         return self.type in ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
@@ -575,6 +575,18 @@ class Graph(object):
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
 
+    def check_integrity(self):
+        """
+        Check graph integrity. Every node's input needs to associate with a node.
+        Return broken outputs.
+        """
+        broken_outputs = set()
+        for node in self.get_nodes():
+            for inp in node.input:
+                if self.get_node_by_output(inp) is None:
+                    broken_outputs.add(inp)
+        return list(broken_outputs)
+
     def update_node_shape_dtype(self, node, override=False):
         """Try the best to infer shapes and dtypes for outputs of the node,
         by default, we respect TF shapes and dtypes.
@@ -844,7 +856,6 @@ class Graph(object):
         for op in self.get_nodes():
             if op.is_const():
                 const_ops.append(op)
-                continue
             elif op.is_graph_input():
                 if op not in self._order_sensitive_inputs:
                     order_non_sensitive_placeholders.append(op)
@@ -854,7 +865,6 @@ class Graph(object):
 
         # create initializers for placeholder with default nodes
         initializers = []
-        placeholder_default_const_ops = []
         for op in placeholder_ops:
             if op.type == "PlaceholderWithDefault":
                 utils.make_sure(op.inputs[0] is not None, "Cannot find node with output {}".format(op.input[0]))
@@ -864,18 +874,24 @@ class Graph(object):
                 value = op.inputs[0].get_tensor_value(as_list=False)
                 tensor = numpy_helper.from_array(value, op.output[0])
                 initializers.append(tensor)
-                placeholder_default_const_ops.append(op.inputs[0])
+                const_ops.remove(op.inputs[0])
+                ops.remove(op.inputs[0])
 
         # create initializers for constant nodes
-        const_ops = [op for op in const_ops if op not in placeholder_default_const_ops]
         for op in const_ops:
-            # not to use numpy_helper.from_array to create a new tensor
-            # because sometimes onnx will have a bug that only check the tensor data in specific field
-            # such as at upsample it only checks the float_data field.
-            t = op.get_attr("value")
-            tensor = helper.get_attribute_value(t)
-            tensor.name = op.output[0]
-            initializers.append(tensor)
+            # Constant support more dtypes after opset 9
+            if self.opset < 9:
+                # not to use numpy_helper.from_array to create a new tensor
+                # because sometimes onnx will have a bug that only check the tensor data in specific field
+                # such as at upsample it only checks the float_data field.
+                t = op.get_attr("value")
+                tensor = helper.get_attribute_value(t)
+                tensor.name = op.output[0]
+                initializers.append(tensor)
+                ops.remove(op)
+            else:
+                op.type = "Constant"
+                op.update_proto()
 
         # create input_tensor_values
         input_ids = [op.output[0] for op in placeholder_ops]
@@ -1164,6 +1180,16 @@ class Graph(object):
                 for _, body_graph in attr_body_graphs.items():
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
+
+    def safe_remove_nodes(self, to_delete):
+        """Delete nodes in `to_delete` without third-party node consuming it."""
+        delete_set = set(to_delete)
+        for n in delete_set:
+            out_consumers = set()
+            for out in n.output:
+                out_consumers |= set(self.find_output_consumers(out))
+            if out_consumers.issubset(delete_set):
+                self.remove_node(n.name)
 
 
 class GraphUtil(object):

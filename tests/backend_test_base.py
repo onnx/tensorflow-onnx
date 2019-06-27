@@ -75,7 +75,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         return y
 
     def run_test_case(self, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
-                      convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=False,
+                      convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
                       check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None):
         # optional - passed to process_tf_graph
         if process_args is None:
@@ -131,6 +131,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
             if check_dtype:
                 self.assertEqual(expected_val.dtype, actual_val.dtype)
+            # why need shape checke: issue when compare [] with scalar
+            # https://github.com/numpy/numpy/issues/11071
             if check_shape:
                 self.assertEqual(expected_val.shape, actual_val.shape)
 

@@ -40,10 +40,10 @@ def rewrite_leakyrelu(g, ops):
                 continue
             leakyrelu = g.make_node("LeakyRelu", inputs=[max_input_edge_name], attr={"alpha": alpha},
                                     shapes=[g.get_shape(max_node.output[0])], dtypes=[g.get_dtype(max_node.output[0])])
-            ops.remove(max_node)
-            ops.remove(mul_node)
             ops.append(leakyrelu)
             g.replace_all_inputs(ops, max_node.output[0], leakyrelu.output[0])
+            to_delete = [max_node, mul_node]
+            g.safe_remove_nodes(to_delete)
 
     return ops
 

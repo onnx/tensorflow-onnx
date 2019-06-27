@@ -125,9 +125,13 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
     def parse_attributes(self, context):
         if self.lstm_cell_type == RNNUnitType.LSTMBlockCell:
             lstm_block_cell = context.cell_match.get_op("lstm_block_cell")
-            clip = float(lstm_block_cell.get_attr("cell_clip").f)
+            clip = lstm_block_cell.get_attr_value("cell_clip")
             # current LSTM op cannot handle clip
             if clip > 0:
+                return False
+
+            use_peephole = lstm_block_cell.get_attr_value("use_peephole")
+            if use_peephole:
                 return False
         return True
 
