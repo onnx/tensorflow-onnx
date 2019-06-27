@@ -47,7 +47,7 @@ def optimize_graph(graph):
                 logger.verbose("Apply %s", name)
                 current = copy.deepcopy(graph)
                 opt = factory()
-                graph = opt.optimize(current)
+                graph = opt.optimize(current) or graph
                 continue_flag = continue_flag or opt.graph_been_opt
 
             except Exception:  # pylint: disable=broad-except

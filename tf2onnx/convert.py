@@ -14,9 +14,8 @@ import sys
 
 import tensorflow as tf
 
-from tf2onnx.graph import GraphUtil
 from tf2onnx.tfonnx import process_tf_graph, tf_optimize
-from tf2onnx import constants, loader, logging, utils
+from tf2onnx import constants, loader, logging, utils, optimizer
 
 
 # pylint: disable=unused-argument
@@ -145,10 +144,8 @@ def main():
                              output_names=outputs,
                              inputs_as_nchw=args.inputs_as_nchw)
 
-    model_proto = g.make_model("converted from {}".format(model_path))
-
-    logger.info("")
-    model_proto = GraphUtil.optimize_model_proto(model_proto)
+    onnx_graph = optimizer.optimize_graph(g)
+    model_proto = onnx_graph.make_model("converted from {}".format(model_path))
 
     # write onnx graph
     logger.info("")
