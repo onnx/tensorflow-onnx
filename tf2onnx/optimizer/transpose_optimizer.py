@@ -370,16 +370,23 @@ class TransposeOptimizer(GraphOptimizerBase):
             if t_p.type in ("Conv", "ConvTranspose") and len(t_p.input) == 2:
                 # if Conv or ConvTranspose's bias input is not set, then we set, otherwise, we don't set
                 # todo: maybe we can add already set bias with the input??? try later
+
+                target_node = node.inputs[1]
+                numpy_val = target_node.get_tensor_value(as_list=False)
+                # Optional 1D bias to be added to the convolution, has size of M
+                if len(numpy_val.shape) - numpy_val.shape.count(1) > 1:
+                    return self._handle_node_having_branches(node)
+                transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
+                target_node.set_tensor_value(transposed_val)
+
                 conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
                 conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.attr_onnx)
                 ops = self._g.get_nodes()
                 trans.input[0] = utils.port_name(conv_node.name)
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-
                 self._g.remove_node(t_p.name)
                 self._g.remove_node(node.name)
                 return True
-            return False
         return self._handle_node_having_branches(node)
 
     def _transpose_handler(self, trans, node):
