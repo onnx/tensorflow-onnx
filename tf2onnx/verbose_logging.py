@@ -42,7 +42,8 @@ def basicConfig(**kwargs):  # pylint: disable=invalid-name, function-redefined
     if "format" not in kwargs:
         level = kwargs.get("level", _logging.root.level)
         kwargs["format"] = _BASIC_LOG_FORMAT if level >= INFO else _VERBOSE_LOG_FORMAT
-
+    # config will make effect only when root.handlers is empty, so add the following statement to make sure it
+    _logging.root.handlers = []
     _logging.basicConfig(**kwargs)
     set_tf_verbosity(_logging.getLogger().getEffectiveLevel())
 

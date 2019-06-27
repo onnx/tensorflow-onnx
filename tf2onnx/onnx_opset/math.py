@@ -271,7 +271,7 @@ class LRN:
                                       name=op_name, shapes=shapes, dtypes=dtypes)
 
 
-@tf_op(["MatMul", "BatchMatMul"])
+@tf_op(["MatMul", "BatchMatMul", "BatchMatMulV2"])
 class MatMul:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
