@@ -9,6 +9,8 @@
 
 from collections import defaultdict, namedtuple
 
+import numpy as np
+
 from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
@@ -59,13 +61,24 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
             unprocessed_node = []
             nodes_to_process = [nodes_group[0]]
             for node in nodes_group[1:]:
-                if node.attr == nodes_to_process[0].attr:
+                if self._have_equal_attr(node, nodes_to_process[0]):
                     nodes_to_process.append(node)
                 else:
                     unprocessed_node.append(node)
 
             self._merge_nodes_that_are_duplicated(nodes_to_process, graph)
             nodes_group = unprocessed_node
+
+    def _have_equal_attr(self, node_1, node_2):
+        if node_1.attr == node_2.attr:
+            return True
+        if node_1.is_const() and node_2.is_const():
+            const_1 = node_1.get_tensor_value(as_list=False)
+            const_2 = node_2.get_tensor_value(as_list=False)
+            if const_1.dtype == const_2.dtype and \
+                    np.array_equal(const_1, const_2):
+                return True
+        return False
 
     def _merge_nodes_that_are_duplicated(self, nodes_to_process, graph):
         # node's output may not all be used, so have to select the one that uses most of node's outputs

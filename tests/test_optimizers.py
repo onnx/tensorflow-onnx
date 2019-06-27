@@ -8,11 +8,11 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import numpy as np
-from onnx import helper, TensorProto
+from onnx import helper, TensorProto, OperatorSetIdProto
 from tf2onnx import utils
 from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, group_nodes_by_type
+from common import unittest_main, group_nodes_by_type, check_opset_min_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -628,6 +628,35 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_merge_duplicated_nodes_compare(["OUT"], {"X": np.random.randn(5, 5).astype(np.float32)}, model_proto,
                                                 op_type="ReduceSum", remaining_op_num=2)
+
+    @check_opset_min_version(9, "Constant")
+    def test_duplicated_duplicated_constant(self):
+        const_val = np.array([1, 2, 3], dtype=np.float32)
+        tensor_1 = helper.make_tensor("tensor_1", TensorProto.FLOAT, const_val.shape, const_val)
+        tensor_2 = helper.make_tensor("tensor_2", TensorProto.FLOAT, const_val.shape, const_val)
+        tensor_3 = helper.make_tensor("tensor_3", TensorProto.FLOAT, const_val.shape, const_val.tobytes(), raw=True)
+        tensor_4 = helper.make_tensor("tensor_4", TensorProto.FLOAT, const_val.shape, const_val.tobytes(), raw=True)
+        node0 = helper.make_node('Constant', inputs=[], outputs=["value0"], value=tensor_1)
+        node1 = helper.make_node('Constant', inputs=[], outputs=["value1"], value=tensor_2)
+        node2 = helper.make_node('Constant', inputs=[], outputs=["value2"], value=tensor_3)
+        node3 = helper.make_node('Constant', inputs=[], outputs=["value3"], value=tensor_4)
+        node4 = helper.make_node("Mul", ["value0", "value1"], ["output1"])
+        node5 = helper.make_node("Mul", ["value2", "output1"], ["output2"])
+        node6 = helper.make_node("Mul", ["value3", "output2"], ["OUT"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3, node4, node5, node6],
+            "test_duplicated_duplicated_constant",
+            [],
+            [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, (3,))],
+        )
+
+        imp = OperatorSetIdProto()
+        imp.version = self.config.opset
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests", opset_imports=[imp])
+        self.run_merge_duplicated_nodes_compare(["OUT"], {}, model_proto,
+                                                op_type="Constant", remaining_op_num=1)
 
     def test_duplicated_node_is_graph_output(self):
         node0 = helper.make_node('Add', inputs=["X", "X"], outputs=["value0"])
