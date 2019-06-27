@@ -118,7 +118,7 @@ def rewrite_gemm(g, ops):
 
                 ops.append(gemm)
                 g.replace_all_inputs(ops, add_node.output[0], gemm.output[0])
+                to_delete = [add_node, matmul_node]
+                g.safe_remove_nodes(to_delete)
 
-            # to_delete = [add_node, matmul_node, input_c_node]
-            # g.delete_nodes_without_dependency(to_delete)
     return ops
