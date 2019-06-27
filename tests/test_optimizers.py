@@ -495,7 +495,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
 
         graph = helper.make_graph(
-            [ const_b_node, node0, node1, node2, node3],
+            [const_b_node, node0, node1, node2, node3],
             "transpose-add-test-with-conv-1",
             [helper.make_tensor_value_info("x", TensorProto.FLOAT, (1, 5, 3, 3)),
              helper.make_tensor_value_info("W", TensorProto.FLOAT, (16, 5, 3, 3))],
