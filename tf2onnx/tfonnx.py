@@ -471,7 +471,6 @@ def rewrite_incomplete_type_support_rs6(g, ops):
         "Split",
         "Tile",
         "Transpose",
-        "Gemm",
         "Where"
     ]
     # TODO: logic to insert cast has bug, not all inputs of one node need cast
