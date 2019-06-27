@@ -1080,12 +1080,13 @@ class BatchToSpace:
         input_tensor = node.inputs[0]
         input_shape = ctx.get_shape(input_tensor.output[0])
         blocksize = node.inputs[1].get_tensor_value()
-        crops = node.inputs[2].get_tensor_value()
 
         utils.make_sure(len(input_shape) in (4, 3),
                         "only supports 3D and 4D for now")
         utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
                         "only support same blocksize at different dims")
+        utils.make_sure(node.inputs[2].output_shapes == [[2, 2]],
+                        "only support the crops with shape [[2,2]]")
 
         # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
         if len(input_shape) == 3:
@@ -1097,34 +1098,72 @@ class BatchToSpace:
         reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
         trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
 
-        # implement crop logic, the data format is NHWC
-        slice_axis = [1, 2]
-        top, bottom = crops[0]
-        left, right = crops[1]
-        starts = [top, left]
-        ends = []
-        for end in [bottom, right]:
-            if end != 0:
-                ends.append(-end)
-            else:
-                ends.append(np.iinfo(np.int32).max)
-
-        attr = {"axes": slice_axis, "ends": ends, "starts": starts}
-        inputs_map = {"data": trans2.output[0], **attr}
         dtypes = node.output_dtypes
         shapes = node.output_shapes
 
-        if len(input_shape) == 3:
-            # add a squeeze op to convert output into 3d
-            kwargs = {**inputs_map}
-            ctx.remove_node(node.name)
-            slice1 = GraphBuilder(ctx).make_slice(kwargs)
-            ctx.make_node("Squeeze", [slice1], {"axes": [3]},
-                          outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
+        if node.inputs[2].is_const():
+            crops = node.inputs[2].get_tensor_value()
+            # implement crop logic, the data format is NHWC
+            slice_axis = [1, 2]
+            top, bottom = crops[0]
+            left, right = crops[1]
+            starts = [top, left]
+            ends = []
+            for end in [bottom, right]:
+                if end != 0:
+                    ends.append(-end)
+                else:
+                    ends.append(np.iinfo(np.int32).max)
+
+            attr = {"axes": slice_axis, "ends": ends, "starts": starts}
+            inputs_map = {"data": trans2.output[0], **attr}
+
+            if len(input_shape) == 3:
+                # add a squeeze op to convert output into 3d
+                kwargs = {**inputs_map}
+                ctx.remove_node(node.name)
+                slice1 = GraphBuilder(ctx).make_slice(kwargs)
+                ctx.make_node("Squeeze", [slice1], {"axes": [3]},
+                              outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
+                return
+
         else:
-            kwargs = {**inputs_map, "outputs": node.output}
-            ctx.remove_node(node.name)
-            GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
+            # when node.inputs[2] is not const, we need to create nodes to get the attr for ends and starts.
+            # Make the node crops being transposed and respectively obtained its two rows by split op.
+            # Starts are fetched by the first row;
+            # Ends are obtained by the second row.
+            crops_type = ctx.get_dtype(node.input[2])
+            crops_np_type = utils.map_onnx_to_numpy_type(crops_type)
+
+            crops_trans = ctx.make_node("Transpose", [node.input[2]], {"perm": [1, 0]})
+            trans_split = ctx.make_node("Split", [crops_trans.output[0]], output_count=2, attr={"axis": 0})
+            starts = ctx.make_node("Squeeze", [trans_split.output[0]], attr={"axes": [0]})
+
+            ends_ori = ctx.make_node("Squeeze", [trans_split.output[1]], attr={"axes": [0]})
+            zero_value = np.array([0]).astype(crops_np_type)
+            zero_const = ctx.make_const(utils.make_name("Const"), zero_value)
+            ends_ori_equal_zero = ctx.make_node("Equal", [ends_ori.output[0], zero_const.output[0]])
+            ends_ori_equal_zero = ctx.make_node("Cast", [ends_ori_equal_zero.output[0]], attr={"to": crops_type})
+            int_max_value = np.array([utils.get_max_value(crops_np_type)]).astype(crops_np_type)
+            int_max_const = ctx.make_const(utils.make_name("largest_int_val"), int_max_value)
+            ends_for_zero = ctx.make_node("Mul", [ends_ori_equal_zero.output[0], int_max_const.output[0]])
+
+            neg_one_value = np.array([-1]).astype(crops_np_type)
+            neg_one_const = ctx.make_const(utils.make_name("const"), neg_one_value)
+            ends_ori_equal_zero_inv = ctx.make_node("Add", [ends_ori_equal_zero.output[0], neg_one_const.output[0]])
+            ends_for_nonzero = ctx.make_node("Mul", [ends_ori_equal_zero_inv.output[0], ends_ori.output[0]])
+
+            ends = ctx.make_node("Add", [ends_for_zero.output[0], ends_for_nonzero.output[0]])
+
+            slice_axis_value = np.array([1, 2]).astype(crops_np_type)
+            slice_axis_const = ctx.make_const(utils.make_name("Const"), slice_axis_value)
+
+            attr = {"axes": slice_axis_const.output[0], "ends": ends.output[0], "starts": starts.output[0]}
+            inputs_map = {"data": trans2.output[0], **attr}
+
+        kwargs = {**inputs_map, "outputs": node.output}
+        ctx.remove_node(node.name)
+        GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
 
 
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")

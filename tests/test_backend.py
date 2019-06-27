@@ -2450,6 +2450,33 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.batch_to_space_nd(input_x, block_size, crop, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
 
+    @check_opset_min_version(10, "Slice in opset 10 can accept dynamic 'starts' and 'ends'")
+    def test_batch_to_spacend_with_dynamic_crop(self):
+        block_size = tf.constant([2, 2], dtype=tf.int32)
+        crop_value_1 = np.array([[0, 1], [2, 1]], dtype=np.int32)   # top is zero
+        crop_value_2 = np.array([[0, 1], [2, 0]], dtype=np.int32)   # right is zero
+        crop_value_3 = np.array([[1, 0], [2, 0]], dtype=np.int32)   # ends are zero
+        input_val = np.random.random_sample([40, 3, 5, 100]).astype(np.float32)
+
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_val.shape, name=_TFINPUT)
+        crop = tf.placeholder(dtype=tf.int32, shape=[2, 2], name=_TFINPUT1)
+        _ = tf.batch_to_space_nd(input_x, block_size, crop, name=_TFOUTPUT)
+
+        for crop_value in [crop_value_1, crop_value_2, crop_value_3]:
+            self._run_test_case([_OUTPUT], feed_dict={_INPUT: input_val, _INPUT1: crop_value})
+
+    @check_opset_min_version(10, "Slice in opset 10 can accept dynamic 'starts' and 'ends'")
+    @check_target('rs6', 'batch_to_space_nd')
+    def test_batch_to_spacend_with_dynamic_crop_for_int64(self):
+        block_size = [2, 2]
+        crops_val = np.array([[1, 0], [2, 0]], dtype=np.int64)
+        input_val = np.random.random_sample([40, 3, 5, 100]).astype(np.float32)
+
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_val.shape, name=_TFINPUT)
+        crops = tf.placeholder(dtype=tf.int64, shape=[2, 2], name=_TFINPUT1)
+        _ = tf.batch_to_space_nd(input_x, block_size, crops, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], feed_dict={_INPUT: input_val, _INPUT1: crops_val})
+
     def test_batch_to_space3d(self):
         block_size = [2, 2]
         crop = [[0, 1], [2, 1]]

@@ -14,10 +14,6 @@ def rewrite_gemm(g, ops):
     if g.opset <= 6:
         return ops
 
-    """
-    4 Candidate patterns are listed as follow, i.e. pattern0, pattern1, pattern2 and pattern 3
-    Where, A,B and C represent the three inputs, alpha and beta represent the two attributes.
-    """
     # pattern0: alpha*A*B + beta*C
     pattern0 = \
         OpTypePattern('Add', name='add', inputs=[
