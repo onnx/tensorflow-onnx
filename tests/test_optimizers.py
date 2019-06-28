@@ -530,6 +530,38 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                              "W": np.random.randn(1, 1, 3, 3).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
+    def test_transpose_pad(self):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Pad", ["Y"], ["Z"], pads=[1, 0, 1, 3, 0, 0, 2, 0], name="pad")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-pad-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (2, 6, 4, 8))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(1, 3, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_reducemean(self):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("ReduceMean", ["Y"], ["Z"], axes=[1, 2], keepdims=1, name="reducemean")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-reducemean-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 3, 1, 1))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(1, 3, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
     def test_trans_output_as_graph_outputs(self):
         """
         If transpose's output is graph's output, don't optimize it.
