@@ -184,12 +184,12 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), const_1_val)
         const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
 
-        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32).reshape(120).tolist()
-        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val)
+        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32)
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val.flatten())
         const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
 
-        const_3_val = np.random.randn(2, 4, 5, 3).astype(np.float32).reshape(120).tolist()
-        const_3 = helper.make_tensor("const_3", TensorProto.FLOAT, (2, 4, 5, 3), const_3_val)
+        const_3_val = np.random.randn(2, 4, 5, 3).astype(np.float32)
+        const_3 = helper.make_tensor("const_3", TensorProto.FLOAT, (2, 4, 5, 3), const_3_val.flatten())
         const_3_node = helper.make_node("Constant", [], ["const_3"], value=const_3, name="const_3")
 
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -212,8 +212,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), const_1_val)
         const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
 
-        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32).reshape(120).tolist()
-        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val)
+        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32)
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val.flatten())
         const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
 
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -465,8 +465,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     def test_transpose_add_with_input_const(self):
-        const_1_val = np.random.randn(1, 3, 3, 1).astype(np.float32).reshape(9).tolist()
-        const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1, 3, 3, 1), const_1_val)
+        const_1_val = np.random.randn(1, 3, 3, 1).astype(np.float32)
+        const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1, 3, 3, 1), const_1_val.flatten())
         const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
 
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -485,8 +485,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     def test_transpose_add_with_conv_1(self):
-        const_b_val = np.random.randn(1, 1, 1, 16).astype(np.float32).reshape(16).tolist()
-        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, (1, 1, 1, 16), const_b_val)
+        # case where bias's dim is 1D and can be merged into Conv
+        const_b_val = np.random.randn(1, 1, 1, 16).astype(np.float32)
+        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, (1, 1, 1, 16), const_b_val.flatten())
         const_b_node = helper.make_node("Constant", [], ["const_b"], value=const_b, name="const_b")
 
         node0 = helper.make_node("Conv", ["x", "W"], ["X"], name="conv", pads=[0, 0, 0, 0])
@@ -508,8 +509,10 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     def test_transpose_add_with_conv_2(self):
-        const_b_val = np.random.randn(1, 3, 3, 1).astype(np.float32).reshape(9).tolist()
-        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, (1, 3, 3, 1), const_b_val)
+        # case where bias's dim is not 1D and can't be merged into Conv
+        # add handler just remove the transpose around Add node
+        const_b_val = np.random.randn(1, 3, 3, 1).astype(np.float32)
+        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, (1, 3, 3, 1), const_b_val.flatten())
         const_b_node = helper.make_node("Constant", [], ["const_b"], value=const_b, name="const_b")
 
         node0 = helper.make_node("Conv", ["x", "W"], ["X"], name="conv", pads=[0, 0, 0, 0])
