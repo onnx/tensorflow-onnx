@@ -578,7 +578,7 @@ class Graph(object):
     def is_empty_input(self, name):
         # in ONNX, operation may have optional input and an empty string may be used
         # in the place of an actual argument's name to indicate a missing argument
-        return name == ""
+        return name == utils.ONNX_EMPTY_INPUT
 
     def check_integrity(self):
         """
