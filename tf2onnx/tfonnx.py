@@ -768,13 +768,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
-    rewriters = [rewrite_transpose, rewrite_flatten,
+    rewriters = [rewrite_transpose, rewrite_flatten, rewrite_gemm,
                  rewrite_random_uniform, rewrite_random_uniform_fold_const,
                  rewrite_random_normal, rewrite_dropout, rewrite_eye,
                  rewrite_leakyrelu, rewrite_thresholded_relu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_bi_direction_gru,
-                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond
+                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond,
                  ]
 
     if custom_rewriter is not None:

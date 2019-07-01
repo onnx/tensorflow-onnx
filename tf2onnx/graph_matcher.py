@@ -107,16 +107,30 @@ class MatchResult(object):
             return pattern_or_name
 
         if isinstance(pattern_or_name, six.text_type):
-            return self._name_to_pattern[pattern_or_name]
+            return self._name_to_pattern.get(pattern_or_name)
 
         raise ValueError('pattern_or_name has type %s. Expect OpTypePattern or str.'
                          % type(pattern_or_name))
 
-    def get_op(self, pattern_or_name):
-        return self._pattern_to_op_tensor[self._to_pattern(pattern_or_name)][0]
+    def get_op(self, pattern_or_name, default=None):
+        """
+        For now, if the op can not be effectively obtained, then the function will return the default
+        instead of an error.
+        """
+        op_and_tensor = self._pattern_to_op_tensor.get(self._to_pattern(pattern_or_name))
+        if op_and_tensor:
+            return op_and_tensor[0]
+        return default
 
-    def get_tensor(self, pattern_or_name):
-        return self._pattern_to_op_tensor[self._to_pattern(pattern_or_name)][1]
+    def get_tensor(self, pattern_or_name, default=None):
+        """
+        For now, if the tensor can not be effectively obtained, then the function will return the default
+        instead of an error.
+        """
+        op_and_tensor = self._pattern_to_op_tensor.get(self._to_pattern(pattern_or_name))
+        if op_and_tensor:
+            return op_and_tensor[1]
+        return default
 
     def get_nodes(self):
         return [n[0] for n in self._pattern_to_op_tensor.values()]
