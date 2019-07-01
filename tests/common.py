@@ -297,6 +297,12 @@ def validate_const_node(node, expected_val):
 def group_nodes_by_type(graph):
     res = defaultdict(list)
     for node in graph.get_nodes():
+        attr_body_graphs = node.get_body_graphs()
+        if attr_body_graphs:
+            for _, body_graph in attr_body_graphs.items():
+                body_graph_res = group_nodes_by_type(body_graph)
+                for k, v in body_graph_res.items():
+                    res[k].extend(v)
         res[node.type].append(node)
     return res
 

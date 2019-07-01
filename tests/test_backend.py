@@ -441,7 +441,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port,
+                           graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
+                                                      check_op_count(g, "RandomUniformLike", 0)))
 
     def test_nn_dropout(self):
         keep_prob = tf.placeholder_with_default(1., (), "keep_prob")
@@ -458,7 +460,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         # when constant_fold is enabled, PlaceholderWithDefault will be folded into either a const or a placeholder.
         # here we set it False to test PlaceholderWithDefault bug: https://github.com/onnx/tensorflow-onnx/pull/446
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False)
+        # Dropout with ratio 1.0 will be optimized so that only one Identity is left
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False,
+                           graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
+                                                      check_op_count(g, "RandomUniformLike", 0)))
 
     @check_tf_min_version("1.13")
     def test_nn_dropout_with_rate(self):
@@ -474,7 +479,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False)
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, constant_fold=False,
+                           graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
+                                                      check_op_count(g, "RandomUniformLike", 0)))
 
     def test_conv2d_with_input_transpose(self):
         x_shape = [2, 32, 32, 3]
