@@ -575,6 +575,11 @@ class Graph(object):
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
 
+    def is_empty_input(self, name):
+        # in ONNX, operation may have optional input and an empty string may be used
+        # in the place of an actual argument's name to indicate a missing argument
+        return name == utils.ONNX_EMPTY_INPUT
+
     def check_integrity(self):
         """
         Check graph integrity. Every node's input needs to associate with a node.
@@ -583,7 +588,7 @@ class Graph(object):
         broken_outputs = set()
         for node in self.get_nodes():
             for inp in node.input:
-                if self.get_node_by_output(inp) is None:
+                if self.get_node_by_output(inp) is None and not self.is_empty_input(inp):
                     broken_outputs.add(inp)
         return list(broken_outputs)
 
@@ -603,11 +608,12 @@ class Graph(object):
         initializers = []
         for i, inp in enumerate(node.inputs):
             if inp is None:
-                if logger.isEnabledFor(logging.INFO):
-                    logger.warning(
-                        "[%s] infer a inexistent node: [%s], please check the code",
-                        node.name, node.input[i]
-                    )
+                if not self.is_empty_input(node.input[i]):
+                    if logger.isEnabledFor(logging.INFO):
+                        logger.warning(
+                            "[%s] infer a inexistent node: [%s], please check the code",
+                            node.name, node.input[i]
+                        )
                 continue
             if inp.is_const():
                 t = inp.get_attr("value")
