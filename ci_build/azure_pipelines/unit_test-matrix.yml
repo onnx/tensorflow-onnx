@@ -7,7 +7,7 @@ stages:
       parameters:
         platforms: ['linux', 'windows', 'mac']
         python_versions: ['3.6', '3.5']
-        tf_versions: ['1.12', '1.11', '1.10', '1.9', '1.8', '1.7', '1.6', '1.5']
+        tf_versions: ['1.13.1','1.12', '1.11', '1.10', '1.9', '1.8', '1.7', '1.6', '1.5']
         onnx_opsets: ['']
         job:
           steps:
@@ -17,8 +17,8 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         platforms: ['linux', 'windows', 'mac']
-        python_versions: ['3.7']
-        tf_versions: ['1.13.1']
+        python_versions: ['3.7', '3.6', '3.5']
+        tf_versions: ['1.14']
         onnx_opsets: ['']
         job:
           steps:
