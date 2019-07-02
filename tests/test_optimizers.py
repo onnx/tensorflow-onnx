@@ -184,12 +184,12 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), const_1_val)
         const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
 
-        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32).reshape(120).tolist()
-        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val)
+        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32)
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val.flatten())
         const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
 
-        const_3_val = np.random.randn(2, 4, 5, 3).astype(np.float32).reshape(120).tolist()
-        const_3 = helper.make_tensor("const_3", TensorProto.FLOAT, (2, 4, 5, 3), const_3_val)
+        const_3_val = np.random.randn(2, 4, 5, 3).astype(np.float32)
+        const_3 = helper.make_tensor("const_3", TensorProto.FLOAT, (2, 4, 5, 3), const_3_val.flatten())
         const_3_node = helper.make_node("Constant", [], ["const_3"], value=const_3, name="const_3")
 
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -206,6 +206,32 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = helper.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
+
+    def test_transpose_max_input_non_const(self):
+        const_1_val = [2.0]
+        const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), const_1_val)
+        const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
+
+        const_2_val = np.random.randn(2, 4, 5, 3).astype(np.float32)
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, (2, 4, 5, 3), const_2_val.flatten())
+        const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
+
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node2 = helper.make_node("Max", ["Y", "non_const", "const_2", "const_1"], ["Z"], name="max")
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [const_1_node, const_2_node, node1, node2, node3],
+            "Max-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (2, 3, 4, 5)),
+             helper.make_tensor_value_info("non_const", TensorProto.FLOAT, (2, 4, 5, 3))],
+            [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, (2, 3, 4, 5))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z1"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32),
+                                            "non_const": np.random.randn(2, 4, 5, 3).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=1)
 
     def test_transpose_merge(self):
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
@@ -393,6 +419,151 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                 model_proto = helper.make_model(graph, producer_name="onnx-tests")
                 self.run_transpose_compare(["res"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                            model_proto, remaining_transpose_num=0)
+
+    def test_trans_with_sub_input_non_const(self):
+        io_shape = [2, 3, 4, 5]
+        non_const_shapes = [[2, 4, 5, 3], [4, 5, 3], [5, 3]]
+        for trans_is_first_input in [True, False]:
+            for non_const_shape in non_const_shapes:
+                node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_a")
+                if trans_is_first_input:
+                    node2 = helper.make_node("Sub", ["Y", "non_const"], ["Z"], name="sub")
+                else:
+                    node2 = helper.make_node("Sub", ["non_const", "Y"], ["Z"], name="sub")
+
+                node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_b")
+                graph = helper.make_graph(
+                    [node1, node2, node3],
+                    "test_trans_with_sub_input_non_const",
+                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, io_shape),
+                     helper.make_tensor_value_info("non_const", TensorProto.FLOAT, non_const_shape)],
+                    [helper.make_tensor_value_info("res", TensorProto.FLOAT, io_shape)],
+                )
+
+                model_proto = helper.make_model(graph, producer_name="onnx-tests")
+                self.run_transpose_compare(["res"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32),
+                                                     "non_const": np.random.randn(*non_const_shape).astype(np.float32)},
+                                           model_proto, remaining_transpose_num=1)
+
+    def test_transpose_add_with_input_non_const(self):
+
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Add", ["Y", "A"], ["Z"], name="add")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-add-test-input-non-const",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 1, 3, 3)),
+             helper.make_tensor_value_info("A", TensorProto.FLOAT, (1, 3, 3, 1))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 1, 3, 3))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(1, 1, 3, 3).astype(np.float32),
+                                             "A": np.random.randn(1, 3, 3, 1).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_add_with_input_const(self):
+        const_1_val = np.random.randn(1, 3, 3, 1).astype(np.float32)
+        const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1, 3, 3, 1), const_1_val.flatten())
+        const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
+
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Add", ["Y", "const_1"], ["Z"], name="add")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [const_1_node, node0, node1, node2],
+            "transpose-add-test-input-const",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 1, 3, 3))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 1, 3, 3))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(1, 1, 3, 3).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_add_with_conv_1(self):
+        # case where bias's dim is 1D and can be merged into Conv
+        const_b_val = np.random.randn(1, 1, 1, 16).astype(np.float32)
+        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, (1, 1, 1, 16), const_b_val.flatten())
+        const_b_node = helper.make_node("Constant", [], ["const_b"], value=const_b, name="const_b")
+
+        node0 = helper.make_node("Conv", ["x", "W"], ["X"], name="conv", pads=[0, 0, 0, 0])
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node2 = helper.make_node("Add", ["Y", "const_b"], ["Z"], name="add")
+        node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [const_b_node, node0, node1, node2, node3],
+            "transpose-add-test-with-conv-1",
+            [helper.make_tensor_value_info("x", TensorProto.FLOAT, (1, 5, 3, 3)),
+             helper.make_tensor_value_info("W", TensorProto.FLOAT, (16, 5, 3, 3))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 16, 1, 1))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"x": np.random.randn(1, 5, 3, 3).astype(np.float32),
+                                             "W": np.random.randn(16, 5, 3, 3).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_add_with_conv_2(self):
+        # case where bias's dim is not 1D and can't be merged into Conv
+        # add handler just remove the transpose around Add node
+        const_b_val = np.random.randn(1, 3, 3, 1).astype(np.float32)
+        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, (1, 3, 3, 1), const_b_val.flatten())
+        const_b_node = helper.make_node("Constant", [], ["const_b"], value=const_b, name="const_b")
+
+        node0 = helper.make_node("Conv", ["x", "W"], ["X"], name="conv", pads=[0, 0, 0, 0])
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node2 = helper.make_node("Add", ["Y", "const_b"], ["Z"], name="add")
+        node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [const_b_node, node0, node1, node2, node3],
+            "transpose-add-test-with-conv-2",
+            [helper.make_tensor_value_info("x", TensorProto.FLOAT, (1, 1, 5, 5)),
+             helper.make_tensor_value_info("W", TensorProto.FLOAT, (1, 1, 3, 3))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 1, 3, 3))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"x": np.random.randn(1, 1, 5, 5).astype(np.float32),
+                                             "W": np.random.randn(1, 1, 3, 3).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_pad(self):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Pad", ["Y"], ["Z"], pads=[1, 0, 1, 3, 0, 0, 2, 0], name="pad")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-pad-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (2, 6, 4, 8))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(1, 3, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_reducemean(self):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("ReduceMean", ["Y"], ["Z"], axes=[1, 2], keepdims=1, name="reducemean")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-reducemean-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 3, 1, 1))],
+        )
+
+        model_proto = helper.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(1, 3, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
 
     def test_trans_output_as_graph_outputs(self):
         """

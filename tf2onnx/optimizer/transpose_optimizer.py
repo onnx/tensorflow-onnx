@@ -370,16 +370,23 @@ class TransposeOptimizer(GraphOptimizerBase):
             if t_p.type in ("Conv", "ConvTranspose") and len(t_p.input) == 2:
                 # if Conv or ConvTranspose's bias input is not set, then we set, otherwise, we don't set
                 # todo: maybe we can add already set bias with the input??? try later
+
+                target_node = node.inputs[1]
+                numpy_val = target_node.get_tensor_value(as_list=False)
+                # Optional 1D bias to be added to the convolution, has size of M
+                if len(numpy_val.shape) - numpy_val.shape.count(1) > 1:
+                    return self._handle_node_having_branches(node)
+                transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
+                target_node.set_tensor_value(transposed_val)
+
                 conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
                 conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.attr_onnx)
                 ops = self._g.get_nodes()
                 trans.input[0] = utils.port_name(conv_node.name)
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-
                 self._g.remove_node(t_p.name)
                 self._g.remove_node(node.name)
                 return True
-            return False
         return self._handle_node_having_branches(node)
 
     def _transpose_handler(self, trans, node):
@@ -398,31 +405,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         return False
 
     def _maxmin_handler(self, trans, node):
-        input_index = self._get_input_index_for_trans(node, trans)
-        all_other_inputs = [input_id for i, input_id in enumerate(node.input) if i != input_index]
-
-        all_other_inputs_const = all([self._g.get_node_by_output(i).is_const() for i in all_other_inputs])
-        if all_other_inputs_const is False:
-            return False
-
-        shapes = [len(self._g.get_shape(i)) for i in all_other_inputs]
-        shapes_not_one_and_four = [s for s in shapes if s not in [1, 4]]
-        if shapes_not_one_and_four:
-            return False
-
-        for i in all_other_inputs:
-            target_node = self._g.get_node_by_output(i)
-            numpy_val = target_node.get_tensor_value(as_list=False)
-            rank = numpy_val.ndim
-            if rank == 4:
-                transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
-                target_node.set_tensor_value(transposed_val)
-            elif rank == 1:  # scalar
-                # do nothing
-                pass
-            else:
-                raise ValueError("find rank !=1 and rank !=4, should not go here.")
-        return self._switch_transpose_and_node(node, trans)
+        return self._handle_node_having_branches(node)
 
     def _mul_handler(self, trans, node):
         multiplier_input_id = None
