@@ -22,7 +22,7 @@ from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.handler import tf_op
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version, check_tf_max_version
+from common import unittest_main
 
 
 # pylint: disable=missing-docstring,unused-argument,unused-variable
@@ -139,7 +139,6 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                        'RandomNormal__2:0 -> output }'
             self.assertEqual(expected, actual)
 
-    @check_tf_max_version("1.12")
     def test_dropout(self):
         with tf.Session() as sess:
             x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
@@ -150,35 +149,15 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph, opset=self.config.opset)
+            # feed output_names in order to remove unused nodes.
+            g = process_tf_graph(sess.graph, opset=self.config.opset, output_names=["output:0"])
+            utils.save_protobuf("./test.onnx", g.make_model("test"))
             actual = onnx_to_graphviz(g)
             expected = 'digraph { prob [op_type=Placeholder shape="[]"] input2 [op_type=Placeholder shape="[1, 3]"] ' \
                        'input1 [op_type=Placeholder shape="[2, 3]"] Add [op_type=Add] output1 [op_type=Identity] ' \
-                       'output2 [op_type=Identity] output [op_type=Identity] input1:0 -> Add input2:0 -> Add ' \
-                       'Add:0 -> output1 output1:0 -> output2 output2:0 -> output }'
-            self.assertEqual(expected, actual)
-
-    @check_tf_min_version("1.13")
-    def test_dropout_2(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
-            x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
-            prop = tf.placeholder(tf.float32, (), name="prob")
-            x_ = tf.add(x1, x2)
-            x_ = tf.nn.dropout(x_, prop)
-            x_ = tf.identity(x_, name="output1")
-            x_ = tf.identity(x_, name="output2")
-            _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph, opset=self.config.opset)
-            actual = onnx_to_graphviz(g)
-            expected = 'digraph { "sub/x" [op_type=Const] prob [op_type=Placeholder shape="[]"] ' \
-                       'sub [op_type=Sub] input2 [op_type=Placeholder shape="[1, 3]"] ' \
-                       'input1 [op_type=Placeholder shape="[2, 3]"] "dropout/sub/x" [op_type=Const] ' \
-                       '"dropout/sub" [op_type=Sub] Add [op_type=Add] output1 [op_type=Identity] ' \
-                       'output2 [op_type=Identity] output [op_type=Identity] "sub/x":0 -> sub ' \
-                       'prob:0 -> sub "dropout/sub/x":0 -> "dropout/sub" sub:0 -> "dropout/sub" ' \
-                       'input1:0 -> Add input2:0 -> Add Add:0 -> output1 output1:0 -> output2 ' \
-                       'output2:0 -> output }'
+                       'output2 [op_type=Identity] output [op_type=Identity] output_graph_outputs_Identity__3 ' \
+                       '[op_type=Identity] input1:0 -> Add input2:0 -> Add Add:0 -> output1 output1:0 -> output2 ' \
+                       'output2:0 -> output output_raw_output___2:0 -> output_graph_outputs_Identity__3 }'
             self.assertEqual(expected, actual)
 
     def test_add(self):

@@ -1,7 +1,12 @@
 tf2onnx - Convert TensorFlow models to ONNX.
 ========
 
-[![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build?definitionId=16&branchName=master)
+| Build Type | OS | Python | Tensorflow | Onnx opset | Status |
+| ---        | ---    | ---    | ---        | ---        | ---    |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.5, 3.6 | 1.5-1.13 | 7-10 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.5, 3.6, 3.7 | 1.5-1.13 | 7-10 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+
+<a name="build_status_footnote">\*</a> Only test on python3.6, TF1.13.
 
 # Supported ONNX version
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.

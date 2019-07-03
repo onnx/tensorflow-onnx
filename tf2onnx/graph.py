@@ -575,6 +575,23 @@ class Graph(object):
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
 
+    def is_empty_input(self, name):
+        # in ONNX, operation may have optional input and an empty string may be used
+        # in the place of an actual argument's name to indicate a missing argument
+        return name == utils.ONNX_EMPTY_INPUT
+
+    def check_integrity(self):
+        """
+        Check graph integrity. Every node's input needs to associate with a node.
+        Return broken outputs.
+        """
+        broken_outputs = set()
+        for node in self.get_nodes():
+            for inp in node.input:
+                if self.get_node_by_output(inp) is None and not self.is_empty_input(inp):
+                    broken_outputs.add(inp)
+        return list(broken_outputs)
+
     def update_node_shape_dtype(self, node, override=False):
         """Try the best to infer shapes and dtypes for outputs of the node,
         by default, we respect TF shapes and dtypes.
@@ -591,11 +608,12 @@ class Graph(object):
         initializers = []
         for i, inp in enumerate(node.inputs):
             if inp is None:
-                if logger.isEnabledFor(logging.INFO):
-                    logger.warning(
-                        "[%s] infer a inexistent node: [%s], please check the code",
-                        node.name, node.input[i]
-                    )
+                if not self.is_empty_input(node.input[i]):
+                    if logger.isEnabledFor(logging.INFO):
+                        logger.warning(
+                            "[%s] infer a inexistent node: [%s], please check the code",
+                            node.name, node.input[i]
+                        )
                 continue
             if inp.is_const():
                 t = inp.get_attr("value")
@@ -1168,6 +1186,16 @@ class Graph(object):
                 for _, body_graph in attr_body_graphs.items():
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
+
+    def safe_remove_nodes(self, to_delete):
+        """Delete nodes in `to_delete` without third-party node consuming it."""
+        delete_set = set(to_delete)
+        for n in delete_set:
+            out_consumers = set()
+            for out in n.output:
+                out_consumers |= set(self.find_output_consumers(out))
+            if out_consumers.issubset(delete_set):
+                self.remove_node(n.name)
 
 
 class GraphUtil(object):

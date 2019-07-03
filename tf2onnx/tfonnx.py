@@ -141,9 +141,8 @@ def rewrite_transpose(g, ops):
         dims = [i for i in range(len(shape) - 1, -1, -1)]
         output.set_attr("perm", dims)
         g.remove_input(output, output.input[1])
-        for n in set(match.get_nodes()):
-            if n != output:
-                g.remove_node(n.name)
+        to_delete = [n for n in match.get_nodes() if n != output]
+        g.safe_remove_nodes(to_delete)
     return ops
 
 
@@ -175,13 +174,12 @@ def rewrite_random_normal(g, ops):
                                    attr={"shape": shape, "mean": mean, "scale": 1.0, "dtype": dtype})
 
         g.replace_all_inputs(ops, output.output[0], new_node.output[0])
-        for n in set(match.get_nodes()):
-            g.remove_node(n.name)
+        g.safe_remove_nodes(match.get_nodes())
     return ops
 
 
 def rewrite_dropout(g, ops):
-    pattern = \
+    patterns = [
         OpTypePattern('Mul', name='outputs', inputs=[
             OpTypePattern('RealDiv', name="input2"),
             OpTypePattern('Floor', inputs=[
@@ -190,26 +188,36 @@ def rewrite_dropout(g, ops):
                     OpTypePattern('RandomUniform|RandomUniformLike'),
                 ])
             ]),
+        ]),
+        OpTypePattern("Mul", name="outputs", inputs=[
+            OpTypePattern("Mul", name="input2"),
+            OpTypePattern("Cast", inputs=[
+                OpTypePattern("GreaterEqual", inputs=[
+                    OpTypePattern("RandomUniform|RandomUniformLike"),
+                    OpTypePattern(None, name="input3")
+                ])
+            ])
         ])
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        inputs2 = match.get_op('input2')
-        outputs = match.get_op('outputs')
-        op_name = utils.make_name("Dropout")
-        out_name = port_name(op_name)
-        new_node = g.make_node(
-            "Dropout",
-            [inputs2.input[0]],
-            outputs=[out_name],
-            name=op_name,
-            attr={"ratio": 1.0},
-            shapes=[g.get_shape(inputs2.input[0])],
-            dtypes=[g.get_dtype(inputs2.input[0])]
-        )
-        g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
-        for n in set(match.get_nodes()):
-            g.remove_node(n.name)
+    ]
+    for pattern in patterns:
+        matcher = GraphMatcher(pattern)
+        match_results = list(matcher.match_ops(ops))
+        for match in match_results:
+            inputs2 = match.get_op('input2')
+            outputs = match.get_op('outputs')
+            op_name = utils.make_name("Dropout")
+            out_name = port_name(op_name)
+            new_node = g.make_node(
+                "Dropout",
+                [inputs2.input[0]],
+                outputs=[out_name],
+                name=op_name,
+                attr={"ratio": 1.0},
+                shapes=[g.get_shape(inputs2.input[0])],
+                dtypes=[g.get_dtype(inputs2.input[0])]
+            )
+            g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
+            g.safe_remove_nodes(match.get_nodes())
 
     # remove dropout if its ratio is 1.0
     for node in g.get_nodes():
@@ -294,10 +302,8 @@ def rewrite_flatten(g, ops):
 
             g.set_shape(out_name, input_shape[:-2] + [new_dim])
             g.replace_all_inputs(ops, reshape_node.output[0], out_name)
-
-            for n in set(match.get_nodes()):
-                if n != input_node:
-                    g.remove_node(n.name)
+            to_delete = [n for n in match.get_nodes() if n != input_node]
+            g.safe_remove_nodes(to_delete)
 
     return ops
 
@@ -654,6 +660,14 @@ def run_rewriters(g, funcs, continue_on_error):
             else:
                 raise ex
 
+        if utils.is_debug_mode():
+            broken_outputs = g.check_integrity()
+            if broken_outputs:
+                logging.error(
+                    "After rewriter %s, graph breaks at outputs %s",
+                    func.__name__, broken_outputs
+                )
+
     if g.contained_graphs:
         for dict_val in g.contained_graphs.values():
             for attr_name, b_g in dict_val.items():
@@ -765,13 +779,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
-    rewriters = [rewrite_transpose, rewrite_flatten,
+    rewriters = [rewrite_transpose, rewrite_flatten, rewrite_gemm,
                  rewrite_random_uniform, rewrite_random_uniform_fold_const,
                  rewrite_random_normal, rewrite_dropout, rewrite_eye,
                  rewrite_leakyrelu, rewrite_thresholded_relu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_bi_direction_gru,
-                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond
+                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond,
                  ]
 
     if custom_rewriter is not None:
