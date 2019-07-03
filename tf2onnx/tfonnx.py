@@ -179,7 +179,7 @@ def rewrite_random_normal(g, ops):
 
 
 def rewrite_dropout(g, ops):
-    pattern = \
+    patterns = [
         OpTypePattern('Mul', name='outputs', inputs=[
             OpTypePattern('RealDiv', name="input2"),
             OpTypePattern('Floor', inputs=[
@@ -188,25 +188,36 @@ def rewrite_dropout(g, ops):
                     OpTypePattern('RandomUniform|RandomUniformLike'),
                 ])
             ]),
+        ]),
+        OpTypePattern("Mul", name="outputs", inputs=[
+            OpTypePattern("Mul", name="input2"),
+            OpTypePattern("Cast", inputs=[
+                OpTypePattern("GreaterEqual", inputs=[
+                    OpTypePattern("RandomUniform|RandomUniformLike"),
+                    OpTypePattern(None, name="input3")
+                ])
+            ])
         ])
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        inputs2 = match.get_op('input2')
-        outputs = match.get_op('outputs')
-        op_name = utils.make_name("Dropout")
-        out_name = port_name(op_name)
-        new_node = g.make_node(
-            "Dropout",
-            [inputs2.input[0]],
-            outputs=[out_name],
-            name=op_name,
-            attr={"ratio": 1.0},
-            shapes=[g.get_shape(inputs2.input[0])],
-            dtypes=[g.get_dtype(inputs2.input[0])]
-        )
-        g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
-        g.safe_remove_nodes(match.get_nodes())
+    ]
+    for pattern in patterns:
+        matcher = GraphMatcher(pattern)
+        match_results = list(matcher.match_ops(ops))
+        for match in match_results:
+            inputs2 = match.get_op('input2')
+            outputs = match.get_op('outputs')
+            op_name = utils.make_name("Dropout")
+            out_name = port_name(op_name)
+            new_node = g.make_node(
+                "Dropout",
+                [inputs2.input[0]],
+                outputs=[out_name],
+                name=op_name,
+                attr={"ratio": 1.0},
+                shapes=[g.get_shape(inputs2.input[0])],
+                dtypes=[g.get_dtype(inputs2.input[0])]
+            )
+            g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
+            g.safe_remove_nodes(match.get_nodes())
 
     # remove dropout if its ratio is 1.0
     for node in g.get_nodes():
