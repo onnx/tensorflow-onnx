@@ -61,7 +61,7 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
             unprocessed_node = []
             nodes_to_process = [nodes_group[0]]
             for node in nodes_group[1:]:
-                if self._have_equal_attr(node, nodes_to_process[0]):
+                if self._have_equal_attr(node, nodes_to_process[0], graph):
                     nodes_to_process.append(node)
                 else:
                     unprocessed_node.append(node)
@@ -69,10 +69,16 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
             self._merge_nodes_that_are_duplicated(nodes_to_process, graph)
             nodes_group = unprocessed_node
 
-    def _have_equal_attr(self, node_1, node_2):
+    def _have_equal_attr(self, node_1, node_2, graph):
         if node_1.attr == node_2.attr:
             return True
         if node_1.is_const() and node_2.is_const():
+            # get_tensor_value is costly so that we check their shape first
+            shape_1 = graph.get_shape(node_1.output[0])
+            shape_2 = graph.get_shape(node_2.output[0])
+            if shape_1 is not None and shape_2 is not None and \
+                    shape_1 != shape_2:
+                return False
             const_1 = node_1.get_tensor_value(as_list=False)
             const_2 = node_2.get_tensor_value(as_list=False)
             if const_1.dtype == const_2.dtype and \
