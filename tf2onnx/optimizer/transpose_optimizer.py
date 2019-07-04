@@ -371,11 +371,26 @@ class TransposeOptimizer(GraphOptimizerBase):
                 # if Conv or ConvTranspose's bias input is not set, then we set, otherwise, we don't set
                 # todo: maybe we can add already set bias with the input??? try later
 
+                if not self._nodes_has_single_consumer_node([t_p]):
+                    self.logger.debug("Conv does not have single consumer, can not merge Conv and Add")
+                    return self._handle_node_having_branches(node)
+
+                if not self._nodes_has_single_consumer_node([trans]):
+                    self.logger.debug("input transpose does not have single consumer, skipping...")
+                    return False
+
                 target_node = node.inputs[1]
                 numpy_val = target_node.get_tensor_value(as_list=False)
                 # Optional 1D bias to be added to the convolution, has size of M
                 if len(numpy_val.shape) - numpy_val.shape.count(1) > 1:
                     return self._handle_node_having_branches(node)
+
+                rank = len(numpy_val.shape)
+                utils.make_sure(rank in (1, 4), "only support bias rank = 4 or 1")
+                # to make rank = 4
+                if rank == 1:
+                    numpy_val = numpy_val.reshape((1, 1, 1, numpy_val.shape[0]))
+
                 transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
                 target_node.set_tensor_value(transposed_val)
 
