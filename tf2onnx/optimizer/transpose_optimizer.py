@@ -389,8 +389,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 utils.make_sure(rank in (1, 4), "only support bias rank = 4 or 1")
                 # to make rank = 4
                 if rank == 1:
-                    for _ in range(3):
-                        numpy_val = np.expand_dims(numpy_val, axis=0)
+                    numpy_val = numpy_val.reshape((1, 1, 1, numpy_val.shape[0]))
 
                 transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
                 target_node.set_tensor_value(transposed_val)
