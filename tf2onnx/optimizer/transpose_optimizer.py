@@ -199,7 +199,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         # otherwise, it would impact their other output nodes
         if self._nodes_has_single_consumer_node(node.inputs):
             self._create_transpose_pairs_after_node(node)
-            input_transposes = node.inputs
+            input_transposes = set(node.inputs)
             for n in input_transposes:
                 n_input = n.input[0]
                 utils.make_sure(len(n.output) == 1, "only expect single output")
