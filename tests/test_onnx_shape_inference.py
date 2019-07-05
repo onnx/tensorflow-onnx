@@ -43,7 +43,7 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
             self.assertEqual(actual_dtype, inferred_dtype)
 
     def _create_empty_graph(self, inputs, shapes, dtypes):
-        graph = Graph([], target=self.config.target, opset=self.config.opset)
+        graph = Graph(target=self.config.target, opset=self.config.opset)
         for inp, shape, dtype in zip(inputs, shapes, dtypes):
             graph.add_graph_input(inp, dtype, shape)
         return graph

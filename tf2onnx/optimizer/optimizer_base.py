@@ -39,7 +39,6 @@ class GraphOptimizerBase(object):
         before = graph.dump_node_statistics()
 
         graph = self._optimize(graph)
-        graph.update_proto()
         graph.delete_unused_nodes(graph.outputs)
 
         after = graph.dump_node_statistics()

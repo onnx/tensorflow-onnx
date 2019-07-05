@@ -12,6 +12,7 @@ from __future__ import unicode_literals
 import collections
 import copy
 import logging
+import os
 import six
 import numpy as np
 
@@ -32,22 +33,26 @@ logger = logging.getLogger(__name__)
 class Node(object):
     """A Node - wrapper around onnx nodes that we use for graph manipulations."""
 
-    def __init__(self, node, graph, skip_conversion=False):
+    def __init__(self, graph, op_type, inputs, outputs, name=None, doc_string=None,
+                 domain=None, skip_conversion=False, **kwargs):
         """Create Node.
         Args:
             node: Onnx node in NodeProto
             graph: Graph() we are part of
         """
-        self._op = node
+        self._op_type = op_type
+        self._input = inputs
+        self._output = outputs
         self.graph = graph
-        self._input = [i for i in node.input]
-        self._output = [i for i in node.output]
+        self._name = name
+        self._doc_string = doc_string
+        self._domain = domain
         self._attr = {}
 
         graph.set_node_by_name(self)
         # dict to original attributes
-        for a in node.attribute:
-            self._attr[a.name] = a
+        for k, a in kwargs.items():
+            self.set_attr(k, a)
         self._skip_conversion = skip_conversion
 
     @property
@@ -91,39 +96,34 @@ class Node(object):
             logger.debug("Node %s uses non-stardard onnx op <%s, %s>, skip attribute check",
                          self.name, self.domain, self.type)
         onnx_attrs = {}
-        for a in self._attr.values():
+        for a in self.attr.values():
             if schema is None or schema.has_attribute(a.name):
                 onnx_attrs[a.name] = a
         return onnx_attrs
 
     @property
     def name(self):
-        return self._op.name
-
-    @property
-    def op(self):
-        """TODO: have a better interface for this."""
-        return self._op
+        return self._name
 
     @property
     def type(self):
         """Return Op type."""
-        return self._op.op_type
+        return self._op_type
 
     @type.setter
     def type(self, val):
         """Set Op type."""
-        self._op.op_type = val
+        self._op_type = val
 
     @property
     def domain(self):
         """Return Op type."""
-        return self._op.domain
+        return self._domain
 
     @domain.setter
     def domain(self, val):
         """Set Op type."""
-        self._op.domain = val
+        self._domain = val
 
     @property
     def data_format(self):
@@ -147,10 +147,17 @@ class Node(object):
         return self.type in ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
 
     def __str__(self):
-        return str(self._op)
+        to_str = []
+        to_str.append("input: {}".format(self.input))
+        to_str.append("output: {}".format(self.output))
+        to_str.append("name: {}".format(self.name))
+        to_str.append("doc_string: {}".format(self._doc_string))
+        to_str.append("domain: {}".format(self.domain))
+        to_str.append("attribute: {}".format(self.attr))
+        return os.linesep.join(to_str)
 
     def __repr__(self):
-        return "<onnx op type='%s' name=%s>" % (self.type, self._op.name)
+        return "<onnx op type='%s' name=%s>" % (self.type, self.name)
 
     @property
     def summary(self):
@@ -172,7 +179,7 @@ class Node(object):
                 lines.append("Outpus:")
                 lines.append("\t{}={}, {}".format(name, g.get_shape(name), g.get_dtype(name)))
 
-        return '\n'.join(lines)
+        return os.linesep.join(lines)
 
     def get_attr(self, name, default=None):
         """Get raw attribute value."""
@@ -204,10 +211,10 @@ class Node(object):
         return attr_str.decode(encoding)
 
     def set_attr(self, name, value):
-        self.attr[name] = helper.make_attribute(name, value)
-
-    def set_attr_onnx(self, value):
-        self.attr[value.name] = value
+        if isinstance(value, AttributeProto):
+            self.attr[name] = value
+        else:
+            self.attr[name] = helper.make_attribute(name, value)
 
     @property
     def skip_conversion(self):
@@ -299,30 +306,19 @@ class Node(object):
         self.graph.contained_graphs[self.name].update({attr_name: graph})
         graph.parent_graph = self.graph
 
-    def update_proto(self):
-        """Update protobuf from internal structure."""
-        nodes = [n for n in self._op.input]
-        for node in nodes:
-            self._op.input.remove(node)
-        self._op.input.extend(self.input)
-        nodes = [n for n in self._op.output]
-        for node in nodes:
-            self._op.output.remove(node)
-        self._op.output.extend(self.output)
-
-        # update attributes to proto
-        del self._op.attribute[:]
-
-        # check attribute of type GraphProto
+    def make_onnx_op(self):
+        """Create onnx op."""
         attr_graphs = self.get_body_graphs()
         if attr_graphs:
             for attr_name, sub_graph in attr_graphs.items():
                 graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name)
                 self.set_attr(attr_name, graph_proto)
 
-        attr = [a for a in self.attr_onnx.values()]
-        if attr:
-            self._op.attribute.extend(attr)
+        onnx_op = helper.make_node(self.type, self.input, self.output, name=self.name, domain=self.domain,
+                                   doc_string=self._doc_string)
+
+        onnx_op.attribute.extend(self.attr_onnx.values())
+        return onnx_op
 
     def get_implicit_inputs(self, recursive=True):
         """Get implicit inputs if the node has attributes being GraphProto."""
@@ -357,41 +353,32 @@ class Node(object):
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
 
-    def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=None, extra_opset=None,
-                 output_names=None):
-        """Create Graph.
-        Args:
-            nodes: list of Node()
-            output_shapes: dict of tensorflow output shapes
-            dtypes: dict of tensorflow dtype
-        """
-        if target is None:
-            target = []
+    def __init__(self, target=None, opset=None, extra_opset=None):
+        """Create Graph."""
         self._nodes = []
         self._nodes_by_name = {}
         self._output_to_node_name = {}
-        self.shapes = {}
+        self._output_shapes = {}
+        self._output_dtypes = {}
 
+        self._order_sensitive_inputs = []
+        self.outputs = []
+
+        self.parent_graph = None
+        self.contained_graphs = {}  # {node_name: {node_attribute_name: Graph}}
+
+        if target is None:
+            target = []
         self._target = set(target)
-        self._dtypes = dtypes
 
-        self._output_shapes = output_shapes
         self._opset = find_opset(opset)
 
         if extra_opset is not None:
             utils.make_sure(isinstance(extra_opset, list), "invalid extra_opset")
         self._extra_opset = extra_opset
 
-        self._order_sensitive_inputs = []
-        self.outputs = output_names if output_names is not None else []
-
-        self.parent_graph = None
-        self.contained_graphs = {}  # {node_name: {node_attribute_name: Graph}}
-
-        ops = [Node(node, self) for node in nodes]
-        self.reset_nodes(ops)
-
-        # add identity node after each output, in case it is renamed during conversion.
+    def decorate_outputs(self):
+        """Add identity node after each output, in case it is renamed during conversion."""
         for o in self.outputs:
             n = self.get_node_by_output_in_current_graph(o)
             new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
@@ -418,8 +405,7 @@ class Graph(object):
 
     def create_new_graph_with_same_config(self):
         """Create a clean graph inheriting current graph's configuration."""
-        return Graph([], output_shapes={}, dtypes={}, target=self._target, opset=self._opset,
-                     extra_opset=self.extra_opset, output_names=[])
+        return Graph(target=self._target, opset=self.opset, extra_opset=self.extra_opset)
 
     @property
     def opset(self):
@@ -446,11 +432,10 @@ class Graph(object):
         else:
             onnx_tensor = helper.make_tensor(name, utils.map_numpy_to_onnx_dtype(np_val.dtype),
                                              np_val.shape, np_val, raw=False)
-        dtype = onnx_tensor.data_type
         node = self.make_node("Const", [], outputs=[name], name=name, attr={"value": onnx_tensor},
-                              skip_conversion=skip_conversion, dtypes=[dtype], infer_shape_dtype=False)
-        self.set_shape(name, np_val.shape)
-        self.set_dtype(name, utils.map_numpy_to_onnx_dtype(np_val.dtype))
+                              skip_conversion=skip_conversion, infer_shape_dtype=False)
+        self.set_shape(node.output[0], list(np_val.shape))
+        self.set_dtype(node.output[0], utils.map_numpy_to_onnx_dtype(np_val.dtype))
         return node
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
@@ -476,13 +461,6 @@ class Graph(object):
             outputs = [name + ":" + str(i) for i in range(output_count)]
 
         output_count = len(outputs)
-        raw_attr = {}
-        onnx_attrs = []
-        for a, v in attr.items():
-            if isinstance(v, AttributeProto):
-                onnx_attrs.append(v)
-            else:
-                raw_attr[a] = v
 
         n = self.get_node_by_name(name)
         utils.make_sure(n is None, "name %s already exists in node: \n%s", name, n)
@@ -490,15 +468,12 @@ class Graph(object):
             n = self.get_node_by_output_in_current_graph(o)
             utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
 
-        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
-
         if op_type in ["If", "Loop", "Scan"]:
             # we force the op containing inner graphs not skipped during conversion.
             skip_conversion = False
 
-        node = Node(onnx_node, self, skip_conversion=skip_conversion)
-        if onnx_attrs:
-            _ = [node.set_attr_onnx(a) for a in onnx_attrs]
+        node = Node(self, op_type, inputs, outputs, name=name, domain=domain,
+                    skip_conversion=skip_conversion, **attr)
 
         if shapes:
             utils.make_sure(len(shapes) == output_count,
@@ -535,8 +510,8 @@ class Graph(object):
 
             if op_output in self._output_shapes:
                 del self._output_shapes[op_output]
-            if op_output in self._dtypes:
-                del self._dtypes[op_output]
+            if op_output in self._output_dtypes:
+                del self._output_dtypes[op_output]
 
         self._nodes.remove(node)
         node.graph = None
@@ -549,8 +524,8 @@ class Graph(object):
         for op in ops:
             for op_output in op.output:
                 # this check should be removed once we make sure all output tensors have dtype/shape.
-                if op_output in self._dtypes:
-                    remained_dtypes[op_output] = self._dtypes[op_output]
+                if op_output in self._output_dtypes:
+                    remained_dtypes[op_output] = self._output_dtypes[op_output]
                 if op_output in self._output_shapes:
                     remained_shapes[op_output] = self._output_shapes[op_output]
 
@@ -572,7 +547,7 @@ class Graph(object):
             if o not in self._output_to_node_name:
                 raise ValueError("graph output " + o + " not exist")
 
-        self._dtypes = remained_dtypes
+        self._output_dtypes = remained_dtypes
         self._output_shapes = remained_shapes
 
     def is_empty_input(self, name):
@@ -653,11 +628,6 @@ class Graph(object):
                 self.set_shape(output, shape)
                 logger.debug("Set shape of [%s] to %s", output, shape)
 
-    def update_proto(self):
-        """Update the onnx protobuf from out internal Node structure."""
-        for node in self._nodes:
-            node.update_proto()
-
     def get_nodes(self):
         """Get node list."""
         return self._nodes
@@ -733,12 +703,12 @@ class Graph(object):
     def get_dtype(self, name):
         """Get dtype for node."""
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
-        return node.graph._dtypes.get(name) if node else None
+        return node.graph._output_dtypes.get(name) if node else None
 
     def set_dtype(self, name, dtype):
         """Set dtype for node."""
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
-        node.graph._dtypes[name] = dtype
+        node.graph._output_dtypes[name] = dtype
 
     def copy_dtype(self, src_name, dst_name):
         """Copy dtype from another node."""
@@ -847,7 +817,6 @@ class Graph(object):
         """
         self.delete_unused_nodes(self.outputs)
         self.topological_sort(self.get_nodes())
-        self.update_proto()
 
         # TODO: we'd want to do something like this so that transpose optimizer is active
         # for  all (unit) tests
@@ -897,7 +866,6 @@ class Graph(object):
                 ops.remove(op)
             else:
                 op.type = "Constant"
-                op.update_proto()
 
         # create input_tensor_values
         input_ids = [op.output[0] for op in placeholder_ops]
@@ -914,7 +882,7 @@ class Graph(object):
         output_tensor_values = self.make_onnx_graph_io(self.outputs)
 
         # create graph proto
-        graph = helper.make_graph([op.op for op in ops],
+        graph = helper.make_graph([op.make_onnx_op() for op in ops],
                                   graph_name,
                                   input_tensor_values,
                                   output_tensor_values,
@@ -1294,11 +1262,20 @@ class GraphUtil(object):
                 n.name = utils.make_name("was_empty")
             nodes_to_append.append(n)
 
-        output_names = []
-        for n in graph_proto.output:
-            output_names.append(n.name)
+        g = Graph(None, opset_version, extra_opset)
+        for n in nodes_to_append:
+            shapes = [output_shapes.get(out) for out in n.output]
+            dtypes = [output_dtypes.get(out) for out in n.output]
+            attr = {}
+            for a in n.attribute:
+                attr[a.name] = a
+            g.make_node(n.op_type, list(n.input), attr=attr, outputs=list(n.output), name=n.name,
+                        domain=n.domain, shapes=shapes, dtypes=dtypes, skip_conversion=False)
 
-        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, extra_opset, output_names)
+        for n in graph_proto.output:
+            g.add_graph_output(n.name)
+        g.decorate_outputs()
+
         const_nodes = GraphUtil._parse_graph_initializer(g, graph_proto)
         GraphUtil._parse_graph_input(g, graph_proto, [n.name for n in const_nodes])
 

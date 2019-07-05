@@ -558,7 +558,11 @@ class TransposeOptimizer(GraphOptimizerBase):
                     axes = axes_node.get_tensor_value(as_list=True)
 
         if axes == [0, 1, 2, 3]:
-            node.set_attr("axes", NCHW_TO_NHWC)
+            if self._g.opset < 10:
+                node.set_attr("axes", NCHW_TO_NHWC)
+            else:
+                assert(axes_node and axes_node.is_const())
+                axes_node.set_tensor_value(np.array(NCHW_TO_NHWC, dtype=np.int64))
             return self._switch_transpose_and_node(node, trans)
         return False
 

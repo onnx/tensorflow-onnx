@@ -311,8 +311,8 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
     for i in all_outputs:
         if i not in g._output_shapes:
             g._output_shapes[i] = parent_g._output_shapes[i]
-        if i not in g._dtypes:
-            g._dtypes[i] = parent_g._dtypes[i]
+        if i not in g._output_dtypes:
+            g._output_dtypes[i] = parent_g._output_dtypes[i]
 
     # handle cell graph: insert identity node, since sometimes we need output same output_id
     # as state_output and scan_out, but ONNX don't allow the same output_id to appear more
