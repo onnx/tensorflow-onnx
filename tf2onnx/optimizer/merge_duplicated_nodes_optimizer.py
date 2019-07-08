@@ -71,6 +71,10 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
             nodes_group = unprocessed_node
 
     def _have_equal_attr(self, node_1, node_2, graph):
+        # node with body graph cannot be compared and merged.
+        if node_1.get_body_graphs() or node_2.get_body_graphs():
+            return False
+
         is_equal = True
         # compare onnx attributes is enough
         for k, a in node_1.attr_onnx.items():
@@ -79,6 +83,7 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
             if a != attr_2:
                 is_equal = False
                 break
+
         # TensorProtos' name might be different, leading to a != attr_2
         if node_1.is_const() and node_2.is_const():
             # get_tensor_value is costly so that we check their shape first
