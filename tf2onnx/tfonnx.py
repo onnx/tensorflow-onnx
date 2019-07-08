@@ -72,11 +72,6 @@ def tflist_to_onnx(node_list, graph, shape_override):
             attr_cnt[a] += 1
             if a == "dtype":
                 attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "dtype"))
-            # elif a == "T":
-            #     dtype = utils.get_tf_node_attr(node, "T")
-            #     if dtype and not isinstance(dtype, list):
-            #         for i, _ in enumerate(node.outputs):
-            #             output_dtypes[i] = utils.map_tf_dtype(dtype)
             elif a in ["output_type", "output_dtype", "out_type", "Tidx", "out_idx"]:
                 # Tidx is used by Range
                 # out_idx is used by ListDiff

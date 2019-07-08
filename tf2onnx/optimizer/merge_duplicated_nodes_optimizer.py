@@ -66,25 +66,30 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
                 else:
                     unprocessed_node.append(node)
 
-            self._merge_nodes_that_are_duplicated(nodes_to_process, graph)
+            if len(nodes_to_process) > 1:
+                self._merge_nodes_that_are_duplicated(nodes_to_process, graph)
             nodes_group = unprocessed_node
 
     def _have_equal_attr(self, node_1, node_2, graph):
-        if node_1.attr == node_2.attr:
-            return True
+        is_equal = True
+        # compare onnx attributes is enough
+        for k, a in node_1.attr_onnx.items():
+            attr_2 = node_2.get_attr(k)
+            # TODO: None attribute means default value, also need to compare it with a.
+            if a != attr_2:
+                is_equal = False
+                break
+        # TensorProtos' name might be different, leading to a != attr_2
         if node_1.is_const() and node_2.is_const():
             # get_tensor_value is costly so that we check their shape first
             shape_1 = graph.get_shape(node_1.output[0])
             shape_2 = graph.get_shape(node_2.output[0])
-            if shape_1 is not None and shape_2 is not None and \
-                    shape_1 != shape_2:
-                return False
-            const_1 = node_1.get_tensor_value(as_list=False)
-            const_2 = node_2.get_tensor_value(as_list=False)
-            if const_1.dtype == const_2.dtype and \
-                    np.array_equal(const_1, const_2):
-                return True
-        return False
+            if shape_1 is None or shape_2 is None or shape_1 == shape_2:
+                const_1 = node_1.get_tensor_value(as_list=False)
+                const_2 = node_2.get_tensor_value(as_list=False)
+                if const_1.dtype == const_2.dtype and np.array_equal(const_1, const_2):
+                    is_equal = True
+        return is_equal
 
     def _merge_nodes_that_are_duplicated(self, nodes_to_process, graph):
         # node's output may not all be used, so have to select the one that uses most of node's outputs
