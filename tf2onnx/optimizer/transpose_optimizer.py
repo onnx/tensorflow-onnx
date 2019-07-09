@@ -500,9 +500,6 @@ class TransposeOptimizer(GraphOptimizerBase):
             return False
 
         if node.get_attr("axes"):
-            squeeze_axes = sorted(list(node.get_attr("axes").ints))
-            trans_perm = list(trans.get_attr("perm").ints)
-            squeeze_shape = self._g.get_shape(node.output[0])
             # switch tran and squeeze
             # 1 switch
             ops = self._g.get_nodes()
@@ -510,13 +507,20 @@ class TransposeOptimizer(GraphOptimizerBase):
             node.input[0] = trans.input[0]
             trans.input[0] = node.output[0]
             # 2 correct attr of nodes
+            squeeze_axes = sorted(list(node.get_attr("axes").ints))
+            trans_perm = list(trans.get_attr("perm").ints)
             new_perm, new_squeeze_axes = _calculate_new_attr(ori_perm=trans_perm, ori_squeeze_axes=squeeze_axes)
             trans.set_attr("perm", new_perm)
             node.set_attr("axes", new_squeeze_axes)
             # 3 set shape
+            squeeze_shape = self._g.get_shape(node.output[0])
             self._g.set_shape(trans.output[0], squeeze_shape)
             input_shape = self._g.get_shape(node.input[0])
-            new_squeeze_output_shape = [input_shape[i] for i in range(4) if i not in new_squeeze_axes]
+            if input_shape is not None:
+                new_squeeze_output_shape = [input_shape[i] for i in range(4) if i not in new_squeeze_axes]
+            else:
+                new_squeeze_output_shape = [-1]*4
+                self.logger.warning("%s's shape is unknown, which may interfere further optimization", node.input[0])
             self._g.set_shape(node.output[0], new_squeeze_output_shape)
             return True
         return False
