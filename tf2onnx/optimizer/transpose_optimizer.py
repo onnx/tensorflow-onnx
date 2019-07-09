@@ -520,7 +520,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 new_squeeze_output_shape = [input_shape[i] for i in range(4) if i not in new_squeeze_axes]
             else:
                 new_squeeze_output_shape = [-1]*4
-                self.logger.warning("%s'sshape is unknown, which may interfere further optimization", node.input[0])
+                self.logger.warning("%s's shape is unknown, which may interfere further optimization", node.input[0])
             self._g.set_shape(node.output[0], new_squeeze_output_shape)
             return True
         return False
