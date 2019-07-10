@@ -550,26 +550,26 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _slice_handler(self, trans, node):
         axes = None
         if self._g.opset < 10:
-            axes = node.get_attr("axes").ints
-        else:  # in opset 10, axes is input instead of an attribute.
-            if len(node.inputs) >= 4:
-                axes_node = node.inputs[3]
-                if axes_node.is_const():
-                    axes = axes_node.get_tensor_value(as_list=True)
-
-        if axes == [0, 1, 2, 3]:
-            if self._g.opset < 10:
+            axes = node.get_attr_value("axes")
+            if axes == [0, 1, 2, 3]:
                 node.set_attr("axes", NCHW_TO_NHWC)
-            else:
-                assert(axes_node and axes_node.is_const())
-                np_axes = np.array(NCHW_TO_NHWC, dtype=np.int64)
-                if self._nodes_has_single_consumer_node([axes_node]):
-                    axes_node.set_tensor_value(np.array(np_axes))
-                else:
-                    # create a new axes const node
-                    new_axes_node = self._g.make_const(utils.make_name(axes_node.name), np_axes)
-                    self._g.replace_all_inputs(self._g.get_nodes(), axes_node.output[0], new_axes_node.output[0])
-            return self._switch_transpose_and_node(node, trans)
+                return self._switch_transpose_and_node(node, trans)
+
+        # opset >= 10, axes is a input
+        if len(node.inputs) >= 4:
+            axes_node = node.inputs[3]
+            if axes_node.is_const():
+                axes = axes_node.get_tensor_value(as_list=True)
+                if axes == [0, 1, 2, 3]:
+                    np_axes = np.array(NCHW_TO_NHWC, dtype=np.int64)
+                    if self._nodes_has_single_consumer_node([axes_node]):
+                        axes_node.set_tensor_value(np_axes)
+                    else:
+                        # create a new axes const node
+                        new_axes_node = self._g.make_const(utils.make_name(axes_node.name), np_axes)
+                        self._g.replace_all_inputs(self._g.get_nodes(), axes_node.output[0], new_axes_node.output[0])
+                    return self._switch_transpose_and_node(node, trans)
+
         return False
 
     def _simple_through_handler(self, trans, node):
