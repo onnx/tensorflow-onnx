@@ -197,7 +197,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             return False
         # make sure node's all input transpose all have only 1 consumer node,
         # otherwise, it would impact their other output nodes
-        if self._nodes_has_single_consumer_node(node.inputs):
+        if self._nodes_has_single_consumer_node(node.inputs) and len(node.output) == 1:
             self._create_transpose_pairs_after_node(node)
             input_transposes = set(node.inputs)
             for n in input_transposes:
