@@ -383,16 +383,18 @@ class TransposeOptimizer(GraphOptimizerBase):
                 numpy_val = target_node.get_tensor_value(as_list=False)
                 # Optional 1D bias to be added to the convolution, has size of M
                 if len(numpy_val.shape) - numpy_val.shape.count(1) > 1:
+                    self.logger.debug("Bias is not 1D, can not merge Conv and Add")
                     return self._handle_node_having_branches(node)
 
-                rank = len(numpy_val.shape)
-                utils.make_sure(rank in (1, 4), "only support bias rank = 4 or 1")
-                # to make rank = 4
-                if rank == 1:
-                    numpy_val = numpy_val.reshape((1, 1, 1, numpy_val.shape[0]))
+                bias_size = max(numpy_val.shape)
+                M = t_p.inputs[1].output_shapes[0]
+                if bias_size != M:
+                    self.logger.debug("Bias size is not M, can not merge Conv and Add")
+                    return self._handle_node_having_branches(node)
 
-                transposed_val = np.transpose(numpy_val, (0, 3, 1, 2))
-                target_node.set_tensor_value(transposed_val)
+                numpy_val = target_node.get_tensor_value(as_list=False)
+                target_val = numpy_val.reshape(bias_size)
+                target_node.set_tensor_value(target_val)
 
                 conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
                 conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.attr_onnx)
