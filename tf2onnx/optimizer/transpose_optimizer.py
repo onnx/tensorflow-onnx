@@ -387,12 +387,11 @@ class TransposeOptimizer(GraphOptimizerBase):
                     return self._handle_node_having_branches(node)
 
                 bias_size = max(numpy_val.shape)
-                M = t_p.inputs[1].output_shapes[0]
+                M = t_p.inputs[1].output_shapes[0][0]
                 if bias_size != M:
                     self.logger.debug("Bias size is not M, can not merge Conv and Add")
                     return self._handle_node_having_branches(node)
 
-                numpy_val = target_node.get_tensor_value(as_list=False)
                 target_val = numpy_val.reshape(bias_size)
                 target_node.set_tensor_value(target_val)
 
