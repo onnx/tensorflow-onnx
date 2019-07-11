@@ -290,10 +290,11 @@ style-transfer:
     - output:0
 
 ssd_mobilenet_v1_coco:
-  # issues with control flow
-  disabled: true
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_17.tar.gz
   model: ssd_mobilenet_v1_coco_2017_11_17/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
   input_get: get_beach
   inputs:
     "image_tensor:0": [1, 224, 224, 3]
