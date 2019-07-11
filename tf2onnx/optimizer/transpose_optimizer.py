@@ -385,7 +385,6 @@ class TransposeOptimizer(GraphOptimizerBase):
                 if len(numpy_val.shape) - numpy_val.shape.count(1) > 1:
                     self.logger.debug("Bias is not 1D, can not merge Conv and Add")
                     return self._handle_node_having_branches(node)
-
                 bias_size = max(numpy_val.shape)
                 M = t_p.inputs[1].output_shapes[0][0]
                 if bias_size != M:
