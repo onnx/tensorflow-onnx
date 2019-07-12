@@ -343,7 +343,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
 
     # body graph creation
     g = ctx.create_new_graph_with_same_config()
-    g.add_graph_input(trip_name, TensorProto.INT64, [])
+    g.add_graph_input(trip_name, TensorProto.INT64, [1])
     g.add_graph_input(cond_name, TensorProto.BOOL, [])
     g.add_graph_input(cur_name, dtype, [])
     g.parent_graph = ctx
@@ -397,7 +397,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     dummy_out_name = utils.make_name("dummy_out")
     result_name = utils.make_name("res")
 
-    g.add_graph_input(trip_name, TensorProto.INT64, [])
+    g.add_graph_input(trip_name, TensorProto.INT64, [1])
     g.add_graph_input(cond_name, TensorProto.BOOL, [])
     g.add_graph_input(dummy_name, t_params, [])
     g.parent_graph = ctx

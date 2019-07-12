@@ -55,7 +55,11 @@ jobs:
                           ${{ if eq(onnx_backend_version, '') }}:
                             CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
                           ${{ if ne(onnx_backend_version, '') }}:
-                            CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                            ${{ if ne(onnx_backend_version, 'nightly') }}:
+                              CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                            ${{ if eq(onnx_backend_version, 'nightly') }}:
+                              CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                              CI_ONNXRUNTIME_NIGHTLY: 'true'
 
                       ${{ if eq(onnx_opset, '') }}:
                         ${{ format('{0} python{1} tf{2} onnx{3} {4}{5}', platform, python_version, tf_version, onnx_version, onnx_backend.key, onnx_backend_version) }}:
@@ -85,7 +89,11 @@ jobs:
                           ${{ if eq(onnx_backend_version, '') }}:
                             CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
                           ${{ if ne(onnx_backend_version, '') }}:
-                            CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                            ${{ if ne(onnx_backend_version, 'nightly') }}:
+                              CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                            ${{ if eq(onnx_backend_version, 'nightly') }}:
+                              CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                              CI_ONNXRUNTIME_NIGHTLY: 'true'
 
     # Insert all properties other than pool/steps/strategy
     ${{ each pair in parameters.job }}:
