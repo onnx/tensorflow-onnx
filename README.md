@@ -74,7 +74,7 @@ python setup.py bdist_wheel
 
 # Usage
 
-You find a end to end tutorial for ssd-mobilenet [here](tutuaials/ConvertingSSDMobilenetToONNX.ipynb).
+You find a end to end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSDMobilenetToONNX.ipynb).
 
 To convert a TensorFlow model, tf2onnx supports ```saved_model```, ```checkpoint``` or ```frozen graph``` formats. We recommend the ```saved_model``` format. If ```checkpoint``` or ```frozen graph``` formats are used, the user needs to specify inputs and outputs for the graph by passing the input and output
 names with ```--inputs INPUTS``` and ```--outputs OUTPUTS```.
