@@ -17,7 +17,7 @@ import numpy as np
 
 from onnx import helper, numpy_helper, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
 from tf2onnx import utils, __version__
-from tf2onnx.utils import port_name, find_opset
+from tf2onnx.utils import make_name, port_name, find_opset
 from tf2onnx import optimizer
 from tf2onnx.schemas import get_schema, infer_onnx_shape_dtype
 from tf2onnx import constants
@@ -141,10 +141,15 @@ class Node(object):
 
     def is_const(self):
         """Return True if node is a constant."""
-        return self.type in ["Const", "ConstV2", "Constant"]
+        return self.type in ["Const", "ConstV2"]
 
     def is_graph_input(self):
         return self.type in ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
+
+    def is_graph_input_default_const(self):
+        return self.is_const() and any(
+            out.is_graph_input() for out in self.graph.find_output_consumers(self.output[0])
+        )
 
     def __str__(self):
         return str(self._op)
@@ -711,6 +716,20 @@ class Graph(object):
         new_node = self.make_node("Placeholder", [], outputs=[name], dtypes=[dtype], shapes=[shape])
         self._order_sensitive_inputs.append(new_node)
 
+    def add_graph_input_with_default(self, name, default_const, dtype=None, shape=None):
+        """Add placeholderwithdefault."""
+        if dtype is None:
+            dtype = self.get_dtype(name)
+
+        if shape is None:
+            shape = self.get_shape(name)
+
+        default_const_name = port_name(make_name("{}_default".format(name)))
+        default_const.output = [default_const_name]
+        new_node = self.make_node("PlaceholderWithDefault", [default_const_name], outputs=[name],
+                                  dtypes=[dtype], shapes=[shape])
+        self._order_sensitive_inputs.append(new_node)
+
     def add_graph_output(self, name, dtype=None, shape=None):
         """Add node output as graph's output."""
         utils.make_sure(name in self._output_to_node_name, "output %s not exist in the graph", name)
@@ -765,6 +784,8 @@ class Graph(object):
         """Set new shape of node."""
         if isinstance(val, np.ndarray):
             val = val.tolist()
+        if isinstance(val, tuple):
+            val = list(val)
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
         utils.make_sure(node is not None, "cannot find node by output id %s", name)
         node.graph._output_shapes[name] = val
@@ -862,6 +883,7 @@ class Graph(object):
         for op in self.get_nodes():
             if op.is_const():
                 const_ops.append(op)
+                continue
             elif op.is_graph_input():
                 if op not in self._order_sensitive_inputs:
                     order_non_sensitive_placeholders.append(op)
@@ -871,6 +893,7 @@ class Graph(object):
 
         # create initializers for placeholder with default nodes
         initializers = []
+        placeholder_default_const_ops = []
         for op in placeholder_ops:
             if op.type == "PlaceholderWithDefault":
                 utils.make_sure(op.inputs[0] is not None, "Cannot find node with output {}".format(op.input[0]))
@@ -880,24 +903,18 @@ class Graph(object):
                 value = op.inputs[0].get_tensor_value(as_list=False)
                 tensor = numpy_helper.from_array(value, op.output[0])
                 initializers.append(tensor)
-                const_ops.remove(op.inputs[0])
-                ops.remove(op.inputs[0])
+                placeholder_default_const_ops.append(op.inputs[0])
 
         # create initializers for constant nodes
+        const_ops = [op for op in const_ops if op not in placeholder_default_const_ops]
         for op in const_ops:
-            # Constant support more dtypes after opset 9
-            if self.opset < 9:
-                # not to use numpy_helper.from_array to create a new tensor
-                # because sometimes onnx will have a bug that only check the tensor data in specific field
-                # such as at upsample it only checks the float_data field.
-                t = op.get_attr("value")
-                tensor = helper.get_attribute_value(t)
-                tensor.name = op.output[0]
-                initializers.append(tensor)
-                ops.remove(op)
-            else:
-                op.type = "Constant"
-                op.update_proto()
+            # not to use numpy_helper.from_array to create a new tensor
+            # because sometimes onnx will have a bug that only check the tensor data in specific field
+            # such as at upsample it only checks the float_data field.
+            t = op.get_attr("value")
+            tensor = helper.get_attribute_value(t)
+            tensor.name = op.output[0]
+            initializers.append(tensor)
 
         # create input_tensor_values
         input_ids = [op.output[0] for op in placeholder_ops]
@@ -1362,3 +1379,5 @@ class GraphUtil(object):
             dtype = dtypes[name]
             if name not in const_node_names:
                 g.add_graph_input(name, dtype, shape)
+            else:
+                g.add_graph_input_with_default(name, g.get_node_by_name(name), dtype, shape)

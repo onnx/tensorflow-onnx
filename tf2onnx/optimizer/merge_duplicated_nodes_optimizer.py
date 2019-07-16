@@ -51,6 +51,9 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     def _group_nodes_by_type_inputs(graph):
         res = defaultdict(list)
         for node in graph.get_nodes():
+            # default const of graph input cannot be merged
+            if node.is_graph_input_default_const():
+                continue
             res[_KeyToGroupNodes(node.type, tuple(node.input))].append(node)
         return res
 
@@ -72,6 +75,7 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     def _have_equal_attr(self, node_1, node_2, graph):
         if node_1.attr == node_2.attr:
             return True
+        # above check guarantees consts here are able to be merged
         if node_1.is_const() and node_2.is_const():
             # get_tensor_value is costly so that we check their shape first
             shape_1 = graph.get_shape(node_1.output[0])
