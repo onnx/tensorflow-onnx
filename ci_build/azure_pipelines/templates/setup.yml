@@ -15,6 +15,7 @@ steps:
 
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
     then
+      pip uninstall -y onnxruntime
       pip install --index-url https://test.pypi.org/simple/ ort-nightly --force-reinstall
     fi
 
