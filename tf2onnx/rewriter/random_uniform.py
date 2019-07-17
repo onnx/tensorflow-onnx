@@ -33,8 +33,7 @@ def rewrite_random_uniform(g, ops):
         to_delete = list(set(match.get_nodes()))
         new_node = create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output, to_delete)
         g.replace_all_inputs(ops, output.output[0], new_node.output[0])
-        for n in to_delete:
-            g.remove_node(n.name)
+        g.safe_remove_nodes(to_delete)
 
     return ops
 
@@ -63,8 +62,7 @@ def rewrite_random_uniform_fold_const(g, ops):
         to_delete = list(set(match.get_nodes()))
         new_node = create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output, to_delete)
         g.replace_all_inputs(ops, output.output[0], new_node.output[0])
-        for n in to_delete:
-            g.remove_node(n.name)
+        g.safe_remove_nodes(to_delete)
 
     return ops
 

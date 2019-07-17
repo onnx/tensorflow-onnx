@@ -23,7 +23,6 @@ import tf2onnx
 import tf2onnx.onnx_opset  # pylint: disable=unused-import
 import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.utils import port_name
@@ -121,185 +120,6 @@ def tensorflow_to_onnx(graph, shape_override):
     Load tensorflow graph and do a conversion.
     """
     return tflist_to_onnx(graph.get_operations(), shape_override)
-
-
-def rewrite_transpose(g, ops):
-    pattern = \
-        OpTypePattern('Transpose', name='output', inputs=[
-            OpTypePattern(None),
-            OpTypePattern('Sub', inputs=[
-                OpTypePattern('Sub', inputs=["*", "*"]),
-                OpTypePattern('Range', inputs=["*", "*", "*"]),
-            ]),
-        ])
-
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        output = match.get_op('output')
-        shape = g.get_shape(output.input[0])
-        dims = [i for i in range(len(shape) - 1, -1, -1)]
-        output.set_attr("perm", dims)
-        g.remove_input(output, output.input[1])
-        for n in set(match.get_nodes()):
-            if n != output:
-                g.remove_node(n.name)
-    return ops
-
-
-def rewrite_random_normal(g, ops):
-    pattern = \
-        OpTypePattern('Add', name='output', inputs=[
-            OpTypePattern('Mul', name='input2', inputs=[
-                OpTypePattern('RandomStandardNormal', name='input1', inputs=["*"]), "*"
-            ]), "*"
-        ])
-
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        output = match.get_op('output')
-        mean = output.inputs[1].get_tensor_value()
-        dtype = g.get_dtype(output.output[0])
-        op_name = utils.make_name("RandomNormal")
-        out_name = port_name(op_name)
-
-        rn_op = match.get_op('input1')
-        if rn_op.inputs[0].type == "Shape":
-            shape_node = rn_op.inputs[0]
-            new_node = g.make_node("RandomNormalLike", [shape_node.input[0]], outputs=[out_name], name=op_name,
-                                   attr={"mean": mean, "scale": 1.0, "dtype": dtype})
-        else:
-            shape = g.get_shape(output.output[0])
-            new_node = g.make_node("RandomNormal", [], outputs=[out_name], name=op_name,
-                                   attr={"shape": shape, "mean": mean, "scale": 1.0, "dtype": dtype})
-
-        g.replace_all_inputs(ops, output.output[0], new_node.output[0])
-        for n in set(match.get_nodes()):
-            g.remove_node(n.name)
-    return ops
-
-
-def rewrite_dropout(g, ops):
-    pattern = \
-        OpTypePattern('Mul', name='outputs', inputs=[
-            OpTypePattern('RealDiv', name="input2"),
-            OpTypePattern('Floor', inputs=[
-                OpTypePattern('Add', inputs=[
-                    OpTypePattern(None, name="input3"),
-                    OpTypePattern('RandomUniform|RandomUniformLike'),
-                ])
-            ]),
-        ])
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        inputs2 = match.get_op('input2')
-        outputs = match.get_op('outputs')
-        op_name = utils.make_name("Dropout")
-        out_name = port_name(op_name)
-        new_node = g.make_node(
-            "Dropout",
-            [inputs2.input[0]],
-            outputs=[out_name],
-            name=op_name,
-            attr={"ratio": 1.0},
-            shapes=[g.get_shape(inputs2.input[0])],
-            dtypes=[g.get_dtype(inputs2.input[0])]
-        )
-        g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
-        for n in set(match.get_nodes()):
-            g.remove_node(n.name)
-
-    # remove dropout if its ratio is 1.0
-    for node in g.get_nodes():
-        if node.type == "Dropout" and node.get_attr("ratio").f == 1.0:
-            g.replace_all_inputs(g.get_nodes(), node.output[0], node.input[0])
-            g.remove_node(node.name)
-
-    return ops
-
-
-def rewrite_flatten(g, ops):
-    pattern_fixed_shape_input = \
-        OpTypePattern('Reshape', name='reshape', inputs=[
-            OpTypePattern("*", name="input"),
-            OpTypePattern('Pack', name="pack", inputs=[
-                OpTypePattern('StridedSlice', name="slice", inputs=[
-                    "*", "*", "*", "*",
-                ]),
-                "*",
-            ]),
-        ])
-    pattern_non_fixed_shape_input = \
-        OpTypePattern('Reshape', name='reshape', inputs=[
-            OpTypePattern("*", name="input"),
-            OpTypePattern('Pack', name="pack", inputs=[
-                OpTypePattern('StridedSlice', name="slice", inputs=[
-                    OpTypePattern('Shape', inputs=[
-                        OpTypePattern("*", name="input2")
-                    ]),
-                    "*", "*", "*",
-                ]),
-                "*",
-            ]),
-        ])
-    matcher = GraphMatcher(pattern_fixed_shape_input)
-    match_results_1 = list(matcher.match_ops(ops))
-
-    matcher = GraphMatcher(pattern_non_fixed_shape_input)
-    match_results_2 = list(matcher.match_ops(ops))
-
-    match_results = [(match_results_1, True), (match_results_2, False)]
-    for match_results, check_fixed_input_shape in match_results:
-        for match in match_results:
-            input_node = match.get_op('input')
-            reshape_node = match.get_op('reshape')
-            pack_node = match.get_op('pack')
-            slice_node = match.get_op('slice')
-            need_rewrite = pack_node.inputs[1].is_const() and pack_node.inputs[1].get_tensor_value() == -1
-            if not need_rewrite:
-                continue
-
-            input_shape = g.get_shape(reshape_node.input[0])
-            need_rewrite = input_shape is not None
-            if not need_rewrite:
-                continue
-
-            if check_fixed_input_shape:
-                need_rewrite = slice_node.inputs[0].is_const() and \
-                               np.array_equal(list(input_shape), list(slice_node.inputs[0].get_tensor_value()))
-                if not need_rewrite:
-                    continue
-
-            begin = slice_node.inputs[1].get_tensor_value(as_list=False)
-            end = slice_node.inputs[2].get_tensor_value(as_list=False)
-            strides = slice_node.inputs[3].get_tensor_value(as_list=False)
-            need_rewrite = np.array_equal(begin, [0]) and len(end) == 1 and \
-                           np.array_equal(strides, [1]) and end[0] - begin[0] == len(input_shape) - 2
-            if not need_rewrite:
-                continue
-
-            op_name = utils.make_name("Flatten")
-            out_name = port_name(op_name)
-            new_node = g.make_node("Flatten", [reshape_node.input[0]], outputs=[out_name], name=op_name)
-
-            last_dim = input_shape[-1]
-            sec_last_dim = input_shape[-2]
-            new_dim = None
-            if last_dim > 0 and sec_last_dim > 0:
-                new_dim = last_dim * sec_last_dim
-            else:
-                new_dim = -1
-
-            g.set_shape(out_name, input_shape[:-2] + [new_dim])
-            g.replace_all_inputs(ops, reshape_node.output[0], out_name)
-
-            for n in set(match.get_nodes()):
-                if n != input_node:
-                    g.remove_node(n.name)
-
-    return ops
 
 
 def rewrite_constant_fold(g, ops):
@@ -486,53 +306,11 @@ def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, impacted_ops)
 
 
-def rewrite_conv2d_with_pad(g, ops):
-    pattern = \
-        OpTypePattern("Conv2D", name="conv", inputs=[
-            OpTypePattern("Pad", name="pad"),
-            OpTypePattern("*")
-        ])
-    matcher = GraphMatcher(pattern)
-    match_results = list(matcher.match_ops(ops))
-    for match in match_results:
-        conv = match.get_op("conv")
-        pad = match.get_op("pad")
-        paddings = pad.inputs[1]
-
-        if not paddings.is_const():
-            continue
-        mode = pad.get_attr("mode")
-        if mode:
-            mode = mode.s.decode("utf-8").lower()
-        if mode not in [None, "constant"] or len(pad.input) >= 3:
-            continue
-        # Conv2D already has a pad
-        if conv.get_attr("padding") == "SAME":
-            continue
-
-        logger.debug("merge pad [%s] into conv [%s]", pad.name, conv.name)
-        paddings_val = np.array(paddings.get_tensor_value())
-        # can't pad on batch or channel dimensions
-        if np.any(paddings_val[0]) or np.any(paddings_val[3]):
-            continue
-
-        paddings_val = paddings_val[1:3]
-        paddings_val = paddings_val.transpose().flatten()
-        g.replace_input(conv, conv.input[0], pad.input[0])
-        # convert Conv2D
-        conv.type = "Conv"
-        func, info = handler.tf_op.find_effective_op("Conv2D")
-        func(g, conv)
-        conv.skip_conversion = True
-        conv.set_attr("auto_pad", "NOTSET")
-        conv.set_attr("pads", paddings_val)
-    return ops
-
-
-def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
+def tensorflow_onnx_mapping(g, ops_mapping):
     logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
+    exceptions = []
 
     ops = [n for n in g.get_nodes()]
     for node in ops:
@@ -545,40 +323,39 @@ def tensorflow_onnx_mapping(g, continue_on_error, ops_mapping):
         op = node.type
         map_info = ops_mapping.get(op)
         if map_info is None:
-            if continue_on_error:
-                unmapped_op[op] += 1
-                continue
-            else:
-                raise ValueError("tensorflow op " + op + " is not supported")
+            unmapped_op[op] += 1
+            logger.error("Tensorflow op [%s: %s] is not supported", node.name, op)
+            continue
         mapped_op[op] += 1
+
         func, kwargs = map_info
         if kwargs:
             # if there is a onnx_op key we'll map the old type to a new type
             onnx_op = kwargs.get("onnx_op")
             if onnx_op:
                 node.type = onnx_op
-        try:
-            body_graphs = node.get_body_graphs()
-            if body_graphs:
-                for attr, b_g in body_graphs.items():
-                    logger.debug("start handling subgraph of %s's attribute %s", node.name, attr)
-                    b_g.topological_sort(b_g.get_nodes())
-                    # we assume only ONNX nodes have subgraph defined in pre-rewriters.
-                    # that means, if we create node having subgraphs in this step, the
-                    # created subgraphs' nodes won't be mapped.
-                    m_ops, unm_ops = tensorflow_onnx_mapping(b_g, continue_on_error, ops_mapping)
-                    mapped_op += m_ops
-                    unmapped_op += unm_ops
-                    logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
+        body_graphs = node.get_body_graphs()
+        if body_graphs:
+            for attr, b_g in body_graphs.items():
+                logger.debug("start handling subgraph of %s's attribute %s", node.name, attr)
+                b_g.topological_sort(b_g.get_nodes())
+                # we assume only ONNX nodes have subgraph defined in pre-rewriters.
+                # that means, if we create node having subgraphs in this step, the
+                # created subgraphs' nodes won't be mapped.
+                m_ops, unm_ops, body_exceptions = tensorflow_onnx_mapping(b_g, ops_mapping)
+                mapped_op += m_ops
+                unmapped_op += unm_ops
+                exceptions.extend(body_exceptions)
+                logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
 
+        try:
             func(g, node, **kwargs)
             node.skip_conversion = True
         except Exception as ex:
             logger.error("Failed to convert node %s\n%s", node.name, node.summary, exc_info=1)
-            if not continue_on_error:
-                raise ex
+            exceptions.append(ex)
 
-    return mapped_op, unmapped_op
+    return mapped_op, unmapped_op, exceptions
 
 
 def transpose_inputs(ctx, inputs_as_nchw):
@@ -601,7 +378,7 @@ def transpose_inputs(ctx, inputs_as_nchw):
                 ops.append(transpose)
                 ops.append(node)
                 continue
-            ops.append(node)
+        ops.append(node)
     ctx.reset_nodes(ops)
 
 
@@ -653,6 +430,14 @@ def run_rewriters(g, funcs, continue_on_error):
                 logger.info(ex_ext)
             else:
                 raise ex
+
+        if utils.is_debug_mode():
+            broken_outputs = g.check_integrity()
+            if broken_outputs:
+                logging.error(
+                    "After rewriter %s, graph breaks at outputs %s",
+                    func.__name__, broken_outputs
+                )
 
     if g.contained_graphs:
         for dict_val in g.contained_graphs.values():
@@ -765,13 +550,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
-    rewriters = [rewrite_transpose, rewrite_flatten,
+    rewriters = [rewrite_transpose, rewrite_flatten, rewrite_gemm,
                  rewrite_random_uniform, rewrite_random_uniform_fold_const,
                  rewrite_random_normal, rewrite_dropout, rewrite_eye,
                  rewrite_leakyrelu, rewrite_thresholded_relu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_bi_direction_gru,
-                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond
+                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond,
                  ]
 
     if custom_rewriter is not None:
@@ -783,7 +568,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     g.delete_unused_nodes(output_names)
     topological_sort(g, continue_on_error)
 
-    mapped_op, unmapped_op = tensorflow_onnx_mapping(g, continue_on_error, ops_mapping)
+    mapped_op, unmapped_op, exceptions = tensorflow_onnx_mapping(g, ops_mapping)
+    if unmapped_op:
+        logger.error("Unsupported ops: %s", unmapped_op)
+    if exceptions and not continue_on_error:
+        raise exceptions[0]
 
     # post-processing rewriters
     late_rewriters = []

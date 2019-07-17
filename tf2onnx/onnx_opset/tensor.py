@@ -20,7 +20,7 @@ import tf2onnx
 from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
-from tf2onnx.onnx_opset import nn
+from tf2onnx.onnx_opset import nn, math
 
 logger = logging.getLogger(__name__)
 
@@ -60,17 +60,37 @@ def _wrap_concat_with_cast(ctx, node):
             ctx.copy_shape(output_name, output_cast.output[0])
 
 
-@tf_op(["Size", "Flatten"])
-class DirectOp:
+@tf_op("Size")
+class Size:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op("Flatten")
+class Flatten:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        # no change for us
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op("Dropout")
 class Dropout:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_6(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
         pass
 
     @classmethod
@@ -81,7 +101,7 @@ class Dropout:
 @tf_op("Identity")
 class Identity:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         if node.inputs[0].is_const():
             # should not remove the identity node if it is output of the graph
             if node.output[0] in ctx.outputs:
@@ -96,7 +116,7 @@ class Identity:
 @tf_op("Reshape")
 class Reshape:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Reshape(T tensor, Tshape shape, @type Tshape)
         # T reshaped = Reshape(T data, @INTS shape) - but takes a optional 2nd input for shape
         shape_node = node.inputs[1]
@@ -138,7 +158,7 @@ class Reshape:
 @tf_op("Squeeze")
 class Squeeze:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Squeeze(T input, @list(int) squeeze_dims)
         # T squeezed = Squeeze(T data, @AttrType.INTS axes), axes are list of positive integers.
         axis = node.get_attr("axis")
@@ -167,7 +187,7 @@ class Squeeze:
 @tf_op("Transpose")
 class Transpose:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T y = Transpose(T x, Tperm perm, @type Tperm)
         # T transposed = Transpose(T data, @INTS perm)
         if len(node.input) > 1:
@@ -187,7 +207,7 @@ class Transpose:
 @tf_op("Concat")
 class Concat:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # old concat op has axis as input[0]
         node.type = "Concat"
         axis_node = node.inputs[0]
@@ -208,7 +228,7 @@ class Concat:
 @tf_op("ConcatV2")
 class ConcatV2:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = ConcatV2(T values, Tidx axis, @int N, @type Tidx)
         # T concat_result = Concat(T inputs, @INT axis)
         # if any input is empty, remove the input and concat the others
@@ -219,7 +239,7 @@ class ConcatV2:
                 ctx.remove_input(node, node.input[i])
         # all inputs are deleted
         if not node.input:
-            raise RuntimeError("all inputs of {} are empty".format(name))
+            raise RuntimeError("all inputs of {} are empty".format(node.name))
 
         axis_node = node.inputs[-1]
         utils.make_sure(axis_node.is_const(), "{} needs to be const".format(axis_node.name))
@@ -241,15 +261,7 @@ class ConcatV2:
 @tf_op("Slice")
 class Slice:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        cls._convert_since_4(ctx, node, **kwargs)
-
-    @classmethod
-    def version_10(cls, ctx, node, **kwargs):
-        cls._convert_since_4(ctx, node, **kwargs)
-
-    @classmethod
-    def _convert_since_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Slice(T input, Index begin, Index size)
         # T output = Slice(T input, Tind starts, Tind ends, Tind axes, Tind steps)
         # "ends" are exclusive, "axes" and "steps" are optional, their default val are [0, ...] and 1
@@ -292,18 +304,22 @@ class Slice:
         kwargs = {**inputs_map, "outputs": node.output}
         _ = GraphBuilder(ctx).make_slice(kwargs, name=node.name)
 
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Gather")
 class Gather:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Gather"
 
 
 @tf_op("GatherV2")
 class GatherV2:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # for GatherV2 axis come as input
         node.type = "Gather"
         axis = node.inputs[2].get_tensor_value()
@@ -327,7 +343,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
 
     # body graph creation
     g = ctx.create_new_graph_with_same_config()
-    g.add_graph_input(trip_name, TensorProto.INT64, [])
+    g.add_graph_input(trip_name, TensorProto.INT64, [1])
     g.add_graph_input(cond_name, TensorProto.BOOL, [])
     g.add_graph_input(cur_name, dtype, [])
     g.parent_graph = ctx
@@ -381,7 +397,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     dummy_out_name = utils.make_name("dummy_out")
     result_name = utils.make_name("res")
 
-    g.add_graph_input(trip_name, TensorProto.INT64, [])
+    g.add_graph_input(trip_name, TensorProto.INT64, [1])
     g.add_graph_input(cond_name, TensorProto.BOOL, [])
     g.add_graph_input(dummy_name, t_params, [])
     g.parent_graph = ctx
@@ -436,7 +452,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
 @tf_op("GatherNd")
 class GatherNd:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # Tparams output = GatherNd(Tparams params, Tidx indices)
         params = node.input[0]
         indices = node.input[1]
@@ -453,18 +469,22 @@ class GatherNd:
 @tf_op("Split")
 class Split:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Split(int32 split_dim, T value, @int num_split)
         # T outputs = Split(T input, @INT axis, @INTS split)
         split_dims = node.inputs[0].get_tensor_value()
         ctx.remove_input(node, node.input[0])
         node.set_attr("axis", split_dims)
 
+    @classmethod
+    def version_2(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("SplitV")
 class SplitV:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = SplitV(T value, Tlen size_splits, int32 split_dim, @int num_split, @type Tlen)
         # T outputs = Split(T input, @INT axis, @INTS split)
         node.type = "Split"
@@ -475,11 +495,15 @@ class SplitV:
         node.set_attr("split", split)
         node.set_attr("axis", split_dims)
 
+    @classmethod
+    def version_2(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("ExpandDims")
 class ExpandDims:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = ExpandDims(T input, Tdim dim, @type Tdim)
         # T reshaped = Reshape-1(T data, @ints consumed_inputs, @int64 shape)
         # T expanded = Unsqueeze-1(T data, @ints axes)
@@ -510,7 +534,6 @@ class ExpandDims:
         # T output = ExpandDims(T input, Tdim dim, @type Tdim), dim is 0-D scalar.
         # T reshaped = Reshape-5(T data, int64 shape)
         # T expanded = Unsqueeze-1(T data, @ints axes)
-        # FIXME: this was in the OPSET5 table
         shape = ctx.get_shape(node.output[0])
         if shape is not None and shape.count(-1) < 2:
             # tensorflow already infers the output shape so we can just take it
@@ -537,13 +560,14 @@ class ExpandDims:
 @tf_op("StridedSlice")
 class StridedSlice:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # for now we implement common cases. Things like strides!=1 are not mappable to onnx.
         not_supported_attr = ["new_axis_mask"]
         for attr_name in not_supported_attr:
             attr = node.get_attr(attr_name)
             if attr is not None and attr.i != 0:
                 raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
+
         onnx_dtype = ctx.get_dtype(node.input[1])
         np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
         max_size = np.iinfo(np_dtype).max
@@ -563,16 +587,26 @@ class StridedSlice:
         axes = []
         # onnx slice op can't remove a axis, track axis and add a squeeze op if needed
         needs_squeeze = []
+        # ellipsis: one bit at most can be 1. An ellipsis implicitly creates as many range specifications as
+        # necessary to fully specify the sliced range for every dimension.
+        # For example for a 4-dimensional tensor foo the slice foo[2, ..., 5:8] implies foo[2, :, :, 5:8]
+        # NOTE: we ignore those axes denoted by ellipsis using `axes` attribute
+        ellipsis_gap = 0
         for idx, begin_item in enumerate(begin):
-            end_item = end[idx]
             if strides[idx] != 1:
                 raise ValueError("StridedSlice: only strides=1 is supported")
-            axes.append(idx)
-
             if (ellipsis_mask >> idx) & 1:
-                new_begin.append(0)
-                new_end.append(max_size)
+                input_shape = ctx.get_shape(node.input[0])
+                utils.make_sure(
+                    input_shape is not None,
+                    "StridedSlice op {} requires the shape of input".format(node.name)
+                )
+                ellipsis_gap = len(input_shape) - len(begin)
                 continue
+
+            # ignore ellipsis axes
+            axes.append(idx + ellipsis_gap)
+            end_item = end[idx]
 
             # an implicit condition is stride == 1 (checked in above)
             if begin_item < 0 and end_item == 0:
@@ -583,7 +617,7 @@ class StridedSlice:
                 new_begin.append(begin_item)
                 end_item = begin_item + 1 if begin_item != -1 else max_size
                 new_end.append(end_item)
-                needs_squeeze.append(idx)
+                needs_squeeze.append(idx + ellipsis_gap)
                 continue
 
             mask = (begin_mask >> idx) & 1
@@ -637,11 +671,183 @@ class StridedSlice:
             ctx.copy_shape(node.output[0], cast_node.output[0])
             nodes.append(cast_node)
 
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # T output = Slice(T input, Index begin, Index end, Index strides
+        #                 @int begin_mask, @int end_mask, @int ellipsis_mask
+        #                 @int shrink_axis_mask, @int new_axis_mask)
+        # T output = Slice(T input, Tind starts, Tind ends, Tind axes, Tind steps)
+        # "ends" are exclusive, "axes" and "steps" are optional, their default val are [0, ...] and 1
+        begin = node.inputs[1]
+        end = node.inputs[2]
+        strides = node.inputs[3]
+        if begin.is_const() and end.is_const() and strides.is_const() \
+                and all(val == 1 for val in strides.get_tensor_value()):
+            cls.version_1(ctx, node, **kwargs)
+            return
+
+        not_supported_attr = ["new_axis_mask"]
+        for attr_name in not_supported_attr:
+            attr = node.get_attr(attr_name)
+            if attr is not None and attr.i != 0:
+                raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
+        onnx_dtype = ctx.get_dtype(node.input[1])
+        np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
+
+        # NOTE: Max op only supports float32, deal with overflow when cast back to int32
+        # enable it after Max supports int32 and int64
+        # max_size = utils.get_max_value(np_dtype)
+        # min_size = utils.get_min_value(np_dtype)
+        max_size = 1e9
+        min_size = -1e9
+
+        end_mask = node.get_attr("end_mask")
+        end_mask = end_mask.i if end_mask is not None else 0
+        begin_mask = node.get_attr("begin_mask")
+        begin_mask = begin_mask.i if begin_mask is not None else 0
+        ellipsis_mask = node.get_attr("ellipsis_mask")
+        ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
+        shrink_axis_mask = node.get_attr("shrink_axis_mask")
+        shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
+        param_shape = ctx.get_shape(node.input[1]) or \
+            ctx.get_shape(node.input[2]) or \
+            ctx.get_shape(node.input[3])
+        utils.make_sure(
+            param_shape is not None,
+            "StridedSlice op {} requires the shape of begin/end/strides".format(node.name)
+        )
+        param_rank = param_shape[0]
+        # use in onnx graph to mask begin
+        new_begin_mask = [1] * param_rank
+        # use in onnx graph to mask end
+        new_end_mask = [min_size] * param_rank
+        # for shrink mask, if shrink mask is 1, set stride to be max_size
+        shrink_strided_mask = [min_size] * param_rank
+        axes = []
+        # onnx slice op can't remove a axis, track axis and add a squeeze op if needed
+        needs_squeeze = []
+        ellipsis_gap = 0
+        for idx in range(param_rank):
+            if (ellipsis_mask >> idx) & 1:
+                input_shape = ctx.get_shape(node.input[0])
+                utils.make_sure(
+                    input_shape is not None,
+                    "StridedSlice op {} requires the shape of input".format(node.name)
+                )
+                ellipsis_gap = len(input_shape) - param_rank
+                # handle the redundant param
+                new_begin_mask[idx] = 0
+                new_end_mask[idx] = max_size
+                axes.append(idx)
+                continue
+
+            # ignore ellipsis axes
+            axes.append(idx + ellipsis_gap)
+
+            mask = (shrink_axis_mask >> idx) & 1
+            if mask != 0:
+                shrink_strided_mask[idx] = max_size
+                new_end_mask[idx] = max_size
+                needs_squeeze.append(idx + ellipsis_gap)
+                continue
+
+            mask = (begin_mask >> idx) & 1
+            if mask != 0:
+                new_begin_mask[idx] = 0
+
+            mask = (end_mask >> idx) & 1
+            if mask != 0:
+                new_end_mask[idx] = max_size
+
+        out_dtypes = [ctx.get_dtype(node.output[0])]
+        out_shapes = [ctx.get_shape(node.output[0])]
+        ctx.remove_node(node.name)
+
+        # mask begin
+        new_begin_mask = np.array(new_begin_mask, dtype=np_dtype)
+        if not np.all(new_begin_mask == 1):
+            if begin.is_const():
+                begin = ctx.make_const(
+                    utils.make_name("begin_masked"),
+                    begin.get_tensor_value(as_list=False) * new_begin_mask
+                )
+            else:
+                begin_mask_const = ctx.make_const(
+                    utils.make_name("begin_mask"),
+                    new_begin_mask
+                )
+                begin = ctx.make_node(
+                    "Mul", [begin.output[0], begin_mask_const.output[0]],
+                    op_name_scope=node.name
+                )
+        # mask end
+        new_end_mask = np.array(new_end_mask, dtype=np_dtype)
+        end_output = end.output[0]
+        if not np.all(new_end_mask == min_size):
+            if end.is_const():
+                end = ctx.make_const(
+                    utils.make_name("end_masked"),
+                    np.maximum(end.get_tensor_value(as_list=False), new_end_mask)
+                )
+                end_output = end.output[0]
+            else:
+                end_mask_const = ctx.make_const(
+                    utils.make_name("end_mask"),
+                    np.array(new_end_mask, dtype=np_dtype)
+                )
+                end_output = utils.make_name("{}__end".format(node.name))
+                math.make_min_or_max_op(ctx, "Max", [end.output[0], end_mask_const.output[0]], [end_output])
+        # mask strides for shrink
+        shrink_strided_mask = np.array(shrink_strided_mask, dtype=np_dtype)
+        strides_output = strides.output[0]
+        if not np.all(shrink_strided_mask == min_size):
+            if strides.is_const():
+                strides = ctx.make_const(
+                    utils.make_name("strides_masked"),
+                    np.maximum(strides.get_tensor_value(as_list=False), shrink_strided_mask)
+                )
+                strides_output = strides.output[0]
+            else:
+                shrink_strided_mask_const = ctx.make_const(
+                    utils.make_name("strides_mask"),
+                    np.array(shrink_strided_mask, dtype=np_dtype)
+                )
+                strides_output = utils.make_name("{}__strides".format(node.name))
+                math.make_min_or_max_op(
+                    ctx, "Max",
+                    [strides.output[0], shrink_strided_mask_const.output[0]],
+                    [strides_output]
+                )
+        # create axes input
+        axes_const = ctx.make_const(
+            utils.make_name("slice_axes"),
+            np.array(axes, dtype=np_dtype)
+        )
+        axes_output = axes_const.output[0]
+
+        inputs_map = {
+            "data": node.input[0],
+            "starts": begin.output[0],
+            "ends": end_output,
+            "steps": strides_output,
+            "axes": axes_output
+        }
+        kwargs = {**inputs_map, "outputs": node.output}
+        node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
+        node = ctx.get_node_by_output(node)
+        if needs_squeeze:
+            name = utils.make_name(node.name)
+            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+            squeeze_node.set_attr("axes", needs_squeeze)
+            input_dtype = ctx.get_dtype(node.output[0])
+            ctx.set_dtype(squeeze_node.output[0], input_dtype)
+            ctx.copy_shape(node.output[0], squeeze_node.output[0])
+
 
 @tf_op("Cast")
 class Cast:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # DstT y = Cast(SrcT x, @type SrcT, @type DstT)
         # T2 output = Cast(T1 input, @STRING to)
         dst = node.get_attr("to")
@@ -649,14 +855,18 @@ class Cast:
         node.set_attr("to", dst)
 
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_6(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
         pass
 
 
 @tf_op("TopKV2", onnx_op="TopK")
 class TopKV2:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T values, int32 indices = TopKV2(T input, int32 k, @bool sorted=true, @realnumbertype T)
         # T values, I indices = TopK(T x, @int axis=-1, @int k). I: int64
         topk_node_name = node.name
@@ -691,7 +901,7 @@ class TopKV2:
 @tf_op("Tile")
 class Tile:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # onnx wants shape input to be int64
         _convert_shapenode_to_int64(ctx, node, 1)
 
@@ -699,7 +909,7 @@ class Tile:
 @tf_op("Pack")
 class Pack:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx pack op
         axis = node.get_attr("axis").i
         if axis < 0:
@@ -729,9 +939,14 @@ class Pack:
 @tf_op("Unpack")
 class Unpack:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx unpack op
+        # squeeze does not support negative axis
         axis = node.get_attr("axis").i
+        if axis < 0:
+            shape = ctx.get_shape(node.input[0])
+            utils.make_sure(shape is not None, "shape of unpack input is None: {}".format(node.input[0]))
+            axis += len(shape)
         # split the tensor into n outputs
         node.type = "Split"
         # for each output we need to squeeze axis
@@ -745,7 +960,7 @@ class Unpack:
 @tf_op("OneHot")
 class OneHot:
     @classmethod
-    def version_5(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # until there is no onehot op in onnx, a workaround using gather from eye
         indices_name = node.input[0]
         indices_shape = ctx.get_shape(indices_name)
@@ -791,7 +1006,7 @@ class OneHot:
         if ctx.is_target(constants.TARGET_RS6) \
                 and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
             logger.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
-            cls.version_5(ctx, node, **kwargs)
+            cls.version_1(ctx, node, **kwargs)
             return
 
         depth = node.input[1]
@@ -832,7 +1047,7 @@ class OneHot:
 @tf_op("Shape")
 class Shape:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # out_type output = Shape(T input, @int32|int64 out_type), out_type by default int32
         # int64 output = Shape(T input)
         dtype = ctx.get_dtype(node.output[0])
@@ -855,27 +1070,30 @@ class IsNan:
 @tf_op("BatchToSpaceND", onnx_op="DepthToSpace")
 class BatchToSpace:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        cls._convert_since_4(ctx, node, **kwargs)
-
-    @classmethod
-    def _convert_since_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
         # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
-        # and we only support 4D here, so the data format is NHWC
+        # and we only support 3D and 4D here, and the data format is NHC and NHWC
         # onnx op "DepthToSpace" does the same work on input tensor except that it works on "C",
         # and it only supports NCHW
         # T out = BatchToSpaceND(T input, int32 block_shape, int32 crops)
         input_tensor = node.inputs[0]
+        input_shape = ctx.get_shape(input_tensor.output[0])
         blocksize = node.inputs[1].get_tensor_value()
         crops = node.inputs[2].get_tensor_value()
 
-        utils.make_sure(len(ctx.get_shape(input_tensor.output[0])) == 4, "only supports 4D for now")
+        utils.make_sure(len(input_shape) in (4, 3),
+                        "only supports 3D and 4D for now")
         utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
                         "only support same blocksize at different dims")
 
         # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
-        trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
+        if len(input_shape) == 3:
+            # insert automatically an Unsqueeze op if the input is 3d
+            unsqz1 = ctx.make_node("Unsqueeze", input_tensor.output, {"axes": [3]})
+            trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
+        else:
+            trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
         reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
         trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
 
@@ -893,17 +1111,26 @@ class BatchToSpace:
 
         attr = {"axes": slice_axis, "ends": ends, "starts": starts}
         inputs_map = {"data": trans2.output[0], **attr}
-        kwargs = {**inputs_map, "outputs": node.output}
-        dtypes = [ctx.get_dtype(node.output[0])]
-        shapes = [ctx.get_shape(node.output[0])]
-        ctx.remove_node(node.name)
-        GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
+        dtypes = node.output_dtypes
+        shapes = node.output_shapes
+
+        if len(input_shape) == 3:
+            # add a squeeze op to convert output into 3d
+            kwargs = {**inputs_map}
+            ctx.remove_node(node.name)
+            slice1 = GraphBuilder(ctx).make_slice(kwargs)
+            ctx.make_node("Squeeze", [slice1], {"axes": [3]},
+                          outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
+        else:
+            kwargs = {**inputs_map, "outputs": node.output}
+            ctx.remove_node(node.name)
+            GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
 
 
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")
 class SpaceToBatch:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # https://www.tensorflow.org/api_docs/python/tf/space_to_batch_nd
         # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
         # and we only support 4D here, so the data format is NHWC
@@ -1051,22 +1278,171 @@ class ReverseSequence:
         seq_dim = node.get_attr("seq_dim")
         utils.make_sure(seq_dim is not None, "sequence dim must be given in {}".format(node.name))
         seq_dim = seq_dim.i
-        batch_dim = node.get_attr("batch_dim")
-        if batch_dim is not None:
-            batch_dim = batch_dim.i
-        else:
-            batch_dim = 0
+        batch_dim = node.get_attr_value("batch_dim", 0)
 
         ctx.remove_node(node.name)
         node = ctx.make_node(
             "ReverseSequence",
             node.input,
             outputs=node.output,
-            attr={"batch_axis": batch_dim, "time_axis": seq_dim}
-        )
+            attr={"batch_axis": batch_dim, "time_axis": seq_dim})
 
         seq_len_dtype = ctx.get_dtype(node.input[1])
         utils.make_sure(seq_len_dtype is not None, "dtype of {} is None".format(node.input[1]))
         target_dtype = TensorProto.INT64
         if seq_len_dtype != target_dtype:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=target_dtype)
+
+
+@tf_op("ReverseV2")
+class ReverseV2:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # T output = ReverseV2(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
+        # Implement tensorflow ReverseV2 op using multiple ReverseSequence (for each axis)
+        # and Transpose ops. We sort the axis vector (if non-empty) at the start. Each axis can
+        # be reversed only once (in tf) and so we can compute the transpose for each axis
+        # (other than 0), feed the tensor to a ReverseSequence node and finally transpose again
+        # to get back the original shape.
+
+        axes_node = node.inputs[1]
+        axes = axes_node.get_tensor_value(as_list=False)
+        # Current support is for when axis is a 1D tensor.
+        utils.make_sure(len(axes.shape) == 1 \
+            , "Currently no support for reverseV2 tensor axis")
+
+        axes = axes.tolist()
+        len_axes = len(axes)
+
+        # Store input and output parameters of the ReverseV2 node.
+        rv2_in_names = [node.input[0]]
+
+        input_shape = ctx.get_shape(node.input[0])
+        # Make sure input shape is not None
+        utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
+
+        input_rank = len(input_shape)
+
+        rv2_node_name = node.name
+        # ReverseV2 has a single output.
+        rv2_output_dtypes = node.output_dtypes
+        rv2_output_shapes = node.output_shapes
+
+        const_name_root = rv2_node_name + '_Const'
+
+        # Remove ReverseV2 node from graph.
+        ctx.remove_node(rv2_node_name)
+
+        # Variable to store input names for the next node.
+        inputs = rv2_in_names
+
+        new_node = None
+
+        # Empty axis vector.
+        if len_axes == 0:
+            # Replace ReverseV2 with an identity block.
+            new_node = ctx.make_node(
+                "Identity",
+                inputs=inputs,
+                outputs=node.output,
+                shapes=rv2_output_shapes,
+                dtypes=rv2_output_dtypes,
+                op_name_scope=rv2_node_name,
+            )
+
+        else:
+            # For negative indices use the positive counterpart.
+            for i, ax in enumerate(axes):
+                if ax < 0:
+                    axes[i] += input_rank
+
+            axes = sorted(axes)
+
+            orig_perm = list(range(input_rank))
+            curr_perm = []
+
+            # Add ReverseSequence nodes for each element of axis.
+            for i in range(len_axes):
+
+                axis = axes[i]
+
+                curr_perm = orig_perm.copy()
+                # Permutation indices relative to original tensor.
+                curr_perm[axis], curr_perm[0] = curr_perm[0], curr_perm[axis]
+
+                # Add a Transpose node if the axis != 0 (finish first due to sort).
+                if axis != 0:
+                    # Permutation indices for the transpose node relative to IN tensor shape.
+                    new_node = ctx.make_node(
+                        "Transpose",
+                        inputs=inputs,
+                        op_name_scope=rv2_node_name,
+                        dtypes=rv2_output_dtypes,
+                        attr={"perm": curr_perm}
+                    )
+
+                    inputs = [new_node.output[0]]
+
+                # Add a Constant node (seq_len) for ReverseSequence.
+
+                # Index 1 for the shape should not return 0
+                # since the input must have rank >= 2.
+                rs_batch_size = ctx.get_shape(inputs[-1])[1]
+
+                # Make sure rs_batch_size and input_shape[axis] are not -1 each
+                utils.make_sure(input_shape[axis] is not -1 \
+                    , "shape of axis {} is unknown".format(axis))
+                utils.make_sure(rs_batch_size is not -1 \
+                    , "ReverseSequence batch size for axis {} is unknown".format(axis))
+
+                seq_list = [input_shape[axis]] * rs_batch_size
+                seq_array = np.asarray(seq_list, dtype=np.int64) # dtype should be int64
+
+                const_seq_name = utils.make_name(const_name_root)
+                new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
+                inputs.append(new_node.output[0])
+
+                # Add a ReverseSequence node.
+
+                # If processing for the final axis and the tensor shape permutation is
+                # original then the output is fed to the output of the ReverseV2 node.
+                #
+                # Else a new output is created which is fed to a Transpose node.
+                rs_out_name = node.output if \
+                    ((i == len_axes - 1) and (curr_perm == orig_perm)) \
+                        else None
+
+                rs_out_shapes = None if rs_out_name is None else rv2_output_shapes
+
+                new_node = ctx.make_node(
+                    "ReverseSequence",
+                    inputs=inputs,
+                    op_name_scope=rv2_node_name,
+                    outputs=rs_out_name,
+                    shapes=rs_out_shapes,
+                    dtypes=rv2_output_dtypes,
+                    attr={"batch_axis": 1, "time_axis": 0}
+                )
+
+                inputs = [new_node.output[0]]
+
+            # Additional transpose block is required if the current
+            # permutation list is not the original one.
+            if curr_perm != orig_perm:
+
+                # Compute the required permutation list.
+                if len_axes != 1:
+                    for i, ax in enumerate(axes[::-1][1:]):
+                        curr_perm[0], curr_perm[ax] = \
+                            curr_perm[ax], curr_perm[0]
+
+                # Add a Transpose node to restore shape.
+                new_node = ctx.make_node(
+                    "Transpose",
+                    inputs=inputs,
+                    op_name_scope=rv2_node_name,
+                    outputs=node.output,
+                    shapes=rv2_output_shapes,
+                    dtypes=rv2_output_dtypes,
+                    attr={"perm": curr_perm}
+                )

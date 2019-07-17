@@ -93,6 +93,7 @@ class TensorValueInfo(object):
 
 
 ONNX_UNKNOWN_DIMENSION = -1
+ONNX_EMPTY_INPUT = ""
 
 # index for internally generated names
 INTERNAL_NAME = 1
@@ -459,6 +460,10 @@ def get_max_value(np_dtype):
     return np.iinfo(np_dtype).max
 
 
+def get_min_value(np_dtype):
+    return np.iinfo(np_dtype).min
+
+
 def get_url(url, path, max_retries=5):
     """ Download url and save to path. """
     retries = Retry(total=max_retries, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
@@ -477,6 +482,49 @@ def get_url(url, path, max_retries=5):
 
     with open(path, "wb") as f:
         f.write(response.content)
+
+
+def have_same_inference_value(g, output_1, output_2):
+    """
+    If two outputs have the same value in inference.
+    Check whether they come from the same subgraph and the same subgraphs
+    contain nodes with the same attributes and share the same ancestors.
+    """
+
+    def is_same(node_1, node_2):
+        # go further util two instance isn't the same
+        if node_1 == node_2:
+            return True
+        # check body graph
+        if node_1.get_body_graphs() or node_2.get_body_graphs():
+            logger.warning("Comparing two nodes containing body graph isn't supported.")
+            return False
+        # check domain
+        if node_1.domain != node_2.domain:
+            return False
+        # check type
+        if node_1.type != node_2.type:
+            return False
+        # check onnx attributes
+        if node_1.attr_onnx.keys() != node_2.attr_onnx.keys():
+            return False
+        for name in node_1.attr_onnx.keys(): # pylint: disable=consider-iterating-dictionary
+            if node_1.get_attr_value(name) != node_2.get_attr_value(name):
+                return False
+        return True
+
+    if output_1 == output_2:
+        return True
+    node_1 = g.get_node_by_output(output_1)
+    node_2 = g.get_node_by_output(output_2)
+    # compare their domain, attr, etc. see __eq__ in Node class
+    if not is_same(node_1, node_2):
+        return False
+
+    for inp_1, inp_2 in zip(node_1.input, node_2.input):
+        if not have_same_inference_value(g, inp_1, inp_2):
+            return False
+    return True
 
 
 def is_tf_reverse_op(op):

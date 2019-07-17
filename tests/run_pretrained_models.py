@@ -170,7 +170,8 @@ class Test(object):
     def run_onnxruntime(self, name, model_proto, inputs):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
-        model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True)
+        model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True,
+                                           as_text=utils.is_debug_mode())
         logger.info("Model saved to %s", model_path)
         m = rt.InferenceSession(model_path)
         results = m.run(self.output_names, inputs)

@@ -12,7 +12,7 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version
+from common import unittest_main, check_tf_min_version, check_onnxruntime_min_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -155,6 +155,37 @@ class LoopTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(out_final.stack(), name="output_ta")
         input_names_with_port = ["input_1:0", "input_2:0"]
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
+                     "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
+
+        output_names_with_port = ["i:0", "output_ta:0"]
+        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+
+    @check_onnxruntime_min_version(
+        "0.5.0",
+        "disable this case due to onnxruntime loop issue: https://github.com/microsoft/onnxruntime/issues/1272"
+    )
+    def test_while_loop_with_cond_init_false(self):
+        i = tf.placeholder(tf.int32, (), name="input_1")
+        inputs = tf.placeholder(tf.float32, (10,), name="input_2")
+
+        inputs_2 = tf.identity(inputs)
+        input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_2)
+        output_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+        c = lambda i, *_: tf.logical_and(i < 10, i >= 0)
+
+        def b(i, out_ta):
+            new_i = tf.add(i, 1)
+            x = input_ta.read(i)
+            y = x + 3
+            out_ta_new = out_ta.write(i, y)
+            return new_i, out_ta_new
+
+        i_final, out_final = tf.while_loop(c, b, [i, output_ta])
+        _ = tf.identity(i_final, name="i")
+        _ = tf.identity(out_final.stack(), name="output_ta")
+        input_names_with_port = ["input_1:0", "input_2:0"]
+        feed_dict = {"input_1:0": np.array(20, dtype=np.int32),
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
 
         output_names_with_port = ["i:0", "output_ta:0"]

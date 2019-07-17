@@ -239,7 +239,6 @@ resnet50_v2_nchw: # NOTE: Tensorflow 1.9.0 fails
 
 
 resnet50_v2_nhwc:
-  disabled: true # FIXME: numerical results are correct but shape=(64,) for tf and (64,1) for lotus
   model_type: saved_model
   url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NHWC.tar.gz
   model: resnet_v2_fp32_savedmodel_NHWC/1538687283
@@ -291,10 +290,11 @@ style-transfer:
     - output:0
 
 ssd_mobilenet_v1_coco:
-  # issues with control flow
-  disabled: true
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_17.tar.gz
   model: ssd_mobilenet_v1_coco_2017_11_17/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
   input_get: get_beach
   inputs:
     "image_tensor:0": [1, 224, 224, 3]

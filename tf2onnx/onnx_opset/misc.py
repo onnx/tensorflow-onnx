@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @tf_op(["CheckNumerics", "StopGradient"])
 class MoveToIdent:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Identity"
         if node.inputs[0].is_const():
             # should not remove the identity node if it is output of the graph
@@ -37,12 +37,12 @@ class MoveToIdent:
 @tf_op(["Placeholder", "PlaceholderV2", "PlaceholderWithDefault"])
 class DirectOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         pass
 
 
 @tf_op("NoOp")
 class NukeNode:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         ctx.remove_node(node.name)

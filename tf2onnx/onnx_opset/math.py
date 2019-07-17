@@ -32,11 +32,22 @@ class RealDiv(common.BroadcastOp):
     pass
 
 
-@tf_op(["Abs", "Ceil", "Elu", "Exp", "Floor", "LeakyRelu", "Log", "LogSoftmax", "Neg", "Relu", "Sigmoid", "Sqrt",
-        "Tanh", "Softplus", "Softsign", "Reciprocal"])
+@tf_op(["LeakyRelu", "LogSoftmax", "Softplus", "Softsign"])
+class DirectOpSinceOpset1:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op(["Abs", "Ceil", "Elu", "Exp", "Floor", "Log", "Neg", "Relu", "Sigmoid", "Sqrt",
+        "Tanh", "Reciprocal"])
 class DirectOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_6(cls, ctx, node, **kwargs):
         pass
 
 
@@ -54,68 +65,82 @@ class TrigOpSinceOpset9:
         pass
 
 
+def make_min_or_max_op(ctx, op_type, inputs, outputs,
+                       output_shapes=None, output_dtypes=None):
+    # support more dtype
+    supported_dtypes = [
+        onnx_pb.TensorProto.FLOAT,
+        onnx_pb.TensorProto.FLOAT16,
+        onnx_pb.TensorProto.DOUBLE
+    ]
+    target_dtype = onnx_pb.TensorProto.FLOAT
+    need_cast = False
+    cast_inputs = []
+    for inp in inputs:
+        dtype = ctx.get_dtype(inp)
+        utils.make_sure(dtype is not None, "dtype of {} is None".format(inp))
+        if dtype not in supported_dtypes:
+            cast_inp = ctx.make_node("Cast", [inp], attr={"to": target_dtype})
+            cast_inputs.append(cast_inp.output[0])
+            need_cast = True
+        else:
+            cast_inputs.append(inp)
+    node = ctx.make_node(op_type, cast_inputs, shapes=output_shapes)
+    actual_outputs = node.output
+    if need_cast:
+        origin_dtype = ctx.get_dtype(inputs[0])
+        if output_dtypes is not None:
+            origin_dtype = output_dtypes[0]
+        ctx.set_dtype(node.output[0], target_dtype)
+        cast_name = utils.make_name(node.name)
+        cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)
+        ctx.set_dtype(cast_node.output[0], origin_dtype)
+        ctx.copy_shape(node.output[0], cast_node.output[0])
+        actual_outputs = cast_node.output
+    ctx.make_node("Identity", actual_outputs, outputs=outputs,
+                  shapes=output_shapes, dtypes=output_dtypes)
+
+    # tensorflow minimum/maximum does support broadcast, onnx < opset 8 does not.
+    # handle this by doing something like:
+    # y = min(x1, add(x2, sub(x1, x1))), where x1, x2 are the inputs and x2 is a scalar
+    # this will create a tensor of zeros of the shape of x1, adds x2 to it (which broadcasts) and use that for min.
+    shapeo = ctx.get_shape(node.output[0])
+    needs_broadcast_op = []
+    has_correct_shape = []
+    if ctx.opset < 8:
+        for i, input_name in enumerate(node.input):
+            if ctx.get_shape(input_name) != shapeo:
+                needs_broadcast_op.append(i)
+            else:
+                has_correct_shape.append(input_name)
+    if needs_broadcast_op:
+        has_correct_shape = has_correct_shape[0]
+        for i in needs_broadcast_op:
+            input_node = node.inputs[i]
+            # get a tensor with zeros (since there is no Fill op as of opset8)
+            sub_node = ctx.make_node("Sub", [has_correct_shape, has_correct_shape],
+                                     op_name_scope=input_node.name)
+            # use add as 'broadcast' op
+            add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
+                                     op_name_scope=input_node.name)
+            node.input[i] = add_node.output[0]
+
+
 @tf_op("Minimum", onnx_op="Min")
 @tf_op("Maximum", onnx_op="Max")
 class MinMaxOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        # tensorflow minimum/maximum does support broadcast, onnx < opset 8 does not.
-        # handle this by doing something like:
-        # y = min(x1, add(x2, sub(x1, x1))), where x1, x2 are the inputs and x2 is a scalar
-        # this will create a tensor of zeros of the shape of x1, adds x2 to it (which broadcasts) and use that for min.
-        # support more dtype
-        supported_dtypes = [
-            onnx_pb.TensorProto.FLOAT,
-            onnx_pb.TensorProto.FLOAT16,
-            onnx_pb.TensorProto.DOUBLE
-        ]
-        target_dtype = onnx_pb.TensorProto.FLOAT
-        need_cast = False
-        for inp in node.input:
-            dtype = ctx.get_dtype(inp)
-            utils.make_sure(dtype is not None, "dtype of {} is None".format(inp))
-            if dtype not in supported_dtypes:
-                inp_cast = ctx.insert_new_node_on_input(node, "Cast", inp, to=target_dtype)
-                ctx.copy_shape(inp, inp_cast.output[0])
-                ctx.set_dtype(inp_cast.output[0], target_dtype)
-                need_cast = True
-        if need_cast:
-            origin_dtype = ctx.get_dtype(node.output[0])
-            utils.make_sure(origin_dtype is not None, "dtype of {} is None".format(node.output[0]))
-            ctx.set_dtype(node.output[0], target_dtype)
-            cast_name = utils.make_name(node.name)
-            cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)
-            ctx.set_dtype(cast_node.output[0], origin_dtype)
-            ctx.copy_shape(node.output[0], cast_node.output[0])
-            to_replace = [n for n in ctx.get_nodes() if n != cast_node]
-            ctx.replace_all_inputs(to_replace, node.output[0], cast_node.output[0])
-
-        shapeo = ctx.get_shape(node.output[0])
-        needs_broadcast_op = []
-        has_correct_shape = []
-        if ctx.opset < 8:
-            for i, input_name in enumerate(node.input):
-                if ctx.get_shape(input_name) != shapeo:
-                    needs_broadcast_op.append(i)
-                else:
-                    has_correct_shape.append(input_name)
-        if needs_broadcast_op:
-            has_correct_shape = has_correct_shape[0]
-            for i in needs_broadcast_op:
-                input_node = node.inputs[i]
-                # get a tensor with zeros (since there is no Fill op as of opset8)
-                sub_node = ctx.make_node("Sub", [has_correct_shape, has_correct_shape],
-                                         op_name_scope=input_node.name)
-                # use add as 'broadcast' op
-                add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
-                                         op_name_scope=input_node.name)
-                node.input[i] = add_node.output[0]
+    def version_1(cls, ctx, node, **kwargs):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        make_min_or_max_op(ctx, node.type, node.input, node.output, shapes, dtypes)
 
 
 @tf_op("Softmax")
 class Softmax:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Softmax(T logits). The axis softmax would be performed on is always on -1.
         # T output = Softmax(T input, @int axis). Default axis is 1.
         logits_rank = len(ctx.get_shape(node.input[0]))
@@ -125,7 +150,7 @@ class Softmax:
 @tf_op("Square")
 class Square:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Mul"
         node.input.append(node.input[0])
 
@@ -133,7 +158,7 @@ class Square:
 @tf_op("Relu6")
 class Relu6:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # relu6 = min(max(features, 0), 6)
         # relu6 = min(max(features, 0), 6)
         node.type = "Clip"
@@ -144,7 +169,7 @@ class Relu6:
 @tf_op("Rsqrt")
 class Rsqrt:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Sqrt"
         op_name = utils.make_name(node.name)
         reciprocal = ctx.insert_new_node_on_output("Reciprocal", node.output[0], name=op_name)
@@ -154,7 +179,7 @@ class Rsqrt:
 @tf_op("SquaredDifference")
 class SquaredDifference:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Sub"
         op_name = utils.make_name(node.name)
         mul = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
@@ -164,7 +189,7 @@ class SquaredDifference:
 @tf_op("Sign")
 class Sign:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """Sign op."""
         # T sign = Sign(T Input)
         node_dtype = ctx.get_dtype(node.output[0])
@@ -200,7 +225,7 @@ class Sign:
 @tf_op("Pow")
 class Pow:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         if ctx.is_target(constants.TARGET_CAFFE2):
             # workaround a bug in caffe2 pre Feb2018, pow(a, b) becomes np.exp(np.log(a) * b)
             node.type = "Log"
@@ -212,7 +237,7 @@ class Pow:
             op_name = utils.make_name(node.name)
             exp_op = ctx.insert_new_node_on_output("Exp", mul_op.output[0], name=op_name)
             ctx.copy_shape(node.output[0], exp_op.output[0])
-            BroadcastOp.version_4(ctx, mul_op, **kwargs)
+            BroadcastOp.version_1(ctx, mul_op, **kwargs)
 
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
@@ -222,23 +247,31 @@ class Pow:
 @tf_op("LRN")
 class LRN:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
-        # FIXME: numerical results are not correct
+    def version_1(cls, ctx, node, **kwargs):
         # ONNX: Each input value is divided by (bias+(alpha/size)*sum(xi^2 for every xi in the local region))^beta
         # TF: sqr_sum[a, b, c, d] = sum(input[a, b, c, d - depth_radius : d + depth_radius + 1] ** 2)
         #     output = input / (bias + alpha * sqr_sum) ** beta
-        depth_radius = node.get_attr("depth_radius")
-        if depth_radius:
-            size = depth_radius.i
-        else:
-            size = 5
+
+        # by default, depth_radius is 5 in tensorflow
+        size = node.get_attr_value("depth_radius", 5) * 2 + 1
+
         node.set_attr("size", size)
+        node.set_attr("alpha", size * node.get_attr("alpha").f)
+
+        shapes = node.output_shapes[0]
+        dtypes = node.output_dtypes[0]
+
+        ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
+        ctx.update_node_shape_dtype(node, override=True)
+        op_name = utils.make_name(node.name)
+        ctx.insert_new_node_on_output("Transpose", node.output[0], perm=constants.NCHW_TO_NHWC,
+                                      name=op_name, shapes=shapes, dtypes=dtypes)
 
 
-@tf_op(["MatMul", "BatchMatMul"])
+@tf_op(["MatMul", "BatchMatMul", "BatchMatMulV2"])
 class MatMul:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # tensorflow allows transpose and conjugated. If found, insert the required transpose.
         # We could use Gemm as well but tensorflow does not pass bias in matmul.
         node.type = "MatMul"
@@ -285,7 +318,7 @@ class MatMul:
 @tf_op("Erf")
 class Erf:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """Error function."""
         # constant names
         a1 = "erf_a1"
@@ -403,5 +436,5 @@ class FloorMod:
 @tf_op("Selu")
 class Selu:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         pass

@@ -65,15 +65,16 @@ class GraphBuilder(object):
 
         for ind, val in enumerate(inputs):
             if val is None:
-                inputs[ind] = ""  # empty string means no connection in ONNX
+                inputs[ind] = utils.ONNX_EMPTY_INPUT  # empty string means no connection in ONNX
         # remove tailing ""
-        while inputs[-1] == "":
+        while inputs[-1] == utils.ONNX_EMPTY_INPUT:
             inputs = inputs[:-1]
 
         if self.graph.opset >= 10:
             dtype = self.graph.get_dtype(inputs[1])
             for input_data in inputs[1:]:
-                utils.make_sure(dtype == self.graph.get_dtype(input_data), "dtype should be same")
+                if input_data != utils.ONNX_EMPTY_INPUT:
+                    utils.make_sure(dtype == self.graph.get_dtype(input_data), "dtype should be same")
 
         return self.graph.make_node(op_type="Slice", inputs=inputs, attr=attr, name=name,
                                     outputs=outputs, shapes=shapes, dtypes=dtypes).output[0]

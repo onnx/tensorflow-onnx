@@ -19,8 +19,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import copy
-
+from itertools import permutations
 import six
 
 
@@ -108,16 +107,30 @@ class MatchResult(object):
             return pattern_or_name
 
         if isinstance(pattern_or_name, six.text_type):
-            return self._name_to_pattern[pattern_or_name]
+            return self._name_to_pattern.get(pattern_or_name)
 
         raise ValueError('pattern_or_name has type %s. Expect OpTypePattern or str.'
                          % type(pattern_or_name))
 
-    def get_op(self, pattern_or_name):
-        return self._pattern_to_op_tensor[self._to_pattern(pattern_or_name)][0]
+    def get_op(self, pattern_or_name, default=None):
+        """
+        For now, if the op can not be effectively obtained, then the function will return the default
+        instead of an error.
+        """
+        op_and_tensor = self._pattern_to_op_tensor.get(self._to_pattern(pattern_or_name))
+        if op_and_tensor:
+            return op_and_tensor[0]
+        return default
 
-    def get_tensor(self, pattern_or_name):
-        return self._pattern_to_op_tensor[self._to_pattern(pattern_or_name)][1]
+    def get_tensor(self, pattern_or_name, default=None):
+        """
+        For now, if the tensor can not be effectively obtained, then the function will return the default
+        instead of an error.
+        """
+        op_and_tensor = self._pattern_to_op_tensor.get(self._to_pattern(pattern_or_name))
+        if op_and_tensor:
+            return op_and_tensor[1]
+        return default
 
     def get_nodes(self):
         return [n[0] for n in self._pattern_to_op_tensor.values()]
@@ -136,6 +149,16 @@ class GraphMatcher(object):
         self._pattern = pattern
         self._allow_reorder = allow_reorder
 
+    @staticmethod
+    def _is_op_type_same(op, pattern):
+        if pattern.op_type == "*":
+            return True
+
+        if op.type in pattern.op_type.split('|'):
+            return True
+
+        return False
+
     def _match_pattern(self, pattern, op, tensor):
         """Returns whether an TF expression rooted at `op` matches `pattern`.
 
@@ -150,48 +173,55 @@ class GraphMatcher(object):
             pattern tree.
 
         Returns:
-          True if an TF expression rooted at `op` matches `pattern`.
+          if matched return True and match_list whose elem is [pattern, op, tensor]
+          else return False
+        the condition that op is matched with pattern:
+        1 op is same:
+          if pattern.op_type is None or *, then treat as same
+          or op.type in pattern.op_type.split("|")
+        2 op.inputs are same with pattern.inputs:
+          if not pattern.inputs, then treat as same
+          otherwise, iteratively compare input nodes with pattern.
         """
+        match_list = []
         if pattern.op_type is None:
-            return True
+            return True, match_list
 
-        if pattern.op_type != '*':
-            if op is None or op.type not in pattern.op_type.split('|'):
-                return False
-
-        self._match_result.add(pattern, op, tensor)
-        # print("matched", ",".join([op.type + "|" + op.name for op in self._match_result.get_nodes()]))
+        if self._is_op_type_same(op, pattern):
+            match_list.append([pattern, op, tensor])
+        else:
+            return False, match_list
 
         if not pattern.inputs:
             # If pattern.inputs is empty, skips the rest and accepts all the inputs.
-            return True
+            return True, match_list
 
         if not op or len(op.inputs) != len(pattern.inputs):
-            return False
+            return False, match_list
 
         if self._allow_reorder:
-            inputs = [None] * len(op.inputs)
-            wanted = copy.copy(pattern.inputs)
-            for idx, i in enumerate(op.inputs):
-                for j in range(len(wanted)):  # pylint: disable=consider-using-enumerate
-                    if i.type == wanted[j].op_type:
-                        inputs[idx] = wanted[j]
-                        del wanted[j]
-                        break
-            for idx, i in enumerate(inputs):
-                if i is None:
-                    inputs[idx] = wanted[0]
-                    del wanted[0]
-            pat = list(zip(op.inputs, inputs))
+            pattern_inputs_list = permutations(pattern.inputs)
         else:
-            pat = list(zip(op.inputs, pattern.inputs))
+            pattern_inputs_list = [pattern.inputs]
 
-        ret = []
-        for input_tensor, input_pattern in pat:
-            # print("MATCHING", input_pattern.op_type, input_tensor.type)
-            r = self._match_pattern(input_pattern, input_tensor, input_tensor)
-            ret.append(r)
-        return all(ret)
+        for possible_pattern_inputs in pattern_inputs_list:
+            pat = list(zip(op.inputs, possible_pattern_inputs))
+            match_flag_of_inputs = []
+            match_lists_of_inputs = []
+            for input_tensor, input_pattern in pat:
+                # print("MATCHING", input_pattern.op_type, input_tensor.type)
+                flag, match_list_of_input = self._match_pattern(input_pattern, input_tensor, input_tensor)
+                match_flag_of_inputs.append(flag)
+                match_lists_of_inputs.extend(match_list_of_input)
+
+            if all(match_flag_of_inputs):
+                match_list.extend(match_lists_of_inputs)
+                return True, match_list
+        return False, match_list
+
+    def _parse_match_list_to_match_result(self, match_list):
+        for pattern, op, tensor in match_list:
+            self._match_result.add(pattern, op, tensor)
 
     def match_op(self, op):
         """Matches `op` against `self._pattern`.
@@ -204,8 +234,10 @@ class GraphMatcher(object):
           None.
         """
         self._match_result = MatchResult()
-        if not self._match_pattern(self._pattern, op, tensor=None):
+        match_flag, match_list = self._match_pattern(self._pattern, op, tensor=None)
+        if not match_flag:
             return None
+        self._parse_match_list_to_match_result(match_list)
         return self._match_result
 
     def match_ops(self, ops):

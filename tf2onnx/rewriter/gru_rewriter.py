@@ -30,8 +30,12 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
             {"state": (self._state_variable_finder, self._connect_gru_state_to_graph)}
         ]
 
+    def run(self):
+        logger.debug("enter gru rewriter")
+        return super(GRUUnitRewriter, self).run()
+
     def find_cell(self, context):
-        gru_cell_types = [RNNUnitType.GRUCell, RNNUnitType.GRUBlockCell]
+        gru_cell_types = [RNNUnitType.GRUCell, RNNUnitType.GRUBlockCell, RNNUnitType.CudnnCompatibleGRUCell]
         for cell_type in gru_cell_types:
             cell_match = self._match_cell(context, cell_type)
             if cell_match:
@@ -46,21 +50,58 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
 
         gate_kernel = get_weights_from_const_node(self.g, match.get_op("gate_kernel"))
         gate_bias = get_weights_from_const_node(self.g, match.get_op("gate_bias"))
-        hidden_kernel = get_weights_from_const_node(self.g, match.get_op("hidden_kernel"))
-        hidden_bias = get_weights_from_const_node(self.g, match.get_op("hidden_bias"))
-        if not all([gate_kernel, gate_bias, hidden_kernel, hidden_bias]):
+        res = {
+            "gate_kernel": gate_kernel,
+            "gate_bias": gate_bias
+        }
+
+        # differ on memory gate:
+        # GRUCell: h'_t = tanh(concat(x_t, r_t .* h_t-1) * W + b)
+        # CudnnCompatibleGRUCell: h'_t = tanh(x_t * W_x + b_x + r_t .* (h_t-1 * W_h + b_h))
+        if self.gru_cell_type == RNNUnitType.CudnnCompatibleGRUCell:
+            hidden_state_kernel = get_weights_from_const_node(
+                self.g, match.get_op("hidden_state_kernel")
+            )
+            hidden_state_bias = get_weights_from_const_node(
+                self.g, match.get_op("hidden_state_bias")
+            )
+            hidden_input_kernel = get_weights_from_const_node(
+                self.g, match.get_op("hidden_input_kernel")
+            )
+            hidden_input_bias = get_weights_from_const_node(
+                self.g, match.get_op("hidden_input_bias")
+            )
+            if not all(val is not None for val in [
+                    hidden_state_kernel, hidden_state_bias,
+                    hidden_input_kernel, hidden_input_bias
+            ]):
+                logger.debug("rnn weights check failed, skip")
+                return None
+            hidden_kernel = np.concatenate([hidden_input_kernel, hidden_state_kernel])
+            # apply the linear transformation before multiplying by the output of reset gate
+            context.attributes["linear_before_reset"] = 1
+            res["hidden_kernel"] = hidden_kernel
+            res["hidden_bias"] = hidden_input_bias
+            # recurrence bias for hidden gate
+            res["Rb_h"] = hidden_state_bias
+        elif self.gru_cell_type in [RNNUnitType.GRUCell, RNNUnitType.GRUBlockCell]:
+            hidden_kernel = get_weights_from_const_node(self.g, match.get_op("hidden_kernel"))
+            hidden_bias = get_weights_from_const_node(self.g, match.get_op("hidden_bias"))
+            res["hidden_kernel"] = hidden_kernel
+            res["hidden_bias"] = hidden_bias
+
+        if not all(val is not None for val in res.values()):
             logger.debug("rnn weights check failed, skip")
             return None
 
         logger.debug("find needed weights")
-        res = {"gate_kernel": gate_kernel,
-               "gate_bias": gate_bias,
-               "hidden_kernel": hidden_kernel,
-               "hidden_bias": hidden_bias}
         return res
 
     def _state_variable_finder(self, context):
-        if self.gru_cell_type == RNNUnitType.GRUCell:
+        if self.gru_cell_type in [
+                RNNUnitType.GRUCell,
+                RNNUnitType.CudnnCompatibleGRUCell
+        ]:
             gru_cell = context.cell_match
             return self._find_state_variable_with_select(
                 context,
@@ -79,10 +120,10 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
     def parse_attributes(self, context):
         # in tf, only activation of hidden gate is optional, input and update gate always use sigmoid
         match = context.cell_match
-        activations = ["sigmoid", "Tanh"]
+        activations = ["Sigmoid", "Tanh"]
         if self.gru_cell_type == RNNUnitType.GRUCell:
             activation_op = match.get_op("optional_activation")
-            activations = ["sigmoid", activation_op.type]
+            activations = ["Sigmoid", activation_op.type]
         context.attributes["activations"] = activations
         return True
 
@@ -108,17 +149,17 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         weights = context.weights
         # from code of tensorflow GRU cell, it can be known that shape of hidden_kernel(or candidate_kernel)
         # is (input_size+hidden_unit, hidden_unit)
-        hidden_size = weights["hidden_kernel"].value.shape[1]
-        input_size = weights["hidden_kernel"].value.shape[0] - hidden_size
+        hidden_size = weights["hidden_kernel"].shape[1]
+        input_size = weights["hidden_kernel"].shape[0] - hidden_size
         weight_dtype = weights["hidden_kernel"].dtype
         bias_dtype = weights["hidden_bias"].dtype
         # below code will use same notation as ONNX document
         # z means update gate, r means reset gate, h means hidden gate;
         # at this time weights of gate include input and state, will split it next
-        r_kernel, z_kernel = np.split(weights["gate_kernel"].value, [hidden_size], axis=1)
-        h_kernel = weights["hidden_kernel"].value
-        r_bias, z_bias = np.split(weights["gate_bias"].value, [hidden_size], axis=0)
-        h_bias = weights["hidden_bias"].value
+        r_kernel, z_kernel = np.split(weights["gate_kernel"], [hidden_size], axis=1)
+        h_kernel = weights["hidden_kernel"]
+        r_bias, z_bias = np.split(weights["gate_bias"], [hidden_size], axis=0)
+        h_bias = weights["hidden_bias"]
         # ONNX GRU split weights of input and state, so have to split *_kernel
         input_r_kernel, state_r_kernel = np.split(r_kernel, [input_size], axis=0)
         input_z_kernel, state_z_kernel = np.split(z_kernel, [input_size], axis=0)
@@ -133,9 +174,11 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         assert W_zrh.shape == (1, 3*hidden_size, input_size)
         assert R_zrh.shape == (1, 3*hidden_size, hidden_size)
         Wb_zrh = np.concatenate((z_bias, r_bias, h_bias), axis=0)
-        # tf don't have bias for state, so use 0 instead
+        # if tf doesn't provide bias for state, use 0
         zero = np.zeros_like(z_bias)
-        Rb_zrh = np.concatenate((zero, zero, zero), axis=0)
+        # Rb_h is set in CudnnCompatibleGRUCell
+        Rb_h = weights["Rb_h"] if "Rb_h" in weights else zero
+        Rb_zrh = np.concatenate((zero, zero, Rb_h), axis=0)
         B_zrh = np.concatenate((Wb_zrh, Rb_zrh), axis=0)
         B_zrh = np.expand_dims(B_zrh, axis=0)
         B_zrh = B_zrh.astype(bias_dtype)
@@ -182,9 +225,13 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         context.attributes["direction"] = "forward"
         context.attributes["hidden_size"] = context.hidden_size
         inputs = context.onnx_input_ids
+        # sequence length is optional
+        seq_len_input = utils.ONNX_EMPTY_INPUT
+        if inputs["sequence_lens"]:
+            seq_len_input = inputs["sequence_lens"]
         gru_inputs = [
             inputs["X"], inputs["W"], inputs["R"], inputs["B"],
-            inputs["sequence_lens"], inputs["initial_state"]]
+            seq_len_input, inputs["initial_state"]]
         x_shape = self.g.get_shape(gru_inputs[0])
         x_seq_length = x_shape[0]
         x_batch_size = x_shape[1]
@@ -192,7 +239,7 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         gru_node = self.g.make_node("GRU", gru_inputs, attr=context.attributes, output_count=2,
                                     shapes=[[x_seq_length, num_direction, x_batch_size, context.hidden_size],
                                             [num_direction, x_batch_size, context.hidden_size]],
-                                    dtypes=[out_dtype, out_dtype])
+                                    dtypes=[out_dtype, out_dtype], op_name_scope=context.rnn_scope)
         return gru_node
 
     def _connect_gru_state_to_graph(self, context):

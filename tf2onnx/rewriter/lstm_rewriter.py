@@ -13,7 +13,7 @@ import logging
 import numpy as np
 from tf2onnx import utils
 from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx.rewriter.rnn_utils import RNNUnitType, RnnWeight, get_weights_from_const_node
+from tf2onnx.rewriter.rnn_utils import RNNUnitType, get_weights_from_const_node
 from tf2onnx.utils import is_tf_concat_op, is_tf_slice_op
 
 from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
@@ -38,6 +38,10 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
             }
         ]
 
+    def run(self):
+        logger.debug("enter lstm rewriter")
+        return super(LSTMUnitRewriter, self).run()
+
     def find_cell(self, context):
         lstm_cell_types = [RNNUnitType.LSTMCell, RNNUnitType.LSTMBlockCell]
         for cell_type in lstm_cell_types:
@@ -61,13 +65,13 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
 
         w_node = cell_match.get_op("cell_kernel")
         w = get_weights_from_const_node(self.g, w_node)
-        if not w:
+        if w is None:
             logger.warning("Cannot find weight, SKIP")
             return None
 
         b_node = cell_match.get_op("cell_bias")
         b = get_weights_from_const_node(self.g, b_node)
-        if not b or b.value.shape[0] != w.value.shape[1]:
+        if b is None or b.shape[0] != w.shape[1]:
             logger.warning("cell_kernel and cell_bias's dimension doesn't match, SKIP")
             return None
 
@@ -76,12 +80,11 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
             lstm_block_cell.get_attr("forget_bias").f,
             dtype=b.dtype
         )
-        ft_bias = RnnWeight(None, ft_bias_val, ft_bias_val.dtype)
 
         return {
             "weight": w,
             "bias": b,
-            "ft_bias": ft_bias
+            "ft_bias": ft_bias_val
         }
 
     def _get_weight_and_bias_for_lstm_cell(self, context):
@@ -89,7 +92,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
 
         w_e = match.get_op("cell_kernel")
         w = get_weights_from_const_node(self.g, w_e)
-        if not w:
+        if w is None:
             return None
 
         # check https://www.tensorflow.org/versions/r1.8/api_docs/cc/class/tensorflow/ops/bias-add
@@ -101,13 +104,13 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
 
         b_e = match.get_op("cell_bias")
         b = get_weights_from_const_node(self.g, b_e)
-        if not b or b.value.shape[0] != w.value.shape[1]:
+        if b is None or b.shape[0] != w.shape[1]:
             logger.warning("cell_kernel and cell_bias's dimensions does not match, skip")
             return None
 
         ft_bias_node = match.get_op("ft_bias")
         ft_bias = get_weights_from_const_node(self.g, ft_bias_node)
-        if not ft_bias:
+        if ft_bias is None:
             return None
 
         if not b.dtype == ft_bias.dtype:
@@ -122,9 +125,13 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
     def parse_attributes(self, context):
         if self.lstm_cell_type == RNNUnitType.LSTMBlockCell:
             lstm_block_cell = context.cell_match.get_op("lstm_block_cell")
-            clip = float(lstm_block_cell.get_attr("cell_clip").f)
+            clip = lstm_block_cell.get_attr_value("cell_clip")
             # current LSTM op cannot handle clip
             if clip > 0:
+                return False
+
+            use_peephole = lstm_block_cell.get_attr_value("use_peephole")
+            if use_peephole:
                 return False
         return True
 
@@ -207,11 +214,11 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
 
     def process_weights_and_bias(self, context):
         weights = context.weights
-        w_r_icfo = weights["weight"].value
+        w_r_icfo = weights["weight"]
         w_dtype = weights["weight"].dtype
-        b_r_icfo = weights["bias"].value
+        b_r_icfo = weights["bias"]
         b_dtype = weights["bias"].dtype
-        ft_bias_scalar = weights["ft_bias"].value
+        ft_bias_scalar = weights["ft_bias"]
 
         # split bias for each hidden unit
         # b_r_icfo: (4 * num_units,)
@@ -320,9 +327,13 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         context.attributes["direction"] = "forward"
         context.attributes["hidden_size"] = context.hidden_size
         inputs = context.onnx_input_ids
+        # sequence len input is optional
+        seq_len_input = utils.ONNX_EMPTY_INPUT
+        if inputs["sequence_lens"]:
+            seq_len_input = inputs["sequence_lens"]
         lstm_inputs = [
             inputs["X"], inputs["W"], inputs["R"], inputs["B"],
-            inputs["sequence_lens"], inputs["initial_h"], inputs["initial_c"]]
+            seq_len_input, inputs["initial_h"], inputs["initial_c"]]
 
         x_shape = self.g.get_shape(lstm_inputs[0])
         x_seq_length = x_shape[0]
@@ -333,7 +344,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
                                      shapes=[[x_seq_length, num_direction, x_batch_size, context.hidden_size],
                                              [num_direction, x_batch_size, context.hidden_size],
                                              [num_direction, x_batch_size, context.hidden_size]],
-                                     dtypes=[out_dtype, out_dtype, out_dtype])
+                                     dtypes=[out_dtype, out_dtype, out_dtype], op_name_scope=context.rnn_scope)
         return lstm_node
 
     def _connect_lstm_yh_to_graph(self, context):

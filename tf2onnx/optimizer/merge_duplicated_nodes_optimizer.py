@@ -9,6 +9,8 @@
 
 from collections import defaultdict, namedtuple
 
+import numpy as np
+
 from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
@@ -32,6 +34,8 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
         while self._graph_can_be_optimized:
             self._graph_can_be_optimized = False
             self._merge_duplicated_nodes(graph)
+            if self._graph_can_be_optimized:
+                self.graph_been_opt = True
         return graph
 
     def _merge_duplicated_nodes(self, graph):
@@ -47,6 +51,9 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
     def _group_nodes_by_type_inputs(graph):
         res = defaultdict(list)
         for node in graph.get_nodes():
+            # default const of graph input cannot be merged
+            if node.is_graph_input_default_const():
+                continue
             res[_KeyToGroupNodes(node.type, tuple(node.input))].append(node)
         return res
 
@@ -57,13 +64,31 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
             unprocessed_node = []
             nodes_to_process = [nodes_group[0]]
             for node in nodes_group[1:]:
-                if node.attr == nodes_to_process[0].attr:
+                if self._have_equal_attr(node, nodes_to_process[0], graph):
                     nodes_to_process.append(node)
                 else:
                     unprocessed_node.append(node)
 
             self._merge_nodes_that_are_duplicated(nodes_to_process, graph)
             nodes_group = unprocessed_node
+
+    def _have_equal_attr(self, node_1, node_2, graph):
+        if node_1.attr == node_2.attr:
+            return True
+        # above check guarantees consts here are able to be merged
+        if node_1.is_const() and node_2.is_const():
+            # get_tensor_value is costly so that we check their shape first
+            shape_1 = graph.get_shape(node_1.output[0])
+            shape_2 = graph.get_shape(node_2.output[0])
+            if shape_1 is not None and shape_2 is not None and \
+                    shape_1 != shape_2:
+                return False
+            const_1 = node_1.get_tensor_value(as_list=False)
+            const_2 = node_2.get_tensor_value(as_list=False)
+            if const_1.dtype == const_2.dtype and \
+                    np.array_equal(const_1, const_2):
+                return True
+        return False
 
     def _merge_nodes_that_are_duplicated(self, nodes_to_process, graph):
         # node's output may not all be used, so have to select the one that uses most of node's outputs

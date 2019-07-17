@@ -1,21 +1,31 @@
-tf2onnx - convert TensorFlow models to ONNX models.
+tf2onnx - Convert TensorFlow models to ONNX.
 ========
 
-[![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build?definitionId=16&branchName=master)
+| Build Type | OS | Python | Tensorflow | Onnx opset | Status |
+| ---        | ---    | ---    | ---        | ---        | ---    |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.5, 3.6 | 1.5-1.14 | 7-10 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.5, 3.6, 3.7 | 1.5-1.14 | 7-10 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+
+<a name="build_status_footnote">\*</a> Only test on python3.6, TF1.14.
 
 # Supported ONNX version
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support opset 6 to 10. By default we use opset 7 for the resulting ONNX graph since most runtimes will support opset 7.
+We support opset 6 to 10. By default we use opset 7 for the resulting ONNX graph since most runtimes will support opset 7. Support for future opsets add added as they are released.
 
-If you want the graph to be generated with a newer opset, use ```--opset``` in the command line, for example ```--opset 10```.
+If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 10```.
 
 # Status
-We support many TensorFlow models. Support for Fully Connected and Convolutional networks is mature. Dynamic LSTM/GRU/Attention networks should work but the code for this is evolving. 
-A list of models that we use for testing can be found [here](tests/run_pretrained_models.yaml)
+We support many TensorFlow models. Support for Fully Connected, Convolutional and dynamic LSTM networks is mature.
+A list of models that we use for testing can be found [here](tests/run_pretrained_models.yaml).
 
 Supported RNN classes and APIs: LSTMCell, BasicLSTMCell, GRUCell, GRUBlockCell, MultiRNNCell, and user defined RNN cells inheriting rnn_cell_impl.RNNCell, used along with DropoutWrapper, BahdanauAttention, AttentionWrapper.
 Check [tips](examples/rnn_tips.md) when converting RNN models.
+
+You find a list of supported Tensorflow ops and their mapping to ONNX [here](support_status.md).
+
+Tensorflow has broad functionality and occacional mapping it to ONNX creates issues.
+The common issues we run into we try to document here [Troubleshooting Guide](Troubleshooting.md).
 
 # Prerequisites
 
@@ -41,7 +51,7 @@ For pytorch/caffe2, follow the instructions here:
 We tested with pytorch/caffe2 and onnxruntime and unit tests are passing for those.
 
 ## Supported Tensorflow and Python Versions
-We are testing with tensorflow 1.5-1.13 and anaconda **3.5,3.6,3.7**.
+We are testing with tensorflow 1.5-1.14 and anaconda **3.5,3.6,3.7**.
 
 # Installation
 ## From pypi
@@ -64,8 +74,10 @@ python setup.py bdist_wheel
 
 # Usage
 
-To convert a TensorFlow model, tf2onnx prefers a ```frozen TensorFlow graph``` and the user needs to specify inputs and outputs for the graph by passing the input and output
-names with ```--inputs INPUTS``` and ```--outputs OUTPUTS```. 
+You find a end to end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSDMobilenetToONNX.ipynb).
+
+To convert a TensorFlow model, tf2onnx supports ```saved_model```, ```checkpoint``` or ```frozen graph``` formats. We recommend the ```saved_model``` format. If ```checkpoint``` or ```frozen graph``` formats are used, the user needs to specify inputs and outputs for the graph by passing the input and output
+names with ```--inputs INPUTS``` and ```--outputs OUTPUTS```.
 
 ```
 python -m tf2onnx.convert 
@@ -107,7 +119,6 @@ Some models require special handling to run on some runtimes. In particular, the
 the runtime may support custom ops that are not defined in onnx. A user can asked the converter to map to custom ops by listing them with the --custom-ops option. Tensorflow ops listed here will be mapped to a custom op with the same name as the tensorflow op but in the onnx domain ai.onnx.converters.tensorflow. For example: ```--custom-ops Print``` will insert a op ```Print``` in the onnx domain ```ai.onnx.converters.tensorflow``` into the graph. We also support a python api for custom ops documented later in this readme. 
 ### --fold_const
 when set, TensorFlow fold_constants transformation will be applied before conversion. This will benefit features including Transpose optimization (e.g. Transpose operations introduced during tf-graph-to-onnx-graph conversion will be removed), and RNN unit conversion (for example LSTM). Older TensorFlow version might run into issues with this option depending on the model.
-
 
 Usage example (run following commands in tensorflow-onnx root directory):
 ```

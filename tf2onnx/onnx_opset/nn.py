@@ -195,7 +195,7 @@ def conv_kernel_shape(ctx, node, input_idx, spatial=2):
 @tf_op(["Conv1D", "Conv2D", "Conv3D"])
 class ConvOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Conv2D(T input, T filter, @list(int) strides, @bool use_cudnn_on_gpu,
         #                       @string padding, @string data_format)
         # T Y = Conv(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
@@ -211,7 +211,7 @@ class ConvOp:
 @tf_op("Conv2DBackpropInput")
 class ConvTranspose:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = Conv2DBackpropInput(int32 input_sizes, T filter, T out_backprop,
         #    @list(int) strides, @bool use_cudnn_on_gpu, @string padding, @string data_format, @list(int) dilations)
         # T Y = ConvTranspose(T X, T W, T B, @STRING auto_pad, @INTS dilations,
@@ -220,13 +220,21 @@ class ConvTranspose:
         node.type = "ConvTranspose"
         # Note: inputs are reversed from what one would expect.
         kernel_shape = conv_kernel_shape(ctx, node, 1)
+        input_shape = ctx.get_shape(node.input[2])
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
         output_shape = ctx.get_shape(node.output[0])
         if node.is_nhwc():
             new_output_shape = [output_shape[1], output_shape[2]]
+            input_hw = [input_shape[1], input_shape[2]]
         else:
             new_output_shape = [output_shape[2], output_shape[3]]
+            input_hw = [input_shape[2], input_shape[3]]
+
+        utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
+        utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
+                        "output h and w cannot be smaller than input h and w.")
+
         node.set_attr("output_shape", new_output_shape)
 
         strides = conv_dims_attr(node, "strides")
@@ -245,7 +253,7 @@ class ConvTranspose:
 @tf_op(["DepthwiseConv2d", "DepthwiseConv2dNative"])
 class DepthwiseConv2d:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = DepthwiseConv2dNative(T input, T filter, @list(int) strides, @string padding, @string data_format)
         # T Y = ConvTranspose(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
         #        @AttrType.INTS kernel_shape, @AttrType.INTS output_shape, @AttrType.INTS pads, @AttrType.INTS strides)
@@ -288,7 +296,7 @@ class DepthwiseConv2d:
 @tf_op(["MaxPool", "MaxPoolV2"], onnx_op="MaxPool")
 class PoolOp:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         cls._convert(ctx, node, **kwargs)
 
     @classmethod
@@ -301,25 +309,26 @@ class PoolOp:
         # T Y = MaxPool(T X, @AttrType.STRING auto_pad, @AttrType.INTS kernel_shape, @AttrType.INTS pads,
         #               @AttrType.INTS strides)
         # above seems wrong - input[1] is ksize, input[2] is strides
+        # stride and ksize in tf is not always NHWC, so watch out when converting into onnx's NCHW
         if len(node.input) < 3:
-            kernel_shape = node.get_attr("ksize").ints
-            kernel_shape = [kernel_shape[1], kernel_shape[2]]
-            node.set_attr("kernel_shape", kernel_shape)
-            strides = conv_dims_attr(node, "strides")
+            kernel_shape_tf = node.get_attr("ksize").ints
+            strides_tf = node.get_attr("strides").ints
         else:
-            kernel_shape = node.inputs[1].get_tensor_value()
-            kernel_shape = [kernel_shape[1], kernel_shape[2]]
-            node.set_attr("kernel_shape", kernel_shape)
-
-            strides = node.inputs[2].get_tensor_value()
-            strides = [strides[1], strides[2]]
-            node.set_attr("strides", strides)
-
+            kernel_shape_tf = node.inputs[1].get_tensor_value()
+            strides_tf = node.inputs[2].get_tensor_value()
             ctx.remove_input(node, node.input[2])
             ctx.remove_input(node, node.input[1])
 
+        if node.is_nhwc():
+            kernel_shape_hw = kernel_shape_tf[1:3]
+            strides_hw = strides_tf[1:3]
+        else:
+            kernel_shape_hw = kernel_shape_tf[2:4]
+            strides_hw = strides_tf[2:4]
+        node.set_attr("kernel_shape", kernel_shape_hw)
+        node.set_attr("strides", strides_hw)
         conv_dims_attr(node, "dilations")
-        add_padding(ctx, node, kernel_shape, strides)
+        add_padding(ctx, node, kernel_shape_hw, strides_hw)
         conv_convert_inputs(ctx, node, with_kernel=False)
 
 
@@ -349,12 +358,12 @@ class MaxPoolWithArgmaxOp:
 @tf_op(["BiasAdd", "BiasAddV1"])
 class BiasAdd:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # T output = BiasAdd(T value, T bias, @string data_format)
         # T output = BiasAddV1(T value, T bias)
         # TODO: for now use add. We may need to convert to NCHW.
         node.type = "Add"
-        common.BroadcastOp.version_4(ctx, node, **kwargs)
+        common.BroadcastOp.version_1(ctx, node, **kwargs)
 
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
@@ -362,7 +371,7 @@ class BiasAdd:
         # T output = BiasAddV1(T value, T bias)
         # According TF bias_add definition, the input dim is always only 1.
         node.type = "Add"
-        common.BroadcastOp.version_7(ctx, node, **kwargs)
+        common.BroadcastOp.version_6(ctx, node, **kwargs)
 
         # on NHWC, bias will broadcast from largest dim, which is default onnx Add op broadcast behavior.
         if not node.is_nhwc():
@@ -383,7 +392,7 @@ class BiasAdd:
 @tf_op(["Pad", "PadV2", "MirrorPad"])
 class Pad:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.type = "Pad"
         # T output = Pad(T input, int32 paddings, @type Tpaddings), CONST model using default value
         #  or PadV2(T input, int32 paddings, T constant_value, @type Tpaddings), CONST mode - default value specified
@@ -423,7 +432,7 @@ class Pad:
 @tf_op(["FusedBatchNorm", "FusedBatchNormV2"])
 class BatchNorm:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_6(cls, ctx, node, **kwargs):
         node.type = "BatchNormalization"
         # tf inputs: x, scale, bias, mean, variance
         # tf outputs: y, batch_mean, batch_var
@@ -458,18 +467,23 @@ class BatchNorm:
             ctx.make_const(new_val_node_name, new_var_value)
             node.input[4] = new_val_node_name
 
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        # is_test was removed - no change for us
+        cls.version_6(ctx, node, **kwargs)
+
 
 @tf_op(["SpaceToDepth", "DepthToSpace"])
 class SpaceToDepth:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         block_size = node.get_attr("block_size")
         node.set_attr("blocksize", block_size.i)
         conv_convert_inputs(ctx, node, with_kernel=False)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
-class ResizeX:
+class Resize:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         mode = "linear" if node.type == "ResizeBilinear" else "nearest"
@@ -480,6 +494,7 @@ class ResizeX:
         # wants the input to be NHWC - adjust target_shape to this.
         n, h, w, c = shape
         nh, nw = target_shape
+        utils.make_sure(all(i != -1 for i in [nh, nw]), "h and w need to be known")
         # scaler is nchw
         scaler = [1., 1., float(nh) / h, float(nw) / w]
         node.set_attr("scales", scaler)
@@ -531,13 +546,13 @@ class ResizeX:
             # scales is nchw
             scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
-        input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": [0, 3, 1, 2]})
+        input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
         upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node("Transpose", upsample.output, {"perm": [0, 2, 3, 1]},
+        ctx.make_node("Transpose", upsample.output, {"perm": constants.NCHW_TO_NHWC},
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 @tf_op("Prod", onnx_op="ReduceProd")
 class ReduceOpBase:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         axes_node = node.inputs[1]
         axes = axes_node.get_tensor_value()
         if np.isscalar(axes):
@@ -53,7 +53,7 @@ class ReduceOpBase:
 @tf_op(["ArgMax", "ArgMin"])
 class ArgMax:
     @classmethod
-    def version_4(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         # output_type output = ArgMin(T input, Tidx dimension, @type Tidx, @type output_type)
         # tensor(int32) reduced = ArgMin(T data, @INT axis, @INT keepdims)
         axis_node = node.inputs[1]
