@@ -30,8 +30,9 @@ stages:
   - template: 'templates/combine_test_coverage.yml'
 
 schedules:
-- cron: "0 16 * * *"
+- cron: "0 10 * * *"
   displayName: Daily onnxruntime nightly unittest
   branches:
     include:
     - master
+  always: true
