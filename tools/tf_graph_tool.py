@@ -246,7 +246,8 @@ class main(object):
         src_ops = []
         def node_checker(n):
             if not n.startswith(name_prefix) or n in src_nodes:
-                src_ops.append(name_to_node[n])
+                if name_to_node[n] not in src_ops:
+                    src_ops.append(name_to_node[n])
                 return False
             return True
         nodes_to_keep = bfs_for_reachable_nodes(dest_nodes, name_to_input_name, checker=node_checker)
@@ -265,10 +266,17 @@ class main(object):
             placeholder_node = node_def_pb2.NodeDef()
             placeholder_node.op = "Placeholder"
             placeholder_node.name = op.name
+            dtype = None
             if str(op.attr["dtype"]):
-                placeholder_node.attr["dtype"].CopyFrom(op.attr["dtype"])
+                dtype = op.attr["dtype"]
             elif str(op.attr["T"]):
-                placeholder_node.attr["dtype"].CopyFrom(op.attr["T"])
+                dtype = op.attr["T"]
+            elif str(op.attr["output_types"]):
+                dtype = attr_value_pb2.AttrValue()
+                dtype.type = op.attr["output_types"].list.type[0]
+            if dtype is None:
+                raise RuntimeError("Cannot find dtype for Placeholder: {}".format(op.name))
+            placeholder_node.attr["dtype"].CopyFrom(dtype)
             shape = graph_util.tensor_shape_from_node_def_name(tf_graph, op.name)
             placeholder_node.attr["shape"].CopyFrom(
                 attr_value_pb2.AttrValue(shape=shape.as_proto())
