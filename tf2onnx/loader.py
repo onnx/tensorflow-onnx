@@ -125,4 +125,4 @@ def from_saved_model(model_path, input_names, output_names, signatures=None):
     input_names = remove_redundant_inputs(frozen_graph, input_names)
     # clean up
     tf.reset_default_graph()
-    return frozen_graph, input_names, outputs.keys()
+    return frozen_graph, input_names, list(outputs.keys())
