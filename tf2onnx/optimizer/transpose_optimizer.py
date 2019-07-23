@@ -210,7 +210,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             # currently we assume node only has 1 output, for cases where it is more than 1 for example Split
             # we need consider the fact that Split's multiple output will not always has data in NCHW/NHWC,
             # it might be a different shape.
-            output_transposes = self._g.find_output_consumers(node.output[0])
+            output_transposes = self._g.find_output_consumers(node.output[0], search_in_body_graph=False)
             for n in output_transposes:
                 n_input = n.input[0]
                 utils.make_sure(len(n.output) == 1, "only expect single output")
@@ -258,7 +258,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         if trans.output[0] in self._g.outputs:
             self.logger.debug("%s connects to graph outputs, skip", trans.output[0])
             return False
-        out_nodes = self._g.find_output_consumers(trans.output[0])
+        out_nodes = self._g.find_output_consumers(trans.output[0], search_in_body_graph=False)
         if len(out_nodes) == 1:
             p = out_nodes[0]
             if p.name in self._output_names:
@@ -274,7 +274,6 @@ class TransposeOptimizer(GraphOptimizerBase):
             branch_trans = self._g.make_node("Transpose", [trans.input[0]], attr=trans.attr_onnx)
             self._g.replace_input(n, trans.output[0], branch_trans.output[0])
 
-        self._g.remove_node(trans.name)
         return False
 
     def _remove_useless_tranpose(self, trans):
@@ -284,7 +283,7 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _nodes_has_single_consumer_node(self, nodes):
         for n in nodes:
             for output in n.output:
-                cnt = len(set(self._g.find_output_consumers(output)))
+                cnt = len(set(self._g.find_output_consumers(output, search_in_body_graph=False)))
                 if cnt != 1:
                     return False
         return True
@@ -293,7 +292,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         # we just support node having 1 output, we need consider cases where node has more than 1 outputs
         assert len(node.output) == 1
         non_nchw_tranpose_nodes = []
-        consumers = self._g.find_output_consumers(node.output[0])
+        consumers = self._g.find_output_consumers(node.output[0], search_in_body_graph=False)
         for o in consumers:
             if not is_nchw_transpose(o) and o not in non_nchw_tranpose_nodes:
                 non_nchw_tranpose_nodes.append(o)

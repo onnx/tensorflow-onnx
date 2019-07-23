@@ -1080,7 +1080,7 @@ class Graph(object):
         self.replace_all_inputs(to_replace, output_name, new_output)
         return new_node
 
-    def find_output_consumers(self, output_name):
+    def find_output_consumers(self, output_name, search_in_body_graph=True):
         """Find all nodes consuming a given output."""
         nodes = []
         for node in self.get_nodes():
@@ -1088,10 +1088,11 @@ class Graph(object):
                 nodes.append(node)
 
             # find consumers in sub graphs
-            body_graphs = node.get_body_graphs()
-            if body_graphs:
-                for g in body_graphs.values():
-                    nodes.extend(g.find_output_consumers(output_name))
+            if search_in_body_graph:
+                body_graphs = node.get_body_graphs()
+                if body_graphs:
+                    for g in body_graphs.values():
+                        nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
     @staticmethod
