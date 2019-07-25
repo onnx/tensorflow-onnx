@@ -808,6 +808,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
+    @check_opset_min_version(11, "Equal")
+    def test_equal_float(self):
+        x_val1 = np.array([0., 1., 2., 3., 4., -1., -2], dtype=np.float32)
+        x_val2 = np.array([0., 1., 2.1, 3.5, 4.6, -1.1, -2.9], dtype=np.float32)
+        x1 = tf.placeholder(tf.float32, x_val1.shape, name=_TFINPUT)
+        x2 = tf.placeholder(tf.float32, x_val2.shape, name=_TFINPUT1)
+        mi = tf.equal(x1, x2)
+        _ = tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
     def test_equal(self):
         x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
         x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
