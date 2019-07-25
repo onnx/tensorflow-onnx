@@ -1522,7 +1522,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(3 * 2 * 3).astype("float32")
         x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
         k_val = np.array(10).astype(np.int32)
-        k = tf.placeholder(tf.int32, name=_TFINPUT1)
+        k = tf.placeholder(tf.int32, k_val.shape, name=_TFINPUT1)
         values, _ = tf.nn.top_k(x, k, sorted=True)
         _ = tf.identity(values, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: k_val})

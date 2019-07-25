@@ -106,13 +106,11 @@ def infer_shape_for_op(op):
     if op.type == "Placeholder":
         # if placeholder shape is not found, try to get it from "shape" attribute.
         attr_shape = utils.get_tf_shape_attr(op)
-        if attr_shape is not None:
-            new_shape = list(attr_shape)
-            op.outputs[0].set_shape(new_shape)
-            logger.debug("set placeholder op [%s] with new shape %s", op.outputs[0].name, new_shape)
-            return True
-        logger.warning("Shape of placeholder %s is unknown, treated it as a scalar", op.name)
-        op.outputs[0].set_shape([])
+        if attr_shape is None:
+            raise RuntimeError("Shape of placeholder {} is unknown.".format(op.name))
+        new_shape = list(attr_shape)
+        op.outputs[0].set_shape(new_shape)
+        logger.debug("set placeholder op [%s] with new shape %s", op.outputs[0].name, new_shape)
         return True
 
     if op.type == "Merge":

@@ -4,6 +4,7 @@
 regression-graphdef:
   model: models/regression/graphdef/frozen.pb
   input_get: get_ramp
+  force_input_shape: true
   inputs:
     "X:0": [1]
   outputs:
@@ -13,6 +14,7 @@ regression-checkpoint:
   model: models/regression/checkpoint/model.meta
   model_type: checkpoint
   input_get: get_ramp
+  force_input_shape: true
   inputs:
     "X:0": [1]
   outputs:
@@ -22,6 +24,7 @@ regression-saved-model:
   model: models/regression/saved_model
   model_type: saved_model
   input_get: get_ramp
+  force_input_shape: true
   inputs:
     "X:0": [1]
   outputs:
@@ -31,6 +34,7 @@ saved_model_with_redundant_inputs:
   model: models/saved_model_with_redundant_inputs
   model_type: saved_model
   input_get: get_ramp
+  force_input_shape: true
   inputs:
     "X:0": [1, 10]
     "Placeholder:0": [1, 10]
@@ -40,6 +44,7 @@ saved_model_with_redundant_inputs:
 graphdef_with_redundant_inputs:
   model: models/regression/graphdef/frozen.pb
   input_get: get_ramp
+  force_input_shape: true
   inputs:
     "X:0": [1, 10]
     "Placeholder:0": [1, 10]
@@ -50,6 +55,7 @@ checkpoint_with_redundant_inputs:
   model: models/regression/checkpoint/model.meta
   model_type: checkpoint
   input_get: get_ramp
+  force_input_shape: true
   inputs:
     "X:0": [1]
     "Placeholder:0": [1, 10]
