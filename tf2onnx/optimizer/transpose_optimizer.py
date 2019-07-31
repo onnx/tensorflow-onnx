@@ -552,15 +552,23 @@ class TransposeOptimizer(GraphOptimizerBase):
         axes = None
         if self._g.opset < 10:
             axes = node.get_attr("axes").ints
+            if axes == [0, 1, 2, 3]:
+                node.set_attr("axes", NCHW_TO_NHWC)
+                return self._switch_transpose_and_node(node, trans)
         else:  # in opset 10, axes is input instead of an attribute.
-            if len(node.inputs) >= 4:
-                axes_node = node.inputs[3]
-                if axes_node.is_const():
-                    axes = axes_node.get_tensor_value(as_list=True)
-
-        if axes == [0, 1, 2, 3]:
-            node.set_attr("axes", NCHW_TO_NHWC)
-            return self._switch_transpose_and_node(node, trans)
+            if len(node.inputs) >= 4 and node.inputs[3].is_const():
+                axes = node.inputs[3].get_tensor_value(as_list=True)
+                if axes == [0, 1, 2, 3]:
+                    # axes node might be shared
+                    new_axes = np.array(NCHW_TO_NHWC, dtype=np.int64)
+                    if self._nodes_has_single_consumer_node([node]):
+                        node.inputs[3].set_tensor_value(new_axes)
+                    else:
+                        new_axes_const = self._g.make_const(
+                            utils.make_name(node.inputs[3].name), new_axes
+                        )
+                        self._g.replace_input(node, node.input[3], new_axes_const.output[0])
+                    return self._switch_transpose_and_node(node, trans)
         return False
 
     def _simple_through_handler(self, trans, node):
