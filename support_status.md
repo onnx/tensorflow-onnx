@@ -2,153 +2,155 @@
 ### Domain: "" (default domain)
 | Tensorflow Op | Convertible to ONNX Op Versions |
 | ------------- | ------------------------------- |
-| Const | ['1'] |
-| ConstV2 | ['1'] |
-| RandomNormal | ['1'] |
-| RandomUniform | ['1'] |
-| RandomNormalLike | ['1'] |
-| RandomUniformLike | ['1'] |
-| ZerosLike | ['1'] |
-| LogicalNot | ['1'] |
-| LogicalOr | ['1', '6'] |
-| LogicalAnd | ['1', '6'] |
-| Equal | ['1', '7'] |
-| NotEqual | ['1', '7'] |
-| Greater | ['1', '7'] |
-| Less | ['1', '7'] |
-| Add | ['1', '6'] |
-| Div | ['1', '6'] |
-| Mul | ['1', '6'] |
-| Sub | ['1', '6'] |
-| RealDiv | ['1', '6'] |
-| TruncateDiv | ['1', '6'] |
-| LeakyRelu | ['1'] |
-| LogSoftmax | ['1'] |
-| Softplus | ['1'] |
-| Softsign | ['1'] |
-| Abs | ['1', '6'] |
-| Ceil | ['1', '6'] |
-| Elu | ['1', '6'] |
-| Exp | ['1', '6'] |
-| Floor | ['1', '6'] |
-| Log | ['1', '6'] |
-| Neg | ['1', '6'] |
-| Relu | ['1', '6'] |
-| Sigmoid | ['1', '6'] |
-| Sqrt | ['1', '6'] |
-| Tanh | ['1', '6'] |
-| Reciprocal | ['1', '6'] |
-| Maximum | ['1'] |
-| Minimum | ['1'] |
-| Softmax | ['1'] |
-| Square | ['1'] |
-| Relu6 | ['1'] |
-| Rsqrt | ['1'] |
-| SquaredDifference | ['1'] |
-| Sign | ['1', '9'] |
-| Pow | ['1', '7'] |
-| LRN | ['1'] |
-| MatMul | ['1'] |
-| BatchMatMul | ['1'] |
-| Erf | ['1', '9'] |
-| Selu | ['1'] |
-| CheckNumerics | ['1'] |
-| StopGradient | ['1'] |
-| Placeholder | ['1'] |
-| PlaceholderV2 | ['1'] |
-| PlaceholderWithDefault | ['1'] |
-| NoOp | ['1'] |
-| Size | ['1'] |
-| Flatten | ['1', '9'] |
-| Dropout | ['1', '6', '7', '10'] |
-| Identity | ['1'] |
-| Reshape | ['1', '5'] |
-| Squeeze | ['1'] |
-| Transpose | ['1'] |
-| Concat | ['1'] |
-| ConcatV2 | ['1'] |
-| Slice | ['1', '10'] |
-| Gather | ['1'] |
-| GatherV2 | ['1'] |
-| GatherNd | ['1'] |
-| Split | ['1', '2'] |
-| SplitV | ['1', '2'] |
-| ExpandDims | ['1', '7'] |
-| StridedSlice | ['1', '10'] |
-| Cast | ['1', '6', '9'] |
-| TopKV2 | ['1', '10'] |
-| Tile | ['1'] |
-| Pack | ['1'] |
-| Unpack | ['1'] |
-| OneHot | ['1', '9'] |
-| Shape | ['1'] |
-| BatchToSpaceND | ['1'] |
-| SpaceToBatchND | ['1'] |
-| Conv1D | ['1'] |
-| Conv2D | ['1'] |
-| Conv3D | ['1'] |
-| Conv2DBackpropInput | ['1'] |
-| DepthwiseConv2d | ['1'] |
-| DepthwiseConv2dNative | ['1'] |
-| MaxPool | ['1', '10'] |
-| MaxPoolV2 | ['1', '10'] |
-| AvgPool | ['1', '10'] |
-| AvgPool3D | ['1', '10'] |
-| BiasAdd | ['1', '7'] |
-| BiasAddV1 | ['1', '7'] |
-| Pad | ['1'] |
-| PadV2 | ['1'] |
-| MirrorPad | ['1'] |
-| SpaceToDepth | ['1'] |
-| DepthToSpace | ['1'] |
-| Prod | ['1'] |
-| Sum | ['1'] |
-| Mean | ['1'] |
-| Max | ['1'] |
-| Min | ['1'] |
-| ArgMax | ['1'] |
-| ArgMin | ['1'] |
-| LSTMBlockCell | ['1', '7'] |
-| FloorDiv | ['6'] |
-| FusedBatchNorm | ['6', '9'] |
-| FusedBatchNormV2 | ['6', '9'] |
-| All | ['6'] |
-| Any | ['6'] |
-| AddN | ['6'] |
-| If | ['7'] |
-| Loop | ['7'] |
-| Scan | ['7'] |
-| Range | ['7'] |
-| Fill | ['7', '9'] |
-| Multinomial | ['7'] |
-| LessEqual | ['7'] |
-| GreaterEqual | ['7'] |
-| Acos | ['7'] |
-| Asin | ['7'] |
-| Atan | ['7'] |
-| Cos | ['7'] |
-| Sin | ['7'] |
-| Tan | ['7'] |
-| FloorMod | ['7'] |
-| ResizeBilinear | ['7', '9', '10'] |
-| ResizeNearestNeighbor | ['7', '9', '10'] |
-| MatrixBandPart | ['7'] |
-| SoftmaxCrossEntropyWithLogits | ['7'] |
-| SparseSoftmaxCrossEntropyWithLogits | ['7', '9'] |
-| Select | ['8', '9'] |
-| ReverseSequence | ['8', '9', '10'] |
-| MaxPoolWithArgmax | ['8'] |
-| Where | ['9'] |
-| Acosh | ['9'] |
-| Asinh | ['9'] |
-| Atanh | ['9'] |
-| Cosh | ['9'] |
-| Sinh | ['9'] |
-| IsNan | ['9'] |
-| IsInf | ['10'] |
-| NonMaxSuppressionV2 | ['10'] |
-| NonMaxSuppressionV3 | ['10'] |
+| Const | 1 ~ 10 |
+| ConstV2 | 1 ~ 10 |
+| RandomNormal | 1 ~ 10 |
+| RandomUniform | 1 ~ 10 |
+| RandomNormalLike | 1 ~ 10 |
+| RandomUniformLike | 1 ~ 10 |
+| ZerosLike | 1 ~ 10 |
+| LogicalNot | 1 ~ 10 |
+| LogicalOr | 1 ~ 10 |
+| LogicalAnd | 1 ~ 10 |
+| Equal | 1 ~ 10 |
+| NotEqual | 1 ~ 10 |
+| Greater | 1 ~ 10 |
+| Less | 1 ~ 10 |
+| Add | 1 ~ 10 |
+| Div | 1 ~ 10 |
+| Mul | 1 ~ 10 |
+| Sub | 1 ~ 10 |
+| RealDiv | 1 ~ 10 |
+| TruncateDiv | 1 ~ 10 |
+| LeakyRelu | 1 ~ 10 |
+| LogSoftmax | 1 ~ 10 |
+| Softplus | 1 ~ 10 |
+| Softsign | 1 ~ 10 |
+| Abs | 1 ~ 10 |
+| Ceil | 1 ~ 10 |
+| Elu | 1 ~ 10 |
+| Exp | 1 ~ 10 |
+| Floor | 1 ~ 10 |
+| Log | 1 ~ 10 |
+| Neg | 1 ~ 10 |
+| Relu | 1 ~ 10 |
+| Sigmoid | 1 ~ 10 |
+| Sqrt | 1 ~ 10 |
+| Tanh | 1 ~ 10 |
+| Reciprocal | 1 ~ 10 |
+| Maximum | 1 ~ 10 |
+| Minimum | 1 ~ 10 |
+| Softmax | 1 ~ 10 |
+| Square | 1 ~ 10 |
+| Relu6 | 1 ~ 10 |
+| Rsqrt | 1 ~ 10 |
+| SquaredDifference | 1 ~ 10 |
+| Sign | 1 ~ 10 |
+| Pow | 1 ~ 10 |
+| LRN | 1 ~ 10 |
+| MatMul | 1 ~ 10 |
+| BatchMatMul | 1 ~ 10 |
+| BatchMatMulV2 | 1 ~ 10 |
+| Erf | 1 ~ 10 |
+| Selu | 1 ~ 10 |
+| CheckNumerics | 1 ~ 10 |
+| StopGradient | 1 ~ 10 |
+| Placeholder | 1 ~ 10 |
+| PlaceholderV2 | 1 ~ 10 |
+| PlaceholderWithDefault | 1 ~ 10 |
+| NoOp | 1 ~ 10 |
+| Size | 1 ~ 10 |
+| Flatten | 1 ~ 10 |
+| Dropout | 1 ~ 10 |
+| Identity | 1 ~ 10 |
+| Reshape | 1 ~ 10 |
+| Squeeze | 1 ~ 10 |
+| Transpose | 1 ~ 10 |
+| Concat | 1 ~ 10 |
+| ConcatV2 | 1 ~ 10 |
+| Slice | 1 ~ 10 |
+| Gather | 1 ~ 10 |
+| GatherV2 | 1 ~ 10 |
+| GatherNd | 1 ~ 10 |
+| Split | 1 ~ 10 |
+| SplitV | 1 ~ 10 |
+| ExpandDims | 1 ~ 10 |
+| StridedSlice | 1 ~ 10 |
+| Cast | 1 ~ 10 |
+| TopKV2 | 1 ~ 10 |
+| Tile | 1 ~ 10 |
+| Pack | 1 ~ 10 |
+| Unpack | 1 ~ 10 |
+| OneHot | 1 ~ 10 |
+| Shape | 1 ~ 10 |
+| BatchToSpaceND | 1 ~ 10 |
+| SpaceToBatchND | 1 ~ 10 |
+| Conv1D | 1 ~ 10 |
+| Conv2D | 1 ~ 10 |
+| Conv3D | 1 ~ 10 |
+| Conv2DBackpropInput | 1 ~ 10 |
+| DepthwiseConv2d | 1 ~ 10 |
+| DepthwiseConv2dNative | 1 ~ 10 |
+| MaxPool | 1 ~ 10 |
+| MaxPoolV2 | 1 ~ 10 |
+| AvgPool | 1 ~ 10 |
+| AvgPool3D | 1 ~ 10 |
+| BiasAdd | 1 ~ 10 |
+| BiasAddV1 | 1 ~ 10 |
+| Pad | 1 ~ 10 |
+| PadV2 | 1 ~ 10 |
+| MirrorPad | 1 ~ 10 |
+| SpaceToDepth | 1 ~ 10 |
+| DepthToSpace | 1 ~ 10 |
+| Prod | 1 ~ 10 |
+| Sum | 1 ~ 10 |
+| Mean | 1 ~ 10 |
+| Max | 1 ~ 10 |
+| Min | 1 ~ 10 |
+| ArgMax | 1 ~ 10 |
+| ArgMin | 1 ~ 10 |
+| LSTMBlockCell | 1 ~ 10 |
+| FloorDiv | 6 ~ 10 |
+| FusedBatchNorm | 6 ~ 10 |
+| FusedBatchNormV2 | 6 ~ 10 |
+| All | 6 ~ 10 |
+| Any | 6 ~ 10 |
+| AddN | 6 ~ 10 |
+| If | 7 ~ 10 |
+| Loop | 7 ~ 10 |
+| Scan | 7 ~ 10 |
+| Range | 7 ~ 10 |
+| Fill | 7 ~ 10 |
+| Multinomial | 7 ~ 10 |
+| LessEqual | 7 ~ 10 |
+| GreaterEqual | 7 ~ 10 |
+| Acos | 7 ~ 10 |
+| Asin | 7 ~ 10 |
+| Atan | 7 ~ 10 |
+| Cos | 7 ~ 10 |
+| Sin | 7 ~ 10 |
+| Tan | 7 ~ 10 |
+| FloorMod | 7 ~ 10 |
+| ResizeBilinear | 7 ~ 10 |
+| ResizeNearestNeighbor | 7 ~ 10 |
+| MatrixBandPart | 7 ~ 10 |
+| SoftmaxCrossEntropyWithLogits | 7 ~ 10 |
+| SparseSoftmaxCrossEntropyWithLogits | 7 ~ 10 |
+| Select | 8 ~ 10 |
+| ReverseSequence | 8 ~ 10 (Except 9) |
+| MaxPoolWithArgmax | 8 ~ 10 |
+| Where | 9 ~ 10 |
+| Acosh | 9 ~ 10 |
+| Asinh | 9 ~ 10 |
+| Atanh | 9 ~ 10 |
+| Cosh | 9 ~ 10 |
+| Sinh | 9 ~ 10 |
+| IsNan | 9 ~ 10 |
+| IsInf | 10 |
+| NonMaxSuppressionV2 | 10 |
+| NonMaxSuppressionV3 | 10 |
+| ReverseV2 | 10 |
 ### Domain: "com.microsoft" 
 | Tensorflow Op | Convertible to ONNX Op Versions |
 | ------------- | ------------------------------- |
-| Range | ['1'] |
+| Range | 1 |

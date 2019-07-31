@@ -79,6 +79,17 @@ class Equal:
             ctx.copy_shape(output_name, not_node.output[0])
             ctx.copy_dtype(output_name, not_node.output[0])
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # starting with opset-11, equal supports all types
+        need_not = node.type == "NotEqual"
+        if need_not:
+            node.type = "Equal"
+            output_name = node.output[0]
+            not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
+            ctx.copy_shape(output_name, not_node.output[0])
+            ctx.copy_dtype(output_name, not_node.output[0])
+
 
 @tf_op(["Greater", "Less"])
 class GreaterLess:
