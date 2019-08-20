@@ -404,6 +404,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
 
+    @check_onnxruntime_min_version("0.5.0", "conv transpose is added since onnxruntime-0.5.0")
     def test_conv2d_transpose2(self):
         # output_shape is dynamic
         extra_opset = [utils.make_opsetid(constants.MICROSOFT_DOMAIN, 1)]
