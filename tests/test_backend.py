@@ -16,7 +16,7 @@ import tensorflow as tf
 from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
-from tf2onnx import constants
+from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
@@ -403,6 +403,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         conv = tf.nn.conv2d_transpose(x, f, output_shape, strides=strides, padding="VALID")
         _ = tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
+
+    def test_conv2d_transpose2(self):
+        # output_shape is dynamic
+        extra_opset = [utils.make_opsetid(constants.MICROSOFT_DOMAIN, 1)]
+        process_args = {"extra_opset": extra_opset}
+        x_shape = [2, 6, 4, 3]
+        output_shape = np.array([2, 13, 9, 2]).astype(np.int32)
+        kernel_shape = [3, 3, 2, 3]
+        strides = [1, 2, 2, 1]
+        x_val = make_xval(x_shape)
+        kernel_val = make_xval(kernel_shape)
+        x = tf.placeholder(tf.float32, shape=x_shape, name=_TFINPUT)
+        f = tf.constant(kernel_val, name="kernel", dtype=tf.float32)
+        output_shape_placeholder = tf.placeholder(tf.int32, shape=[4], name=_TFINPUT1)
+        conv = tf.nn.conv2d_transpose(x, f, output_shape_placeholder, strides=strides, padding="VALID")
+        _ = tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape}, rtol=1e-05, process_args=process_args)
 
     def test_depthwiseconv_0(self):
         x_shape = [1, 3, 4, 3]
