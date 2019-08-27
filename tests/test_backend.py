@@ -2588,6 +2588,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(y, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    def test_clip_by_value(self):
+        x_val = np.arange(0, 24, dtype=np.float32).reshape([3, 8])
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        y = tf.clip_by_value(x, 8.5, 16.5)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        tf.reset_default_graph()
+        x_val = np.arange(0, 24, dtype=np.int32).reshape([3, 8])
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        y = tf.clip_by_value(x, 8, 16)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     # test for gemm pattern0: alpha*A*B + beta*C
     def test_gemm_pattern0(self):
         max_number = 10
