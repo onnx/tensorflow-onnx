@@ -11,7 +11,7 @@ jobs:
 
 - template: 'templates/job_generator.yml'
   parameters:
-    platforms: ['windows', 'mac']
+    platforms: ['windows']
     tf_versions: ['1.14.0']
     job:
       steps:
