@@ -151,7 +151,7 @@ class ClipByValueOp:
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         node = ctx.make_node("Clip", [node.input[0]], outputs=[node.output[0]],
-                             attr = {"min": float(min_val), "max": float(max_val)}, shapes=shapes, dtypes=dtypes)
+                             attr={"min": float(min_val), "max": float(max_val)}, shapes=shapes, dtypes=dtypes)
         if dtypes[0] not in supported:
             cast_name = utils.make_name(node.name)
             ctx.insert_new_node_on_input(node, "Cast", node.input[0], name=cast_name, to=onnx_pb.TensorProto.FLOAT)
