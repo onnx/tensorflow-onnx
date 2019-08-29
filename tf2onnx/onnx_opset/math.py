@@ -137,6 +137,30 @@ class MinMaxOp:
         make_min_or_max_op(ctx, node.type, node.input, node.output, shapes, dtypes)
 
 
+@tf_op("ClipByValue")
+class ClipByValueOp:
+    # in tf-1.8 there was a ClipByValue op which in later versions was replaced by max(min(x, a), b)
+    # To support models generated with tf-1.8 we use onnx Clip().
+    # Only constants for min and max values are supported.
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        supported = [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]
+        min_val = node.inputs[1].get_tensor_value()
+        max_val = node.inputs[2].get_tensor_value()
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        node = ctx.make_node("Clip", [node.input[0]], outputs=[node.output[0]],
+                             attr={"min": float(min_val), "max": float(max_val)}, shapes=shapes, dtypes=dtypes)
+        if dtypes[0] not in supported:
+            cast_name = utils.make_name(node.name)
+            ctx.insert_new_node_on_input(node, "Cast", node.input[0], name=cast_name, to=onnx_pb.TensorProto.FLOAT)
+            cast_name = utils.make_name(node.name)
+            cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=dtypes[0])
+            ctx.copy_shape(node.output[0], cast_node.output[0])
+            ctx.copy_dtype(node.output[0], cast_node.output[0])
+
+
 @tf_op("Softmax")
 class Softmax:
     @classmethod
