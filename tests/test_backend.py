@@ -2588,12 +2588,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(y, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(8, "ClipByValue (needs broadcast)")
     def test_clip_by_value(self):
+        # float32, dynamic min/max
+        x_val = np.arange(0, 24, dtype=np.float32).reshape([3, 8])
+        x_minval = np.array(8.5, dtype=np.float32)
+        x_maxval = np.array(16.5, dtype=np.float32)
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        x_min = tf.placeholder(tf.float32, name=_TFINPUT1)
+        x_max = tf.placeholder(tf.float32, name=_TFINPUT2)
+        y = tf.clip_by_value(x, x_min, x_max)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_minval, _INPUT2: x_maxval})
+        # float32, const min/max
+        tf.reset_default_graph()
         x_val = np.arange(0, 24, dtype=np.float32).reshape([3, 8])
         x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
         y = tf.clip_by_value(x, 8.5, 16.5)
         _ = tf.identity(y, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        # int32, converter needs to cast, const min/max
         tf.reset_default_graph()
         x_val = np.arange(0, 24, dtype=np.int32).reshape([3, 8])
         x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)

@@ -140,25 +140,42 @@ class MinMaxOp:
 @tf_op("ClipByValue")
 class ClipByValueOp:
     # in tf-1.8 there was a ClipByValue op which in later versions was replaced by max(min(x, a), b)
-    # To support models generated with tf-1.8 we use onnx Clip().
-    # Only constants for min and max values are supported.
+    # To support models generated with tf-1.8 rewrite the tf ClipByValue op to max(min(x, a), b)
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def version_8(cls, ctx, node, **kwargs):
         supported = [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]
-        min_val = node.inputs[1].get_tensor_value()
-        max_val = node.inputs[2].get_tensor_value()
+        # fetch those upfront since they are not accessible once we remove 'node'
         shapes = node.output_shapes
         dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        node = ctx.make_node("Clip", [node.input[0]], outputs=[node.output[0]],
-                             attr={"min": float(min_val), "max": float(max_val)}, shapes=shapes, dtypes=dtypes)
+        input_dtype = node.inputs[0].output_dtypes[0]
+        name = node.name
+        min_node = node.inputs[1]
+        if min_node.output_dtypes[0] not in supported:
+            # cast min if needed
+            min_node = ctx.insert_new_node_on_input(node, "Cast", min_node.output[0], to=onnx_pb.TensorProto.FLOAT)
+        max_node = node.inputs[2]
+        if max_node.output_dtypes[0] not in supported:
+            # cast max if needed
+            max_node = ctx.insert_new_node_on_input(node, "Cast", max_node.output[0], to=onnx_pb.TensorProto.FLOAT)
+        ctx.remove_node(name)
+        new_node = ctx.make_node("Max", [node.input[0], min_node.output[0]], outputs=[node.output[0]],
+                                 shapes=shapes, dtypes=dtypes)
+        if input_dtype not in supported:
+            # cast the data tensor if needed
+            ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[0], to=onnx_pb.TensorProto.FLOAT)
+
+        new_node = ctx.insert_new_node_on_output("Min", new_node.output[0], name=utils.make_name(name))
+        new_node.input.append(max_node.output[0])
+        # copy shape and type
+        ctx.set_dtype(new_node.output[0], dtypes[0])
+        ctx.set_shape(new_node.output[0], shapes[0])
         if dtypes[0] not in supported:
-            cast_name = utils.make_name(node.name)
-            ctx.insert_new_node_on_input(node, "Cast", node.input[0], name=cast_name, to=onnx_pb.TensorProto.FLOAT)
-            cast_name = utils.make_name(node.name)
-            cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=dtypes[0])
-            ctx.copy_shape(node.output[0], cast_node.output[0])
-            ctx.copy_dtype(node.output[0], cast_node.output[0])
+            # cast output if needed
+            new_node = ctx.insert_new_node_on_output("Cast", new_node.output[0],
+                                                     name=utils.make_name(name), to=dtypes[0])
+            # copy shape and type
+            ctx.set_dtype(new_node.output[0], dtypes[0])
+            ctx.set_shape(new_node.output[0], shapes[0])
 
 
 @tf_op("Softmax")
