@@ -2588,6 +2588,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(y, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(8, "ClipByValue (needs broadcast)")
     def test_clip_by_value(self):
         # float32, dynamic min/max
         x_val = np.arange(0, 24, dtype=np.float32).reshape([3, 8])
