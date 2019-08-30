@@ -159,7 +159,7 @@ class ClipByValueOp:
             max_node = ctx.insert_new_node_on_input(node, "Cast", max_node.output[0], to=onnx_pb.TensorProto.FLOAT)
         ctx.remove_node(name)
         new_node = ctx.make_node("Max", [node.input[0], min_node.output[0]], outputs=[node.output[0]],
-                             shapes=shapes, dtypes=dtypes)
+                                 shapes=shapes, dtypes=dtypes)
         if input_dtype not in supported:
             # cast the data tensor if needed
             ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[0], to=onnx_pb.TensorProto.FLOAT)
@@ -172,7 +172,7 @@ class ClipByValueOp:
         if dtypes[0] not in supported:
             # cast output if needed
             new_node = ctx.insert_new_node_on_output("Cast", new_node.output[0],
-                                                      name=utils.make_name(name), to=dtypes[0])
+                                                     name=utils.make_name(name), to=dtypes[0])
             # copy shape and type
             ctx.set_dtype(new_node.output[0], dtypes[0])
             ctx.set_shape(new_node.output[0], shapes[0])
