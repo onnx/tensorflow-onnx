@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring
 
-@tf_op(["Add", "Div", "Mul", "Sub"])
+@tf_op(["Add", "AddV2", "Div", "Mul", "Sub"])
 class BroadcastOp(common.BroadcastOp):
     pass
 
