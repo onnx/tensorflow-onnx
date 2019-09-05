@@ -3,7 +3,7 @@
 jobs:
 - template: 'templates/job_generator.yml'
   parameters:
-    platforms: ['linux', 'windows', 'mac']
+    platforms: ['linux', 'windows']
     python_versions: ['3.6', '3.5']
     tf_versions: ['1.13.1', '1.12', '1.11', '1.10', '1.9', '1.8', '1.7', '1.6', '1.5']
     job:
@@ -12,7 +12,7 @@ jobs:
 
 - template: 'templates/job_generator.yml'
   parameters:
-    platforms: ['linux', 'windows', 'mac']
+    platforms: ['linux', 'windows']
     python_versions: ['3.7', '3.6', '3.5']
     tf_versions: ['1.14']
     job:
