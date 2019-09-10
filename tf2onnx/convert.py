@@ -49,7 +49,7 @@ def get_args():
     parser.add_argument("--outputs", help="model output_names")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
     parser.add_argument("--custom-ops", help="list of custom ops")
-    parser.add_argument("--pyfunc", help="list ops to be mapped to pyfunc")
+    parser.add_argument("--pyfunc", help="list ops to be mapped to onnxruntime/PyOp")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
     parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=constants.POSSIBLE_TARGETS,
@@ -98,14 +98,19 @@ def default_custom_op_handler(ctx, node, name, args):
 
 
 def pyfunc_op_handler(ctx, node, name, args):
-    node.domain = constants.PYFUNC_OPSET.domain
-    node.set_attr("module", 'pyfunc')
-    node.set_attr("class_name", node.type)
-    node.type = "PyOp"
+    """
+    Handler to map a tensorflow op to onnxruntime/PyOp.
+    Might be useful for debugging but is not meant for production.
+    """
     input_types = [ctx.get_dtype(i) for i in node.input]
     output_types = [ctx.get_dtype(i) for i in node.output]
     node.set_attr("input_types", input_types)
     node.set_attr("output_types", output_types)
+    node.set_attr("class_name", node.type)
+    # assume a fixed module name to avoid another config option
+    node.set_attr("module", 'pyfunc')
+    node.domain = constants.TENSORFLOW_OPSET.domain
+    node.type = "PyOp"
     return node
 
 
@@ -127,7 +132,7 @@ def main():
         # map pyfunc ups to onnxruntime PyOp in the "pyfunc" namespace
         for op in args.pyfunc.split(","):
             custom_ops[op] = (pyfunc_op_handler, [])
-        extra_opset.append(constants.PYFUNC_OPSET)
+        extra_opset.append(constants.TENSORFLOW_OPSET)
 
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:
