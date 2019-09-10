@@ -49,6 +49,7 @@ def get_args():
     parser.add_argument("--outputs", help="model output_names")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
     parser.add_argument("--custom-ops", help="list of custom ops")
+    parser.add_argument("--pyfunc", help="list ops to be mapped to onnxruntime/PyOp")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
     parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=constants.POSSIBLE_TARGETS,
@@ -96,6 +97,23 @@ def default_custom_op_handler(ctx, node, name, args):
     return node
 
 
+def pyfunc_op_handler(ctx, node, name, args):
+    """
+    Handler to map a tensorflow op to onnxruntime/PyOp.
+    Might be useful for debugging but is not meant for production.
+    """
+    input_types = [ctx.get_dtype(i) for i in node.input]
+    output_types = [ctx.get_dtype(i) for i in node.output]
+    node.set_attr("input_types", input_types)
+    node.set_attr("output_types", output_types)
+    node.set_attr("class_name", node.type)
+    # assume a fixed module name to avoid another config option
+    node.set_attr("module", 'pyfunc')
+    node.domain = constants.TENSORFLOW_OPSET.domain
+    node.type = "PyOp"
+    return node
+
+
 def main():
     args = get_args()
     logging.basicConfig(level=logging.get_verbosity_level(args.verbose))
@@ -109,6 +127,11 @@ def main():
     if args.custom_ops:
         # default custom ops for tensorflow-onnx are in the "tf" namespace
         custom_ops = {op: (default_custom_op_handler, []) for op in args.custom_ops.split(",")}
+        extra_opset.append(constants.TENSORFLOW_OPSET)
+    if args.pyfunc:
+        # map pyfunc ups to onnxruntime PyOp in the "pyfunc" namespace
+        for op in args.pyfunc.split(","):
+            custom_ops[op] = (pyfunc_op_handler, [])
         extra_opset.append(constants.TENSORFLOW_OPSET)
 
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
