@@ -19,6 +19,7 @@ PREFERRED_OPSET = 7
 
 # Default opset for custom ops
 TENSORFLOW_OPSET = helper.make_opsetid("ai.onnx.converters.tensorflow", 1)
+PYFUNC_OPSET = helper.make_opsetid("pyfunc", 1)
 
 # Target for the generated onnx graph. It possible targets:
 # onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)
