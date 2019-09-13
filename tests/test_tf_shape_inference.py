@@ -17,7 +17,7 @@ from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from tf2onnx import utils
-from tf2onnx.tfonnx import tf_optimize
+from tf2onnx.tf_utils import tf_optimize, get_tf_tensor_shape
 from tf2onnx.shape_inference import infer_shape_for_graph
 
 # pylint: disable=missing-docstring
@@ -68,9 +68,9 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
     def _compare_shape_for_op(self, op1, op2):
         """Align outputs of op2 to op1."""
         for out1, out2 in zip(op1.outputs, op2.outputs):
-            expected_shape = utils.get_tf_tensor_shape(out1)
+            expected_shape = get_tf_tensor_shape(out1)
             if out1 is not None:
-                actual_shape = utils.get_tf_tensor_shape(out2)
+                actual_shape = get_tf_tensor_shape(out2)
                 self.assertTrue(utils.are_shapes_compatible(expected_shape, actual_shape))
 
     def test_while_loop_with_ta_read_and_write(self):

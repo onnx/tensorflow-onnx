@@ -13,42 +13,17 @@ import os
 import re
 import shutil
 import tempfile
-from distutils.version import LooseVersion
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import six
 import numpy as np
-import tensorflow as tf
-from tensorflow.core.framework import types_pb2, tensor_pb2
-from tensorflow.python.framework import tensor_util
 from google.protobuf import text_format
 import onnx
 from onnx import helper, onnx_pb, defs, numpy_helper
 
 from . import constants
 
-#
-#  mapping dtypes from tensorflow to onnx
-#
-TF_TO_ONNX_DTYPE = {
-    types_pb2.DT_FLOAT: onnx_pb.TensorProto.FLOAT,
-    types_pb2.DT_HALF: onnx_pb.TensorProto.FLOAT16,
-    types_pb2.DT_DOUBLE: onnx_pb.TensorProto.DOUBLE,
-    types_pb2.DT_INT32: onnx_pb.TensorProto.INT32,
-    types_pb2.DT_INT16: onnx_pb.TensorProto.INT16,
-    types_pb2.DT_INT8: onnx_pb.TensorProto.INT8,
-    types_pb2.DT_UINT8: onnx_pb.TensorProto.UINT8,
-    types_pb2.DT_UINT16: onnx_pb.TensorProto.UINT16,
-    types_pb2.DT_INT64: onnx_pb.TensorProto.INT64,
-    types_pb2.DT_STRING: onnx_pb.TensorProto.STRING,
-    types_pb2.DT_COMPLEX64: onnx_pb.TensorProto.COMPLEX64,
-    types_pb2.DT_COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
-    types_pb2.DT_BOOL: onnx_pb.TensorProto.BOOL,
-    types_pb2.DT_RESOURCE: onnx_pb.TensorProto.INT64,  # TODO: hack to allow processing on control flow
-    types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8,  # TODO: map quint8 to  uint8 for now
-}
 
 #
 # mapping dtypes from onnx to numpy
@@ -128,70 +103,6 @@ def split_nodename_and_shape(name):
     return inputs, shapes
 
 
-def tf_to_onnx_tensor(tensor, name=""):
-    """Convert tensorflow tensor to onnx tensor."""
-    np_data = get_tf_tensor_data(tensor)
-    if np_data.dtype == np.object:
-        # assume np_data is string, numpy_helper.from_array accepts ndarray,
-        # in which each item is of str while the whole dtype is of object.
-        try:
-            np_data = np_data.astype(np.str).astype(np.object)
-        except: # pylint: disable=bare-except
-            raise RuntimeError("Not support type: {}".format(type(np_data.flat[0])))
-    return numpy_helper.from_array(np_data, name=name)
-
-
-def get_tf_tensor_data(tensor):
-    """Get data from tensor."""
-    make_sure(isinstance(tensor, tensor_pb2.TensorProto), "Require TensorProto")
-    np_data = tensor_util.MakeNdarray(tensor)
-    make_sure(isinstance(np_data, np.ndarray), "{} isn't ndarray".format(np_data))
-    return np_data
-
-
-def get_tf_const_value(op, as_list=True):
-    """
-    If as_list=True, return the array as a (possibly nested) list.
-    Otherwise, return data of type np.ndarray.
-
-    If a tensor is a scalar having value 1,
-        when as_list=False, return np.array(1), type is <class 'numpy.ndarray'>
-        when as_list=True, return 1, type is <class 'int'>.
-    """
-    make_sure(is_tf_const_op(op), "{} isn't a const op".format(op.name))
-    value = get_tf_tensor_data(op.get_attr("value"))
-    if as_list:
-        value = value.tolist()
-    return value
-
-
-def get_tf_shape_attr(node):
-    """Get shape from tensorflow attr "shape"."""
-    dims = None
-    try:
-        shape = get_tf_node_attr(node, "shape")
-        if not shape.unknown_rank:
-            dims = [int(d.size) for d in shape.dim]
-    except:  # pylint: disable=bare-except
-        pass
-    return dims
-
-
-def get_tf_tensor_shape(tensor):
-    shape = []
-    try:
-        shape = tensor.get_shape().as_list()
-    except Exception:  # pylint: disable=broad-except
-        shape = None
-    return shape
-
-
-def map_tf_dtype(dtype):
-    if dtype:
-        dtype = TF_TO_ONNX_DTYPE[dtype]
-    return dtype
-
-
 def map_numpy_to_onnx_dtype(np_dtype):
     for onnx_dtype, numpy_dtype in ONNX_TO_NUMPY_DTYPE.items():
         if numpy_dtype == np_dtype:
@@ -248,14 +159,6 @@ def find_opset(opset):
             # if we use a newer onnx opset than most runtimes support, default to the one most supported
             opset = constants.PREFERRED_OPSET
     return opset
-
-
-def get_tf_node_attr(node, name):
-    """Parser TF node attribute."""
-    if six.PY2:
-        # For python2, TF get_attr does not accept unicode
-        name = str(name)
-    return node.get_attr(name)
 
 
 def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False):
@@ -421,10 +324,6 @@ def create_vague_shape_like(shape):
 
 def get_onnx_version():
     return onnx.__version__
-
-
-def get_tf_version():
-    return LooseVersion(tf.__version__)
 
 
 def make_opsetid(domain, version):

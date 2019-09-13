@@ -15,7 +15,7 @@ from onnx import TensorProto
 from onnx import helper, numpy_helper
 
 import tensorflow as tf
-from tf2onnx import utils
+from tf2onnx import utils, tf_utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.graph import GraphUtil
 
@@ -260,8 +260,8 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
 
             self.assertTrue("value" in tf_node.node_def.attr)
             # convert to onnx tensor value
-            tensor_value = utils.tf_to_onnx_tensor(
-                utils.get_tf_node_attr(tf_node, "value"),
+            tensor_value = tf_utils.tf_to_onnx_tensor(
+                tf_utils.get_tf_node_attr(tf_node, "value"),
                 name=utils.port_name(tf_node.name)
             )
             attr = helper.make_attribute("value", tensor_value)

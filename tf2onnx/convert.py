@@ -14,8 +14,9 @@ import sys
 
 import tensorflow as tf
 
-from tf2onnx.tfonnx import process_tf_graph, tf_optimize
-from tf2onnx import constants, loader, logging, utils, optimizer
+from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx import constants, logging, utils, optimizer
+from tf2onnx import tf_utils, tf_loader
 
 
 # pylint: disable=unused-argument
@@ -113,13 +114,13 @@ def main():
 
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:
-        graph_def, inputs, outputs = loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
+        graph_def, inputs, outputs = tf_loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
         model_path = args.graphdef
     if args.checkpoint:
-        graph_def, inputs, outputs = loader.from_checkpoint(args.checkpoint, args.inputs, args.outputs)
+        graph_def, inputs, outputs = tf_loader.from_checkpoint(args.checkpoint, args.inputs, args.outputs)
         model_path = args.checkpoint
     if args.saved_model:
-        graph_def, inputs, outputs = loader.from_saved_model(
+        graph_def, inputs, outputs = tf_loader.from_saved_model(
             args.saved_model, args.inputs, args.outputs, args.signature_def)
         model_path = args.saved_model
 
@@ -128,7 +129,7 @@ def main():
         logger.info("outputs: %s", outputs)
 
     # todo: consider to enable const folding by default?
-    graph_def = tf_optimize(inputs, outputs, graph_def, args.fold_const)
+    graph_def = tf_utils.tf_optimize(inputs, outputs, graph_def, args.fold_const)
 
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')

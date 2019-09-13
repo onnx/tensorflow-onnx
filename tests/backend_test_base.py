@@ -17,7 +17,8 @@ import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
 from common import get_test_config
 from tf2onnx import utils
-from tf2onnx.tfonnx import process_tf_graph, tf_optimize
+from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx.tf_utils import tf_optimize
 from tf2onnx import optimizer
 
 

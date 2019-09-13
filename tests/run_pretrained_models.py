@@ -27,7 +27,7 @@ import tensorflow.contrib.rnn  # pylint: disable=unused-import
 import yaml
 
 import tf2onnx
-from tf2onnx import loader, logging, optimizer, utils
+from tf2onnx import tf_loader, logging, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
@@ -206,11 +206,11 @@ class Test(object):
         input_names = list(self.input_names.keys())
         outputs = self.output_names
         if self.model_type in ["checkpoint"]:
-            graph_def, input_names, outputs = loader.from_checkpoint(model_path, input_names, outputs)
+            graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
-            graph_def, input_names, outputs = loader.from_saved_model(model_path, input_names, outputs)
+            graph_def, input_names, outputs = tf_loader.from_saved_model(model_path, input_names, outputs)
         else:
-            graph_def, input_names, outputs = loader.from_graphdef(model_path, input_names, outputs)
+            graph_def, input_names, outputs = tf_loader.from_graphdef(model_path, input_names, outputs)
 
         # remove unused input names
         input_names = list(set(input_names).intersection(self.input_names.keys()))
