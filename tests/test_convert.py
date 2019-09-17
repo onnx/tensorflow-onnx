@@ -7,7 +7,8 @@ def run_test_case(args):
     sys.argv = args
     convert.main()
     ret = os.path.exists(args[-1])
-    os.remove(args[-1])
+    if ret == True:
+        os.remove(args[-1])
     return ret
 
 class Tf2OnnxConvertTest(unittest.TestCase):
