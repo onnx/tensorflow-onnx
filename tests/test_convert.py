@@ -1,8 +1,12 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license.
+
 """ Test convert.py """
 
+import os
 import sys
 import unittest
-import os
+
 from tf2onnx import convert
 
 def run_test_case(args):
