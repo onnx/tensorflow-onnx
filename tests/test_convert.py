@@ -9,6 +9,7 @@ import unittest
 
 from tf2onnx import convert
 
+
 def run_test_case(args):
     """ run case and clean up """
     sys.argv = args
@@ -17,6 +18,7 @@ def run_test_case(args):
     if ret:
         os.remove(args[-1])
     return ret
+
 
 class Tf2OnnxConvertTest(unittest.TestCase):
     """ teat cases for convert.py """
@@ -52,6 +54,7 @@ class Tf2OnnxConvertTest(unittest.TestCase):
                                        'pred:0',
                                        '--output',
                                        'converted_checkpoint.onnx']))
+
 
 if __name__ == '__main__':
     unittest.main()
