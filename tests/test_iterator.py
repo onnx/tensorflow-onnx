@@ -15,9 +15,7 @@ import os
 import sys
 
 import numpy as np
-from scipy import sparse
 from sklearn.model_selection import train_test_split
-from sklearn.datasets import make_blobs
 import onnx
 
 import tensorflow.compat.v1 as tf
@@ -33,7 +31,8 @@ class BatchIteratorConversionTest:
     """  """
 
     def __init__(self, batch_sz=64):
-        self.X, self.y = make_blobs(n_samples=250, centers=3, n_features=5, random_state=0)
+        self.X = np.random.randint(0, 100, [250, 10])
+        self.y = np.zeros([250, 3])
 
         self.batch_sz = batch_sz
         self.learning_rate = 0.01
@@ -81,7 +80,6 @@ class BatchIteratorConversionTest:
     def train_model(self):
         """ trains model and outputs a frozen graph which can be saved """
 
-        # need to initialise all variables to use them in sess
         init = tf.global_variables_initializer()
 
         with tf.Session() as sess:
@@ -96,20 +94,17 @@ class BatchIteratorConversionTest:
             self.output_graph_def = loader.freeze_session(sess, output_names=["output:0"])
 
     def test_convert_onnx(self):
-        """ convert model into onnx and save it as 'model_tensorflow.onnx' """
+        """ convert model into onnx """
 
         tf.reset_default_graph()
         with tf.Graph().as_default() as tf_graph:
             tf.import_graph_def(self.output_graph_def, name='')
 
             self.onnx_graph = tf2onnx.tfonnx.process_tf_graph(tf_graph, input_names=["input:0"],
-                                                         output_names=["output:0"])
-        
-        assert type(self.onnx_graph) == 'tf2onnx.graph.Graph'
+                                                              output_names=["output:0"])
 
 
 if __name__ == '__main__':
-
     print("\n -- Testing onnx compatability with TensorFlow -- ", flush=True)
 
     print(f"\n -- Testing tensorflow version {tf.__version__} -- ", flush=True)
