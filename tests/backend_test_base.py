@@ -21,7 +21,7 @@ from tf2onnx.tfonnx import process_tf_graph, tf_optimize
 from tf2onnx import optimizer
 
 
-# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test, import-outside-toplevel
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     def setUp(self):
