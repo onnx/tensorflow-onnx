@@ -40,8 +40,8 @@ class Node(object):
         """
         self._op = node
         self.graph = graph
-        self._input = [i for i in node.input]
-        self._output = [i for i in node.output]
+        self._input = list(node.input)
+        self._output = list(node.output)
         self._attr = {}
 
         graph.set_node_by_name(self)
@@ -306,11 +306,11 @@ class Node(object):
 
     def update_proto(self):
         """Update protobuf from internal structure."""
-        nodes = [n for n in self._op.input]
+        nodes = list(self._op.input)
         for node in nodes:
             self._op.input.remove(node)
         self._op.input.extend(self.input)
-        nodes = [n for n in self._op.output]
+        nodes = list(self._op.output)
         for node in nodes:
             self._op.output.remove(node)
         self._op.output.extend(self.output)
@@ -325,7 +325,7 @@ class Node(object):
                 graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name)
                 self.set_attr(attr_name, graph_proto)
 
-        attr = [a for a in self.attr_onnx.values()]
+        attr = list(self.attr_onnx.values())
         if attr:
             self._op.attribute.extend(attr)
 
@@ -772,10 +772,12 @@ class Graph(object):
         if shape:
             for i, v in enumerate(shape):
                 if v is None:
+                    # pylint: disable=unsupported-assignment-operation
                     shape[i] = -1
             # hack to allow utils.ONNX_UNKNOWN_DIMENSION to override batchsize if needed.
             # default is -1.
             if shape[0] == -1:
+                # pylint: disable=unsupported-assignment-operation
                 shape[0] = utils.ONNX_UNKNOWN_DIMENSION
             return shape
         return shape
@@ -839,7 +841,7 @@ class Graph(object):
         label = [-1 for _ in range(n)]
         stack = []
         in_stack = dict()
-        not_visited = dict.fromkeys([i for i in range(n)])
+        not_visited = dict.fromkeys(range(n))
         label_counter = n - 1
 
         while not_visited:
@@ -884,7 +886,7 @@ class Graph(object):
             if op.is_const():
                 const_ops.append(op)
                 continue
-            elif op.is_graph_input():
+            if op.is_graph_input():
                 if op not in self._order_sensitive_inputs:
                     order_non_sensitive_placeholders.append(op)
                 continue

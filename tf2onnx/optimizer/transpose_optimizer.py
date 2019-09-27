@@ -227,8 +227,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         for i in node.input:
             if i == trans.output[0]:
                 break
-            else:
-                input_index += 1
+            input_index += 1
         return input_index
 
     # the assumption is: both node and trans have only 1 output

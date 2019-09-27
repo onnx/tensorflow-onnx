@@ -7,7 +7,8 @@ Save pre-trained model.
 import tensorflow as tf
 import numpy as np
 
-# pylint: disable=redefined-outer-name,reimported
+
+# pylint: disable=redefined-outer-name,reimported,import-outside-toplevel
 
 def save_pretrained_model(sess, outputs, feeds, out_dir, model_name="pretrained"):
     """Save pretrained model and config"""
@@ -54,6 +55,7 @@ def save_pretrained_model(sess, outputs, feeds, out_dir, model_name="pretrained"
 
         # save graph and weights
         from tensorflow.saved_model import simple_save
+        # pylint: disable=unnecessary-comprehension
         simple_save(sess, saved_model,
                     {n: i for n, i in zip(inputs.keys(), feeds.keys())},
                     {op.name: op for op in outputs})
