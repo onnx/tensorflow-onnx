@@ -504,7 +504,7 @@ class Det:
 
 
 @tf_op("LeftShift", onnx_op="BitShift")
-class BitShift:
+class BitShiftLeft:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         shapes = node.output_shapes
@@ -516,7 +516,7 @@ class BitShift:
 
 
 @tf_op("RightShift", onnx_op="BitShift")
-class BitShift:
+class BitShiftRight:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         shapes = node.output_shapes
