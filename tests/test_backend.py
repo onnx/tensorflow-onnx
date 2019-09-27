@@ -2737,6 +2737,67 @@ class BackendTests(Tf2OnnxBackendTestBase):
         match_results = list(matcher.match_ops(onnx_graph.get_nodes()))
         self.assertTrue(len(match_results) == 1)
 
+    @check_opset_min_version(11, "CumSum")
+    def test_cumsum(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.cumsum(x, axis=1)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_cumsum_axis1_reverse_exclusive(self):
+        x_val = np.array([1., 2., 3., 4.,
+                          5., 6., 7., 8.,
+                          9., 10., 11., 12.,
+                          13., 14., 15., 16.,
+                          17., 18., 19., 20.,
+                          21., 22., 23., 24.], dtype=np.float32).reshape((2, 3, 4))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.cumsum(x, axis=1, reverse=True)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Round")
+    def test_round(self):
+        x_val = np.array([-0.7, -0.5, -0.0, 0.0, +0.0, 0.3, 0.5, 0.7, float('nan')], dtype=np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.round(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Det")
+    def test_determinant(self):
+        x_val = np.array([1., 2., 3., 4., 1., 2.,
+                          2., 1., 1., 3., 3., 1.,
+                          1., 2., 3., 4., 1., 2.,
+                          2., 1., 1., 3., 3., 1.],
+                         dtype=np.float32).reshape((1, 2, 3, 2, 2))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.matrix_determinant(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "BitShift")
+    def test_bitshift_left(self):
+        info = np.iinfo(np.int32)
+        x_val = np.array([16, 4, 1], dtype=np.int32)
+        y_val = np.array([1, 2, 3], dtype=np.int32)
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = tf.bitwise.left_shift(x, y)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(11, "BitShift")
+    def test_bitshift_right(self):
+        info = np.iinfo(np.int32)
+        x_val = np.array([-1, 0, 1, info.max, info.min], dtype=np.int32)
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        x_ = tf.bitwise.right_shift(x, 1)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
 
 if __name__ == '__main__':
     unittest_main()

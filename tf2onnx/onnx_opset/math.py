@@ -17,8 +17,8 @@ from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument,missing-docstring
 
@@ -474,8 +474,54 @@ class FloorMod:
         ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
+
 @tf_op("Selu")
 class Selu:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op("Cumsum", onnx_op="CumSum")
+class CumSum:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("Round")
+class Round:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("MatrixDeterminant", onnx_op="Det")
+class Det:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("LeftShift", onnx_op="BitShift")
+class BitShift:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("BitShift", inputs=node.input, outputs=node.output, name=node.name,
+                      shapes=shapes, dtypes=dtypes,
+                      domain=constants.ONNX_DOMAIN, attr={'direction': 'LEFT'})
+
+
+@tf_op("RightShift", onnx_op="BitShift")
+class BitShift:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("BitShift", inputs=node.input, outputs=node.output, name=node.name,
+                      shapes=shapes, dtypes=dtypes,
+                      domain=constants.ONNX_DOMAIN, attr={'direction': 'RIGHT'})
