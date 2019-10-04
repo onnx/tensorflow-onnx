@@ -1555,6 +1555,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(values, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: k_val})
 
+    @check_onnxruntime_min_version("0.5.0", "topk-10's shape inference function has a bug")
+    def test_topk3(self):
+        # test topk index output
+        x_val = np.arange(3 * 2 * 3).astype("float32")
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        _, idx = tf.nn.top_k(x, 5, sorted=True)
+        _ = tf.identity(idx, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def test_stack_axis(self):
         for axis in [0, 1]:
             tf.reset_default_graph()
