@@ -21,6 +21,7 @@ from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import nn, math
+from onnx import helper, numpy_helper
 
 logger = logging.getLogger(__name__)
 
@@ -449,8 +450,8 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
                   dtypes=dtypes)
 
 
-@tf_op("GatherNd")
-class GatherNd:
+@tf_op("GatherNd", onnx_op="GatherND")
+class GatherND:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # Tparams output = GatherNd(Tparams params, Tidx indices)
@@ -464,6 +465,41 @@ class GatherNd:
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         make_gathernd(ctx, params, indices, output, node.name, t_params, shapes, dtypes)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # indicies input
+        input1 = node.input[1]
+        target_dtype = TensorProto.INT64
+        if ctx.get_dtype(input1) != TensorProto.INT64:
+            inp_cast = ctx.insert_new_node_on_input(node, "Cast", input1, to=target_dtype)
+            ctx.copy_shape(input1, inp_cast.output[0])
+            ctx.set_dtype(inp_cast.output[0], target_dtype)
+        pass
+
+
+@tf_op("ScatterNd", onnx_op="ScatterND")
+class ScatterND:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+
+        # onnx requires pre-generated tensor for data
+        np_val = np.array([0], dtype=np.int64)
+        onnx_tensor = numpy_helper.from_array(np_val, utils.make_name(node.name))
+        const_of_shape = ctx.insert_new_node_on_input(node, "ConstantOfShape", node.input[2], value=onnx_tensor)
+
+        # cast edge to INT64 if not already
+        input0 = const_of_shape.input[0]
+        if ctx.get_dtype(input0) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(const_of_shape, "Cast", input0, to=TensorProto.INT64)
+
+        # cast edge to INT64 if not already
+        input0 = node.input[0]
+        if (ctx.get_dtype(input0) != TensorProto.INT64):
+            ctx.insert_new_node_on_input(node, "Cast", input0, to=TensorProto.INT64)
+
+        # reorder inputs to match onnx
+        node._input = [node.input[2], node.input[0], node.input[1]]
 
 
 @tf_op("Split")
@@ -710,8 +746,8 @@ class StridedSlice:
         shrink_axis_mask = node.get_attr("shrink_axis_mask")
         shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
         param_shape = ctx.get_shape(node.input[1]) or \
-            ctx.get_shape(node.input[2]) or \
-            ctx.get_shape(node.input[3])
+                      ctx.get_shape(node.input[2]) or \
+                      ctx.get_shape(node.input[3])
         utils.make_sure(
             param_shape is not None,
             "StridedSlice op {} requires the shape of begin/end/strides".format(node.name)
@@ -1309,7 +1345,7 @@ class ReverseV2:
         axes = axes_node.get_tensor_value(as_list=False)
         # Current support is for when axis is a 1D tensor.
         utils.make_sure(len(axes.shape) == 1 \
-            , "Currently no support for reverseV2 tensor axis")
+                        , "Currently no support for reverseV2 tensor axis")
 
         axes = axes.tolist()
         len_axes = len(axes)
@@ -1391,12 +1427,12 @@ class ReverseV2:
 
                 # Make sure rs_batch_size and input_shape[axis] are not -1 each
                 utils.make_sure(input_shape[axis] is not -1 \
-                    , "shape of axis {} is unknown".format(axis))
+                                , "shape of axis {} is unknown".format(axis))
                 utils.make_sure(rs_batch_size is not -1 \
-                    , "ReverseSequence batch size for axis {} is unknown".format(axis))
+                                , "ReverseSequence batch size for axis {} is unknown".format(axis))
 
                 seq_list = [input_shape[axis]] * rs_batch_size
-                seq_array = np.asarray(seq_list, dtype=np.int64) # dtype should be int64
+                seq_array = np.asarray(seq_list, dtype=np.int64)  # dtype should be int64
 
                 const_seq_name = utils.make_name(const_name_root)
                 new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
@@ -1410,7 +1446,7 @@ class ReverseV2:
                 # Else a new output is created which is fed to a Transpose node.
                 rs_out_name = node.output if \
                     ((i == len_axes - 1) and (curr_perm == orig_perm)) \
-                        else None
+                    else None
 
                 rs_out_shapes = None if rs_out_name is None else rv2_output_shapes
 
