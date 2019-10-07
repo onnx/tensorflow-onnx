@@ -483,7 +483,7 @@ class SpaceToDepth:
 
 
 @tf_op(["DepthToSpace"])
-class SpaceToDepth:
+class DepthToSpace:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         block_size = node.get_attr("block_size")

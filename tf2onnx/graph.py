@@ -54,6 +54,10 @@ class Node(object):
     def input(self):
         return self._input
 
+    @input.setter
+    def input(self, val):
+        self._input = copy.deepcopy(val)
+
     @property
     def output(self):
         return copy.deepcopy(self._output)

@@ -9,10 +9,11 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import sys
 import logging
+import sys
 
 import numpy as np
+from onnx import numpy_helper
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 
@@ -21,7 +22,6 @@ from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import nn, math
-from onnx import helper, numpy_helper
 
 logger = logging.getLogger(__name__)
 
@@ -475,7 +475,6 @@ class GatherND:
             inp_cast = ctx.insert_new_node_on_input(node, "Cast", input1, to=target_dtype)
             ctx.copy_shape(input1, inp_cast.output[0])
             ctx.set_dtype(inp_cast.output[0], target_dtype)
-        pass
 
 
 @tf_op("ScatterNd", onnx_op="ScatterND")
@@ -495,11 +494,11 @@ class ScatterND:
 
         # cast edge to INT64 if not already
         input0 = node.input[0]
-        if (ctx.get_dtype(input0) != TensorProto.INT64):
+        if ctx.get_dtype(input0) != TensorProto.INT64:
             ctx.insert_new_node_on_input(node, "Cast", input0, to=TensorProto.INT64)
 
         # reorder inputs to match onnx
-        node._input = [node.input[2], node.input[0], node.input[1]]
+        node.input = [node.input[2], node.input[0], node.input[1]]
 
 
 @tf_op("Split")
