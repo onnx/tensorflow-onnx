@@ -2807,7 +2807,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(11, "ScatterND")
-    def test_scatter_1d(self):
+    def test_scatternd_1d(self):
         x_val = np.array([4, 3, 1, 7], dtype=np.int32).reshape((4, 1))
         y_val = np.array([9, 10, 11, 12], dtype=np.int64).reshape((4))
         z_val = np.array([8], dtype=np.int32).reshape(1)
@@ -2821,7 +2821,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
     @check_opset_min_version(11, "ScatterND")
-    def test_scatter_3d(self):
+    def test_scatternd_3d(self):
         x_val = np.array([0, 2], dtype=np.int32).reshape((2, 1))
         y_val = np.array([[[5, 5, 5, 5], [6, 6, 6, 6],
                            [7, 7, 7, 7], [8, 8, 8, 8]],
