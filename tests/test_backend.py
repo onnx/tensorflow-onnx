@@ -2806,6 +2806,37 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "ScatterND")
+    def test_scatternd_1d(self):
+        x_val = np.array([4, 3, 1, 7], dtype=np.int32).reshape((4, 1))
+        y_val = np.array([9, 10, 11, 12], dtype=np.int64).reshape((4))
+        z_val = np.array([8], dtype=np.int32).reshape(1)
+
+        x = tf.placeholder(np.int32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(np.int64, y_val.shape, name=_TFINPUT1)
+        z = tf.placeholder(np.int32, z_val.shape, name=_TFINPUT2)
+
+        x_ = tf.scatter_nd(x, y, z)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_opset_min_version(11, "ScatterND")
+    def test_scatternd_3d(self):
+        x_val = np.array([0, 2], dtype=np.int32).reshape((2, 1))
+        y_val = np.array([[[5, 5, 5, 5], [6, 6, 6, 6],
+                           [7, 7, 7, 7], [8, 8, 8, 8]],
+                          [[5, 5, 5, 5], [6, 6, 6, 6],
+                           [7, 7, 7, 7], [8, 8, 8, 8]]], dtype=np.int64).reshape((2, 4, 4))
+        z_val = np.array([4, 4, 4], dtype=np.int32).reshape(3)
+
+        x = tf.placeholder(np.int32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(np.int64, y_val.shape, name=_TFINPUT1)
+        z = tf.placeholder(np.int32, z_val.shape, name=_TFINPUT2)
+
+        x_ = tf.scatter_nd(x, y, z)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
 
 if __name__ == '__main__':
     unittest_main()

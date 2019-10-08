@@ -473,13 +473,27 @@ class BatchNorm:
         cls.version_6(ctx, node, **kwargs)
 
 
-@tf_op(["SpaceToDepth", "DepthToSpace"])
+@tf_op(["SpaceToDepth"])
 class SpaceToDepth:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         block_size = node.get_attr("block_size")
         node.set_attr("blocksize", block_size.i)
         conv_convert_inputs(ctx, node, with_kernel=False)
+
+
+@tf_op(["DepthToSpace"])
+class DepthToSpace:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        block_size = node.get_attr("block_size")
+        node.set_attr("blocksize", block_size.i)
+        conv_convert_inputs(ctx, node, with_kernel=False)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Onnx-11 CRD mode added. No change for tf2onnx
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
