@@ -79,6 +79,11 @@ class Flatten:
         # no change for us
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Dropout")
 class Dropout:
@@ -184,6 +189,11 @@ class Squeeze:
             axis = [i for i, j in enumerate(shape) if j == 1]
         node.set_attr("axes", axis)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Transpose")
 class Transpose:
@@ -224,6 +234,11 @@ class Concat:
             # opset < 8: might need to wrap concat in casts since only float is supported
             _wrap_concat_with_cast(ctx, node)
             return
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op("ConcatV2")
@@ -316,6 +331,11 @@ class Gather:
     def version_1(cls, ctx, node, **kwargs):
         node.type = "Gather"
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("GatherV2")
 class GatherV2:
@@ -326,6 +346,11 @@ class GatherV2:
         axis = node.inputs[2].get_tensor_value()
         ctx.remove_input(node, node.input[2])
         node.set_attr("axis", axis)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
 
 
 def _make_gathernd_inner_loop(ctx, params, index, dtype):
@@ -513,6 +538,11 @@ class Split:
 
     @classmethod
     def version_2(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
         cls.version_1(ctx, node, **kwargs)
 
 
@@ -937,6 +967,12 @@ class TopKV2:
         ctx.set_dtype(cast_out.output[0], dtypes[1])
         ctx.copy_shape(node.output[1], cast_out.output[0])
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 supports negative axis, and new attrs 'largest' and 'sorted'
+        # the core logic doesn't change, using defaults for new attrs
+        cls.version_10(ctx, node, **kwargs)
+
 
 @tf_op("Tile")
 class Tile:
@@ -1082,6 +1118,11 @@ class OneHot:
             new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
             ctx.set_dtype(new_node.output[0], output_dtype)
             ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_9(ctx, node, **kwargs)
 
 
 @tf_op("Shape")

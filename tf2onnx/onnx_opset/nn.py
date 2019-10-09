@@ -207,6 +207,11 @@ class ConvOp:
         add_padding(ctx, node, kernel_shape, strides, dilations=dilations, spatial=2)
         conv_convert_inputs(ctx, node, with_kernel=True)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Conv2DBackpropInput")
 class ConvTranspose:
@@ -301,6 +306,11 @@ class PoolOp:
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
+        cls._convert(ctx, node, **kwargs)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
         cls._convert(ctx, node, **kwargs)
 
     @classmethod
