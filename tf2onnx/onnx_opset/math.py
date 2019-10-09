@@ -187,6 +187,11 @@ class Softmax:
         logits_rank = len(ctx.get_shape(node.input[0]))
         node.set_attr("axis", logits_rank - 1)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 supports -ve axis
+        pass
+
 
 @tf_op("Square")
 class Square:

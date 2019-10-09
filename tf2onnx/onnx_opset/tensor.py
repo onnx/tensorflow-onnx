@@ -79,6 +79,10 @@ class Flatten:
         # no change for us
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("Dropout")
 class Dropout:
@@ -184,6 +188,10 @@ class Squeeze:
             axis = [i for i, j in enumerate(shape) if j == 1]
         node.set_attr("axes", axis)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("Transpose")
 class Transpose:
@@ -225,6 +233,10 @@ class Concat:
             _wrap_concat_with_cast(ctx, node)
             return
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("ConcatV2")
 class ConcatV2:
@@ -316,6 +328,10 @@ class Gather:
     def version_1(cls, ctx, node, **kwargs):
         node.type = "Gather"
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("GatherV2")
 class GatherV2:
@@ -327,6 +343,10 @@ class GatherV2:
         ctx.remove_input(node, node.input[2])
         node.set_attr("axis", axis)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
 
 def _make_gathernd_inner_loop(ctx, params, index, dtype):
     """create the inner loop for GatherNd."""
@@ -515,6 +535,10 @@ class Split:
     def version_2(cls, ctx, node, **kwargs):
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("SplitV")
 class SplitV:
@@ -924,6 +948,12 @@ class TopKV2:
                                       shapes=[shapes[1]], dtypes=[onnx_pb.TensorProto.INT32])
 
     @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 supports negative axis, and new attrs 'largest' and 'sorted'
+        # the core logic doesn't change, using defaults for new attrs
+        cls.version_1(ctx, node, **kwargs)
+
+    @classmethod
     def version_10(cls, ctx, node, **kwargs):
         # onnx only supports input K as a 1D tesor with dtype int64
         # while in tf, K is a 0D tensor with dtype int32
@@ -1083,6 +1113,10 @@ class OneHot:
             ctx.set_dtype(new_node.output[0], output_dtype)
             ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_9(ctx, node, **kwargs)
 
 @tf_op("Shape")
 class Shape:
