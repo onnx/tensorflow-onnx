@@ -238,6 +238,14 @@ class PassThroughOp:
     def version_7(cls, ctx, node, **kwargs):
         pass
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change needed
+        # loop has 1 less mandatory input
+        # if = only doc changes
+        # scan has 1 less mandatory input and 4 extra attrs
+        pass
+
 
 @tf_op("Range")
 class Range:
