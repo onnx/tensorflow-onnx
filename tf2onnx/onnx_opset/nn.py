@@ -399,7 +399,7 @@ class BiasAdd:
                 ctx.set_shape(reshape_node.output[0], new_broadcast_shape)
 
 
-@tf_op(["Pad", "PadV2", "MirrorPad"])
+@tf_op(["Pad", "PadV2", "MirrorPad"], onnx_op="Pad")
 class Pad:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -430,6 +430,33 @@ class Pad:
             cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
             cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
             ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
+            ctx.copy_shape(node.name, cast_node.output[0])
+
+            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+                                                           name=utils.make_name(node.name) + "_castback")
+            cast_back_node.set_attr("to", origin_dtype)
+            ctx.set_dtype(cast_back_node.output[0], origin_dtype)
+            ctx.copy_shape(node.name, cast_back_node.output[0])
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        mode = node.get_attr("mode")
+        if mode:
+            mode = mode.s.decode("utf-8").lower()
+            node.set_attr("mode", mode)
+        if mode not in [None, "constant", "reflect"]:
+            raise ValueError(mode + " pad mode is not supported")
+
+        pads = node.inputs[1].get_tensor_value()
+        pads = np.array(pads).transpose().flatten().astype(np.int64)
+        node.inputs[1].set_tensor_value(pads)
+
+        origin_dtype = ctx.get_dtype(node.output[0])
+        if origin_dtype not in [TensorProto.FLOAT16, TensorProto.FLOAT,
+                                TensorProto.DOUBLE]:
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+            cast_node.set_attr("to", TensorProto.FLOAT)
+            ctx.set_dtype(cast_node.output[0], TensorProto.FLOAT)
             ctx.copy_shape(node.name, cast_node.output[0])
 
             cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
