@@ -1280,6 +1280,11 @@ class NonMaxSuppression:
         ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                       name=node.name, outputs=node.output, dtypes=dtypes, shapes=shapes)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # reuse version_10 logic due to same input and output specification
+        cls.version_10(ctx, node, **kwargs)
+
 
 @tf_op("ReverseSequence")
 class ReverseSequence:
