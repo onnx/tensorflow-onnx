@@ -254,6 +254,10 @@ class ConvTranspose:
 
         conv_convert_inputs(ctx, node, with_kernel=True)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op(["DepthwiseConv2d", "DepthwiseConv2dNative"])
 class DepthwiseConv2d:
