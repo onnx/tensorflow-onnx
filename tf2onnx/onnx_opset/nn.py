@@ -564,10 +564,10 @@ class Resize:
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        cls._convert_since_9(ctx, node, op_type="Resize", roi_required = True)
+        cls._convert_since_9(ctx, node, op_type="Resize", roi_required=True)
 
     @classmethod
-    def _convert_since_9(cls, ctx, node, op_type, roi_required = False):
+    def _convert_since_9(cls, ctx, node, op_type, roi_required=False):
 
         # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
         # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
