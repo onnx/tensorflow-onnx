@@ -37,7 +37,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             one = tf.constant([1])
             c = lambda i: tf.less(i, 10)
             b = lambda i: tf.add(i, one)
-            r = tf.while_loop(c, b, [i])
+            r = tf.while_loop(c, b, [i], shape_invariants=True)
             return tf.identity(r, name=_TFOUTPUT)
         self.run_test_case(func, {_INPUT: np.array(0, dtype=np.int32)}, [], [_OUTPUT], rtol=1e-06)
 
@@ -67,8 +67,9 @@ class LoopTests(Tf2OnnxBackendTestBase):
 
             i_final, ta_final = tf.while_loop(c, b, [i, output_ta])
             r = ta_final.stack()
-            _ = tf.identity(r, name="output")
+            ret = tf.identity(r, name="output")
             _ = tf.identity(i_final, name="i")
+            return ret
         input_names_with_port = ["input_1:0"]
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32)}
 
@@ -202,7 +203,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = tf.identity(x)
             res_ = tf.map_fn(fn0, x_, dtype=tf.float32)
-            _ = tf.identity(res_, name="output_0")
+            return tf.identity(res_, name="output_0")
         feed_dict = {"input_0:0": x_val}
         input_names_with_port = ["input_0:0"]
         output_names_with_port = ["output_0:0"]
@@ -213,7 +214,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             x_ = tf.identity(x)
             y_ = tf.identity(y)
             res_ = tf.map_fn(fn1, (x_, y_), dtype=tf.float32)
-            _ = tf.identity(res_, name="output_0")
+            return tf.identity(res_, name="output_0")
         feed_dict = {"input_0:0": x_val, "input_1:0": y_val}
         input_names_with_port = ["input_0:0", "input_1:0"]
         output_names_with_port = ["output_0:0"]
@@ -228,7 +229,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             c = lambda i: tf.reduce_all(tf.shape(i) < 10)
             b = lambda i: tf.concat([i, const], 0)
             r = tf.while_loop(c, b, [i], shape_invariants=[tf.TensorShape([None])])
-            _ = tf.identity(r, name="output")
+            return tf.identity(r, name="output")
         input_names_with_port = ["input_1:0"]
         feed_dict = {"input_1:0": np.array([0], dtype=np.int32)}
         output_names_with_port = ["output:0"]
