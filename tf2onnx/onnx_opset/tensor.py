@@ -324,6 +324,10 @@ class Slice:
     def version_10(cls, ctx, node, **kwargs):
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Gather")
 class Gather:
@@ -1280,6 +1284,11 @@ class NonMaxSuppression:
         ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                       name=node.name, outputs=node.output, dtypes=dtypes, shapes=shapes)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_10(ctx, node, **kwargs)
+
 
 @tf_op("ReverseSequence")
 class ReverseSequence:
@@ -1527,3 +1536,11 @@ class ReverseV2:
                     dtypes=rv2_output_dtypes,
                     attr={"perm": curr_perm}
                 )
+
+
+@tf_op("Unique", onnx_op="Unique")
+class Unique:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 supports explicitly
+        pass

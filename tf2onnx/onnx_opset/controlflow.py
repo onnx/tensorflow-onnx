@@ -261,6 +261,11 @@ class Range:
         make_range(ctx, node.input[0], node.input[1], node.input[2],
                    node.output[0], node.name, shape, dtype)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 implements Range op explicitly
+        pass
+
 
 @tf_op("Select")
 class Select:

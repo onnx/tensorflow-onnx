@@ -2837,6 +2837,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
+    @check_opset_min_version(11, "Unique")
+    def test_unique(self):
+        x_val = np.array([1, 1, 2, 4, 4, 4, 7, 8, 8], dtype=np.int32)
+        x = tf.placeholder(np.int32, x_val.shape, name=_TFINPUT)
+        x1_, x2_ = tf.unique(x)
+        _ = tf.identity(x1_, name=_TFOUTPUT)
+        _ = tf.identity(x2_, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+
 
 if __name__ == '__main__':
     unittest_main()
