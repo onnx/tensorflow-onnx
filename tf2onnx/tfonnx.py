@@ -22,7 +22,7 @@ import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
-from tf2onnx.tf_utils import  tensorflow_to_onnx, get_tf_version
+from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version
 from . import constants, logging, schemas, utils, handler
 
 logger = logging.getLogger(__name__)

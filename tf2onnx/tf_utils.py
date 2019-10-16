@@ -15,10 +15,13 @@ from distutils.version import LooseVersion
 import six
 import numpy as np
 import tensorflow as tf
+
+TF2 = tf.__version__.startswith("2.")
+
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
-from tensorflow.python.framework import graph_util
-from tensorflow.tools.graph_transforms import TransformGraph
+if not TF2:
+    from tensorflow.tools.graph_transforms import TransformGraph
 
 from onnx import helper, onnx_pb, numpy_helper
 
@@ -45,6 +48,7 @@ TF_TO_ONNX_DTYPE = {
     types_pb2.DT_COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     types_pb2.DT_BOOL: onnx_pb.TensorProto.BOOL,
     types_pb2.DT_RESOURCE: onnx_pb.TensorProto.INT64,  # TODO: hack to allow processing on control flow
+    types_pb2.DT_VARIANT: onnx_pb.TensorProto.INT64,  # TODO: hack to allow processing on control flow
     types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8,  # TODO: map quint8 to  uint8 for now
 }
 
@@ -125,25 +129,6 @@ def get_tf_version():
     return LooseVersion(tf.__version__)
 
 
-def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
-    """Optimize tensorflow graph for inference."""
-    transforms = []
-    if fold_constant:
-        transforms.extend([
-            "fold_constants(ignore_errors=true)",
-            "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
-        ])
-
-    transforms.extend([
-        "fold_batch_norms",
-        "fold_old_batch_norms",
-    ])
-    needed_names = [node_name(i) for i in inputs] + [node_name(i) for i in outputs]
-    graph_def = graph_util.extract_sub_graph(graph_def, needed_names)
-    graph_def = TransformGraph(graph_def, inputs, outputs, transforms)
-    return graph_def
-
-
 def tflist_to_onnx(node_list, shape_override):
     """
     Convert the tf-node list into an onnx graph with minimal rewrites so
@@ -154,7 +139,8 @@ def tflist_to_onnx(node_list, shape_override):
     ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
                     "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax"]
+                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax",
+                    "T_threshold", "element_dtype", "shape_type"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -183,8 +169,8 @@ def tflist_to_onnx(node_list, shape_override):
             attr_cnt[a] += 1
             if a == "dtype":
                 attr[a] = map_tf_dtype(get_tf_node_attr(node, "dtype"))
-            elif a == "T":
-                dtype = get_tf_node_attr(node, "T")
+            elif a in ["T"]:
+                dtype = get_tf_node_attr(node, a)
                 if dtype:
                     if not isinstance(dtype, list):
                         dtypes[node.name] = map_tf_dtype(dtype)

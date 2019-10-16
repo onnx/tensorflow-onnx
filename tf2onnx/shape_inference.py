@@ -435,7 +435,7 @@ def infer_shape_for_op_legacy(op):
 
 
 def infer_input_shapes(op):
-    if op.type == "Select":
+    if op.type in ["Select", "SelectV2"]:
         shape_t = get_tf_tensor_shape(op.inputs[1])
         shape_e = get_tf_tensor_shape(op.inputs[2])
         # copy shape if t OR e does not have a shape, no update if t AND e both have shapes
@@ -480,7 +480,7 @@ def infer_output_shapes_with_partial_inputs(op):
         logger.debug("set Concat op [%s] with new shape %s", op.outputs[0].name, new_shape)
         return True
 
-    if op.type == "Select":
+    if op.type in ["Select", "SelectV2"]:
         new_shape = get_tf_tensor_shape(op.inputs[1])
         if new_shape is None:
             new_shape = get_tf_tensor_shape(op.inputs[2])

@@ -13,6 +13,7 @@ from distutils.version import LooseVersion
 from parameterized import parameterized
 import numpy as np
 import tensorflow as tf
+
 from tf2onnx import constants, logging, utils, tf_utils
 
 __all__ = [

@@ -12,6 +12,7 @@ import os
 import types
 
 import tensorflow as tf
+TF2 = tf.__version__.startswith("2.")
 
 from . import constants
 
@@ -68,6 +69,9 @@ def set_level(level):
 def set_tf_verbosity(level):
     """ Set TF logging verbosity."""
     # TF log is too verbose, adjust it
+    if TF2:
+        return
+
     level = ERROR if level >= INFO else level
     tf.logging.set_verbosity(level)
 

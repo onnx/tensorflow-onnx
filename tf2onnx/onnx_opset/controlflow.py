@@ -254,7 +254,7 @@ class Range:
                    node.output[0], node.name, shape, dtype)
 
 
-@tf_op("Select")
+@tf_op(["Select", "SelectV2"])
 class Select:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):

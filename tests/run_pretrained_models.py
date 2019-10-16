@@ -9,6 +9,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
+import yaml
 import os
 import re
 import sys
@@ -20,15 +21,22 @@ from collections import namedtuple
 import PIL.Image
 import numpy as np
 import six
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
+
 # contrib ops are registered only when the module is imported, the following import statement is needed,
 # otherwise tf runtime error will show up when the tf model is restored from pb file because of un-registered ops.
-import tensorflow.contrib.rnn  # pylint: disable=unused-import
-import yaml
+try:
+    import tensorflow.contrib.rnn  # pylint: disable=unused-import
+except:
+    # not needed for tf-2.0
+    pass
 
 import tf2onnx
 from tf2onnx import tf_loader, logging, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
 
@@ -214,14 +222,15 @@ class Test(object):
 
         # remove unused input names
         input_names = list(set(input_names).intersection(self.input_names.keys()))
-        graph_def = tf2onnx.tfonnx.tf_optimize(input_names, self.output_names, graph_def, fold_const)
+        graph_def = tf2onnx.tf_loader.tf_optimize(input_names, self.output_names, graph_def, fold_const)
         if utils.is_debug_mode():
             utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
 
         inputs = {}
         shape_override = {}
         g = tf.import_graph_def(graph_def, name='')
-        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
+        # with tf_session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
+        with tf_session(graph=g) as sess:
             # create the input data
             for k in input_names:
                 v = self.input_names[k]

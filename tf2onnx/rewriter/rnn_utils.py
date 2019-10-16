@@ -197,7 +197,7 @@ lstmblockcell_pattern = \
 
 
 
-seq_len_pattern = OpTypePattern("Select", inputs=[
+seq_len_pattern = OpTypePattern("Select|SelectV2", inputs=[
     OpTypePattern("GreaterEqual", inputs=[
         OpTypePattern("*"),
         OpTypePattern("Enter", inputs=[

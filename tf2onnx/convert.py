@@ -10,7 +10,10 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
+import os
 import sys
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import tensorflow as tf
 
@@ -125,15 +128,14 @@ def main():
         model_path = args.saved_model
 
     if args.verbose:
-        logger.info("inputs: %s", inputs)
-        logger.info("outputs: %s", outputs)
+        logger.info("inputs: %s", inputs.keys())
+        logger.info("outputs: %s", outputs.keys())
 
-    # todo: consider to enable const folding by default?
-    graph_def = tf_utils.tf_optimize(inputs, outputs, graph_def, args.fold_const)
+    # TODO: do we need to pass fold_const
 
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')
-    with tf.Session(graph=tf_graph):
+    with tf_loader.tf_session(graph=tf_graph):
         g = process_tf_graph(tf_graph,
                              continue_on_error=args.continue_on_error,
                              target=args.target,
@@ -141,8 +143,8 @@ def main():
                              custom_op_handlers=custom_ops,
                              extra_opset=extra_opset,
                              shape_override=args.shape_override,
-                             input_names=inputs,
-                             output_names=outputs,
+                             input_names=list(inputs.keys()),
+                             output_names=list(outputs.keys()),
                              inputs_as_nchw=args.inputs_as_nchw)
 
     onnx_graph = optimizer.optimize_graph(g)

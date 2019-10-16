@@ -20,9 +20,10 @@ from tf2onnx.graph import GraphUtil
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.handler import tf_op
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, freeze_func
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main
+from common import *
 
 
 # pylint: disable=missing-docstring,unused-argument,unused-variable
@@ -106,8 +107,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                           continue_on_error=False)
 
     def test_abs(self):
-        with tf.Session() as sess:
-            x = tf.placeholder(tf.float32, [2, 3], name="input")
+        with tf_session() as sess:
+            x = tf_placeholder(tf.float32, [2, 3], name="input")
             x_ = tf.abs(x)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
@@ -116,9 +117,9 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                              onnx_to_graphviz(g))
 
     def test_randomuniform(self):
-        with tf.Session() as sess:
+        with tf_session() as sess:
             shape = tf.constant([2, 3], name="shape")
-            x_ = tf.random_uniform(shape, name="rand")
+            x_ = tf.compat.v1.random_uniform(shape, name="rand")
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             _ = tf.identity(x_, name="output")
@@ -130,8 +131,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_randomnormal(self):
-        with tf.Session() as sess:
-            x_ = tf.random_normal([2, 3], name="rand")
+        with tf_session() as sess:
+            x_ = tf.compat.v1.random_normal([2, 3], name="rand")
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             actual = onnx_to_graphviz(g)
@@ -140,10 +141,10 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             self.assertEqual(expected, actual)
 
     def test_dropout(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
-            x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
-            prop = tf.placeholder(tf.float32, (), name="prob")
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
+            x2 = tf_placeholder(tf.float32, [1, 3], name="input2")
+            prop = tf_placeholder(tf.float32, (), name="prob")
             x_ = tf.add(x1, x2)
             x_ = tf.nn.dropout(x_, prop)
             x_ = tf.identity(x_, name="output1")
@@ -161,9 +162,9 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             self.assertEqual(expected, actual)
 
     def test_add(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
-            x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
+            x2 = tf_placeholder(tf.float32, [1, 3], name="input2")
             x_ = tf.add(x1, x2)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
@@ -173,10 +174,10 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_squareddifference(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [1, 3], name="input1")
-            x2 = tf.placeholder(tf.float32, [1, 3], name="input2")
-            x_ = tf.squared_difference(x1, x2)
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [1, 3], name="input1")
+            x2 = tf_placeholder(tf.float32, [1, 3], name="input2")
+            x_ = tf.math.squared_difference(x1, x2)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
@@ -188,8 +189,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_reducesum(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.reduce_sum(x1)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
@@ -199,8 +200,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_argminmax(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.argmin(x1, axis=0)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
@@ -210,9 +211,9 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_rsqrt(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
-            x_ = tf.rsqrt(x1)
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
+            x_ = tf.math.rsqrt(x1)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
             self.assertEqual(
@@ -222,8 +223,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_relu6(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.nn.relu6(x1)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
@@ -232,6 +233,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 'input1:0 -> Relu6 Relu6:0 -> output }',
                 onnx_to_graphviz(g))
 
+    # FIXME: we should be able to make this work
+    @check_tf_max_version("1.15", "not supported in tf-2.0")
     def test_conv2d(self):
         kernel = tf.constant([
             [1, 0, 1],
@@ -247,8 +250,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             [3, 1, 0, 2]
         ]).reshape([1, 4, 4, 1])
 
-        with tf.Session() as sess:
-            image_ = tf.placeholder(tf.float32, shape=image.shape, name='input1')
+        with tf_session() as sess:
+            image_ = tf_placeholder(tf.float32, shape=image.shape, name='input1')
             conv = tf.nn.conv2d(image_, kernel, strides=[1, 1, 1, 1], padding='VALID')
             _ = tf.identity(conv, name="output")
             sess.run(tf.global_variables_initializer())
@@ -265,8 +268,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_squeeze(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.squeeze(x1)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
@@ -276,8 +279,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_cast(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.cast(x1, tf.int32)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
@@ -287,8 +290,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 onnx_to_graphviz(g))
 
     def test_reshape(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x1 = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.reshape(x1, [3, 2])
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset)
@@ -311,8 +314,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 op.type = "Mul"
             return ops
 
-        with tf.Session() as sess:
-            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.add(x, x)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph, opset=self.config.opset, custom_rewriter=[rewrite_test])
@@ -321,6 +324,7 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 'output [op_type=Identity] input1:0 -> Add input1:0 -> Add Add:0 -> output }',
                 onnx_to_graphviz(g))
 
+    @check_tf_max_version("1.15", "not supported in tf-2.0")
     def test_custom_op_depreciated(self):
         """Custom op test using old depreciated api."""
 
@@ -335,8 +339,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             del node.input[1:]
             return node
 
-        with tf.Session() as sess:
-            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.Print(x, [x], "hello")
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph,
@@ -350,6 +354,7 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             self.assertEqual(g.opset, self.config.opset)
             self.assertEqual(g.extra_opset, [constants.TENSORFLOW_OPSET])
 
+    @check_tf_max_version("1.15", "not supported in tf-2.0")
     def test_custom_op(self):
         """Custom op test."""
 
@@ -362,8 +367,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 del node.input[1:]
                 return node
 
-        with tf.Session() as sess:
-            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.Print(x, [x], "hello")
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph,
@@ -381,8 +386,8 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
             utils.make_opsetid(constants.MICROSOFT_DOMAIN, 1),
             utils.make_opsetid("my.domain", 1024),
         ]
-        with tf.Session() as sess:
-            x = tf.placeholder(tf.float32, [2, 3], name="input1")
+        with tf_session() as sess:
+            x = tf_placeholder(tf.float32, [2, 3], name="input1")
             x_ = tf.add(x, x)
             _ = tf.identity(x_, name="output")
             g = process_tf_graph(sess.graph,

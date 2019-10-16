@@ -31,19 +31,33 @@ def rewrite_dropout(g, ops):
                     OpTypePattern(None, name="input3")
                 ])
             ])
-        ])
+        ]),
+        # pattern for tf-2.0 tf.nn.dropout()
+        OpTypePattern("Mul", name="outputs", inputs=[
+            OpTypePattern("Cast", inputs=[
+                OpTypePattern("GreaterEqual", inputs=[
+                    OpTypePattern("RandomUniform|RandomUniformLike"),
+                    OpTypePattern(None, name="input3")
+                ])
+            ]),
+            OpTypePattern("Mul", name="input2"),
+        ]),
     ]
     for pattern in patterns:
-        matcher = GraphMatcher(pattern)
+        matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(ops))
         for match in match_results:
             inputs2 = match.get_op('input2')
+            if inputs2.inputs[0].type == "RealDiv":
+                data = inputs2.input[1]
+            else:
+                data = inputs2.input[0]
             outputs = match.get_op('outputs')
             op_name = utils.make_name("Dropout")
             out_name = utils.port_name(op_name)
             new_node = g.make_node(
                 "Dropout",
-                [inputs2.input[0]],
+                [data],
                 outputs=[out_name],
                 name=op_name,
                 attr={"ratio": 1.0},
