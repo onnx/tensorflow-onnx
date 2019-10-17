@@ -211,6 +211,17 @@ class Relu6:
         node.set_attr("min", 0.0)
         node.set_attr("max", 6.0)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # add min and max as inputs
+        node.type = "Clip"
+        onnx_dtype = ctx.get_dtype(node.input[0])
+        np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
+        clip_min = ctx.make_const(utils.make_name("{}_min".format(node.name)), np.array(0.0, dtype=np_dtype))
+        clip_max = ctx.make_const(utils.make_name("{}_max".format(node.name)), np.array(6.0, dtype=np_dtype))
+        node.input.append(clip_min.output[0])
+        node.input.append(clip_max.output[0])
+
 
 @tf_op("Rsqrt")
 class Rsqrt:
