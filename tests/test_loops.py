@@ -67,9 +67,8 @@ class LoopTests(Tf2OnnxBackendTestBase):
 
             i_final, ta_final = tf.while_loop(c, b, [i, output_ta])
             r = ta_final.stack()
-            ret = tf.identity(r, name="output")
-            _ = tf.identity(i_final, name="i")
-            return ret
+            return tf.identity(r, name="output"), tf.identity(i_final, name="i")
+
         input_names_with_port = ["input_1:0"]
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32)}
 
@@ -97,9 +96,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
                 return new_i, x, y
 
             i_final, x_final, y_final = tf.while_loop(c, b, [i, res, res2])
-            _ = tf.identity(i_final, name="i")
-            _ = tf.identity(x_final, name="x")
-            _ = tf.identity(y_final, name="y")
+            return tf.identity(i_final, name="i"), tf.identity(x_final, name="x"), tf.identity(y_final, name="y")
         input_names_with_port = ["input_1:0", "input_2:0", "input_3:0"]
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32),
@@ -125,9 +122,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
                 return new_i, x, y
 
             i_final, x_final, y_final = tf.while_loop(c, b, [i, res, res2])
-            _ = tf.identity(i_final, name="i")
-            _ = tf.identity(x_final, name="x")
-            _ = tf.identity(y_final, name="y")
+            return tf.identity(i_final, name="i"), tf.identity(x_final, name="x"), tf.identity(y_final, name="y")
         input_names_with_port = ["input_1:0", "input_2:0", "input_3:0"]
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32),
@@ -151,8 +146,8 @@ class LoopTests(Tf2OnnxBackendTestBase):
                 return new_i, out_ta_new
 
             i_final, out_final = tf.while_loop(c, b, [i, output_ta])
-            _ = tf.identity(i_final, name="i")
-            _ = tf.identity(out_final.stack(), name="output_ta")
+            return tf.identity(i_final, name="i"), tf.identity(out_final.stack(), name="output_ta")
+
         input_names_with_port = ["input_1:0", "input_2:0"]
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
@@ -179,8 +174,8 @@ class LoopTests(Tf2OnnxBackendTestBase):
                 return new_i, out_ta_new
 
             i_final, out_final = tf.while_loop(c, b, [i, output_ta])
-            _ = tf.identity(i_final, name="i")
-            _ = tf.identity(out_final.stack(), name="output_ta")
+            return tf.identity(i_final, name="i"), tf.identity(out_final.stack(), name="output_ta")
+
         input_names_with_port = ["input_1:0", "input_2:0"]
         feed_dict = {"input_1:0": np.array(20, dtype=np.int32),
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
