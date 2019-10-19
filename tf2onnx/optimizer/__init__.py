@@ -14,6 +14,7 @@ from .identity_optimizer import IdentityOptimizer
 from .merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
 from .transpose_optimizer import TransposeOptimizer
 from .loop_optimizer import LoopOptimizer
+from .back_to_back_optimizer import BackToBackOptimizer
 from .. import logging
 
 # optimizer sequence need to be considered carefully
@@ -25,6 +26,7 @@ _optimizers = OrderedDict([
     # for optimize_transpose may have some trans nodes that can be merge
     ("merge_duplication", MergeDuplicatedNodesOptimizer),
     ("remove_identity", IdentityOptimizer),
+    ("remove_back_to_back", BackToBackOptimizer),
 ])
 
 
