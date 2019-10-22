@@ -72,6 +72,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = helper.make_model(graph, producer_name=producer_name, opset_imports=[imp])
         return model_proto
+
     # Tranpose Optimizer Tests Start
 
     def run_transpose_compare(self, output_names_with_port, onnx_feed_dict, origin_proto,
@@ -662,6 +663,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             model_proto = self.make_model(graph, producer_name="onnx-tests")
             self.run_transpose_compare(["Y"], {"X": np.random.randn(*input_shape_np).astype(np.float32)},
                                        model_proto, remaining_transpose_num=0)
+
     # Tranpose Optimizer Tests End
 
     # Identity Optimizer Tests Start
@@ -1053,7 +1055,45 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = self.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.int64)}, model_proto,
                              "Cast", 0)
+
     # Const Fold Optimizer Tests End
+
+    def test_transpose_back_to_back_non_const(self):
+
+        node0 = helper.make_node("Transpose", ["u"], ["v"], perm=[0, 2, 3, 1], name="trans_0")
+        node1 = helper.make_node("Transpose", ["v"], ["w"], perm=[0, 3, 1, 2], name="trans_1")
+        node2 = helper.make_node("Transpose", ["w"], ["x"], perm=[0, 3, 2, 1], name="trans_2")
+        node3 = helper.make_node("Transpose", ["x"], ["res"], perm=[1, 3, 0, 2], name="trans_3")
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3],
+            "test-transpose-back-to-back-non-const",
+            [helper.make_tensor_value_info("u", TensorProto.FLOAT, (5, 5, 5, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (5, 5, 5, 5))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"u": np.random.randn(5, 5, 5, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=1)
+
+    def test_cast_back_to_back_non_const(self):
+        # TODO: make this more complex (e.g. float -> int -> float)
+        node0 = helper.make_node("Cast", ["u"], ["v"], to=11, name="cast_0")
+        node1 = helper.make_node("Cast", ["v"], ["w"], to=1, name="cast_1")
+        node2 = helper.make_node("Cast", ["w"], ["x"], to=11, name="cast_2")
+        node3 = helper.make_node("Cast", ["x"], ["res"], to=1, name="cast_3")
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3],
+            "test-cast-back-to-back-non-const",
+            [helper.make_tensor_value_info("u", TensorProto.FLOAT, (5, 5, 5, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (5, 5, 5, 5))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+
+        self.run_and_compare(["res"], {"u": np.random.randn(5, 5, 5, 5).astype(np.float32)}, model_proto,
+                             "Cast", 1)
 
 
 if __name__ == "__main__":

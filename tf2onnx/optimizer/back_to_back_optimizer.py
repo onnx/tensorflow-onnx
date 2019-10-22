@@ -34,7 +34,12 @@ class BackToBackOptimizer(GraphOptimizerBase):
 
     def _optimize_at_current_graph_level(self, g):
         for optype, handler in _func_map.items():
-            nodes = [n for n in g.get_nodes() if n.type == optype]
+
+            # nodes to optimize
+            nodes = [n for n in g.get_nodes()
+                     if n.type == optype]
+            # and not set(n.output) & set(g.outputs)]
+
             # find consumer list for each cast node
             has_dependencies = set()
             consumer_node_ids = {n.output[0]: [] for n in nodes}
@@ -57,6 +62,9 @@ class BackToBackOptimizer(GraphOptimizerBase):
                     if len(all_consumers) != len(downstream_nodes):
                         # if first node is used elsewhere, skip
                         continue
+                    if set(node.output) & set(g.outputs):
+                        # if this node is part of graph outputs, skip
+                        continue
                     # update downstream nodes, delete this one
                     for node2 in downstream_nodes:
                         handler(g, node, node2)
@@ -69,6 +77,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
     @staticmethod
     @_register_func("Cast")
     def _fold_cast(g, node1, node2):
+        # TODO: check for cast safety
         node2.input[0] = node1.input[0]
 
     @staticmethod
@@ -80,7 +89,8 @@ class BackToBackOptimizer(GraphOptimizerBase):
         new_perm = [t1[i] for i in t2]
 
         # check if node2 can be removed. otherwise only update
-        if new_perm == list(range(len(t2))):
+        if new_perm == list(range(len(t2))) \
+                and not set(node2.output) & set(g.outputs):
             # both nodes can be deleted
             # node1 will be removed by caller.so only remove node2 here
             node2_consumers = g.find_output_consumers(node2.output[0])
