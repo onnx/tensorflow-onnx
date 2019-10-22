@@ -1988,7 +1988,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(7, "div")
     def test_tf_div(self):
-        # pylint: disable=E0001
+        # pylint: disable=E0001,import-outside-toplevel
         from tensorflow.python.ops.gen_math_ops import div
         shape = 1000
         # test floating data

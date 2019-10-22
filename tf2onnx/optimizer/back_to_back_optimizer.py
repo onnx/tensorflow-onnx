@@ -59,21 +59,33 @@ class BackToBackOptimizer(GraphOptimizerBase):
                         continue
                     # update downstream nodes, delete this one
                     for node2 in downstream_nodes:
-                        handler(node, node2)
+                        handler(g, node, node2)
                         # add node2 to q, in case it has downstream nodes
                         q.append(node2.output[0])
                     g.remove_node(node.name)
+
         return g
 
     @staticmethod
     @_register_func("Cast")
-    def _fold_cast(node1, node2):
+    def _fold_cast(g, node1, node2):
         node2.input[0] = node1.input[0]
 
     @staticmethod
     @_register_func("Transpose")
-    def _fold_cast2(node1, node2):
+    def _fold_cast2(g, node1, node2):
         node2.input[0] = node1.input[0]
         t1 = list(node1.get_attr("perm").ints)
         t2 = list(node2.get_attr("perm").ints)
-        node2.set_attr("perm", [t1[i] for i in t2])
+        new_perm = [t1[i] for i in t2]
+
+        # check if node2 can be removed. otherwise only update
+        if new_perm == list(range(len(t2))):
+            # both nodes can be deleted
+            # node1 will be removed by caller.so only remove node2 here
+            node2_consumers = g.find_output_consumers(node2.output[0])
+            for consumer in node2_consumers:
+                consumer.input[0] = node1.input[0]
+            g.remove_node(node2.name)
+        else:
+            node2.set_attr("perm", [t1[i] for i in t2])
