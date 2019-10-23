@@ -7,7 +7,8 @@
 
 from __future__ import unicode_literals
 
-from .optimizer_base import GraphOptimizerBase
+from tf2onnx.utils import ONNX_DTYPE_NAMES
+from .optimizer_base import GraphOptimizerBase  # lgtm[py/cyclic-import]
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
 
@@ -34,13 +35,12 @@ class BackToBackOptimizer(GraphOptimizerBase):
 
     def _optimize_at_current_graph_level(self, g):
         for optype, handler in _func_map.items():
+            # candidate nodes for removal/optimization
+            nodes = [n for n in g.get_nodes() if n.type == optype]
 
-            # nodes to optimize
-            nodes = [n for n in g.get_nodes()
-                     if n.type == optype]
-            # and not set(n.output) & set(g.outputs)]
-
-            # find consumer list for each cast node
+            # topological sort of candidates
+            # simplifying assumption for back-to-back-optimizer is
+            # the op_types have 1 input, 1 output, but multiple consumers
             has_dependencies = set()
             consumer_node_ids = {n.output[0]: [] for n in nodes}
             for n in nodes:
@@ -48,54 +48,100 @@ class BackToBackOptimizer(GraphOptimizerBase):
                     consumer_node_ids[n.input[0]].extend([n])
                     has_dependencies.add(n.output[0])
 
-            # nodes with no dependencies
+            # q = starting nodes with no dependencies
             q = list(set(consumer_node_ids.keys()) - has_dependencies)
             while q:
                 nodeid = q[0]
                 q.remove(nodeid)
                 node = g.get_node_by_output(nodeid, False)
-                downstream_nodes = consumer_node_ids[nodeid]
+                consumer_nodes = consumer_node_ids[nodeid]
 
-                if len(downstream_nodes) > 0:
-                    # these are back-to-back nodes
-                    all_consumers = g.find_output_consumers(nodeid)
-                    if len(all_consumers) != len(downstream_nodes):
+                if len(consumer_nodes) > 0:
+                    all_consumers = g.find_output_consumers(node.output[0])
+                    if len(all_consumers) != len(consumer_nodes):
                         # if first node is used elsewhere, skip
                         continue
                     if set(node.output) & set(g.outputs):
                         # if this node is part of graph outputs, skip
                         continue
-                    # update downstream nodes, delete this one
-                    for node2 in downstream_nodes:
-                        handler(g, node, node2)
-                        # add node2 to q, in case it has downstream nodes
-                        q.append(node2.output[0])
-                    g.remove_node(node.name)
-
+                    q2 = handler(g, node, consumer_nodes)
+                    # add more nodes which can now be processed
+                    q.extend(q2)
         return g
 
     @staticmethod
     @_register_func("Cast")
-    def _fold_cast(g, node1, node2):
-        # TODO: check for cast safety
-        node2.input[0] = node1.input[0]
+    def _optimize_cast(g, node, consumer_nodes):
+        q2 = []
+        type1 = node.get_attr('to').i
+        type1_name = ONNX_DTYPE_NAMES[type1] if type1 in ONNX_DTYPE_NAMES else ''
 
+        # if parent node is cast node, and same type, delete this one
+        pnode = node.inputs[0]
+        if pnode.type == 'Cast':
+            type2 = pnode.get_attr('to').i
+            if type1 == type2:
+                for node2 in consumer_nodes:
+                    node2.input[0] = node.input[0]
+                    q2.append(node2.output[0])
+                g.remove_node(node.name)
+                return q2
+
+        # otherwise, check consumer cast nodes for a target type
+        # that contains more information than current type
+        can_reduce = True
+        for node2 in consumer_nodes:
+            type2 = node2.get_attr('to').i
+            type2_name = ONNX_DTYPE_NAMES[type2] if type2 in ONNX_DTYPE_NAMES else ''
+
+            if 'float' in type1_name or type1_name == 'double':
+                # high information type. ok to eliminate
+                pass
+            elif 'int' in type1_name:
+                # int* and uint* are mix of high and low information.
+                # for safety, keep the current node, unless type2 is bool,
+                # in which case it's ok to remove node
+                if type1 != type2 and type2_name != 'bool':
+                    can_reduce = False
+            elif type1_name == 'bool':
+                # bool is low information, so don't eliminate
+                if type1 != type2:
+                    can_reduce = False
+            elif type1_name == 'string':
+                # can always remove string
+                pass
+            else:
+                # some odd type, keep node
+                can_reduce = False
+            q2.append(node2.output[0])
+
+        if can_reduce:
+            for node2 in consumer_nodes:
+                node2.input[0] = node.input[0]
+            g.remove_node(node.name)
+        return q2
+
+    # TODO: reactivate after fixing interference with transpose_optimizer
+    # reactivate after fixing
     @staticmethod
-    @_register_func("Transpose")
-    def _fold_cast2(g, node1, node2):
-        node2.input[0] = node1.input[0]
-        t1 = list(node1.get_attr("perm").ints)
-        t2 = list(node2.get_attr("perm").ints)
-        new_perm = [t1[i] for i in t2]
-
-        # check if node2 can be removed. otherwise only update
-        if new_perm == list(range(len(t2))) \
-                and not set(node2.output) & set(g.outputs):
-            # both nodes can be deleted
-            # node1 will be removed by caller.so only remove node2 here
-            node2_consumers = g.find_output_consumers(node2.output[0])
-            for consumer in node2_consumers:
-                consumer.input[0] = node1.input[0]
-            g.remove_node(node2.name)
-        else:
-            node2.set_attr("perm", [t1[i] for i in t2])
+    @_register_func("_Transpose")
+    def _optimize_transpose(g, node, consumer_nodes):
+        t1 = list(node.get_attr('perm').ints)
+        q2 = []
+        for node2 in consumer_nodes:
+            node2.input[0] = node.input[0]
+            t2 = list(node2.get_attr('perm').ints)
+            new_perm = [t1[i] for i in t2]
+            # check if node2 can be removed. otherwise only update
+            if new_perm == list(range(len(t2))) \
+                    and not set(node2.output) & set(g.outputs):
+                # both nodes can be deleted
+                node2_consumers = g.find_output_consumers(node2.output[0])
+                for consumer in node2_consumers:
+                    consumer.input[0] = node.input[0]
+                g.remove_node(node2.name)
+            else:
+                node2.set_attr('perm', [t1[i] for i in t2])
+                q2.append(node2.output[0])
+        g.remove_node(node.name)
+        return q2
