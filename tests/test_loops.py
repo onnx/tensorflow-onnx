@@ -37,9 +37,9 @@ class LoopTests(Tf2OnnxBackendTestBase):
             one = tf.constant([1])
             c = lambda i: tf.less(i, 10)
             b = lambda i: tf.add(i, one)
-            r = tf.while_loop(c, b, [i], shape_invariants=True)
+            r = tf.while_loop(c, b, [i])
             return tf.identity(r, name=_TFOUTPUT)
-        self.run_test_case(func, {_INPUT: np.array(0, dtype=np.int32)}, [], [_OUTPUT], rtol=1e-06)
+        self.run_test_case(func, {_INPUT: np.array([0], dtype=np.int32)}, [], [_OUTPUT], rtol=1e-06)
 
     def test_simple_while_loop_2(self):
         def func(i):
