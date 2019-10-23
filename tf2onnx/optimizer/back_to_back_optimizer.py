@@ -7,8 +7,8 @@
 
 from __future__ import unicode_literals
 
-from tf2onnx.utils import ONNX_DTYPE_NAMES
-from .optimizer_base import GraphOptimizerBase  # lgtm[py/cyclic-import]
+from tf2onnx.utils import ONNX_DTYPE_NAMES  # lgtm[py/unsafe-cyclic-import]
+from .optimizer_base import GraphOptimizerBase  # lgtm[py/unsafe-cyclic-import]
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
 
