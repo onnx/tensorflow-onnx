@@ -9,10 +9,11 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import sys
 import logging
+import sys
 
 import numpy as np
+from onnx import numpy_helper
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 
@@ -76,6 +77,11 @@ class Flatten:
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
         # no change for us
+        cls.version_1(ctx, node, **kwargs)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
         cls.version_1(ctx, node, **kwargs)
 
 
@@ -183,6 +189,11 @@ class Squeeze:
             axis = [i for i, j in enumerate(shape) if j == 1]
         node.set_attr("axes", axis)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Transpose")
 class Transpose:
@@ -223,6 +234,11 @@ class Concat:
             # opset < 8: might need to wrap concat in casts since only float is supported
             _wrap_concat_with_cast(ctx, node)
             return
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op("ConcatV2")
@@ -308,12 +324,21 @@ class Slice:
     def version_10(cls, ctx, node, **kwargs):
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Gather")
 class Gather:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         node.type = "Gather"
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op("GatherV2")
@@ -325,6 +350,11 @@ class GatherV2:
         axis = node.inputs[2].get_tensor_value()
         ctx.remove_input(node, node.input[2])
         node.set_attr("axis", axis)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
 
 
 def _make_gathernd_inner_loop(ctx, params, index, dtype):
@@ -449,8 +479,8 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
                   dtypes=dtypes)
 
 
-@tf_op("GatherNd")
-class GatherNd:
+@tf_op("GatherNd", onnx_op="GatherND")
+class GatherND:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # Tparams output = GatherNd(Tparams params, Tidx indices)
@@ -465,6 +495,40 @@ class GatherNd:
         ctx.remove_node(node.name)
         make_gathernd(ctx, params, indices, output, node.name, t_params, shapes, dtypes)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # indicies input
+        input1 = node.input[1]
+        target_dtype = TensorProto.INT64
+        if ctx.get_dtype(input1) != TensorProto.INT64:
+            inp_cast = ctx.insert_new_node_on_input(node, "Cast", input1, to=target_dtype)
+            ctx.copy_shape(input1, inp_cast.output[0])
+            ctx.set_dtype(inp_cast.output[0], target_dtype)
+
+
+@tf_op("ScatterNd", onnx_op="ScatterND")
+class ScatterND:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+
+        # onnx requires pre-generated tensor for data
+        np_val = np.array([0], dtype=np.int64)
+        onnx_tensor = numpy_helper.from_array(np_val, utils.make_name(node.name))
+        const_of_shape = ctx.insert_new_node_on_input(node, "ConstantOfShape", node.input[2], value=onnx_tensor)
+
+        # cast edge to INT64 if not already
+        input0 = const_of_shape.input[0]
+        if ctx.get_dtype(input0) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(const_of_shape, "Cast", input0, to=TensorProto.INT64)
+
+        # cast edge to INT64 if not already
+        input0 = node.input[0]
+        if ctx.get_dtype(input0) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", input0, to=TensorProto.INT64)
+
+        # reorder inputs to match onnx
+        node.input = [node.input[2], node.input[0], node.input[1]]
+
 
 @tf_op("Split")
 class Split:
@@ -478,6 +542,11 @@ class Split:
 
     @classmethod
     def version_2(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
         cls.version_1(ctx, node, **kwargs)
 
 
@@ -710,8 +779,8 @@ class StridedSlice:
         shrink_axis_mask = node.get_attr("shrink_axis_mask")
         shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
         param_shape = ctx.get_shape(node.input[1]) or \
-            ctx.get_shape(node.input[2]) or \
-            ctx.get_shape(node.input[3])
+                      ctx.get_shape(node.input[2]) or \
+                      ctx.get_shape(node.input[3])
         utils.make_sure(
             param_shape is not None,
             "StridedSlice op {} requires the shape of begin/end/strides".format(node.name)
@@ -892,10 +961,21 @@ class TopKV2:
     def version_10(cls, ctx, node, **kwargs):
         # onnx only supports input K as a 1D tesor with dtype int64
         # while in tf, K is a 0D tensor with dtype int32
+        dtypes = node.output_dtypes
         k_0d = node.input[1]
         cast = ctx.make_node("Cast", [k_0d], attr={"to": onnx_pb.TensorProto.INT64})
         k_1d = ctx.make_node("Unsqueeze", cast.output, attr={"axes": [0]})
         ctx.replace_input(node, k_0d, k_1d.output[0])
+        # cast the index output to int32
+        cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
+        ctx.set_dtype(cast_out.output[0], dtypes[1])
+        ctx.copy_shape(node.output[1], cast_out.output[0])
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 supports negative axis, and new attrs 'largest' and 'sorted'
+        # the core logic doesn't change, using defaults for new attrs
+        cls.version_10(ctx, node, **kwargs)
 
 
 @tf_op("Tile")
@@ -1042,6 +1122,11 @@ class OneHot:
             new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
             ctx.set_dtype(new_node.output[0], output_dtype)
             ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_9(ctx, node, **kwargs)
 
 
 @tf_op("Shape")
@@ -1199,6 +1284,11 @@ class NonMaxSuppression:
         ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                       name=node.name, outputs=node.output, dtypes=dtypes, shapes=shapes)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_10(ctx, node, **kwargs)
+
 
 @tf_op("ReverseSequence")
 class ReverseSequence:
@@ -1309,7 +1399,7 @@ class ReverseV2:
         axes = axes_node.get_tensor_value(as_list=False)
         # Current support is for when axis is a 1D tensor.
         utils.make_sure(len(axes.shape) == 1 \
-            , "Currently no support for reverseV2 tensor axis")
+                        , "Currently no support for reverseV2 tensor axis")
 
         axes = axes.tolist()
         len_axes = len(axes)
@@ -1391,12 +1481,12 @@ class ReverseV2:
 
                 # Make sure rs_batch_size and input_shape[axis] are not -1 each
                 utils.make_sure(input_shape[axis] is not -1 \
-                    , "shape of axis {} is unknown".format(axis))
+                                , "shape of axis {} is unknown".format(axis))
                 utils.make_sure(rs_batch_size is not -1 \
-                    , "ReverseSequence batch size for axis {} is unknown".format(axis))
+                                , "ReverseSequence batch size for axis {} is unknown".format(axis))
 
                 seq_list = [input_shape[axis]] * rs_batch_size
-                seq_array = np.asarray(seq_list, dtype=np.int64) # dtype should be int64
+                seq_array = np.asarray(seq_list, dtype=np.int64)  # dtype should be int64
 
                 const_seq_name = utils.make_name(const_name_root)
                 new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
@@ -1410,7 +1500,7 @@ class ReverseV2:
                 # Else a new output is created which is fed to a Transpose node.
                 rs_out_name = node.output if \
                     ((i == len_axes - 1) and (curr_perm == orig_perm)) \
-                        else None
+                    else None
 
                 rs_out_shapes = None if rs_out_name is None else rv2_output_shapes
 
@@ -1446,3 +1536,11 @@ class ReverseV2:
                     dtypes=rv2_output_dtypes,
                     attr={"perm": curr_perm}
                 )
+
+
+@tf_op("Unique", onnx_op="Unique")
+class Unique:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 supports explicitly
+        pass

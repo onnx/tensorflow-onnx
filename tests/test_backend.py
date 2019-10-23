@@ -1479,6 +1479,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(values, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: k_val})
 
+    @check_onnxruntime_min_version("0.5.0", "topk-10's shape inference function has a bug")
+    def test_topk3(self):
+        # test topk index output
+        x_val = np.arange(3 * 2 * 3).astype("float32")
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        _, idx = tf.nn.top_k(x, 5, sorted=True)
+        _ = tf.identity(idx, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def test_stack_axis(self):
         for axis in [0, 1]:
             x_val = [np.random.randn(3, 4).astype("float32") for _ in range(10)]
@@ -2562,6 +2571,100 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.add(x, x)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_cumsum(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
+        def func(x):
+            x_ = tf.cumsum(x, axis=1)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_cumsum_axis1_reverse_exclusive(self):
+        x_val = np.array([1., 2., 3., 4.,
+                          5., 6., 7., 8.,
+                          9., 10., 11., 12.,
+                          13., 14., 15., 16.,
+                          17., 18., 19., 20.,
+                          21., 22., 23., 24.], dtype=np.float32).reshape((2, 3, 4))
+        def func(x):
+            x_ = tf.cumsum(x, axis=1, reverse=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Round")
+    def test_round(self):
+        x_val = np.array([-0.7, -0.5, -0.0, 0.0, +0.0, 0.3, 0.5, 0.7, float('nan')], dtype=np.float32)
+        def func(x):
+            x_ = tf.round(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Det")
+    def test_determinant(self):
+        x_val = np.array([1., 2., 3., 4., 1., 2.,
+                          2., 1., 1., 3., 3., 1.,
+                          1., 2., 3., 4., 1., 2.,
+                          2., 1., 1., 3., 3., 1.],
+                         dtype=np.float32).reshape((1, 2, 3, 2, 2))
+        def func(x):
+            x_ = tf.matrix_determinant(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "BitShift")
+    def test_bitshift_left(self):
+        x_val = np.array([16, 4, 1], dtype=np.int32)
+        y_val = np.array([1, 2, 3], dtype=np.int32)
+        def func(x, y):
+            x_ = tf.bitwise.left_shift(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(11, "BitShift")
+    def test_bitshift_right(self):
+        info = np.iinfo(np.int32)
+        x_val = np.array([-1, 0, 1, info.max, info.min], dtype=np.int32)
+        def func(x):
+            x_ = tf.bitwise.right_shift(x, 1)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "ScatterND")
+    def test_scatternd_1d(self):
+        x_val = np.array([4, 3, 1, 7], dtype=np.int32).reshape((4, 1))
+        y_val = np.array([9, 10, 11, 12], dtype=np.int64).reshape((4))
+        z_val = np.array([8], dtype=np.int32).reshape(1)
+
+        def func(x, y, z):
+            x_ = tf.scatter_nd(x, y, z)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_opset_min_version(11, "ScatterND")
+    def test_scatternd_3d(self):
+        x_val = np.array([0, 2], dtype=np.int32).reshape((2, 1))
+        y_val = np.array([[[5, 5, 5, 5], [6, 6, 6, 6],
+                           [7, 7, 7, 7], [8, 8, 8, 8]],
+                          [[5, 5, 5, 5], [6, 6, 6, 6],
+                           [7, 7, 7, 7], [8, 8, 8, 8]]], dtype=np.int64).reshape((2, 4, 4))
+        z_val = np.array([4, 4, 4], dtype=np.int32).reshape(3)
+
+        def func(x, y, z):
+            x_ = tf.scatter_nd(x, y, z)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_opset_min_version(11, "Unique")
+    def test_unique(self):
+        x_val = np.array([1, 1, 2, 4, 4, 4, 7, 8, 8], dtype=np.int32)
+        x = tf.placeholder(np.int32, x_val.shape, name=_TFINPUT)
+        x1_, x2_ = tf.unique(x)
+        _ = tf.identity(x1_, name=_TFOUTPUT)
+        _ = tf.identity(x2_, name=_TFOUTPUT1)
+        self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+
 
 if __name__ == '__main__':
     unittest_main()

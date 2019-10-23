@@ -17,8 +17,8 @@ from onnx import onnx_pb, helper
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument,missing-docstring
 
@@ -49,6 +49,11 @@ class ReduceOpBase:
             del node.attr['keep_dims']
             node.set_attr("keepdims", keep_dims.i)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic is same
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op(["ArgMax", "ArgMin"])
 class ArgMax:
@@ -78,6 +83,11 @@ class ArgMax:
         node.set_attr("axis", axis)
         node.set_attr("keepdims", 0)
         ctx.remove_input(node, node.input[1])
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Opset 11 supports negative axis, but core logic same
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op(["All", "Any"])

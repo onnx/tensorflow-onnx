@@ -207,6 +207,11 @@ class ConvOp:
         add_padding(ctx, node, kernel_shape, strides, dilations=dilations, spatial=2)
         conv_convert_inputs(ctx, node, with_kernel=True)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Conv2DBackpropInput")
 class ConvTranspose:
@@ -248,6 +253,10 @@ class ConvTranspose:
         node.input[1] = t
 
         conv_convert_inputs(ctx, node, with_kernel=True)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op(["DepthwiseConv2d", "DepthwiseConv2dNative"])
@@ -301,6 +310,11 @@ class PoolOp:
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
+        cls._convert(ctx, node, **kwargs)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
         cls._convert(ctx, node, **kwargs)
 
     @classmethod
@@ -389,7 +403,7 @@ class BiasAdd:
                 ctx.set_shape(reshape_node.output[0], new_broadcast_shape)
 
 
-@tf_op(["Pad", "PadV2", "MirrorPad"])
+@tf_op(["Pad", "PadV2", "MirrorPad"], onnx_op="Pad")
 class Pad:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -420,6 +434,33 @@ class Pad:
             cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
             cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
             ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
+            ctx.copy_shape(node.name, cast_node.output[0])
+
+            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+                                                           name=utils.make_name(node.name) + "_castback")
+            cast_back_node.set_attr("to", origin_dtype)
+            ctx.set_dtype(cast_back_node.output[0], origin_dtype)
+            ctx.copy_shape(node.name, cast_back_node.output[0])
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        mode = node.get_attr("mode")
+        if mode:
+            mode = mode.s.decode("utf-8").lower()
+            node.set_attr("mode", mode)
+        if mode not in [None, "constant", "reflect"]:
+            raise ValueError(mode + " pad mode is not supported")
+
+        pads = node.inputs[1].get_tensor_value()
+        pads = np.array(pads).transpose().flatten().astype(np.int64)
+        node.inputs[1].set_tensor_value(pads)
+
+        origin_dtype = ctx.get_dtype(node.output[0])
+        if origin_dtype not in [TensorProto.FLOAT16, TensorProto.FLOAT,
+                                TensorProto.DOUBLE]:
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+            cast_node.set_attr("to", TensorProto.FLOAT)
+            ctx.set_dtype(cast_node.output[0], TensorProto.FLOAT)
             ctx.copy_shape(node.name, cast_node.output[0])
 
             cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
@@ -473,13 +514,27 @@ class BatchNorm:
         cls.version_6(ctx, node, **kwargs)
 
 
-@tf_op(["SpaceToDepth", "DepthToSpace"])
+@tf_op(["SpaceToDepth"])
 class SpaceToDepth:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         block_size = node.get_attr("block_size")
         node.set_attr("blocksize", block_size.i)
         conv_convert_inputs(ctx, node, with_kernel=False)
+
+
+@tf_op(["DepthToSpace"])
+class DepthToSpace:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        block_size = node.get_attr("block_size")
+        node.set_attr("blocksize", block_size.i)
+        conv_convert_inputs(ctx, node, with_kernel=False)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Onnx-11 CRD mode added. No change for tf2onnx
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
@@ -512,7 +567,11 @@ class Resize:
         cls._convert_since_9(ctx, node, op_type="Resize")
 
     @classmethod
-    def _convert_since_9(cls, ctx, node, op_type):
+    def version_11(cls, ctx, node, **kwargs):
+        cls._convert_since_9(ctx, node, op_type="Resize", roi_required=True)
+
+    @classmethod
+    def _convert_since_9(cls, ctx, node, op_type, roi_required=False):
 
         # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
         # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
@@ -547,7 +606,12 @@ class Resize:
             scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
         input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
-        upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
+        if roi_required:
+            roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
+            upsample = ctx.make_node("Resize", [input_nchw.output[0], roi.output[0], scales.output[0]],
+                                     attr={"mode": mode})
+        else:
+            upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes

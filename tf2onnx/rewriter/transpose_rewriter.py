@@ -26,7 +26,7 @@ def rewrite_transpose(g, ops):
     for match in match_results:
         output = match.get_op('output')
         shape = g.get_shape(output.input[0])
-        dims = [i for i in range(len(shape) - 1, -1, -1)]
+        dims = range(len(shape) - 1, -1, -1)
         output.set_attr("perm", dims)
         g.remove_input(output, output.input[1])
         to_delete = [n for n in match.get_nodes() if n != output]

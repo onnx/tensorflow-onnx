@@ -38,7 +38,7 @@ from tf2onnx import tf_loader, logging, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
 
-# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
+# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
 
 logger = logging.getLogger("run_pretrained")
 

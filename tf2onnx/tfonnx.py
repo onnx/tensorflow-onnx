@@ -144,7 +144,7 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
         "Where": [0],  # Where's first input is bool
     }
     new_ops = []
-    org_ops = [n for n in ops]
+    org_ops = list(ops)
     for op in org_ops:
         if op.type in impacted_ops:
             cast_inserted = []
@@ -223,7 +223,7 @@ def tensorflow_onnx_mapping(g, ops_mapping):
     unmapped_op = collections.Counter()
     exceptions = []
 
-    ops = [n for n in g.get_nodes()]
+    ops = list(g.get_nodes())
     for node in ops:
         logger.debug("Process node: %s\n%s", node.name, node.summary)
 

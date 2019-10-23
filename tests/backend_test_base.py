@@ -25,7 +25,7 @@ from tf2onnx import optimizer
 from tf2onnx.tf_loader import tf_optimize, tf_reset_default_graph, tf_session, tf_placeholder, freeze_func
 
 
-# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test, import-outside-toplevel
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     def setUp(self):

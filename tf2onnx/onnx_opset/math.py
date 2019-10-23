@@ -17,8 +17,8 @@ from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument,missing-docstring
 
@@ -187,6 +187,11 @@ class Softmax:
         logits_rank = len(ctx.get_shape(node.input[0]))
         node.set_attr("axis", logits_rank - 1)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 supports -ve axis
+        pass
+
 
 @tf_op("Square")
 class Square:
@@ -205,6 +210,17 @@ class Relu6:
         node.type = "Clip"
         node.set_attr("min", 0.0)
         node.set_attr("max", 6.0)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # add min and max as inputs
+        node.type = "Clip"
+        onnx_dtype = ctx.get_dtype(node.input[0])
+        np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
+        clip_min = ctx.make_const(utils.make_name("{}_min".format(node.name)), np.array(0.0, dtype=np_dtype))
+        clip_max = ctx.make_const(utils.make_name("{}_max".format(node.name)), np.array(6.0, dtype=np_dtype))
+        node.input.append(clip_min.output[0])
+        node.input.append(clip_max.output[0])
 
 
 @tf_op("Rsqrt")
@@ -474,8 +490,54 @@ class FloorMod:
         ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
+
 @tf_op("Selu")
 class Selu:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op("Cumsum", onnx_op="CumSum")
+class CumSum:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("Round")
+class Round:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("MatrixDeterminant", onnx_op="Det")
+class Det:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("LeftShift", onnx_op="BitShift")
+class BitShiftLeft:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("BitShift", inputs=node.input, outputs=node.output, name=node.name,
+                      shapes=shapes, dtypes=dtypes,
+                      domain=constants.ONNX_DOMAIN, attr={'direction': 'LEFT'})
+
+
+@tf_op("RightShift", onnx_op="BitShift")
+class BitShiftRight:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("BitShift", inputs=node.input, outputs=node.output, name=node.name,
+                      shapes=shapes, dtypes=dtypes,
+                      domain=constants.ONNX_DOMAIN, attr={'direction': 'RIGHT'})
