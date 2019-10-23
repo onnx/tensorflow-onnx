@@ -122,7 +122,6 @@ class BackToBackOptimizer(GraphOptimizerBase):
         return q2
 
     # TODO: reactivate after fixing interference with transpose_optimizer
-    # reactivate after fixing
     @staticmethod
     @_register_func("_Transpose")
     def _optimize_transpose(g, node, consumer_nodes):
