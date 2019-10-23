@@ -227,14 +227,20 @@ class Test(object):
                 v = self.input_names[k]
                 t = sess.graph.get_tensor_by_name(k)
                 expected_dtype = tf.as_dtype(t.dtype).name
-                if isinstance(v, six.text_type) and v.startswith("np."):
-                    np_value = eval(v)  # pylint: disable=eval-used
-                    if expected_dtype != np_value.dtype:
-                        logger.warning("dtype mismatch for input %s: expected=%s, actual=%s", k, expected_dtype,
-                                       np_value.dtype)
-                    inputs[k] = np_value.astype(expected_dtype)
-                else:
-                    inputs[k] = self.make_input(v).astype(expected_dtype)
+                if isinstance(v, six.text_type):
+                    if v.startswith("np."):
+                        np_value = eval(v)  # pylint: disable=eval-used
+                        if expected_dtype != np_value.dtype:
+                            logger.warning("dtype mismatch for input %s: expected=%s, actual=%s", k, expected_dtype,
+                                           np_value.dtype)
+                        inputs[k] = np_value.astype(expected_dtype)
+                    # e.g. 'file# #np.float#[1,39,8]#D:\modelsspeech\input_record\prosody_feature_no_duration.txt'
+                    elif v.startswith("file"):
+                        _, delim, typ, shape, file = v.split('#')
+                        np_value = np.loadtxt(file, eval(typ), '#', delim).reshape(eval(shape))
+                        inputs[k] = np_value.astype(expected_dtype)
+                    else:
+                        raise ("%s : Value is string, but doesn't start with np.load or file")
 
             if self.force_input_shape:
                 for k, v in inputs.items():
