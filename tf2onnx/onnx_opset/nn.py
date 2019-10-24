@@ -609,7 +609,7 @@ class Resize:
         if roi_required:
             roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
             upsample = ctx.make_node("Resize", [input_nchw.output[0], roi.output[0], scales.output[0]],
-                                     attr={"mode": mode})
+                                     attr={"mode": mode, "nearest_mode": "floor", "coordinate_transformation_mode": "asymmetric"})
         else:
             upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
 
