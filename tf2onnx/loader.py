@@ -91,6 +91,7 @@ def from_saved_model(model_path, input_names, output_names, signatures=None):
     inputs = {}
     outputs = {}
     try:
+        # pylint: disable=C0415
         from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
         # pylint: disable=unnecessary-lambda
         get_signature_def = lambda meta_graph_def, k: \
