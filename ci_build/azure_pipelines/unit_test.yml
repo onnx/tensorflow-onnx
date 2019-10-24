@@ -5,14 +5,31 @@ stages:
     jobs:
     - template: 'templates/job_generator.yml'
       parameters:
-        python_versions: ['3.7', '3.6']
-        tf_versions: ['1.14', '1.15']
-        platforms: ['linux']
-        onnx_opsets: ['11', '10', '9', '8', '7']
-        onnx_backends: {onnxruntime: ['nightly']}
+        python_versions: ['3.7', '3.6', '3.5']
+        tf_versions: ['1.14']
+        onnx_opsets: ['']
         job:
           steps:
           - template: 'unit_test.yml'
         report_coverage: 'True'
     
+    - template: 'templates/job_generator.yml'
+      parameters:
+        tf_versions: ['1.13.1', '1.12', '1.11', '1.10', '1.9', '1.8', '1.7', '1.5']
+        onnx_opsets: ['']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+    
+    - template: 'templates/job_generator.yml'
+      parameters:
+        platforms: ['windows']
+        tf_versions: ['1.14']
+        onnx_opsets: ['']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
   - template: 'templates/combine_test_coverage.yml'
