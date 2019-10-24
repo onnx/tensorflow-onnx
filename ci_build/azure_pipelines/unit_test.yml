@@ -10,7 +10,6 @@ stages:
         platforms: ['linux']
         onnx_opsets: ['11', '10', '9', '8', '7']
         onnx_backends: {onnxruntime: ['nightly']}
-        tf_versions: ['1.15', 1.14']
         job:
           steps:
           - template: 'unit_test.yml'
