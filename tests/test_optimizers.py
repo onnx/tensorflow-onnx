@@ -1076,6 +1076,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["res"], {"u": np.random.randn(5, 5, 5, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=2)
 
+    @check_opset_min_version(9, "string type tensor")
     def test_cast_back_to_back_non_const_mixed_types(self):
         node0 = helper.make_node("Cast", ["u"], ["v"], to=11, name="cast_0")  # double
         node1 = helper.make_node("Cast", ["v"], ["w"], to=6, name="cast_1")  # int32
