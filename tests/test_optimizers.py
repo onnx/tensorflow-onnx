@@ -12,7 +12,7 @@ from onnx import helper, TensorProto, OperatorSetIdProto
 from tf2onnx import utils
 from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, group_nodes_by_type, check_opset_min_version
+from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -568,6 +568,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                              "W": np.random.randn(1, 1, 3, 3).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
+    @check_opset_max_version(10, "pad")
     def test_transpose_pad(self):
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
         node1 = helper.make_node("Pad", ["Y"], ["Z"], pads=[1, 0, 1, 3, 0, 0, 2, 0], name="pad")
@@ -575,6 +576,28 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         graph = helper.make_graph(
             [node0, node1, node2],
+            "transpose-pad-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (2, 6, 4, 8))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(1, 3, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @check_opset_min_version(11, "pad")
+    def test_transpose_pad11(self):
+
+        pads_val = np.array([1, 0, 1, 3, 0, 0, 2, 0], dtype=np.int64)
+        pads_tensor = helper.make_tensor("Pads", TensorProto.INT64, [8], pads_val)
+        pads_const = helper.make_node("Constant", [], ["Pads"], value=pads_tensor, name="Pads")
+
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Pad", ["Y", "Pads"], ["Z"], name="pad")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2, pads_const],
             "transpose-pad-test",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
             [helper.make_tensor_value_info("res", TensorProto.FLOAT, (2, 6, 4, 8))],

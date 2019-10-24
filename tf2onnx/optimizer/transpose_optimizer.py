@@ -102,8 +102,8 @@ class TransposeOptimizer(GraphOptimizerBase):
                 if not input_shape:
                     continue
 
-                if (is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1:3] == [1, 1])))\
-                   or (is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2:4] == [1, 1]))):
+                if (is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1:3] == [1, 1]))) \
+                        or (is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2:4] == [1, 1]))):
                     new_shape = _calculate_new_shape(self._g, op)
                     # replace transpose with reshape
                     self._g.remove_node(op.name)
@@ -315,7 +315,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 self.logger.warning("%s shape can contain one -1 at most, otherwise reshape op can't work", node.name)
                 return None
             ori_rank = len(ori_shape)
-            new_shape = [1]*(4-ori_rank) + ori_shape
+            new_shape = [1] * (4 - ori_rank) + ori_shape
             return new_shape
 
         non_nhwc_trans_inputs = []
@@ -519,7 +519,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             if input_shape is not None:
                 new_squeeze_output_shape = [input_shape[i] for i in range(4) if i not in new_squeeze_axes]
             else:
-                new_squeeze_output_shape = [-1]*4
+                new_squeeze_output_shape = [-1] * 4
                 self.logger.warning("%s's shape is unknown, which may interfere further optimization", node.input[0])
             self._g.set_shape(node.output[0], new_squeeze_output_shape)
             return True
@@ -530,10 +530,17 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _pad_handler(self, trans, node):
         # [N-start, H-start, W-start, C-start, N-end, H-end,  W-end, C-end]
-        pads = node.get_attr('pads').ints  # [x1_begin, x2_begin...x1_end, x2_end,...]
-        # NHWC->NCHW
-        new_pads = [pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]]
-        node.set_attr("pads", new_pads)
+        if self._g.opset < 11:
+            pads = node.get_attr('pads').ints  # [x1_begin, x2_begin...x1_end, x2_end,...]
+            # NHWC->NCHW
+            new_pads = [pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]]
+            node.set_attr("pads", new_pads)
+        else:
+            pads = node.inputs[1].get_tensor_value()
+            # NHWC->NCHW
+            new_pads = np.array([pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]],
+                                dtype=np.int64)
+            node.inputs[1].set_tensor_value(new_pads)
         return self._switch_transpose_and_node(node, trans)
 
     def _reducemean_handler(self, trans, node):
