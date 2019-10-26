@@ -35,7 +35,7 @@ def infer_shape(tf_graph, shape_override):
 
     op_outputs_with_none_shape = check_shape_for_tf_graph(tf_graph)
     if op_outputs_with_none_shape:
-        if utils.get_tf_version() > LooseVersion("1.5.0"):
+        if get_tf_version() > LooseVersion("1.5.0"):
             for op, outs in op_outputs_with_none_shape.items():
                 logger.warning(
                     "Cannot infer shape for %s: %s",

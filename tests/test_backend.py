@@ -1483,10 +1483,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_topk3(self):
         # test topk index output
         x_val = np.arange(3 * 2 * 3).astype("float32")
-        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
-        _, idx = tf.nn.top_k(x, 5, sorted=True)
-        _ = tf.identity(idx, name=_TFOUTPUT)
-        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        def func(x):
+            _, idx = tf.nn.top_k(x, 5, sorted=True)
+            return tf.identity(idx, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     def test_stack_axis(self):
         for axis in [0, 1]:

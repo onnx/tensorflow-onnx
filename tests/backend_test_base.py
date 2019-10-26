@@ -92,13 +92,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         graph_def = None
 
         clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
-        input_tensors = [tf.TensorSpec(shape=v.shape, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
-                         for k, v in feed_dict.items()]
         if TF2:
             #
             # use eager to execute the tensorflow func
             #
             # numpy doesn't work for all ops, make it tf.Tensor()
+            input_tensors = [tf.TensorSpec(shape=v.shape, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
+                         for k, v in feed_dict.items()]
             input_list = [tf.convert_to_tensor(v, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
                              for k, v in feed_dict.items()]
             expected = func(*input_list)

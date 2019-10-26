@@ -20,7 +20,6 @@ from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direc
     rewrite_custom_rnn_cell, rewrite_generic_loop
 from tf2onnx.rewriter.thresholded_relu_rewriter import rewrite_thresholded_relu
 from tf2onnx.rewriter.transpose_rewriter import rewrite_transpose
-from tf2onnx.rewriter.tf2_compat import rewrite_tf2compat
 
 
 __all__ = [
@@ -42,5 +41,4 @@ __all__ = [
     "rewrite_bi_direction_gru",
     "rewrite_custom_rnn_cell",
     "rewrite_generic_loop",
-    "rewrite_tf2compat",
 ]
