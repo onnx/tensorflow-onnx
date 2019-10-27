@@ -529,9 +529,8 @@ class BitShift:
         supported = [onnx_pb.TensorProto.UINT8, onnx_pb.TensorProto.UINT16,
                      onnx_pb.TensorProto.UINT32, onnx_pb.TensorProto.UINT64]
         type_map = {onnx_pb.TensorProto.INT8: onnx_pb.TensorProto.UINT8,
-                    onnx_pb.TensorProto.INT16: onnx_pb.TensorProto.UINT16,
-                    onnx_pb.TensorProto.INT32: onnx_pb.TensorProto.UINT32,
-                    onnx_pb.TensorProto.INT64: onnx_pb.TensorProto.UINT64}
+                    onnx_pb.TensorProto.INT16: onnx_pb.TensorProto.UINT32,
+                    onnx_pb.TensorProto.INT32: onnx_pb.TensorProto.UINT64}
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
