@@ -362,6 +362,27 @@ class Node(object):
         utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
                         self.name)
 
+    def maybe_cast_input(self, supported, type_map):
+        """.maybe_cast_input
+        Args:
+            supported: list of supported types for inputs
+            type_map: dict type to supported type mapping
+        """
+        did_cast = False
+        for i, name in enumerate(self.input):
+            dtype = self.graph.get_dtype(name)
+            if dtype not in supported[i]:
+                tdtype = type_map.get(dtype)
+                if tdtype is None:
+                    raise RuntimeError("don't know how to cast type {} on node {}".format(dtype, name))
+                shape = self.graph.get_shape(name)
+                cast_node = self.graph.insert_new_node_on_input(self, "Cast", name)
+                cast_node.set_attr("to", tdtype)
+                self.graph.set_dtype(cast_node.output[0], [tdtype])
+                self.graph.set_shape(cast_node.output[0], shape)
+                did_cast = True
+        return did_cast
+
 
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
