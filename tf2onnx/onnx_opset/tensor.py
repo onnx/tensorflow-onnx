@@ -1543,4 +1543,13 @@ class Unique:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # opset 11 supports explicitly
-        pass
+        dtypes = node.output_dtypes
+        if len(node.output) > 1:
+            # cast to int64 if needed
+            if dtypes[1] != onnx_pb.TensorProto.UINT64:
+                cast_node = ctx.insert_new_node_on_output("Cast", node.output[1],
+                                                          name=utils.make_name(node.name) + "_cast")
+                cast_node.set_attr("to", dtypes[1])
+                ctx.set_dtype(cast_node.output[0], dtypes[1])
+                ctx.copy_shape(node.output[1], cast_node.output[0])
+            # FIXME: the indices in onnx are not the same as in tensorflow.
