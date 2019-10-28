@@ -1224,7 +1224,6 @@ class SpaceToBatch:
         # T out = SpaceToBatchND(T input, int32 block_shape, int32 crops)
         input_tensor = node.inputs[0]
         blocksize = node.inputs[1].get_tensor_value()
-        paddings = node.inputs[2].get_tensor_value()
 
         utils.make_sure(len(ctx.get_shape(input_tensor.output[0])) == 4, "only supports 4D for now")
         utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
@@ -1232,21 +1231,27 @@ class SpaceToBatch:
 
         shapes = [ctx.get_shape(node.output[0])]
         dtypes = [ctx.get_dtype(node.output[0])]
-        ctx.remove_node(node.name)
 
         # implement pads logic, the data format is NHWC
+        paddings = node.inputs[2].get_tensor_value()
         top, bottom = paddings[0]
         left, right = paddings[1]
         pads = [0, top, left, 0,
                 0, bottom, right, 0]
-
-        pad_op = ctx.make_node("Pad", input_tensor.output, attr={"pads": pads})
+        ctx.remove_node(node.name)
+        if ctx.opset <= 10:
+            pad_op = ctx.make_node("Pad", input_tensor.output, attr={"pads": pads})
+        else:
+            # TODO: we should be able to support dynamic input here.
+            pads_name = utils.make_name(node.name)
+            ctx.make_const(name=pads_name, np_val=np.array(pads, dtype=np.int64))
+            pad_op = ctx.make_node("Pad", [input_tensor.output[0], pads_name])
 
         # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
         trans1 = ctx.make_node("Transpose", pad_op.output, {"perm": [3, 0, 1, 2]})
         reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
-        ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]}, name=node.name, outputs=node.output,
-                      shapes=shapes, dtypes=dtypes)
+        ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]},
+                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 
 @tf_op("IsInf", onnx_op="IsInf")

@@ -1928,11 +1928,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_new_size_ = tf.constant(x_new_size)
         x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
-        node_statistic = group_nodes_by_type(graph)
-        mapped_node = node_statistic.get("Resize")[0]
-        scale_node = mapped_node.inputs[1]
-        self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 0.1, 2.0]))
+        _ = self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(9, "fill")
     def test_fill_float32(self):
