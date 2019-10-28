@@ -36,7 +36,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         platforms: ['linux']
-        tf_versions: ['1.15']
+        tf_versions: ['1.14']
         onnx_opsets: ['11']
         onnx_backends: {onnxruntime: ['nightly']}
         job:
