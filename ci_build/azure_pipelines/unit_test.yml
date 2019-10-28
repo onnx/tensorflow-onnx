@@ -15,7 +15,7 @@ stages:
     
     - template: 'templates/job_generator.yml'
       parameters:
-        tf_versions: ['1.13.1', '1.12', '1.11', '1.10', '1.9', '1.8', '1.7', '1.5']
+        tf_versions: ['1.14', '1.12', '1.11', '1.10', '1.9', '1.8', '1.7']
         onnx_opsets: ['']
         job:
           steps:
@@ -25,8 +25,20 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         platforms: ['windows']
-        tf_versions: ['1.14']
+        tf_versions: ['1.15']
         onnx_opsets: ['']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    # test opset-11 and tf-1.15
+    - template: 'templates/job_generator.yml'
+      parameters:
+        platforms: ['linux']
+        tf_versions: ['1.15']
+        onnx_opsets: ['11']
+        onnx_backends: {onnxruntime: ['nightly']}
         job:
           steps:
           - template: 'unit_test.yml'
