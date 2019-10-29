@@ -138,10 +138,8 @@ class LSTMBlockCell:
                 cs = cs_clip_node.output[0]
             else:
                 dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(cs))
-                min_name  = utils.make_name("{}_min".format(node.name))
-                max_name = utils.make_name("{}_max".format(node.name))
-                min_const = ctx.make_const(min_name, np.array(-cell_clip, dtype=dtype))
-                max_const = ctx.make_const(max_name, np.array(cell_clip, dtype=dtype))
+                min_const = ctx.make_const(utils.make_name(f'{node.name}_min'), np.array(-cell_clip, dtype=dtype))
+                max_const = ctx.make_const(utils.make_name(f"{node.name}_max"), np.array(cell_clip, dtype=dtype))
                 cs_clip_node = ctx.make_node("Clip", [cs, min_const.output[0], max_const.output[0]])
                 nodes.append(cs_clip_node)
                 cs = cs_clip_node.output[0]
