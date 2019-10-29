@@ -15,7 +15,6 @@ import numpy as np
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -133,9 +132,18 @@ class LSTMBlockCell:
         cs = cs_node.output[0]
         # cs = clip(cs)
         if cell_clip > 0:
-            cs_clip_node = ctx.make_node("Clip", [cs], attr={"max": cell_clip, "min": -cell_clip})
-            nodes.append(cs_clip_node)
-            cs = cs_clip_node.output[0]
+            if ctx.opset < 11:
+                cs_clip_node = ctx.make_node("Clip", [cs], attr={"max": cell_clip, "min": -cell_clip})
+                nodes.append(cs_clip_node)
+                cs = cs_clip_node.output[0]
+            else:
+                dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(cs))
+                clip_min = ctx.make_const(node.name + 'min', np.array(-cell_clip, dtype=dtype))
+                clip_max = ctx.make_const(node.name + 'max', np.array(cell_clip, dtype=dtype))
+                cs_clip_node = ctx.make_node("Clip", [cs, clip_min.output[0], clip_max.output[0]])
+                nodes.append(cs_clip_node)
+                cs = cs_clip_node.output[0]
+
         # o = cs * wco + o
         o = make_sigmoid(cs, wco, o)
         # co = Tanh(cs)
