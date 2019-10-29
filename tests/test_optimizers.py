@@ -7,6 +7,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import unittest
+
 import numpy as np
 from onnx import helper, TensorProto, OperatorSetIdProto
 from tf2onnx import utils
@@ -1099,7 +1101,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["res"], {"u": np.random.randn(5, 5, 5, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=2)
 
-    @check_opset_min_version(9, "string type tensor")
+    # @check_opset_min_version(9, "string type tensor")
+    @unittest.skip("FIXME: disabled because of crash on linux/ortnightly")
     def test_cast_back_to_back_non_const_mixed_types(self):
         node0 = helper.make_node("Cast", ["u"], ["v"], to=11, name="cast_0")  # double
         node1 = helper.make_node("Cast", ["v"], ["w"], to=6, name="cast_1")  # int32

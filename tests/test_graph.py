@@ -221,17 +221,6 @@ class Tf2OnnxGraphTests(Tf2OnnxBackendTestBase):
                 'Rsqrt:0 -> Rsqrt__2 Rsqrt__2:0 -> output }',
                 onnx_to_graphviz(g))
 
-    def test_relu6(self):
-        with tf.Session() as sess:
-            x1 = tf.placeholder(tf.float32, [2, 3], name="input1")
-            x_ = tf.nn.relu6(x1)
-            _ = tf.identity(x_, name="output")
-            g = process_tf_graph(sess.graph, opset=self.config.opset)
-            self.assertEqual(
-                'digraph { input1 [op_type=Placeholder shape="[2, 3]"] Relu6 [op_type=Clip] output [op_type=Identity] '
-                'input1:0 -> Relu6 Relu6:0 -> output }',
-                onnx_to_graphviz(g))
-
     def test_conv2d(self):
         kernel = tf.constant([
             [1, 0, 1],
