@@ -16,7 +16,7 @@ def rewrite_gemm(g, ops):
 
     # pattern0: alpha*A*B + beta*C
     pattern0 = \
-        OpTypePattern('Add', name='add', inputs=[
+        OpTypePattern('Add|AddV2', name='add', inputs=[
             OpTypePattern('Mul', name='mul1', inputs=[
                 OpTypePattern('Const', name='alpha'),
                 OpTypePattern('MatMul', name='matmul')
@@ -29,7 +29,7 @@ def rewrite_gemm(g, ops):
 
     # pattern1: alpha*A*B + C
     pattern1 = \
-        OpTypePattern('Add', name='add', inputs=[
+        OpTypePattern('Add|AddV2', name='add', inputs=[
             OpTypePattern('Mul', name='mul1', inputs=[
                 OpTypePattern('MatMul', name='matmul'),
                 OpTypePattern('Const', name='alpha')
@@ -39,7 +39,7 @@ def rewrite_gemm(g, ops):
 
     # pattern2: A*B + beta*C
     pattern2 = \
-        OpTypePattern('Add', name='add', inputs=[
+        OpTypePattern('Add|AddV2', name='add', inputs=[
             OpTypePattern('MatMul', name='matmul'),
             OpTypePattern('Mul', name='mul2', inputs=[
                 OpTypePattern('Const', name='beta'),
@@ -49,7 +49,7 @@ def rewrite_gemm(g, ops):
 
     # pattern3: A*B + C
     pattern3 = \
-        OpTypePattern('Add', name='add', inputs=[
+        OpTypePattern('Add|AddV2', name='add', inputs=[
             OpTypePattern('MatMul', name='matmul'),
             OpTypePattern('*', name='C'),
         ])

@@ -56,6 +56,11 @@ def optimize_graph(graph):
                 # if current optimizer fails, continue with other optimizers
                 logger.warning("Failed to apply %s", name, exc_info=1)
 
+    try:
+        graph.topological_sort(graph.get_nodes())
+    except Exception:  # pylint: disable=broad-except
+        logger.warning("Failed topological_sort", exc_info=1)
+
     after = graph.dump_node_statistics()
     diff = copy.deepcopy(after)
     diff.subtract(before)

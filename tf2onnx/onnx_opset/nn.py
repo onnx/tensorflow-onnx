@@ -470,7 +470,7 @@ class Pad:
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
 
-@tf_op(["FusedBatchNorm", "FusedBatchNormV2"])
+@tf_op(["FusedBatchNorm", "FusedBatchNormV2", "FusedBatchNormV3"])
 class BatchNorm:
     @classmethod
     def version_6(cls, ctx, node, **kwargs):

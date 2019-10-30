@@ -22,6 +22,8 @@ class BroadcastOp:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         """Elementwise Ops with broadcast flag."""
+        if node.type == "AddV2":
+            node.type = "Add"
         shape0 = ctx.get_shape(node.input[0])
         shape1 = ctx.get_shape(node.input[1])
         if shape0 != shape1:
@@ -36,7 +38,7 @@ class BroadcastOp:
                 if not shape1:
                     if node.inputs[1].is_const():
                         shape1 = node.inputs[1].scalar_to_dim1()
-            if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add", "AddV2"]:
+            if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
                 tmp = node.input[0]
                 node.input[0] = node.input[1]
                 node.input[1] = tmp
@@ -46,6 +48,8 @@ class BroadcastOp:
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
         """Elementwise Ops with broadcast flag."""
+        if node.type == "AddV2":
+            node.type = "Add"
         shape0 = ctx.get_shape(node.input[0])
         shape1 = ctx.get_shape(node.input[1])
         if shape0 != shape1:
@@ -59,7 +63,7 @@ class BroadcastOp:
                 if not shape1:
                     if node.inputs[1].is_const():
                         shape1 = node.inputs[1].scalar_to_dim1()
-            if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add", "AddV2"]:
+            if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
                 tmp = node.input[0]
                 node.input[0] = node.input[1]
                 node.input[1] = tmp

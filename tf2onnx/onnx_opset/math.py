@@ -519,25 +519,28 @@ class Det:
         pass
 
 
-@tf_op("LeftShift", onnx_op="BitShift")
-class BitShiftLeft:
+@tf_op(["LeftShift", "RightShift"])
+class BitShift:
+
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
+        dir_map = {"LeftShift": "LEFT", "RightShift": "RIGHT"}
+        direction = dir_map[node.type]
+        supported = [onnx_pb.TensorProto.UINT8, onnx_pb.TensorProto.UINT16,
+                     onnx_pb.TensorProto.UINT32, onnx_pb.TensorProto.UINT64]
+        type_map = {onnx_pb.TensorProto.INT8: onnx_pb.TensorProto.UINT8,
+                    onnx_pb.TensorProto.INT16: onnx_pb.TensorProto.UINT32,
+                    onnx_pb.TensorProto.INT32: onnx_pb.TensorProto.UINT64}
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node("BitShift", inputs=node.input, outputs=node.output, name=node.name,
-                      shapes=shapes, dtypes=dtypes,
-                      domain=constants.ONNX_DOMAIN, attr={'direction': 'LEFT'})
 
+        node = ctx.make_node("BitShift", inputs=node.input, outputs=node.output, name=node.name,
+                             shapes=shapes, dtypes=dtypes, domain=constants.ONNX_DOMAIN, attr={'direction': direction})
 
-@tf_op("RightShift", onnx_op="BitShift")
-class BitShiftRight:
-    @classmethod
-    def version_11(cls, ctx, node, **kwargs):
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node("BitShift", inputs=node.input, outputs=node.output, name=node.name,
-                      shapes=shapes, dtypes=dtypes,
-                      domain=constants.ONNX_DOMAIN, attr={'direction': 'RIGHT'})
+        if node.maybe_cast_input([supported, supported], type_map):
+            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+                                                           name=utils.make_name(node.name) + "_castback")
+            cast_back_node.set_attr("to", dtypes[0])
+            ctx.set_dtype(cast_back_node.output[0], dtypes[0])
+            ctx.copy_shape(node.name, cast_back_node.output[0])
