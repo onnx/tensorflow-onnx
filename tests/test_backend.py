@@ -36,6 +36,8 @@ _TFINPUT1 = "input1"
 _INPUT1 = "input1:0"
 _TFINPUT2 = "input2"
 _INPUT2 = "input2:0"
+_TFINPUT3 = "input3"
+_INPUT3 = "input3:0"
 _TFOUTPUT = "output"
 _OUTPUT = "output:0"
 _TFOUTPUT1 = "output1"
@@ -2472,6 +2474,67 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.batch_to_space_nd(input_x, block_size, crop, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
 
+    @check_opset_min_version(11, "BatchToSpaceND")
+    def test_batch_to_spacend_non_const(self):
+        input_x_val = np.random.random_sample([40, 3, 5, 100]).astype(np.float32) # NHWC
+        block_shape_val = np.array([2, 2]).astype(np.int64)
+        crops_val = np.array([[1, 0], [2, 1]]).astype(np.int64)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        block_shape = tf.placeholder(dtype=tf.int64, shape=block_shape_val.shape, name=_TFINPUT1)
+        crops = tf.placeholder(dtype=tf.int64, shape=crops_val.shape, name=_TFINPUT2)
+        _ = tf.batch_to_space_nd(input_x, block_shape, crops, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_x_val, _INPUT1: block_shape_val, _INPUT2: crops_val})
+
+    @check_opset_min_version(11, "SpaceToBatchND")
+    def test_space_to_batchnd_non_const(self):
+        input_x_val = np.random.random_sample([40, 5, 7, 66]).astype(np.float32) # NHWC
+        block_size_val = np.array([2, 2]).astype(np.int64)
+        pad_val = np.array([[0, 1], [2, 1]]).astype(np.int64)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        block_size = tf.placeholder(dtype=tf.int64, shape=block_size_val.shape, name=_TFINPUT1)
+        pad = tf.placeholder(dtype=tf.int64, shape=pad_val.shape, name=_TFINPUT2)
+        _ = tf.space_to_batch_nd(input_x, block_size, pad, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_x_val, _INPUT1: block_size_val, _INPUT2: pad_val})
+
+    @check_opset_min_version(11, "CropAndResize")
+    def test_crop_and_resize_linear(self):
+        input_x_val = np.random.randint(low=5, high=10, size=[1, 36, 36, 3]).astype(np.float32) # NHWC
+        boxes_val = np.array([[0.4, 0.6, 0.6, 0.8]]).astype(np.float32)
+        box_ind_val = np.array([0]).astype(np.int32)
+        corp_size_val = np.array([20, 20]).astype(np.int32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        boxes = tf.placeholder(dtype=tf.float32, shape=boxes_val.shape, name=_TFINPUT1)
+        box_ind = tf.placeholder(dtype=tf.int32, shape=box_ind_val.shape, name=_TFINPUT2)
+        corp_size = tf.placeholder(dtype=tf.int32, shape=corp_size_val.shape, name=_TFINPUT3)
+        _ = tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='bilinear')
+        self._run_test_case([_OUTPUT], {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val})
+
+    @check_opset_min_version(11, "CropAndResize")
+    def test_crop_and_resize_nearest(self):
+        input_x_val = np.random.randint(low=5, high=10, size=[1, 36, 36, 3]).astype(np.float32) # NHWC
+        boxes_val = np.array([[0.2, 0.4, 0.6, 0.8]]).astype(np.float32)
+        box_ind_val = np.array([0]).astype(np.int32)
+        corp_size_val = np.array([30, 30]).astype(np.int32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        boxes = tf.placeholder(dtype=tf.float32, shape=boxes_val.shape, name=_TFINPUT1)
+        box_ind = tf.placeholder(dtype=tf.int32, shape=box_ind_val.shape, name=_TFINPUT2)
+        corp_size = tf.placeholder(dtype=tf.int32, shape=corp_size_val.shape, name=_TFINPUT3)
+        _ = tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='nearest')
+        self._run_test_case([_OUTPUT], {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val})
+
+    @check_opset_min_version(11, "CropAndResize")
+    def test_crop_and_resize_extrapolation(self):
+        input_x_val = np.random.randint(low=5, high=8, size=[1, 36, 36, 3]).astype(np.float32) # NHWC
+        boxes_val = np.array([[0.2, 0.4, 1.2, 1.4]]).astype(np.float32)
+        box_ind_val = np.array([0]).astype(np.int32)
+        corp_size_val = np.array([40, 40]).astype(np.int32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        boxes = tf.placeholder(dtype=tf.float32, shape=boxes_val.shape, name=_TFINPUT1)
+        box_ind = tf.placeholder(dtype=tf.int32, shape=box_ind_val.shape, name=_TFINPUT2)
+        corp_size = tf.placeholder(dtype=tf.int32, shape=corp_size_val.shape, name=_TFINPUT3)
+        _ = tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, extrapolation_value=1.0)
+        self._run_test_case([_OUTPUT], {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val})
+
     def test_batch_to_space3d(self):
         block_size = [2, 2]
         crop = [[0, 1], [2, 1]]
@@ -2832,7 +2895,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # FIXME: indices in onnx are not the same as in tensorflow so don't check for now
         #self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
+    '''
 
 if __name__ == '__main__':
     unittest_main()

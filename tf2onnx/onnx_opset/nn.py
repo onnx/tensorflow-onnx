@@ -537,6 +537,44 @@ class DepthToSpace:
         cls.version_1(ctx, node, **kwargs)
 
 
+@tf_op(["CropAndResize"])
+class CropAndResize:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # crop by roialign then resize
+        print (node.attr["extrapolation_value"])
+        mode = "nearest" if node.attr["method"].s == b"nearest" else "linear"
+        extrapolation_value = float(node.attr["extrapolation_value"].f) if node.attr["extrapolation_value"] is not None else 0.0
+        input_x = node.inputs[0]
+        boxes = node.inputs[1]
+        crop_size = node.inputs[3]
+        transposed_x = ctx.make_node("Transpose", [input_x.output[0]], attr={'perm':[0,3,1,2]})
+        shape_of_transposed_x = ctx.make_node("Shape", [transposed_x.output[0]])
+        const_zero = ctx.make_const(utils.make_name(node.name + "_const_zero"), np.array([0], dtype=np.int64))
+        const_zero_zero_int64 = ctx.make_const(utils.make_name(node.name + "_const_zero_zero_int64"), np.array([0,0], dtype=np.int64))
+        const_zero_zero = ctx.make_const(utils.make_name(node.name + "_const_zero_zero"), np.array([0,0], dtype=np.float32))
+        const_one_one = ctx.make_const(utils.make_name(node.name + "_const_one_one"), np.array([1,1], dtype=np.float32))
+        const_one = ctx.make_const(utils.make_name(node.name + "_const_one"), np.array([0], dtype=np.int64))
+        const_one_four = ctx.make_const(utils.make_name(node.name + "_const_one_four"), np.array([1,4], dtype=np.int64))
+        const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
+        const_four = ctx.make_const(utils.make_name(node.name + "_const_four"), np.array([4], dtype=np.int64))
+        const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([], dtype=np.float32))
+        first_half_of_shape = ctx.make_node("Slice", [shape_of_transposed_x.output[0], const_zero.output[0], const_two.output[0]])
+        first_box = ctx.make_node("Slice", [boxes.output[0], const_zero_zero_int64.output[0], const_one_four.output[0]])
+        roi_raw = ctx.make_node("Reshape", [first_box.output[0], const_four.output[0]])
+        roi_raw_first_half = ctx.make_node("Slice", [roi_raw.output[0], const_zero.output[0], const_two.output[0]])
+        roi_raw_second_half = ctx.make_node("Slice", [roi_raw.output[0], const_two.output[0], const_four.output[0]])
+        roi_concat_1 = ctx.make_node("Concat", [const_zero_zero.output[0], roi_raw_first_half.output[0]], attr={'axis':0})
+        roi_concat_2 = ctx.make_node("Concat", [const_one_one.output[0], roi_raw_second_half.output[0]], attr={'axis':0})
+        final_roi = ctx.make_node("Concat", [roi_concat_1.output[0], roi_concat_2.output[0]], attr={'axis':0})
+        crop_size_int64 = ctx.make_node("Cast", [crop_size.output[0]], attr={'to':TensorProto.INT64})
+        final_crop_size = ctx.make_node("Concat", [first_half_of_shape.output[0], crop_size_int64.output[0]], {'axis':0})
+        resized_x = ctx.make_node("Resize", [transposed_x.output[0], final_roi.output[0], const_empty_float.output[0], final_crop_size.output[0]],
+                      attr={"mode": mode, "extrapolation_value": extrapolation_value, "coordinate_transformation_mode": "tf_crop_and_resize"})
+        ctx.remove_node(node.name)
+        ctx.make_node("Transpose", [resized_x.output[0]], attr={'perm':[0,2,3,1]}, name=node.name, outputs=node.output)
+
+
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
 class Resize:
     @classmethod
