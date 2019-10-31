@@ -15,7 +15,7 @@ AI_ONNX_ML_DOMAIN = "ai.onnx.ml"
 MICROSOFT_DOMAIN = "com.microsoft"
 
 # Default opset version for onnx domain
-PREFERRED_OPSET = 7
+PREFERRED_OPSET = 8
 
 # Default opset for custom ops
 TENSORFLOW_OPSET = helper.make_opsetid("ai.onnx.converters.tensorflow", 1)
