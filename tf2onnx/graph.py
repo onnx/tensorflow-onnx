@@ -1231,6 +1231,18 @@ class Graph(object):
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
 
+    def safe_to_remove_nodes(self, to_delete):
+        """ List of nodes that safe to delete (i.e. outputs not consumed by other nodes.)"""
+        safe_to_remove = []
+        delete_set = set(to_delete)
+        for n in delete_set:
+            out_consumers = set()
+            for out in n.output:
+                out_consumers |= set(self.find_output_consumers(out))
+            if out_consumers.issubset(delete_set):
+                safe_to_remove.append(n)
+        return safe_to_remove
+
     def safe_remove_nodes(self, to_delete):
         """Delete nodes in `to_delete` without third-party node consuming it."""
         delete_set = set(to_delete)
