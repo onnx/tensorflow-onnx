@@ -1216,41 +1216,41 @@ class BatchToSpace:
             input_x = node.inputs[0]
             block_shape = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
             crop = ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=TensorProto.INT64)
-            shape_x = ctx.make_node('Shape', [input_x.output[0]])
+            shape_x = ctx.make_node("Shape", [input_x.output[0]])
             block_size = GraphBuilder(ctx).make_slice({"data": block_shape.output[0], "ends": [1], "starts": [0]})
-            block_prod = ctx.make_node('Mul', [block_size, block_size])
+            block_prod = ctx.make_node("Mul", [block_size, block_size])
             const_one = ctx.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
             const_zero_three = ctx.make_const(utils.make_name(node.name + "_const_zero_three"),
                                               np.array([0, 3], dtype=np.int64))
-            padded_block_prod = ctx.make_node('Pad',
+            padded_block_prod = ctx.make_node("Pad",
                                               [block_prod.output[0], const_zero_three.output[0], const_one.output[0]])
-            new_shape_x = ctx.make_node('Div', [shape_x.output[0], padded_block_prod.output[0]])
-            concat_new_shape_x = ctx.make_node('Concat', [block_shape.output[0], new_shape_x.output[0]], {'axis': 0})
-            reshaped_x = ctx.make_node('Reshape', [input_x.output[0], concat_new_shape_x.output[0]])
-            transposed_x = ctx.make_node('Transpose', [reshaped_x.output[0]], {'perm': [2, 3, 0, 4, 1, 5]})
+            new_shape_x = ctx.make_node("Div", [shape_x.output[0], padded_block_prod.output[0]])
+            concat_new_shape_x = ctx.make_node("Concat", [block_shape.output[0], new_shape_x.output[0]], {"axis": 0})
+            reshaped_x = ctx.make_node("Reshape", [input_x.output[0], concat_new_shape_x.output[0]])
+            transposed_x = ctx.make_node("Transpose", [reshaped_x.output[0]], {"perm": [2, 3, 0, 4, 1, 5]})
             const_one_one = ctx.make_const(utils.make_name(node.name + "_const_one_one"),
                                            np.array([1, 1], dtype=np.int64))
-            padded_block_shape = ctx.make_node('Pad',
+            padded_block_shape = ctx.make_node("Pad",
                                                [block_shape.output[0], const_one_one.output[0], const_one.output[0]])
-            new_shape_x_v2 = ctx.make_node('Mul', [new_shape_x.output[0], padded_block_shape.output[0]])
-            reshaped_x_v2 = ctx.make_node('Reshape', [transposed_x.output[0], new_shape_x_v2.output[0]])
-            transposed_crop = ctx.make_node('Transpose', [crop.output[0]], {'perm': [1, 0]})
+            new_shape_x_v2 = ctx.make_node("Mul", [new_shape_x.output[0], padded_block_shape.output[0]])
+            reshaped_x_v2 = ctx.make_node("Reshape", [transposed_x.output[0], new_shape_x_v2.output[0]])
+            transposed_crop = ctx.make_node("Transpose", [crop.output[0]], {"perm": [1, 0]})
             const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
             const_one_two = ctx.make_const(utils.make_name(node.name + "const_one_two"),
                                            np.array([1, 2], dtype=np.int64))
             slice_crop_starts = GraphBuilder(ctx).make_slice(
                 {"data": transposed_crop.output[0], "ends": [1, 2], "starts": [0, 0]})
-            reshaped_slice_crop_starts = ctx.make_node('Reshape', [slice_crop_starts, const_two.output[0]])
+            reshaped_slice_crop_starts = ctx.make_node("Reshape", [slice_crop_starts, const_two.output[0]])
             slice_crop_ends = GraphBuilder(ctx).make_slice(
                 {"data": transposed_crop.output[0], "ends": [2, 2], "starts": [1, 0]})
-            reshaped_slice_crop_ends = ctx.make_node('Reshape', [slice_crop_ends, const_two.output[0]])
+            reshaped_slice_crop_ends = ctx.make_node("Reshape", [slice_crop_ends, const_two.output[0]])
             const_three = ctx.make_const(utils.make_name("const_three"), np.array([3], dtype=np.int64))
             sliced_new_shape_x_v2 = GraphBuilder(ctx).make_slice(
                 {"data": new_shape_x_v2.output[0], "ends": [3], "starts": [1]})
-            neged_reshaped_slice_crop_ends = ctx.make_node('Sub',
+            neged_reshaped_slice_crop_ends = ctx.make_node("Sub",
                                                            [sliced_new_shape_x_v2, reshaped_slice_crop_ends.output[0]])
             ctx.remove_node(node.name)
-            cropped_x = ctx.make_node('Slice', [reshaped_x_v2.output[0], reshaped_slice_crop_starts.output[0],
+            cropped_x = ctx.make_node("Slice", [reshaped_x_v2.output[0], reshaped_slice_crop_starts.output[0],
                                                 neged_reshaped_slice_crop_ends.output[0], const_one_two.output[0]],
                                       name=node.name, outputs=node.output)
 
@@ -1303,47 +1303,47 @@ class SpaceToBatch:
             pad_x = ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=TensorProto.INT64)
             const_zero_zero = ctx.make_const(utils.make_name(node.name + "_const_zero_zero"),
                                              np.array([[0, 0]], dtype=np.int64))
-            concated_pad_x = ctx.make_node('Concat', [const_zero_zero.output[0], pad_x.output[0]], {'axis': 0})
-            concated_pad_x_v2 = ctx.make_node('Concat', [concated_pad_x.output[0], const_zero_zero.output[0]],
-                                              {'axis': 0})
-            transposed_concated_pad_x_v2 = ctx.make_node('Transpose', [concated_pad_x_v2.output[0]], {'perm': [1, 0]})
+            concated_pad_x = ctx.make_node("Concat", [const_zero_zero.output[0], pad_x.output[0]], {"axis": 0})
+            concated_pad_x_v2 = ctx.make_node("Concat", [concated_pad_x.output[0], const_zero_zero.output[0]],
+                                              {"axis": 0})
+            transposed_concated_pad_x_v2 = ctx.make_node("Transpose", [concated_pad_x_v2.output[0]], {"perm": [1, 0]})
             const_eight = ctx.make_const(utils.make_name(node.name + "_const_eight"), np.array([8], dtype=np.int64))
-            reshaped_transposed_pad_x = ctx.make_node('Reshape',
+            reshaped_transposed_pad_x = ctx.make_node("Reshape",
                                                       [transposed_concated_pad_x_v2.output[0], const_eight.output[0]])
-            padded_input_x = ctx.make_node('Pad', [input_x.output[0], reshaped_transposed_pad_x.output[0]])
+            padded_input_x = ctx.make_node("Pad", [input_x.output[0], reshaped_transposed_pad_x.output[0]])
             const_one = ctx.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
             const_one_one = ctx.make_const(utils.make_name(node.name + "_const_one_one"),
                                            np.array([1, 1], dtype=np.int64))
-            padded_block_shape = ctx.make_node('Pad',
+            padded_block_shape = ctx.make_node("Pad",
                                                [block_shape.output[0], const_one_one.output[0], const_one.output[0]])
-            shape_x = ctx.make_node('Shape', [padded_input_x.output[0]])
-            new_shape_x = ctx.make_node('Div', [shape_x.output[0], padded_block_shape.output[0]])
+            shape_x = ctx.make_node("Shape", [padded_input_x.output[0]])
+            new_shape_x = ctx.make_node("Div", [shape_x.output[0], padded_block_shape.output[0]])
             first_row_new_shape_x = GraphBuilder(ctx).make_slice(
                 {"data": new_shape_x.output[0], "ends": [2], "starts": [0]})
             block_size = GraphBuilder(ctx).make_slice({"data": block_shape.output[0], "ends": [1], "starts": [0]})
-            new_fisrt_row_new_shape_x = ctx.make_node('Concat', [first_row_new_shape_x, block_size], {'axis': 0})
+            new_fisrt_row_new_shape_x = ctx.make_node("Concat", [first_row_new_shape_x, block_size], {"axis": 0})
             second_row_new_shape_x_first_half = GraphBuilder(ctx).make_slice(
                 {"data": new_shape_x.output[0], "ends": [3], "starts": [2]})
             second_row_new_shape_x_second_half = GraphBuilder(ctx).make_slice(
                 {"data": new_shape_x.output[0], "ends": [4], "starts": [3]})
-            new_second_row_new_shape_x_first_half = ctx.make_node('Concat',
+            new_second_row_new_shape_x_first_half = ctx.make_node("Concat",
                                                                   [second_row_new_shape_x_first_half, block_size],
-                                                                  {'axis': 0})
-            new_second_row_new_shape_x = ctx.make_node('Concat', [new_second_row_new_shape_x_first_half.output[0],
-                                                                  second_row_new_shape_x_second_half], {'axis': 0})
-            new_shape_x_v2 = ctx.make_node('Concat',
+                                                                  {"axis": 0})
+            new_second_row_new_shape_x = ctx.make_node("Concat", [new_second_row_new_shape_x_first_half.output[0],
+                                                                  second_row_new_shape_x_second_half], {"axis": 0})
+            new_shape_x_v2 = ctx.make_node("Concat",
                                            [new_fisrt_row_new_shape_x.output[0], new_second_row_new_shape_x.output[0]],
-                                           {'axis': 0})
-            new_x = ctx.make_node('Reshape', [padded_input_x.output[0], new_shape_x_v2.output[0]])
-            transposed_new_x = ctx.make_node('Transpose', [new_x.output[0]], {'perm': [2, 4, 0, 1, 3, 5]})
-            block_size_prod = ctx.make_node('Mul', [block_size, block_size])
+                                           {"axis": 0})
+            new_x = ctx.make_node("Reshape", [padded_input_x.output[0], new_shape_x_v2.output[0]])
+            transposed_new_x = ctx.make_node("Transpose", [new_x.output[0]], {"perm": [2, 4, 0, 1, 3, 5]})
+            block_size_prod = ctx.make_node("Mul", [block_size, block_size])
             const_zero_three = ctx.make_const(utils.make_name(node.name + "_const_zero_three"),
                                               np.array([0, 3], dtype=np.int64))
-            padded_block_size_prod = ctx.make_node('Pad', [block_size_prod.output[0], const_zero_three.output[0],
+            padded_block_size_prod = ctx.make_node("Pad", [block_size_prod.output[0], const_zero_three.output[0],
                                                            const_one.output[0]])
-            new_shape_x_v3 = ctx.make_node('Mul', [new_shape_x.output[0], padded_block_size_prod.output[0]])
+            new_shape_x_v3 = ctx.make_node("Mul", [new_shape_x.output[0], padded_block_size_prod.output[0]])
             ctx.remove_node(node.name)
-            new_x_v2 = ctx.make_node('Reshape', [transposed_new_x.output[0], new_shape_x_v3.output[0]], name=node.name,
+            new_x_v2 = ctx.make_node("Reshape", [transposed_new_x.output[0], new_shape_x_v3.output[0]], name=node.name,
                                      outputs=node.output)
 
 

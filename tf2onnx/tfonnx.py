@@ -90,8 +90,6 @@ def tflist_to_onnx(node_list, shape_override):
                     attr[a] = shape
             elif a == "Tperm":
                 pass
-            elif a == "T_threshold":
-                pass
             elif a == "value":
                 onnx_tensor = utils.tf_to_onnx_tensor(utils.get_tf_node_attr(node, a), name=port_name(node.name))
                 attr[a] = onnx_tensor
