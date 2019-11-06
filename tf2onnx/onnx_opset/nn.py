@@ -541,7 +541,7 @@ class DepthToSpace:
 class CropAndResize:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        # crop by roialign then resize
+        # create loop of resize to cater to tensorflow CropAndResize, one box one iteration
         mode = "nearest" if node.get_attr("method") is not None and node.get_attr(
             "method").s == b"nearest" else "linear"
         extrapolation_value = float(node.get_attr("extrapolation_value", "0").f)
@@ -549,16 +549,13 @@ class CropAndResize:
         boxes = node.inputs[1]
         box_ind = node.inputs[2]
         crop_size = node.inputs[3]
-
         trip_name = utils.make_name("i")
         cond_name = utils.make_name("cond")
         cond_out_name = utils.make_name("cond_out")
-
         g = ctx.create_new_graph_with_same_config()
         g.add_graph_input(trip_name, TensorProto.INT64, [1])
         g.add_graph_input(cond_name, TensorProto.BOOL, [])
         g.parent_graph = ctx
-
         const_zero = g.make_const(utils.make_name(node.name + "_const_zero"), np.array([0], dtype=np.int32))
         const_zero_long = g.make_const(utils.make_name(node.name + "_const_zero_long"), np.array([0], dtype=np.int64))
         const_one = g.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int32))
@@ -595,15 +592,13 @@ class CropAndResize:
         recovered_x = g.make_node("Transpose", [resized_x.output[0]], attr={'perm': constants.NCHW_TO_NHWC})
         squeeze_x = g.make_node("Squeeze", inputs=[recovered_x.output[0]], attr={"axes": [0]})
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
-
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
-
         trip_node = ctx.make_node("Size", [box_ind.output[0]])
         cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
         ctx.remove_node(node.name)
-        inner_loop = ctx.make_node("Loop", [trip_node.output[0],
-                                            cond_const.output[0]], name=node.name, outputs=node.output)
+        inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]], name=node.name,
+                                   outputs=node.output)
         inner_loop.set_body_graph_as_attr("body", g)
 
 
