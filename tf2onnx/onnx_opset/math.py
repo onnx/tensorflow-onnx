@@ -189,8 +189,7 @@ class Softmax:
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        # opset 11 supports -ve axis
-        pass
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op("Square")

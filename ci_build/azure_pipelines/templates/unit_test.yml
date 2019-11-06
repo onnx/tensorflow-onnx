@@ -1,7 +1,7 @@
 # Run unit test
 
 parameters:
-    onnx_opsets: ['10', '9', '8', '7']
+    onnx_opsets: ['11', '10', '9', '8', '7']
 
 steps:
 - ${{ each onnx_opset in parameters.onnx_opsets }}:

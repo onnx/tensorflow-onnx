@@ -345,6 +345,8 @@ def tensorflow_onnx_mapping(g, ops_mapping):
                 m_ops, unm_ops, body_exceptions = tensorflow_onnx_mapping(b_g, ops_mapping)
                 mapped_op += m_ops
                 unmapped_op += unm_ops
+                # topological_sort on the body in case processing has changed the order
+                b_g.topological_sort(b_g.get_nodes())
                 exceptions.extend(body_exceptions)
                 logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
 
