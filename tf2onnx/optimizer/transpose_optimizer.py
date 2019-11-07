@@ -139,7 +139,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         self.pre_optimize_action()
         no_action = False
         iteration_cnt = 0
-        while not no_action and iteration_cnt < 1000:
+        while not no_action:
             no_action = True
             nodes = self.nodes
             self._force_stop = {}
