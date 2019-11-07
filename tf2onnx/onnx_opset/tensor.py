@@ -1232,8 +1232,7 @@ class BatchToSpace:
                 [batch / prod(block_shape),
                 input_shape[1] * block_shape[0] - crops[0,0] - crops[0,1], ...,
                 input_shape[M] * block_shape[M-1] - crops[M-1,0] - crops[M-1,1],
-                input_shape[M+1], ..., input_shape[N-1]]
-            '''
+                input_shape[M+1], ..., input_shape[N-1]] '''
             input_x = node.inputs[0]
             block_shape = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
             crop = ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=TensorProto.INT64)
@@ -1331,8 +1330,7 @@ class SpaceToBatch:
             4. Reshape permuted_reshaped_padded to flatten block_shape into the batch dimension,
                 producing an output tensor of shape:
                 [batch * prod(block_shape)] + [padded_shape[1] / block_shape[0], ...,
-                padded_shape[M] / block_shape[M-1]] + remaining_shape
-            '''
+                padded_shape[M] / block_shape[M-1]] + remaining_shape '''
             input_x = node.inputs[0]
             block_shape = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
             pad_x = ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=TensorProto.INT64)
