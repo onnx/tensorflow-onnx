@@ -1212,7 +1212,7 @@ class BatchToSpace:
                 ctx.remove_node(node.name)
                 GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
         else:
-            '''
+            """
             1. Reshape input to reshaped of shape:
                 [block_shape[0], ...,
                 block_shape[M-1], batch / prod(block_shape),
@@ -1232,7 +1232,8 @@ class BatchToSpace:
                 [batch / prod(block_shape),
                 input_shape[1] * block_shape[0] - crops[0,0] - crops[0,1], ...,
                 input_shape[M] * block_shape[M-1] - crops[M-1,0] - crops[M-1,1],
-                input_shape[M+1], ..., input_shape[N-1]] '''
+                input_shape[M+1], ..., input_shape[N-1]]
+            """
             input_x = node.inputs[0]
             block_shape = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
             crop = ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=TensorProto.INT64)
@@ -1317,7 +1318,7 @@ class SpaceToBatch:
             ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]},
                           name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
         else:
-            '''
+            """
             1. Zero-pad the start and end of dimensions [1, ..., M] of the input
                 according to paddings to produce padded of shape padded_shape.
             2. Reshape padded to reshaped_padded of shape:
@@ -1330,7 +1331,8 @@ class SpaceToBatch:
             4. Reshape permuted_reshaped_padded to flatten block_shape into the batch dimension,
                 producing an output tensor of shape:
                 [batch * prod(block_shape)] + [padded_shape[1] / block_shape[0], ...,
-                padded_shape[M] / block_shape[M-1]] + remaining_shape '''
+                padded_shape[M] / block_shape[M-1]] + remaining_shape
+            """
             input_x = node.inputs[0]
             block_shape = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
             pad_x = ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=TensorProto.INT64)
