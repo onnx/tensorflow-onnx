@@ -26,7 +26,7 @@ from tf2onnx.onnx_opset import nn, math
 logger = logging.getLogger(__name__)
 
 
-# pylint: disable=unused-argument,missing-docstring,unused-variable
+# pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement
 
 
 def _convert_shapenode_to_int64(ctx, node, input_number):
