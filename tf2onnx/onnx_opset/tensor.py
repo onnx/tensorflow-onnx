@@ -1214,7 +1214,7 @@ class BatchToSpace:
         else:
             '''
             1. Reshape input to reshaped of shape:
-                [block_shape[0], ..., 
+                [block_shape[0], ...,
                 block_shape[M-1], batch / prod(block_shape),
                 input_shape[1], ..., input_shape[N-1]]
             2. Permute dimensions of reshaped to produce permuted of shape:
