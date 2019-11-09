@@ -7,8 +7,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import unittest
-
 import numpy as np
 from onnx import helper, TensorProto, OperatorSetIdProto
 from tf2onnx import utils
@@ -1099,10 +1097,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["res"], {"u": np.random.randn(5, 5, 5, 5).astype(np.float32)},
-                                   model_proto, remaining_transpose_num=2)
+                                   model_proto, remaining_transpose_num=1)
 
-    # @check_opset_min_version(9, "string type tensor")
-    @unittest.skip("FIXME: disabled because of crash on linux/ortnightly")
+    @check_opset_min_version(9, "string type tensor")
     def test_cast_back_to_back_non_const_mixed_types(self):
         node0 = helper.make_node("Cast", ["u"], ["v"], to=11, name="cast_0")  # double
         node1 = helper.make_node("Cast", ["v"], ["w"], to=6, name="cast_1")  # int32
@@ -1113,11 +1110,13 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node5 = helper.make_node("Cast", ["w2"], ["res2"], to=7, name="cast_5")  # int64
 
         node6 = helper.make_node("Cast", ["x"], ["x2"], to=9, name="cast_6")  # bool
-        node7 = helper.make_node("Cast", ["x2"], ["x3"], to=8, name="cast_7")  # string
-        node8 = helper.make_node("Cast", ["x3"], ["res3"], to=3, name="cast_8")  # int8
+        # TODO: uncomment below after fix
+        # https://github.com/microsoft/onnxruntime/issues/2338
+        # node7 = helper.make_node("Cast", ["x2"], ["x3"], to=8, name="cast_7")  # string
+        node8 = helper.make_node("Cast", ["x2"], ["res3"], to=3, name="cast_8")  # int8
 
         graph = helper.make_graph(
-            [node0, node1, node2, node3, node4, node5, node6, node7, node8],
+            [node0, node1, node2, node3, node4, node5, node6, node8],
             "test-cast-back-to-back-non-const",
             [helper.make_tensor_value_info("u", TensorProto.FLOAT, (1, 2, 3))],
             [helper.make_tensor_value_info("res", TensorProto.INT64, (1, 2, 3)),

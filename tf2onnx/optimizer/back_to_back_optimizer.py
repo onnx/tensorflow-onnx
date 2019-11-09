@@ -121,9 +121,8 @@ class BackToBackOptimizer(GraphOptimizerBase):
             g.remove_node(node.name)
         return q2
 
-    # TODO: reactivate after fixing interference with transpose_optimizer
     @staticmethod
-    @_register_func("_Transpose")
+    @_register_func("Transpose")
     def _optimize_transpose(g, node, consumer_nodes):
         t1 = list(node.get_attr('perm').ints)
         q2 = []
@@ -132,13 +131,16 @@ class BackToBackOptimizer(GraphOptimizerBase):
             t2 = list(node2.get_attr('perm').ints)
             new_perm = [t1[i] for i in t2]
             # check if node2 can be removed. otherwise only update
-            if new_perm == list(range(len(t2))) \
-                    and not set(node2.output) & set(g.outputs):
+            if new_perm == list(range(len(t2))):
                 # both nodes can be deleted
+                shape = g.get_shape(node2.output[0])
+                dtype = g.get_dtype(node2.output[0])
                 node2_consumers = g.find_output_consumers(node2.output[0])
-                for consumer in node2_consumers:
-                    consumer.input[0] = node.input[0]
+                g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0])
                 g.remove_node(node2.name)
+                if set(node2.output) & set(g.outputs):
+                    g.make_node("Identity", [node.input[0]],
+                                outputs=node2.output, shapes=[shape], dtypes=[dtype])
             else:
                 node2.set_attr('perm', [t1[i] for i in t2])
                 q2.append(node2.output[0])
