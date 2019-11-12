@@ -300,6 +300,82 @@ class DepthwiseConv2d:
         new_kernel_shape = [k_output_channels, 1, k_h, k_w]
         conv_convert_inputs(ctx, node, with_kernel=True, new_kernel_shape=new_kernel_shape)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # do depthwise conv by normal conv
+        kernel_shape = ctx.get_shape(node.input[1])
+        if len(kernel_shape) != 4:
+            raise ValueError("only Conv2D is supported")
+        strides = conv_dims_attr(node, "strides")
+        conv_dims_attr(node, "dilations")
+        add_padding(ctx, node, kernel_shape, strides)
+        transposed_x = ctx.make_node("Transpose", [node.input[0]], attr={'perm': constants.NHWC_TO_NCHW})
+        first_channel_x = GraphBuilder(ctx).make_slice(
+            {"data": transposed_x.output[0], "ends": [1], "starts": [0], "axes": [1]})
+        second_channel_x = GraphBuilder(ctx).make_slice(
+            {"data": transposed_x.output[0], "ends": [2], "starts": [1], "axes": [1]})
+        third_channel_x = GraphBuilder(ctx).make_slice(
+            {"data": transposed_x.output[0], "ends": [3], "starts": [2], "axes": [1]})
+        first_channel_w = GraphBuilder(ctx).make_slice({"data": node.input[1], "ends": [1], "starts": [0], "axes": [2]})
+        second_channel_w = GraphBuilder(ctx).make_slice(
+            {"data": node.input[1], "ends": [2], "starts": [1], "axes": [2]})
+        third_channel_w = GraphBuilder(ctx).make_slice({"data": node.input[1], "ends": [3], "starts": [2], "axes": [2]})
+
+        trip_name = utils.make_name("i")
+        cond_name = utils.make_name("cond")
+        cond_out_name = utils.make_name("cond_out")
+        g = ctx.create_new_graph_with_same_config()
+        g.add_graph_input(trip_name, TensorProto.INT64, [1])
+        g.add_graph_input(cond_name, TensorProto.BOOL, [])
+        g.parent_graph = ctx
+
+        const_three = g.make_const(utils.make_name(node.name + "_const_three"), np.array([3], dtype=np.int64))
+        const_one = g.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
+        index_end = g.make_node("Add", [trip_name, const_one.output[0]])
+
+        # channel one
+        depthwise_first_channel_w = g.make_node("Slice", [first_channel_w, trip_name, index_end.output[0],
+                                                          const_three.output[0]])
+        transposed_first_channel_w = g.make_node("Transpose", [depthwise_first_channel_w.output[0]],
+                                                 attr={'perm': constants.HWCN_TO_NCHW})
+        first_channel_y = g.make_node("Conv", [first_channel_x, transposed_first_channel_w.output[0]], attr=node.attr)
+        squeezed_first_y = g.make_node("Squeeze", inputs=[first_channel_y.output[0]], attr={"axes": [1]})
+
+        # channel two
+        depthwise_second_channel_w = g.make_node("Slice", [second_channel_w, trip_name, index_end.output[0],
+                                                           const_three.output[0]])
+        transposed_second_channel_w = g.make_node("Transpose", [depthwise_second_channel_w.output[0]],
+                                                  attr={'perm': constants.HWCN_TO_NCHW})
+        second_channel_y = g.make_node("Conv", [second_channel_x, transposed_second_channel_w.output[0]],
+                                       attr=node.attr)
+        squeezed_second_y = g.make_node("Squeeze", inputs=[second_channel_y.output[0]], attr={"axes": [1]})
+
+        # channel three
+        depthwise_third_channel_w = g.make_node("Slice", [third_channel_w, trip_name, index_end.output[0],
+                                                          const_three.output[0]])
+        transposed_third_channel_w = g.make_node("Transpose", [depthwise_third_channel_w.output[0]],
+                                                 attr={'perm': constants.HWCN_TO_NCHW})
+        third_channel_y = g.make_node("Conv", [third_channel_x, transposed_third_channel_w.output[0]], attr=node.attr)
+        squeezed_third_y = g.make_node("Squeeze", inputs=[third_channel_y.output[0]], attr={"axes": [1]})
+
+        g.make_node("Identity", [cond_name], outputs=[cond_out_name])
+        g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
+        g.add_graph_output(squeezed_first_y.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
+        g.add_graph_output(squeezed_second_y.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
+        g.add_graph_output(squeezed_third_y.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
+        shape_w = ctx.make_node("Shape", [node.input[1]])
+        trip_node = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [4], "starts": [3], "axes": [0]})
+        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+        inner_loop = ctx.make_node("Loop", [trip_node, cond_const.output[0]],  # loop throuh W's channel multiplier
+                                   outputs=[squeezed_first_y.output[0], squeezed_second_y.output[0],
+                                            squeezed_third_y.output[0]])
+        inner_loop.set_body_graph_as_attr("body", g)
+        first_concat = ctx.make_node("Concat", [inner_loop.output[0], inner_loop.output[1]], attr={"axis": 0})
+        second_concat = ctx.make_node("Concat", [first_concat.output[0], inner_loop.output[2]], attr={"axis": 0})
+        ctx.remove_node(node.name)
+        final_y = ctx.make_node("Transpose", [second_concat.output[0]], attr={'perm': [1, 2, 3, 0]}, name=node.name,
+                                outputs=node.output)
+
 
 @tf_op(["AvgPool", "AvgPool3D"], onnx_op="AveragePool")
 @tf_op(["MaxPool", "MaxPoolV2"], onnx_op="MaxPool")

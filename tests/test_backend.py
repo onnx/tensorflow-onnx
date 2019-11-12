@@ -424,6 +424,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape}, rtol=1e-05, process_args=process_args)
 
+    @check_opset_max_version(10, "DepthwiseConv2d")
     def test_depthwiseconv_0(self):
         x_shape = [1, 3, 4, 3]
         kernel_shape = [3, 3, 3, 3]
@@ -436,6 +437,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
 
+    @check_opset_max_version(10, "DepthwiseConv2d")
     def test_depthwiseconv_1(self):
         x_shape = [1, 112, 112, 32]
         kernel_shape = [3, 3, 32, 1]
@@ -447,6 +449,42 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(conv, name=_TFOUTPUT)
         # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
+
+    @check_opset_min_version(11, "DepthwiseConv2dNative")
+    def test_depthwiseconv_native_default(self):
+        x_shape = [1, 112, 112, 3]
+        kernel_shape = [3, 3, 3, 10]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
+        kernel = tf.constant(kernel_val, dtype=tf.float32, name='k')
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        conv = tf.nn.depthwise_conv2d_native(x, kernel, strides=_STRIDE1x1, padding='VALID')
+        _ = tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-6)
+
+    @check_opset_min_version(11, "DepthwiseConv2dNative")
+    def test_depthwiseconv_native_strided(self):
+        x_shape = [1, 200, 200, 3]
+        kernel_shape = [12, 12, 3, 20]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
+        kernel = tf.constant(kernel_val, dtype=tf.float32, name='k')
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        conv = tf.nn.depthwise_conv2d_native(x, kernel, strides=[1, 4, 4, 1], padding='VALID')
+        _ = tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-6)
+
+    @check_opset_min_version(11, "DepthwiseConv2dNative")
+    def test_depthwiseconv_native_padded(self):
+        x_shape = [1, 112, 112, 3]
+        kernel_shape = [24, 24, 3, 12]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
+        kernel = tf.constant(kernel_val, dtype=tf.float32, name='k')
+        x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
+        conv = tf.nn.depthwise_conv2d_native(x, kernel, strides=[1, 3, 3, 1], padding="SAME")
+        _ = tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-5)
 
     def test_dropout(self):
         is_training = tf.placeholder_with_default(False, (), "is_training")
@@ -2902,7 +2940,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # FIXME: indices in onnx are not the same as in tensorflow so don't check for now
         # self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-
 
 if __name__ == '__main__':
     unittest_main()
