@@ -282,6 +282,19 @@ resnet50_v1:
     - ArgMax:0
     - softmax_tensor:0
 
+ssd_mobilenet_v3_large_coco:
+  url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_large_coco_2019_08_14.tar.gz
+  model: ssd_mobilenet_v3_large_coco_2019_08_14/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
+  input_get: get_beach
+  inputs:
+    "normalized_input_image_tensor:0": [1, 320, 320, 3]
+  outputs:
+    - raw_outputs/box_encodings:0
+    - raw_outputs/class_predictions:0
+
 ssd_mobilenet_v1_coco:
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_17.tar.gz
   model: ssd_mobilenet_v1_coco_2017_11_17/frozen_inference_graph.pb
