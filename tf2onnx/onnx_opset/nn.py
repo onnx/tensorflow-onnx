@@ -321,9 +321,9 @@ class DepthwiseConv2d:
             {"data": node.input[1], "ends": [2], "starts": [1], "axes": [2]})
         third_channel_w = GraphBuilder(ctx).make_slice({"data": node.input[1], "ends": [3], "starts": [2], "axes": [2]})
 
-        trip_name = utils.make_name("i")
-        cond_name = utils.make_name("cond")
-        cond_out_name = utils.make_name("cond_out")
+        trip_name = utils.make_name(node.name + "_i")
+        cond_name = utils.make_name(node.name + "_cond")
+        cond_out_name = utils.make_name(node.name + "_cond_out")
         g = ctx.create_new_graph_with_same_config()
         g.add_graph_input(trip_name, TensorProto.INT64, [1])
         g.add_graph_input(cond_name, TensorProto.BOOL, [])
@@ -625,9 +625,9 @@ class CropAndResize:
         boxes = node.inputs[1]
         box_ind = node.inputs[2]
         crop_size = node.inputs[3]
-        trip_name = utils.make_name("i")
-        cond_name = utils.make_name("cond")
-        cond_out_name = utils.make_name("cond_out")
+        trip_name = utils.make_name(node.name + "_i")
+        cond_name = utils.make_name(node.name + "_cond")
+        cond_out_name = utils.make_name(node.name + "cond_out")
         g = ctx.create_new_graph_with_same_config()
         g.add_graph_input(trip_name, TensorProto.INT64, [1])
         g.add_graph_input(cond_name, TensorProto.BOOL, [])
