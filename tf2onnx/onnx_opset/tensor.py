@@ -1265,15 +1265,14 @@ class BatchToSpace:
             slice_crop_ends = GraphBuilder(ctx).make_slice(
                 {"data": transposed_crop.output[0], "ends": [2, 2], "starts": [1, 0]})
             reshaped_slice_crop_ends = ctx.make_node("Reshape", [slice_crop_ends, const_two.output[0]])
-            const_three = ctx.make_const(utils.make_name("const_three"), np.array([3], dtype=np.int64))
             sliced_new_shape_x_v2 = GraphBuilder(ctx).make_slice(
                 {"data": new_shape_x_v2.output[0], "ends": [3], "starts": [1]})
             neged_reshaped_slice_crop_ends = ctx.make_node("Sub",
                                                            [sliced_new_shape_x_v2, reshaped_slice_crop_ends.output[0]])
             ctx.remove_node(node.name)
-            cropped_x = ctx.make_node("Slice", [reshaped_x_v2.output[0], reshaped_slice_crop_starts.output[0],
-                                                neged_reshaped_slice_crop_ends.output[0], const_one_two.output[0]],
-                                      name=node.name, outputs=node.output)
+            ctx.make_node("Slice", [reshaped_x_v2.output[0], reshaped_slice_crop_starts.output[0],
+                                    neged_reshaped_slice_crop_ends.output[0], const_one_two.output[0]],
+                          name=node.name, outputs=node.output)
 
 
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")
@@ -1378,8 +1377,8 @@ class SpaceToBatch:
                                                            const_one.output[0]])
             new_shape_x_v3 = ctx.make_node("Mul", [new_shape_x.output[0], padded_block_size_prod.output[0]])
             ctx.remove_node(node.name)
-            new_x_v2 = ctx.make_node("Reshape", [transposed_new_x.output[0], new_shape_x_v3.output[0]], name=node.name,
-                                     outputs=node.output)
+            ctx.make_node("Reshape", [transposed_new_x.output[0], new_shape_x_v3.output[0]], name=node.name,
+                          outputs=node.output)
 
 
 @tf_op("IsInf", onnx_op="IsInf")

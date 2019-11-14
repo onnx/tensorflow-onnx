@@ -373,8 +373,8 @@ class DepthwiseConv2d:
         first_concat = ctx.make_node("Concat", [inner_loop.output[0], inner_loop.output[1]], attr={"axis": 0})
         second_concat = ctx.make_node("Concat", [first_concat.output[0], inner_loop.output[2]], attr={"axis": 0})
         ctx.remove_node(node.name)
-        final_y = ctx.make_node("Transpose", [second_concat.output[0]], attr={'perm': [1, 2, 3, 0]}, name=node.name,
-                                outputs=node.output)
+        ctx.make_node("Transpose", [second_concat.output[0]], attr={'perm': [1, 2, 3, 0]}, name=node.name,
+                      outputs=node.output)
 
 
 @tf_op(["AvgPool", "AvgPool3D"], onnx_op="AveragePool")
