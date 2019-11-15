@@ -424,7 +424,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape}, rtol=1e-05, process_args=process_args)
 
-    @check_opset_max_version(10, "DepthwiseConv2d")
     def test_depthwiseconv_0(self):
         x_shape = [1, 3, 4, 3]
         kernel_shape = [3, 3, 3, 3]
@@ -437,7 +436,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
 
-    @check_opset_max_version(10, "DepthwiseConv2d")
     def test_depthwiseconv_1(self):
         x_shape = [1, 112, 112, 32]
         kernel_shape = [3, 3, 32, 1]
