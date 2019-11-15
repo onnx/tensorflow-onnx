@@ -313,16 +313,6 @@ class DepthwiseConv2d:
         w_n = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [4], "starts": [3], "axes": [0]})
         w_c = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [3], "starts": [2], "axes": [0]})
         transposed_x = ctx.make_node("Transpose", [node.input[0]], attr={'perm': constants.NHWC_TO_NCHW})
-        first_channel_x = GraphBuilder(ctx).make_slice(
-            {"data": transposed_x.output[0], "ends": [1], "starts": [0], "axes": [1]})
-        second_channel_x = GraphBuilder(ctx).make_slice(
-            {"data": transposed_x.output[0], "ends": [2], "starts": [1], "axes": [1]})
-        third_channel_x = GraphBuilder(ctx).make_slice(
-            {"data": transposed_x.output[0], "ends": [3], "starts": [2], "axes": [1]})
-        first_channel_w = GraphBuilder(ctx).make_slice({"data": node.input[1], "ends": [1], "starts": [0], "axes": [2]})
-        second_channel_w = GraphBuilder(ctx).make_slice(
-            {"data": node.input[1], "ends": [2], "starts": [1], "axes": [2]})
-        third_channel_w = GraphBuilder(ctx).make_slice({"data": node.input[1], "ends": [3], "starts": [2], "axes": [2]})
         trip_name = utils.make_name(node.name + "_i")
         cond_name = utils.make_name(node.name + "_cond")
         cond_out_name = utils.make_name(node.name + "_cond_out")
