@@ -333,9 +333,9 @@ class DepthwiseConv2d:
         const_one = g.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
         const_two = g.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
         const_three = g.make_const(utils.make_name(node.name + "_const_three"), np.array([3], dtype=np.int64))
-        trip_channel = g.make_node("Div", [trip_name, N])
+        trip_channel = g.make_node("Div", [trip_name, w_n])
         trip_channel_next = g.make_node("Add", [trip_channel.output[0], const_one.output[0]])
-        trip_multiplier = g.make_node("Mod", [trip_name, N])
+        trip_multiplier = g.make_node("Mod", [trip_name, w_n])
         trip_multiplier_next = g.make_node("Add", [trip_multiplier.output[0], const_one.output[0]])
         channel_x = g.make_node("Slice", [transposed_x.output[0], trip_channel.output[0], trip_channel_next.output[0],
                                           const_one.output[0]])
