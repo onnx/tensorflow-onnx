@@ -310,8 +310,8 @@ class DepthwiseConv2d:
         conv_dims_attr(node, "dilations")
         add_padding(ctx, node, kernel_shape, strides)
         shape_w = ctx.make_node("Shape", [node.input[1]])
-        N = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [4], "starts": [3], "axes": [0]})
-        C = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [3], "starts": [2], "axes": [0]})
+        w_n = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [4], "starts": [3], "axes": [0]})
+        w_c = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [3], "starts": [2], "axes": [0]})
         transposed_x = ctx.make_node("Transpose", [node.input[0]], attr={'perm': constants.NHWC_TO_NCHW})
         first_channel_x = GraphBuilder(ctx).make_slice(
             {"data": transposed_x.output[0], "ends": [1], "starts": [0], "axes": [1]})
@@ -350,7 +350,7 @@ class DepthwiseConv2d:
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeezed_y.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
-        trip_node = ctx.make_node("Mul", [N, C])
+        trip_node = ctx.make_node("Mul", [w_n, w_c])
         cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
         inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]],
                                    outputs=[squeezed_y.output[0]])
