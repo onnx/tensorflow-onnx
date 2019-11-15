@@ -1,3 +1,379 @@
+#
+# simple models for basic functional test
+#
+regression-graphdef:
+  model: models/regression/graphdef/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1]
+  outputs:
+    - pred:0
+
+regression-checkpoint:
+  model: models/regression/checkpoint/model.meta
+  model_type: checkpoint
+  input_get: get_ramp
+  inputs:
+    "X:0": [1]
+  outputs:
+    - pred:0
+
+regression-saved-model:
+  model: models/regression/saved_model
+  model_type: saved_model
+  input_get: get_ramp
+  inputs:
+    "X:0": [1]
+  outputs:
+    - pred:0
+
+saved_model_with_redundant_inputs:
+  model: models/saved_model_with_redundant_inputs
+  model_type: saved_model
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 10]
+    "Placeholder:0": [1, 10]
+  outputs:
+    - Add:0
+
+graphdef_with_redundant_inputs:
+  model: models/regression/graphdef/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 10]
+    "Placeholder:0": [1, 10]
+  outputs:
+    - Add:0
+
+checkpoint_with_redundant_inputs:
+  model: models/regression/checkpoint/model.meta
+  model_type: checkpoint
+  input_get: get_ramp
+  inputs:
+    "X:0": [1]
+    "Placeholder:0": [1, 10]
+  outputs:
+    - pred:0
+
+benchtf-fc:
+  model: models/fc-layers/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 784]
+  outputs:
+    - output:0
+
+benchtf-conv:
+  model: models/conv-layers/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 784]
+  outputs:
+    - output:0
+
+benchtf-convbn:
+  disabled: true # some if from training isn't removed
+  model: models/convbn-layers/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 784]
+  outputs:
+    - output:0
+
+benchtf-ae0:
+  model: models/ae0/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 784]
+  outputs:
+    - output:0
+
+benchtf-lstm:
+  disabled: true
+  model: models/lstm/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 784]
+  outputs:
+    - output:0
+
+benchtf-gru:
+  disabled: true
+  model: models/gru/frozen.pb
+  input_get: get_ramp
+  inputs:
+    "X:0": [1, 784]
+    "keep_prob:0": [1]
+  outputs:
+    - output:0
+
+##
+## standard image nets
+##
+inception_v3_slim:
+  url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz
+  model: inception_v3_2016_08_28_frozen.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 299, 299, 3]
+  outputs:
+    - InceptionV3/Predictions/Softmax:0
+  rtol: 0.02
+  atol: 0.00001
+
+googlenet_v1_nonslim:
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/inception5h.zip
+  model: tensorflow_inception_graph.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - softmax2:0
+
+googlenet_resnet_v2:
+  url: https://storage.googleapis.com/download.tensorflow.org/models/inception_resnet_v2_2016_08_30_frozen.pb.tar.gz
+  model: inception_resnet_v2_2016_08_30_frozen.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 299, 299, 3]
+  outputs:
+    - InceptionResnetV2/Logits/Predictions:0
+  rtol: 0.05
+
+googlenet_v1_slim:
+  url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v1_2016_08_28_frozen.pb.tar.gz
+  model: inception_v1_2016_08_28_frozen.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - InceptionV1/Logits/Predictions/Softmax:0
+  rtol: 0.05
+
+googlenet_v2_slim:
+  # FIXME: fails because of 0.29% missmatch
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v2_2016_08_28_frozen.pb.tar.gz
+  model: inception_v2_2016_08_28_frozen.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - InceptionV2/Predictions/Softmax:0
+  rtol: 0.05
+  atol: 0.00005
+
+googlenet_v4_slim:
+  url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v4_2016_09_09_frozen.pb.tar.gz
+  model: inception_v4_2016_09_09_frozen.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 299, 299, 3]
+  outputs:
+    - InceptionV4/Logits/Predictions:0
+  rtol: 0.1
+
+mobilenet_v3_large_float:
+  url: https://storage.googleapis.com/mobilenet_v3/checkpoints/v3-large_224_1.0_float.tgz
+  model: v3-large_224_1.0_float/v3-large_224_1.0_float.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - MobilenetV3/Predictions/Softmax:0
+
+mobilenet_v2_1.4_224:
+  url: https://storage.googleapis.com/mobilenet_v2/checkpoints/mobilenet_v2_1.4_224.tgz
+  model: mobilenet_v2_1.4_224_frozen.pb
+  input_get: get_beach
+  force_input_shape: true
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - MobilenetV2/Predictions/Reshape_1:0
+
+mobilenet_v1_100_224:
+  url: https://storage.googleapis.com/download.tensorflow.org/models/mobilenet_v1_1.0_224_frozen.tgz
+  model: mobilenet_v1_1.0_224/frozen_graph.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - MobilenetV1/Predictions/Softmax:0
+
+mobilenet_v1_75_192:
+  url: https://storage.googleapis.com/download.tensorflow.org/models/mobilenet_v1_0.75_192_frozen.tgz
+  model: mobilenet_v1_0.75_192/frozen_graph.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 192, 192, 3]
+  outputs:
+    - MobilenetV1/Predictions/Softmax:0
+
+nasnet-a_mobile_224:
+  # has only checkpoint format
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/nasnet-a_mobile_04_10_2017.tar.gz
+  model: fixme
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 416, 416, 3]
+  outputs:
+    - output:0
+
+vgg-16:
+  # has only checkpoint format
+  disabled: true
+  url: http://download.tensorflow.org/models/vgg_16_2016_08_28.tar.gz
+  model: fixme
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 416, 416, 3]
+  outputs:
+    - output:0
+
+resnet50_v2_nchw: # NOTE: Tensorflow 1.9.0 fails
+  skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
+  model_type: saved_model
+  url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NCHW.tar.gz
+  model: resnet_v2_fp32_savedmodel_NCHW/1538687196
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [64, 224, 224, 3]
+  outputs:
+    - ArgMax:0
+    - softmax_tensor:0
+
+resnet50_v2_nhwc:
+  model_type: saved_model
+  url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NHWC.tar.gz
+  model: resnet_v2_fp32_savedmodel_NHWC/1538687283
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [64, 224, 224, 3]
+  outputs:
+    - ArgMax:0
+    - softmax_tensor:0
+
+resnet50_fp16_v2:
+  disabled: true # FIXME: need to handle float16 constants
+  model_type: saved_model
+  url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp16_savedmodel_NHWC.tar.gz
+  model: resnet_v2_fp16_savedmodel_NHWC/1538686978
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [64, 224, 224, 3]
+  outputs:
+    - ArgMax:0
+    - softmax_tensor:0
+
+resnet50_v1:
+  disabled: true # works, disabled because its nearly the same as resnet50_v2_nchw
+  skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
+  model_type: saved_model
+  url: http://download.tensorflow.org/models/official/20180601_resnet_v1_imagenet_savedmodel.tar.gz
+  model: 20180601_resnet_v1_imagenet_savedmodel/1527888778
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [128, 224, 224, 3]
+  outputs:
+    - ArgMax:0
+    - softmax_tensor:0
+
+ssd_mobilenet_v3_large_coco:
+  url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_large_coco_2019_08_14.tar.gz
+  model: ssd_mobilenet_v3_large_coco_2019_08_14/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
+  input_get: get_beach
+  inputs:
+    "normalized_input_image_tensor:0": [1, 320, 320, 3]
+  outputs:
+    - raw_outputs/box_encodings:0
+    - raw_outputs/class_predictions:0
+
+ssd_mobilenet_v1_coco:
+  url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_17.tar.gz
+  model: ssd_mobilenet_v1_coco_2017_11_17/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0
+
+ssd_mobilenet_v2_coco:
+  # works with opset-10
+  disabled: true
+  url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
+  model: ssd_mobilenet_v2_coco_2018_03_29/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0
+
+ssdlite_mobilenet_v2_coco:
+  # works with opset-10
+  disabled: true
+  url: http://download.tensorflow.org/models/object_detection/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
+  model: ssdlite_mobilenet_v2_coco_2018_05_09/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0
+
+ssd_inception_v2_coco:
+  disabled: true
+  url: http://download.tensorflow.org/models/object_detection/ssd_inception_v2_coco_2017_11_17.tar.gz
+  model: ssd_inception_v2_coco_2017_11_17/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0
+
+#
+# models that will not work
+#
+style-transfer:
+  # quantitized model
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/stylize_v1.zip
+  model: stylize_quantized.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 416, 416, 3]
+  outputs:
+    - output:0
+
 faster_rcnn_inception_v2_coco:
   url: http://download.tensorflow.org/models/object_detection/faster_rcnn_inception_v2_coco_2018_01_28.tar.gz
   model: faster_rcnn_inception_v2_coco_2018_01_28/frozen_inference_graph.pb
