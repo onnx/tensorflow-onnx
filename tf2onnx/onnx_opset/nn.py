@@ -252,7 +252,7 @@ class ConvTranspose:
         node.input[0] = node.input[1]
         node.input[1] = t
 
-        conv_convert_inputs(ctx, node, with_kernel=True)DepthwiseConv2d
+        conv_convert_inputs(ctx, node, with_kernel=True)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
