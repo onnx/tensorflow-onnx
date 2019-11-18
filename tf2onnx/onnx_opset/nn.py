@@ -72,6 +72,24 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
 
     # kernel must to be transposed
     if with_kernel:
+        # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
+        if new_kernel_shape:
+            if ctx.opset < 5:
+                # old reshape takes new shape as attribute
+                input_name = node.input[1]
+                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
+                reshape.set_attr("shape", new_kernel_shape)
+                reshape.skip_conversion = True
+            else:
+                # new reshape takes new shape as input[1]
+                shape_name = utils.make_name(node.name)
+                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
+                input_name = node.input[1]
+                reshape = ctx.make_node("Reshape", [input_name, shape_name])
+                ctx.replace_input(node, input_name, reshape.output[0])
+                reshape.skip_conversion = True
+            ctx.set_shape(reshape.output[0], new_kernel_shape)
+
         parent = node.inputs[1]
         need_transpose = True
         if node.inputs[1].is_const():
@@ -90,24 +108,6 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             transpose.skip_conversion = True
             new_shape = spatial_map(ctx.get_shape(input_name), constants.HWCN_TO_NCHW)
             ctx.set_shape(transpose.output[0], new_shape)
-
-        # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
-        if new_kernel_shape:
-            if ctx.opset < 5:
-                # old reshape takes new shape as attribute
-                input_name = node.input[1]
-                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
-                reshape.set_attr("shape", new_kernel_shape)
-                reshape.skip_conversion = True
-            else:
-                # new reshape takes new shape as input[1]
-                shape_name = utils.make_name(node.name)
-                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
-                input_name = node.input[1]
-                reshape = ctx.make_node("Reshape", [input_name, shape_name])
-                ctx.replace_input(node, input_name, reshape.output[0])
-                reshape.skip_conversion = True
-            ctx.set_shape(reshape.output[0], new_kernel_shape)
 
     # transpose outputs if needed
     if node.is_nhwc():
@@ -280,74 +280,20 @@ class DepthwiseConv2d:
         if len(input_shape) != 4:
             raise ValueError("only Conv2D is supported")
 
-        if node.is_nhwc():
-            i_n, i_h, i_w, i_c = input_shape
-        else:
-            i_n, i_c, i_h, i_w = input_shape
-
         kernel_shape = ctx.get_shape(node.input[1])
         if len(kernel_shape) != 4:
             raise ValueError("only Conv2D is supported")
         k_h, k_w, k_input_channels, k_channel_multiplier = kernel_shape
-        k_output_channels = i_c * k_channel_multiplier
+        k_output_channels = k_input_channels * k_channel_multiplier
 
         node.set_attr("kernel_shape", [k_h, k_w])
         strides = conv_dims_attr(node, "strides")
         conv_dims_attr(node, "dilations")
-        node.set_attr("group", i_c)
+        node.set_attr("group", k_input_channels)
         add_padding(ctx, node, kernel_shape, strides)
 
-        new_kernel_shape = [k_output_channels, 1, k_h, k_w]
+        new_kernel_shape = [k_h, k_w, 1, k_output_channels]
         conv_convert_inputs(ctx, node, with_kernel=True, new_kernel_shape=new_kernel_shape)
-
-    @classmethod
-    def version_11(cls, ctx, node, **kwargs):
-        # do depthwise conv by normal conv
-        kernel_shape = ctx.get_shape(node.input[1])
-        if len(kernel_shape) != 4:
-            raise ValueError("only Conv2D is supported")
-        strides = conv_dims_attr(node, "strides")
-        conv_dims_attr(node, "dilations")
-        add_padding(ctx, node, kernel_shape, strides)
-        shape_w = ctx.make_node("Shape", [node.input[1]])
-        w_n = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [4], "starts": [3], "axes": [0]})
-        w_c = GraphBuilder(ctx).make_slice({"data": shape_w.output[0], "ends": [3], "starts": [2], "axes": [0]})
-        transposed_x = ctx.make_node("Transpose", [node.input[0]], attr={'perm': constants.NHWC_TO_NCHW})
-        trip_name = utils.make_name(node.name + "_i")
-        cond_name = utils.make_name(node.name + "_cond")
-        cond_out_name = utils.make_name(node.name + "_cond_out")
-        g = ctx.create_new_graph_with_same_config()
-        g.add_graph_input(trip_name, TensorProto.INT64, [1])
-        g.add_graph_input(cond_name, TensorProto.BOOL, [])
-        g.parent_graph = ctx
-        const_one = g.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
-        const_two = g.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
-        const_three = g.make_const(utils.make_name(node.name + "_const_three"), np.array([3], dtype=np.int64))
-        trip_channel = g.make_node("Div", [trip_name, w_n])
-        trip_channel_next = g.make_node("Add", [trip_channel.output[0], const_one.output[0]])
-        trip_multiplier = g.make_node("Mod", [trip_name, w_n])
-        trip_multiplier_next = g.make_node("Add", [trip_multiplier.output[0], const_one.output[0]])
-        channel_x = g.make_node("Slice", [transposed_x.output[0], trip_channel.output[0], trip_channel_next.output[0],
-                                          const_one.output[0]])
-        channel_w = g.make_node("Slice", [node.input[1], trip_channel.output[0], trip_channel_next.output[0],
-                                          const_two.output[0]])
-        depthwise_channel_w = g.make_node("Slice", [channel_w.output[0], trip_multiplier.output[0],
-                                                    trip_multiplier_next.output[0], const_three.output[0]])
-        transposed_channel_w = g.make_node("Transpose", [depthwise_channel_w.output[0]],
-                                           attr={'perm': constants.HWCN_TO_NCHW})
-        channel_y = g.make_node("Conv", [channel_x.output[0], transposed_channel_w.output[0]], attr=node.attr)
-        squeezed_y = g.make_node("Squeeze", inputs=[channel_y.output[0]], attr={"axes": [1]})
-        g.make_node("Identity", [cond_name], outputs=[cond_out_name])
-        g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
-        g.add_graph_output(squeezed_y.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
-        trip_node = ctx.make_node("Mul", [w_n, w_c])
-        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
-        inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]],
-                                   outputs=[squeezed_y.output[0]])
-        inner_loop.set_body_graph_as_attr("body", g)
-        ctx.remove_node(node.name)
-        ctx.make_node("Transpose", [inner_loop.output[0]], attr={'perm': [1, 2, 3, 0]}, name=node.name,
-                      outputs=node.output)
 
 
 @tf_op(["AvgPool", "AvgPool3D"], onnx_op="AveragePool")
