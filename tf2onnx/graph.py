@@ -362,6 +362,27 @@ class Node(object):
         utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
                         self.name)
 
+    def maybe_cast_input(self, supported, type_map):
+        """.maybe_cast_input
+        Args:
+            supported: list of supported types for inputs
+            type_map: dict type to supported type mapping
+        """
+        did_cast = False
+        for i, name in enumerate(self.input):
+            dtype = self.graph.get_dtype(name)
+            if dtype not in supported[i]:
+                tdtype = type_map.get(dtype)
+                if tdtype is None:
+                    raise RuntimeError("don't know how to cast type {} on node {}".format(dtype, name))
+                shape = self.graph.get_shape(name)
+                cast_node = self.graph.insert_new_node_on_input(self, "Cast", name)
+                cast_node.set_attr("to", tdtype)
+                self.graph.set_dtype(cast_node.output[0], [tdtype])
+                self.graph.set_shape(cast_node.output[0], shape)
+                did_cast = True
+        return did_cast
+
 
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
@@ -1209,6 +1230,18 @@ class Graph(object):
                 for _, body_graph in attr_body_graphs.items():
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
+
+    def safe_to_remove_nodes(self, to_delete):
+        """ List of nodes that safe to delete (i.e. outputs not consumed by other nodes.)"""
+        safe_to_remove = []
+        delete_set = set(to_delete)
+        for n in delete_set:
+            out_consumers = set()
+            for out in n.output:
+                out_consumers |= set(self.find_output_consumers(out))
+            if out_consumers.issubset(delete_set):
+                safe_to_remove.append(n)
+        return safe_to_remove
 
     def safe_remove_nodes(self, to_delete):
         """Delete nodes in `to_delete` without third-party node consuming it."""
