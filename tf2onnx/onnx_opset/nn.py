@@ -284,7 +284,9 @@ class DepthwiseConv2d:
         if len(kernel_shape) != 4:
             raise ValueError("only Conv2D is supported")
         k_h, k_w, k_input_channels, k_channel_multiplier = kernel_shape
-        k_output_channels = k_input_channels * k_channel_multiplier
+        if k_input_channels < 1:
+            raise ValueError("input channel must be positive")
+        k_output_channels = k_input_channels  * k_channel_multiplier
 
         node.set_attr("kernel_shape", [k_h, k_w])
         strides = conv_dims_attr(node, "strides")
