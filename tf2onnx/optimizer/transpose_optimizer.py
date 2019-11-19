@@ -535,13 +535,15 @@ class TransposeOptimizer(GraphOptimizerBase):
             # NHWC->NCHW
             new_pads = [pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]]
             node.set_attr("pads", new_pads)
-        else:
+            return self._switch_transpose_and_node(node, trans)
+        if node.inputs[1].is_const():
             pads = node.inputs[1].get_tensor_value()
             # NHWC->NCHW
             new_pads = np.array([pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]],
                                 dtype=np.int64)
             node.inputs[1].set_tensor_value(new_pads)
-        return self._switch_transpose_and_node(node, trans)
+            return self._switch_transpose_and_node(node, trans)
+        return False
 
     def _reducemean_handler(self, trans, node):
         axes = node.get_attr("axes").ints
