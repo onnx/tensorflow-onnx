@@ -107,7 +107,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kwargs["convert_var_to_const"] = False
         kwargs["constant_fold"] = False
         return self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
-    '''
+
     def _test_expand_dims_known_rank(self, idx):
         tf.reset_default_graph()
         x_val = make_xval([3, 4])
@@ -421,7 +421,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         conv = tf.nn.conv2d_transpose(x, f, output_shape_placeholder, strides=strides, padding="VALID")
         _ = tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape}, rtol=1e-05, process_args=process_args)
-    '''
+
     def test_depthwiseconv_0(self):
         x_shape = [1, 3, 4, 3]
         kernel_shape = [3, 3, 3, 3]
@@ -443,7 +443,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         conv = tf.nn.depthwise_conv2d(x, kernel, strides=_STRIDE1x1, padding='VALID')
         _ = tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-6)
-    '''
+
     def test_dropout(self):
         is_training = tf.placeholder_with_default(False, (), "is_training")
         x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
@@ -2830,7 +2830,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # FIXME: indices in onnx are not the same as in tensorflow so don't check for now
         #self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
-    '''
+
 
 if __name__ == '__main__':
     unittest_main()
