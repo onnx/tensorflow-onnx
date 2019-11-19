@@ -431,8 +431,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
         conv = tf.nn.depthwise_conv2d(x, kernel, strides=[1, 1, 1, 1], padding='VALID')
         _ = tf.identity(conv, name=_TFOUTPUT)
-        # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
-        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-6)
 
     def test_depthwiseconv_1(self):
         x_shape = [1, 112, 112, 32]
@@ -443,8 +442,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
         conv = tf.nn.depthwise_conv2d(x, kernel, strides=_STRIDE1x1, padding='VALID')
         _ = tf.identity(conv, name=_TFOUTPUT)
-        # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
-        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-6)
 
     def test_dropout(self):
         is_training = tf.placeholder_with_default(False, (), "is_training")
