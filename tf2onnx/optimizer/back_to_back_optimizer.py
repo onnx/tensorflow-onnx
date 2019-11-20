@@ -161,10 +161,10 @@ class BackToBackOptimizer(GraphOptimizerBase):
         if node2.type != 'Unsqueeze':
             return []
 
-        axis1 = node.get_attr('axes').i
-        axis2 = node2.get_attr('axes').i
+        axis1 = node.get_attr('axes').ints
+        axis2 = node2.get_attr('axes').ints
 
-        # if squeeze followed by unsqueeze is on diff axis, skip
+        # if squeeze followed by unsqueeze is on diff axes, skip
         if axis1 != axis2:
             return []
 
