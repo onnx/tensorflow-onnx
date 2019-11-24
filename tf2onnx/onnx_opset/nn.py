@@ -244,10 +244,14 @@ class ConvTranspose:
         else:
             input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
             output_shape = ctx.make_node("Shape", [node.output[0]])
-            output_h = GraphBuilder(ctx).make_slice({"data": output_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
-            output_w = GraphBuilder(ctx).make_slice({"data": output_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
-            expect_h = GraphBuilder(ctx).make_slice({"data": input_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
-            expect_w = GraphBuilder(ctx).make_slice({"data": input_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
+            output_h = GraphBuilder(ctx).make_slice(
+                {"data": output_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
+            output_w = GraphBuilder(ctx).make_slice(
+                {"data": output_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
+            expect_h = GraphBuilder(ctx).make_slice(
+                {"data": input_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
+            expect_w = GraphBuilder(ctx).make_slice(
+                {"data": input_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
             diff_h = ctx.make_node("Sub", [output_h, expect_h])
             diff_w = ctx.make_node("Sub", [output_w, expect_w])
             const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
@@ -255,10 +259,12 @@ class ConvTranspose:
             start_w = ctx.make_node("Div", [diff_w.output[0], const_two.output[0]])
             end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
             end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
-            starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis":0})
-            ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis":0}, name="concat_efgh")
-            const_one_two = ctx.make_const(utils.make_name(node.name + "_const_one_two"), np.array([1,2], dtype=np.int64))
-            slice_node = ctx.make_node("Slice", [node.output[0], starts.output[0], ends.output[0], const_one_two.output[0]])
+            starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
+            ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0}, name="concat_efgh")
+            const_one_two = ctx.make_const(utils.make_name(node.name + "_const_one_two"),
+                                           np.array([1, 2], dtype=np.int64))
+            slice_node = ctx.make_node("Slice",
+                                       [node.output[0], starts.output[0], ends.output[0], const_one_two.output[0]])
             downstream_nodes = ctx.find_output_consumers(node.output[0])
             downstream_nodes.remove(output_shape)
             downstream_nodes.remove(slice_node)
