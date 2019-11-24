@@ -448,7 +448,7 @@ class Pad:
         if mode not in [None, "constant", "reflect"]:
             raise ValueError(mode + " pad mode is not supported")
 
-        # pads must be int64
+        # pads must be int64.
         if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
         ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
