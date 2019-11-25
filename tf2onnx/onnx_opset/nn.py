@@ -260,7 +260,7 @@ class ConvTranspose:
             end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
             end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
             starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
-            ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0}, name="concat_efgh")
+            ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0})
             const_one_two = ctx.make_const(utils.make_name(node.name + "_const_one_two"),
                                            np.array([1, 2], dtype=np.int64))
             slice_node = ctx.make_node("Slice",
