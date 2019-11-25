@@ -226,21 +226,49 @@ class ConvTranspose:
         # Note: inputs are reversed from what one would expect.
         kernel_shape = conv_kernel_shape(ctx, node, 1)
         input_shape = ctx.get_shape(node.input[2])
+        append_slice = False
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
-        output_shape = ctx.get_shape(node.output[0])
-        if node.is_nhwc():
-            new_output_shape = [output_shape[1], output_shape[2]]
-            input_hw = [input_shape[1], input_shape[2]]
+        if node.inputs[0].is_const():
+            output_shape = ctx.get_shape(node.output[0])
+            if node.is_nhwc():
+                new_output_shape = [output_shape[1], output_shape[2]]
+                input_hw = [input_shape[1], input_shape[2]]
+            else:
+                new_output_shape = [output_shape[2], output_shape[3]]
+                input_hw = [input_shape[2], input_shape[3]]
+            utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
+            utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
+                            "output h and w cannot be smaller than input h and w.")
+            node.set_attr("output_shape", new_output_shape)
         else:
-            new_output_shape = [output_shape[2], output_shape[3]]
-            input_hw = [input_shape[2], input_shape[3]]
-
-        utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
-        utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
-                        "output h and w cannot be smaller than input h and w.")
-
-        node.set_attr("output_shape", new_output_shape)
+            input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
+            output_shape = ctx.make_node("Shape", [node.output[0]])
+            output_h = GraphBuilder(ctx).make_slice(
+                {"data": output_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
+            output_w = GraphBuilder(ctx).make_slice(
+                {"data": output_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
+            expect_h = GraphBuilder(ctx).make_slice(
+                {"data": input_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
+            expect_w = GraphBuilder(ctx).make_slice(
+                {"data": input_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
+            diff_h = ctx.make_node("Sub", [output_h, expect_h])
+            diff_w = ctx.make_node("Sub", [output_w, expect_w])
+            const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
+            start_h = ctx.make_node("Div", [diff_h.output[0], const_two.output[0]])
+            start_w = ctx.make_node("Div", [diff_w.output[0], const_two.output[0]])
+            end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
+            end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
+            starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
+            ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0})
+            const_one_two = ctx.make_const(utils.make_name(node.name + "_const_one_two"),
+                                           np.array([1, 2], dtype=np.int64))
+            slice_node = ctx.make_node("Slice",
+                                       [node.output[0], starts.output[0], ends.output[0], const_one_two.output[0]])
+            downstream_nodes = ctx.find_output_consumers(node.output[0])
+            downstream_nodes.remove(output_shape)
+            downstream_nodes.remove(slice_node)
+            ctx.replace_all_inputs(downstream_nodes, node.output[0], slice_node.output[0])
 
         strides = conv_dims_attr(node, "strides")
         conv_dims_attr(node, "dilations")
