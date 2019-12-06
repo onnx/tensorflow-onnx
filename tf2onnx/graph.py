@@ -1079,7 +1079,7 @@ class Graph(object):
         if name is None:
             name = utils.make_name(node.name)
         new_output = port_name(name)
-        if type(input_name) is not list:
+        if not isinstance(input_name, list):
             input_name = [input_name]
 
         new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
