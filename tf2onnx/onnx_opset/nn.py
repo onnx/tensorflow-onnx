@@ -314,7 +314,7 @@ class DepthwiseConv2d:
         k_h, k_w, k_input_channels, k_channel_multiplier = kernel_shape
         if k_input_channels < 1:
             raise ValueError("input channel must be positive")
-        k_output_channels = k_input_channels  * k_channel_multiplier
+        k_output_channels = k_input_channels * k_channel_multiplier
 
         node.set_attr("kernel_shape", [k_h, k_w])
         strides = conv_dims_attr(node, "strides")
@@ -476,13 +476,16 @@ class Pad:
         if mode not in [None, "constant", "reflect"]:
             raise ValueError(mode + " pad mode is not supported")
 
-        pads = node.inputs[1].get_tensor_value()
-        pads = np.array(pads).transpose().flatten().astype(np.int64)
-        node.inputs[1].set_tensor_value(pads)
+        # pads must be int64.
+        if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
+        ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
+        shape_const = ctx.make_const(utils.make_name(node.name), np.array([-1]).astype(np.int64))
+        ctx.insert_new_node_on_input(node, "Reshape", [node.input[1], shape_const.name])
 
         origin_dtype = ctx.get_dtype(node.output[0])
-        if origin_dtype not in [TensorProto.FLOAT16, TensorProto.FLOAT,
-                                TensorProto.DOUBLE]:
+        if origin_dtype not in [TensorProto.FLOAT, TensorProto.DOUBLE,
+                                TensorProto.INT32, TensorProto.INT64]:
             cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
             cast_node.set_attr("to", TensorProto.FLOAT)
             ctx.set_dtype(cast_node.output[0], TensorProto.FLOAT)
@@ -739,8 +742,12 @@ class MatrixBandPart:
         # 2: "loop" to generate mask matrix: generate col or row of matrix one by one
         g = ctx.create_new_graph_with_same_config()
         node_name = utils.make_name("const_zero_bool")
-        const_zero_bool = ctx.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
-        ctx.set_dtype(const_zero_bool.output[0], onnx_pb.TensorProto.BOOL)
+        const_zero_bool = g.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
+        g.set_dtype(const_zero_bool.output[0], onnx_pb.TensorProto.BOOL)
+
+        g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
+        g.add_graph_input("cond", onnx_pb.TensorProto.BOOL, [])
+        g.add_graph_input("line", onnx_pb.TensorProto.BOOL, [-1, -1])
 
         # shift right the line and add zero at the left.
         new_line = g.make_node(op_type="Concat", inputs=[const_zero_bool.output[0], "line"],
@@ -753,10 +760,6 @@ class MatrixBandPart:
         g.make_node("Identity", ["cond"], outputs=["cond_out"])
         g.make_node("Identity", ["line"], outputs=["res"])
         g.make_node("Identity", [slice_node], outputs=["line_out"])
-
-        g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
-        g.add_graph_input("cond", onnx_pb.TensorProto.BOOL, [])
-        g.add_graph_input("line", onnx_pb.TensorProto.BOOL, [-1, -1])
 
         g.add_graph_output("cond_out", onnx_pb.TensorProto.BOOL, [])
         g.add_graph_output("line_out", onnx_pb.TensorProto.BOOL, [-1, -1])
