@@ -1067,7 +1067,9 @@ class Graph(object):
         Args:
             node: we want to replace the input for this node
             op_type: type for new operation
-            input_name: the names of the outputs above us
+            input_name: the name(s) of the outputs above us
+                if scalar, new node placed above input_name
+                if list, new node placed above input_name[0]. list is inputs into new node
             name: the name of the new op
             kwargs: attributes of the new node
 
@@ -1077,9 +1079,12 @@ class Graph(object):
         if name is None:
             name = utils.make_name(node.name)
         new_output = port_name(name)
-        new_node = self.make_node(op_type, [input_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
+        if type(input_name) is not list:
+            input_name = [input_name]
+
+        new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
         for i, n in enumerate(node.input):
-            if n == input_name:
+            if n == input_name[0]:
                 node.input[i] = new_output
                 break
         return new_node
