@@ -603,16 +603,6 @@ class ExpandDims:
         # T output = ExpandDims(T input, Tdim dim, @type Tdim), dim is 0-D scalar.
         # T reshaped = Reshape-5(T data, int64 shape)
         # T expanded = Unsqueeze-1(T data, @ints axes)
-        shape = ctx.get_shape(node.output[0])
-        if shape is not None and shape.count(-1) < 2:
-            # tensorflow already infers the output shape so we can just take it
-            shape_name = utils.make_name(node.name)
-            ctx.make_const(shape_name, np.array(shape, dtype=np.int64))
-            node.type = "Reshape"
-            node.input[1] = shape_name
-            return
-
-        # if there is more than one -1 in the shape, Reshape won't support.
         dim_node = node.inputs[1]
         if dim_node.is_const():
             node.type = "Unsqueeze"
