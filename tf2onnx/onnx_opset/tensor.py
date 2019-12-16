@@ -621,12 +621,6 @@ class StridedSlice:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # for now we implement common cases. Things like strides!=1 are not mappable to onnx.
-        not_supported_attr = ["new_axis_mask"]
-        for attr_name in not_supported_attr:
-            attr = node.get_attr(attr_name)
-            if attr is not None and attr.i != 0:
-                raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
-
         onnx_dtype = ctx.get_dtype(node.input[1])
         np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
         max_size = np.iinfo(np_dtype).max
@@ -641,6 +635,8 @@ class StridedSlice:
         shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
         ellipsis_mask = node.get_attr("ellipsis_mask")
         ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
+        new_axis_mask = node.get_attr("new_axis_mask")
+        new_axis_mask = new_axis_mask.i if new_axis_mask is not None else 0
         new_begin = []
         new_end = []
         axes = []
@@ -651,55 +647,86 @@ class StridedSlice:
         # For example for a 4-dimensional tensor foo the slice foo[2, ..., 5:8] implies foo[2, :, :, 5:8]
         # NOTE: we ignore those axes denoted by ellipsis using `axes` attribute
         ellipsis_gap = 0
-        for idx, begin_item in enumerate(begin):
-            if strides[idx] != 1:
-                raise ValueError("StridedSlice: only strides=1 is supported")
-            if (ellipsis_mask >> idx) & 1:
-                input_shape = ctx.get_shape(node.input[0])
-                utils.make_sure(
-                    input_shape is not None,
-                    "StridedSlice op {} requires the shape of input".format(node.name)
-                )
-                ellipsis_gap = len(input_shape) - len(begin)
-                continue
+        needs_unsqueeze = []
+        if (new_axis_mask and (ellipsis_mask != 0 or shrink_axis_mask != 0 )) :
+            raise ValueError("StridedSlice: attribute new_axis_mask not supported together with non-empty ellipsis or shrink")
+        if (new_axis_mask):
+            nbegin=[]
+            nend=[]
+            nstrides=[]
+            nbeginmask=0
+            nendmask=0
+            idx = 0
+            for origin_idx in range(len(begin)):
+                if not ((new_axis_mask >> origin_idx) & 1):
+                    nbegin.extend([begin[origin_idx]])
+                    nend.extend([end[origin_idx]])
+                    nstrides.extend([strides[origin_idx]])
+                    if (begin_mask >> origin_idx) & 1:
+                        nbeginmask = nbeginmask | (1 << idx)
+                    if (end_mask >> origin_idx) & 1:
+                        nendmask = nendmask | (1 << idx)
+                    idx = idx + 1
+                else:
+                    needs_unsqueeze.extend([origin_idx])
+            (begin, end, strides, begin_mask, end_mask) = (nbegin, nend, nstrides, nbeginmask, nendmask)
+        if len(begin) == 0:
+            input_name = node.input[0]
+            output_name = node.output[0]
+            ctx.remove_node(node.name)
+            # infact indentity first, and then unsqueeze if needed
+            node = ctx.make_node("Identity", [input_name], outputs=[output_name])
+        else:
+            input_shape = ctx.get_shape(node.input[0])        
+            for idx, begin_item in enumerate(begin):
+                if strides[idx] != 1:
+                    raise ValueError("StridedSlice: only strides=1 is supported")
+                if (ellipsis_mask >> idx) & 1:
+                    input_shape = ctx.get_shape(node.input[0])
+                    utils.make_sure(
+                        input_shape is not None,
+                        "StridedSlice op {} requires the shape of input".format(node.name)
+                    )
+                    ellipsis_gap = len(input_shape) - len(begin)
+                    continue
 
-            # ignore ellipsis axes
-            axes.append(idx + ellipsis_gap)
-            end_item = end[idx]
+                # ignore ellipsis axes
+                axes.append(idx + ellipsis_gap)
+                end_item = end[idx]
 
-            # an implicit condition is stride == 1 (checked in above)
-            if begin_item < 0 and end_item == 0:
-                end_item = max_size
+                # an implicit condition is stride == 1 (checked in above)
+                if begin_item < 0 and end_item == 0:
+                    end_item = max_size
 
-            mask = (shrink_axis_mask >> idx) & 1
-            if mask != 0:
-                new_begin.append(begin_item)
-                end_item = begin_item + 1 if begin_item != -1 else max_size
-                new_end.append(end_item)
-                needs_squeeze.append(idx + ellipsis_gap)
-                continue
+                mask = (shrink_axis_mask >> idx) & 1
+                if mask != 0:
+                    new_begin.append(begin_item)
+                    end_item = begin_item + 1 if begin_item != -1 else max_size
+                    new_end.append(end_item)
+                    needs_squeeze.append(idx + ellipsis_gap)
+                    continue
 
-            mask = (begin_mask >> idx) & 1
-            if mask != 0:
-                new_begin.append(0)
-            else:
-                new_begin.append(begin_item)
+                mask = (begin_mask >> idx) & 1
+                if mask != 0:
+                    new_begin.append(0)
+                else:
+                    new_begin.append(begin_item)
 
-            mask = (end_mask >> idx) & 1
-            if mask != 0:
-                new_end.append(max_size)
-            else:
-                new_end.append(end_item)
+                mask = (end_mask >> idx) & 1
+                if mask != 0:
+                    new_end.append(max_size)
+                else:
+                    new_end.append(end_item)
 
-        out_dtypes = [ctx.get_dtype(node.output[0])]
-        out_shapes = [ctx.get_shape(node.output[0])]
-        ctx.remove_node(node.name)
+            out_dtypes = [ctx.get_dtype(node.output[0])]
+            out_shapes = [ctx.get_shape(node.output[0])]
+            ctx.remove_node(node.name)
 
-        attr = {"starts": new_begin, "ends": new_end, "axes": axes}
-        inputs_map = {"data": node.input[0], **attr}
-        kwargs = {**inputs_map, "outputs": node.output}
-        node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
-        node = ctx.get_node_by_output(node)
+            attr = {"starts": new_begin, "ends": new_end, "axes": axes}
+            inputs_map = {"data": node.input[0], **attr}
+            kwargs = {**inputs_map, "outputs": node.output}
+            node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
+            node = ctx.get_node_by_output(node)
         nodes = [node]
         if needs_squeeze:
             name = utils.make_name(node.name)
@@ -1334,7 +1361,7 @@ class SpaceToBatch:
             transposed_concated_pad_x_v2 = ctx.make_node("Transpose", [concated_pad_x_v2.output[0]], {"perm": [1, 0]})
             const_eight = ctx.make_const(utils.make_name(node.name + "_const_eight"), np.array([8], dtype=np.int64))
             reshaped_transposed_pad_x = ctx.make_node("Reshape",
-                                                      [transposed_concated_pad_x_v2.output[0], const_eight.output[0]])
+                                                      [transposed_concated_pad_x_v2.output[0], const_eight.StridedSliceoutput[0]])
             padded_input_x = ctx.make_node("Pad", [input_x.output[0], reshaped_transposed_pad_x.output[0]])
             const_one = ctx.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
             const_one_one = ctx.make_const(utils.make_name(node.name + "_const_one_one"),
