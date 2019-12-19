@@ -28,10 +28,13 @@ steps:
 # https://github.com/numpy/numpy/issues/12957
 # https://github.com/ContinuumIO/anaconda-issues/issues/10629
 # Add numpy lib path manually here
+# On Windows sqlite3.dll is found under Library/bin
 - bash: |
     site_dir=$(python -c "import site; print(site.getsitepackages()[1])")
     echo "##vso[task.prependpath]$site_dir\numpy\.libs"
-  displayName: 'Fix Numpy Path'
+    base_dir=$(python -c "import site; print(site.getsitepackages()[0])")
+    echo "##vso[task.prependpath]$base_dir/Library/bin"
+  displayName: 'Fix Paths'
   condition: and(succeeded(), in(variables['Agent.OS'], 'Windows_NT'))
 
 - bash: env
