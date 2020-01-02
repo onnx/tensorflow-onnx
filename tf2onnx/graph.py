@@ -40,8 +40,8 @@ class Node(object):
         """
         self._op = node
         self.graph = graph
-        self._input = [i for i in node.input]
-        self._output = [i for i in node.output]
+        self._input = list(node.input)
+        self._output = list(node.output)
         self._attr = {}
 
         graph.set_node_by_name(self)
@@ -53,6 +53,10 @@ class Node(object):
     @property
     def input(self):
         return self._input
+
+    @input.setter
+    def input(self, val):
+        self._input = copy.deepcopy(val)
 
     @property
     def output(self):
@@ -306,11 +310,11 @@ class Node(object):
 
     def update_proto(self):
         """Update protobuf from internal structure."""
-        nodes = [n for n in self._op.input]
+        nodes = list(self._op.input)
         for node in nodes:
             self._op.input.remove(node)
         self._op.input.extend(self.input)
-        nodes = [n for n in self._op.output]
+        nodes = list(self._op.output)
         for node in nodes:
             self._op.output.remove(node)
         self._op.output.extend(self.output)
@@ -325,7 +329,7 @@ class Node(object):
                 graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name)
                 self.set_attr(attr_name, graph_proto)
 
-        attr = [a for a in self.attr_onnx.values()]
+        attr = list(self.attr_onnx.values())
         if attr:
             self._op.attribute.extend(attr)
 
@@ -357,6 +361,27 @@ class Node(object):
     def _graph_check(self):
         utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
                         self.name)
+
+    def maybe_cast_input(self, supported, type_map):
+        """.maybe_cast_input
+        Args:
+            supported: list of supported types for inputs
+            type_map: dict type to supported type mapping
+        """
+        did_cast = False
+        for i, name in enumerate(self.input):
+            dtype = self.graph.get_dtype(name)
+            if dtype not in supported[i]:
+                tdtype = type_map.get(dtype)
+                if tdtype is None:
+                    raise RuntimeError("don't know how to cast type {} on node {}".format(dtype, name))
+                shape = self.graph.get_shape(name)
+                cast_node = self.graph.insert_new_node_on_input(self, "Cast", name)
+                cast_node.set_attr("to", tdtype)
+                self.graph.set_dtype(cast_node.output[0], [tdtype])
+                self.graph.set_shape(cast_node.output[0], shape)
+                did_cast = True
+        return did_cast
 
 
 class Graph(object):
@@ -772,10 +797,12 @@ class Graph(object):
         if shape:
             for i, v in enumerate(shape):
                 if v is None:
+                    # pylint: disable=unsupported-assignment-operation
                     shape[i] = -1
             # hack to allow utils.ONNX_UNKNOWN_DIMENSION to override batchsize if needed.
             # default is -1.
             if shape[0] == -1:
+                # pylint: disable=unsupported-assignment-operation
                 shape[0] = utils.ONNX_UNKNOWN_DIMENSION
             return shape
         return shape
@@ -839,7 +866,7 @@ class Graph(object):
         label = [-1 for _ in range(n)]
         stack = []
         in_stack = dict()
-        not_visited = dict.fromkeys([i for i in range(n)])
+        not_visited = dict.fromkeys(range(n))
         label_counter = n - 1
 
         while not_visited:
@@ -884,7 +911,7 @@ class Graph(object):
             if op.is_const():
                 const_ops.append(op)
                 continue
-            elif op.is_graph_input():
+            if op.is_graph_input():
                 if op not in self._order_sensitive_inputs:
                     order_non_sensitive_placeholders.append(op)
                 continue
@@ -1040,7 +1067,9 @@ class Graph(object):
         Args:
             node: we want to replace the input for this node
             op_type: type for new operation
-            input_name: the names of the outputs above us
+            input_name: the name(s) of the outputs above us
+                if scalar, new node placed above input_name
+                if list, new node placed above input_name[0]. list is inputs into new node
             name: the name of the new op
             kwargs: attributes of the new node
 
@@ -1050,9 +1079,12 @@ class Graph(object):
         if name is None:
             name = utils.make_name(node.name)
         new_output = port_name(name)
-        new_node = self.make_node(op_type, [input_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
+        if not isinstance(input_name, list):
+            input_name = [input_name]
+
+        new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
         for i, n in enumerate(node.input):
-            if n == input_name:
+            if n == input_name[0]:
                 node.input[i] = new_output
                 break
         return new_node
@@ -1203,6 +1235,18 @@ class Graph(object):
                 for _, body_graph in attr_body_graphs.items():
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
+
+    def safe_to_remove_nodes(self, to_delete):
+        """ List of nodes that safe to delete (i.e. outputs not consumed by other nodes.)"""
+        safe_to_remove = []
+        delete_set = set(to_delete)
+        for n in delete_set:
+            out_consumers = set()
+            for out in n.output:
+                out_consumers |= set(self.find_output_consumers(out))
+            if out_consumers.issubset(delete_set):
+                safe_to_remove.append(n)
+        return safe_to_remove
 
     def safe_remove_nodes(self, to_delete):
         """Delete nodes in `to_delete` without third-party node consuming it."""

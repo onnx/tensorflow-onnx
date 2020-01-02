@@ -74,6 +74,13 @@ def rewrite_flatten(g, ops):
             if not need_rewrite:
                 continue
 
+            to_remove = [n for n in match.get_nodes() if n != input_node]
+            safe = g.safe_to_remove_nodes(to_remove)
+
+            # Ok if reshape_node is not safe. Will make it safe later.
+            if len(to_remove) - len(safe) > 1:
+                continue
+
             op_name = utils.make_name("Flatten")
             out_name = utils.port_name(op_name)
             g.make_node("Flatten", [reshape_node.input[0]], outputs=[out_name], name=op_name)
@@ -88,7 +95,7 @@ def rewrite_flatten(g, ops):
 
             g.set_shape(out_name, input_shape[:-2] + [new_dim])
             g.replace_all_inputs(ops, reshape_node.output[0], out_name)
-            to_delete = [n for n in match.get_nodes() if n != input_node]
-            g.safe_remove_nodes(to_delete)
+            for n in to_remove:
+                g.remove_node(n.name)
 
     return ops

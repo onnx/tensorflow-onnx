@@ -15,6 +15,7 @@ import numpy as np
 import tensorflow as tf
 from tf2onnx import constants, logging, utils
 
+# pylint: disable=import-outside-toplevel
 __all__ = [
     "TestConfig",
     "get_test_config",

@@ -12,7 +12,7 @@ from onnx import helper, TensorProto, OperatorSetIdProto
 from tf2onnx import utils
 from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, group_nodes_by_type, check_opset_min_version
+from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -72,6 +72,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = helper.make_model(graph, producer_name=producer_name, opset_imports=[imp])
         return model_proto
+
     # Tranpose Optimizer Tests Start
 
     def run_transpose_compare(self, output_names_with_port, onnx_feed_dict, origin_proto,
@@ -567,6 +568,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                              "W": np.random.randn(1, 1, 3, 3).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
+    @check_opset_max_version(10, "pad")
     def test_transpose_pad(self):
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
         node1 = helper.make_node("Pad", ["Y"], ["Z"], pads=[1, 0, 1, 3, 0, 0, 2, 0], name="pad")
@@ -574,6 +576,28 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         graph = helper.make_graph(
             [node0, node1, node2],
+            "transpose-pad-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (2, 6, 4, 8))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(1, 3, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @check_opset_min_version(11, "pad")
+    def test_transpose_pad11(self):
+
+        pads_val = np.array([1, 0, 1, 3, 0, 0, 2, 0], dtype=np.int64)
+        pads_tensor = helper.make_tensor("Pads", TensorProto.INT64, [8], pads_val)
+        pads_const = helper.make_node("Constant", [], ["Pads"], value=pads_tensor, name="Pads")
+
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Pad", ["Y", "Pads"], ["Z"], name="pad")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2, pads_const],
             "transpose-pad-test",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
             [helper.make_tensor_value_info("res", TensorProto.FLOAT, (2, 6, 4, 8))],
@@ -662,6 +686,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             model_proto = self.make_model(graph, producer_name="onnx-tests")
             self.run_transpose_compare(["Y"], {"X": np.random.randn(*input_shape_np).astype(np.float32)},
                                        model_proto, remaining_transpose_num=0)
+
     # Tranpose Optimizer Tests End
 
     # Identity Optimizer Tests Start
@@ -1053,7 +1078,56 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = self.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.int64)}, model_proto,
                              "Cast", 0)
+
     # Const Fold Optimizer Tests End
+
+    def test_transpose_back_to_back_non_const(self):
+
+        node0 = helper.make_node("Transpose", ["u"], ["v"], perm=[0, 2, 3, 1], name="trans_0")
+        node1 = helper.make_node("Transpose", ["v"], ["w"], perm=[0, 3, 1, 2], name="trans_1")
+        node2 = helper.make_node("Transpose", ["w"], ["x"], perm=[0, 3, 2, 1], name="trans_2")
+        node3 = helper.make_node("Transpose", ["x"], ["res"], perm=[1, 3, 0, 2], name="trans_3")
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3],
+            "test-transpose-back-to-back-non-const",
+            [helper.make_tensor_value_info("u", TensorProto.FLOAT, (5, 5, 5, 5))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (5, 5, 5, 5))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"u": np.random.randn(5, 5, 5, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=1)
+
+    @check_opset_min_version(9, "string type tensor")
+    def test_cast_back_to_back_non_const_mixed_types(self):
+        node0 = helper.make_node("Cast", ["u"], ["v"], to=11, name="cast_0")  # double
+        node1 = helper.make_node("Cast", ["v"], ["w"], to=6, name="cast_1")  # int32
+        node2 = helper.make_node("Cast", ["w"], ["x"], to=1, name="cast_2")  # float
+        node3 = helper.make_node("Cast", ["x"], ["res"], to=7, name="cast_3")  # int64
+
+        node4 = helper.make_node("Cast", ["w"], ["w2"], to=6, name="cast_4")  # int32
+        node5 = helper.make_node("Cast", ["w2"], ["res2"], to=7, name="cast_5")  # int64
+
+        node6 = helper.make_node("Cast", ["x"], ["x2"], to=9, name="cast_6")  # bool
+        # TODO: uncomment below after fix
+        # https://github.com/microsoft/onnxruntime/issues/2338
+        # node7 = helper.make_node("Cast", ["x2"], ["x3"], to=8, name="cast_7")  # string
+        node8 = helper.make_node("Cast", ["x2"], ["res3"], to=3, name="cast_8")  # int8
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3, node4, node5, node6, node8],
+            "test-cast-back-to-back-non-const",
+            [helper.make_tensor_value_info("u", TensorProto.FLOAT, (1, 2, 3))],
+            [helper.make_tensor_value_info("res", TensorProto.INT64, (1, 2, 3)),
+             helper.make_tensor_value_info("res2", TensorProto.INT64, (1, 2, 3)),
+             helper.make_tensor_value_info("res3", TensorProto.INT8, (1, 2, 3))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+
+        self.run_and_compare(["res", "res2", "res3"], {"u": np.random.randn(1, 2, 3).astype(np.float32)}, model_proto,
+                             "Cast", 5)
 
 
 if __name__ == "__main__":

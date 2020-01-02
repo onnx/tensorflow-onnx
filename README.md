@@ -3,17 +3,18 @@ tf2onnx - Convert TensorFlow models to ONNX.
 
 | Build Type | OS | Python | Tensorflow | Onnx opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.5, 3.6 | 1.5-1.14 | 7-10 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.5, 3.6, 3.7 | 1.5-1.14 | 7-10 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.5, 3.6 | 1.5-1.14 | 7-11 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.5, 3.6, 3.7 | 1.5-1.14 | 7-11 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
 
 <a name="build_status_footnote">\*</a> Only test on python3.6, TF1.14.
 
 # Supported ONNX version
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support opset 6 to 10. By default we use opset 7 for the resulting ONNX graph since most runtimes will support opset 7. Support for future opsets add added as they are released.
+We support opset 6 to 11. By default we use opset 8 for the resulting ONNX graph since most runtimes will support opset 8.
+Support for future opsets add added as they are released.
 
-If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 10```.
+If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 11```.
 
 # Status
 We support many TensorFlow models. Support for Fully Connected, Convolutional and dynamic LSTM networks is mature.

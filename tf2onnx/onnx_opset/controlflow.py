@@ -238,6 +238,14 @@ class PassThroughOp:
     def version_7(cls, ctx, node, **kwargs):
         pass
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change needed
+        # loop has 1 less mandatory input
+        # if = only doc changes
+        # scan has 1 less mandatory input and 4 extra attrs
+        pass
+
 
 @tf_op("Range")
 class Range:
@@ -252,6 +260,11 @@ class Range:
         ctx.remove_node(node.name)
         make_range(ctx, node.input[0], node.input[1], node.input[2],
                    node.output[0], node.name, shape, dtype)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # opset 11 implements Range op explicitly
+        pass
 
 
 @tf_op("Select")

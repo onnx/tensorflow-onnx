@@ -16,7 +16,7 @@ import tensorflow as tf
 from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
-from tf2onnx import constants
+from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
@@ -36,6 +36,8 @@ _TFINPUT1 = "input1"
 _INPUT1 = "input1:0"
 _TFINPUT2 = "input2"
 _INPUT2 = "input2:0"
+_TFINPUT3 = "input3"
+_INPUT3 = "input3:0"
 _TFOUTPUT = "output"
 _OUTPUT = "output:0"
 _TFOUTPUT1 = "output1"
@@ -404,6 +406,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
 
+    @check_onnxruntime_min_version("0.5.0", "conv transpose is added since onnxruntime-0.5.0")
+    def test_conv2d_transpose2(self):
+        # output_shape is dynamic
+        extra_opset = [utils.make_opsetid(constants.MICROSOFT_DOMAIN, 1)]
+        process_args = {"extra_opset": extra_opset}
+        x_shape = [2, 6, 4, 3]
+        output_shape = np.array([2, 13, 9, 2]).astype(np.int32)
+        kernel_shape = [3, 3, 2, 3]
+        strides = [1, 2, 2, 1]
+        x_val = make_xval(x_shape)
+        kernel_val = make_xval(kernel_shape)
+        x = tf.placeholder(tf.float32, shape=x_shape, name=_TFINPUT)
+        f = tf.constant(kernel_val, name="kernel", dtype=tf.float32)
+        output_shape_placeholder = tf.placeholder(tf.int32, shape=[4], name=_TFINPUT1)
+        conv = tf.nn.conv2d_transpose(x, f, output_shape_placeholder, strides=strides, padding="VALID")
+        _ = tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape}, rtol=1e-05, process_args=process_args)
+
     def test_depthwiseconv_0(self):
         x_shape = [1, 3, 4, 3]
         kernel_shape = [3, 3, 3, 3]
@@ -413,8 +433,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
         conv = tf.nn.depthwise_conv2d(x, kernel, strides=[1, 1, 1, 1], padding='VALID')
         _ = tf.identity(conv, name=_TFOUTPUT)
-        # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
-        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-6)
 
     def test_depthwiseconv_1(self):
         x_shape = [1, 112, 112, 32]
@@ -425,8 +444,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x = tf.placeholder(tf.float32, shape=x_val.shape, name=_TFINPUT)
         conv = tf.nn.depthwise_conv2d(x, kernel, strides=_STRIDE1x1, padding='VALID')
         _ = tf.identity(conv, name=_TFOUTPUT)
-        # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
-        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=0.08)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val}, rtol=1e-6)
 
     def test_dropout(self):
         is_training = tf.placeholder_with_default(False, (), "is_training")
@@ -1537,6 +1555,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(values, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: k_val})
 
+    @check_onnxruntime_min_version("0.5.0", "topk-10's shape inference function has a bug")
+    def test_topk3(self):
+        # test topk index output
+        x_val = np.arange(3 * 2 * 3).astype("float32")
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        _, idx = tf.nn.top_k(x, 5, sorted=True)
+        _ = tf.identity(idx, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     def test_stack_axis(self):
         for axis in [0, 1]:
             tf.reset_default_graph()
@@ -1838,13 +1865,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_new_size_ = tf.constant(x_new_size)
         x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
-        if self.config.opset >= 9:
-            # in opset 10, upsample is removed and resize is defined.
-            node_statistic = group_nodes_by_type(graph)
-            mapped_node = (node_statistic.get("Upsample") or node_statistic.get("Resize"))[0]
-            scale_node = mapped_node.inputs[1]
-            self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 2.0, 2.0]))
+        _ = self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(9, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor_with_non_const(self):
@@ -1869,13 +1890,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_new_size_ = tf.constant(x_new_size)
         x_ = tf.image.resize_bilinear(x, x_new_size_)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
-        if self.config.opset >= 9:
-            # in opset 10, upsample is removed and resize is defined.
-            node_statistic = group_nodes_by_type(graph)
-            mapped_node = (node_statistic.get("Upsample") or node_statistic.get("Resize"))[0]
-            scale_node = mapped_node.inputs[1]
-            self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 2.0, 2.0]))
+        _ = self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(9, "resize_bilinear")
     def test_resize_bilinear_with_non_const(self):
@@ -1913,11 +1928,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_new_size_ = tf.constant(x_new_size)
         x_ = tf.image.resize_nearest_neighbor(x, x_new_size_)
         _ = tf.identity(x_, name=_TFOUTPUT)
-        graph = self._run_test_case([_OUTPUT], {_INPUT: x_val})
-        node_statistic = group_nodes_by_type(graph)
-        mapped_node = node_statistic.get("Resize")[0]
-        scale_node = mapped_node.inputs[1]
-        self.assertTrue(validate_const_node(scale_node, [1.0, 1.0, 0.1, 2.0]))
+        _ = self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(9, "fill")
     def test_fill_float32(self):
@@ -1961,7 +1972,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(7, "div")
     def test_tf_div(self):
-        # pylint: disable=E0001
+        # pylint: disable=E0001,C0415
         from tensorflow.python.ops.gen_math_ops import div
         shape = 1000
         # test floating data
@@ -2249,8 +2260,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
             self._run_test_case([_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val}, atol=1e-5)
 
-    @check_opset_min_version(7, "sparse_softmax_cross_entropy_with_logits")
+    @check_opset_min_version(9, "sparse_softmax_cross_entropy_with_logits")
     def test_sparse_softmax_cross_entropy_with_logits(self):
+        # FIXME: fails for opset 8 on onnxruntime-1.0, disable for now
         num_class = 5
         for logic_shape in [[None, None], [None, num_class]]:
             tf.reset_default_graph()
@@ -2460,6 +2472,74 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.batch_to_space_nd(input_x, block_size, crop, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
 
+    @check_opset_min_version(11, "BatchToSpaceND")
+    def test_batch_to_spacend_non_const(self):
+        input_x_val = np.random.random_sample([40, 3, 5, 100]).astype(np.float32)  # NHWC
+        block_shape_val = np.array([2, 2]).astype(np.int64)
+        crops_val = np.array([[1, 0], [2, 1]]).astype(np.int64)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        block_shape = tf.placeholder(dtype=tf.int64, shape=block_shape_val.shape, name=_TFINPUT1)
+        crops = tf.placeholder(dtype=tf.int64, shape=crops_val.shape, name=_TFINPUT2)
+        _ = tf.batch_to_space_nd(input_x, block_shape, crops, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_x_val, _INPUT1: block_shape_val, _INPUT2: crops_val})
+
+    @check_opset_min_version(11, "SpaceToBatchND")
+    def test_space_to_batchnd_non_const(self):
+        input_x_val = np.random.random_sample([40, 5, 7, 66]).astype(np.float32)  # NHWC
+        block_size_val = np.array([2, 2]).astype(np.int64)
+        pad_val = np.array([[0, 1], [2, 1]]).astype(np.int64)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        block_size = tf.placeholder(dtype=tf.int64, shape=block_size_val.shape, name=_TFINPUT1)
+        pad = tf.placeholder(dtype=tf.int64, shape=pad_val.shape, name=_TFINPUT2)
+        _ = tf.space_to_batch_nd(input_x, block_size, pad, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_x_val, _INPUT1: block_size_val, _INPUT2: pad_val})
+
+    @check_opset_min_version(11, "CropAndResize")
+    def test_crop_and_resize_linear(self):
+        input_x_val = np.random.randint(low=0, high=256, size=[2, 36, 36, 3]).astype(np.float32)  # NHWC
+        boxes_val = np.array([[0.5, 0.7, 0.7, 0.9], [0.2, 0.4, 0.4, 0.6]]).astype(np.float32)
+        box_ind_val = np.array([1, 0]).astype(np.int32)
+        corp_size_val = np.array([20, 20]).astype(np.int32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        boxes = tf.placeholder(dtype=tf.float32, shape=boxes_val.shape, name=_TFINPUT1)
+        box_ind = tf.placeholder(dtype=tf.int32, shape=box_ind_val.shape, name=_TFINPUT2)
+        corp_size = tf.placeholder(dtype=tf.int32, shape=corp_size_val.shape, name=_TFINPUT3)
+        _ = tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='bilinear')
+        self._run_test_case([_OUTPUT],
+                            {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
+                            rtol=1e-05, atol=1e-04)
+
+    @check_tf_min_version("1.9")
+    @check_opset_min_version(11, "CropAndResize")
+    def test_crop_and_resize_nearest(self):
+        input_x_val = np.random.randint(low=0, high=256, size=[1, 36, 36, 3]).astype(np.float32)  # NHWC
+        boxes_val = np.array([[0.2, 0.4, 0.6, 0.8]]).astype(np.float32)
+        box_ind_val = np.array([0]).astype(np.int32)
+        corp_size_val = np.array([30, 30]).astype(np.int32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        boxes = tf.placeholder(dtype=tf.float32, shape=boxes_val.shape, name=_TFINPUT1)
+        box_ind = tf.placeholder(dtype=tf.int32, shape=box_ind_val.shape, name=_TFINPUT2)
+        corp_size = tf.placeholder(dtype=tf.int32, shape=corp_size_val.shape, name=_TFINPUT3)
+        _ = tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='nearest')
+        self._run_test_case([_OUTPUT],
+                            {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
+                            rtol=1e-05, atol=1e-04)
+
+    @check_opset_min_version(11, "CropAndResize")
+    def test_crop_and_resize_extrapolation(self):
+        input_x_val = np.random.randint(low=0, high=256, size=[1, 36, 36, 3]).astype(np.float32)  # NHWC
+        boxes_val = np.array([[0.2, 0.4, 1.2, 1.4]]).astype(np.float32)
+        box_ind_val = np.array([0]).astype(np.int32)
+        corp_size_val = np.array([40, 40]).astype(np.int32)
+        input_x = tf.placeholder(dtype=tf.float32, shape=input_x_val.shape, name=_TFINPUT)
+        boxes = tf.placeholder(dtype=tf.float32, shape=boxes_val.shape, name=_TFINPUT1)
+        box_ind = tf.placeholder(dtype=tf.int32, shape=box_ind_val.shape, name=_TFINPUT2)
+        corp_size = tf.placeholder(dtype=tf.int32, shape=corp_size_val.shape, name=_TFINPUT3)
+        _ = tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, extrapolation_value=1.0)
+        self._run_test_case([_OUTPUT],
+                            {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
+                            rtol=1e-04, atol=1e-03)
+
     def test_batch_to_space3d(self):
         block_size = [2, 2]
         crop = [[0, 1], [2, 1]]
@@ -2588,6 +2668,33 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(y, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(8, "ClipByValue (needs broadcast)")
+    def test_clip_by_value(self):
+        # float32, dynamic min/max
+        x_val = np.arange(0, 24, dtype=np.float32).reshape([3, 8])
+        x_minval = np.array(8.5, dtype=np.float32)
+        x_maxval = np.array(16.5, dtype=np.float32)
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        x_min = tf.placeholder(tf.float32, name=_TFINPUT1)
+        x_max = tf.placeholder(tf.float32, name=_TFINPUT2)
+        y = tf.clip_by_value(x, x_min, x_max)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: x_minval, _INPUT2: x_maxval})
+        # float32, const min/max
+        tf.reset_default_graph()
+        x_val = np.arange(0, 24, dtype=np.float32).reshape([3, 8])
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        y = tf.clip_by_value(x, 8.5, 16.5)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+        # int32, converter needs to cast, const min/max
+        tf.reset_default_graph()
+        x_val = np.arange(0, 24, dtype=np.int32).reshape([3, 8])
+        x = tf.placeholder(x_val.dtype, x_val.shape, name=_TFINPUT)
+        y = tf.clip_by_value(x, 8, 16)
+        _ = tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     # test for gemm pattern0: alpha*A*B + beta*C
     def test_gemm_pattern0(self):
         max_number = 10
@@ -2691,6 +2798,171 @@ class BackendTests(Tf2OnnxBackendTestBase):
         matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(onnx_graph.get_nodes()))
         self.assertTrue(len(match_results) == 1)
+
+    @check_opset_min_version(11, "CumSum")
+    def test_cumsum(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.cumsum(x, axis=1)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_cumsum_axis1_reverse_exclusive(self):
+        x_val = np.array([1., 2., 3., 4.,
+                          5., 6., 7., 8.,
+                          9., 10., 11., 12.,
+                          13., 14., 15., 16.,
+                          17., 18., 19., 20.,
+                          21., 22., 23., 24.], dtype=np.float32).reshape((2, 3, 4))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.cumsum(x, axis=1, reverse=True)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Round")
+    def test_round(self):
+        x_val = np.array([-0.7, -0.5, -0.0, 0.0, +0.0, 0.3, 0.5, 0.7, float('nan')], dtype=np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.round(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Det")
+    def test_determinant(self):
+        x_val = np.array([1., 2., 3., 4., 1., 2.,
+                          2., 1., 1., 3., 3., 1.,
+                          1., 2., 3., 4., 1., 2.,
+                          2., 1., 1., 3., 3., 1.],
+                         dtype=np.float32).reshape((1, 2, 3, 2, 2))
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x_ = tf.matrix_determinant(x)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "BitShift")
+    def test_bitshift_left(self):
+        x_val = np.array([16, 4, 1], dtype=np.int32)
+        y_val = np.array([1, 2, 3], dtype=np.int32)
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = tf.bitwise.left_shift(x, y)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(11, "BitShift")
+    def test_bitshift_right(self):
+        info = np.iinfo(np.int32)
+        x_val = np.array([-1, 0, 1, info.max, info.min], dtype=np.int32)
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        x_ = tf.bitwise.right_shift(x, 1)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "ScatterND")
+    def test_scatternd_1d(self):
+        x_val = np.array([4, 3, 1, 7], dtype=np.int32).reshape((4, 1))
+        y_val = np.array([9, 10, 11, 12], dtype=np.int64).reshape((4))
+        z_val = np.array([8], dtype=np.int32).reshape(1)
+
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int64, y_val.shape, name=_TFINPUT1)
+        z = tf.placeholder(tf.int32, z_val.shape, name=_TFINPUT2)
+
+        x_ = tf.scatter_nd(x, y, z)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_opset_min_version(11, "ScatterND")
+    def test_scatternd_3d(self):
+        x_val = np.array([0, 2], dtype=np.int32).reshape((2, 1))
+        y_val = np.array([[[5, 5, 5, 5], [6, 6, 6, 6],
+                           [7, 7, 7, 7], [8, 8, 8, 8]],
+                          [[5, 5, 5, 5], [6, 6, 6, 6],
+                           [7, 7, 7, 7], [8, 8, 8, 8]]], dtype=np.int64).reshape((2, 4, 4))
+        z_val = np.array([4, 4, 4], dtype=np.int32).reshape(3)
+
+        x = tf.placeholder(tf.int32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int64, y_val.shape, name=_TFINPUT1)
+        z = tf.placeholder(tf.int32, z_val.shape, name=_TFINPUT2)
+
+        x_ = tf.scatter_nd(x, y, z)
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_opset_min_version(11, "Unique")
+    def test_unique(self):
+        x_val = np.array([1, 1, 2, 4, 4, 4, 7, 8, 8], dtype=np.float32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        x1_, x2_ = tf.unique(x)
+        _ = tf.identity(x1_, name=_TFOUTPUT)
+        _ = tf.identity(x2_, name=_TFOUTPUT1)
+        # FIXME: indices in onnx are not the same as in tensorflow so don't check for now
+        # self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+        self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Conv2DBackpropInput")
+    def test_Conv2DBackpropInput_const(self):
+        input_sizes_val = np.array([1, 10, 10, 3], dtype=np.int32)
+        filter_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
+        out_backprop_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 5]).astype(np.float32)
+        _ = tf.nn.conv2d_backprop_input(input_sizes=input_sizes_val, filter=filter_val, out_backprop=out_backprop_val,
+                                        strides=[1, 1, 1, 1], padding='SAME', name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+
+    @check_opset_min_version(10, "Conv2DBackpropInput")
+    def test_Conv2DBackpropInput_const_strided(self):
+        input_sizes_val = np.array([1, 10, 10, 3], dtype=np.int32)
+        filter_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
+        out_backprop_val = np.random.randint(low=0, high=256, size=[1, 5, 5, 5]).astype(np.float32)
+        _ = tf.nn.conv2d_backprop_input(input_sizes=input_sizes_val, filter=filter_val, out_backprop=out_backprop_val,
+                                        strides=[1, 2, 2, 1], padding='SAME', name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+
+    @check_opset_min_version(10, "Conv2DBackpropInput")
+    def test_Conv2DBackpropInput_const_valid(self):
+        input_sizes_val = np.array([1, 12, 12, 3], dtype=np.int32)
+        filter_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
+        out_backprop_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 5]).astype(np.float32)
+        _ = tf.nn.conv2d_backprop_input(input_sizes=input_sizes_val, filter=filter_val, out_backprop=out_backprop_val,
+                                        strides=[1, 1, 1, 1], padding='VALID', name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {})
+
+    @check_opset_min_version(10, "Conv2DBackpropInput")
+    def test_Conv2DBackpropInput(self):
+        input_sizes_val = np.array([1, 10, 10, 3], dtype=np.int32)
+        input_sizes = tf.placeholder(tf.int32, input_sizes_val.shape, name=_TFINPUT)
+        filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
+        filters = tf.placeholder(tf.float32, filters_val.shape, name=_TFINPUT1)
+        out_backprop_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 5]).astype(np.float32)
+        out_backprop = tf.placeholder(tf.float32, out_backprop_val.shape, name=_TFINPUT2)
+        _ = tf.nn.conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 1, 1, 1], padding='SAME',
+                                        name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
+
+    @check_opset_min_version(10, "Conv2DBackpropInput")
+    def test_Conv2DBackpropInput_strided(self):
+        input_sizes_val = np.array([1, 10, 10, 3], dtype=np.int32)
+        input_sizes = tf.placeholder(tf.int32, input_sizes_val.shape, name=_TFINPUT)
+        filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
+        filters = tf.placeholder(tf.float32, filters_val.shape, name=_TFINPUT1)
+        out_backprop_val = np.random.randint(low=0, high=256, size=[1, 5, 5, 5]).astype(np.float32)
+        out_backprop = tf.placeholder(tf.float32, out_backprop_val.shape, name=_TFINPUT2)
+        _ = tf.nn.conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 2, 2, 1], padding='SAME',
+                                        name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
+
+    @check_opset_min_version(10, "Conv2DBackpropInput")
+    def test_Conv2DBackpropInput_valid(self):
+        input_sizes_val = np.array([1, 12, 12, 3], dtype=np.int32)
+        input_sizes = tf.placeholder(tf.int32, input_sizes_val.shape, name=_TFINPUT)
+        filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
+        filters = tf.placeholder(tf.float32, filters_val.shape, name=_TFINPUT1)
+        out_backprop_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 5]).astype(np.float32)
+        out_backprop = tf.placeholder(tf.float32, out_backprop_val.shape, name=_TFINPUT2)
+        _ = tf.nn.conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 1, 1, 1], padding='VALID',
+                                        name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
 
 
 if __name__ == '__main__':

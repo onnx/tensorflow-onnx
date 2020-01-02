@@ -17,12 +17,12 @@ from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument,missing-docstring
 
-@tf_op(["Add", "Div", "Mul", "Sub"])
+@tf_op(["Add", "AddV2", "Div", "Mul", "Sub"])
 class BroadcastOp(common.BroadcastOp):
     pass
 
@@ -137,6 +137,47 @@ class MinMaxOp:
         make_min_or_max_op(ctx, node.type, node.input, node.output, shapes, dtypes)
 
 
+@tf_op("ClipByValue")
+class ClipByValueOp:
+    # in tf-1.8 there was a ClipByValue op which in later versions was replaced by max(min(x, a), b)
+    # To support models generated with tf-1.8 rewrite the tf ClipByValue op to max(min(x, a), b)
+    @classmethod
+    def version_8(cls, ctx, node, **kwargs):
+        supported = [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]
+        # fetch those upfront since they are not accessible once we remove 'node'
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        input_dtype = node.inputs[0].output_dtypes[0]
+        name = node.name
+        min_node = node.inputs[1]
+        if min_node.output_dtypes[0] not in supported:
+            # cast min if needed
+            min_node = ctx.insert_new_node_on_input(node, "Cast", min_node.output[0], to=onnx_pb.TensorProto.FLOAT)
+        max_node = node.inputs[2]
+        if max_node.output_dtypes[0] not in supported:
+            # cast max if needed
+            max_node = ctx.insert_new_node_on_input(node, "Cast", max_node.output[0], to=onnx_pb.TensorProto.FLOAT)
+        ctx.remove_node(name)
+        new_node = ctx.make_node("Max", [node.input[0], min_node.output[0]], outputs=[node.output[0]],
+                                 shapes=shapes, dtypes=dtypes)
+        if input_dtype not in supported:
+            # cast the data tensor if needed
+            ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[0], to=onnx_pb.TensorProto.FLOAT)
+
+        new_node = ctx.insert_new_node_on_output("Min", new_node.output[0], name=utils.make_name(name))
+        new_node.input.append(max_node.output[0])
+        # copy shape and type
+        ctx.set_dtype(new_node.output[0], dtypes[0])
+        ctx.set_shape(new_node.output[0], shapes[0])
+        if dtypes[0] not in supported:
+            # cast output if needed
+            new_node = ctx.insert_new_node_on_output("Cast", new_node.output[0],
+                                                     name=utils.make_name(name), to=dtypes[0])
+            # copy shape and type
+            ctx.set_dtype(new_node.output[0], dtypes[0])
+            ctx.set_shape(new_node.output[0], shapes[0])
+
+
 @tf_op("Softmax")
 class Softmax:
     @classmethod
@@ -145,6 +186,10 @@ class Softmax:
         # T output = Softmax(T input, @int axis). Default axis is 1.
         logits_rank = len(ctx.get_shape(node.input[0]))
         node.set_attr("axis", logits_rank - 1)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op("Square")
@@ -164,6 +209,17 @@ class Relu6:
         node.type = "Clip"
         node.set_attr("min", 0.0)
         node.set_attr("max", 6.0)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # add min and max as inputs
+        node.type = "Clip"
+        onnx_dtype = ctx.get_dtype(node.input[0])
+        np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
+        clip_min = ctx.make_const(utils.make_name("{}_min".format(node.name)), np.array(0.0, dtype=np_dtype))
+        clip_max = ctx.make_const(utils.make_name("{}_max".format(node.name)), np.array(6.0, dtype=np_dtype))
+        node.input.append(clip_min.output[0])
+        node.input.append(clip_max.output[0])
 
 
 @tf_op("Rsqrt")
@@ -433,8 +489,57 @@ class FloorMod:
         ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
+
 @tf_op("Selu")
 class Selu:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op("Cumsum", onnx_op="CumSum")
+class CumSum:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("Round")
+class Round:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("MatrixDeterminant", onnx_op="Det")
+class Det:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op(["LeftShift", "RightShift"])
+class BitShift:
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        dir_map = {"LeftShift": "LEFT", "RightShift": "RIGHT"}
+        direction = dir_map[node.type]
+        supported = [onnx_pb.TensorProto.UINT8, onnx_pb.TensorProto.UINT16,
+                     onnx_pb.TensorProto.UINT32, onnx_pb.TensorProto.UINT64]
+        type_map = {onnx_pb.TensorProto.INT8: onnx_pb.TensorProto.UINT8,
+                    onnx_pb.TensorProto.INT16: onnx_pb.TensorProto.UINT32,
+                    onnx_pb.TensorProto.INT32: onnx_pb.TensorProto.UINT64}
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+
+        node = ctx.make_node("BitShift", inputs=node.input, outputs=node.output, name=node.name,
+                             shapes=shapes, dtypes=dtypes, domain=constants.ONNX_DOMAIN, attr={'direction': direction})
+
+        if node.maybe_cast_input([supported, supported], type_map):
+            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+                                                           name=utils.make_name(node.name) + "_castback")
+            cast_back_node.set_attr("to", dtypes[0])
+            ctx.set_dtype(cast_back_node.output[0], dtypes[0])
+            ctx.copy_shape(node.name, cast_back_node.output[0])

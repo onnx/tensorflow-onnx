@@ -175,6 +175,15 @@ googlenet_v4_slim:
     - InceptionV4/Logits/Predictions:0
   rtol: 0.1
 
+mobilenet_v3_large_float:
+  url: https://storage.googleapis.com/mobilenet_v3/checkpoints/v3-large_224_1.0_float.tgz
+  model: v3-large_224_1.0_float/v3-large_224_1.0_float.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - MobilenetV3/Predictions/Softmax:0
+
 mobilenet_v2_1.4_224:
   url: https://storage.googleapis.com/mobilenet_v2/checkpoints/mobilenet_v2_1.4_224.tgz
   model: mobilenet_v2_1.4_224_frozen.pb
@@ -237,7 +246,6 @@ resnet50_v2_nchw: # NOTE: Tensorflow 1.9.0 fails
     - ArgMax:0
     - softmax_tensor:0
 
-
 resnet50_v2_nhwc:
   model_type: saved_model
   url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NHWC.tar.gz
@@ -261,7 +269,6 @@ resnet50_fp16_v2:
     - ArgMax:0
     - softmax_tensor:0
 
-
 resnet50_v1:
   disabled: true # works, disabled because its nearly the same as resnet50_v2_nchw
   skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
@@ -275,19 +282,18 @@ resnet50_v1:
     - ArgMax:0
     - softmax_tensor:0
 
-#
-# models that will never work
-#
-style-transfer:
-  # quantitized model
-  disabled: true
-  url: https://storage.googleapis.com/download.tensorflow.org/models/stylize_v1.zip
-  model: stylize_quantized.pb
+ssd_mobilenet_v3_large_coco:
+  url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_large_coco_2019_08_14.tar.gz
+  model: ssd_mobilenet_v3_large_coco_2019_08_14/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
   input_get: get_beach
   inputs:
-    "input:0": [1, 416, 416, 3]
+    "normalized_input_image_tensor:0": [1, 320, 320, 3]
   outputs:
-    - output:0
+    - raw_outputs/box_encodings:0
+    - raw_outputs/class_predictions:0
 
 ssd_mobilenet_v1_coco:
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_17.tar.gz
@@ -305,10 +311,13 @@ ssd_mobilenet_v1_coco:
     - detection_classes:0
 
 ssd_mobilenet_v2_coco:
-  # issues with control flow
+  # works with opset-10
   disabled: true
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
   model: ssd_mobilenet_v2_coco_2018_03_29/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
   input_get: get_beach
   inputs:
     "image_tensor:0": [1, 224, 224, 3]
@@ -319,10 +328,13 @@ ssd_mobilenet_v2_coco:
     - detection_classes:0
 
 ssdlite_mobilenet_v2_coco:
-  # issues with control flow
+  # works with opset-10
   disabled: true
   url: http://download.tensorflow.org/models/object_detection/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
   model: ssdlite_mobilenet_v2_coco_2018_05_09/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
   input_get: get_beach
   inputs:
     "image_tensor:0": [1, 224, 224, 3]
@@ -333,10 +345,12 @@ ssdlite_mobilenet_v2_coco:
     - detection_classes:0
 
 ssd_inception_v2_coco:
-  # issues with control flow
   disabled: true
   url: http://download.tensorflow.org/models/object_detection/ssd_inception_v2_coco_2017_11_17.tar.gz
   model: ssd_inception_v2_coco_2017_11_17/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 10
   input_get: get_beach
   inputs:
     "image_tensor:0": [1, 224, 224, 3]
@@ -345,3 +359,32 @@ ssd_inception_v2_coco:
     - detection_scores:0
     - num_detections:0
     - detection_classes:0
+
+#
+# models that will not work
+#
+style-transfer:
+  # quantitized model
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/stylize_v1.zip
+  model: stylize_quantized.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 416, 416, 3]
+  outputs:
+    - output:0
+
+faster_rcnn_inception_v2_coco:
+  url: http://download.tensorflow.org/models/object_detection/faster_rcnn_inception_v2_coco_2018_01_28.tar.gz
+  model: faster_rcnn_inception_v2_coco_2018_01_28/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 11
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_classes:0
+    - detection_scores:0
+    - num_detections:0

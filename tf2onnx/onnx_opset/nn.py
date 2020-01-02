@@ -72,6 +72,24 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
 
     # kernel must to be transposed
     if with_kernel:
+        # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
+        if new_kernel_shape:
+            if ctx.opset < 5:
+                # old reshape takes new shape as attribute
+                input_name = node.input[1]
+                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
+                reshape.set_attr("shape", new_kernel_shape)
+                reshape.skip_conversion = True
+            else:
+                # new reshape takes new shape as input[1]
+                shape_name = utils.make_name(node.name)
+                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
+                input_name = node.input[1]
+                reshape = ctx.make_node("Reshape", [input_name, shape_name])
+                ctx.replace_input(node, input_name, reshape.output[0])
+                reshape.skip_conversion = True
+            ctx.set_shape(reshape.output[0], new_kernel_shape)
+
         parent = node.inputs[1]
         need_transpose = True
         if node.inputs[1].is_const():
@@ -90,24 +108,6 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             transpose.skip_conversion = True
             new_shape = spatial_map(ctx.get_shape(input_name), constants.HWCN_TO_NCHW)
             ctx.set_shape(transpose.output[0], new_shape)
-
-        # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
-        if new_kernel_shape:
-            if ctx.opset < 5:
-                # old reshape takes new shape as attribute
-                input_name = node.input[1]
-                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
-                reshape.set_attr("shape", new_kernel_shape)
-                reshape.skip_conversion = True
-            else:
-                # new reshape takes new shape as input[1]
-                shape_name = utils.make_name(node.name)
-                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
-                input_name = node.input[1]
-                reshape = ctx.make_node("Reshape", [input_name, shape_name])
-                ctx.replace_input(node, input_name, reshape.output[0])
-                reshape.skip_conversion = True
-            ctx.set_shape(reshape.output[0], new_kernel_shape)
 
     # transpose outputs if needed
     if node.is_nhwc():
@@ -207,6 +207,11 @@ class ConvOp:
         add_padding(ctx, node, kernel_shape, strides, dilations=dilations, spatial=2)
         conv_convert_inputs(ctx, node, with_kernel=True)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Conv2DBackpropInput")
 class ConvTranspose:
@@ -221,21 +226,49 @@ class ConvTranspose:
         # Note: inputs are reversed from what one would expect.
         kernel_shape = conv_kernel_shape(ctx, node, 1)
         input_shape = ctx.get_shape(node.input[2])
+        append_slice = False
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
-        output_shape = ctx.get_shape(node.output[0])
-        if node.is_nhwc():
-            new_output_shape = [output_shape[1], output_shape[2]]
-            input_hw = [input_shape[1], input_shape[2]]
+        if node.inputs[0].is_const():
+            output_shape = ctx.get_shape(node.output[0])
+            if node.is_nhwc():
+                new_output_shape = [output_shape[1], output_shape[2]]
+                input_hw = [input_shape[1], input_shape[2]]
+            else:
+                new_output_shape = [output_shape[2], output_shape[3]]
+                input_hw = [input_shape[2], input_shape[3]]
+            utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
+            utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
+                            "output h and w cannot be smaller than input h and w.")
+            node.set_attr("output_shape", new_output_shape)
         else:
-            new_output_shape = [output_shape[2], output_shape[3]]
-            input_hw = [input_shape[2], input_shape[3]]
-
-        utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
-        utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
-                        "output h and w cannot be smaller than input h and w.")
-
-        node.set_attr("output_shape", new_output_shape)
+            input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
+            output_shape = ctx.make_node("Shape", [node.output[0]])
+            output_h = GraphBuilder(ctx).make_slice(
+                {"data": output_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
+            output_w = GraphBuilder(ctx).make_slice(
+                {"data": output_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
+            expect_h = GraphBuilder(ctx).make_slice(
+                {"data": input_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
+            expect_w = GraphBuilder(ctx).make_slice(
+                {"data": input_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
+            diff_h = ctx.make_node("Sub", [output_h, expect_h])
+            diff_w = ctx.make_node("Sub", [output_w, expect_w])
+            const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
+            start_h = ctx.make_node("Div", [diff_h.output[0], const_two.output[0]])
+            start_w = ctx.make_node("Div", [diff_w.output[0], const_two.output[0]])
+            end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
+            end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
+            starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
+            ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0})
+            const_one_two = ctx.make_const(utils.make_name(node.name + "_const_one_two"),
+                                           np.array([1, 2], dtype=np.int64))
+            slice_node = ctx.make_node("Slice",
+                                       [node.output[0], starts.output[0], ends.output[0], const_one_two.output[0]])
+            downstream_nodes = ctx.find_output_consumers(node.output[0])
+            downstream_nodes.remove(output_shape)
+            downstream_nodes.remove(slice_node)
+            ctx.replace_all_inputs(downstream_nodes, node.output[0], slice_node.output[0])
 
         strides = conv_dims_attr(node, "strides")
         conv_dims_attr(node, "dilations")
@@ -248,6 +281,10 @@ class ConvTranspose:
         node.input[1] = t
 
         conv_convert_inputs(ctx, node, with_kernel=True)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.version_1(ctx, node, **kwargs)
 
 
 @tf_op(["DepthwiseConv2d", "DepthwiseConv2dNative"])
@@ -271,24 +308,21 @@ class DepthwiseConv2d:
         if len(input_shape) != 4:
             raise ValueError("only Conv2D is supported")
 
-        if node.is_nhwc():
-            i_n, i_h, i_w, i_c = input_shape
-        else:
-            i_n, i_c, i_h, i_w = input_shape
-
         kernel_shape = ctx.get_shape(node.input[1])
         if len(kernel_shape) != 4:
             raise ValueError("only Conv2D is supported")
         k_h, k_w, k_input_channels, k_channel_multiplier = kernel_shape
-        k_output_channels = i_c * k_channel_multiplier
+        if k_input_channels < 1:
+            raise ValueError("input channel must be positive")
+        k_output_channels = k_input_channels * k_channel_multiplier
 
         node.set_attr("kernel_shape", [k_h, k_w])
         strides = conv_dims_attr(node, "strides")
         conv_dims_attr(node, "dilations")
-        node.set_attr("group", i_c)
+        node.set_attr("group", k_input_channels)
         add_padding(ctx, node, kernel_shape, strides)
 
-        new_kernel_shape = [k_output_channels, 1, k_h, k_w]
+        new_kernel_shape = [k_h, k_w, 1, k_output_channels]
         conv_convert_inputs(ctx, node, with_kernel=True, new_kernel_shape=new_kernel_shape)
 
 
@@ -301,6 +335,11 @@ class PoolOp:
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
+        cls._convert(ctx, node, **kwargs)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # no change
         cls._convert(ctx, node, **kwargs)
 
     @classmethod
@@ -389,7 +428,7 @@ class BiasAdd:
                 ctx.set_shape(reshape_node.output[0], new_broadcast_shape)
 
 
-@tf_op(["Pad", "PadV2", "MirrorPad"])
+@tf_op(["Pad", "PadV2", "MirrorPad"], onnx_op="Pad")
 class Pad:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -428,8 +467,38 @@ class Pad:
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        mode = node.get_attr("mode")
+        if mode:
+            mode = mode.s.decode("utf-8").lower()
+            node.set_attr("mode", mode)
+        if mode not in [None, "constant", "reflect"]:
+            raise ValueError(mode + " pad mode is not supported")
 
-@tf_op(["FusedBatchNorm", "FusedBatchNormV2"])
+        # pads must be int64.
+        if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
+        ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
+        shape_const = ctx.make_const(utils.make_name(node.name), np.array([-1]).astype(np.int64))
+        ctx.insert_new_node_on_input(node, "Reshape", [node.input[1], shape_const.name])
+
+        origin_dtype = ctx.get_dtype(node.output[0])
+        if origin_dtype not in [TensorProto.FLOAT, TensorProto.DOUBLE,
+                                TensorProto.INT32, TensorProto.INT64]:
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+            cast_node.set_attr("to", TensorProto.FLOAT)
+            ctx.set_dtype(cast_node.output[0], TensorProto.FLOAT)
+            ctx.copy_shape(node.name, cast_node.output[0])
+
+            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+                                                           name=utils.make_name(node.name) + "_castback")
+            cast_back_node.set_attr("to", origin_dtype)
+            ctx.set_dtype(cast_back_node.output[0], origin_dtype)
+            ctx.copy_shape(node.name, cast_back_node.output[0])
+
+
+@tf_op(["FusedBatchNorm", "FusedBatchNormV2", "FusedBatchNormV3"])
 class BatchNorm:
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
@@ -473,13 +542,92 @@ class BatchNorm:
         cls.version_6(ctx, node, **kwargs)
 
 
-@tf_op(["SpaceToDepth", "DepthToSpace"])
+@tf_op(["SpaceToDepth"])
 class SpaceToDepth:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         block_size = node.get_attr("block_size")
         node.set_attr("blocksize", block_size.i)
         conv_convert_inputs(ctx, node, with_kernel=False)
+
+
+@tf_op(["DepthToSpace"])
+class DepthToSpace:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        block_size = node.get_attr("block_size")
+        node.set_attr("blocksize", block_size.i)
+        conv_convert_inputs(ctx, node, with_kernel=False)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Onnx-11 CRD mode added. No change for tf2onnx
+        cls.version_1(ctx, node, **kwargs)
+
+
+@tf_op(["CropAndResize"])
+class CropAndResize:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # create loop of resize to cater to tensorflow CropAndResize, one box one iteration
+        mode = "nearest" if node.get_attr("method") is not None and node.get_attr(
+            "method").s == b"nearest" else "linear"
+        extrapolation_value = float(node.get_attr("extrapolation_value", "0").f)
+        input_x = node.inputs[0]
+        boxes = node.inputs[1]
+        box_ind = node.inputs[2]
+        crop_size = node.inputs[3]
+        trip_name = utils.make_name(node.name + "_i")
+        cond_name = utils.make_name(node.name + "_cond")
+        cond_out_name = utils.make_name(node.name + "cond_out")
+        g = ctx.create_new_graph_with_same_config()
+        g.add_graph_input(trip_name, TensorProto.INT64, [1])
+        g.add_graph_input(cond_name, TensorProto.BOOL, [])
+        g.parent_graph = ctx
+        const_zero = g.make_const(utils.make_name(node.name + "_const_zero"), np.array([0], dtype=np.int32))
+        const_zero_long = g.make_const(utils.make_name(node.name + "_const_zero_long"), np.array([0], dtype=np.int64))
+        const_one = g.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int32))
+        const_one_long = g.make_const(utils.make_name(node.name + "_const_one_long"), np.array([1], dtype=np.int64))
+        index_end = g.make_node("Add", [trip_name, const_one_long.output[0]])
+        box_index_from = g.make_node("Slice", [box_ind.output[0], trip_name, index_end.output[0]], name="Slice_a")
+        box_index_to = g.make_node("Add", [box_index_from.output[0], const_one.output[0]])
+        target_x = g.make_node("Slice", [input_x.output[0], box_index_from.output[0], box_index_to.output[0],
+                                         const_zero.output[0]], name="Slice_b")
+        transposed_x = g.make_node("Transpose", [target_x.output[0]], attr={'perm': constants.NHWC_TO_NCHW})
+        shape_of_transposed_x = g.make_node("Shape", [transposed_x.output[0]])
+        const_zero_zero = g.make_const(utils.make_name(node.name + "_const_zero_zero"),
+                                       np.array([0, 0], dtype=np.float32))
+        const_one_one = g.make_const(utils.make_name(node.name + "_const_one_one"),
+                                     np.array([1, 1], dtype=np.float32))
+        const_four = g.make_const(utils.make_name(node.name + "_const_four"), np.array([4], dtype=np.int64))
+        const_empty_float = g.make_const(utils.make_name("const_empty_float"), np.array([], dtype=np.float32))
+        first_half_of_shape = GraphBuilder(g).make_slice(
+            {"data": shape_of_transposed_x.output[0], "ends": [2], "starts": [0]})
+        box = g.make_node("Slice", [boxes.output[0], trip_name, index_end.output[0], const_zero_long.output[0]],
+                          name="Slice_c")
+        roi_raw = g.make_node("Reshape", [box.output[0], const_four.output[0]])
+        roi_raw_first_half = GraphBuilder(g).make_slice({"data": roi_raw.output[0], "ends": [2], "starts": [0]})
+        roi_raw_second_half = GraphBuilder(g).make_slice({"data": roi_raw.output[0], "ends": [4], "starts": [2]})
+        roi_concat_1 = g.make_node("Concat", [const_zero_zero.output[0], roi_raw_first_half], attr={'axis': 0})
+        roi_concat_2 = g.make_node("Concat", [const_one_one.output[0], roi_raw_second_half], attr={'axis': 0})
+        final_roi = g.make_node("Concat", [roi_concat_1.output[0], roi_concat_2.output[0]], attr={'axis': 0})
+        crop_size_int64 = g.make_node("Cast", [crop_size.output[0]], attr={'to': TensorProto.INT64})
+        final_crop_size = g.make_node("Concat", [first_half_of_shape, crop_size_int64.output[0]], {'axis': 0})
+        resized_x = g.make_node("Resize", [transposed_x.output[0], final_roi.output[0], const_empty_float.output[0],
+                                           final_crop_size.output[0]],
+                                attr={"mode": mode, "extrapolation_value": extrapolation_value,
+                                      "coordinate_transformation_mode": "tf_crop_and_resize"})
+        recovered_x = g.make_node("Transpose", [resized_x.output[0]], attr={'perm': constants.NCHW_TO_NHWC})
+        squeeze_x = g.make_node("Squeeze", inputs=[recovered_x.output[0]], attr={"axes": [0]})
+        g.make_node("Identity", [cond_name], outputs=[cond_out_name])
+        g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
+        g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
+        trip_node = ctx.make_node("Size", [box_ind.output[0]])
+        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+        ctx.remove_node(node.name)
+        inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]], name=node.name,
+                                   outputs=node.output)
+        inner_loop.set_body_graph_as_attr("body", g)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
@@ -512,7 +660,11 @@ class Resize:
         cls._convert_since_9(ctx, node, op_type="Resize")
 
     @classmethod
-    def _convert_since_9(cls, ctx, node, op_type):
+    def version_11(cls, ctx, node, **kwargs):
+        cls._convert_since_9(ctx, node, op_type="Resize", roi_required=True)
+
+    @classmethod
+    def _convert_since_9(cls, ctx, node, op_type, roi_required=False):
 
         # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
         # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
@@ -547,7 +699,13 @@ class Resize:
             scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
         input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
-        upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
+        if roi_required:
+            roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
+            upsample = ctx.make_node("Resize", [input_nchw.output[0], roi.output[0], scales.output[0]],
+                                     attr={"mode": mode, "nearest_mode": "floor",
+                                           "coordinate_transformation_mode": "asymmetric"})
+        else:
+            upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
@@ -584,8 +742,12 @@ class MatrixBandPart:
         # 2: "loop" to generate mask matrix: generate col or row of matrix one by one
         g = ctx.create_new_graph_with_same_config()
         node_name = utils.make_name("const_zero_bool")
-        const_zero_bool = ctx.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
-        ctx.set_dtype(const_zero_bool.output[0], onnx_pb.TensorProto.BOOL)
+        const_zero_bool = g.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
+        g.set_dtype(const_zero_bool.output[0], onnx_pb.TensorProto.BOOL)
+
+        g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
+        g.add_graph_input("cond", onnx_pb.TensorProto.BOOL, [])
+        g.add_graph_input("line", onnx_pb.TensorProto.BOOL, [-1, -1])
 
         # shift right the line and add zero at the left.
         new_line = g.make_node(op_type="Concat", inputs=[const_zero_bool.output[0], "line"],
@@ -598,10 +760,6 @@ class MatrixBandPart:
         g.make_node("Identity", ["cond"], outputs=["cond_out"])
         g.make_node("Identity", ["line"], outputs=["res"])
         g.make_node("Identity", [slice_node], outputs=["line_out"])
-
-        g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
-        g.add_graph_input("cond", onnx_pb.TensorProto.BOOL, [])
-        g.add_graph_input("line", onnx_pb.TensorProto.BOOL, [-1, -1])
 
         g.add_graph_output("cond_out", onnx_pb.TensorProto.BOOL, [])
         g.add_graph_output("line_out", onnx_pb.TensorProto.BOOL, [-1, -1])

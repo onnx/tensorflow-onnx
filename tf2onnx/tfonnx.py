@@ -46,7 +46,7 @@ def tflist_to_onnx(node_list, shape_override):
     ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
                     "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax"]
+                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "T_threshold"]
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -233,7 +233,7 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
         "Where": [0],  # Where's first input is bool
     }
     new_ops = []
-    org_ops = [n for n in ops]
+    org_ops = list(ops)
     for op in org_ops:
         if op.type in impacted_ops:
             cast_inserted = []
@@ -312,7 +312,7 @@ def tensorflow_onnx_mapping(g, ops_mapping):
     unmapped_op = collections.Counter()
     exceptions = []
 
-    ops = [n for n in g.get_nodes()]
+    ops = list(g.get_nodes())
     for node in ops:
         logger.debug("Process node: %s\n%s", node.name, node.summary)
 
@@ -345,6 +345,8 @@ def tensorflow_onnx_mapping(g, ops_mapping):
                 m_ops, unm_ops, body_exceptions = tensorflow_onnx_mapping(b_g, ops_mapping)
                 mapped_op += m_ops
                 unmapped_op += unm_ops
+                # topological_sort on the body in case processing has changed the order
+                b_g.topological_sort(b_g.get_nodes())
                 exceptions.extend(body_exceptions)
                 logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
 

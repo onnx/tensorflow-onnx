@@ -136,7 +136,7 @@ def infer_onnx_shape_dtype(node, opset_version, input_shapes, input_dtypes, init
                 copied_sub_graph = copy.deepcopy(sub_graph)
                 graph_proto = copied_sub_graph.make_graph("graph for " + node.name + " " + attr_name)
                 attr.append(helper.make_attribute(attr_name, graph_proto))
-        attr.extend([a for a in node.attr_onnx.values()])
+        attr.extend(node.attr_onnx.values())
         if attr:
             onnx_node.attribute.extend(attr)
         return onnx_node

@@ -30,7 +30,7 @@ import tf2onnx
 from tf2onnx import loader, logging, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
 
-# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda
+# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
 
 logger = logging.getLogger("run_pretrained")
 
