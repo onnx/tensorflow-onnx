@@ -18,7 +18,7 @@ steps:
       pip uninstall -y onnxruntime
       # install numpy upfront since it is not on https://test.pypi.org/simple/
       pip install 'numpy>=1.18'
-      pip install --index-url https://test.pypi.org/simple/ ort-nightly --force-reinstall
+      pip install --index-url https://test.pypi.org/simple/ ort-nightly --force-reinstall --no-deps
     fi
 
     python setup.py install
