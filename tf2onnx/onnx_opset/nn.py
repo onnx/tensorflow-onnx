@@ -240,6 +240,8 @@ class ConvTranspose:
             utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
             utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
                             "output h and w cannot be smaller than input h and w.")
+            # This flag affects the output when stride > 1 and is required for compatibility
+            node.set_attr("auto_pad", "SAME_UPPER")
             node.set_attr("output_shape", new_output_shape)
         else:
             input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
