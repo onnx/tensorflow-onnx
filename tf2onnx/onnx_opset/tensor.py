@@ -798,7 +798,6 @@ class StridedSlice:
         ellipsis_gap = 0
         for idx in range(param_rank):
             if (ellipsis_mask >> idx) & 1:
-                #input_shape = ctx.get_shape(node.input[0])
                 input_shape = ctx.get_shape(input_x.output[0])
                 utils.make_sure(
                     input_shape is not None,
@@ -896,7 +895,7 @@ class StridedSlice:
         axes_output = axes_const.output[0]
 
         inputs_map = {
-            "data": input_x.output[0], #node.input[0],
+            "data": input_x.output[0],
             "starts": begin.output[0],
             "ends": end_output,
             "steps": strides_output,
