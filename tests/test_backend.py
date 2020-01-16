@@ -1828,6 +1828,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @check_opset_min_version(10, "Slice")
+    def test_new_axis_mask(self):
+        x_val = np.arange(5*10*10*10*10*20*30).astype("float32").reshape((5, 10, 10, 10, 10, 20, 30))
+        y_val = np.array(9, dtype=np.int32)
+        x = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+        y = tf.placeholder(tf.int32, y_val.shape, name=_TFINPUT1)
+        x_ = x[tf.newaxis, 0:y, y::2, tf.newaxis, :, tf.newaxis, :y, tf.newaxis, ..., 9]
+        _ = tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
     @skip_caffe2_backend("fails with schema error")
     @check_opset_min_version(7, "batchnorm")
     def test_batchnorm(self):

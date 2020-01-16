@@ -738,19 +738,19 @@ class StridedSlice:
         #                 @int shrink_axis_mask, @int new_axis_mask)
         # T output = Slice(T input, Tind starts, Tind ends, Tind axes, Tind steps)
         # "ends" are exclusive, "axes" and "steps" are optional, their default val are [0, ...] and 1
+        input_x = node.inputs[0]
         begin = node.inputs[1]
         end = node.inputs[2]
         strides = node.inputs[3]
+        new_axis_mask = node.get_attr("new_axis_mask")
+        new_axis_mask = new_axis_mask.i if new_axis_mask is not None else 0
+
         if begin.is_const() and end.is_const() and strides.is_const() \
-                and all(val == 1 for val in strides.get_tensor_value()):
+                and all(val == 1 for val in strides.get_tensor_value()) \
+                and new_axis_mask == 0:
             cls.version_1(ctx, node, **kwargs)
             return
 
-        not_supported_attr = ["new_axis_mask"]
-        for attr_name in not_supported_attr:
-            attr = node.get_attr(attr_name)
-            if attr is not None and attr.i != 0:
-                raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
         onnx_dtype = ctx.get_dtype(node.input[1])
         np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
 
@@ -769,6 +769,15 @@ class StridedSlice:
         ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
         shrink_axis_mask = node.get_attr("shrink_axis_mask")
         shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
+        if new_axis_mask != 0:
+            unqueeze_at = []
+            for bit in range(32):
+                if (new_axis_mask >> bit) & 1 == 1:
+                    unqueeze_at.append(bit)
+                    begin_mask |= 1 << bit
+                    end_mask |= 1 << bit
+            input_x = ctx.make_node("Unsqueeze", [input_x.output[0]], {"axes": unqueeze_at})
+
         param_shape = ctx.get_shape(node.input[1]) or \
                       ctx.get_shape(node.input[2]) or \
                       ctx.get_shape(node.input[3])
@@ -789,7 +798,7 @@ class StridedSlice:
         ellipsis_gap = 0
         for idx in range(param_rank):
             if (ellipsis_mask >> idx) & 1:
-                input_shape = ctx.get_shape(node.input[0])
+                input_shape = ctx.get_shape(input_x.output[0])
                 utils.make_sure(
                     input_shape is not None,
                     "StridedSlice op {} requires the shape of input".format(node.name)
@@ -886,7 +895,7 @@ class StridedSlice:
         axes_output = axes_const.output[0]
 
         inputs_map = {
-            "data": node.input[0],
+            "data": input_x.output[0],
             "starts": begin.output[0],
             "ends": end_output,
             "steps": strides_output,
