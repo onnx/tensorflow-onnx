@@ -776,7 +776,7 @@ class StridedSlice:
                     unqueeze_at.append(bit)
                     begin_mask |= 1 << bit
                     end_mask |= 1 << bit
-            input_x = ctx.make_node("Unsqueeze", [input_x.output[0]], {"axes":unqueeze_at})
+            input_x = ctx.make_node("Unsqueeze", [input_x.output[0]], {"axes": unqueeze_at})
 
         param_shape = ctx.get_shape(node.input[1]) or \
                       ctx.get_shape(node.input[2]) or \
