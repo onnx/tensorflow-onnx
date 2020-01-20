@@ -192,6 +192,28 @@ def conv_kernel_shape(ctx, node, input_idx, spatial=2):
     return kernel_shape
 
 
+def build_dynamic_target_size(ctx, transposed_intput, target_hw):
+    """
+    Build the target tensor shape for the Resize op.
+
+    Args:
+        - ctx: the graph context
+        - transposed_intput: A tensor of rank 4 of shape [n c h w]
+        - target_hw: tensor of rank 2 containing the target size for a resize: [nh nw]
+
+    Returns:
+        A tensor of rank 2 containing [n c nh nw]
+    """
+    # We get the first half [n c] of the target shape
+    shape_of_transposed_input = ctx.make_node("Shape", [transposed_intput.output[0]])
+    first_half_of_shape = GraphBuilder(ctx).make_slice(
+        {"data": shape_of_transposed_input.output[0], "ends": [2], "starts": [0]})
+    target_size_int64 = ctx.make_node("Cast", [target_hw.output[0]], attr={'to': TensorProto.INT64})
+    # We build a tensor containing [n c nh nw]
+    final_target_size = ctx.make_node("Concat", [first_half_of_shape, target_size_int64.output[0]], {'axis': 0})
+    return final_target_size
+
+
 @tf_op(["Conv1D", "Conv2D", "Conv3D"])
 class ConvOp:
     @classmethod
@@ -594,15 +616,12 @@ class CropAndResize:
         target_x = g.make_node("Slice", [input_x.output[0], box_index_from.output[0], box_index_to.output[0],
                                          const_zero.output[0]], name="Slice_b")
         transposed_x = g.make_node("Transpose", [target_x.output[0]], attr={'perm': constants.NHWC_TO_NCHW})
-        shape_of_transposed_x = g.make_node("Shape", [transposed_x.output[0]])
         const_zero_zero = g.make_const(utils.make_name(node.name + "_const_zero_zero"),
                                        np.array([0, 0], dtype=np.float32))
         const_one_one = g.make_const(utils.make_name(node.name + "_const_one_one"),
                                      np.array([1, 1], dtype=np.float32))
         const_four = g.make_const(utils.make_name(node.name + "_const_four"), np.array([4], dtype=np.int64))
         const_empty_float = g.make_const(utils.make_name("const_empty_float"), np.array([], dtype=np.float32))
-        first_half_of_shape = GraphBuilder(g).make_slice(
-            {"data": shape_of_transposed_x.output[0], "ends": [2], "starts": [0]})
         box = g.make_node("Slice", [boxes.output[0], trip_name, index_end.output[0], const_zero_long.output[0]],
                           name="Slice_c")
         roi_raw = g.make_node("Reshape", [box.output[0], const_four.output[0]])
@@ -611,8 +630,7 @@ class CropAndResize:
         roi_concat_1 = g.make_node("Concat", [const_zero_zero.output[0], roi_raw_first_half], attr={'axis': 0})
         roi_concat_2 = g.make_node("Concat", [const_one_one.output[0], roi_raw_second_half], attr={'axis': 0})
         final_roi = g.make_node("Concat", [roi_concat_1.output[0], roi_concat_2.output[0]], attr={'axis': 0})
-        crop_size_int64 = g.make_node("Cast", [crop_size.output[0]], attr={'to': TensorProto.INT64})
-        final_crop_size = g.make_node("Concat", [first_half_of_shape, crop_size_int64.output[0]], {'axis': 0})
+        final_crop_size = build_dynamic_target_size(g, transposed_x, crop_size)
         resized_x = g.make_node("Resize", [transposed_x.output[0], final_roi.output[0], const_empty_float.output[0],
                                            final_crop_size.output[0]],
                                 attr={"mode": mode, "extrapolation_value": extrapolation_value,
@@ -661,50 +679,52 @@ class Resize:
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        cls._convert_since_9(ctx, node, op_type="Resize", roi_required=True)
+        cls._convert_since_9(ctx, node, op_type="Resize", use_target_size=True)
 
     @classmethod
-    def _convert_since_9(cls, ctx, node, op_type, roi_required=False):
+    def _convert_since_9(cls, ctx, node, op_type, use_target_size=False):
 
         # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
         # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
         # wants the input to be NHWC - adjust target_shape to this.
         mode = "linear" if node.type == "ResizeBilinear" else "nearest"
 
-        # first create "scales" info for onnx upsample
-        # if shape of input and output known then  "scale" is calculated statically and set as a const node
-        shape = ctx.get_shape(node.input[0])
-        if shape and shape[2] != -1 and shape[1] != -1 and node.inputs[1].is_const():
-            target_shape = node.inputs[1].get_tensor_value()
-            n, h, w, c = shape
-            nh, nw = target_shape
-            # scales is nchw
-            # the reason not storing data at raw field is because of the bug: https://github.com/onnx/onnx/issues/1852
-            scale_val = np.array([1.0, 1.0, float(nh) / h, float(nw) / w]).astype(np.float32)
-            scales = ctx.make_const(utils.make_name("scales"), scale_val, raw=False)
-        else:
-            ori_shape = ctx.make_node("Shape", [node.input[0]])
-            attr = {"axes": [0], "starts": [1], "ends": [3]}
-            inputs_map = {"data": ori_shape.output[0], **attr}
-            ori_shape_hw = GraphBuilder(ctx).make_slice(inputs_map)
-            ori_shape_hw_float = ctx.make_node("Cast", [ori_shape_hw], attr={"to": onnx_pb.TensorProto.FLOAT})
-
-            target_hw = node.inputs[1]
-            target_hw_float = ctx.make_node("Cast", target_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
-
-            scales_hw = ctx.make_node("Div", [target_hw_float.output[0], ori_shape_hw_float.output[0]])
-
-            const_one_array = ctx.make_const(utils.make_name("one"), np.array([1.0, 1.0]).astype(np.float32))
-            # scales is nchw
-            scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
         input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
-        if roi_required:
+        if use_target_size:
+            final_target_size = build_dynamic_target_size(ctx, input_nchw, node.inputs[1])
             roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
-            upsample = ctx.make_node("Resize", [input_nchw.output[0], roi.output[0], scales.output[0]],
+            const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([], dtype=np.float32))
+            upsample = ctx.make_node("Resize", [input_nchw.output[0], roi.output[0], const_empty_float.output[0], final_target_size.output[0]],
                                      attr={"mode": mode, "nearest_mode": "floor",
                                            "coordinate_transformation_mode": "asymmetric"})
         else:
+            # first create "scales" info for onnx upsample
+            # if shape of input and output known then  "scale" is calculated statically and set as a const node
+            shape = ctx.get_shape(node.input[0])
+            if shape and shape[2] != -1 and shape[1] != -1 and node.inputs[1].is_const():
+                target_shape = node.inputs[1].get_tensor_value()
+                n, h, w, c = shape
+                nh, nw = target_shape
+                # scales is nchw
+                # the reason not storing data at raw field is because of the bug: https://github.com/onnx/onnx/issues/1852
+                scale_val = np.array([1.0, 1.0, float(nh) / h, float(nw) / w]).astype(np.float32)
+                scales = ctx.make_const(utils.make_name("scales"), scale_val, raw=False)
+            else:
+                ori_shape = ctx.make_node("Shape", [node.input[0]])
+                attr = {"axes": [0], "starts": [1], "ends": [3]}
+                inputs_map = {"data": ori_shape.output[0], **attr}
+                ori_shape_hw = GraphBuilder(ctx).make_slice(inputs_map)
+                ori_shape_hw_float = ctx.make_node("Cast", [ori_shape_hw], attr={"to": onnx_pb.TensorProto.FLOAT})
+
+                target_hw = node.inputs[1]
+                target_hw_float = ctx.make_node("Cast", target_hw.output, attr={"to": onnx_pb.TensorProto.FLOAT})
+
+                scales_hw = ctx.make_node("Div", [target_hw_float.output[0], ori_shape_hw_float.output[0]])
+
+                const_one_array = ctx.make_const(utils.make_name("one"), np.array([1.0, 1.0]).astype(np.float32))
+                # scales is nchw
+                scales = ctx.make_node("Concat", [const_one_array.output[0], scales_hw.output[0]], {"axis": 0})
             upsample = ctx.make_node(op_type, [input_nchw.output[0], scales.output[0]], attr={"mode": mode})
 
         shapes = node.output_shapes
