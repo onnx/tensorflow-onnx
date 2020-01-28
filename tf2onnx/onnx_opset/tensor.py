@@ -607,6 +607,7 @@ class ExpandDims:
         if dim_node.is_const():
             node.type = "Unsqueeze"
             dim = dim_node.get_tensor_value()
+            dim = dim[0]
             if dim < 0:
                 input_rank = len(ctx.get_shape(node.input[0]))
                 dim = dim + input_rank + 1
