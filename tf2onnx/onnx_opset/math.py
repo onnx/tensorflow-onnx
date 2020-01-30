@@ -543,3 +543,21 @@ class BitShift:
             cast_back_node.set_attr("to", dtypes[0])
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
+
+
+@tf_op(["UnsortedSegmentSum", "UnsortedSegmentMin", "UnsortedSegmentMax",
+        "UnsortedSegmentMean", "UnsortedSegmentProd"])
+class UnsortedSegment:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        to_op = {"UnsortedSegmentSum": "ReduceSum",
+                 "UnsortedSegmentMin": "ReduceMin",
+                 "UnsortedSegmentMax": "ReduceMax",
+                 "UnsortedSegmentMean": "ReduceMean",
+                 "UnsortedSegmentProd": "ReduceProd"}
+        if node.inputs[2].is_const() and node.inputs[2].get_tensor_value(as_list=False) == 1:
+            node.type = to_op[node.type]
+            node.input = [node.input[0]]
+            node.set_attr("axes", [0])
+        else:
+            raise ValueError(node.name + " - only num_segments=1 is supported for now")

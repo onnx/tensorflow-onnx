@@ -1171,6 +1171,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    def test_unsorted_segment(self):
+        tests = [tf.math.unsorted_segment_sum, tf.math.unsorted_segment_mean, tf.math.unsorted_segment_max,
+                 tf.math.unsorted_segment_min, tf.math.unsorted_segment_prod]
+        for func in tests:
+            # num_segments = 1
+            tf.reset_default_graph()
+            x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [4, 3, 2, 1]]).astype(np.float32)
+            x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            x_ = func(x0, tf.constant([0, 0, 0]), num_segments=1)
+            _ = tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
+            # TODO: enable once we have support for this
+            # num_segments > 1
+            # tf.reset_default_graph()
+            # x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [4, 3, 2, 1]]).astype(np.float32)
+            # x0 = tf.placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            # x_ = tf.math.unsorted_segment_sum(x0, tf.constant([0, 1, 0]), num_segments=2)
+            # _ = tf.identity(x_, name=_TFOUTPUT)
+            # self._run_test_case([_OUTPUT], {_INPUT: x_val})
+
     @check_onnxruntime_incompatibility("Sqrt")
     def test_sqrt(self):
         x_val = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32).reshape((2, 2))
