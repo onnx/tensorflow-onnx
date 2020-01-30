@@ -1171,6 +1171,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("1.12")
     def test_unsorted_segment(self):
         tests = [tf.math.unsorted_segment_sum, tf.math.unsorted_segment_mean, tf.math.unsorted_segment_max,
                  tf.math.unsorted_segment_min, tf.math.unsorted_segment_prod]
