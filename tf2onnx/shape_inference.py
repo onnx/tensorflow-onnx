@@ -15,6 +15,7 @@ from collections import defaultdict
 import tensorflow as tf
 from tf2onnx import utils
 from tf2onnx.tf_utils import get_tf_tensor_shape, get_tf_const_value, get_tf_shape_attr, get_tf_version
+from tf2onnx.tf_loader import tf_reload_graph
 
 # pylint: disable=logging-not-lazy,missing-docstring,consider-swap-variables
 
@@ -29,7 +30,7 @@ def infer_shape(tf_graph, shape_override):
         for name, shape in shape_override.items():
             logger.info("\tSet %s shape to %s", name, shape)
             tf_graph.get_tensor_by_name(name).set_shape(shape)
-        tf_graph = reload_tf_graph(tf_graph)
+        tf_graph = tf_reload_graph(tf_graph)
 
     tf_graph = infer_shape_for_graph(tf_graph)
 
@@ -59,22 +60,6 @@ def check_shape_for_tf_graph(tf_graph):
     return op_outputs_mapping_none_shape
 
 
-def reload_tf_graph(tf_graph):
-    """Invoke tensorflow cpp shape inference by reloading graph_def."""
-    # invoke c api if tf version is below 1.8
-    if get_tf_version() < LooseVersion("1.8"):
-        logger.debug(
-            "On TF < 1.8, graph is constructed by python API, " \
-            "which doesn't invoke shape inference, please set " \
-            "TF_C_API_GRAPH_CONSTRUCTION=1 to enable it"
-        )
-
-    graph_def = tf_graph.as_graph_def(add_shapes=True)
-    with tf.Graph().as_default() as inferred_graph:
-        tf.import_graph_def(graph_def, name="")
-    return inferred_graph
-
-
 def infer_shape_for_graph(tf_graph):
     """
     Infer shape for Tensorflow ops.
@@ -94,7 +79,7 @@ def infer_shape_for_graph(tf_graph):
             if updated:
                 shape_updated = True
         if shape_updated:
-            tf_graph = reload_tf_graph(tf_graph)
+            tf_graph = tf_reload_graph(tf_graph)
     return tf_graph
 
 

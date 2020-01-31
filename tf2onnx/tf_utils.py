@@ -16,12 +16,10 @@ import six
 import numpy as np
 import tensorflow as tf
 
-TF2 = tf.__version__.startswith("2.")
+from functools import reduce as _reduce
 
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
-if not TF2:
-    from tensorflow.tools.graph_transforms import TransformGraph
 
 from onnx import helper, onnx_pb, numpy_helper
 
@@ -48,7 +46,7 @@ TF_TO_ONNX_DTYPE = {
     types_pb2.DT_COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     types_pb2.DT_BOOL: onnx_pb.TensorProto.BOOL,
     types_pb2.DT_RESOURCE: onnx_pb.TensorProto.INT64,  # TODO: hack to allow processing on control flow
-    types_pb2.DT_VARIANT: onnx_pb.TensorProto.INT64,  # TODO: hack to allow processing on control flow
+    types_pb2.DT_VARIANT: -1, # TODO: onnx does not have the an equivalent, tag with -1 so we can set it later
     types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8,  # TODO: map quint8 to  uint8 for now
 }
 
@@ -129,7 +127,7 @@ def get_tf_version():
     return LooseVersion(tf.__version__)
 
 
-def tflist_to_onnx(node_list, shape_override):
+def tflist_to_onnx(g, shape_override):
     """
     Convert the tf-node list into an onnx graph with minimal rewrites so
     we can use the onnx graph as intermediate graph.
@@ -137,10 +135,15 @@ def tflist_to_onnx(node_list, shape_override):
 
     # ignore the following attributes
     ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
-                    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
+                    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
                     "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax",
-                    "T_threshold", "element_dtype", "shape_type"]
+                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
+                    "T_threshold", "element_dtype", "shape_type", "_lower_using_switch_merge",
+                    "parallel_iterations", "_num_original_outputs"]
+
+    node_list = g.get_operations()
+    functions = {}
+
     # some stats
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
@@ -182,8 +185,14 @@ def tflist_to_onnx(node_list, shape_override):
                 shape = get_tf_shape_attr(node)
                 if shape is not None:
                     attr[a] = shape
-            elif a == "Tperm":
+            elif a == "output_shapes":
+                # we should not need it since we pull the shapes above already
                 pass
+            elif a in ["body", "cond", "then_branch", "else_branch"]:
+                input_shapes = [inp.get_shape() for inp in node.inputs]
+                nattr = get_tf_node_attr(node, a)
+                attr[a] = nattr.name
+                functions[nattr.name] = input_shapes
             elif a == "value":
                 onnx_tensor = tf_to_onnx_tensor(get_tf_node_attr(node, a), name=port_name(node.name))
                 attr[a] = onnx_tensor
@@ -206,11 +215,11 @@ def tflist_to_onnx(node_list, shape_override):
                 logger.error("pass1 convert failed for %s, ex=%s", node, ex)
                 raise
 
-    return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes
+    return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, functions
 
 
 def tensorflow_to_onnx(graph, shape_override):
     """
     Load tensorflow graph and do a conversion.
     """
-    return tflist_to_onnx(graph.get_operations(), shape_override)
+    return tflist_to_onnx(graph, shape_override)

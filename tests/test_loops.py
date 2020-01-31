@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, check_tf_min_version, check_onnxruntime_min_version
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -33,24 +33,37 @@ _OUTPUT1 = "output1:0"
 class LoopTests(Tf2OnnxBackendTestBase):
 
     def test_simple_while_loop(self):
+        if is_tf2():
+            x_val = np.array([0], dtype=np.int32)
+        else:
+            x_val = np.array(0, dtype=np.int32)
+
         def func(i):
-            one = tf.constant([1])
+            if is_tf2():
+                one = tf.constant(np.array([1], dtype=np.int32))
+            else:
+                one = tf.constant(np.array(1, dtype=np.int32))
             c = lambda i: tf.less(i, 10)
             b = lambda i: tf.add(i, one)
             r = tf.while_loop(c, b, [i])
             return tf.identity(r, name=_TFOUTPUT)
-        self.run_test_case(func, {_INPUT: np.array([0], dtype=np.int32)}, [], [_OUTPUT], rtol=1e-06)
+        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06)
 
     def test_simple_while_loop_2(self):
         def func(i):
+            if is_tf2():
+                one = tf.constant(np.array([1], dtype=np.int32))
+            else:
+                one = tf.constant(np.array(1, dtype=np.int32))
             c = lambda i: tf.logical_and(tf.less(i, 10), tf.greater_equal(i, 3))
-            b = lambda i: tf.add(i, 1)
+            b = lambda i: tf.add(i, one)
             r = tf.while_loop(c, b, [i])
-            _ = tf.identity(r, name="output")
-        input_names_with_port = ["input_1:0"]
-        feed_dict = {"input_1:0": np.array(3, dtype=np.int32)}
-        output_names_with_port = ["output:0"]
-        self.run_test_case(feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+            return tf.identity(r, name="output")
+        if is_tf2():
+            x_val = np.array([3], dtype=np.int32)
+        else:
+            x_val = np.array(3, dtype=np.int32)
+        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06)
 
     def test_while_loop_with_ta_write(self):
         def func(i):
@@ -69,19 +82,35 @@ class LoopTests(Tf2OnnxBackendTestBase):
             r = ta_final.stack()
             return tf.identity(r, name="output"), tf.identity(i_final, name="i")
 
-        input_names_with_port = ["input_1:0"]
-        feed_dict = {"input_1:0": np.array(0, dtype=np.int32)}
-
+        x_val = np.array(0, dtype=np.int32)
         output_names_with_port = ["output:0", "i:0"]
+        self.run_test_case(func, {_INPUT: x_val}, [], output_names_with_port, rtol=1e-06)
+
+    def test_while_loop_with_ta_read_simple(self):
+        def func(i, inputs_2, ):
+            input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_2)
+            c = lambda i, *_: tf.less(i, 10)
+            res = tf.constant(0.)
+            def b(i, r):
+                new_i = tf.add(i, 1)
+                x = input_ta.read(i)
+                r = tf.add(r, x)
+                return new_i, r
+
+            i_final, x_final = tf.while_loop(c, b, [i, res])
+            return tf.identity(i_final, name="i"), tf.identity(x_final, name="x")
+        input_names_with_port = ["input_1:0", "input_2:0"]
+        feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
+                     "input_2:0": np.array([1., 2., 3., 4., 5., 6., 7., 8., 9., 10.], dtype=np.float32)}
+        output_names_with_port = ["i:0", "x:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
     def test_while_loop_with_ta_read(self):
-        def func(i, inputs):
-            inputs_2 = tf.identity(inputs)
+        def func(i, input_2, input_3):
+            inputs_2 = tf.identity(input_2)
             input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_2)
 
-            inputs_3 = tf.placeholder(tf.float32, (10,), name="input_3")
-            inputs_3_identity = tf.identity(inputs_3)
+            inputs_3_identity = tf.identity(input_3)
             input_ta_3 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_3_identity)
 
             c = lambda i, *_: tf.logical_and(tf.less(i, 10), i >= 0)
@@ -105,9 +134,8 @@ class LoopTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
     def test_while_loop_with_ta_read_reference_outer_input_directly(self):
-        def func(i, inputs):
-            input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs)
-            inputs_3 = tf.placeholder(tf.float32, (10,), name="input_3")
+        def func(i, inputs_1, inputs_3):
+            input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_1)
             input_ta_3 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_3)
 
             c = lambda i, *_: tf.logical_and(tf.less(i, 10), i >= 0)

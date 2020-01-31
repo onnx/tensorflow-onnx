@@ -54,8 +54,7 @@ def _wrap_concat_with_cast(ctx, node):
         next_nodes = ctx.find_output_consumers(node.output[0])
         # cast output back to dtype unless the next op is a cast
         if next_nodes[0].type != "Cast":
-            op_name = utils.make_name(node.name)
-            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=op_name)
+            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=node.child_name())
             output_cast.set_attr("to", dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(output_name, output_cast.output[0])
@@ -154,8 +153,7 @@ class Reshape:
         # if the next node is already a cast we don't need to insert another one
         next_nodes = ctx.find_output_consumers(node.output[0])
         if len(next_nodes) != 1 or next_nodes[0].type != "Cast":
-            op_name = utils.make_name(node.name)
-            output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
+            output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=node.child_name())
             output_cast.set_attr("to", dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(node.output[0], output_cast.output[0])
@@ -513,7 +511,7 @@ class ScatterND:
 
         # onnx requires pre-generated tensor for data
         np_val = np.array([0], dtype=np.int64)
-        onnx_tensor = numpy_helper.from_array(np_val, utils.make_name(node.name))
+        onnx_tensor = numpy_helper.from_array(np_val, node.child_name())
         const_of_shape = ctx.insert_new_node_on_input(node, "ConstantOfShape", node.input[2], value=onnx_tensor)
 
         # cast edge to INT64 if not already
@@ -905,8 +903,7 @@ class StridedSlice:
         node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
         node = ctx.get_node_by_output(node)
         if needs_squeeze:
-            name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], node.child_name())
             squeeze_node.set_attr("axes", needs_squeeze)
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)

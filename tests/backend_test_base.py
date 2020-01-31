@@ -16,13 +16,13 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import numpy as np
 import tensorflow as tf
-TF2 = tf.__version__.startswith("2.")
 from tensorflow.python.ops import variables as variables_lib
 from common import get_test_config
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
 from tf2onnx.tf_loader import tf_optimize, tf_reset_default_graph, tf_session, tf_placeholder, freeze_func
+from tf2onnx.tf_loader import is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test, import-outside-toplevel
@@ -62,7 +62,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_onnxruntime(self, model_path, inputs, output_names):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
-        m = rt.InferenceSession(model_path)
+        opt = rt.SessionOptions()
+        # in case of issues with the runtime, one can enable more logging
+        # opt.log_severity_level = 0
+        # opt.log_verbosity_level = 255
+        # opt.enable_profiling = True
+        m = rt.InferenceSession(model_path, opt)
         results = m.run(output_names, inputs)
         return results
 
@@ -92,7 +97,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         graph_def = None
 
         clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
-        if TF2:
+        if is_tf2():
             #
             # use eager to execute the tensorflow func
             #
@@ -136,14 +141,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     graph_def = tf_optimize(input_names_with_port, output_names_with_port, graph_def, constant_fold)
 
         tf_reset_default_graph()
-        tf.import_graph_def(graph_def, name='')
-
-        if self.config.is_debug_mode:
-            model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
-            utils.save_protobuf(model_path, graph_def)
-            self.logger.debug("created file  %s", model_path)
-
         with tf_session() as sess:
+            tf.import_graph_def(graph_def, name='')
+
+            if self.config.is_debug_mode:
+                model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
+                utils.save_protobuf(model_path, graph_def)
+                self.logger.debug("created file  %s", model_path)
+
             g = process_tf_graph(sess.graph, opset=self.config.opset, output_names=output_names_with_port,
                                  target=self.config.target, **process_args)
             g = optimizer.optimize_graph(g)

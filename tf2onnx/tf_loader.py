@@ -9,24 +9,32 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import logging
+from distutils.version import LooseVersion
 
 import tensorflow as tf
-TF2 = tf.__version__.startswith("2.")
-
 from tensorflow.python.framework import graph_util
-if TF2:
-    from tensorflow.python.framework import convert_to_constants
-else:
-    from tensorflow.python.framework.graph_util import convert_variables_to_constants
 
 from tf2onnx import utils
+from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx
 
 logger = logging.getLogger(__name__)
+
+def is_tf2():
+    return tf.__version__.startswith("2.")
+
+
+if is_tf2():
+    from tensorflow.python.framework import convert_to_constants
+    from tensorflow.python.framework import func_graph
+    from tensorflow.python.framework import function_def_to_graph
+else:
+    from tensorflow.python.framework.graph_util import convert_variables_to_constants
+    from tensorflow.tools.graph_transforms import TransformGraph
 
 
 # pylint: disable=unused-argument
 
-if TF2:
+if is_tf2():
     tf_reset_default_graph = tf.compat.v1.reset_default_graph
     tf_global_variables = tf.compat.v1.global_variables
     tf_session = tf.compat.v1.Session
@@ -49,7 +57,14 @@ else:
 
 
 def freeze_func(func, outputs=None):
-    frozen_func = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=True)
+    try:
+        # starting tf-2.1
+        frozen_func, graph_def = \
+            convert_to_constants.convert_variables_to_constants_v2_as_graph(func, lower_control_flow=False)
+    except:
+        frozen_func = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=False)
+        graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
+
     input_tensors = [
         tensor for tensor in frozen_func.inputs
         if tensor.dtype != tf.dtypes.resource
@@ -60,13 +75,13 @@ def freeze_func(func, outputs=None):
         # below is important. tf.function will add and identity to the output in many cases and if
         # our output is also an identity, grappler will optimize our output away. Make sure to tell
         # grappler to preserve it.
-        _, outputs = get_tensors_for_names(frozen_func.graph.as_graph_def(), [], outputs)
+        _, outputs = get_tensors_for_names(graph_def, [], outputs)
         output_tensors = {k: v for k, v in outputs.items()}
     else:
         # TODO: do we need frozen_func.outputs or can we just use our outputs ?
         output_tensors = { i.name: i for i in frozen_func.outputs }
 
-    graph_def = tf_optimize(input_tensors, output_tensors, frozen_func.graph.as_graph_def())
+    graph_def = tf_optimize(input_tensors, output_tensors, frozen_func.graph.as_graph_def(add_shapes=True))
     return graph_def
 
 
@@ -82,7 +97,7 @@ def freeze_session(sess, keep_var_names=None, output_names=None, clear_devices=T
         if clear_devices:
             for node in input_graph_def.node:
                 node.device = ""
-        if TF2:
+        if is_tf2():
             frozen_graph = tf.compat.v1.graph_util.convert_variables_to_constants(sess, input_graph_def,
                                                       output_names, freeze_var_names)
         else:
@@ -227,7 +242,7 @@ def from_saved_model(model_path, input_names, output_names, signatures=None):
     if signatures == None:
         signatures = []
     tf_reset_default_graph()
-    if TF2:
+    if is_tf2():
         frozen_graph, inputs, outputs = \
             _from_saved_model_v2(model_path, input_names, output_names, signatures)
         inputs = {k: v for k, v in inputs.items() if v.dtype != tf.dtypes.resource}
@@ -264,7 +279,12 @@ def tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant
 
     config = config_pb2.ConfigProto()
     rewrite_options = config.graph_options.rewrite_options
-    rewrite_options.constant_folding = rewrite_options.ON
+    rewrite_options.optimizers[:] = [
+        'pruning', 'constfold', 'arithmetic', 'dependency', 'pruning',
+        'constfold', 'arithmetic', 'dependency', 'function'
+    ]
+    # rewrite_options.constant_folding = rewrite_options.ON
+    # rewrite_options.function = rewrite_options.ON
 
     meta_graph = tf.compat.v1.train.export_meta_graph(graph_def=graph_def)
     fetch_collection = meta_graph_pb2.CollectionDef()
@@ -306,7 +326,7 @@ def tf_optimize_v1(input_tensors, output_tensors, graph_def, fold_constant):
     return graph_def
 
 
-def tf_optimize_v2(input_tensors, output_tensors, graph_def, fold_constant):
+def tf_optimize_v2(input_tensors, output_tensors, graph_def, fold_constant=True):
     with tf_session() as sess:
         graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
 
@@ -316,11 +336,74 @@ def tf_optimize_v2(input_tensors, output_tensors, graph_def, fold_constant):
     else:
         needed_names = [utils.node_name(i) for i in input_tensors.keys()] + \
                    [utils.node_name(i) for i in output_tensors.keys()]
-    graph_def = graph_util.extract_sub_graph(graph_def, needed_names)
+    # graph_def = graph_util.extract_sub_graph(graph_def, needed_names)
+    graph_def = tf.compat.v1.graph_util.extract_sub_graph(graph_def, needed_names)
     return graph_def
 
 
 def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
-    if TF2:
+    if is_tf2():
         return tf_optimize_v2(inputs, outputs, graph_def, fold_constant)
     return tf_optimize_v1(inputs, outputs, graph_def, fold_constant)
+
+
+def tf_reload_graph(tf_graph):
+    """Invoke tensorflow cpp shape inference by reloading graph_def."""
+    # invoke c api if tf version is below 1.8
+    if get_tf_version() < LooseVersion("1.8"):
+        logger.debug(
+            "On TF < 1.8, graph is constructed by python API, " \
+            "which doesn't invoke shape inference, please set " \
+            "TF_C_API_GRAPH_CONSTRUCTION=1 to enable it"
+        )
+
+    graph_def = tf_graph.as_graph_def(add_shapes=True)
+    with tf.Graph().as_default() as inferred_graph:
+        tf.import_graph_def(graph_def, name="")
+    return inferred_graph
+
+
+def is_function(g):
+    if is_tf2():
+        return 'tensorflow.python.framework.func_graph.FuncGraph' in str(type(g))
+    return False
+
+_FUNCTIONS = {}
+
+
+def resolve_functions(tf_graph):
+    def toposort(data):
+        while True:
+            ordered = set(item for item, dep in data.items() if len(dep) == 0)
+            if not ordered:
+                break
+            yield ordered
+            data = {item: (dep - ordered) for item, dep in data.items() if item not in ordered}
+
+    _, _, _, output_shapes, dtypes, functions = tflist_to_onnx(tf_graph, {})
+    data = {}
+    for k, fdef in tf_graph._functions.items():
+        input_shapes = functions.get(k)
+        # fdef = tf_graph._get_function(k)
+        fdef = fdef.definition
+        if input_shapes and len(fdef.signature.input_arg) < len(input_shapes):
+            input_shapes = input_shapes[:len(fdef.signature.input_arg)]
+        func = function_def_to_graph.function_def_to_graph(fdef, input_shapes=input_shapes)
+        #func = freeze_func(fdef)
+        _FUNCTIONS[k] = func
+        _, _, _, output_shapes, dtypes, tfunctions = tflist_to_onnx(func, {})
+        functions.update(tfunctions)
+        data[k] = set(tfunctions.keys())
+
+    result = []
+    for d in toposort(data):
+        result.extend(list(d))
+    return [_FUNCTIONS[k] for k in result]
+
+
+def set_function(name, func):
+    _FUNCTIONS[name] = func
+
+
+def find_function(name):
+    return _FUNCTIONS.get(name)
