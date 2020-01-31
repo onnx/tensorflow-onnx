@@ -27,7 +27,7 @@ from tf2onnx import tf_utils, tf_loader
 _HELP_TEXT = """
 Usage Examples:
 
-python -m tf2onnx.convert --saved_model saved_model_dir --output model.onnx
+python -m tf2onnx.convert --saved-model saved_model_dir --output model.onnx
 python -m tf2onnx.convert --input frozen_graph.pb  --inputs X:0 --outputs output:0 --output model.onnx
 python -m tf2onnx.convert --checkpoint checkpoint.meta  --inputs X:0 --outputs output:0 --output model.onnx
 

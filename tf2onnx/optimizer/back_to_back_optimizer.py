@@ -36,7 +36,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
     def _optimize_at_current_graph_level(self, g):
         for optype, handler in _func_map.items():
             # candidate nodes for removal/optimization
-            nodes = [n for n in g.get_nodes() if n.type == optype]
+            nodes = [n for n in g.get_nodes() if n.type in optype]
 
             # topological sort of candidates
             # simplifying assumption for back-to-back-optimizer is
@@ -51,8 +51,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
             # q = starting nodes with no dependencies
             q = list(set(consumer_node_ids.keys()) - has_dependencies)
             while q:
-                nodeid = q[0]
-                q.remove(nodeid)
+                nodeid = q.pop(0)
                 node = g.get_node_by_output(nodeid, False)
                 consumer_nodes = consumer_node_ids[nodeid]
 
@@ -72,6 +71,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
     @staticmethod
     @_register_func("Cast")
     def _optimize_cast(g, node, consumer_nodes):
+        """remove long chains of cast ops"""
         q2 = []
         type1 = node.get_attr('to').i
         type1_name = ONNX_DTYPE_NAMES[type1] if type1 in ONNX_DTYPE_NAMES else ''
@@ -124,6 +124,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
     @staticmethod
     @_register_func("Transpose")
     def _optimize_transpose(g, node, consumer_nodes):
+        """remove long chains of transpose ops"""
         t1 = list(node.get_attr('perm').ints)
         q2 = []
         for node2 in consumer_nodes:
@@ -146,3 +147,33 @@ class BackToBackOptimizer(GraphOptimizerBase):
                 q2.append(node2.output[0])
         g.remove_node(node.name)
         return q2
+
+    @staticmethod
+    @_register_func(('Squeeze', 'Unsqueeze'))
+    def _optimize_squeeze_unsqueeze(g, node, consumer_nodes):
+        """remove pairs of squeeze-unsqueeze nodes"""
+
+        if node.type != 'Squeeze' or len(consumer_nodes) != 1:
+            # no need to return any value, since not removing long chain of nodes
+            return []
+
+        node2 = consumer_nodes[0]
+        if node2.type != 'Unsqueeze':
+            return []
+
+        axis1 = node.get_attr('axes').ints
+        axis2 = node2.get_attr('axes').ints
+
+        # if squeeze followed by unsqueeze is on diff axes, skip
+        if axis1 != axis2:
+            return []
+
+        # if unsqueeze output is graph output, skip
+        if set(node2.output) & set(g.outputs):
+            return []
+
+        node2_consumers = g.find_output_consumers(node2.output[0])
+        g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0])
+        g.remove_node(node.name)
+        g.remove_node(node2.name)
+        return []

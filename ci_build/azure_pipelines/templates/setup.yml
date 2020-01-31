@@ -16,7 +16,9 @@ steps:
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
     then
       pip uninstall -y onnxruntime
-      pip install --index-url https://test.pypi.org/simple/ ort-nightly --force-reinstall
+      # install numpy upfront since it is not on https://test.pypi.org/simple/
+      pip install 'numpy>=1.18'
+      pip install --index-url https://test.pypi.org/simple/ ort-nightly
     fi
 
     python setup.py install
@@ -28,10 +30,13 @@ steps:
 # https://github.com/numpy/numpy/issues/12957
 # https://github.com/ContinuumIO/anaconda-issues/issues/10629
 # Add numpy lib path manually here
+# On Windows sqlite3.dll is found under Library/bin
 - bash: |
     site_dir=$(python -c "import site; print(site.getsitepackages()[1])")
     echo "##vso[task.prependpath]$site_dir\numpy\.libs"
-  displayName: 'Fix Numpy Path'
+    base_dir=$(python -c "import site; print(site.getsitepackages()[0])")
+    echo "##vso[task.prependpath]$base_dir/Library/bin"
+  displayName: 'Fix Paths'
   condition: and(succeeded(), in(variables['Agent.OS'], 'Windows_NT'))
 
 - bash: env

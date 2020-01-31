@@ -406,16 +406,17 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _transpose_handler(self, trans, node):
         if is_nchw_transpose(node):
-            ops = self._g.get_nodes()
-            self._g.replace_all_inputs(ops, node.output[0], trans.input[0])
+            for g in {self._g, node.graph}:
+                ops = g.get_nodes()
+                g.replace_all_inputs(ops, node.output[0], trans.input[0])
 
-            shape = self._g.get_shape(node.output[0])
-            dtype = self._g.get_dtype(node.output[0])
+            shape = node.graph.get_shape(node.output[0])
+            dtype = node.graph.get_dtype(node.output[0])
+            if node.output[0] in node.graph.outputs:
+                node.graph.make_node("Identity", [trans.input[0]],
+                                     outputs=node.output, shapes=[shape], dtypes=[dtype])
             self._g.remove_node(trans.name)
-            self._g.remove_node(node.name)
-            if node.output[0] in self._g.outputs:
-                self._g.make_node("Identity", [trans.input[0]],
-                                  outputs=node.output, shapes=[shape], dtypes=[dtype])
+            node.graph.remove_node(node.name)
             return True
         return False
 
@@ -459,11 +460,12 @@ class TransposeOptimizer(GraphOptimizerBase):
         return False
 
     def _identity_handler(self, trans, node):
-        if node.output[0] in self._g.outputs:
+        if node.output[0] in node.graph.outputs:
             return False
-        ops = self._g.get_nodes()
-        self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-        self._g.remove_node(node.name)
+        for g in {self._g, node.graph}:
+            ops = g.get_nodes()
+            g.replace_all_inputs(ops, node.output[0], trans.output[0])
+        node.graph.remove_node(node.name)
         return True
 
     def _concat_handler(self, trans, node):
@@ -535,13 +537,15 @@ class TransposeOptimizer(GraphOptimizerBase):
             # NHWC->NCHW
             new_pads = [pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]]
             node.set_attr("pads", new_pads)
-        else:
+            return self._switch_transpose_and_node(node, trans)
+        if node.inputs[1].is_const():
             pads = node.inputs[1].get_tensor_value()
             # NHWC->NCHW
             new_pads = np.array([pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]],
                                 dtype=np.int64)
             node.inputs[1].set_tensor_value(new_pads)
-        return self._switch_transpose_and_node(node, trans)
+            return self._switch_transpose_and_node(node, trans)
+        return False
 
     def _reducemean_handler(self, trans, node):
         axes = node.get_attr("axes").ints

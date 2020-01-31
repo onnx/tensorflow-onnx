@@ -374,3 +374,17 @@ style-transfer:
   outputs:
     - output:0
 
+faster_rcnn_inception_v2_coco:
+  url: http://download.tensorflow.org/models/object_detection/faster_rcnn_inception_v2_coco_2018_01_28.tar.gz
+  model: faster_rcnn_inception_v2_coco_2018_01_28/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 11
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_classes:0
+    - detection_scores:0
+    - num_detections:0

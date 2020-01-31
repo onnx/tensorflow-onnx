@@ -16,8 +16,8 @@ from onnx import onnx_pb, numpy_helper
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 
-
 logger = logging.getLogger(__name__)
+
 
 # pylint: disable=unused-argument,missing-docstring
 
@@ -117,6 +117,15 @@ class Fill:
         value_proto = numpy_helper.from_array(value)
         node.set_attr("value", value_proto)
         del node.input[1]
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # cls.version_7(ctx, node, **kwargs)
+        node.type = "Expand"
+        node.input = [node.input[1], node.input[0]]
+        # cast shape to int64 if needed
+        if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
 
 
 @tf_op("Multinomial")
