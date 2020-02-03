@@ -9,6 +9,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+# pylint: disable=unused-argument,unused-import,ungrouped-imports,wrong-import-position
+
 import argparse
 import os
 import sys
@@ -19,7 +21,7 @@ import tensorflow as tf
 
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import constants, logging, utils, optimizer
-from tf2onnx import tf_utils, tf_loader
+from tf2onnx import tf_loader
 
 
 # pylint: disable=unused-argument

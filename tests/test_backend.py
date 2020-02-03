@@ -18,9 +18,9 @@ from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_placeholder, is_tf2
+from tf2onnx.tf_loader import tf_reset_default_graph, is_tf2
 
-# pylint: disable=missing-docstring,invalid-name,unused-argument
+# pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
 
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -174,25 +174,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(9, "ConstantOfShape")
     def test_eye_non_const2(self):
         # tf.eye(num_rows), num_rows is not const here
-        for np_dtype, tf_dtype in zip([np.int32, np.int64, np.float32, np.float64],
-                                      [tf.int32, tf.int64, tf.float32, tf.float64]):
+        for np_dtype in [np.int32, np.int64, np.float32, np.float64]:
             x_val = np.array(5, dtype=np_dtype)
             def func(x):
                 y = tf.eye(x, dtype=tf.int32)
                 y1 = tf.eye(x, dtype=tf.int64)
                 y2 = tf.eye(x, dtype=tf.float32)
-                return tf.identity(y, name=_TFOUTPUT), tf.identity(y1, name=_TFOUTPUT1), tf.identity(y2, name=_TFOUTPUT2)
+                return tf.identity(y, name=_TFOUTPUT),\
+                       tf.identity(y1, name=_TFOUTPUT1), \
+                       tf.identity(y2, name=_TFOUTPUT2)
             self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val}, rtol=0)
 
         # tf.eye(num_rows, num_columns), both num_rows and num_columns are not const here
-        for np_dtype, tf_dtype in zip([np.int32, np.int64, np.float32, np.float64],
-                                      [tf.int32, tf.int64, tf.float32, tf.float64]):
+        for np_dtype in [np.int32, np.int64, np.float32, np.float64]:
             x_val = np.array([5, 10], dtype=np_dtype)
             def func(x):
                 y = tf.eye(x[0], x[1], dtype=tf.int32)
                 y1 = tf.eye(x[0], x[1], dtype=tf.int64)
                 y2 = tf.eye(x[0], x[1], dtype=tf.float32)
-                return tf.identity(y, name=_TFOUTPUT), tf.identity(y1, name=_TFOUTPUT1), tf.identity(y2, name=_TFOUTPUT2)
+                return tf.identity(y, name=_TFOUTPUT), \
+                       tf.identity(y1, name=_TFOUTPUT1), \
+                       tf.identity(y2, name=_TFOUTPUT2)
             self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val}, rtol=0)
 
     @check_opset_min_version(7, "trig")
@@ -238,15 +240,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             check_shape=True, check_dtype=True)
 
     def test_maxpool(self):
-        for tf_shape in ["known", "unknown"]:
-            for p in get_conv_getdata():
-                _, padding, x_shape, ksize, strides = p
-                x_val = make_xval(x_shape)
-                def func(x):
-                    mp = tf.nn.max_pool(x, ksize, strides, padding=padding)
-                    return tf.identity(mp, name=_TFOUTPUT)
-                self.logger.debug(str(p))
-                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        for p in get_conv_getdata():
+            _, padding, x_shape, ksize, strides = p
+            x_val = make_xval(x_shape)
+            def func(x):
+                mp = tf.nn.max_pool(x, ksize, strides, padding=padding)
+                return tf.identity(mp, name=_TFOUTPUT)
+            self.logger.debug(str(p))
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @skip_tf_cpu("only tf_gpu can run maxpool with NCHW format")
     def test_maxpool_gpu(self):
@@ -263,16 +264,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_onnxruntime_incompatibility("AveragePool")
     def test_avgpool(self):
-        for tf_shape in ["known", "unknown"]:
-            for p in get_conv_getdata(kind=0):
-                _, padding, x_shape, ksize, strides = p
-                x_val = make_xval(x_shape)
-                def func(x):
-                    mp = tf.nn.avg_pool(x, ksize, strides, padding=padding)
-                    return tf.identity(mp, name=_TFOUTPUT)
+        for p in get_conv_getdata(kind=0):
+            _, padding, x_shape, ksize, strides = p
+            x_val = make_xval(x_shape)
+            def func(x):
+                mp = tf.nn.avg_pool(x, ksize, strides, padding=padding)
+                return tf.identity(mp, name=_TFOUTPUT)
 
-                self.logger.debug(str(p))
-                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-06)
+            self.logger.debug(str(p))
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-06)
 
     @check_onnxruntime_incompatibility("AveragePool")
     @skip_tf_cpu("only tf_gpu can run avgpool with NCHW format")
@@ -402,7 +402,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             f = tf.constant(kernel_val, name="kernel", dtype=tf.float32)
             conv = tf.nn.conv2d_transpose(x, f, output_shape_placeholder, strides=strides, padding="VALID")
             return tf.identity(conv, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape}, rtol=1e-05, process_args=process_args)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape},
+                            rtol=1e-05, process_args=process_args)
 
     def test_depthwiseconv_0(self):
         x_shape = [1, 3, 4, 3]
@@ -439,7 +440,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=0.01)
 
-
     @check_tf_max_version("1.15", "not supported in tf-2.0")
     def test_dropout(self):
         x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
@@ -450,8 +450,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             fc1 = tf.layers.dropout(x_, rate=.1, training=is_training)
             return tf.identity(fc1, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val},
-                           graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
-                                                      check_op_count(g, "RandomUniformLike", 0)))
+                            graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
+                                                       check_op_count(g, "RandomUniformLike", 0)))
 
     def test_nn_dropout(self):
         x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
@@ -465,8 +465,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # here we set it False to test PlaceholderWithDefault bug: https://github.com/onnx/tensorflow-onnx/pull/446
         # Dropout with ratio 1.0 will be optimized so that only one Identity is left
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: np.array(1., dtype=np.float32)},
-                           graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
-                                                      check_op_count(g, "RandomUniformLike", 0)))
+                            graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
+                                                       check_op_count(g, "RandomUniformLike", 0)))
 
     @check_tf_min_version("1.13")
     def test_nn_dropout_with_rate(self):
@@ -542,26 +542,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         def func(x):
             return tf.identity(x, name=_TFOUTPUT)
-            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-    @unittest.skip("doesn't work with the new ut func interface, fix later")
-    def test_placeholder_with_default_use_default(self):
-        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
-        def func():
-            x = tf.constant(x_val, name="x")
-            y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
-        return tf.identity(y, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {})
+    #@unittest.skip("doesn't work with the new ut func interface, fix later")
+    #def test_placeholder_with_default_use_default(self):
+    #    x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+    #    def func():
+    #        x = tf.constant(x_val, name="x")
+    #        y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+    #    return tf.identity(y, name=_TFOUTPUT)
+    #    self._run_test_case(func, [_OUTPUT], {})
 
-    @unittest.skip("doesn't work with the new ut func interface, fix later")
-    def test_placeholder_with_default_use_feed(self):
-        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
-        def func():
-            x = tf.constant(x_val, name="x")
-            y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
-            return tf.identity(y, name=_TFOUTPUT)
-        x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_feed_val})
+    #@unittest.skip("doesn't work with the new ut func interface, fix later")
+    #def test_placeholder_with_default_use_feed(self):
+    #    x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+    #    def func():
+    #        x = tf.constant(x_val, name="x")
+    #        y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+    #        return tf.identity(y, name=_TFOUTPUT)
+    #    x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
+    #    self._run_test_case(func, [_OUTPUT], {_INPUT: x_feed_val})
 
     @check_onnxruntime_incompatibility("Add")
     def test_add_bcast(self):
@@ -1422,7 +1422,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(9, "onehot")
     def test_onehot3(self):
         # rank 1
-        for np_dtype, tf_dtype in zip([np.int32, np.int64], [tf.int32, tf.int64]):
+        for np_dtype in [np.int32, np.int64]:
             x_val = np.array([0, 1, 2, 1, 2, 0, 1, 2, 1, 2], dtype=np_dtype)
             depth = np.array(20).astype(np.int64)
             def func(x):
@@ -1433,7 +1433,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.assertTrue(len(group_nodes_by_type(graph)["OneHot"]) == 1, "onnx onehot should be used")
         # rank 2
         for aixs in [-1, 0, 1, 2]:
-            for np_dtype, tf_dtype in zip([np.int32, np.int64], [tf.int32, tf.int64]):
+            for np_dtype in [np.int32, np.int64]:
                 x_val = np.arange(0, 50, dtype=np_dtype).reshape([-1, 10])
                 depth = np.array(20).astype(np.int64)
                 def func(x):
@@ -1847,7 +1847,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
-            x_ =  tf.compat.v1.image.resize_nearest_neighbor(x, x_new_size_)
+            x_ = tf.compat.v1.image.resize_nearest_neighbor(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -2121,7 +2121,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(9, "NonZero")
     @check_target("rs6", "onnxruntime Transpose type limitation")
     def test_where_with_cond_only(self):
-        for np_type, tf_type in [(np.int32, tf.int32), (np.float32, tf.float32)]:
+        for np_type in [np.int32, np.float32]:
             x_val = np.random.randint(0, 2, size=[10, 20, 30]).astype(np_type)
             def func(x):
                 # FIXME: was tf_placeholder(tf_type, shape=[None] * x_val.ndim, name=_TFINPUT)
@@ -2155,7 +2155,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_softmax_cross_entropy_with_logits(self):
         num_class = 5
         data_shape = [100, num_class]
-        for np_dtype, tf_dtype in zip([np.int32, np.int64], [tf.int32, tf.int64]):
+        for np_dtype in [np.int32, np.int64]:
             tf_reset_default_graph()
             label_val = np.random.randint(0, num_class - 1, data_shape).astype(np_dtype)
             logits_val = np.random.random(data_shape).astype(np.float32)
@@ -2169,13 +2169,12 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_sparse_softmax_cross_entropy_with_logits(self):
         # FIXME: fails for opset 8 on onnxruntime-1.0, disable for now
         num_class = 5
-        for logic_shape in [[None, None], [None, num_class]]:
-            label_val = np.array([3, 2, 0, 4]).astype(np.int32)
-            logits_val = np.random.random((len(label_val), num_class)).astype(np.float32)
-            def func(label, logits):
-                res1 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label, logits=logits)
-                return tf.identity(res1, name=_TFOUTPUT)
-            self._run_test_case(func, [_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val})
+        label_val = np.array([3, 2, 0, 4]).astype(np.int32)
+        logits_val = np.random.random((len(label_val), num_class)).astype(np.float32)
+        def func(label, logits):
+            res1 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label, logits=logits)
+            return tf.identity(res1, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val})
 
     @check_target('rs6', 'SparseSoftmaxCrossEntropyWithLogits')
     def test_sparse_softmax_cross_entropy_with_logits_large_class(self):
@@ -2311,7 +2310,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             def func(x):
                 x_ = tf.is_nan(x)
                 return tf.identity(x_, name=_TFOUTPUT)
-                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     def test_ceil(self):
         x_val = np.array([-1.5, 1.2], dtype=np.float32)
@@ -2452,7 +2451,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             kernel = tf.constant(w, dtype=tf.float32, name='k')
             conv = tf.nn.conv1d(x, kernel, stride=stride, padding=padding)
             return tf.identity(conv, name=_TFOUTPUT)
-            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=rtol)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=rtol)
 
     def test_conv1d_1(self):
         x_val = make_xval((1, 7, 1))
@@ -2495,15 +2494,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.13")
     @check_opset_min_version(8, "MaxPoolWithArgmax")
     def test_maxpoolwithargmax(self):
-        for tf_shape in ["known", "unknown"]:
-            for p in get_maxpoolwithargmax_getdata():
-                _, padding, x_shape, ksize, strides = p
-                x_val = make_xval(x_shape)
-                def func(x):
-                    mp = tf.nn.max_pool_with_argmax(x, ksize, strides, padding=padding)
-                    return tf.identity(mp[0], name=_TFOUTPUT), tf.identity(mp[1], name=_TFOUTPUT1)
-                self.logger.debug(str(p))
-                self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+        for p in get_maxpoolwithargmax_getdata():
+            _, padding, x_shape, ksize, strides = p
+            x_val = make_xval(x_shape)
+            def func(x):
+                mp = tf.nn.max_pool_with_argmax(x, ksize, strides, padding=padding)
+                return tf.identity(mp[0], name=_TFOUTPUT), tf.identity(mp[1], name=_TFOUTPUT1)
+            self.logger.debug(str(p))
+            self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
     @check_opset_min_version(10, "Selu")
     def test_selu(self):
@@ -2729,9 +2727,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_unique(self):
         x_val = np.array([1, 1, 2, 4, 4, 4, 7, 8, 8], dtype=np.float32)
         def func(x):
-            x1_, x2_ = tf.unique(x)
+            x1_, _ = tf.unique(x)
             y1 = tf.identity(x1_, name=_TFOUTPUT)
-            y2 = tf.identity(x2_, name=_TFOUTPUT1)
             return y1
             # FIXME: indices in onnx are not the same as in tensorflow so don't check for now
             #self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
@@ -2747,8 +2744,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             filter_val = tf.constant(filter_val_, dtype=tf.float32)
             out_backprop_val = tf.constant(out_backprop_val_, dtype=tf.float32)
             return conv2d_backprop_input(input_sizes=input_sizes_val, filter=filter_val,
-                                               out_backprop=out_backprop_val, strides=[1, 1, 1, 1],
-                                               padding='SAME', name=_TFOUTPUT)
+                                         out_backprop=out_backprop_val, strides=[1, 1, 1, 1],
+                                         padding='SAME', name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {})
 
     @check_opset_min_version(10, "Conv2DBackpropInput")
@@ -2762,8 +2759,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             filter_val = tf.constant(filter_val_, dtype=tf.float32)
             out_backprop_val = tf.constant(out_backprop_val_, dtype=tf.float32)
             return conv2d_backprop_input(input_sizes=input_sizes_val, filter=filter_val,
-                                               out_backprop=out_backprop_val, strides=[1, 2, 2, 1],
-                                               padding='SAME', name=_TFOUTPUT)
+                                         out_backprop=out_backprop_val, strides=[1, 2, 2, 1],
+                                         padding='SAME', name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {})
 
     @check_opset_min_version(10, "Conv2DBackpropInput")
@@ -2776,15 +2773,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             filter_val = tf.constant(filter_val_, dtype=tf.float32)
             out_backprop_val = tf.constant(out_backprop_val_, dtype=tf.float32)
             return conv2d_backprop_input(input_sizes=input_sizes_val, filter=filter_val,
-                                               out_backprop=out_backprop_val, strides=[1, 1, 1, 1],
-                                               padding='VALID', name=_TFOUTPUT)
+                                         out_backprop=out_backprop_val, strides=[1, 1, 1, 1],
+                                         padding='VALID', name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {})
 
     @check_opset_min_version(10, "Conv2DBackpropInput")
     def test_Conv2DBackpropInput(self):
         def func(input_sizes, filters, out_backprop):
             return conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 1, 1, 1],
-                                               padding='SAME', name=_TFOUTPUT)
+                                         padding='SAME', name=_TFOUTPUT)
         filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
         out_backprop_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 5]).astype(np.float32)
         input_sizes_val = np.array([1, 10, 10, 3], dtype=np.int32)
@@ -2794,7 +2791,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_Conv2DBackpropInput_strided(self):
         def func(input_sizes, filters, out_backprop):
             return conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 2, 2, 1], padding='SAME',
-                                            name=_TFOUTPUT)
+                                         name=_TFOUTPUT)
         input_sizes_val = np.array([1, 10, 10, 3], dtype=np.int32)
         filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
         out_backprop_val = np.random.randint(low=0, high=256, size=[1, 5, 5, 5]).astype(np.float32)
@@ -2804,8 +2801,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_Conv2DBackpropInput_valid(self):
         def func(input_sizes, filters, out_backprop):
             return conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 1, 1, 1],
-                                               padding='VALID', name=_TFOUTPUT)
-
+                                         padding='VALID', name=_TFOUTPUT)
         input_sizes_val = np.array([1, 12, 12, 3], dtype=np.int32)
         filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
         out_backprop_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 5]).astype(np.float32)

@@ -7,6 +7,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+# pylint: disable=missing-docstring,unused-argument,unused-variable
+
 from collections import namedtuple
 
 import numpy as np
@@ -20,13 +22,11 @@ from tf2onnx.graph import GraphUtil
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.handler import tf_op
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, freeze_func
+from tf2onnx.tf_loader import tf_session, tf_placeholder
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import *
+from common import unittest_main, check_tf_max_version
 
-
-# pylint: disable=missing-docstring,unused-argument,unused-variable
 
 def onnx_to_graphviz(g, include_attrs=False):
     """Return dot for graph."""

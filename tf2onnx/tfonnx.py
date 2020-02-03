@@ -399,8 +399,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                                   custom_op_handlers, custom_rewriter,
                                   extra_opset, shape_override, inputs_as_nchw,
                                   f_inputs_names, f_output_names, is_subgraph=True)
-            fg._graph_name = func.name
-            fg._func_inputs = f_inputs_names
+            fg.graph_name = func.name
+            fg.func_inputs = f_inputs_names
             set_function(func.name, fg)
 
     io_to_check = []

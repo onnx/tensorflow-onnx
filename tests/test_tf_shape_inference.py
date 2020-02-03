@@ -19,7 +19,7 @@ from common import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from tf2onnx import utils
 from tf2onnx.tf_utils import get_tf_tensor_shape
 from tf2onnx.shape_inference import infer_shape_for_graph
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, freeze_func, tf_optimize
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, tf_optimize
 
 # pylint: disable=missing-docstring
 

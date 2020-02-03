@@ -12,7 +12,6 @@ import logging
 from distutils.version import LooseVersion
 from collections import defaultdict
 
-import tensorflow as tf
 from tf2onnx import utils
 from tf2onnx.tf_utils import get_tf_tensor_shape, get_tf_const_value, get_tf_shape_attr, get_tf_version
 from tf2onnx.tf_loader import tf_reload_graph

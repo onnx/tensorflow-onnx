@@ -407,7 +407,7 @@ class Graph(object):
         self._nodes_by_name = {}
         self._output_to_node_name = {}
         self.shapes = {}
-        self._graph_name = graph_name or "tf2onnx"
+        self.graph_name = graph_name or "tf2onnx"
         self._is_subgraph = is_subgraph
         self.ta_reads = []
 
@@ -940,7 +940,7 @@ class Graph(object):
             optimize: optimize graph via onnx
             doc: text for doc string of the graph
         """
-        graph_name = graph_name or self._graph_name
+        graph_name = graph_name or self.graph_name
         self.delete_unused_nodes(self.outputs)
         self.topological_sort(self.get_nodes())
         self.update_proto()

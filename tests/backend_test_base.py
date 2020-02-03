@@ -8,11 +8,14 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,import-outside-toplevel
+# pylint: disable=wrong-import-position
+
 import logging
 import os
 import unittest
 
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import numpy as np
 import tensorflow as tf
@@ -21,11 +24,10 @@ from common import get_test_config
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
-from tf2onnx.tf_loader import tf_optimize, tf_reset_default_graph, tf_session, tf_placeholder, freeze_func
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, freeze_func, freeze_session
 from tf2onnx.tf_loader import is_tf2
 
 
-# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test, import-outside-toplevel
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     def setUp(self):
@@ -96,6 +98,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         tf_reset_default_graph()
         graph_def = None
 
+        np.random.seed(1)  # Make it reproducible.
         clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
         if is_tf2():
             #
@@ -103,9 +106,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             #
             # numpy doesn't work for all ops, make it tf.Tensor()
             input_tensors = [tf.TensorSpec(shape=v.shape, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
-                         for k, v in feed_dict.items()]
-            input_list = [tf.convert_to_tensor(v, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
                              for k, v in feed_dict.items()]
+            input_list = [tf.convert_to_tensor(v, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
+                          for k, v in feed_dict.items()]
+            tf.random.set_seed(1)
             expected = func(*input_list)
             if isinstance(expected, list) or isinstance(expected, tuple):
                 # list or tuple
@@ -123,6 +127,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # use graph to execute the tensorflow func
             #
             with tf_session() as sess:
+                tf.set_random_seed(1)
                 input_list = []
                 for k, v in clean_feed_dict.items():
                     input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
@@ -137,8 +142,11 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if convert_var_to_const:
                 with tf_session() as sess:
                     variables_lib.global_variables_initializer().run()
-                    output_name_without_port = [n.split(':')[0] for n in output_names_with_port]
-                    graph_def = tf_optimize(input_names_with_port, output_names_with_port, graph_def, constant_fold)
+                    graph_def = freeze_session(sess, None,
+                                               input_names=list(feed_dict.keys()),
+                                               output_names=output_names_with_port,
+                                               clear_devices=True)
+                    # graph_def = tf_optimize(input_names_with_port, output_names_with_port, graph_def, constant_fold)
 
         tf_reset_default_graph()
         with tf_session() as sess:

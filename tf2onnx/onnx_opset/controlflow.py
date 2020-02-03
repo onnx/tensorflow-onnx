@@ -18,7 +18,6 @@ import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
-from tf2onnx.graph import Graph, Node
 from tf2onnx.handler import tf_op
 from tf2onnx.utils import make_sure
 from tf2onnx.tf_loader import find_function
@@ -386,7 +385,7 @@ class StatelessIfOp:
 
         # replace the original node
         if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-            shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
 
         for branch in ["then_branch", "else_branch"]:
             func_name = node.get_attr_str(branch)
@@ -413,7 +412,7 @@ class IfOp:
 
         # replace the original node
         if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-            shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
 
         for branch in ["then_branch", "else_branch"]:
             func_name = node.get_attr_str(branch)
@@ -502,7 +501,7 @@ class While:
         if maximum_iterations == -1:
             # in tf -1 means forever, in onnx it is maxsize
             maximum_iterations = sys.maxsize
-        ctx.make_const(maximum_iterations_name,  np.array(maximum_iterations, dtype=np.int64))
+        ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
 
         cond_name = node.get_attr_str("cond")
         cond_graph = find_function(cond_name)
@@ -532,8 +531,8 @@ class While:
                 continue
 
             # tensor arrays we read from can't be loop_vars and we fetch them from the outer context instead
-            if body._func_inputs[idx] in body.ta_reads:
-                state_vars[body._func_inputs[idx]] = name
+            if body.func_inputs[idx] in body.ta_reads:
+                state_vars[body.func_inputs[idx]] = name
                 input_idx_to_remove.append(idx)
             else:
                 loop_vars.append(name)
@@ -549,8 +548,8 @@ class While:
             ctx.remove_node(n.name)
             # make the node output bad
             ctx.replace_all_inputs(ctx.get_nodes(), n.output[0], "@@ALLOC")
-            del body._func_inputs[idx]
-            del cond_graph._func_inputs[idx]
+            del body.func_inputs[idx]
+            del cond_graph.func_inputs[idx]
             del tf_while_inputs[idx]
 
         ctx.remove_node(node.name)
@@ -566,8 +565,8 @@ class While:
         output_dtypes = output_dtypes[2:]
 
         loop_node = ctx.make_node("Loop", [maximum_iterations_name, cond_outputs[0]] + loop_vars,
-                        output_count=len(output_shapes), name=node.name,
-                        shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+                                  output_count=len(output_shapes), name=node.name,
+                                  shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
         # shift output consumers
         for k, v in output_map.items():
             ctx.replace_all_inputs(ctx.get_nodes(), k, v)
@@ -578,7 +577,7 @@ class While:
         for i, n in enumerate(body.inputs):
             # this was a tensorflow variant type, put in a real type here
             if body.get_dtype(n.output[0]) == -1:
-                body.set_dtype(n.output[0],  ctx.get_dtype(loop_node.input[i]))
+                body.set_dtype(n.output[0], ctx.get_dtype(loop_node.input[i]))
         loop_node.set_body_graph_as_attr("body", body)
 
         # dump_graph(body)
@@ -602,11 +601,12 @@ def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, ou
                             output_count=1, dtypes=[onnx_pb.TensorProto.BOOL], shapes=[[]])
 
     # in onnx the body inputs are: index, cond, [loop_vars]
-    func_inputs = [i for i in g._func_inputs[2:] if i not in state_vars]
-    func_inputs = [g._func_inputs[0], cond_node.output[0]] +  func_inputs
+    func_inputs = [i for i in g.func_inputs[2:] if i not in state_vars]
+    func_inputs = [g.func_inputs[0], cond_node.output[0]] + func_inputs
     g.set_dtype(func_inputs[0], onnx_pb.TensorProto.INT64)
     # tell graph lib to keep inputs in order
-    g._order_sensitive_inputs = [g.get_node_by_output(name) for name in  func_inputs]
+    g._order_sensitive_inputs = \
+        [g.get_node_by_output(name) for name in func_inputs]  # pylint: disable=protected-access
 
     for p, c in zip(loop_node_inputs, func_inputs):
         shape = p.output_shapes[0]
@@ -650,7 +650,6 @@ def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, ou
 
 def wire_if_branch(parent_g, g, inputs, output_shapes, output_dtypes, scope, parent):
     """Wire subgraph graph into main."""
-    remove_parents = []
 
     binding = parameter_binding(g, inputs, parent)
     to_remove = []
@@ -701,7 +700,7 @@ def inline_subgraph(parent, g, scope, binding):
 
 def parameter_binding(g, inputs, parent):
     binding = {}
-    for k, v in zip(g._func_inputs, inputs):
+    for k, v in zip(g.func_inputs, inputs):
         binding[k] = v
     return binding
 
@@ -716,8 +715,8 @@ def prefix_graph(g, scope):
         if node.is_graph_input():
             continue
         new_node = g.make_node(node.type, node.input, name=node.name, output_count=len(node.output),
-            shapes=output_shapes, dtypes=output_dtypes, attr=attr,
-            op_name_scope=scope, skip_conversion=True)
+                               shapes=output_shapes, dtypes=output_dtypes, attr=attr,
+                               op_name_scope=scope, skip_conversion=True)
         attr_graphs = node.get_body_graphs()
         if attr_graphs:
             for k, v in attr_graphs.items():
@@ -735,7 +734,7 @@ def prefix_graph(g, scope):
 
 def dump_graph(g):
     print()
-    print("--, graph=", g._graph_name)
+    print("--, graph=", g.graph_name)
     t = [n.name + str(g.get_shape(n.output[0])) for n in g.inputs]
     print("--, inputs=", ",".join(t))
     t = [n + str(g.get_shape(n)) for n in g.outputs]

@@ -8,8 +8,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
+# pylint: disable=wrong-import-position
+
 import argparse
-import yaml
 import os
 import re
 import sys
@@ -18,8 +20,9 @@ import time
 import zipfile
 from collections import namedtuple
 
-import PIL.Image
+import yaml
 import numpy as np
+import PIL.Image
 import six
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -29,16 +32,15 @@ import tensorflow as tf
 # otherwise tf runtime error will show up when the tf model is restored from pb file because of un-registered ops.
 try:
     import tensorflow.contrib.rnn  # pylint: disable=unused-import
-except:
+except:  # pylint: disable=bare-except
     # not needed for tf-2.0
     pass
 
 import tf2onnx
 from tf2onnx import tf_loader, logging, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
+from tf2onnx.tf_loader import tf_session
 
-# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
 
 logger = logging.getLogger("run_pretrained")
 

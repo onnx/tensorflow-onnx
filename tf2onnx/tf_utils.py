@@ -12,18 +12,16 @@ from __future__ import unicode_literals
 import collections
 from distutils.version import LooseVersion
 
-import six
 import numpy as np
+import six
 import tensorflow as tf
-
-from functools import reduce as _reduce
 
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
 
 from onnx import helper, onnx_pb, numpy_helper
 
-from tf2onnx.utils import make_sure, is_tf_const_op, port_name, node_name
+from tf2onnx.utils import make_sure, is_tf_const_op, port_name
 from . import logging
 
 logger = logging.getLogger(__name__)
