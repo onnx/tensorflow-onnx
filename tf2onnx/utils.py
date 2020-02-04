@@ -179,7 +179,7 @@ def get_tf_shape_attr(node):
 
 def get_tf_output_shapes_attr(node):
     """Get output shapes from tensorflow attr "output_shapes"."""
-    dims = [] 
+    dims = []
     try:
         shapes = get_tf_node_attr(node, "output_shapes")
         for shape in shapes:
