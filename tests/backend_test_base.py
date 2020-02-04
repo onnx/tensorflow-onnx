@@ -15,7 +15,7 @@ import logging
 import os
 import unittest
 
-# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import numpy as np
 import tensorflow as tf
@@ -110,7 +110,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                           for k, v in feed_dict.items()]
             tf.random.set_seed(1)
             expected = func(*input_list)
-            if isinstance(expected, list) or isinstance(expected, tuple):
+            if isinstance(expected, (list, tuple)):
                 # list or tuple
                 expected = [x.numpy() for x in expected]
             else:

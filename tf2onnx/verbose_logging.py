@@ -14,7 +14,7 @@ import types
 import tensorflow as tf
 TF2 = tf.__version__.startswith("2.")
 
-from . import constants
+from . import constants  # pylint: disable=wrong-import-position
 
 VERBOSE = 15
 

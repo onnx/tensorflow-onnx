@@ -73,7 +73,7 @@ def freeze_func(func, outputs=None):
         # our output is also an identity, grappler will optimize our output away. Make sure to tell
         # grappler to preserve it.
         _, outputs = get_tensors_for_names(graph_def, [], outputs)
-        output_tensors = {k: v for k, v in outputs.items()}
+        output_tensors = {k: v.name for k, v in outputs.items()}
     else:
         # TODO: do we need frozen_func.outputs or can we just use our outputs ?
         output_tensors = {i.name: i for i in frozen_func.outputs}
