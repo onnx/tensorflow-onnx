@@ -33,28 +33,27 @@ class ConstantFoldingTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, ["output_0:0", "output_1:0", "output_2:0"], {})
 
     def test_range(self):
-        def func():
+        def func0():
             start = tf.constant(3, dtype=tf.float32, name='start')
             limit = tf.constant(18, dtype=tf.float32, name='limit')
             delta = tf.constant(3, dtype=tf.float32, name='delta')
-
             x_ = tf.range(start, limit, delta)
             return tf.identity(x_, name="output_0")
-        self._run_test_case(func, ["output_0:0"], {})
+        self._run_test_case(func0, ["output_0:0"], {})
 
-        def func():
+        def func1():
             start = tf.constant(3, dtype=tf.float32, name='start')
             limit = tf.constant(1, dtype=tf.float32, name='limit')
             delta = tf.constant(-0.5, dtype=tf.float32, name='delta')
             x_ = tf.range(start, limit, delta)
             return tf.identity(x_, name="output_0")
-        self._run_test_case(func, ["output_0:0"], {})
+        self._run_test_case(func1, ["output_0:0"], {})
 
-        def func():
+        def func2():
             limit = tf.constant(5, dtype=tf.float32, name='limit')
             x_ = tf.range(limit)
             return tf.identity(x_, name="output_0")
-        self._run_test_case(func, ["output_0:0"], {})
+        self._run_test_case(func2, ["output_0:0"], {})
 
     @unittest.skip("tensorflow op ListDiff is not supported")
     def test_bahdanau_attention_memory_layer_tensordot(self):

@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, check_tf_min_version, check_onnxruntime_min_version
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, is_tf2
+from tf2onnx.tf_loader import is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -87,7 +87,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, {_INPUT: x_val}, [], output_names_with_port, rtol=1e-06)
 
     def test_while_loop_with_ta_read_simple(self):
-        def func(i, inputs_2, ):
+        def func(i, inputs_2):
             input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_2)
             c = lambda i, *_: tf.less(i, 10)
             res = tf.constant(0.)
@@ -223,17 +223,17 @@ class LoopTests(Tf2OnnxBackendTestBase):
         y_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
 
         # test fn0
-        def func(x):
+        def func0(x):
             x_ = tf.identity(x)
             res_ = tf.map_fn(fn0, x_, dtype=tf.float32)
             return tf.identity(res_, name="output_0")
         feed_dict = {"input_0:0": x_val}
         input_names_with_port = ["input_0:0"]
         output_names_with_port = ["output_0:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(func0, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
 
         # test fn1
-        def func(x, y):
+        def func1(x, y):
             x_ = tf.identity(x)
             y_ = tf.identity(y)
             res_ = tf.map_fn(fn1, (x_, y_), dtype=tf.float32)
@@ -241,7 +241,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_0:0": x_val, "input_1:0": y_val}
         input_names_with_port = ["input_0:0", "input_1:0"]
         output_names_with_port = ["output_0:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(func1, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
 
     @check_tf_min_version("1.9")
     def test_simple_while_loop_var_shape(self):

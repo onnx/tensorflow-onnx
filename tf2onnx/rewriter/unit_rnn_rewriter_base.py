@@ -11,7 +11,7 @@ import logging
 
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_pattern, \
-    get_rnn_scope_name, parse_rnn_loop, seq_len_pattern
+    get_rnn_scope_name, parse_rnn_loop, seq_len_pattern0, seq_len_pattern1
 from tf2onnx.utils import is_tf_select_op, is_tf_tensor_array_write_op
 from tf2onnx.graph_matcher import GraphMatcher
 
@@ -212,10 +212,13 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         if not is_tf_select_op(next_iter_input_node):
             logger.debug("no sequence length node is given")
             return None
-        matcher = GraphMatcher(seq_len_pattern)
+        matcher = GraphMatcher(seq_len_pattern0)
         match_result = matcher.match_op(next_iter_input_node)
         if not match_result:
-            raise RuntimeError("failed to find sequence length.")
+            matcher = GraphMatcher(seq_len_pattern1)
+            match_result = matcher.match_op(next_iter_input_node)
+            if not match_result:
+                raise RuntimeError("failed to find sequence length.")
         return match_result.get_op("seq_len_node")
 
     def process_weights_and_bias(self, context):

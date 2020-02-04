@@ -12,7 +12,6 @@ import logging
 from distutils.version import LooseVersion
 
 import tensorflow as tf
-from tensorflow.python.framework import graph_util
 
 from tf2onnx import utils
 from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx
@@ -314,7 +313,7 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=False):
         try:
             # try grappler. this should work on newer tensorflow versions tf-1.12 and up
             graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
-        except Exception as ex:  # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             # older versions might fail
 
             # if older, try the old try TransformGraph

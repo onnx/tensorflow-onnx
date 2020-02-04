@@ -452,7 +452,7 @@ def is_tf_loopcond_op(op):
 
 
 def is_tf_select_op(op):
-    return op.type == "Select"
+    return op.type in ("Select", "SelectV2")
 
 
 def is_tf_slice_op(op):

@@ -28,7 +28,6 @@ from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
 from tf2onnx.tf_loader import is_tf2
 
 
-
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     def setUp(self):
         self.config = get_test_config()
@@ -146,7 +145,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                                input_names=list(feed_dict.keys()),
                                                output_names=output_names_with_port,
                                                clear_devices=True)
-                    # graph_def = tf_optimize(input_names_with_port, output_names_with_port, graph_def, constant_fold)
 
         tf_reset_default_graph()
         with tf_session() as sess:

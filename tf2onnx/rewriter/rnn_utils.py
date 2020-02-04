@@ -196,13 +196,22 @@ lstmblockcell_pattern = \
     ])
 
 
-
-seq_len_pattern = OpTypePattern("Select|SelectV2", inputs=[
+seq_len_pattern0 = OpTypePattern("Select|SelectV2", inputs=[
     OpTypePattern("GreaterEqual", inputs=[
         OpTypePattern("*"),
         OpTypePattern("Enter", inputs=[
             OpTypePattern("*", name="seq_len_node")
         ])
+    ]),
+    OpTypePattern("*"),
+    OpTypePattern("*")
+])
+
+
+seq_len_pattern1 = OpTypePattern("Select|SelectV2", inputs=[
+    OpTypePattern("GreaterEqual", inputs=[
+        OpTypePattern("*"),
+        OpTypePattern("Const", name="seq_len_node")
     ]),
     OpTypePattern("*"),
     OpTypePattern("*")
