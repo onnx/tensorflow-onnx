@@ -1,11 +1,11 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 """ tf2onnx mapping functions for onnx ml domain. """
-import numpy as np
-
-from onnx import onnx_pb
 from tf2onnx import constants
 from tf2onnx.handler import tf_op
+
+
+# pylint: disable=unused-argument,missing-docstring,unnecessary-pass
 
 @tf_op("HashTableV2")
 class HashTable:
@@ -13,6 +13,7 @@ class HashTable:
     def version_11(cls, ctx, node, **kwargs):
         """ HashTable will be removed """
         pass
+
 
 @tf_op("LookupTableFindV2")
 class LookupTableFind:
