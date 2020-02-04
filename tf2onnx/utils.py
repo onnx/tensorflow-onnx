@@ -177,6 +177,17 @@ def get_tf_shape_attr(node):
         pass
     return dims
 
+def get_tf_output_shapes_attr(node):
+    """Get output shapes from tensorflow attr "output_shapes"."""
+    dims = [] 
+    try:
+        shapes = get_tf_node_attr(node, "output_shapes")
+        for shape in shapes:
+            dims.extend([d.size for d in shape.dim])
+            dims.append(0)
+    except:  # pylint: disable=bare-except
+        pass
+    return dims
 
 def get_tf_tensor_shape(tensor):
     shape = []

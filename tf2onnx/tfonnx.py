@@ -99,6 +99,12 @@ def tflist_to_onnx(node_list, shape_override):
                 continue
             elif a in ignored_attr:
                 continue
+            elif a in ["key_dtype", "value_dtype", "Tin", "Tout"]:
+                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
+            elif a == "output_types":
+                attr[a] = [utils.map_tf_dtype(v) for v in utils.get_tf_node_attr(node, a)]
+            elif a == "output_shapes":
+                attr[a] = utils.get_tf_output_shapes_attr(node)
             else:
                 attr[a] = utils.get_tf_node_attr(node, a)
 
