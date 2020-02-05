@@ -11,18 +11,30 @@ from __future__ import unicode_literals
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.contrib import cudnn_rnn
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_gru_count
+from common import unittest_main, check_gru_count, check_opset_min_version, check_tf_max_version
+from tf2onnx.tf_loader import is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
 
+if is_tf2():
+    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
+    bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
+else:
+    GRUBlockCell = tf.contrib.rnn.GRUBlockCell
+    MultiRNNCell = tf.contrib.rnn.MultiRNNCell
+    CudnnCompatibleGRUCell = tf.contrib.cudnn_rnn.CudnnCompatibleGRUCell
+    dynamic_rnn = tf.nn.dynamic_rnn
+    bidirectional_dynamic_rnn = tf.nn.bidirectional_dynamic_rnn
+
 
 # TODO: as a workaround, set batch_size to 1 for now to bypass a onnxruntime bug, revert it when the bug is fixed
 class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_single_dynamic_gru(self):
         units = 5
         batch_size = 1
@@ -31,8 +43,8 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
 
         def func(x):
             # no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(units)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            cell = CudnnCompatibleGRUCell(units)
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -45,6 +57,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_multiple_dynamic_gru(self):
         units = 5
         batch_size = 1
@@ -55,8 +68,8 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             gru_output_list = []
             gru_cell_state_list = []
             # no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(units)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            cell = CudnnCompatibleGRUCell(units)
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -64,9 +77,9 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             gru_cell_state_list.append(cell_state)
 
             # given scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(units)
+            cell = CudnnCompatibleGRUCell(units)
             with variable_scope.variable_scope("root1") as scope:
-                outputs, cell_state = tf.nn.dynamic_rnn(
+                outputs, cell_state = dynamic_rnn(
                     cell,
                     x,
                     dtype=tf.float32,
@@ -80,9 +93,10 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
-                           graph_validator=lambda g: check_gru_count(g, 2))
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06)
+        # graph_validator=lambda g: check_gru_count(g, 2))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_single_dynamic_gru_seq_length_is_const(self):
         units = 5
         batch_size = 1
@@ -92,10 +106,10 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32,
@@ -109,9 +123,9 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_single_dynamic_gru_seq_length_is_not_const(self):
         for np_dtype in [np.int32, np.int64, np.float32]:
-            tf_reset_default_graph()
             units = 5
             batch_size = 1
             x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
@@ -121,10 +135,10 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             def func(x, seq_length):
                 initializer = init_ops.constant_initializer(0.5)
                 # no scope
-                cell = cudnn_rnn.CudnnCompatibleGRUCell(
+                cell = CudnnCompatibleGRUCell(
                     units,
                     kernel_initializer=initializer)
-                outputs, cell_state = tf.nn.dynamic_rnn(
+                outputs, cell_state = dynamic_rnn(
                     cell,
                     x,
                     dtype=tf.float32,
@@ -138,6 +152,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03, atol=1e-06,
                                graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_single_dynamic_gru_placeholder_input(self):
         units = 5
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -145,10 +160,10 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         def func(x):
             initializer = init_ops.constant_initializer(0.5)
             # no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)  # by default zero initializer is used
@@ -161,6 +176,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_single_dynamic_gru_ch_zero_state_initializer(self):
         units = 5
         batch_size = 1
@@ -169,13 +185,13 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         def func(x):
             initializer = init_ops.constant_initializer(0.5)
             # no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
 
             # defining initial state
             initial_state = cell.zero_state(batch_size, dtype=tf.float32)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 initial_state=initial_state,
@@ -189,6 +205,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_single_dynamic_gru_random_weights(self):
         hidden_size = 5
         batch_size = 1
@@ -199,11 +216,11 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             initializer = tf.random_uniform_initializer(-1.0, 1.0)
 
             # no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell = CudnnCompatibleGRUCell(
                 hidden_size,
                 kernel_initializer=initializer)
 
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -216,6 +233,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, 0.0001,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_single_dynamic_gru_random_weights2(self):
         hidden_size = 128
         batch_size = 1
@@ -225,11 +243,11 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         def func(x):
             initializer = tf.random_uniform_initializer(0.0, 1.0)
             # no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell = CudnnCompatibleGRUCell(
                 hidden_size,
                 kernel_initializer=initializer)
 
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -242,6 +260,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, 0.01,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_gru_output_consumed_only(self):
         units = 5
         batch_size = 6
@@ -249,11 +268,11 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
         def func(x):
             initializer = tf.random_uniform_initializer(-1.0, 1.0)
-            cell1 = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell1 = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
 
-            outputs, _ = tf.nn.dynamic_rnn(
+            outputs, _ = dynamic_rnn(
                 cell1,
                 x,
                 dtype=tf.float32)
@@ -266,6 +285,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, 0.0001,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_gru_state_consumed_only(self):
         units = 5
         batch_size = 6
@@ -274,11 +294,11 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
 
         def func(x):
             initializer = tf.random_uniform_initializer(-1.0, 1.0)
-            cell1 = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell1 = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
 
-            _, cell_state = tf.nn.dynamic_rnn(
+            _, cell_state = dynamic_rnn(
                 cell1,
                 x,
                 dtype=tf.float32)
@@ -291,6 +311,8 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bigru(self):
         units = 5
         batch_size = 1
@@ -301,13 +323,13 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # bigru, no scope
-            cell1 = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell1 = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            cell2 = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell2 = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            outputs, cell_state = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -321,6 +343,8 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bigru_output_consumed_only(self):
         units = 5
         batch_size = 1
@@ -331,13 +355,13 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # bigru, no scope
-            cell1 = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell1 = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            cell2 = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell2 = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            outputs, _ = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -351,6 +375,8 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bigru_state_consumed_only(self):
         units = 5
         batch_size = 1
@@ -361,13 +387,13 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # bigru, no scope
-            cell1 = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell1 = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            cell2 = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell2 = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            _, cell_state = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -381,6 +407,8 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bidirectional_but_one_gru(self):
         units = 5
         batch_size = 1
@@ -391,10 +419,10 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # bigru, no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell = CudnnCompatibleGRUCell(
                 units,
                 kernel_initializer=initializer)
-            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            outputs, cell_state = bidirectional_dynamic_rnn(
                 cell,
                 cell,
                 x,
@@ -408,6 +436,8 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bidirectional_but_one_gru_and_output_consumed_only(self):
         units = 5
         batch_size = 1
@@ -415,9 +445,9 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
         def func(x):
             # bigru, no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell = CudnnCompatibleGRUCell(
                 units)
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            outputs, _ = bidirectional_dynamic_rnn(
                 cell,
                 cell,
                 x,
@@ -431,6 +461,8 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
+    @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bidirectional_but_one_gru_and_state_consumed_only(self):
         units = 5
         batch_size = 1
@@ -440,9 +472,9 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         def func(x):
 
             # bigru, no scope
-            cell = cudnn_rnn.CudnnCompatibleGRUCell(
+            cell = CudnnCompatibleGRUCell(
                 units)
-            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            _, cell_state = bidirectional_dynamic_rnn(
                 cell,
                 cell,
                 x,

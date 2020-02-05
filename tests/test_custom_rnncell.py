@@ -14,10 +14,20 @@ from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import check_tf_min_version, check_opset_min_version, unittest_main, skip_opset
+from tf2onnx.tf_loader import is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 # pylint: disable=abstract-method,arguments-differ
+
+if is_tf2():
+    LSTMBlockCell = tf.compat.v1.nn.rnn_cell.LSTMBlockCell
+    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    dynamic_rnn = tf.compat.v1.nn.rnn.dynamic_rnn
+else:
+    LSTMBlockCell = tf.contrib.rnn.LSTMBlockCell
+    MultiRNNCell = tf.contrib.rnn.MultiRNNCell
+    dynamic_rnn = tf.nn.dynamic_rnn
 
 
 class CustomRnnCellTests(Tf2OnnxBackendTestBase):
@@ -30,8 +40,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
         x_val = np.stack([x_val] * batch_size)
         def func(x):
-            xs, s = tf.nn.dynamic_rnn(cell=cell, dtype=tf.float32,
-                                      inputs=x, time_major=False)
+            xs, s = dynamic_rnn(cell=cell, dtype=tf.float32, inputs=x, time_major=False)
             return tf.identity(xs, name="output"), tf.identity(s, name="final_state")
 
         feed_dict = {"input_1:0": x_val}
@@ -47,8 +56,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
         def func(x):
             cell = GatedGRUCell(size)
-            xs, s = tf.nn.dynamic_rnn(cell=cell, dtype=tf.float32,
-                                      inputs=x, time_major=True)
+            xs, s = dynamic_rnn(cell=cell, dtype=tf.float32, inputs=x, time_major=True)
             return tf.identity(xs, name="output"), tf.identity(s, name="final_state")
 
         feed_dict = {"input_1:0": x_val}
@@ -65,7 +73,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         def func(x):
             # no scope
             cell = GatedGRUCell(units)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32,
@@ -87,7 +95,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         def func(x, seq_length):
             # no scope
             cell = GatedGRUCell(units)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32,
@@ -125,7 +133,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                                                 attention_layer_size=attn_size,
                                                                 cell_input_fn=match_input_fn,
                                                                 output_attention=False)
-            output, attr_state = tf.nn.dynamic_rnn(match_cell_fw, x, dtype=tf.float32)
+            output, attr_state = dynamic_rnn(match_cell_fw, x, dtype=tf.float32)
 
             return tf.identity(output, name="output"), tf.identity(attr_state.cell_state, name="final_state")
 
@@ -156,7 +164,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
         def func(encoder_x, decoder_x):
             encoder_cell = tf.nn.rnn_cell.LSTMCell(size)
-            output, attr_state = tf.nn.dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
+            output, attr_state = dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
             output_0 = tf.identity(output, name="output_0")
             attention_states = output
             attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size,
@@ -170,7 +178,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                                                 cell_input_fn=match_input_fn,
                                                                 output_attention=False)
 
-            output, attr_state = tf.nn.dynamic_rnn(match_cell_fw, decoder_x, dtype=tf.float32)
+            output, attr_state = dynamic_rnn(match_cell_fw, decoder_x, dtype=tf.float32)
 
             return output_0, tf.identity(output, name="output"), tf.identity(attr_state.cell_state, name="final_state")
 
@@ -200,7 +208,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
         def func(encoder_x, decoder_x):
             encoder_cell = tf.nn.rnn_cell.GRUCell(size)
-            output, attr_state = tf.nn.dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
+            output, attr_state = dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
             _ = tf.identity(output, name="output_0")
             attention_states = output
             attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size,
@@ -213,7 +221,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                                                 attention_layer_size=attn_size,
                                                                 cell_input_fn=match_input_fn,
                                                                 output_attention=False)
-            output, attr_state = tf.nn.dynamic_rnn(match_cell_fw, decoder_x, dtype=tf.float32)
+            output, attr_state = dynamic_rnn(match_cell_fw, decoder_x, dtype=tf.float32)
             return tf.identity(output, name="output"), tf.identity(attr_state.cell_state, name="final_state")
 
         feed_dict = {"input_1:0": encoder_x_val, "input_2:0": decoder_x_val}
@@ -242,7 +250,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
         def func(encoder_x, decoder_x):
             encoder_cell = tf.nn.rnn_cell.LSTMCell(size)
-            output, attr_state = tf.nn.dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
+            output, attr_state = dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
             _ = tf.identity(output, name="output_0")
             attention_states = output
             attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size,
@@ -256,7 +264,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                                                 cell_input_fn=match_input_fn,
                                                                 output_attention=False)
 
-            output, attr_state = tf.nn.dynamic_rnn(match_cell_fw, decoder_x, dtype=tf.float32)
+            output, attr_state = dynamic_rnn(match_cell_fw, decoder_x, dtype=tf.float32)
 
             return tf.identity(output, name="output"), tf.identity(attr_state.cell_state, name="final_state")
 
@@ -288,10 +296,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                   state_is_tuple=state_is_tuple)
 
             cells = rnn.MultiRNNCell([cell_0, cell_1, cell_2], state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.dynamic_rnn(cells,
-                                                    x,
-                                                    dtype=tf.float32)
-
+            outputs, cell_state = dynamic_rnn(cells, x, dtype=tf.float32)
             return tf.identity(outputs, name="output"), tf.identity(cell_state, name="cell_state")
 
         input_names_with_port = ["input_1:0"]
@@ -321,7 +326,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
         def func(encoder_x, decoder_x, seq_length):
             encoder_cell = tf.nn.rnn_cell.LSTMCell(size)
-            attention_states, _ = tf.nn.dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
+            attention_states, _ = dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
             # [9, 3, 30], [9, 30]
             attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size,
                                                                        attention_states)

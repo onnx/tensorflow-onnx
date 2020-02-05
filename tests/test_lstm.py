@@ -11,17 +11,30 @@ from __future__ import unicode_literals
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, check_lstm_count
 
-from tf2onnx.tf_loader import tf_reset_default_graph
+from tf2onnx.tf_loader import is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
 
+if is_tf2():
+    # There is no LSTMBlockCell in tf-2.x
+    BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
+    LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
+    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
+    bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
+else:
+    BasicLSTMCell = tf.contrib.rnn.BasicLSTMCell
+    LSTMCell = tf.contrib.rnn.LSTMCell
+    LSTMBlockCell = tf.contrib.rnn.LSTMBlockCell
+    MultiRNNCell = tf.contrib.rnn.MultiRNNCell
+    dynamic_rnn = tf.nn.dynamic_rnn
+    bidirectional_dynamic_rnn = tf.nn.bidirectional_dynamic_rnn
 
 class LSTMTests(Tf2OnnxBackendTestBase):
     def test_test_single_dynamic_lstm_state_is_tuple(self):
@@ -39,11 +52,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -67,10 +80,10 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 time_major=True,
@@ -95,11 +108,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer,
                 forget_bias=0.5)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 time_major=True,
@@ -124,11 +137,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32,
@@ -144,7 +157,6 @@ class LSTMTests(Tf2OnnxBackendTestBase):
 
     def test_single_dynamic_lstm_seq_length_is_not_const(self):
         for np_dtype in [np.int32, np.int64, np.float32]:
-            tf_reset_default_graph()
             units = 5
             batch_size = 6
             x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.], [5., 5.]], dtype=np.float32)
@@ -155,11 +167,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 initializer = init_ops.constant_initializer(0.5)
 
                 # no scope
-                cell = rnn.LSTMCell(
+                cell = LSTMCell(
                     units,
                     initializer=initializer,
                     state_is_tuple=state_is_tuple)
-                outputs, cell_state = tf.nn.dynamic_rnn(
+                outputs, cell_state = dynamic_rnn(
                     cell,
                     x,
                     dtype=tf.float32,
@@ -182,11 +194,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)  # by default zero initializer is used
@@ -209,14 +221,14 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
 
             # defining initial state
             initial_state = cell.zero_state(batch_size, dtype=tf.float32)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 initial_state=initial_state,
@@ -240,11 +252,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
             state_is_tuple = True
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -269,12 +281,12 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = tf.random_uniform_initializer(-1.0, 1.0)
 
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 hidden_size,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
 
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -296,12 +308,12 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         def func(x):
             initializer = tf.random_uniform_initializer(0.0, 1.0)
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 hidden_size,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
 
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -332,11 +344,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             lstm_output_list = []
             lstm_cell_state_list = []
             # no scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
                 dtype=tf.float32)
@@ -344,12 +356,12 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             lstm_cell_state_list.append(cell_state)
 
             # given scope
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
             with variable_scope.variable_scope("root1") as scope:
-                outputs, cell_state = tf.nn.dynamic_rnn(
+                outputs, cell_state = dynamic_rnn(
                     cell,
                     x,
                     dtype=tf.float32,
@@ -372,10 +384,10 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         def func(x):
-            cell1 = rnn.BasicLSTMCell(
+            cell1 = BasicLSTMCell(
                 units,
                 state_is_tuple=True)
-            outputs, cell_state = tf.nn.dynamic_rnn(
+            outputs, cell_state = dynamic_rnn(
                 cell1,
                 x,
                 dtype=tf.float32)
@@ -394,11 +406,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         def func(x):
-            cell1 = rnn.LSTMCell(
+            cell1 = LSTMCell(
                 units,
                 state_is_tuple=True)
 
-            outputs, _ = tf.nn.dynamic_rnn(
+            outputs, _ = dynamic_rnn(
                 cell1,
                 x,
                 dtype=tf.float32)
@@ -418,8 +430,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         def func(x):
-            cell1 = rnn.LSTMCell(units, state_is_tuple=True)
-            _, cell_state = tf.nn.dynamic_rnn(cell1, x, dtype=tf.float32)
+            cell1 = LSTMCell(units, state_is_tuple=True)
+            _, cell_state = dynamic_rnn(cell1, x, dtype=tf.float32)
             return tf.identity(cell_state, name="cell_state")
 
         feed_dict = {"input_1:0": x_val}
@@ -444,11 +456,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # bilstm, no scope
-            cell1 = rnn.LSTMCell(
+            cell1 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
-            cell2 = rnn.LSTMCell(
+            cell2 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
@@ -476,11 +488,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # bilstm, no scope
-            cell1 = rnn.LSTMCell(
+            cell1 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
-            cell2 = rnn.LSTMCell(
+            cell2 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
@@ -508,11 +520,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # bilstm, no scope
-            cell1 = rnn.LSTMCell(
+            cell1 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
-            cell2 = rnn.LSTMCell(
+            cell2 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
@@ -540,11 +552,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             initializer = init_ops.constant_initializer(0.5)
 
             # bilstm, no scope
-            cell1 = rnn.LSTMCell(
+            cell1 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)  # state_is_tuple will impact Pack node (for cell_state)'s usage pattern
-            cell2 = rnn.LSTMCell(
+            cell2 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
@@ -571,11 +583,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         def func(x):
             initializer = init_ops.constant_initializer(0.5)
 
-            cell1 = rnn.LSTMCell(
+            cell1 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            cell2 = rnn.LSTMCell(
+            cell2 = LSTMCell(
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
@@ -601,9 +613,9 @@ class LSTMTests(Tf2OnnxBackendTestBase):
 
         def func(x):
             units = 5
-            cell1 = rnn.LSTMCell(units)
-            cell2 = rnn.LSTMCell(units)
-            outputs_1, cell_state_1 = tf.nn.bidirectional_dynamic_rnn(
+            cell1 = LSTMCell(units)
+            cell2 = LSTMCell(units)
+            outputs_1, cell_state_1 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -612,9 +624,9 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             )
 
             units = 10
-            cell1 = rnn.LSTMCell(units)
-            cell2 = rnn.LSTMCell(units)
-            outputs_2, cell_state_2 = tf.nn.bidirectional_dynamic_rnn(
+            cell1 = LSTMCell(units)
+            cell2 = LSTMCell(units)
+            outputs_2, cell_state_2 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -642,9 +654,9 @@ class LSTMTests(Tf2OnnxBackendTestBase):
 
         def func(x, y1, y2):
             seq_len1 = tf.tile(y1, [batch_size])
-            cell1 = rnn.LSTMCell(units)
-            cell2 = rnn.LSTMCell(units)
-            outputs_1, cell_state_1 = tf.nn.bidirectional_dynamic_rnn(
+            cell1 = LSTMCell(units)
+            cell2 = LSTMCell(units)
+            outputs_1, cell_state_1 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -654,9 +666,9 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             )
 
             seq_len2 = tf.tile(y2, [batch_size])
-            cell1 = rnn.LSTMCell(units)
-            cell2 = rnn.LSTMCell(units)
-            outputs_2, cell_state_2 = tf.nn.bidirectional_dynamic_rnn(
+            cell1 = LSTMCell(units)
+            cell2 = LSTMCell(units)
+            outputs_2, cell_state_2 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
