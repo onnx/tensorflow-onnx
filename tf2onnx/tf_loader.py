@@ -302,8 +302,10 @@ def tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant
 
 def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=False):
     """Extract inference subgraph and optimize graph."""
-    assert isinstance(input_tensors, dict)
-    assert isinstance(output_tensors, dict)
+    if isinstance(input_tensors, list):
+        input_tensors, _ = get_tensors_for_names(graph_def, input_tensors, [])
+    if isinstance(output_tensors, list):
+        _, output_tensors = get_tensors_for_names(graph_def, [], output_tensors)
 
     if is_tf2():
         with tf_session() as _:

@@ -286,10 +286,11 @@ def parse_rnn_loop(graph, loop_properties, rnn_scope, while_context_scope):
         elif enter_input_node.name == iteration_counter_name:
             iteration_var = val
 
-    if not found_time or is_rnn_out_ta is False:
-        logger.debug("this should not be a dynamic_rnn loop, found_time: %s, is_rnn_out_ta: %s",
-                     found_time, is_rnn_out_ta)
-        return None
+    # TODO: this check breaks with grappler. For now remove it but recheck it.
+    # if not found_time or is_rnn_out_ta is False:
+    #     logger.debug("this should not be a dynamic_rnn loop, found_time: %s, is_rnn_out_ta: %s",
+    #                  found_time, is_rnn_out_ta)
+    #     return None
 
     if not loop_properties.tensor_array_inputs:
         logger.debug("this should not be a dynamic_rnn loop, no ta input is found")
