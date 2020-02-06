@@ -19,7 +19,7 @@ from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx
 logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,unused-import,no-value-for-parameter,unexpected-keyword-arg,ungrouped-imports
-# pylint: disable=missing-function-docstring,import-outside-toplevel,useless-import-alias
+# pylint: disable=missing-function-docstring,import-outside-toplevel,useless-import-alias,missing-docstring
 
 def is_tf2():
     return tf.__version__.startswith("2.")
@@ -366,7 +366,7 @@ _FUNCTIONS = {}
 def resolve_functions(tf_graph):
     def toposort(data):
         while True:
-            ordered = set(item for item, dep in data.items() if len(dep) == 0)
+            ordered = set(item for item, dep in data.items() if dep == 0)
             if not ordered:
                 break
             yield ordered
