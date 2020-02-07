@@ -2,11 +2,11 @@
 
 parameters:
   platforms: ['linux']
-  python_versions: ['3.6']
+  python_versions: ['3.7']
   tf_versions: ['']
   onnx_versions: ['']
   onnx_opsets: ['11', '10', '9', '8', '7']
-  onnx_backends: {onnxruntime: ['1.0.0']}
+  onnx_backends: {onnxruntime: ['1.1.0']}
   job: {}
   run_setup: 'True'
   report_coverage: 'False'
