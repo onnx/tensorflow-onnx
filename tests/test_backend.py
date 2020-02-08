@@ -111,7 +111,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kwargs["convert_var_to_const"] = False
         kwargs["constant_fold"] = False
         return self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
-    '''
+
     def _test_expand_dims_known_rank(self, idx):
         tf.reset_default_graph()
         x_val = make_xval([3, 4])
@@ -2975,7 +2975,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.nn.conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 1, 1, 1], padding='VALID',
                                         name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
-    '''
+
     @check_opset_min_version(1, "CategoryMapper")
     def test_hashtable_lookup(self):
         filnm = "vocab.tmp"
@@ -2989,6 +2989,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         lookup_results = hash_table.lookup(query_holder)
         self._run_test_case([lookup_results.name], {_INPUT: query})
         os.remove(filnm) 
+
 
 if __name__ == '__main__':
     unittest_main()
