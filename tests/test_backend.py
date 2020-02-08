@@ -10,9 +10,11 @@ from __future__ import unicode_literals
 import unittest
 from itertools import product
 
+import os
 import numpy as np
 import tensorflow as tf
 
+from tensorflow.python.ops import lookup_ops
 from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
@@ -109,7 +111,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kwargs["convert_var_to_const"] = False
         kwargs["constant_fold"] = False
         return self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
-
+    '''
     def _test_expand_dims_known_rank(self, idx):
         tf.reset_default_graph()
         x_val = make_xval([3, 4])
@@ -2973,7 +2975,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.nn.conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 1, 1, 1], padding='VALID',
                                         name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
-
+    '''
+    @check_opset_min_version(1, "CategoryMapper")
+    def test_hashtable_lookup(self):
+        filnm = "vocab.tmp"
+        words = ["apple","pear","banana","cherry","grape"]
+        query = np.array(['cherry'],dtype=object)
+        with open(filnm, "w") as f:
+            for word in words:
+                f.write(word + "\n")
+        query_holder = tf.placeholder(tf.string, shape=[len(query)], name=_TFINPUT)
+        hash_table = lookup_ops.index_table_from_file(filnm)
+        lookup_results = hash_table.lookup(query_holder)
+        self._run_test_case([lookup_results.name], {_INPUT: query})
+        os.remove(filnm) 
 
 if __name__ == '__main__':
     unittest_main()
