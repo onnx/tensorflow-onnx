@@ -695,7 +695,13 @@ class Resize:
             final_target_size = build_dynamic_target_size(ctx, input_nchw, node.inputs[1])
             roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
             const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([], dtype=np.float32))
-            upsample = ctx.make_node("Resize", [input_nchw.output[0], roi.output[0], const_empty_float.output[0], final_target_size.output[0]],
+            resize_inputs = [
+                input_nchw.output[0],
+                roi.output[0],
+                const_empty_float.output[0],
+                final_target_size.output[0]
+            ]
+            upsample = ctx.make_node("Resize", resize_inputs,
                                      attr={"mode": mode, "nearest_mode": "floor",
                                            "coordinate_transformation_mode": "asymmetric"})
         else:
@@ -707,7 +713,8 @@ class Resize:
                 n, h, w, c = shape
                 nh, nw = target_shape
                 # scales is nchw
-                # the reason not storing data at raw field is because of the bug: https://github.com/onnx/onnx/issues/1852
+                # the reason not storing data at raw field is because of the bug:
+                # https://github.com/onnx/onnx/issues/1852
                 scale_val = np.array([1.0, 1.0, float(nh) / h, float(nw) / w]).astype(np.float32)
                 scales = ctx.make_const(utils.make_name("scales"), scale_val, raw=False)
             else:
