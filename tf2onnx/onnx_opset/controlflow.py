@@ -377,8 +377,10 @@ class IteratorGetNext:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
         output_names = node.output
+        type_0 = ctx.get_dtype(output_names[0])
+        type_1 = ctx.get_dtype(output_names[1])
+        shape_0 = ctx.get_shape(output_names[0])
+        shape_1 = ctx.get_shape(output_names[1])
         ctx.remove_node(node.name)
-        output_types = list(node.get_attr('output_types').ints)
-        output_shapes = list(node.get_attr('output_shapes').ints)
-        ctx.add_graph_input(output_names[0], output_types[0], output_shapes[:output_shapes.index(0)])
-        ctx.add_graph_input(output_names[1], output_types[1], output_shapes[output_shapes.index(0)+1:-1])
+        ctx.add_graph_input(output_names[0], type_0, shape_0)
+        ctx.add_graph_input(output_names[1], type_1, shape_1)
