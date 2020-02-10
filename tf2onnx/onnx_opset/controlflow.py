@@ -369,13 +369,13 @@ class Where:
 @tf_op("IteratorV2")
 class Iterator:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def version_8(cls, ctx, node, **kwargs):
         ctx.remove_node(node.name)
 
 @tf_op("IteratorGetNext")
 class IteratorGetNext:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def version_8(cls, ctx, node, **kwargs):
         output_names = node.output
         ctx.remove_node(node.name)
         output_types = list(node.get_attr('output_types').ints)

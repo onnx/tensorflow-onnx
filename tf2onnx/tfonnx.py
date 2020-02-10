@@ -80,7 +80,8 @@ def tflist_to_onnx(node_list, shape_override):
                 if dtype:
                     if not isinstance(dtype, list):
                         dtypes[node.name] = utils.map_tf_dtype(dtype)
-            elif a in ["output_type", "output_dtype", "out_type", "Tidx", "out_idx"]:
+            elif a in ["output_type", "output_dtype", "out_type", "Tidx",
+                       "out_idx", "key_dtype", "value_dtype", "Tin", "Tout"]:
                 # Tidx is used by Range
                 # out_idx is used by ListDiff
                 attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
@@ -99,8 +100,6 @@ def tflist_to_onnx(node_list, shape_override):
                 continue
             elif a in ignored_attr:
                 continue
-            elif a in ["key_dtype", "value_dtype", "Tin", "Tout"]:
-                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
             elif a == "output_types":
                 attr[a] = [utils.map_tf_dtype(v) for v in utils.get_tf_node_attr(node, a)]
             elif a == "output_shapes":

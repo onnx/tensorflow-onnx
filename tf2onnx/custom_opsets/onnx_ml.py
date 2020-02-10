@@ -10,7 +10,7 @@ from tf2onnx.handler import tf_op
 @tf_op("HashTableV2")
 class HashTable:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def version_8(cls, ctx, node, **kwargs):
         """ HashTable will be removed """
         pass
 
@@ -18,7 +18,7 @@ class HashTable:
 @tf_op("LookupTableFindV2")
 class LookupTableFind:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def version_8(cls, ctx, node, **kwargs):
         """ convert lookup to category mapper """
         table_node = node.inputs[0]
         file_path = table_node.get_attr_value("shared_name")[11:-6]
