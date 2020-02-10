@@ -87,6 +87,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         graph_def = None
         if convert_var_to_const:
             with tf.Session() as sess:
+                tf.tables_initializer().run()
                 variables_lib.global_variables_initializer().run()
                 output_name_without_port = [n.split(':')[0] for n in output_names_with_port]
                 graph_def = tf.graph_util.convert_variables_to_constants(sess, sess.graph_def,
@@ -96,6 +97,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf.import_graph_def(graph_def, name='')
 
         with tf.Session() as sess:
+            tf.tables_initializer().run()
             variables_lib.global_variables_initializer().run()
             output_dict = []
             for out_name in output_names_with_port:
