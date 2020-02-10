@@ -2976,7 +2976,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                         name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
 
-    @check_opset_min_version(1, "CategoryMapper")
+    @check_opset_min_version(8, "CategoryMapper")
     def test_hashtable_lookup(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
