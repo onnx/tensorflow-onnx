@@ -5,7 +5,7 @@ stages:
     jobs:
     - template: 'templates/job_generator.yml'
       parameters:
-        python_versions: ['3.8', '3.7', '3.6']
+        python_versions: ['3.7', '3.6']
         tf_versions: ['1.14.0']
         onnx_opsets: ['']
         job:
@@ -15,7 +15,8 @@ stages:
     
     - template: 'templates/job_generator.yml'
       parameters:
-        tf_versions: ['1.14.0', '1.12.3']
+        python_versions: [3.6']
+        tf_versions: ['1.12.3']
         onnx_opsets: ['']
         job:
           steps:
