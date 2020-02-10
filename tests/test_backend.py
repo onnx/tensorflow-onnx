@@ -2988,7 +2988,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         hash_table = lookup_ops.index_table_from_file(filnm)
         lookup_results = hash_table.lookup(query_holder)
         self._run_test_case([lookup_results.name], {_INPUT: query})
-        os.remove(filnm) 
+        os.remove(filnm)
 
 
 if __name__ == '__main__':
