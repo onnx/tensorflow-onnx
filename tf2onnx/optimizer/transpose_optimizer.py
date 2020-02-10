@@ -174,6 +174,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Cast": self._simple_through_handler,
             "Clip": self._simple_through_handler,
             "Concat": self._concat_handler,
+            "Elu": self._simple_through_handler,
             "Identity": self._identity_handler,
             "LeakyRelu": self._simple_through_handler,
             "Max": self._maxmin_handler,
