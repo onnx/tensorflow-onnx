@@ -2979,8 +2979,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(1, "CategoryMapper")
     def test_hashtable_lookup(self):
         filnm = "vocab.tmp"
-        words = ["apple","pear","banana","cherry","grape"]
-        query = np.array(['cherry'],dtype=object)
+        words = ["apple", "pear", "banana", "cherry", "grape"]
+        query = np.array(['cherry'], dtype=object)
         with open(filnm, "w") as f:
             for word in words:
                 f.write(word + "\n")
