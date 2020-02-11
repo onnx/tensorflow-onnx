@@ -1275,9 +1275,9 @@ class BatchToSpace:
             indices = mkconst('_indicies_const', np.asarray(g))
             gather = mknode('Gather', [shape1.output[0], indices])
             x2 = mknode('Reshape', [input0, gather.output[0]])
-            trans2 = mknode('Transpose', [x2.output[0]], {'perm': np.array(p)})
+            tr2 = mknode('Transpose', [x2.output[0]], {'perm': np.array(p)})
             shape2 = mknode('Concat', [minus1_const, target_spatial.output[0], depth.output[0]], {'axis': 0})
-            x3 = mknode('Reshape', [trans2.output[0], shape2.output[0]])
+            x3 = mknode('Reshape', [tr2.output[0], shape2.output[0]])
 
             # crop axes
             slice_starts_const1 = mkconst('_slicestart1_const', np.asarray([0, 0]))
