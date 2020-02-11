@@ -1230,15 +1230,16 @@ class BatchToSpace:
 
             # support non 4D tensors and dynamic crop vals
             # dynamic slice starts at opset 10
-            utils.make_sure(ctx.opset >= 10, 'not-4D tensor or non-const pads require opset 10+')
+            utils.make_sure(ctx.opset >= 10, 'non-4D tensor or non-const crops require opset 10+')
 
             input0 = node.input[0]
             input2 = node.input[2]
+
+            # const vals
             int_max_const = mkconst('int_max', np.array([utils.get_max_value(np.int64)]))
             one_const = mkconst('_const_one', np.array([1]))
             minus1_const = mkconst('_const_minus1', np.array([-1]))
             blocklen_resize_const = mkconst('_const_blocklen_resize', np.array([-1, blocklen]))
-
             blocklenplus1_const = mkconst('_const_blocklenplus1', np.array([blocklen + 1]))
             block_shape_const = mkconst('_const_block_shape', block_shape)
 
@@ -1357,17 +1358,17 @@ class SpaceToBatch:
 
             # support non 4D tensors and dynamic pad vals
             # dynamic slice starts at opset 10
-            utils.make_sure(ctx.opset >= 10, 'not-4D tensor or non-const pads require opset 10+')
+            utils.make_sure(ctx.opset >= 10, 'non-4D tensor or non-const pads require opset 10+')
 
             input0 = node.input[0]
             input2 = node.input[2]
+
             # const vals
             int_max_const = mkconst('int_max', np.array([utils.get_max_value(np.int64)]))
             zero_const = mkconst('_zero_const', np.array([0]))
             one_const = mkconst('_one_const', np.array([1]))
             minus1_const = mkconst('_minus1_const', np.array([-1]))
             blocklen_resize_const = mkconst('_blocklen_resize_const', np.array([-1, blocklen]))
-
             blocklenplus1_const = mkconst('_blocklenplus1_const', np.array([blocklen + 1]))
             filltop_const = mkconst('_filltop_const', np.array([1, 0, 0, 0]))
             fillbottom_const = mkconst('_bottom_const', np.array([0, 0, 1, 0]))
