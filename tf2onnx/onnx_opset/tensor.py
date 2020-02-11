@@ -1165,8 +1165,8 @@ class BatchToSpace:
         blocklen = len(block_shape)
         xlen = len(ctx.get_shape(node.input[0]))
 
-        # if 4d tensor & square 2d block_shape , can optimize
-        cond1 = xlen == 4
+        # if 3d or 4d tensor & square 2d block_shape , can optimize
+        cond1 = xlen in [3, 4]
         cond2 = node.inputs[2].is_const()
         cond3 = blocklen == 2 and block_shape[0] == block_shape[1]
         if cond1 and cond2 and cond3:
@@ -1228,7 +1228,7 @@ class BatchToSpace:
                 const_node = ctx.make_const(utils.make_name(nodename), val.astype(dtype))
                 return const_node.output[0]
 
-            # support non 4D tensors and dynamic crop vals
+            # support non 3D/4D tensors and dynamic crop vals
             # dynamic slice starts at opset 10
             utils.make_sure(ctx.opset >= 10, 'non-4D tensor or non-const crops require opset 10+')
 
@@ -1311,8 +1311,8 @@ class SpaceToBatch:
         blocklen = len(block_shape)
         xlen = len(ctx.get_shape(node.input[0]))
 
-        # if 4d tensor & square 2d block_shape , can optimize
-        cond1 = xlen == 4
+        # if 3d or 4d tensor & square 2d block_shape , can optimize
+        cond1 = xlen in [3, 4]
         cond2 = node.inputs[2].is_const()
         cond3 = blocklen == 2 and block_shape[0] == block_shape[1]
         if cond1 and cond2 and cond3:
@@ -1356,7 +1356,7 @@ class SpaceToBatch:
                 const_node = ctx.make_const(utils.make_name(nodename), val.astype(dtype))
                 return const_node.output[0]
 
-            # support non 4D tensors and dynamic pad vals
+            # support non 3D/4D tensors and dynamic pad vals
             # dynamic slice starts at opset 10
             utils.make_sure(ctx.opset >= 10, 'non-4D tensor or non-const pads require opset 10+')
 
