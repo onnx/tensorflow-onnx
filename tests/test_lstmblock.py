@@ -240,7 +240,8 @@ class LSTMBlockTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_tf_max_version("1.15", "no LSTMBlockCell in tf-2.x")
-    def test_dynamic_bilstm(self):
+    @check_opset_min_version(10, "might need ReverseV2")
+     def test_dynamic_bilstm(self):
         units = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
@@ -263,6 +264,7 @@ class LSTMBlockTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_tf_max_version("1.15", "no LSTMBlockCell in tf-2.x")
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_bilstm_output_consumed_only(self):
         units = 5
         batch_size = 6
@@ -286,6 +288,7 @@ class LSTMBlockTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_tf_max_version("1.15", "no LSTMBlockCell in tf-2.x")
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_bilstm_state_consumed_only(self):
         units = 5
         batch_size = 6

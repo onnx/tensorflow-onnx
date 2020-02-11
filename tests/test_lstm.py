@@ -14,7 +14,7 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_lstm_count
+from common import unittest_main, check_lstm_count, check_opset_min_version
 
 from tf2onnx.tf_loader import is_tf2
 
@@ -443,9 +443,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_bilstm_state_is_tuple(self):
         self.internal_test_dynamic_bilstm_with_parameters(True)
 
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_bilstm_state_is_not_tuple(self):
         self.internal_test_dynamic_bilstm_with_parameters(False)
 
@@ -481,6 +483,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_bilstm_output_consumed_only(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -513,6 +516,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_bilstm_state_consumed_only(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -545,6 +549,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_bilstm_outputs_partially_consumed(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -577,6 +582,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_bilstm_unknown_batch_size(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -609,6 +615,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_multi_bilstm_with_same_input_hidden_size(self):
         batch_size = 10
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
@@ -648,6 +655,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06)
         # graph_validator=lambda g: check_lstm_count(g, 2))
 
+    @check_opset_min_version(10, "might need ReverseV2")
     def test_dynamic_multi_bilstm_with_same_input_seq_len(self):
         units = 5
         batch_size = 10
