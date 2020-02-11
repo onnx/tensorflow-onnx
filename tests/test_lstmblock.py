@@ -241,7 +241,7 @@ class LSTMBlockTests(Tf2OnnxBackendTestBase):
 
     @check_tf_max_version("1.15", "no LSTMBlockCell in tf-2.x")
     @check_opset_min_version(10, "might need ReverseV2")
-     def test_dynamic_bilstm(self):
+    def test_dynamic_bilstm(self):
         units = 5
         batch_size = 6
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
