@@ -2472,7 +2472,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = tf.batch_to_space_nd(input_x, block_size, crop, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
 
-    @check_opset_min_version(11, "BatchToSpaceND")
+    @check_opset_min_version(10, "BatchToSpaceND")
     def test_batch_to_spacend_non_const_7d(self):
         x_type, y_type, z_type = np.int64, np.int64, np.int64
         # test 3D upto 7D input tensors
@@ -2493,7 +2493,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 _ = tf.batch_to_space_nd(x, y, z, name=_TFOUTPUT)
                 self._run_test_case([_OUTPUT], {_INPUT: x_val, _INPUT2: z_val})
 
-    @check_opset_min_version(11, "SpaceToBatchND")
+    @check_opset_min_version(10, "SpaceToBatchND")
     def test_space_to_batchnd_non_const_7d(self):
         x_type, y_type, z_type = np.int64, np.int64, np.int64
         # test 3D upto 7D input tensors
