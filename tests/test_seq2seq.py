@@ -9,15 +9,34 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main
+from common import unittest_main, check_tf_max_version
+from tf2onnx.tf_loader import is_tf2
 
+# pylint: disable=invalid-name
 
+if is_tf2():
+    BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
+    LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
+    RNNCell = tf.compat.v1.nn.rnn_cell.RNNCell
+    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
+    bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
+    LSTMStateTuple = tf.compat.v1.nn.rnn_cell.LSTMStateTuple
+else:
+    LSTMCell = tf.contrib.rnn.LSTMCell
+    LSTMBlockCell = tf.contrib.rnn.LSTMBlockCell
+    RNNCell = tf.nn.rnn_cell.RNNCell
+    MultiRNNCell = tf.contrib.rnn.MultiRNNCell
+    dynamic_rnn = tf.nn.dynamic_rnn
+    LSTMStateTuple = tf.nn.rnn_cell.LSTMStateTuple
+
+# pylint: enable=invalid-name
 # pylint: disable=missing-docstring
 
 class Seq2SeqTests(Tf2OnnxBackendTestBase):
+    @check_tf_max_version("1.15", "FIXME - need replacement for tf.contrib in tf-2.x")
     def test_dynamic_decode_maximum_iterations(self):
         batch_size = 2
         num_units = 4
@@ -32,7 +51,7 @@ class Seq2SeqTests(Tf2OnnxBackendTestBase):
                                    [batch_size, num_units])
             encoder_state = tf.nn.rnn_cell.LSTMStateTuple(state_val, state_val)
             initializer = init_ops.constant_initializer(0.5)
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 num_units=num_units,
                 initializer=initializer,
                 state_is_tuple=True)
@@ -62,6 +81,7 @@ class Seq2SeqTests(Tf2OnnxBackendTestBase):
         ]
         self.run_test_case(func, {}, [], output_names_with_port, atol=1e-06, rtol=1e-6)
 
+    @check_tf_max_version("1.15", "FIXME - need replacement for tf.contrib in tf-2.x")
     def test_dynamic_decode_normal_stop(self):
         batch_size = 2
         num_units = 4
@@ -74,7 +94,7 @@ class Seq2SeqTests(Tf2OnnxBackendTestBase):
             embedding = tf.constant(np.ones([vocab_size, embedding_size], dtype=np.float32))
             state_val = np.reshape([np.ones([num_units], dtype=np.float32) * i for i in range(batch_size)],
                                    [batch_size, num_units])
-            encoder_state = tf.nn.rnn_cell.LSTMStateTuple(state_val, state_val)
+            encoder_state = LSTMStateTuple(state_val, state_val)
 
             cell_initializer = init_ops.constant_initializer(
                 np.array([[-0.9592235, 0.42451382, 0.7437744, -0.54485345, -0.80763197,
@@ -111,7 +131,7 @@ class Seq2SeqTests(Tf2OnnxBackendTestBase):
                           [-0.98890066, 0.6175642, 0.09800482, -0.6721206, 0.48805737],
                           [0.19671416, 0.2623148, 0.742548, 0.13555217, 0.56009054]], dtype=np.float32))
 
-            cell = rnn.LSTMCell(
+            cell = LSTMCell(
                 num_units=num_units,
                 initializer=cell_initializer,
                 state_is_tuple=True)

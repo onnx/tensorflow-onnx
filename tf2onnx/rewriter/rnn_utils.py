@@ -161,7 +161,7 @@ cudnn_compatible_grucell_pattern = \
     ])
 
 
-grublockcell_pattern = OpTypePattern("GRUBlockCell", name="gru_block_cell", inputs=[
+grublockcell_pattern0 = OpTypePattern("GRUBlockCell", name="gru_block_cell", inputs=[
     OpTypePattern("*"),
     OpTypePattern("*"),
     OpTypePattern("Enter", inputs=[
@@ -176,6 +176,16 @@ grublockcell_pattern = OpTypePattern("GRUBlockCell", name="gru_block_cell", inpu
     OpTypePattern("Enter", inputs=[
         OpTypePattern("*", name="hidden_bias")
     ])
+])
+
+
+grublockcell_pattern1 = OpTypePattern("GRUBlockCell", name="gru_block_cell", inputs=[
+    OpTypePattern("*"),
+    OpTypePattern("*"),
+    OpTypePattern("Const", name="gate_kernel"),
+    OpTypePattern("Const", name="hidden_kernel"),
+    OpTypePattern("Const", name="gate_bias"),
+    OpTypePattern("Const", name="hidden_bias")
 ])
 
 
@@ -227,11 +237,11 @@ class RNNUnitType(Enum):
 
 
 rnn_cell_patterns = {
-    RNNUnitType.LSTMCell: lstmcell_pattern,
-    RNNUnitType.LSTMBlockCell: lstmblockcell_pattern,
-    RNNUnitType.GRUCell: grucell_pattern,
-    RNNUnitType.GRUBlockCell: grublockcell_pattern,
-    RNNUnitType.CudnnCompatibleGRUCell: cudnn_compatible_grucell_pattern
+    RNNUnitType.LSTMCell: [lstmcell_pattern],
+    RNNUnitType.LSTMBlockCell: [lstmblockcell_pattern],
+    RNNUnitType.GRUCell: [grucell_pattern],
+    RNNUnitType.GRUBlockCell: [grublockcell_pattern0, grublockcell_pattern1],
+    RNNUnitType.CudnnCompatibleGRUCell: [cudnn_compatible_grucell_pattern]
 }
 
 

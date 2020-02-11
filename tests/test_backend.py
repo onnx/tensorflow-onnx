@@ -49,8 +49,11 @@ _OUTPUT2 = "output2:0"
 
 if is_tf2():
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
+    is_nan = tf.math.is_nan
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
+    is_nan = tf.is_nan
+
 
 def make_xval(shape):
     x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
@@ -178,24 +181,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_val = np.array(5, dtype=np_dtype)
             def func(x):
                 y = tf.eye(x, dtype=tf.int32)
-                y1 = tf.eye(x, dtype=tf.int64)
-                y2 = tf.eye(x, dtype=tf.float32)
+                y1 = tf.eye(x, dtype=tf.float32)
                 return tf.identity(y, name=_TFOUTPUT),\
-                       tf.identity(y1, name=_TFOUTPUT1), \
-                       tf.identity(y2, name=_TFOUTPUT2)
-            self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val}, rtol=0)
+                       tf.identity(y1, name=_TFOUTPUT1)
+            self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val}, rtol=0)
 
         # tf.eye(num_rows, num_columns), both num_rows and num_columns are not const here
         for np_dtype in [np.int32, np.int64, np.float32, np.float64]:
             x_val = np.array([5, 10], dtype=np_dtype)
             def func(x):
                 y = tf.eye(x[0], x[1], dtype=tf.int32)
-                y1 = tf.eye(x[0], x[1], dtype=tf.int64)
-                y2 = tf.eye(x[0], x[1], dtype=tf.float32)
+                y1 = tf.eye(x[0], x[1], dtype=tf.float32)
                 return tf.identity(y, name=_TFOUTPUT), \
-                       tf.identity(y1, name=_TFOUTPUT1), \
-                       tf.identity(y2, name=_TFOUTPUT2)
-            self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val}, rtol=0)
+                       tf.identity(y1, name=_TFOUTPUT1)
+            self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val}, rtol=0)
 
     @check_opset_min_version(7, "trig")
     def test_trig_ops(self):
@@ -2308,7 +2307,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val3 = np.array([1.0, np.nan, -3.0, np.nan], dtype=np.float32).reshape((2, 2))
         for x_val in [x_val1, x_val2, x_val3]:
             def func(x):
-                x_ = tf.is_nan(x)
+                x_ = is_nan(x)
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 

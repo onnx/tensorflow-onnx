@@ -18,6 +18,7 @@ from tf2onnx.tf_loader import is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
+# pylint: disable=invalid-name
 
 if is_tf2():
     MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
@@ -28,6 +29,8 @@ else:
     MultiRNNCell = tf.contrib.rnn.MultiRNNCell
     dynamic_rnn = tf.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.nn.bidirectional_dynamic_rnn
+
+# pylint: enable=invalid-name
 
 
 # TODO: as a workaround, set batch_size to 1 for now to bypass a onnxruntime bug, revert it when the bug is fixed
@@ -66,25 +69,15 @@ class GRUBlockTests(Tf2OnnxBackendTestBase):
             gru_output_list = []
             gru_cell_state_list = []
             # no scope
-            cell = GRUBlockCell(
-                units)
-            outputs, cell_state = dynamic_rnn(
-                cell,
-                x,
-                dtype=tf.float32)
+            cell = GRUBlockCell(units)
+            outputs, cell_state = dynamic_rnn(cell, x, dtype=tf.float32)
             gru_output_list.append(outputs)
             gru_cell_state_list.append(cell_state)
 
             # given scope
-            cell = GRUBlockCell(
-                units)
+            cell = GRUBlockCell(units)
             with variable_scope.variable_scope("root1") as scope:
-                outputs, cell_state = dynamic_rnn(
-                    cell,
-                    x,
-                    dtype=tf.float32,
-                    sequence_length=[4],
-                    scope=scope)
+                outputs, cell_state = dynamic_rnn(cell, x, dtype=tf.float32, sequence_length=[4], scope=scope)
             gru_output_list.append(outputs)
             gru_cell_state_list.append(cell_state)
 

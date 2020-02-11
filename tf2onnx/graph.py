@@ -410,6 +410,7 @@ class Graph(object):
         self.graph_name = graph_name or "tf2onnx"
         self._is_subgraph = is_subgraph
         self.ta_reads = []
+        self.func_inputs = []
 
         self._target = set(target)
         self._dtypes = dtypes

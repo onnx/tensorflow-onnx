@@ -10,7 +10,6 @@ from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.contrib import rnn
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import check_tf_min_version, check_opset_min_version, unittest_main, skip_opset
@@ -21,11 +20,16 @@ from tf2onnx.tf_loader import is_tf2
 # pylint: disable=abstract-method,arguments-differ
 
 if is_tf2():
-    LSTMBlockCell = tf.compat.v1.nn.rnn_cell.LSTMBlockCell
+    BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
+    LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
+    RNNCell = tf.compat.v1.nn.rnn_cell.RNNCell
     MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
-    dynamic_rnn = tf.compat.v1.nn.rnn.dynamic_rnn
+    dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
+    bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
 else:
     LSTMBlockCell = tf.contrib.rnn.LSTMBlockCell
+    LSTMCell = tf.contrib.rnn.LSTMCell
+    RNNCell = tf.nn.rnn_cell.RNNCell
     MultiRNNCell = tf.contrib.rnn.MultiRNNCell
     dynamic_rnn = tf.nn.dynamic_rnn
 
@@ -283,19 +287,19 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         def func(x):
             initializer = init_ops.constant_initializer(0.5)
 
-            cell_0 = rnn.LSTMCell(units,
-                                  initializer=initializer,
-                                  state_is_tuple=state_is_tuple)
+            cell_0 = LSTMCell(units,
+                              initializer=initializer,
+                              state_is_tuple=state_is_tuple)
 
-            cell_1 = rnn.LSTMCell(units,
-                                  initializer=initializer,
-                                  state_is_tuple=state_is_tuple)
+            cell_1 = LSTMCell(units,
+                              initializer=initializer,
+                              state_is_tuple=state_is_tuple)
 
-            cell_2 = rnn.LSTMCell(units,
-                                  initializer=initializer,
-                                  state_is_tuple=state_is_tuple)
+            cell_2 = LSTMCell(units,
+                              initializer=initializer,
+                              state_is_tuple=state_is_tuple)
 
-            cells = rnn.MultiRNNCell([cell_0, cell_1, cell_2], state_is_tuple=state_is_tuple)
+            cells = MultiRNNCell([cell_0, cell_1, cell_2], state_is_tuple=state_is_tuple)
             outputs, cell_state = dynamic_rnn(cells, x, dtype=tf.float32)
             return tf.identity(outputs, name="output"), tf.identity(cell_state, name="cell_state")
 
@@ -362,7 +366,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
 
-class GatedGRUCell(tf.nn.rnn_cell.RNNCell):
+class GatedGRUCell(RNNCell):
     def __init__(self, hidden_dim, reuse=None):
         super().__init__(self, _reuse=reuse)
         self._num_units = hidden_dim

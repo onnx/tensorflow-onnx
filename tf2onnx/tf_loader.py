@@ -53,58 +53,38 @@ else:
     tf_placeholder = tf.placeholder
 
 
-def freeze_func(func, outputs=None):
-    try:
-        # starting tf-2.1
-        frozen_func, graph_def = \
-            convert_to_constants.convert_variables_to_constants_v2_as_graph(func, lower_control_flow=False)
-    except:  # pylint: disable=bare-except
-        frozen_func = convert_to_constants.convert_variables_to_constants_v2(func)
-        graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
-
-    input_tensors = [
-        tensor for tensor in frozen_func.inputs
-        if tensor.dtype != tf.dtypes.resource
-    ]
-    input_tensors = {i.name: i for i in input_tensors}
-
-    if outputs:
-        # below is important. tf.function will add and identity to the output in many cases and if
-        # our output is also an identity, grappler will optimize our output away. Make sure to tell
-        # grappler to preserve it.
-        _, outputs = get_tensors_for_names(graph_def, [], outputs)
-        output_tensors = {k: v.name for k, v in outputs.items()}
-    else:
-        # TODO: do we need frozen_func.outputs or can we just use our outputs ?
-        output_tensors = {i.name: i for i in frozen_func.outputs}
-
-    graph_def = tf_optimize(input_tensors, output_tensors, frozen_func.graph.as_graph_def(add_shapes=True))
-    return graph_def
-
-
-def freeze_session(sess, keep_var_names=None, input_names=None, output_names=None, clear_devices=True):
-    """Freezes the state of a session into a pruned computation graph."""
-    output_node_names = [i.split(':')[:-1][0] for i in output_names]
-    graph = sess.graph
-    with graph.as_default():
-        freeze_var_names = list(set(v.op.name for v in tf_global_variables()).difference(keep_var_names or []))
-        output_node_names = output_node_names or []
-        output_node_names += [v.op.name for v in tf_global_variables()]
-        graph_def = graph.as_graph_def(add_shapes=True)
-        if clear_devices:
-            for node in graph_def.node:
-                node.device = ""
+def freeze_func(func, input_names, output_names):
+    frozen_func = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=False)
+    graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
+    # output_tensors = {i.name: i for i in frozen_func.outputs}
+    tf_reset_default_graph()
+    with tf_session() as sess:
+        tf.import_graph_def(graph_def, name='')
         input_tensors = {i: sess.graph.get_tensor_by_name(i) for i in input_names}
         output_tensors = {i: sess.graph.get_tensor_by_name(i) for i in output_names}
         graph_def = tf_optimize(input_tensors, output_tensors, graph_def)
-        if is_tf2():
-            frozen_graph = tf.compat.v1.graph_util.convert_variables_to_constants(sess, graph_def,
-                                                                                  output_node_names, freeze_var_names)
-        else:
-            frozen_graph = convert_variables_to_constants(sess, graph_def,
-                                                          output_node_names, freeze_var_names)
+    return graph_def
 
-        return frozen_graph
+
+def freeze_session(sess, input_names=None, output_names=None):
+    """Freezes the state of a session into a pruned computation graph."""
+    output_node_names = [i.split(':')[:-1][0] for i in output_names]
+    keep_var_names = [i.split(':')[:-1][0] for i in input_names]
+    with sess.graph.as_default():
+        # freeze_var_names = list(set(v.op.name for v in tf_global_variables()).difference(keep_var_names or []))
+        output_node_names = output_node_names or []
+        output_node_names += [v.op.name for v in tf_global_variables()]
+        output_node_names += keep_var_names
+        graph_def = sess.graph.as_graph_def(add_shapes=True)
+        for node in graph_def.node:
+            node.device = ""
+        if is_tf2():
+            graph_def = tf.compat.v1.graph_util.convert_variables_to_constants(sess, graph_def,
+                                                                               output_node_names)
+        else:
+            graph_def = convert_variables_to_constants(sess, graph_def,
+                                                       output_node_names)
+    return graph_def
 
 
 def remove_redundant_inputs(frozen_graph, input_names):
@@ -121,19 +101,6 @@ def remove_redundant_inputs(frozen_graph, input_names):
     return frozen_inputs
 
 
-def get_tensors_for_names(graph_def, input_names, output_names):
-    inputs = {}
-    outputs = {}
-    tf_reset_default_graph()
-    with tf_session() as sess:
-        tf.import_graph_def(graph_def, name='')
-        for i in input_names:
-            inputs[i] = sess.graph.get_tensor_by_name(i)
-        for i in output_names:
-            outputs[i] = sess.graph.get_tensor_by_name(i)
-    return inputs, outputs
-
-
 def from_graphdef(model_path, input_names, output_names):
     """Load tensorflow graph from graphdef."""
     # make sure we start with clean default graph
@@ -143,13 +110,14 @@ def from_graphdef(model_path, input_names, output_names):
         with tf_gfile.GFile(model_path, 'rb') as f:
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def, name='')
-            frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-    input_names = remove_redundant_inputs(frozen_graph, input_names)
+        frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
+        input_names = remove_redundant_inputs(frozen_graph, input_names)
+        inputs = {i: sess.graph.get_tensor_by_name(i) for i in input_names}
+        outputs = {i: sess.graph.get_tensor_by_name(i) for i in output_names}
 
-    # get the input and output tensors
-    inputs, outputs = get_tensors_for_names(frozen_graph, input_names, output_names)
-
-    # clean up
+    tf_reset_default_graph()
+    with tf_session() as sess:
+        frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
     tf_reset_default_graph()
     return frozen_graph, inputs, outputs
 
@@ -164,14 +132,14 @@ def from_checkpoint(model_path, input_names, output_names):
         # restore from model_path minus the ".meta"
         saver.restore(sess, model_path[:-5])
         frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-    input_names = remove_redundant_inputs(frozen_graph, input_names)
+        input_names = remove_redundant_inputs(frozen_graph, input_names)
+        inputs = {i: sess.graph.get_tensor_by_name(i) for i in input_names}
+        outputs = {i: sess.graph.get_tensor_by_name(i) for i in output_names}
 
-    # get the input and output tensors
-    inputs, outputs = get_tensors_for_names(frozen_graph, input_names, output_names)
-
-    # clean up
-    # tf_reset_default_graph()
-    # frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
+    tf_reset_default_graph()
+    with tf_session() as sess:
+        frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
+    tf_reset_default_graph()
     return frozen_graph, inputs, outputs
 
 
@@ -232,8 +200,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, signatures):
         for output_tensor in  concrete_func.outputs:
             outputs[output_tensor.name] = output_tensor
 
-    frozen_func = convert_to_constants.convert_variables_to_constants_v2(concrete_func, lower_control_flow=True)
-    frozen_graph = frozen_func.graph.as_graph_def()
+    frozen_graph = freeze_func(concrete_func, list(inputs.keys()), list(outputs.keys()))
     return frozen_graph, inputs, outputs
 
 
@@ -256,16 +223,14 @@ def from_saved_model(model_path, input_names, output_names, signatures=None):
         logger.warning("found multiple signatures %s in saved_model, pass --signature_def in command line",
                        signatures)
 
-
     # if command line overrides inputs or outputs, filter the tensors here
-    if input_names:
-        inputs = {k: v for k, v in inputs.items() if k in input_names}
-    if output_names:
-        outputs = {k: v for k, v in outputs.items() if k in output_names}
+    #if input_names:
+    #    inputs = {k: v for k, v in inputs.items() if k in input_names}
+    #if output_names:
+    #    outputs = {k: v for k, v in outputs.items() if k in output_names}
 
-    # clean up
     tf_reset_default_graph()
-    frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
+    #frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
     return frozen_graph, inputs, outputs
 
 
@@ -280,17 +245,10 @@ def tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant
     rewrite_options = config.graph_options.rewrite_options
     # TODO: if we turn on pruning, grappler removes some identities that the tf-1.x lstm rewriter
     #   depends on so for now don't turn this on.
-    if is_tf2():
-        rewrite_options.optimizers[:] = [
-            'pruning', 'constfold', 'arithmetic', 'dependency', 'function'
-        ]
-    else:
-        rewrite_options.optimizers[:] = [
-            'constfold', 'arithmetic', 'function'
-        ]
-    # rewrite_options.constant_folding = rewrite_options.ON
-    # rewrite_options.function = rewrite_options.ON
-
+    rewrite_options.optimizers[:] = [
+        # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
+        'constfold', 'function'
+    ]
     meta_graph = tf.compat.v1.train.export_meta_graph(graph_def=graph_def)
     fetch_collection = meta_graph_pb2.CollectionDef()
     for t in list(input_tensors) + output_tensors:
@@ -302,23 +260,26 @@ def tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant
 
 def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=False):
     """Extract inference subgraph and optimize graph."""
-    if isinstance(input_tensors, list):
-        input_tensors, _ = get_tensors_for_names(graph_def, input_tensors, [])
-    if isinstance(output_tensors, list):
-        _, output_tensors = get_tensors_for_names(graph_def, [], output_tensors)
+    assert isinstance(input_tensors, dict)
+    assert isinstance(output_tensors, dict)
+    input_tensors = {
+        name: tensor for name, tensor in input_tensors.items()
+        if tensor.dtype != tf.dtypes.resource
+    }
+
+    needed_names = [utils.node_name(i) for i in input_tensors.keys()] + \
+               [utils.node_name(i) for i in output_tensors.keys()]
+    graph_def = tf.compat.v1.graph_util.extract_sub_graph(graph_def, needed_names)
 
     if is_tf2():
-        with tf_session() as _:
-            graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
+        graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
     else:
         # tf-1.x
         try:
             # try grappler. this should work on newer tensorflow versions tf-1.12 and up
             graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
         except:  # pylint: disable=bare-except
-            # older versions might fail
-
-            # if older, try the old try TransformGraph
+            # older tf versions migtht not have grappler - try the old try TransformGraph
             from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name
             transforms = []
             if fold_constant:
@@ -331,10 +292,6 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=False):
                 "fold_old_batch_norms",
             ])
             graph_def = TransformGraph(graph_def, input_tensors.keys(), output_tensors.keys(), transforms)
-
-    needed_names = [utils.node_name(i) for i in input_tensors.keys()] + \
-               [utils.node_name(i) for i in output_tensors.keys()]
-    graph_def = tf.compat.v1.graph_util.extract_sub_graph(graph_def, needed_names)
 
     return graph_def
 
@@ -366,7 +323,7 @@ _FUNCTIONS = {}
 def resolve_functions(tf_graph):
     def toposort(data):
         while True:
-            ordered = set(item for item, dep in data.items() if dep == 0)
+            ordered = set(item for item, dep in data.items() if not dep)
             if not ordered:
                 break
             yield ordered

@@ -136,24 +136,24 @@ class UnitRnnRewriterBase(LoopRewriterBase):
 
     def _match_cell(self, context, unittype):
         """match unit cell"""
-        cell_pattern = get_pattern(unittype)
-        matcher = GraphMatcher(cell_pattern, allow_reorder=True)
+        for cell_pattern in get_pattern(unittype):
+            matcher = GraphMatcher(cell_pattern, allow_reorder=True)
 
-        loop_props = context.loop_properties
-        inputs = loop_props.state_inputs + loop_props.scan_inputs
-        input_ids = [input_tensor_value_info.id for input_tensor_value_info in inputs]
-        outputs = loop_props.state_outputs + loop_props.scan_outputs
-        output_ids = [out_tensor_value_info.id for out_tensor_value_info in outputs]
-        body_graph_ops, _, _ = LoopRewriterBase.find_subgraph(
-            set(input_ids),
-            set(output_ids),
-            self.g, merge_as_end=True
-        )
+            loop_props = context.loop_properties
+            inputs = loop_props.state_inputs + loop_props.scan_inputs
+            input_ids = [input_tensor_value_info.id for input_tensor_value_info in inputs]
+            outputs = loop_props.state_outputs + loop_props.scan_outputs
+            output_ids = [out_tensor_value_info.id for out_tensor_value_info in outputs]
+            body_graph_ops, _, _ = LoopRewriterBase.find_subgraph(
+                set(input_ids),
+                set(output_ids),
+                self.g, merge_as_end=True
+            )
 
-        match_results = list(matcher.match_ops(body_graph_ops))
-        if len(match_results) != 1:
-            return None
-        return match_results[0]
+            match_results = list(matcher.match_ops(body_graph_ops))
+            if len(match_results) == 1:
+                return match_results[0]
+        return None
 
     def get_weight_and_bias(self, context):
         raise NotImplementedError()

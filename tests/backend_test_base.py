@@ -25,7 +25,7 @@ from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
 from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, freeze_func, freeze_session
-from tf2onnx.tf_loader import is_tf2
+from tf2onnx.tf_loader import tf_optimize, is_tf2
 
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
@@ -120,7 +120,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # now make the eager functions a graph
             concrete_func = tf.function(func, input_signature=tuple(input_tensors))
             concrete_func = concrete_func.get_concrete_function()
-            graph_def = freeze_func(concrete_func, output_names_with_port)
+            graph_def = freeze_func(concrete_func,
+                                    input_names=list(feed_dict.keys()), output_names=output_names_with_port)
         else:
             #
             # use graph to execute the tensorflow func
@@ -136,15 +137,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 for out_name in output_names_with_port:
                     output_dict.append(sess.graph.get_tensor_by_name(out_name))
                 expected = sess.run(output_dict, feed_dict=feed_dict)
-                graph_def = sess.graph_def
+                graph_def = freeze_session(sess,
+                                           input_names=list(feed_dict.keys()),
+                                           output_names=output_names_with_port)
 
-            if convert_var_to_const:
-                with tf_session() as sess:
-                    variables_lib.global_variables_initializer().run()
-                    graph_def = freeze_session(sess, None,
-                                               input_names=list(feed_dict.keys()),
-                                               output_names=output_names_with_port,
-                                               clear_devices=True)
+            tf_reset_default_graph()
+            with tf_session() as sess:
+                tf.import_graph_def(graph_def, name='')
+                input_tensors = {i: sess.graph.get_tensor_by_name(i) for i in list(feed_dict.keys())}
+                output_tensors = {i: sess.graph.get_tensor_by_name(i) for i in output_names_with_port}
+                graph_def = tf_optimize(input_tensors, output_tensors, graph_def)
 
         tf_reset_default_graph()
         with tf_session() as sess:
@@ -155,7 +157,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 utils.save_protobuf(model_path, graph_def)
                 self.logger.debug("created file  %s", model_path)
 
-            g = process_tf_graph(sess.graph, opset=self.config.opset, output_names=output_names_with_port,
+            g = process_tf_graph(sess.graph, opset=self.config.opset,
+                                 input_names=list(feed_dict.keys()),
+                                 output_names=output_names_with_port,
                                  target=self.config.target, **process_args)
             g = optimizer.optimize_graph(g)
             actual = self.run_backend(g, output_names_with_port, onnx_feed_dict)

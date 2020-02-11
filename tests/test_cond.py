@@ -103,14 +103,16 @@ class CondTests(Tf2OnnxBackendTestBase):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
         def func(x, y):
-            def cond_graph():
-                b = tf.constant(np.array([0], dtype=np.int32), dtype=tf.int32)
+            def true_fn():
+                return [x]
+            def false_fn():
+                # b = tf.constant(np.array([0], dtype=np.int32), dtype=tf.int32)
                 # while_loop
                 c = lambda y: tf.reduce_any(tf.less(y, 10))
                 b = lambda i: tf.add(y, 1)
                 return tf.while_loop(c, b, [y])
 
-            res = tf.cond(x[0] < y[0], lambda: x, cond_graph, name="test_cond")
+            res = tf.cond(x[0] < y[0], true_fn, false_fn, name="test_cond")
             return tf.identity(res, name="output")
 
         feed_dict = {"input_1:0": x_val, "input_2:0": y_val}

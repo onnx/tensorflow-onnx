@@ -20,6 +20,7 @@ from tf2onnx.tf_loader import is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
+# pylint: disable=invalid-name
 
 if is_tf2():
     # There is no LSTMBlockCell in tf-2.x
@@ -35,6 +36,8 @@ else:
     MultiRNNCell = tf.contrib.rnn.MultiRNNCell
     dynamic_rnn = tf.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.nn.bidirectional_dynamic_rnn
+
+# pylint: enable=invalid-name
 
 class LSTMTests(Tf2OnnxBackendTestBase):
     def test_test_single_dynamic_lstm_state_is_tuple(self):
@@ -613,8 +616,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
 
         def func(x):
             units = 5
-            cell1 = LSTMCell(units)
-            cell2 = LSTMCell(units)
+            cell1 = LSTMCell(units, name="cell1")
+            cell2 = LSTMCell(units, name="cell2")
             outputs_1, cell_state_1 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
@@ -624,11 +627,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             )
 
             units = 10
-            cell1 = LSTMCell(units)
-            cell2 = LSTMCell(units)
+            cell3 = LSTMCell(units, name="cell3")
+            cell4 = LSTMCell(units, name="cell4")
             outputs_2, cell_state_2 = bidirectional_dynamic_rnn(
-                cell1,
-                cell2,
+                cell3,
+                cell4,
                 x,
                 dtype=tf.float32,
                 scope="bilstm_2"
