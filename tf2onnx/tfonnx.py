@@ -31,7 +31,6 @@ logger = logging.getLogger(__name__)
 
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
-# FIXME:
 # pylint: disable=unused-variable
 
 

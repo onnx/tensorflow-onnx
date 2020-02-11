@@ -34,6 +34,7 @@ else:
     dynamic_rnn = tf.nn.dynamic_rnn
 
 
+
 class CustomRnnCellTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(8, "Scan")
     def test_single_dynamic_custom_rnn(self):

@@ -7,12 +7,14 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import os
 import unittest
 from itertools import product
 
 import numpy as np
 import tensorflow as tf
 
+from tensorflow.python.ops import lookup_ops
 from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
@@ -49,10 +51,8 @@ _OUTPUT2 = "output2:0"
 
 if is_tf2():
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
-    is_nan = tf.math.is_nan
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
-    is_nan = tf.is_nan
 
 
 def make_xval(shape):
@@ -2307,7 +2307,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val3 = np.array([1.0, np.nan, -3.0, np.nan], dtype=np.float32).reshape((2, 2))
         for x_val in [x_val1, x_val2, x_val3]:
             def func(x):
-                x_ = is_nan(x)
+                x_ = tf.math.is_nan(x)
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -2805,6 +2805,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
         out_backprop_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 5]).astype(np.float32)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
+
+    @check_opset_min_version(8, "CategoryMapper")
+    def test_hashtable_lookup(self):
+        filnm = "vocab.tmp"
+        words = ["apple", "pear", "banana", "cherry", "grape"]
+        query = np.array(['cherry'], dtype=np.object)
+        with open(filnm, "w") as f:
+            for word in words:
+                f.write(word + "\n")
+        def func(query_holder):
+            hash_table = lookup_ops.index_table_from_file(filnm)
+            lookup_results = hash_table.lookup(query_holder)
+            ret = tf.add(lookup_results, 0, name=_TFOUTPUT)
+            return ret
+        #query_holder = tf.placeholder(tf.string, shape=[len(query)], name=_TFINPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, constant_fold=False)
+        os.remove(filnm)
 
 
 if __name__ == '__main__':

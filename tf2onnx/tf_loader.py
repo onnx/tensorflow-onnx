@@ -44,13 +44,13 @@ else:
     # we support tf-1.4 and up. Need to see if we can limit support
     # to newer tensorflow version.
     # In the meantime we do it like below:
-    tf_reset_default_graph = tf.reset_default_graph
-    tf_global_variables = tf.global_variables
-    tf_session = tf.Session  # pylint: disable=invalid-name
-    tf_graphdef = tf.GraphDef
-    tf_import_meta_graph = tf.train.import_meta_graph
+    tf_reset_default_graph = tf.compat.v1.reset_default_graph
+    tf_global_variables = tf.compat.v1.global_variables
+    tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
+    tf_graphdef = tf.compat.v1.GraphDef
+    tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.gfile
-    tf_placeholder = tf.placeholder
+    tf_placeholder = tf.compat.v1.placeholder
 
 
 def freeze_func(func, input_names, output_names):
@@ -243,6 +243,7 @@ def tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant
 
     config = config_pb2.ConfigProto()
     rewrite_options = config.graph_options.rewrite_options
+    config.graph_options.infer_shapes = True
     # TODO: if we turn on pruning, grappler removes some identities that the tf-1.x lstm rewriter
     #   depends on so for now don't turn this on.
     rewrite_options.optimizers[:] = [
@@ -258,7 +259,7 @@ def tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant
     return graph_def
 
 
-def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=False):
+def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=True):
     """Extract inference subgraph and optimize graph."""
     assert isinstance(input_tensors, dict)
     assert isinstance(output_tensors, dict)
@@ -267,31 +268,33 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=False):
         if tensor.dtype != tf.dtypes.resource
     }
 
+    # TODO: is this needed ?
     needed_names = [utils.node_name(i) for i in input_tensors.keys()] + \
                [utils.node_name(i) for i in output_tensors.keys()]
     graph_def = tf.compat.v1.graph_util.extract_sub_graph(graph_def, needed_names)
 
-    if is_tf2():
-        graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
-    else:
-        # tf-1.x
-        try:
-            # try grappler. this should work on newer tensorflow versions tf-1.12 and up
+    if fold_constant:
+        if is_tf2():
             graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
-        except:  # pylint: disable=bare-except
-            # older tf versions migtht not have grappler - try the old try TransformGraph
-            from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name
-            transforms = []
-            if fold_constant:
+        else:
+            # tf-1.x
+            try:
+                # try grappler. this should work on newer tensorflow versions tf-1.12 and up
+                graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
+            except:  # pylint: disable=bare-except
+                # older tf versions migtht not have grappler - try the old try TransformGraph
+                from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name
+                transforms = []
+                if fold_constant:
+                    transforms.extend([
+                        "fold_constants(ignore_errors=true)",
+                        "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
+                    ])
                 transforms.extend([
-                    "fold_constants(ignore_errors=true)",
-                    "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
+                    "fold_batch_norms",
+                    "fold_old_batch_norms",
                 ])
-            transforms.extend([
-                "fold_batch_norms",
-                "fold_old_batch_norms",
-            ])
-            graph_def = TransformGraph(graph_def, input_tensors.keys(), output_tensors.keys(), transforms)
+                graph_def = TransformGraph(graph_def, input_tensors.keys(), output_tensors.keys(), transforms)
 
     return graph_def
 

@@ -133,6 +133,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
                 func(*input_list)
                 variables_lib.global_variables_initializer().run()
+                tf.tables_initializer().run()
                 output_dict = []
                 for out_name in output_names_with_port:
                     output_dict.append(sess.graph.get_tensor_by_name(out_name))
@@ -146,7 +147,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 tf.import_graph_def(graph_def, name='')
                 input_tensors = {i: sess.graph.get_tensor_by_name(i) for i in list(feed_dict.keys())}
                 output_tensors = {i: sess.graph.get_tensor_by_name(i) for i in output_names_with_port}
-                graph_def = tf_optimize(input_tensors, output_tensors, graph_def)
+                graph_def = tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=constant_fold)
 
         tf_reset_default_graph()
         with tf_session() as sess:

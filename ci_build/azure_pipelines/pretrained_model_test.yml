@@ -3,8 +3,8 @@
 jobs:
 - template: 'templates/job_generator.yml'
   parameters:
-    python_versions: ['3.7', '3.5']
-    tf_versions: ['1.14']
+    python_versions: ['3.7', '3.6']
+    tf_versions: ['1.14.0']
     job:
       steps:
       - template: 'pretrained_model_test.yml'
@@ -12,7 +12,7 @@ jobs:
 - template: 'templates/job_generator.yml'
   parameters:
     platforms: ['windows']
-    tf_versions: ['1.14']
+    tf_versions: ['1.14.0']
     job:
       steps:
       - template: 'pretrained_model_test.yml'

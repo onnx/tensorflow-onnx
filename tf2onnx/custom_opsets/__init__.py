@@ -3,3 +3,4 @@
 """ custom tf2onnx mapping functions. """
 
 from . import ms
+from . import onnx_ml
