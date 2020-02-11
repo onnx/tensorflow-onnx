@@ -174,6 +174,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Cast": self._simple_through_handler,
             "Clip": self._simple_through_handler,
             "Concat": self._concat_handler,
+            "Elu": self._simple_through_handler,
             "Identity": self._identity_handler,
             "LeakyRelu": self._simple_through_handler,
             "Max": self._maxmin_handler,
@@ -247,14 +248,6 @@ class TransposeOptimizer(GraphOptimizerBase):
         shape = self._g.get_shape(node.output[0])
         if shape:
             # only nhwc transpose can reach here
-            # if slicing results in non 4-D shape, we cannot infer the outputshape
-            # JRP
-            # new_shape = shape
-            # if len(shape) == len(NHWC_TO_NCHW):
-            #     new_shape = [shape[i] for i in NHWC_TO_NCHW]
-            # else:
-            #     new_shape = [-1]*len(shape)
-            #     self.logger.warning("%s's shape is unknown, which may interfere further optimization", node.output[0])
             new_shape = [shape[i] for i in NHWC_TO_NCHW]
             self._g.set_shape(node.output[0], new_shape)
         return True
@@ -526,7 +519,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             squeeze_shape = self._g.get_shape(node.output[0])
             self._g.set_shape(trans.output[0], squeeze_shape)
             input_shape = self._g.get_shape(node.input[0])
-            if input_shape is not None: # JRP and len(input_shape) == 4:
+            if input_shape is not None:
                 new_squeeze_output_shape = [input_shape[i] for i in range(4) if i not in new_squeeze_axes]
             else:
                 new_squeeze_output_shape = [-1] * 4
@@ -576,9 +569,6 @@ class TransposeOptimizer(GraphOptimizerBase):
         else:  # in opset 10, axes is input instead of an attribute.
             if len(node.inputs) >= 4 and node.inputs[3].is_const():
                 axes = node.inputs[3].get_tensor_value(as_list=True)
-                # JRP
-                #shape = self._g.get_shape(node.output[0])
-                #if axes == [0, 1, 2, 3] and len(shape) == 4:
                 if axes == [0, 1, 2, 3]:
                     # axes node might be shared
                     new_axes = np.array(NCHW_TO_NHWC, dtype=np.int64)
