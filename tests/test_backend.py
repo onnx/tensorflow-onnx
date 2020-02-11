@@ -2477,7 +2477,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_type, y_type, z_type = np.int64, np.int64, np.int64
         # test 3D upto 7D input tensors
         for x_shape in [[12, 4, 4], [12, 4, 8, 3], [12, 4, 8, 3, 2], [12, 4, 8, 3, 2, 3], [12, 4, 8, 3, 2, 1, 3]]:
-            # test 1D upto 7D block shapes
+            # test 1D upto 2D block shapes
             for block_shape in [[2, 3], [2]]:
                 tf.reset_default_graph()
                 # crop 1 layer at end of each dim
@@ -2498,7 +2498,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_type, y_type, z_type = np.int64, np.int64, np.int64
         # test 3D upto 7D input tensors
         for x_shape in [[2, 4, 4], [1, 4, 8, 3], [1, 4, 8, 3, 2], [1, 4, 8, 3, 2, 3], [1, 4, 8, 3, 2, 1, 3]]:
-            # test 1D upto 7D block shapes
+            # test 1D upto 2D block shapes
             for block_shape in [[2], [2, 2]]:
                 tf.reset_default_graph()
                 # pad 1 layer at begin and end of each dim
