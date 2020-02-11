@@ -1230,7 +1230,7 @@ class BatchToSpace:
 
             # support non 3D/4D tensors and dynamic crop vals
             # dynamic slice starts at opset 10
-            utils.make_sure(ctx.opset >= 10, 'non-4D tensor or non-const crops require opset 10+')
+            utils.make_sure(ctx.opset >= 11, 'non-4D tensor or non-const crops require opset 11')
 
             input0 = node.input[0]
             input2 = node.input[2]
@@ -1358,7 +1358,7 @@ class SpaceToBatch:
 
             # support non 3D/4D tensors and dynamic pad vals
             # dynamic slice starts at opset 10
-            utils.make_sure(ctx.opset >= 10, 'non-4D tensor or non-const pads require opset 10+')
+            utils.make_sure(ctx.opset >= 11, 'non-4D tensor or non-const pads require opset 11')
 
             input0 = node.input[0]
             input2 = node.input[2]
