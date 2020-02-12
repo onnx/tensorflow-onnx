@@ -65,7 +65,7 @@ if is_tf2():
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.math.floormod
-    elif LooseVersion(tf.__version__) >= "1.13":
+elif LooseVersion(tf.__version__) >= "1.13":
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
     multinomial = tf.compat.v1.random.multinomial
     space_to_batch_nd = tf.compat.v1.space_to_batch_nd
