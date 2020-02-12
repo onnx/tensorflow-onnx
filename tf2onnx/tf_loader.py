@@ -273,8 +273,8 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=True):
             name: tensor for name, tensor in input_tensors.items()
             if tensor.dtype != tf.dtypes.resource
         }
-    except:
-        pass  # pylint: disable=bare-except
+    except:  # pylint: disable=bare-except
+        pass
 
 
     # TODO: is this needed ?
