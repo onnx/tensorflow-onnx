@@ -81,7 +81,7 @@ else:
     batch_to_space_nd = tf.batch_to_space_nd
     reverse_v2 = tf.reverse_v2
     random_normal = tf.random_normal
-    random_uniform =  tf.random_uniform
+    random_uniform = tf.random_uniform
     fused_batch_norm = tf.nn.fused_batch_norm
     dropout = tf.nn.dropout
     resize_nearest_neighbor = tf.image.resize_nearest_neighbor
