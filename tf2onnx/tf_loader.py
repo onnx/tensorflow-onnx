@@ -39,6 +39,7 @@ if is_tf2():
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.io.gfile
     tf_placeholder = tf.compat.v1.placeholder
+    extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 elif LooseVersion(tf.__version__) >= "1.13":
     # 1.13 introduced the compat namespace
     tf_reset_default_graph = tf.compat.v1.reset_default_graph
@@ -48,6 +49,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.compat.v1.placeholder
+    extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 else:
     # older than 1.13
     tf_reset_default_graph = tf.reset_default_graph
@@ -57,6 +59,8 @@ else:
     tf_import_meta_graph = tf.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.placeholder
+    extract_sub_graph = tf.graph_util.extract_sub_graph
+
 
 def freeze_func(func, input_names, output_names):
     frozen_func = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=False)
@@ -276,11 +280,10 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=True):
     except:  # pylint: disable=bare-except
         pass
 
-
     # TODO: is this needed ?
     needed_names = [utils.node_name(i) for i in input_tensors.keys()] + \
                [utils.node_name(i) for i in output_tensors.keys()]
-    graph_def = tf.compat.v1.graph_util.extract_sub_graph(graph_def, needed_names)
+    graph_def = extract_sub_graph(graph_def, needed_names)
 
     if fold_constant:
         want_grappler = is_tf2() or LooseVersion(tf.__version__) >= "1.15"
