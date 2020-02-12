@@ -268,10 +268,14 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=True):
     """Extract inference subgraph and optimize graph."""
     assert isinstance(input_tensors, dict)
     assert isinstance(output_tensors, dict)
-    input_tensors = {
-        name: tensor for name, tensor in input_tensors.items()
-        if tensor.dtype != tf.dtypes.resource
-    }
+    try:
+        input_tensors = {
+            name: tensor for name, tensor in input_tensors.items()
+            if tensor.dtype != tf.dtypes.resource
+        }
+    except:
+        pass  # pylint: disable=bare-except
+
 
     # TODO: is this needed ?
     needed_names = [utils.node_name(i) for i in input_tensors.keys()] + \
