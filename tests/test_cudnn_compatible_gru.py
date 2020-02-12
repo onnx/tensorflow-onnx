@@ -14,7 +14,7 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_gru_count, check_opset_min_version, check_tf_max_version
+from common import unittest_main, check_gru_count, check_opset_min_version, check_tf_max_version, check_opset_after_tf_version
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -311,7 +311,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=0.0001, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bigru(self):
         units = 5
@@ -343,7 +343,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bigru_output_consumed_only(self):
         units = 5
@@ -375,7 +375,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bigru_state_consumed_only(self):
         units = 5
@@ -407,7 +407,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bidirectional_but_one_gru(self):
         units = 5
@@ -436,7 +436,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bidirectional_but_one_gru_and_output_consumed_only(self):
         units = 5
@@ -461,7 +461,7 @@ class CudnnCompatibleGRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
 
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     @check_tf_max_version("1.15", "no CudnnCompatibleGRUCell in tf-2.x")
     def test_dynamic_bidirectional_but_one_gru_and_state_consumed_only(self):
         units = 5

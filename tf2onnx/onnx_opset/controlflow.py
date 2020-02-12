@@ -419,7 +419,7 @@ class StatelessIfOp:
 @tf_op(["If"])
 class IfOp:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """V2 control flow - If"""
         inputs = node.input[1:]
 

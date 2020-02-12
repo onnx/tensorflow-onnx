@@ -29,6 +29,7 @@ __all__ = [
     "check_onnxruntime_min_version",
     "check_opset_min_version",
     "check_opset_max_version",
+    "check_opset_after_tf_version",
     "check_target",
     "skip_caffe2_backend",
     "skip_onnxruntime_backend",
@@ -151,6 +152,14 @@ def _append_message(reason, message):
     if message:
         reason = reason + ": " + message
     return reason
+
+
+def check_opset_after_tf_version(tf_version, required_opset, message=""):
+    """ Skip if tf_version > max_required_version """
+    config = get_test_config()
+    reason = _append_message("conversion requires opset {} after tf {}".format(required_opset, tf_version), message)
+    skip = config.tf_version >= LooseVersion(tf_version) and config.opset < required_opset
+    return unittest.skipIf(skip, reason)
 
 
 def check_tf_max_version(max_accepted_version, message=""):

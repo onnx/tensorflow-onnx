@@ -274,27 +274,23 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=True):
     graph_def = tf.compat.v1.graph_util.extract_sub_graph(graph_def, needed_names)
 
     if fold_constant:
-        if is_tf2():
+        want_grappler = is_tf2() or LooseVersion(tf.__version__) >= "1.15"
+        if want_grappler:
             graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
         else:
-            # tf-1.x
-            try:
-                # try grappler. this should work on newer tensorflow versions tf-1.12 and up
-                graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
-            except:  # pylint: disable=bare-except
-                # older tf versions migtht not have grappler - try the old try TransformGraph
-                from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name
-                transforms = []
-                if fold_constant:
-                    transforms.extend([
-                        "fold_constants(ignore_errors=true)",
-                        "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
-                    ])
+            # the older transform path
+            from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name
+            transforms = []
+            if fold_constant:
                 transforms.extend([
-                    "fold_batch_norms",
-                    "fold_old_batch_norms",
+                    "fold_constants(ignore_errors=true)",
+                    "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
                 ])
-                graph_def = TransformGraph(graph_def, input_tensors.keys(), output_tensors.keys(), transforms)
+            transforms.extend([
+                "fold_batch_norms",
+                "fold_old_batch_norms",
+            ])
+            graph_def = TransformGraph(graph_def, input_tensors.keys(), output_tensors.keys(), transforms)
 
     return graph_def
 

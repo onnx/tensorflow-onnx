@@ -13,7 +13,8 @@ import tensorflow as tf
 
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version, check_opset_min_version, check_lstm_count, check_tf_max_version
+from common import unittest_main, check_tf_min_version, check_opset_min_version, check_lstm_count
+from common import check_tf_max_version, check_opset_after_tf_version
 from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -240,7 +241,7 @@ class LSTMBlockTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_tf_max_version("1.15", "no LSTMBlockCell in tf-2.x")
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     def test_dynamic_bilstm(self):
         units = 5
         batch_size = 6
@@ -264,7 +265,7 @@ class LSTMBlockTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_tf_max_version("1.15", "no LSTMBlockCell in tf-2.x")
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     def test_dynamic_bilstm_output_consumed_only(self):
         units = 5
         batch_size = 6
@@ -288,7 +289,7 @@ class LSTMBlockTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_tf_max_version("1.15", "no LSTMBlockCell in tf-2.x")
-    @check_opset_min_version(10, "might need ReverseV2")
+    @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     def test_dynamic_bilstm_state_consumed_only(self):
         units = 5
         batch_size = 6
