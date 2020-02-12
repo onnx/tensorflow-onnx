@@ -396,7 +396,7 @@ class IteratorGetNext:
 @tf_op(["StatelessIf"])
 class StatelessIfOp:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """V2 control flow - If"""
         inputs = node.input[1:]
 
@@ -446,7 +446,7 @@ class IfOp:
 @tf_op(["TensorListSetItem"])
 class TensorListSetItem:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         # handled in 'While'
         pass
 
@@ -454,7 +454,7 @@ class TensorListSetItem:
 @tf_op(["TensorListGetItem"])
 class TensorListGetItem:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         ctx.ta_reads.append(node.input[0])
         node.type = "Gather"
         node.input = [node.input[0], node.input[1]]
@@ -465,21 +465,21 @@ class TensorListGetItem:
 @tf_op(["TensorListLength"])
 class TensorListLength:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         pass
 
 
 @tf_op(["TensorListReserve", "TensorListResize"])
 class TensorListReserve:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         pass
 
 
 @tf_op(["TensorListFromTensor"])
 class TensorListFromTensor:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         consumers = ctx.find_output_consumers(node.output[0])
         if any([c.is_while() for c in consumers]):
             node.type = "Identity"
@@ -490,7 +490,7 @@ class TensorListFromTensor:
 @tf_op(["TensorListStack"])
 class TensorListStack:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         if node.inputs[0].is_while():
             ctx.remove_node(node.name)
             ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], node.input[0])
@@ -499,7 +499,7 @@ class TensorListStack:
 @tf_op(["While", "StatelessWhile"])
 class While:
     @classmethod
-    def version_8(cls, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         # the tensorflow while input is:
         #   loop_counter, max_iterations, [loop_vars]
         # cond and body use the same inputs

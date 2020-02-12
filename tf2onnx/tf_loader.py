@@ -39,11 +39,8 @@ if is_tf2():
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.io.gfile
     tf_placeholder = tf.compat.v1.placeholder
-else:
-    # TODO: in theory we can just use tf.compat.v1 but currently
-    # we support tf-1.4 and up. Need to see if we can limit support
-    # to newer tensorflow version.
-    # In the meantime we do it like below:
+elif LooseVersion(tf.__version__) >= "1.13":
+    # 1.13 introduced the compat namespace
     tf_reset_default_graph = tf.compat.v1.reset_default_graph
     tf_global_variables = tf.compat.v1.global_variables
     tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
@@ -51,7 +48,15 @@ else:
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.compat.v1.placeholder
-
+else:
+    # older than 1.13
+    tf_reset_default_graph = tf.reset_default_graph
+    tf_global_variables = tf.global_variables
+    tf_session = tf.Session  # pylint: disable=invalid-name
+    tf_graphdef = tf.GraphDef
+    tf_import_meta_graph = tf.train.import_meta_graph
+    tf_gfile = tf.gfile
+    tf_placeholder = tf.placeholder
 
 def freeze_func(func, input_names, output_names):
     frozen_func = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=False)
