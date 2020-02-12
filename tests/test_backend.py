@@ -9,6 +9,7 @@ from __future__ import unicode_literals
 
 import os
 import unittest
+from distutils.version import LooseVersion
 from itertools import product
 
 import numpy as np
@@ -51,8 +52,40 @@ _OUTPUT2 = "output2:0"
 
 if is_tf2():
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
+    multinomial = tf.compat.v1.random.multinomial
+    space_to_batch_nd = tf.compat.v1.space_to_batch_nd
+    batch_to_space_nd = tf.compat.v1.batch_to_space_nd
+    reverse_v2 = tf.compat.v1.reverse_v2
+    random_normal = tf.compat.v1.random_normal
+    random_uniform = tf.compat.v1.random_uniform
+    fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
+    dropout = tf.compat.v1.nn.dropout
+    resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
+    resize_bilinear = tf.compat.v1.image.resize_bilinear
+elif LooseVersion(tf.__version__) >= "1.13":
+    conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
+    multinomial = tf.compat.v1.random.multinomial
+    space_to_batch_nd = tf.compat.v1.space_to_batch_nd
+    batch_to_space_nd = tf.compat.v1.batch_to_space_nd
+    reverse_v2 = tf.compat.v1.reverse_v2
+    random_normal = tf.compat.v1.random_normal
+    random_uniform = tf.compat.v1.random_uniform
+    fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
+    dropout = tf.compat.v1.nn.dropout
+    resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
+    resize_bilinear = tf.compat.v1.image.resize_bilinear
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
+    multinomial = tf.multinomial
+    space_to_batch_nd = tf.space_to_batch_nd
+    batch_to_space_nd = tf.batch_to_space_nd
+    reverse_v2 = tf.reverse_v2
+    random_normal = tf.random_normal
+    random_uniform =  tf.random_uniform
+    fused_batch_norm = tf.nn.fused_batch_norm
+    dropout = tf.nn.dropout
+    resize_nearest_neighbor = tf.image.resize_nearest_neighbor
+    resize_bilinear = tf.image.resize_bilinear
 
 
 def make_xval(shape):
@@ -219,7 +252,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_multinomial(self):
         x_val = np.array([[10., 10.]], dtype=np.float32)
         def func(x):
-            op = tf.compat.v1.random.multinomial(tf.math.log(x), 5, output_dtype=tf.int64)
+            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int64)
             return tf.identity(op, name=_TFOUTPUT)
 
         # since returned indexes are random we can only check type and shape
@@ -232,7 +265,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
         def func(x):
-            op = tf.compat.v1.random.multinomial(x, 2, output_dtype=tf.int64)
+            op = multinomial(x, 2, output_dtype=tf.int64)
             return tf.identity(op, name=_TFOUTPUT)
         # since returned indexes are random we can only check type and shape
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False,
@@ -457,8 +490,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # Define a scope for reusing the variables
         def func(x, keep_prob):
             x_ = tf.identity(x)
-            # fc1 = tf.nn.dropout(x_, keep_prob)
-            fc1 = tf.compat.v1.nn.dropout(x_, keep_prob)
+            fc1 = dropout(x_, keep_prob)
             return tf.identity(fc1, name=_TFOUTPUT)
         # when constant_fold is enabled, PlaceholderWithDefault will be folded into either a const or a placeholder.
         # here we set it False to test PlaceholderWithDefault bug: https://github.com/onnx/tensorflow-onnx/pull/446
@@ -1303,7 +1335,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_randomuniform(self):
         def func():
             shape = tf.constant([2, 3], name="shape")
-            x_ = tf.compat.v1.random_uniform(shape, name="rand", dtype=tf.float32)
+            x_ = random_uniform(shape, name="rand", dtype=tf.float32)
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -1314,7 +1346,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_randomuniform_int(self):
         def func():
             shape = tf.constant([2, 3], name="shape")
-            x_ = tf.compat.v1.random_uniform(shape, name="rand", dtype=tf.int32, maxval=10)
+            x_ = random_uniform(shape, name="rand", dtype=tf.int32, maxval=10)
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -1329,7 +1361,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.stack([x, x])
             x_ = tf.identity(x_)
             x_ = tf.shape(x_, name="shape")
-            x_ = tf.compat.v1.random_uniform(x_, name="rand", dtype=tf.float32)
+            x_ = random_uniform(x_, name="rand", dtype=tf.float32)
             x_ = tf.identity(x_)
             return tf.identity(x_, name=_TFOUTPUT)
         # since results are random, compare the shapes only
@@ -1342,7 +1374,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = tf.identity(x)
             x_ = tf.shape(x_, name="shape")[1:]
-            x_ = tf.compat.v1.random_uniform(x_, name="rand", dtype=tf.float32)
+            x_ = random_uniform(x_, name="rand", dtype=tf.float32)
             x_ = tf.identity(x_)
             return tf.identity(x_, name=_TFOUTPUT)
         # since results are random, compare the shapes only
@@ -1778,7 +1810,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             mean = tf.constant(mean_val, name='mean')
             var = tf.constant(var_val, name='variance')
             epsilon = 0.001
-            y, _, _ = tf.compat.v1.nn.fused_batch_norm(
+            y, _, _ = fused_batch_norm(
                 x, scale, offset, mean=mean, variance=var,
                 epsilon=epsilon, data_format=data_format, is_training=False)
             return tf.identity(y, name=_TFOUTPUT)
@@ -1792,7 +1824,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
-            x_ = tf.compat.v1.image.resize_nearest_neighbor(x, x_new_size_)
+            x_ = resize_nearest_neighbor(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -1802,7 +1834,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
-            x_ = tf.compat.v1.image.resize_nearest_neighbor(x, x_new_size_)
+            x_ = resize_nearest_neighbor(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
@@ -1814,7 +1846,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
-            x_ = tf.compat.v1.image.resize_bilinear(x, x_new_size_)
+            x_ = resize_bilinear(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -1824,7 +1856,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
-            x_ = tf.compat.v1.image.resize_bilinear(x, x_new_size_)
+            x_ = resize_bilinear(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
@@ -1835,7 +1867,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
-            x_ = tf.compat.v1.image.resize_bilinear(x, x_new_size_)
+            x_ = resize_bilinear(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
@@ -1846,7 +1878,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
-            x_ = tf.compat.v1.image.resize_nearest_neighbor(x, x_new_size_)
+            x_ = resize_nearest_neighbor(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -1985,7 +2017,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val_shape = [1, 2, 3, 4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
-            x_ = tf.compat.v1.reverse_v2(x, axis=[3])
+            x_ = reverse_v2(x, axis=[3])
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -1993,7 +2025,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val_shape = [2, 3, 4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
-            x_ = tf.compat.v1.reverse_v2(x, axis=[])
+            x_ = reverse_v2(x, axis=[])
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -2002,21 +2034,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val_shape = [1, 2, 3, 4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
-            x_ = tf.compat.v1.reverse_v2(x, axis=[0, -3, 2, 3])
+            x_ = reverse_v2(x, axis=[0, -3, 2, 3])
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
         x_val_shape = [2, 3, 4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
-            x_ = tf.compat.v1.reverse_v2(x, axis=[-3, 1, 2])
+            x_ = reverse_v2(x, axis=[-3, 1, 2])
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
         x_val_shape = [5, 5, 9, 7, 8, 9]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
-            x_ = tf.compat.v1.reverse_v2(x, axis=[0, 1, -2, 3, 5])
+            x_ = reverse_v2(x, axis=[0, 1, -2, 3, 5])
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -2027,7 +2059,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val_shape = [4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
-            x_ = tf.compat.v1.reverse_v2(x, axis=[])
+            x_ = reverse_v2(x, axis=[])
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -2338,13 +2370,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         input_val = np.random.random_sample([40, 3, 5, 100]).astype(np.float32)
         def func(x):
-            return tf.compat.v1.batch_to_space_nd(x, block_size, crop, name=_TFOUTPUT)
+            return batch_to_space_nd(x, block_size, crop, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
     @check_opset_min_version(11, "BatchToSpaceND")
     def test_batch_to_spacend_non_const(self):
         def func(input_x, block_shape, crops):
-            return tf.compat.v1.batch_to_space_nd(input_x, block_shape, crops, name=_TFOUTPUT)
+            return batch_to_space_nd(input_x, block_shape, crops, name=_TFOUTPUT)
         input_x_val = np.random.random_sample([40, 3, 5, 100]).astype(np.float32)  # NHWC
         block_shape_val = np.array([2, 2]).astype(np.int64)
         crops_val = np.array([[1, 0], [2, 1]]).astype(np.int64)
@@ -2353,7 +2385,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "SpaceToBatchND")
     def test_space_to_batchnd_non_const(self):
         def func(input_x, block_size, pad):
-            return tf.compat.v1.batch_to_space_nd(input_x, block_size, pad, name=_TFOUTPUT)
+            return batch_to_space_nd(input_x, block_size, pad, name=_TFOUTPUT)
         input_x_val = np.random.random_sample([40, 5, 7, 66]).astype(np.float32)  # NHWC
         block_size_val = np.array([2, 2]).astype(np.int64)
         pad_val = np.array([[0, 1], [2, 1]]).astype(np.int64)
@@ -2402,7 +2434,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         crop = [[0, 1], [2, 1]]
         input_val = np.random.random_sample([40, 3, 100]).astype(np.float32)
         def func(x):
-            return tf.compat.v1.batch_to_space_nd(x, block_size, crop, name=_TFOUTPUT)
+            return batch_to_space_nd(x, block_size, crop, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
     def test_space_to_batchnd(self):
@@ -2410,13 +2442,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
         pad = [[0, 1], [2, 1]]
         input_val = np.random.random_sample([40, 5, 7, 66]).astype(np.float32)
         def func(x):
-            return tf.compat.v1.space_to_batch_nd(x, block_size, pad, name=_TFOUTPUT)
+            return space_to_batch_nd(x, block_size, pad, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
         pad = [[0, 0], [1, 2]]
         input_val = np.random.random_sample([10, 6, 7, 66]).astype(np.float32)
         def func(x):
-            return tf.compat.v1.space_to_batch_nd(x, block_size, pad, name=_TFOUTPUT)
+            return space_to_batch_nd(x, block_size, pad, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
     @check_opset_min_version(10, "is_inf")
