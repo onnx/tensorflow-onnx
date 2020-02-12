@@ -62,7 +62,10 @@ if is_tf2():
     dropout = tf.compat.v1.nn.dropout
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
-elif LooseVersion(tf.__version__) >= "1.13":
+    is_nan = tf.math.is_nan
+    is_inf = tf.math.is_inf
+    floormod = tf.math.floormod
+    elif LooseVersion(tf.__version__) >= "1.13":
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
     multinomial = tf.compat.v1.random.multinomial
     space_to_batch_nd = tf.compat.v1.space_to_batch_nd
@@ -74,6 +77,8 @@ elif LooseVersion(tf.__version__) >= "1.13":
     dropout = tf.compat.v1.nn.dropout
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
+    is_inf = tf.math.is_inf
+    floormod = tf.math.floormod
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
     multinomial = tf.multinomial
@@ -86,6 +91,9 @@ else:
     dropout = tf.nn.dropout
     resize_nearest_neighbor = tf.image.resize_nearest_neighbor
     resize_bilinear = tf.image.resize_bilinear
+    is_nan = tf.is_nan
+    is_inf = tf.is_inf
+    floormod = tf.floormod
 
 
 def make_xval(shape):
@@ -2262,14 +2270,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         input_val_1 = 100 * np.random.random_sample(100).astype(np.int32)
         input_val_2 = (100 * np.random.random_sample(100) + 1).astype(np.int32)
         def func(input_1, input_2):
-            res = tf.math.floormod(input_1, input_2)
+            res = floormod(input_1, input_2)
             return tf.identity(res, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2})
 
         input_val_1 = 100 * np.random.random_sample(100).astype(np.float32)
         input_val_2 = (100 * np.random.random_sample(100) + 1).astype(np.float32)
         def func(input_1, input_2):
-            res = tf.math.floormod(input_1, input_2)
+            res = floormod(input_1, input_2)
             return tf.identity(res, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2}, rtol=1e-5)
 
@@ -2277,7 +2285,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         input_val_1 = (50 * np.random.random_sample((10, 50)) + 1).astype(np.float32)
         input_val_2 = (50 * np.random.random_sample(50) + 1).astype(np.float32)
         def func(input_1, input_2):
-            res = tf.math.floormod(input_1, input_2)
+            res = floormod(input_1, input_2)
             return tf.identity(res, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2}, rtol=1e-4)
 
@@ -2339,7 +2347,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val3 = np.array([1.0, np.nan, -3.0, np.nan], dtype=np.float32).reshape((2, 2))
         for x_val in [x_val1, x_val2, x_val3]:
             def func(x):
-                x_ = tf.math.is_nan(x)
+                x_ = is_nan(x)
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -2460,7 +2468,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_val3 = np.array([1.0, np.inf, -3.0, np.inf, 5.0, np.inf, -7.0, np.inf], dtype=x_type).reshape((2, 2, 2))
             for x_val in [x_val1, x_val2, x_val3]:
                 def func(x):
-                    x_ = tf.math.is_inf(x)
+                    x_ = is_inf(x)
                     return tf.identity(x_, name=_TFOUTPUT)
                 self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
