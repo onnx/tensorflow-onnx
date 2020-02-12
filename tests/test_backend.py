@@ -77,6 +77,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     dropout = tf.compat.v1.nn.dropout
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
+    is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.math.floormod
 else:
