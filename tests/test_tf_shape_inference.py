@@ -17,16 +17,21 @@ from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from tf2onnx import utils
-from tf2onnx.tfonnx import tf_optimize
+from tf2onnx.tf_utils import get_tf_tensor_shape
 from tf2onnx.shape_inference import infer_shape_for_graph
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, tf_optimize
 
 # pylint: disable=missing-docstring
 
 
 class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, input_names_with_port, output_names_with_port):
+        try:
+            tf.compat.v1.disable_eager_execution()
+        except:  # pylint: disable=bare-except
+            pass
         graph_def = None
-        with tf.Session() as sess:
+        with tf_session() as sess:
             # freeze graph
             origin_graph = sess.graph
             variables_lib.global_variables_initializer().run()
@@ -36,14 +41,15 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
                 output_name_without_port
             )
 
-        tf.reset_default_graph()
+        tf_reset_default_graph()
         tf.import_graph_def(graph_def, name='')
 
         # optimize graph
-        graph_def = tf_optimize(input_names_with_port, output_names_with_port,
-                                sess.graph_def, True)
+        input_tensors = {i: sess.graph.get_tensor_by_name(i) for i in input_names_with_port}
+        output_tensors = {i: sess.graph.get_tensor_by_name(i) for i in output_names_with_port}
+        graph_def = tf_optimize(input_tensors, output_tensors, sess.graph_def, True)
 
-        with tf.Session() as sess:
+        with tf_session() as sess:
             if self.config.is_debug_mode:
                 if not os.path.exists(self.test_data_directory):
                     os.makedirs(self.test_data_directory)
@@ -51,10 +57,10 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
                 utils.save_protobuf(model_path, graph_def)
                 self.logger.debug("created file  %s", model_path)
 
-        tf.reset_default_graph()
+        tf_reset_default_graph()
         tf.import_graph_def(graph_def, name='')
 
-        with tf.Session() as sess:
+        with tf_session() as sess:
             inferred_graph = infer_shape_for_graph(sess.graph)
             # compare each operation
             for op in origin_graph.get_operations():
@@ -68,14 +74,15 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
     def _compare_shape_for_op(self, op1, op2):
         """Align outputs of op2 to op1."""
         for out1, out2 in zip(op1.outputs, op2.outputs):
-            expected_shape = utils.get_tf_tensor_shape(out1)
+            expected_shape = get_tf_tensor_shape(out1)
             if out1 is not None:
-                actual_shape = utils.get_tf_tensor_shape(out2)
+                actual_shape = get_tf_tensor_shape(out2)
                 self.assertTrue(utils.are_shapes_compatible(expected_shape, actual_shape))
 
+    @check_tf_max_version("1.15", "_run_test_case needs to supported tf-2")
     def test_while_loop_with_ta_read_and_write(self):
-        i = tf.placeholder(tf.int32, (), name="input_1")
-        inputs = tf.placeholder(tf.float32, (10,), name="input_2")
+        i = tf_placeholder(tf.int32, (), name="input_1")
+        inputs = tf_placeholder(tf.float32, (10,), name="input_2")
 
         inputs_2 = tf.identity(inputs)
         input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs_2)
@@ -98,6 +105,7 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "output_ta:0"]
         self._run_test_case(input_names_with_port, output_names_with_port)
 
+    @check_tf_max_version("1.15", "_run_test_case needs to supported tf-2")
     def test_map_fn(self):
         def fn0(elem):
             res = elem + elem * elem
@@ -111,18 +119,18 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
         y_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
 
         # test fn0
-        x = tf.placeholder(tf.float32, shape=x_val.shape, name="input_0")
+        x = tf_placeholder(tf.float32, shape=x_val.shape, name="input_0")
         x_ = tf.identity(x)
         res_ = tf.map_fn(fn0, x_, dtype=tf.float32)
         _ = tf.identity(res_, name="output_0")
         input_names_with_port = ["input_0:0"]
         output_names_with_port = ["output_0:0"]
         self._run_test_case(input_names_with_port, output_names_with_port)
-        tf.reset_default_graph()
+        tf_reset_default_graph()
 
         # test fn1
-        x = tf.placeholder(tf.float32, shape=x_val.shape, name="input_0")
-        y = tf.placeholder(tf.float32, shape=y_val.shape, name="input_1")
+        x = tf_placeholder(tf.float32, shape=x_val.shape, name="input_0")
+        y = tf_placeholder(tf.float32, shape=y_val.shape, name="input_1")
         x_ = tf.identity(x)
         y_ = tf.identity(y)
         res_ = tf.map_fn(fn1, (x_, y_), dtype=tf.float32)
@@ -131,6 +139,7 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output_0:0"]
         self._run_test_case(input_names_with_port, output_names_with_port)
 
+    @check_tf_max_version("1.15", "_run_test_case needs to supported tf-2")
     def test_bidrectional_attention_wrapper_lstm_encoder(self):
         size = 30
         time_step = 3
@@ -144,7 +153,7 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
         encoder_time_step = time_step
         encoder_x_val = np.random.randn(encoder_time_step, input_size).astype('f')
         encoder_x_val = np.stack([encoder_x_val] * batch_size)
-        encoder_x = tf.placeholder(tf.float32, encoder_x_val.shape, name="input_1")
+        encoder_x = tf_placeholder(tf.float32, encoder_x_val.shape, name="input_1")
         encoder_cell = tf.nn.rnn_cell.LSTMCell(size)
         attention_states, _ = tf.nn.dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
         # [9, 3, 30], [9, 30]
@@ -167,8 +176,8 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
         decoder_time_step = 6
         decoder_x_val = np.random.randn(decoder_time_step, batch_size, input_size).astype('f')
 
-        decoder_x = tf.placeholder(tf.float32, decoder_x_val.shape, name="input_2")
-        seq_length = tf.placeholder(tf.int32, (batch_size), name="input_3")
+        decoder_x = tf_placeholder(tf.float32, decoder_x_val.shape, name="input_2")
+        seq_length = tf_placeholder(tf.int32, (batch_size), name="input_3")
         (match_output_fw, match_output_bk), (match_state_fw, match_state_bk) = \
             tf.nn.bidirectional_dynamic_rnn(cell_fw=match_cell_fw,
                                             cell_bw=match_cell_bk,
@@ -187,6 +196,7 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output_0:0", "final_state:0"]
         self._run_test_case(input_names_with_port, output_names_with_port)
 
+    @check_tf_max_version("1.15", "_run_test_case needs to supported tf-2")
     def test_dynamic_decode_normal_stop(self):
         batch_size = 2
         num_units = 4
@@ -269,11 +279,12 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case([], output_names_with_port)
 
+    @check_tf_max_version("1.15", "_run_test_case needs to supported tf-2")
     def test_while_loop_in_cond(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
-        x = tf.placeholder(tf.float32, x_val.shape, name="input_1")
-        y = tf.placeholder(tf.float32, y_val.shape, name="input_2")
+        x = tf_placeholder(tf.float32, x_val.shape, name="input_1")
+        y = tf_placeholder(tf.float32, y_val.shape, name="input_2")
 
         def cond_graph():
             b = tf.constant(np.array([0], dtype=np.int32), dtype=tf.int32)
@@ -289,6 +300,7 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self._run_test_case(input_names_with_port, output_names_with_port)
 
+    @check_tf_max_version("1.15", "_run_test_case needs to supported tf-2")
     def test_cond_in_while_loop(self):
         i = tf.placeholder(tf.int32, (), name="input_1")
         inputs = tf.placeholder(tf.float32, (10,), name="input_2")

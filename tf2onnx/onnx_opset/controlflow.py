@@ -9,14 +9,19 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import copy
 import logging
+import sys
 
 import numpy as np
 
+from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 from tf2onnx.utils import make_sure
+from tf2onnx.tf_loader import find_function
+
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +113,7 @@ def create_if_op(g, input_ids, output_data_type, output_shape):
     out_name = utils.port_name(op_name)
 
     # output a scalar
-    if_node = g.make_node("If", [input_ids[0]], outputs=[out_name], name=op_name, skip_conversion=False)
+    if_node = g.make_node("If", [input_ids[0]], outputs=[out_name], name=op_name, skip_conversion=True)
     if_node.set_body_graph_as_attr("then_branch", true_graph)
     if_node.set_body_graph_as_attr("else_branch", false_graph)
     return if_node, out_name
@@ -131,7 +136,7 @@ def create_body_graph_for_if_branch(parent_g, data_type, output_shape, chosen_cu
 # gather_input_ids is 1-D tensor, containing 3 elements:
 # 0: condition data to gather on
 # 1: true result to gather on
-# 2: false result to father on
+# 2: false result to gather on
 def create_loop_op(g, gather_input_ids, output_type, output_shape, trip_count_input_ids, rank):
     cond_var_name = utils.make_name("cond_var")
     g.make_const(cond_var_name, np.array(True, dtype=np.bool))
@@ -232,7 +237,7 @@ def make_range(ctx, start, limit, delta, output, scope_name, shape, dtype):
         make_range_non_const(ctx, start, limit, delta, output, scope_name, shape, dtype)
 
 
-@tf_op(["If", "Loop", "Scan"])
+@tf_op(["Loop", "Scan"])
 class PassThroughOp:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
@@ -267,7 +272,7 @@ class Range:
         pass
 
 
-@tf_op("Select")
+@tf_op(["Select", "SelectV2"])
 class Select:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
@@ -366,11 +371,13 @@ class Where:
         ctx.copy_shape(node.output[0], transpose_node.output[0])
         ctx.copy_dtype(node.output[0], transpose_node.output[0])
 
+
 @tf_op("IteratorV2")
 class Iterator:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
         ctx.remove_node(node.name)
+
 
 @tf_op("IteratorGetNext")
 class IteratorGetNext:
@@ -384,3 +391,375 @@ class IteratorGetNext:
         ctx.remove_node(node.name)
         ctx.add_graph_input(output_names[0], type_0, shape_0)
         ctx.add_graph_input(output_names[1], type_1, shape_1)
+
+
+@tf_op(["StatelessIf"])
+class StatelessIfOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        """V2 control flow - If"""
+        inputs = node.input[1:]
+
+        output_shapes = node.output_shapes
+        output_dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+
+        # replace the original node
+        if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+
+        for branch in ["then_branch", "else_branch"]:
+            func_name = node.get_attr_str(branch)
+            g = find_function(func_name)
+            g.parent_graph = ctx
+            wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
+            if_node.set_body_graph_as_attr(branch, g)
+
+
+@tf_op(["If"])
+class IfOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        """V2 control flow - If"""
+        inputs = node.input[1:]
+
+        if node.type == "If" and len(inputs) == 0:
+            # this comes from the re-writers
+            return
+
+        output_shapes = node.output_shapes
+        output_dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+
+        # replace the original node
+        if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+
+        for branch in ["then_branch", "else_branch"]:
+            func_name = node.get_attr_str(branch)
+            g = find_function(func_name)
+            g.parent_graph = ctx
+            wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
+            if_node.set_body_graph_as_attr(branch, g)
+
+
+@tf_op(["TensorListSetItem"])
+class TensorListSetItem:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        # handled in 'While'
+        pass
+
+
+@tf_op(["TensorListGetItem"])
+class TensorListGetItem:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        ctx.ta_reads.append(node.input[0])
+        node.type = "Gather"
+        node.input = [node.input[0], node.input[1]]
+        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])
+        ctx.insert_new_node_on_output("Squeeze", node.output[0], name=node.child_name(), axes=[0])
+
+
+@tf_op(["TensorListLength"])
+class TensorListLength:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op(["TensorListReserve", "TensorListResize"])
+class TensorListReserve:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op(["TensorListFromTensor"])
+class TensorListFromTensor:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        consumers = ctx.find_output_consumers(node.output[0])
+        if any([c.is_while() for c in consumers]):
+            node.type = "Identity"
+            ctx.copy_dtype(node.input[0], node.output[0])
+            ctx.copy_shape(node.input[0], node.output[0])
+
+
+@tf_op(["TensorListStack"])
+class TensorListStack:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        if node.inputs[0].is_while():
+            ctx.remove_node(node.name)
+            ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], node.input[0])
+
+
+@tf_op(["While", "StatelessWhile"])
+class While:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        # the tensorflow while input is:
+        #   loop_counter, max_iterations, [loop_vars]
+        # cond and body use the same inputs
+        # outputs are identical to inputs
+        #
+        # the onnx loop input is:
+        #   max_iterations, cond, [loop_vars]
+        # body uses the same inputs
+        # the onnx loop output is:
+        #   [v_final_and_scan_outputs]
+
+        tf_while_inputs = node.input
+        output_shapes = node.output_shapes
+        output_dtypes = node.output_dtypes
+
+        # make maximum_iterations int64
+        maximum_iterations_name = node.input[1]
+        maximum_iterations = node.inputs[1].get_tensor_value()
+        ctx.remove_node(node.inputs[1].name)
+        if maximum_iterations == -1:
+            # in tf -1 means forever, in onnx it is maxsize
+            maximum_iterations = sys.maxsize
+        ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
+
+        cond_name = node.get_attr_str("cond")
+        cond_graph = find_function(cond_name)
+        cond_graph.parent_graph = ctx
+
+        body_name = node.get_attr_str("body")
+        body = find_function(body_name)
+        body.parent_graph = ctx
+
+        loop_vars = [] # passed into the loop
+        state_vars = {} # comes from outer context
+        to_remove = []
+        input_idx_to_remove = []
+        # remove TensorListReserve
+        for idx, name in enumerate(tf_while_inputs):
+            if idx < 2:
+                # skip  [0,1] loop_counter, max_iterations
+                continue
+            n = node.inputs[idx]
+            if n.type in ["TensorListReserve", "TensorListResize"]:
+                # there is no equivalent step in onnx and we should remove it.
+                # But we make this an identity to keep the loop_vars the same on input and output
+                # of the body but there should be no access to this argument in the body.
+                # n.type = "Identity"
+                # n.input = [n.input[0]]
+                to_remove.append((idx, n))
+                continue
+
+            # tensor arrays we read from can't be loop_vars and we fetch them from the outer context instead
+            if body.func_inputs[idx] in body.ta_reads:
+                state_vars[body.func_inputs[idx]] = name
+                input_idx_to_remove.append(idx)
+            else:
+                loop_vars.append(name)
+
+        # loop_vars that become state_vars need to be removed from output as well
+        for idx in reversed(input_idx_to_remove):
+            del output_shapes[idx]
+            del output_dtypes[idx]
+            del body.outputs[idx]
+
+        # remove tensor array that are passed in to the loop
+        for idx, n in reversed(to_remove):
+            ctx.remove_node(n.name)
+            # make the node output bad
+            ctx.replace_all_inputs(ctx.get_nodes(), n.output[0], "@@ALLOC")
+            del body.func_inputs[idx]
+            del cond_graph.func_inputs[idx]
+            del tf_while_inputs[idx]
+
+        ctx.remove_node(node.name)
+
+        # In onnx cond is a variable, not a function. We need to inject the subgraph into the main graph
+        # before the loop and into the body.
+        cond_binding = parameter_binding(cond_graph, tf_while_inputs, ctx)
+        cond_outputs = inline_subgraph(ctx, cond_graph, cond_name, cond_binding)
+        # onnx Loop op outputs only loop_vars so we need shift output dtypes/shapes and consumers
+        output_map = {node.output[i+2]: node.output[i] for i in range(len(node.output) - 2)}
+        output_shapes = output_shapes[2:]
+        output_dtypes = output_dtypes[2:]
+
+        loop_node = ctx.make_node("Loop", [maximum_iterations_name, cond_outputs[0]] + loop_vars,
+                                  output_count=len(output_shapes), name=node.name,
+                                  shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+        # shift output consumers
+        for k, v in output_map.items():
+            ctx.replace_all_inputs(ctx.get_nodes(), k, v)
+
+        wire_while_body(ctx, body, loop_node.inputs, state_vars, output_shapes, output_dtypes, body_name,
+                        node.name, cond_graph)
+
+        for i, n in enumerate(body.inputs):
+            # this was a tensorflow variant type, put in a real type here
+            if body.get_dtype(n.output[0]) == -1:
+                body.set_dtype(n.output[0], ctx.get_dtype(loop_node.input[i]))
+        loop_node.set_body_graph_as_attr("body", body)
+
+        print(ctx.find_output_consumers("while_maximum_iterations:0"))
+        print(body.find_output_consumers("while_maximum_iterations:0"))
+        dump_graph(body)
+        dump_graph(ctx)
+
+
+def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, output_dtypes, scope, parent, cond_graph):
+    """Wire subgraph graph into main."""
+    remove_parents = []
+    to_remove = []
+
+    # tensorflow function inputs that are state_vars come from outer context and
+    # we need to remove them from the inputs
+    for n in g.inputs:
+        if n.output[0] in state_vars:
+            n.type = "Identity"
+            n.input = [state_vars[n.output[0]]]
+
+    # onnx will pass in cond as argument
+    cond_node = g.make_node("Placeholder", [], name=utils.make_name("cond"),
+                            output_count=1, dtypes=[onnx_pb.TensorProto.BOOL], shapes=[[]])
+
+    # in onnx the body inputs are: index, cond, [loop_vars]
+    func_inputs = [i for i in g.func_inputs[2:] if i not in state_vars]
+    func_inputs = [g.func_inputs[0], cond_node.output[0]] + func_inputs
+    g.set_dtype(func_inputs[0], onnx_pb.TensorProto.INT64)
+    # tell graph lib to keep inputs in order
+    g._order_sensitive_inputs = \
+        [g.get_node_by_output(name) for name in func_inputs]  # pylint: disable=protected-access
+
+    for p, c in zip(loop_node_inputs, func_inputs):
+        shape = p.output_shapes[0]
+        g.set_shape(c, shape)
+
+    for i, node in enumerate(g.inputs):
+        if node.output[0] not in func_inputs:
+            remove_parents.append(node.output[0])
+
+    # this is a tensor array write - make it an identity
+    for node in g.get_nodes():
+        if node.type == "TensorListSetItem":
+            remove_parents.append(node.input[0])
+            node.type = "Identity"
+            g.set_shape(node.output[0], g.get_shape(node.input[2]))
+            g.set_dtype(node.output[0], g.get_dtype(node.input[2]))
+            node.input = [node.input[2]]
+
+    # remove all nodes feeding to TensorListSetItem's reserved tensor
+    while remove_parents:
+        output_name = remove_parents[0]
+        del remove_parents[0]
+        node = g.get_node_by_output(output_name)
+        if node:
+            if output_name not in func_inputs:
+                if node.input:
+                    remove_parents.append(node.input[0])
+                g.remove_node(node.name)
+
+    for node in to_remove:
+        g.remove_node(node.name)
+
+    # we need to bind the the loop_var output, else we'd do 1 too much
+    cond_binding = parameter_binding(cond_graph, func_inputs[:2] + g.outputs[2:], g)
+    cond_outputs = inline_subgraph(g, cond_graph, "cond__", cond_binding)
+
+    g.outputs = [cond_outputs[0]] + g.outputs[2:]
+
+    return g
+
+
+def wire_if_branch(parent_g, g, inputs, output_shapes, output_dtypes, scope, parent):
+    """Wire subgraph graph into main."""
+    binding = parameter_binding(g, inputs, parent)
+    to_remove = []
+    for node in g.inputs:
+        parent_name = binding.get(node.output[0])
+        if parent_name and parent_name != "@@ALLOC":
+            node.input = [parent_name]
+            node.type = "Identity"
+        else:
+            to_remove.append(node)
+
+    for node in to_remove:
+        g.remove_node(node.name)
+
+    prefix_graph(g, scope)
+
+    for shape, dtype, output_name in zip(output_shapes, output_dtypes, g.outputs):
+        g.set_shape(output_name, shape)
+        g.set_dtype(output_name, dtype)
+
+    return g
+
+
+def inline_subgraph(parent, g, scope, binding):
+    # make a copy since we don't want to change the origianl graph
+    g = copy.deepcopy(g)
+    to_remove = []
+    for node in g.inputs:
+        parent_name = binding.get(node.output[0])
+        if parent_name and parent_name != "@@ALLOC":
+            node.input = [parent_name]
+            node.type = "Identity"
+        else:
+            to_remove.append(node)
+    for node in to_remove:
+        g.remove_node(node.name)
+    prefix_graph(g, scope)
+    for node in g.get_nodes():
+        parent.append_node(node)
+
+    # copy output shape and dtype to parent graph
+    for name in g.outputs:
+        parent.set_dtype(name, g.get_dtype(name))
+        parent.set_shape(name, g.get_shape(name))
+
+    return  g.outputs
+
+
+def parameter_binding(g, inputs, parent):
+    binding = {}
+    for k, v in zip(g.func_inputs, inputs):
+        binding[k] = v
+    return binding
+
+
+def prefix_graph(g, scope):
+    ops = g.get_nodes()[:]
+    to_remove = []
+    for node in ops:
+        output_shapes = node.output_shapes
+        output_dtypes = node.output_dtypes
+        attr = node.attr
+        if node.is_graph_input():
+            continue
+        new_node = g.make_node(node.type, node.input, name=node.name, output_count=len(node.output),
+                               shapes=output_shapes, dtypes=output_dtypes, attr=attr,
+                               op_name_scope=scope, skip_conversion=True)
+        attr_graphs = node.get_body_graphs()
+        if attr_graphs:
+            for k, v in attr_graphs.items():
+                new_node.set_body_graph_as_attr(k, v)
+        for old_output, new_output in zip(node.output, new_node.output):
+            for i, oname in enumerate(g.outputs):
+                if old_output == oname:
+                    g.outputs[i] = new_output
+                    break
+            g.replace_all_inputs(ops, old_output, new_output)
+        to_remove.append(node)
+    for node in to_remove:
+        g.remove_node(node.name)
+
+
+def dump_graph(g):
+    print()
+    print("--, graph=", g.graph_name)
+    t = [n.name + str(g.get_shape(n.output[0])) for n in g.inputs]
+    print("--, inputs=", ",".join(t))
+    t = [n + str(g.get_shape(n)) for n in g.outputs]
+    print("--, outputs=", ",".join(t))
+    for node in g.get_nodes():
+        input_names = ["{}{}".format(n, g.get_shape(n)) for n in node.input]
+        print("-- {} {} {} {}".format(node.type, node.name, g.get_shape(node.output[0]), ", ".join(input_names)))
