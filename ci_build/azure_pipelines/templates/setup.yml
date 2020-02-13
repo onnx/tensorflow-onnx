@@ -16,7 +16,9 @@ steps:
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
     then
       pip uninstall -y onnxruntime
-      pip install --index-url https://test.pypi.org/simple/ ort-nightly --force-reinstall
+      # install numpy upfront since it is not on https://test.pypi.org/simple/
+      pip install 'numpy>=1.18'
+      pip install --index-url https://test.pypi.org/simple/ ort-nightly
     fi
 
     python setup.py install

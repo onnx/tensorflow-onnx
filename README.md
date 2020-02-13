@@ -3,18 +3,25 @@ tf2onnx - Convert TensorFlow models to ONNX.
 
 | Build Type | OS | Python | Tensorflow | Onnx opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.5, 3.6 | 1.5-1.14 | 7-11 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.5, 3.6, 3.7 | 1.5-1.14 | 7-11 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7 | 1.12-1.14 | 7-11 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7, 3.8 | 1.12-1.14 | 7-11 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
 
-<a name="build_status_footnote">\*</a> Only test on python3.6, TF1.14.
+<a name="build_status_footnote">\*</a> Only test on python3.7, TF1.14.
 
-# Supported ONNX version
+# Supported Versions
+## ONNX
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
 We support opset 6 to 11. By default we use opset 8 for the resulting ONNX graph since most runtimes will support opset 8.
 Support for future opsets add added as they are released.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 11```.
+
+## Tensorflow
+We support all ```tf-1.x graphs```. To keep our test matrix manageable we stopped testing tf2onnx running on top of versions older than ```tf-1.12```. tf2onnx-1.5.4 was the last version that was tested all the way back to tf-1.4.
+
+## Python
+We support Python ```3.6```, ```3.7``` and ```3.8```. tf2onnx-1.5.4 was the last release that supports Python 3.5.
 
 # Status
 We support many TensorFlow models. Support for Fully Connected, Convolutional and dynamic LSTM networks is mature.
@@ -50,9 +57,6 @@ For pytorch/caffe2, follow the instructions here:
 
 
 We tested with pytorch/caffe2 and onnxruntime and unit tests are passing for those.
-
-## Supported Tensorflow and Python Versions
-We are testing with tensorflow 1.5-1.14 and anaconda **3.5,3.6,3.7**.
 
 # Installation
 ## From pypi

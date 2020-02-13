@@ -607,6 +607,9 @@ class ExpandDims:
         if dim_node.is_const():
             node.type = "Unsqueeze"
             dim = dim_node.get_tensor_value()
+            # TODO: isn't this always a list ?
+            if isinstance(dim, list):
+                dim = dim[0]
             if dim < 0:
                 input_rank = len(ctx.get_shape(node.input[0]))
                 dim = dim + input_rank + 1
@@ -738,19 +741,19 @@ class StridedSlice:
         #                 @int shrink_axis_mask, @int new_axis_mask)
         # T output = Slice(T input, Tind starts, Tind ends, Tind axes, Tind steps)
         # "ends" are exclusive, "axes" and "steps" are optional, their default val are [0, ...] and 1
+        input_x = node.inputs[0]
         begin = node.inputs[1]
         end = node.inputs[2]
         strides = node.inputs[3]
+        new_axis_mask = node.get_attr("new_axis_mask")
+        new_axis_mask = new_axis_mask.i if new_axis_mask is not None else 0
+
         if begin.is_const() and end.is_const() and strides.is_const() \
-                and all(val == 1 for val in strides.get_tensor_value()):
+                and all(val == 1 for val in strides.get_tensor_value()) \
+                and new_axis_mask == 0:
             cls.version_1(ctx, node, **kwargs)
             return
 
-        not_supported_attr = ["new_axis_mask"]
-        for attr_name in not_supported_attr:
-            attr = node.get_attr(attr_name)
-            if attr is not None and attr.i != 0:
-                raise ValueError("StridedSlice: attribute " + attr_name + " not supported")
         onnx_dtype = ctx.get_dtype(node.input[1])
         np_dtype = utils.ONNX_TO_NUMPY_DTYPE[onnx_dtype]
 
@@ -769,6 +772,15 @@ class StridedSlice:
         ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
         shrink_axis_mask = node.get_attr("shrink_axis_mask")
         shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
+        if new_axis_mask != 0:
+            unqueeze_at = []
+            for bit in range(32):
+                if (new_axis_mask >> bit) & 1 == 1:
+                    unqueeze_at.append(bit)
+                    begin_mask |= 1 << bit
+                    end_mask |= 1 << bit
+            input_x = ctx.make_node("Unsqueeze", [input_x.output[0]], {"axes": unqueeze_at})
+
         param_shape = ctx.get_shape(node.input[1]) or \
                       ctx.get_shape(node.input[2]) or \
                       ctx.get_shape(node.input[3])
@@ -789,7 +801,7 @@ class StridedSlice:
         ellipsis_gap = 0
         for idx in range(param_rank):
             if (ellipsis_mask >> idx) & 1:
-                input_shape = ctx.get_shape(node.input[0])
+                input_shape = ctx.get_shape(input_x.output[0])
                 utils.make_sure(
                     input_shape is not None,
                     "StridedSlice op {} requires the shape of input".format(node.name)
@@ -886,7 +898,7 @@ class StridedSlice:
         axes_output = axes_const.output[0]
 
         inputs_map = {
-            "data": node.input[0],
+            "data": input_x.output[0],
             "starts": begin.output[0],
             "ends": end_output,
             "steps": strides_output,
@@ -1147,22 +1159,28 @@ class IsNan:
 class BatchToSpace:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
-        # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
-        # and we only support 3D and 4D here, and the data format is NHC and NHWC
-        # onnx op "DepthToSpace" does the same work on input tensor except that it works on "C",
-        # and it only supports NCHW
-        # T out = BatchToSpaceND(T input, int32 block_shape, int32 crops)
-        if ctx.opset <= 10 or (node.inputs[1].is_const() and node.inputs[2].is_const()):
+        # block_shape impacts Transpose 'perm' attribute values.
+        # must be available at compile time
+        utils.make_sure(node.inputs[1].is_const(), 'only support constant block_shape value.')
+
+        block_shape = node.inputs[1].get_tensor_value(False)
+        blocklen = len(block_shape)
+        xlen = len(ctx.get_shape(node.input[0]))
+
+        # if 3d or 4d tensor & square 2d block_shape , can optimize
+        cond1 = xlen in [3, 4]
+        cond2 = node.inputs[2].is_const()
+        cond3 = blocklen == 2 and block_shape[0] == block_shape[1]
+        if cond1 and cond2 and cond3:
+            # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
+            # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
+            # and we only support 3D and 4D here, and the data format is NHC and NHWC
+            # onnx op "DepthToSpace" does the same work on input tensor except that it works on "C",
+            # and it only supports NCHW
+            # T out = BatchToSpaceND(T input, int32 block_shape, int32 crops)
             input_tensor = node.inputs[0]
             input_shape = ctx.get_shape(input_tensor.output[0])
-            blocksize = node.inputs[1].get_tensor_value()
             crops = node.inputs[2].get_tensor_value()
-
-            utils.make_sure(len(input_shape) in (4, 3),
-                            "only supports 3D and 4D for now")
-            utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
-                            "only support same blocksize at different dims")
 
             # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
             if len(input_shape) == 3:
@@ -1171,7 +1189,7 @@ class BatchToSpace:
                 trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
             else:
                 trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
-            reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
+            reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": block_shape[0]})
             trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
 
             # implement crop logic, the data format is NHWC
@@ -1203,87 +1221,110 @@ class BatchToSpace:
                 ctx.remove_node(node.name)
                 GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
         else:
-            """
-            1. Reshape input to reshaped of shape:
-                [block_shape[0], ...,
-                block_shape[M-1], batch / prod(block_shape),
-                input_shape[1], ..., input_shape[N-1]]
-            2. Permute dimensions of reshaped to produce permuted of shape:
-                [batch / prod(block_shape),input_shape[1],
-                block_shape[0], ..., input_shape[M],
-                block_shape[M-1],input_shape[M+1], ...,
-                input_shape[N-1]]
-            3. Reshape permuted to produce reshaped_permuted of shape:
-                [batch / prod(block_shape),
-                input_shape[1] * block_shape[0], ...,
-                input_shape[M] * block_shape[M-1],
-                input_shape[M+1], ..., input_shape[N-1]]
-            4. Crop the start and end of dimensions [1, ..., M] of reshaped_permuted
-                according to crops to produce the output of shape:
-                [batch / prod(block_shape),
-                input_shape[1] * block_shape[0] - crops[0,0] - crops[0,1], ...,
-                input_shape[M] * block_shape[M-1] - crops[M-1,0] - crops[M-1,1],
-                input_shape[M+1], ..., input_shape[N-1]]
-            """
-            input_x = node.inputs[0]
-            block_shape = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
-            crop = ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=TensorProto.INT64)
-            shape_x = ctx.make_node("Shape", [input_x.output[0]])
-            block_size = GraphBuilder(ctx).make_slice({"data": block_shape.output[0], "ends": [1], "starts": [0]})
-            block_prod = ctx.make_node("Mul", [block_size, block_size])
-            const_one = ctx.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
-            const_zero_three = ctx.make_const(utils.make_name(node.name + "_const_zero_three"),
-                                              np.array([0, 3], dtype=np.int64))
-            padded_block_prod = ctx.make_node("Pad",
-                                              [block_prod.output[0], const_zero_three.output[0], const_one.output[0]])
-            new_shape_x = ctx.make_node("Div", [shape_x.output[0], padded_block_prod.output[0]])
-            concat_new_shape_x = ctx.make_node("Concat", [block_shape.output[0], new_shape_x.output[0]], {"axis": 0})
-            reshaped_x = ctx.make_node("Reshape", [input_x.output[0], concat_new_shape_x.output[0]])
-            transposed_x = ctx.make_node("Transpose", [reshaped_x.output[0]], {"perm": [2, 3, 0, 4, 1, 5]})
-            const_one_one = ctx.make_const(utils.make_name(node.name + "_const_one_one"),
-                                           np.array([1, 1], dtype=np.int64))
-            padded_block_shape = ctx.make_node("Pad",
-                                               [block_shape.output[0], const_one_one.output[0], const_one.output[0]])
-            new_shape_x_v2 = ctx.make_node("Mul", [new_shape_x.output[0], padded_block_shape.output[0]])
-            reshaped_x_v2 = ctx.make_node("Reshape", [transposed_x.output[0], new_shape_x_v2.output[0]])
-            transposed_crop = ctx.make_node("Transpose", [crop.output[0]], {"perm": [1, 0]})
-            const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
-            const_one_two = ctx.make_const(utils.make_name(node.name + "const_one_two"),
-                                           np.array([1, 2], dtype=np.int64))
-            slice_crop_starts = GraphBuilder(ctx).make_slice(
-                {"data": transposed_crop.output[0], "ends": [1, 2], "starts": [0, 0]})
-            reshaped_slice_crop_starts = ctx.make_node("Reshape", [slice_crop_starts, const_two.output[0]])
-            slice_crop_ends = GraphBuilder(ctx).make_slice(
-                {"data": transposed_crop.output[0], "ends": [2, 2], "starts": [1, 0]})
-            reshaped_slice_crop_ends = ctx.make_node("Reshape", [slice_crop_ends, const_two.output[0]])
-            sliced_new_shape_x_v2 = GraphBuilder(ctx).make_slice(
-                {"data": new_shape_x_v2.output[0], "ends": [3], "starts": [1]})
-            neged_reshaped_slice_crop_ends = ctx.make_node("Sub",
-                                                           [sliced_new_shape_x_v2, reshaped_slice_crop_ends.output[0]])
+            def mknode(optype, inputs, attrs=None):
+                nodename = utils.make_name(node.name + '_' + optype.lower())
+                return ctx.make_node(optype, inputs, attrs, name=nodename)
+
+            def mkconst(desc, val, dtype=np.int64):
+                nodename = utils.make_name(node.name + '_' + desc)
+                const_node = ctx.make_const(utils.make_name(nodename), val.astype(dtype))
+                return const_node.output[0]
+
+            # support non 3D/4D tensors and dynamic crop vals
+            # dynamic slice starts at opset 10
+            utils.make_sure(ctx.opset >= 11, 'non-4D tensor or non-const crops require opset 11')
+
+            input0 = node.input[0]
+            input2 = node.input[2]
+
+            # const vals
+            int_max_const = mkconst('int_max', np.array([utils.get_max_value(np.int64)]))
+            one_const = mkconst('_const_one', np.array([1]))
+            minus1_const = mkconst('_const_minus1', np.array([-1]))
+            blocklen_resize_const = mkconst('_const_blocklen_resize', np.array([-1, blocklen]))
+            blocklenplus1_const = mkconst('_const_blocklenplus1', np.array([blocklen + 1]))
+            block_shape_const = mkconst('_const_block_shape', block_shape)
+
+            x_shape = ctx.insert_new_node_on_input(node, 'Shape', node.input[0])
+
+            # get the spatial and depth (i.e remaining) dimensions
+            # compute target spatial dimensions by multiplying block_shape
+            spatial = mknode('Slice', [x_shape.output[0], one_const, blocklenplus1_const])
+            depth = mknode('Slice', [x_shape.output[0], blocklenplus1_const, int_max_const])
+            target_spatial = mknode('Mul', [spatial.output[0], block_shape_const])
+
+            # shape to use before shuffle  (part 1)
+            ccat1 = mknode('Concat', [spatial.output[0], block_shape_const], {'axis': 0})
+            re1 = mknode('Reshape', [ccat1.output[0], blocklen_resize_const])
+            tr1 = mknode('Transpose', [re1.output[0]])
+            interleave = mknode('Reshape', [tr1.output[0], minus1_const])
+            shape1 = mknode('Concat', [minus1_const, interleave.output[0], depth.output[0]], {'axis': 0})
+
+            # shape to use before shuffle (part 2)
+            g1 = list(range(2, 2 * blocklen + 1, 2))
+            g2 = list(range(1, 2 * blocklen + 1, 2))
+            g = g1 + [0] + g2 + list(range(0, xlen + blocklen)[1 + 2 * blocklen:])
+
+            # permutation values for shuffling
+            p = np.asarray(range(0, xlen + blocklen))
+            p[0] = blocklen
+            p[1] = blocklen + 1
+            p[2] = 0
+            for i in range(3, blocklen * 2 + 1):
+                p[i] = p[i - 2] + 1
+
+            # reshape to create moving blocks, shuffle, and reshape to target_spatial
+            indices = mkconst('_indicies_const', np.asarray(g))
+            gather = mknode('Gather', [shape1.output[0], indices])
+            x2 = mknode('Reshape', [input0, gather.output[0]])
+            tr2 = mknode('Transpose', [x2.output[0]], {'perm': np.array(p)})
+            shape2 = mknode('Concat', [minus1_const, target_spatial.output[0], depth.output[0]], {'axis': 0})
+            x3 = mknode('Reshape', [tr2.output[0], shape2.output[0]])
+
+            # crop axes
+            slice_starts_const1 = mkconst('_slicestart1_const', np.asarray([0, 0]))
+            slice_starts_const2 = mkconst('_slicestart2_const', np.asarray([1, utils.get_max_value(np.int64)]))
+            slice_ends_const1 = mkconst('_sliceend1_const', np.asarray([1, 0]))
+            slice_ends_const2 = mkconst('_sliceend2_const', np.asarray([2, utils.get_max_value(np.int64)]))
+            axes_const = mkconst('_sliceaxes_const', np.asarray(range(1, blocklen + 1)))
+            crop = mknode('Cast', [input2], {'to': TensorProto.INT64})
+            crop_transposed = mknode('Transpose', [crop.output[0]])
+            crop_starts = mknode('Slice', [crop_transposed.output[0], slice_starts_const1, slice_starts_const2])
+            crop_ends = mknode('Slice', [crop_transposed.output[0], slice_ends_const1, slice_ends_const2])
+            crop_starts_squeeze = mknode('Squeeze', [crop_starts.output[0]], {'axes': [0]})
+            crop_ends_squeeze = mknode('Squeeze', [crop_ends.output[0]], {'axes': [0]})
+            end_range = mknode('Sub', [target_spatial.output[0], crop_ends_squeeze.output[0]])
+            orig_shape = node.output_shapes
+            orig_dtypes = node.output_dtypes
             ctx.remove_node(node.name)
-            ctx.make_node("Slice", [reshaped_x_v2.output[0], reshaped_slice_crop_starts.output[0],
-                                    neged_reshaped_slice_crop_ends.output[0], const_one_two.output[0]],
-                          name=node.name, outputs=node.output)
+            ctx.make_node('Slice', [x3.output[0], crop_starts_squeeze.output[0], end_range.output[0], axes_const],
+                          name=node.name, outputs=node.output, shapes=orig_shape, dtypes=orig_dtypes)
 
 
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")
 class SpaceToBatch:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        # https://www.tensorflow.org/api_docs/python/tf/space_to_batch_nd
-        # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
-        # and we only support 4D here, so the data format is NHWC
-        # onnx op "SpaceToDepth" does the same work on input tensor except that it works on "C",
-        # and it only supports NCHW
-        # T out = SpaceToBatchND(T input, int32 block_shape, int32 crops)
-        if ctx.opset <= 10 or (node.inputs[1].is_const() and node.inputs[2].is_const()):
+        # block_shape impacts Transpose 'perm' attribute values.
+        # must be available at compile time
+        utils.make_sure(node.inputs[1].is_const(), 'only support constant block_shape value.')
+
+        block_shape = node.inputs[1].get_tensor_value(False)
+        blocklen = len(block_shape)
+        xlen = len(ctx.get_shape(node.input[0]))
+
+        # if 3d or 4d tensor & square 2d block_shape , can optimize
+        cond1 = xlen in [3, 4]
+        cond2 = node.inputs[2].is_const()
+        cond3 = blocklen == 2 and block_shape[0] == block_shape[1]
+        if cond1 and cond2 and cond3:
+            # https://www.tensorflow.org/api_docs/python/tf/space_to_batch_nd
+            # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
+            # and we only support 4D here, so the data format is NHWC
+            # onnx op "SpaceToDepth" does the same work on input tensor except that it works on "C",
+            # and it only supports NCHW
+            # T out = SpaceToBatchND(T input, int32 block_shape, int32 crops)
             input_tensor = node.inputs[0]
-            blocksize = node.inputs[1].get_tensor_value()
-
-            utils.make_sure(len(ctx.get_shape(input_tensor.output[0])) == 4, "only supports 4D for now")
-            utils.make_sure(len(blocksize) == 2 and blocksize[0] == blocksize[1],
-                            "only support same blocksize at different dims")
-
             shapes = [ctx.get_shape(node.output[0])]
             dtypes = [ctx.get_dtype(node.output[0])]
 
@@ -1304,72 +1345,81 @@ class SpaceToBatch:
 
             # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
             trans1 = ctx.make_node("Transpose", pad_op.output, {"perm": [3, 0, 1, 2]})
-            reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": blocksize[0]})
+            reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": block_shape[0]})
             ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]},
                           name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
         else:
-            """
-            1. Zero-pad the start and end of dimensions [1, ..., M] of the input
-                according to paddings to produce padded of shape padded_shape.
-            2. Reshape padded to reshaped_padded of shape:
-                [batch] + [padded_shape[1] / block_shape[0],
-                block_shape[0], ..., padded_shape[M] / block_shape[M-1],
-                block_shape[M-1]] + remaining_shape
-            3. Permute dimensions of reshaped_padded to produce permuted_reshaped_padded of shape:
-                block_shape + [batch] + [padded_shape[1] / block_shape[0], ...,
-                padded_shape[M] / block_shape[M-1]] + remaining_shape
-            4. Reshape permuted_reshaped_padded to flatten block_shape into the batch dimension,
-                producing an output tensor of shape:
-                [batch * prod(block_shape)] + [padded_shape[1] / block_shape[0], ...,
-                padded_shape[M] / block_shape[M-1]] + remaining_shape
-            """
-            input_x = node.inputs[0]
-            block_shape = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
-            pad_x = ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=TensorProto.INT64)
-            const_zero_zero = ctx.make_const(utils.make_name(node.name + "_const_zero_zero"),
-                                             np.array([[0, 0]], dtype=np.int64))
-            concated_pad_x = ctx.make_node("Concat", [const_zero_zero.output[0], pad_x.output[0]], {"axis": 0})
-            concated_pad_x_v2 = ctx.make_node("Concat", [concated_pad_x.output[0], const_zero_zero.output[0]],
-                                              {"axis": 0})
-            transposed_concated_pad_x_v2 = ctx.make_node("Transpose", [concated_pad_x_v2.output[0]], {"perm": [1, 0]})
-            const_eight = ctx.make_const(utils.make_name(node.name + "_const_eight"), np.array([8], dtype=np.int64))
-            reshaped_transposed_pad_x = ctx.make_node("Reshape",
-                                                      [transposed_concated_pad_x_v2.output[0], const_eight.output[0]])
-            padded_input_x = ctx.make_node("Pad", [input_x.output[0], reshaped_transposed_pad_x.output[0]])
-            const_one = ctx.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
-            const_one_one = ctx.make_const(utils.make_name(node.name + "_const_one_one"),
-                                           np.array([1, 1], dtype=np.int64))
-            padded_block_shape = ctx.make_node("Pad",
-                                               [block_shape.output[0], const_one_one.output[0], const_one.output[0]])
-            shape_x = ctx.make_node("Shape", [padded_input_x.output[0]])
-            new_shape_x = ctx.make_node("Div", [shape_x.output[0], padded_block_shape.output[0]])
-            first_row_new_shape_x = GraphBuilder(ctx).make_slice(
-                {"data": new_shape_x.output[0], "ends": [2], "starts": [0]})
-            block_size = GraphBuilder(ctx).make_slice({"data": block_shape.output[0], "ends": [1], "starts": [0]})
-            new_fisrt_row_new_shape_x = ctx.make_node("Concat", [first_row_new_shape_x, block_size], {"axis": 0})
-            second_row_new_shape_x_first_half = GraphBuilder(ctx).make_slice(
-                {"data": new_shape_x.output[0], "ends": [3], "starts": [2]})
-            second_row_new_shape_x_second_half = GraphBuilder(ctx).make_slice(
-                {"data": new_shape_x.output[0], "ends": [4], "starts": [3]})
-            new_second_row_new_shape_x_first_half = ctx.make_node("Concat",
-                                                                  [second_row_new_shape_x_first_half, block_size],
-                                                                  {"axis": 0})
-            new_second_row_new_shape_x = ctx.make_node("Concat", [new_second_row_new_shape_x_first_half.output[0],
-                                                                  second_row_new_shape_x_second_half], {"axis": 0})
-            new_shape_x_v2 = ctx.make_node("Concat",
-                                           [new_fisrt_row_new_shape_x.output[0], new_second_row_new_shape_x.output[0]],
-                                           {"axis": 0})
-            new_x = ctx.make_node("Reshape", [padded_input_x.output[0], new_shape_x_v2.output[0]])
-            transposed_new_x = ctx.make_node("Transpose", [new_x.output[0]], {"perm": [2, 4, 0, 1, 3, 5]})
-            block_size_prod = ctx.make_node("Mul", [block_size, block_size])
-            const_zero_three = ctx.make_const(utils.make_name(node.name + "_const_zero_three"),
-                                              np.array([0, 3], dtype=np.int64))
-            padded_block_size_prod = ctx.make_node("Pad", [block_size_prod.output[0], const_zero_three.output[0],
-                                                           const_one.output[0]])
-            new_shape_x_v3 = ctx.make_node("Mul", [new_shape_x.output[0], padded_block_size_prod.output[0]])
+            def mknode(optype, inputs, attrs=None):
+                nodename = utils.make_name(node.name + '_' + optype.lower())
+                return ctx.make_node(optype, inputs, attrs, name=nodename)
+
+            def mkconst(desc, val, dtype=np.int64):
+                nodename = utils.make_name(node.name + '_' + desc)
+                const_node = ctx.make_const(utils.make_name(nodename), val.astype(dtype))
+                return const_node.output[0]
+
+            # support non 3D/4D tensors and dynamic pad vals
+            # dynamic slice starts at opset 10
+            utils.make_sure(ctx.opset >= 11, 'non-4D tensor or non-const pads require opset 11')
+
+            input0 = node.input[0]
+            input2 = node.input[2]
+
+            # const vals
+            int_max_const = mkconst('int_max', np.array([utils.get_max_value(np.int64)]))
+            zero_const = mkconst('_zero_const', np.array([0]))
+            one_const = mkconst('_one_const', np.array([1]))
+            minus1_const = mkconst('_minus1_const', np.array([-1]))
+            blocklen_resize_const = mkconst('_blocklen_resize_const', np.array([-1, blocklen]))
+            blocklenplus1_const = mkconst('_blocklenplus1_const', np.array([blocklen + 1]))
+            filltop_const = mkconst('_filltop_const', np.array([1, 0, 0, 0]))
+            fillbottom_const = mkconst('_bottom_const', np.array([0, 0, 1, 0]))
+            block_shape_const = mkconst('_block_shape_const', block_shape)
+
+            x_shape = ctx.insert_new_node_on_input(node, 'Shape', node.input[0])
+            x_rank = mknode('Size', [x_shape.output[0]])
+
+            # pad x prior to compute
+            pad = mknode('Cast', [input2], {'to': TensorProto.INT64})
+            pad_shape = mknode('Shape', [pad.output[0]])
+            pad_rank = mknode('Slice', [pad_shape.output[0], zero_const, one_const])
+            pad_gap = mknode('Sub', [x_rank.output[0], pad_rank.output[0]])
+            gapminus1 = mknode('Sub', [pad_gap.output[0], one_const])
+            gapminus1fillbot = mknode('Mul', [fillbottom_const, gapminus1.output[0]])
+            padfilltop = mknode('Pad', [pad.output[0], filltop_const])
+            padfilltopbottom = mknode('Pad', [padfilltop.output[0], gapminus1fillbot.output[0]])
+            pad_t = mknode('Transpose', [padfilltopbottom.output[0]])
+            pad1d = mknode('Reshape', [pad_t.output[0], minus1_const])
+
+            # get the spatial and depth (i.e remaining) dimensions
+            # compute reduced spatial dimensions by dividing block_shape
+            x1 = mknode('Pad', [input0, pad1d.output[0]])
+            x1_shape = mknode('Shape', [x1.output[0]])
+            spatial = mknode('Slice', [x1_shape.output[0], one_const, blocklenplus1_const])
+            depth = mknode('Slice', [x1_shape.output[0], blocklenplus1_const, int_max_const])
+            reduced = mknode('Div', [spatial.output[0], block_shape_const])
+
+            # reshape x into smaller blocks before shuffle
+            ccat1 = mknode('Concat', [reduced.output[0], block_shape_const], {'axis': 0})
+            reshape1 = mknode('Reshape', [ccat1.output[0], blocklen_resize_const])
+            tr1 = mknode('Transpose', [reshape1.output[0]])
+            interleave = mknode('Reshape', [tr1.output[0], minus1_const])
+            shape1 = mknode('Concat', [minus1_const, interleave.output[0], depth.output[0]], {'axis': 0})
+            x2 = mknode('Reshape', [x1.output[0], shape1.output[0]])
+
+            # permutation values for shuffling
+            p1 = list(range(2, 2 * blocklen + 1, 2))
+            p2 = list(range(1, 2 * blocklen + 1, 2))
+            perm = p1 + [0] + p2 + list(range(0, xlen + blocklen)[1 + 2 * blocklen:])
+
+            tr2 = mknode('Transpose', [x2.output[0]], {'perm': perm})
+            shape2 = mknode('Concat', [minus1_const, reduced.output[0], depth.output[0]], {'axis': 0})
+            orig_shape = node.output_shapes
+            orig_dtypes = node.output_dtypes
             ctx.remove_node(node.name)
-            ctx.make_node("Reshape", [transposed_new_x.output[0], new_shape_x_v3.output[0]], name=node.name,
-                          outputs=node.output)
+            ctx.make_node('Reshape', [tr2.output[0], shape2.output[0]],
+                          name=node.name, outputs=node.output, shapes=orig_shape,
+                          dtypes=orig_dtypes)
 
 
 @tf_op("IsInf", onnx_op="IsInf")
