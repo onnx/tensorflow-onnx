@@ -2402,6 +2402,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         pad_val = np.array([[0, 1], [2, 1]]).astype(np.int64)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x_val, _INPUT1: block_size_val, _INPUT2: pad_val})
 
+    @check_opset_min_version(11, "BatchToSpaceND")
     def test_batch_to_spacend_non_const_7d(self):
         x_type, y_type, z_type = np.int64, np.int64, np.int64
         # test 3D upto 7D input tensors

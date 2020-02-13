@@ -62,7 +62,7 @@ else:
     extract_sub_graph = tf.graph_util.extract_sub_graph
 
 
-def freeze_func(func, input_names, output_names):
+def from_function(func, input_names, output_names):
     frozen_func = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=False)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
     # output_tensors = {i.name: i for i in frozen_func.outputs}
@@ -209,7 +209,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, signatures):
         for output_tensor in  concrete_func.outputs:
             outputs[output_tensor.name] = output_tensor
 
-    frozen_graph = freeze_func(concrete_func, list(inputs.keys()), list(outputs.keys()))
+    frozen_graph = from_function(concrete_func, list(inputs.keys()), list(outputs.keys()))
     return frozen_graph, inputs, outputs
 
 

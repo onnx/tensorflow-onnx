@@ -24,7 +24,7 @@ from common import get_test_config
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, freeze_func, freeze_session
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, from_function, freeze_session
 from tf2onnx.tf_loader import tf_optimize, is_tf2
 
 
@@ -120,8 +120,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # now make the eager functions a graph
             concrete_func = tf.function(func, input_signature=tuple(input_tensors))
             concrete_func = concrete_func.get_concrete_function()
-            graph_def = freeze_func(concrete_func,
-                                    input_names=list(feed_dict.keys()), output_names=output_names_with_port)
+            graph_def = from_function(concrete_func,
+                                      input_names=list(feed_dict.keys()), output_names=output_names_with_port)
         else:
             #
             # use graph to execute the tensorflow func
