@@ -30,14 +30,15 @@ def rewrite_random_normal(g, ops):
         out_name = utils.port_name(op_name)
 
         rn_op = match.get_op('input1')
+        seed = rn_op.get_attr('seed2').i
         if rn_op.inputs[0].type == "Shape":
             shape_node = rn_op.inputs[0]
             new_node = g.make_node("RandomNormalLike", [shape_node.input[0]], outputs=[out_name], name=op_name,
-                                   attr={"mean": mean, "scale": 1.0, "dtype": dtype})
+                                   attr={"mean": mean, "scale": 1.0, "dtype": dtype, "seed": seed})
         else:
             shape = g.get_shape(output.output[0])
             new_node = g.make_node("RandomNormal", [], outputs=[out_name], name=op_name,
-                                   attr={"shape": shape, "mean": mean, "scale": 1.0, "dtype": dtype})
+                                   attr={"shape": shape, "mean": mean, "scale": 1.0, "dtype": dtype, "seed": seed})
 
         g.replace_all_inputs(ops, output.output[0], new_node.output[0])
         g.safe_remove_nodes(match.get_nodes())

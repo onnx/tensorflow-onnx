@@ -2383,6 +2383,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
     @check_opset_min_version(11, "BatchToSpaceND")
+    @unittest.skip("this was recently removed - but don't we want this to work ?")
     def test_batch_to_spacend_non_const(self):
         def func(input_x, block_shape, crops):
             return batch_to_space_nd(input_x, block_shape, crops, name=_TFOUTPUT)
@@ -2392,13 +2393,51 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x_val, _INPUT1: block_shape_val, _INPUT2: crops_val})
 
     @check_opset_min_version(11, "SpaceToBatchND")
+    @unittest.skip("this was recently removed - but don't we want this to work ?")
     def test_space_to_batchnd_non_const(self):
+        input_x_val = np.random.random_sample([40, 5, 7, 66]).astype(np.float32)  # NHWC
         def func(input_x, block_size, pad):
             return batch_to_space_nd(input_x, block_size, pad, name=_TFOUTPUT)
-        input_x_val = np.random.random_sample([40, 5, 7, 66]).astype(np.float32)  # NHWC
         block_size_val = np.array([2, 2]).astype(np.int64)
         pad_val = np.array([[0, 1], [2, 1]]).astype(np.int64)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x_val, _INPUT1: block_size_val, _INPUT2: pad_val})
+
+    def test_batch_to_spacend_non_const_7d(self):
+        x_type, y_type, z_type = np.int64, np.int64, np.int64
+        # test 3D upto 7D input tensors
+        for x_shape in [[12, 4, 4], [12, 4, 8, 3], [12, 4, 8, 3, 2], [12, 4, 8, 3, 2, 3], [12, 4, 8, 3, 2, 1, 3]]:
+            # test 1D upto 2D block shapes
+            for block_shape in [[2, 3], [2]]:
+                # crop 1 layer at end of each dim
+                # x and z can be dynamic.
+                # y = block_shape cannot be dynamic without change to Transpose op spec
+                crops = [[0, 1] for dim in block_shape]
+                y_val = np.array(block_shape).astype(y_type)
+                x_val = np.array([x + 1 for x in range(0, np.prod(x_shape))], dtype=x_type).reshape(x_shape)
+                z_val = np.array(crops).astype(z_type)
+                def func(x, z):
+                    y = tf.constant(dtype=y_type, value=y_val, shape=y_val.shape, name=_TFINPUT1)
+                    return batch_to_space_nd(x, y, z, name=_TFOUTPUT)
+                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT2: z_val})
+
+    @check_opset_min_version(11, "SpaceToBatchND")
+    def test_space_to_batchnd_non_const_7d(self):
+        x_type, y_type, z_type = np.int64, np.int64, np.int64
+        # test 3D upto 7D input tensors
+        for x_shape in [[2, 4, 4], [1, 4, 8, 3], [1, 4, 8, 3, 2], [1, 4, 8, 3, 2, 3], [1, 4, 8, 3, 2, 1, 3]]:
+            # test 1D upto 2D block shapes
+            for block_shape in [[2], [2, 2]]:
+                # pad 1 layer at begin and end of each dim
+                pads = [[1, 1] for dim in block_shape]
+                y_val = np.array(block_shape).astype(y_type)
+                x_val = np.array([x + 1 for x in range(0, np.prod(x_shape))], dtype=x_type).reshape(x_shape)
+                z_val = np.array(pads).astype(z_type)
+                # x and z can be dynamic.
+                # y = block_shape cannot be dynamic without change to Transpose op spec
+                def func(x, z):
+                    y = tf.constant(dtype=y_type, value=y_val, shape=y_val.shape, name=_TFINPUT1)
+                    return space_to_batch_nd(x, y, z, name=_TFOUTPUT)
+                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT2: z_val})
 
     @check_opset_min_version(11, "CropAndResize")
     def test_crop_and_resize_linear(self):
