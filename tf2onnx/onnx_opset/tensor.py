@@ -118,6 +118,15 @@ class Identity:
             ctx.remove_node(node.name)
 
 
+@tf_op("IdentityN")
+class IdentityN:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        ctx.remove_node(node.name)
+        for input_name, output_name in zip(node.input, node.output):
+            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name)
+
+
 @tf_op("Reshape")
 class Reshape:
     @classmethod

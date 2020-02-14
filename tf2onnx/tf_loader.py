@@ -204,10 +204,8 @@ def _from_saved_model_v2(model_path, input_names, output_names, signatures):
         signatures.append(k)
     for k in signatures:
         concrete_func = imported.signatures[k]
-        for input_tensor in concrete_func.inputs:
-            inputs[input_tensor.name] = input_tensor
-        for output_tensor in  concrete_func.outputs:
-            outputs[output_tensor.name] = output_tensor
+        inputs = {input_tensor.name: input_tensor for input_tensor in concrete_func.inputs}
+        outputs = {output_tensor.name: output_tensor for output_tensor in concrete_func.outputs}
 
     frozen_graph = from_function(concrete_func, list(inputs.keys()), list(outputs.keys()))
     return frozen_graph, inputs, outputs
@@ -232,14 +230,40 @@ def from_saved_model(model_path, input_names, output_names, signatures=None):
         logger.warning("found multiple signatures %s in saved_model, pass --signature_def in command line",
                        signatures)
 
-    # if command line overrides inputs or outputs, filter the tensors here
-    #if input_names:
-    #    inputs = {k: v for k, v in inputs.items() if k in input_names}
-    #if output_names:
-    #    outputs = {k: v for k, v in outputs.items() if k in output_names}
-
     tf_reset_default_graph()
-    #frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
+    return frozen_graph, inputs, outputs
+
+
+def from_keras(model_path, input_names, output_names):
+    """Load keras model - experimental for now."""
+    from tensorflow.python import keras as _keras
+    from tensorflow.python.eager import context
+    from tensorflow.python.keras.saving import saving_utils as _saving_utils
+
+    # Handles Keras when Eager mode is enabled.
+    custom_objects = None
+    if context.executing_eagerly():
+        _keras.backend.set_learning_phase(False)
+        keras_model = _keras.models.load_model(model_path, custom_objects)
+
+        function = _saving_utils.trace_model_call(keras_model)
+        concrete_func = function.get_concrete_function()
+        inputs = {input_tensor.name: input_tensor for input_tensor in concrete_func.inputs}
+        outputs = {output_tensor.name: output_tensor for output_tensor in concrete_func.outputs}
+        frozen_graph = from_function(concrete_func, list(inputs.keys()), list(outputs.keys()))
+    else:
+        # Handles Keras when Eager mode is disabled.
+        _keras.backend.clear_session()
+        _keras.backend.set_learning_phase(False)
+        keras_model = _keras.models.load_model(model_path, custom_objects)
+        sess = _keras.backend.get_session()
+        frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
+        inputs = {i: sess.graph.get_tensor_by_name(i) for i in keras_model.inputs}
+        outputs = {i: sess.graph.get_tensor_by_name(i) for i in keras_model.outputs}
+        tf_reset_default_graph()
+        with tf_session() as sess:
+            frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
+        tf_reset_default_graph()
     return frozen_graph, inputs, outputs
 
 

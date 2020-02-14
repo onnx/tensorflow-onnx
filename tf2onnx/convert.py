@@ -50,6 +50,7 @@ def get_args():
     parser.add_argument("--saved-model", help="input from saved model")
     parser.add_argument("--signature_def", help="signature_def from saved model to use")
     parser.add_argument("--checkpoint", help="input from checkpoint")
+    parser.add_argument("--keras", help="input from keras model")
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names")
     parser.add_argument("--outputs", help="model output_names")
@@ -75,7 +76,7 @@ def get_args():
     if args.graphdef or args.checkpoint:
         if not args.input and not args.outputs:
             parser.error("graphdef and checkpoint models need to provide inputs and outputs")
-    if not any([args.graphdef, args.checkpoint, args.saved_model]):
+    if not any([args.graphdef, args.checkpoint, args.saved_model, args.keras]):
         parser.print_help()
         sys.exit(1)
     if args.inputs:
@@ -128,12 +129,14 @@ def main():
         graph_def, inputs, outputs = tf_loader.from_saved_model(
             args.saved_model, args.inputs, args.outputs, args.signature_def)
         model_path = args.saved_model
+    if args.keras:
+        graph_def, inputs, outputs = tf_loader.from_keras(
+            args.keras, args.inputs, args.outputs)
+        model_path = args.keras
 
     if args.verbose:
         logger.info("inputs: %s", inputs.keys())
         logger.info("outputs: %s", outputs.keys())
-
-    # TODO: do we need to pass fold_const
 
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')
