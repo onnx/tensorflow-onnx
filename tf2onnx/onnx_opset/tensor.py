@@ -1762,4 +1762,3 @@ class MatrixDiagPart:
         ctx.remove_node(node.name)
         squeezed_result = ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes":[-1]},
                                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
-    

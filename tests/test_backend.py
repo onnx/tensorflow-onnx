@@ -3012,7 +3012,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11)
     def test_MatrixDiagPart(self):
-        input_val = np.array([[[1,2,3],[4,5,6]]], dtype=np.int64)
+        input_val = np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.int64)
         input = tf.placeholder(tf.int64, input_val.shape, name=_TFINPUT)
         _ = tf.matrix_diag_part(input, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
