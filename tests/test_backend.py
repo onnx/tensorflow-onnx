@@ -3017,6 +3017,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
         input_holder = tf.placeholder(tf.int64, input_val.shape, name=_TFINPUT)
         _ = tf.matrix_diag_part(input_holder, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
-
+        tf.reset_default_graph()
+        input_val = np.array([[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]]).astype(
+            np.int64)
+        input_holder = tf.placeholder(tf.int64, input_val.shape, name=_TFINPUT)
+        _ = tf.matrix_diag_part(input_holder, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val})
+        tf.reset_default_graph()
+        input_val = np.array([[[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]],
+                              [[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]]]).astype(
+            np.int64)
+        input_holder = tf.placeholder(tf.int64, input_val.shape, name=_TFINPUT)
+        _ = tf.matrix_diag_part(input_holder, name=_TFOUTPUT)
+        self._run_test_case([_OUTPUT], {_INPUT: input_val})
+        tf.reset_default_graph()
+        
 if __name__ == '__main__':
     unittest_main()
