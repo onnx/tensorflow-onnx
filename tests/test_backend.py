@@ -3014,8 +3014,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_MatrixDiagPart(self):
         input_val = np.array([[[1, 2, 3, 4, 5], [6, 7, 8, 9, 10], [11, 12, 13, 14, 15], [16, 17, 18, 19, 20]]]).astype(
             np.int64)
-        input = tf.placeholder(tf.int64, input_val.shape, name=_TFINPUT)
-        _ = tf.matrix_diag_part(input, name=_TFOUTPUT)
+        input_holder = tf.placeholder(tf.int64, input_val.shape, name=_TFINPUT)
+        _ = tf.matrix_diag_part(input_holder, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
 
 if __name__ == '__main__':
