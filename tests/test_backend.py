@@ -111,7 +111,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kwargs["convert_var_to_const"] = False
         kwargs["constant_fold"] = False
         return self.run_test_case(feed_dict, [], output_names_with_port, **kwargs)
-
+    '''
     def _test_expand_dims_known_rank(self, idx):
         tf.reset_default_graph()
         x_val = make_xval([3, 4])
@@ -3009,10 +3009,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         lookup_results = hash_table.lookup(query_holder)
         self._run_test_case([lookup_results.name], {_INPUT: query})
         os.remove(filnm)
-
+    '''
     @check_opset_min_version(11)
     def test_MatrixDiagPart(self):
-        input_val = np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.int64)
+        input_val = np.array([[[1,2,3,4,5],[6,7,8,9,10],[11,12,13,14,15],[16,17,18,19,20]]]).astype(np.int64)
         input = tf.placeholder(tf.int64, input_val.shape, name=_TFINPUT)
         _ = tf.matrix_diag_part(input, name=_TFOUTPUT)
         self._run_test_case([_OUTPUT], {_INPUT: input_val})
