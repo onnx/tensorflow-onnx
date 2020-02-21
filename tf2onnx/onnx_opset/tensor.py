@@ -1726,3 +1726,51 @@ class Unique:
                 ctx.set_dtype(cast_node.output[0], dtypes[1])
                 ctx.copy_shape(node.output[1], cast_node.output[0])
             # FIXME: the indices in onnx are not the same as in tensorflow.
+
+
+@tf_op("MatrixDiagPart")
+class MatrixDiagPart:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # MatrixDiagPart by slice and gather
+        const_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero', np.array([0]).astype(np.int64))
+        const_zero_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero_zero',
+                                         np.array([0, 0]).astype(np.int64))
+        const_one = ctx.make_const(utils.make_name(node.name) + 'const_one', np.array([1]).astype(np.int64))
+        const_two = ctx.make_const(utils.make_name(node.name) + 'const_two', np.array([2]).astype(np.int64))
+        const_negative_one = ctx.make_const(utils.make_name(node.name) + 'const_negative_one',
+                                            np.array([-1]).astype(np.int64))
+        const_negative_two = ctx.make_const(utils.make_name(node.name) + 'const_negative_two',
+                                            np.array([-2]).astype(np.int64))
+        const_negative_two_one = ctx.make_const(utils.make_name(node.name) + 'const_negative_two_one',
+                                                np.array([-2, -1]).astype(np.int64))
+        input_shape = ctx.make_node('Shape', [node.input[0]])
+        input_shape_size = ctx.make_node('Shape', [input_shape.output[0]])
+        matrice_shape = ctx.make_node('Slice',
+                                      [input_shape.output[0], const_negative_two.output[0], input_shape_size.output[0]])
+        matrice_shape_float = ctx.make_node('Cast', [matrice_shape.output[0]], attr={'to': TensorProto.FLOAT})
+        matrice_shape_float_x = ctx.make_node('Slice', [matrice_shape_float.output[0], const_zero.output[0],
+                                                        const_one.output[0]])
+        matrice_shape_float_y = ctx.make_node('Slice',
+                                              [matrice_shape_float.output[0], const_one.output[0], const_two.output[0]])
+        min_matrice_dim_float = ctx.make_node('Min', [matrice_shape_float_x.output[0], matrice_shape_float_y.output[0]])
+        min_matrice_dim = ctx.make_node('Cast', [min_matrice_dim_float.output[0]], attr={'to': TensorProto.INT64})
+        double_matrice_dim = ctx.make_node('Concat', [min_matrice_dim.output[0], min_matrice_dim.output[0]],
+                                           attr={'axis': -1})
+        sliced_input = ctx.make_node('Slice', [node.input[0], const_zero_zero.output[0], double_matrice_dim.output[0],
+                                               const_negative_two_one.output[0]])
+        sliced_input_shape = ctx.make_node('Shape', [sliced_input.output[0]])
+        sliced_input_shape_half = ctx.make_node('Slice', [sliced_input_shape.output[0], const_zero.output[0],
+                                                          const_negative_one.output[0]])
+        sliced_input_shape_new = ctx.make_node('Concat', [sliced_input_shape_half.output[0], const_one.output[0]],
+                                               attr={'axis': -1})
+        matrice_range = ctx.make_node('Range', [const_zero.output[0], min_matrice_dim.output[0], const_one.output[0]])
+        unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0]], attr={"axes": [-1]})
+        expanded_range = ctx.make_node('Expand', [unsqueezed_matrice_range.output[0], sliced_input_shape_new.output[0]])
+        gathered_result = ctx.make_node('GatherElements', [sliced_input.output[0], expanded_range.output[0]],
+                                        attr={'axis': -1})
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        squeezed_result = ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
+                                        name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
