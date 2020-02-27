@@ -88,11 +88,9 @@ def freeze_session(sess, input_names=None, output_names=None):
         for node in graph_def.node:
             node.device = ""
         if is_tf2():
-            graph_def = tf.compat.v1.graph_util.convert_variables_to_constants(sess, graph_def,
-                                                                               output_node_names)
+            graph_def = tf.compat.v1.graph_util.convert_variables_to_constants(sess, graph_def, output_node_names)
         else:
-            graph_def = convert_variables_to_constants(sess, graph_def,
-                                                       output_node_names)
+            graph_def = convert_variables_to_constants(sess, graph_def, output_node_names)
     return graph_def
 
 
@@ -181,10 +179,7 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures
         for _, output_tensor in outputs_tensor_info.items():
             outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
 
-    frozen_graph = freeze_session(sess,
-                                  input_names=list(inputs.keys()),
-                                  output_names=list(outputs.keys()))
-
+    frozen_graph = freeze_session(sess, input_names=list(inputs.keys()), output_names=list(outputs.keys()))
     return frozen_graph, inputs, outputs
 
 

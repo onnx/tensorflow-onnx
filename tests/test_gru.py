@@ -14,7 +14,7 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_gru_count, check_opset_after_tf_version
+from common import unittest_main, check_gru_count, check_opset_after_tf_version, skip_tf2
 from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
@@ -40,6 +40,7 @@ else:
 # TODO: as a workaround, set batch_size to 1 for now to bypass a onnxruntime bug, revert it when the bug is fixed
 class GRUTests(Tf2OnnxBackendTestBase):
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_gru(self):
         units = 5
         batch_size = 1
@@ -65,6 +66,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_multiple_dynamic_gru(self):
         units = 5
         batch_size = 1
@@ -108,6 +110,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         # graph_validator=lambda g: check_gru_count(g, 2))
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
+    @skip_tf2()
     def test_single_dynamic_gru_seq_length_is_const(self):
         units = 5
         batch_size = 1
@@ -135,6 +138,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
+    @skip_tf2()
     def test_single_dynamic_gru_seq_length_is_not_const(self):
         for np_dtype in [np.int32, np.int64, np.float32]:
             units = 5
@@ -165,6 +169,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                                graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_gru_placeholder_input(self):
         units = 5
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -190,6 +195,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_gru_ch_zero_state_initializer(self):
         units = 5
         batch_size = 1
@@ -220,6 +226,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_gru_random_weights(self):
         hidden_size = 5
         batch_size = 1
@@ -248,6 +255,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_gru_random_weights2(self):
         hidden_size = 128
         batch_size = 1
@@ -275,6 +283,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_dynamic_gru_output_consumed_only(self):
         units = 5
         batch_size = 6
@@ -301,6 +310,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_dynamic_gru_state_consumed_only(self):
         units = 5
         batch_size = 6
@@ -327,6 +337,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bigru(self):
         units = 5
         batch_size = 1
@@ -358,6 +369,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bigru_output_consumed_only(self):
         units = 5
         batch_size = 1
@@ -389,6 +401,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bigru_state_consumed_only(self):
         units = 5
         batch_size = 1
@@ -420,6 +433,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bidirectional_but_one_gru(self):
         units = 5
         batch_size = 1
@@ -448,6 +462,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bidirectional_but_one_gru_and_output_consumed_only(self):
         units = 5
         batch_size = 1
@@ -474,6 +489,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bidirectional_but_one_gru_and_state_consumed_only(self):
         units = 5
         batch_size = 1
@@ -500,6 +516,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bigru_unknown_batch_size(self):
         units = 5
         batch_size = 6
@@ -526,6 +543,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bigru_outputs_partially_consumed(self):
         units = 5
         batch_size = 6
@@ -551,6 +569,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_multi_bigru_with_same_input_hidden_size(self):
         batch_size = 10
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
@@ -592,6 +611,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         # graph_validator=lambda g: check_gru_count(g, 2))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_multi_bigru_with_same_input_seq_len(self):
         units = 5
         batch_size = 10

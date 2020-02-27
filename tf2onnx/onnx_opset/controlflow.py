@@ -504,23 +504,23 @@ class While:
         #   loop_counter, max_iterations, [loop_vars]
         # cond and body use the same inputs
         # outputs are identical to inputs
-        #
+        tf_while_inputs = node.input
+
         # the onnx loop input is:
         #   max_iterations, cond, [loop_vars]
-        # body uses the same inputs
+        # body uses the inputs:
+        #   iteration, cond, [loop_vars]
         # the onnx loop output is:
-        #   [v_final_and_scan_outputs]
+        #   cond [v_final_and_scan_outputs]
 
-        tf_while_inputs = node.input
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
 
-        # make maximum_iterations int64
+        # make maximum_iterations int64 and replace -1(tf) with maxsize(onnx)
         maximum_iterations_name = node.input[1]
         maximum_iterations = node.inputs[1].get_tensor_value()
         ctx.remove_node(node.inputs[1].name)
         if maximum_iterations == -1:
-            # in tf -1 means forever, in onnx it is maxsize
             maximum_iterations = sys.maxsize
         ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
 
@@ -538,6 +538,10 @@ class While:
         input_idx_to_remove = []
         # remove TensorListReserve
         for idx, name in enumerate(tf_while_inputs):
+            if idx == 1:
+                # onnx does not know maximum_iterations in the body so move this to a state var
+                state_vars[body.func_inputs[idx]] = maximum_iterations_name
+                continue
             if idx < 2:
                 # skip  [0,1] loop_counter, max_iterations
                 continue
@@ -546,8 +550,6 @@ class While:
                 # there is no equivalent step in onnx and we should remove it.
                 # But we make this an identity to keep the loop_vars the same on input and output
                 # of the body but there should be no access to this argument in the body.
-                # n.type = "Identity"
-                # n.input = [n.input[0]]
                 to_remove.append((idx, n))
                 continue
 
@@ -575,9 +577,9 @@ class While:
 
         ctx.remove_node(node.name)
 
-        # In onnx cond is a variable, not a function. We need to inject the subgraph into the main graph
+        # In onnx 'cond' is a variable, not a function. We need to inject the subgraph into the main graph
         # before the loop and into the body.
-        cond_binding = parameter_binding(cond_graph, tf_while_inputs, ctx)
+        cond_binding = parameter_binding(cond_graph, tf_while_inputs)
         cond_outputs = inline_subgraph(ctx, cond_graph, cond_name, cond_binding)
         # onnx Loop op outputs only loop_vars so we need shift output dtypes/shapes and consumers
         output_map = {node.output[i+2]: node.output[i] for i in range(len(node.output) - 2)}
@@ -592,27 +594,25 @@ class While:
             ctx.replace_all_inputs(ctx.get_nodes(), k, v)
 
         wire_while_body(ctx, body, loop_node.inputs, state_vars, output_shapes, output_dtypes, body_name,
-                        node.name, cond_graph)
+                        node.name, cond_graph, tf_while_inputs)
 
+        # if there was a tensorflow variant type, bind in a real type here
         for i, n in enumerate(body.inputs):
-            # this was a tensorflow variant type, put in a real type here
-            if body.get_dtype(n.output[0]) == -1:
+            if body.get_dtype(n.output[0]) == onnx_pb.TensorProto.UNDEFINED:
                 body.set_dtype(n.output[0], ctx.get_dtype(loop_node.input[i]))
         loop_node.set_body_graph_as_attr("body", body)
-
-        print(ctx.find_output_consumers("while_maximum_iterations:0"))
-        print(body.find_output_consumers("while_maximum_iterations:0"))
-        dump_graph(body)
-        dump_graph(ctx)
+        # dump_graph(body)
+        # dump_graph(ctx)
 
 
-def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, output_dtypes, scope, parent, cond_graph):
+def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, output_dtypes, scope, parent,
+                    cond_graph, tf_while_inputs):
     """Wire subgraph graph into main."""
     remove_parents = []
     to_remove = []
 
     # tensorflow function inputs that are state_vars come from outer context and
-    # we need to remove them from the inputs
+    # we need to remove them from the inputs by makeing the placeholder an identity
     for n in g.inputs:
         if n.output[0] in state_vars:
             n.type = "Identity"
@@ -655,24 +655,31 @@ def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, ou
         if node:
             if output_name not in func_inputs:
                 if node.input:
-                    remove_parents.append(node.input[0])
+                    remove_parents.extend(node.input)
                 g.remove_node(node.name)
 
     for node in to_remove:
         g.remove_node(node.name)
 
     # we need to bind the the loop_var output, else we'd do 1 too much
-    cond_binding = parameter_binding(cond_graph, func_inputs[:2] + g.outputs[2:], g)
+    cond_binding = parameter_binding(cond_graph, func_inputs[:2] + g.outputs[2:])
     cond_outputs = inline_subgraph(g, cond_graph, "cond__", cond_binding)
 
     g.outputs = [cond_outputs[0]] + g.outputs[2:]
+
+    # FIXME: onnx does not have a variant type so we try to fish for the dtype in a prior TensorListSetItem.
+    for o in g.outputs:
+        if g.get_dtype(o) == onnx_pb.TensorProto.UNDEFINED:
+            node = g.get_node_by_output(o)
+            if node.type in ["Identity"]:
+                g.set_dtype(o, node.inputs[0].output_dtypes[0])
 
     return g
 
 
 def wire_if_branch(parent_g, g, inputs, output_shapes, output_dtypes, scope, parent):
     """Wire subgraph graph into main."""
-    binding = parameter_binding(g, inputs, parent)
+    binding = parameter_binding(g, inputs)
     to_remove = []
     for node in g.inputs:
         parent_name = binding.get(node.output[0])
@@ -708,8 +715,17 @@ def inline_subgraph(parent, g, scope, binding):
     for node in to_remove:
         g.remove_node(node.name)
     prefix_graph(g, scope)
-    for node in g.get_nodes():
-        parent.append_node(node)
+    for n in g.get_nodes():
+        dtypes = n.output_dtypes
+        shapes = n.output_shapes
+        n.graph = parent
+        for name, shape, dtype in zip(n.output, shapes, dtypes):
+            # FIXME: don't access this directly
+            parent._output_shapes[name] = shape  # pylint: disable=protected-access
+            parent._dtypes[name] = dtype  # pylint: disable=protected-access
+
+    ops = parent.get_nodes() + g.get_nodes()
+    parent.reset_nodes(ops)
 
     # copy output shape and dtype to parent graph
     for name in g.outputs:
@@ -719,9 +735,11 @@ def inline_subgraph(parent, g, scope, binding):
     return  g.outputs
 
 
-def parameter_binding(g, inputs, parent):
+def parameter_binding(g, inputs, state_vars=None):
     binding = {}
     for k, v in zip(g.func_inputs, inputs):
+        if state_vars:
+            v = state_vars.get(v, v)
         binding[k] = v
     return binding
 
@@ -756,10 +774,11 @@ def prefix_graph(g, scope):
 def dump_graph(g):
     print()
     print("--, graph=", g.graph_name)
-    t = [n.name + str(g.get_shape(n.output[0])) for n in g.inputs]
-    print("--, inputs=", ",".join(t))
-    t = [n + str(g.get_shape(n)) for n in g.outputs]
-    print("--, outputs=", ",".join(t))
+    t = ["{} {}/{}".format(n.name, g.get_shape(n.output[0]), g.get_dtype(n.output[0])) for n in g.inputs]
+    print("--, inputs=", ", ".join(t))
+    t = ["{} {}/{}".format(n, g.get_shape(n), g.get_dtype(n)) for n in g.outputs]
+    print("--, outputs=", ", ".join(t))
     for node in g.get_nodes():
-        input_names = ["{}{}".format(n, g.get_shape(n)) for n in node.input]
-        print("-- {} {} {} {}".format(node.type, node.name, g.get_shape(node.output[0]), ", ".join(input_names)))
+        input_names = ", ".join(["{} {}/{}".format(n, g.get_shape(n), g.get_dtype(n)) for n in node.input])
+        output_names = ", ".join(["{} {}/{}".format(n, g.get_shape(n), g.get_dtype(n)) for n in node.output])
+        print("-- {} n={} i={} o={}".format(node.type, node.name, input_names, output_names))

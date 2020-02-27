@@ -14,7 +14,7 @@ from parameterized import parameterized
 import numpy as np
 import tensorflow as tf
 
-from tf2onnx import constants, logging, utils, tf_utils
+from tf2onnx import constants, logging, utils, tf_utils, tf_loader
 
 # pylint: disable=import-outside-toplevel
 __all__ = [
@@ -29,6 +29,7 @@ __all__ = [
     "check_onnxruntime_min_version",
     "check_opset_min_version",
     "check_opset_max_version",
+    "skip_tf2",
     "check_opset_after_tf_version",
     "check_target",
     "skip_caffe2_backend",
@@ -160,6 +161,12 @@ def check_opset_after_tf_version(tf_version, required_opset, message=""):
     reason = _append_message("conversion requires opset {} after tf {}".format(required_opset, tf_version), message)
     skip = config.tf_version >= LooseVersion(tf_version) and config.opset < required_opset
     return unittest.skipIf(skip, reason)
+
+
+def skip_tf2(message=""):
+    """ Skip if tf_version > max_required_version """
+    reason = _append_message("test needs to be fixed for tf-2.x", message)
+    return unittest.skipIf(tf_loader.is_tf2(), reason)
 
 
 def check_tf_max_version(max_accepted_version, message=""):

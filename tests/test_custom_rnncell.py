@@ -12,7 +12,7 @@ import tensorflow as tf
 
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import check_tf_min_version, check_opset_min_version, unittest_main, skip_opset
+from common import check_tf_min_version, check_opset_min_version, unittest_main, skip_opset, skip_tf2
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -22,21 +22,24 @@ from tf2onnx.tf_loader import is_tf2
 if is_tf2():
     BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
     LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
+    GRUCell = tf.compat.v1.nn.rnn_cell.GRUCell
     RNNCell = tf.compat.v1.nn.rnn_cell.RNNCell
     MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
     dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
 else:
     LSTMBlockCell = tf.contrib.rnn.LSTMBlockCell
-    LSTMCell = tf.contrib.rnn.LSTMCell
+    LSTMCell = tf.nn.rnn_cell.LSTMCell
+    GRUCell = tf.nn.rnn_cell.LSTMCell
     RNNCell = tf.nn.rnn_cell.RNNCell
     MultiRNNCell = tf.contrib.rnn.MultiRNNCell
     dynamic_rnn = tf.nn.dynamic_rnn
-
+    bidirectional_dynamic_rnn = tf.nn.bidirectional_dynamic_rnn
 
 
 class CustomRnnCellTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(8, "Scan")
+    @skip_tf2()
     def test_single_dynamic_custom_rnn(self):
         size = 5  # size of each model layer.
         batch_size = 1
@@ -54,6 +57,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
     @check_opset_min_version(8, "Scan")
+    @skip_tf2()
     def test_single_dynamic_custom_rnn_time_major(self):
         size = 5  # size of each model layer.
         batch_size = 1
@@ -70,6 +74,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
     @check_opset_min_version(8, "Scan")
+    @skip_tf2()
     def test_single_dynamic_custom_rnn_with_seq_length(self):
         units = 5
         batch_size = 6
@@ -91,6 +96,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
     @check_opset_min_version(8, "Scan")
+    @skip_tf2()
     def test_single_dynamic_custom_rnn_with_non_const_seq_length(self):
         units = 5
         batch_size = 6
@@ -114,6 +120,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "Scan")
     @check_tf_min_version("1.8")
+    @skip_tf2()
     def test_attention_wrapper_const_encoder(self):
         size = 5
         time_step = 3
@@ -132,7 +139,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
             attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size, attention_states)
 
             match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
-            cell = tf.nn.rnn_cell.LSTMCell(size)
+            cell = LSTMCell(size)
             match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
                                                                 attention_mechanism,
                                                                 attention_layer_size=attn_size,
@@ -150,6 +157,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "Scan")
     @check_tf_min_version("1.8")
+    @skip_tf2()
     def test_attention_wrapper_lstm_encoder(self):
         size = 5
         time_step = 3
@@ -168,7 +176,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         decoder_x_val = np.stack([decoder_x_val] * batch_size)
 
         def func(encoder_x, decoder_x):
-            encoder_cell = tf.nn.rnn_cell.LSTMCell(size)
+            encoder_cell = LSTMCell(size)
             output, attr_state = dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
             output_0 = tf.identity(output, name="output_0")
             attention_states = output
@@ -176,7 +184,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                                                        attention_states)
 
             match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
-            cell = tf.nn.rnn_cell.LSTMCell(size)
+            cell = LSTMCell(size)
             match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
                                                                 attention_mechanism,
                                                                 attention_layer_size=attn_size,
@@ -194,6 +202,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "Scan")
     @check_tf_min_version("1.8")
+    @skip_tf2()
     def test_attention_wrapper_gru_encoder(self):
         size = 5
         time_step = 3
@@ -212,7 +221,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         decoder_x_val = np.stack([decoder_x_val] * batch_size)
 
         def func(encoder_x, decoder_x):
-            encoder_cell = tf.nn.rnn_cell.GRUCell(size)
+            encoder_cell = GRUCell(size)
             output, attr_state = dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
             _ = tf.identity(output, name="output_0")
             attention_states = output
@@ -220,7 +229,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                                                        attention_states)
 
             match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
-            cell = tf.nn.rnn_cell.GRUCell(size)
+            cell = GRUCell(size)
             match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
                                                                 attention_mechanism,
                                                                 attention_layer_size=attn_size,
@@ -236,6 +245,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "Scan")
     @check_tf_min_version("1.8")
+    @skip_tf2()
     def test_attention_wrapper_lstm_encoder_input_has_none_dim(self):
         size = 5
         time_step = 3
@@ -254,7 +264,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         decoder_x_val = np.stack([decoder_x_val] * batch_size)
 
         def func(encoder_x, decoder_x):
-            encoder_cell = tf.nn.rnn_cell.LSTMCell(size)
+            encoder_cell = LSTMCell(size)
             output, attr_state = dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
             _ = tf.identity(output, name="output_0")
             attention_states = output
@@ -262,7 +272,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                                                        attention_states)
 
             match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
-            cell = tf.nn.rnn_cell.LSTMCell(size)
+            cell = LSTMCell(size)
             match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
                                                                 attention_mechanism,
                                                                 attention_layer_size=attn_size,
@@ -280,6 +290,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, 0.1)
 
     @check_opset_min_version(8, "Scan")
+    @skip_tf2()
     def test_multi_rnn_lstm(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -313,6 +324,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(8, "Scan")
     @check_tf_min_version("1.8")
     @skip_opset(9, "ReverseSequence")
+    @skip_tf2()
     def test_bidrectional_attention_wrapper_lstm_encoder(self):
         size = 30
         time_step = 3
@@ -330,14 +342,14 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         decoder_x_val = np.random.randn(decoder_time_step, batch_size, input_size).astype('f')
 
         def func(encoder_x, decoder_x, seq_length):
-            encoder_cell = tf.nn.rnn_cell.LSTMCell(size)
+            encoder_cell = LSTMCell(size)
             attention_states, _ = dynamic_rnn(encoder_cell, encoder_x, dtype=tf.float32)
             # [9, 3, 30], [9, 30]
             attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attn_size,
                                                                        attention_states)
 
             match_input_fn = lambda curr_input, state: tf.concat([curr_input, state], axis=-1)
-            cell = tf.nn.rnn_cell.LSTMCell(size)
+            cell = LSTMCell(size)
             match_cell_fw = tf.contrib.seq2seq.AttentionWrapper(cell,
                                                                 attention_mechanism,
                                                                 attention_layer_size=attn_size,
@@ -349,12 +361,12 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
                                                                 cell_input_fn=match_input_fn,
                                                                 output_attention=False)
             (match_output_fw, match_output_bk), (match_state_fw, match_state_bk) = \
-                tf.nn.bidirectional_dynamic_rnn(cell_fw=match_cell_fw,
-                                                cell_bw=match_cell_bk,
-                                                inputs=decoder_x,
-                                                sequence_length=tf.identity(seq_length),
-                                                dtype=tf.float32,
-                                                time_major=True)
+                bidirectional_dynamic_rnn(cell_fw=match_cell_fw,
+                                          cell_bw=match_cell_bk,
+                                          inputs=decoder_x,
+                                          sequence_length=tf.identity(seq_length),
+                                          dtype=tf.float32,
+                                          time_major=True)
 
             matched_output = tf.concat([match_output_fw, match_output_bk], axis=-1)
             matched_state = tf.concat([match_state_fw.cell_state, match_state_bk.cell_state], -1)

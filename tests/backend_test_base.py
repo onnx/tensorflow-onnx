@@ -86,7 +86,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
-                      check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None):
+                      check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False):
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -99,7 +99,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         np.random.seed(1)  # Make it reproducible.
         clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
-        if is_tf2():
+        if is_tf2() and not as_session:
             #
             # use eager to execute the tensorflow func
             #
@@ -127,13 +127,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # use graph to execute the tensorflow func
             #
             with tf_session() as sess:
-                tf.set_random_seed(1)
+                tf.compat.v1.set_random_seed(1)
                 input_list = []
                 for k, v in clean_feed_dict.items():
                     input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
                 func(*input_list)
                 variables_lib.global_variables_initializer().run()
-                tf.tables_initializer().run()
+                if not is_tf2():
+                    tf.tables_initializer().run()
                 output_dict = []
                 for out_name in output_names_with_port:
                     output_dict.append(sess.graph.get_tensor_by_name(out_name))

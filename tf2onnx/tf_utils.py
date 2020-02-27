@@ -44,8 +44,8 @@ TF_TO_ONNX_DTYPE = {
     types_pb2.DT_COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     types_pb2.DT_BOOL: onnx_pb.TensorProto.BOOL,
     types_pb2.DT_RESOURCE: onnx_pb.TensorProto.INT64,  # TODO: hack to allow processing on control flow
-    types_pb2.DT_VARIANT: -1, # TODO: onnx does not have the an equivalent, tag with -1 so we can set it later
-    types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8,  # TODO: map quint8 to  uint8 for now
+    types_pb2.DT_VARIANT: onnx_pb.TensorProto.UNDEFINED,
+    types_pb2.DT_QUINT8: onnx_pb.TensorProto.UINT8,
 }
 
 

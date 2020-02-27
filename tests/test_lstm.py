@@ -14,7 +14,7 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_lstm_count, check_opset_after_tf_version
+from common import unittest_main, check_lstm_count, check_opset_after_tf_version, skip_tf2
 
 from tf2onnx.tf_loader import is_tf2
 
@@ -41,10 +41,12 @@ else:
 
 class LSTMTests(Tf2OnnxBackendTestBase):
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_test_single_dynamic_lstm_state_is_tuple(self):
         self.internal_test_single_dynamic_lstm(True)
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_test_single_dynamic_lstm_state_is_not_tuple(self):
         self.internal_test_single_dynamic_lstm(False)
 
@@ -76,6 +78,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_lstm_time_major(self):
         units = 5
         seq_len = 6
@@ -105,6 +108,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_lstm_forget_bias(self):
         units = 5
         seq_len = 6
@@ -135,6 +139,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
+    @skip_tf2()
     def test_single_dynamic_lstm_seq_length_is_const(self):
         units = 5
         batch_size = 6
@@ -164,6 +169,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
+    @skip_tf2()
     def test_single_dynamic_lstm_seq_length_is_not_const(self):
         for np_dtype in [np.int32, np.int64, np.float32]:
             units = 5
@@ -195,6 +201,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                                graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_lstm_placeholder_input(self):
         units = 5
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -222,6 +229,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_lstm_ch_zero_state_initializer(self):
         units = 5
         batch_size = 6
@@ -254,6 +262,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_lstm_consume_one_of_ch_tuple(self):
         units = 5
         batch_size = 6
@@ -274,16 +283,16 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 dtype=tf.float32)
 
             return tf.identity(outputs, name="output"), \
-                   tf.identity(cell_state.c, name="cell_state_c"), \
-                   tf.identity(cell_state.h, name="cell_state_h")
+                   tf.identity(cell_state.c, name="cell_state_c")
 
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
-        output_names_with_port = ["output:0", "cell_state_c:0", "cell_state_h:0"]
+        output_names_with_port = ["output:0", "cell_state_c:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_single_dynamic_lstm_random_weights(self, state_is_tuple=True):
         hidden_size = 5
         batch_size = 6
@@ -313,6 +322,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
+    @skip_tf2()
     def test_single_dynamic_lstm_random_weights2(self, state_is_tuple=True):
         hidden_size = 128
         batch_size = 1
@@ -341,9 +351,11 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
+    @skip_tf2()
     def test_multiple_dynamic_lstm_state_is_tuple(self):
         self.internal_test_multiple_dynamic_lstm_with_parameters(True)
 
+    @skip_tf2()
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
     def test_multiple_dynamic_lstm_state_is_not_tuple(self):
         self.internal_test_multiple_dynamic_lstm_with_parameters(False)
@@ -394,6 +406,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_dynamic_basiclstm(self):
         units = 5
         batch_size = 6
@@ -417,6 +430,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_dynamic_lstm_output_consumed_only(self):
         units = 5
         batch_size = 6
@@ -442,6 +456,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_dynamic_lstm_state_consumed_only(self):
         units = 5
         batch_size = 6
@@ -460,10 +475,12 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bilstm_state_is_tuple(self):
         self.internal_test_dynamic_bilstm_with_parameters(True)
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bilstm_state_is_not_tuple(self):
         self.internal_test_dynamic_bilstm_with_parameters(False)
 
@@ -485,7 +502,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            outputs, cell_state = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -500,6 +517,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bilstm_output_consumed_only(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -518,7 +536,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            outputs, _ = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -533,6 +551,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bilstm_state_consumed_only(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -551,7 +570,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            _, cell_state = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -566,6 +585,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bilstm_outputs_partially_consumed(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -584,7 +604,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            (output_fw, _), (_, state_bw) = tf.nn.bidirectional_dynamic_rnn(
+            (output_fw, _), (_, state_bw) = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -599,6 +619,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_bilstm_unknown_batch_size(self, state_is_tuple=True):
         units = 5
         batch_size = 6
@@ -616,7 +637,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 units,
                 initializer=initializer,
                 state_is_tuple=state_is_tuple)
-            _, cell_state = tf.nn.bidirectional_dynamic_rnn(
+            _, cell_state = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
                 x,
@@ -632,6 +653,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_lstm_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_multi_bilstm_with_same_input_hidden_size(self):
         batch_size = 10
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
@@ -672,6 +694,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         # graph_validator=lambda g: check_lstm_count(g, 2))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf2()
     def test_dynamic_multi_bilstm_with_same_input_seq_len(self):
         units = 5
         batch_size = 10

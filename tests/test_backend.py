@@ -21,7 +21,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.tf_loader import tf_reset_default_graph, is_tf2
+from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
 
@@ -162,7 +162,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         return self.run_test_case(func, feed_dict, [], output_names_with_port, **kwargs)
 
     def _test_expand_dims_known_rank(self, idx):
-        tf_reset_default_graph()
         x_val = make_xval([3, 4])
         def func(x):
             op = tf.expand_dims(x, idx)
@@ -174,7 +173,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._test_expand_dims_known_rank(i)
 
     def test_expand_dims_one_unknown_rank(self):
-        tf_reset_default_graph()
         x_val = make_xval([3, 4])
         def func(x):
             # FIXME: this was tf_placeholder(tf.float32, shape=[None, 4], name=_TFINPUT)
@@ -183,7 +181,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     def _test_expand_dims_more_unknown_rank(self, idx):
-        tf_reset_default_graph()
         x_val = make_xval([3, 4])
         def func(x):
             # FIXME: this was tf_placeholder(tf.float32, shape=[None, None], name=_TFINPUT)
@@ -394,7 +391,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     def test_conv2d_8(self):
         for input_shape in [[10, 10], [5, 5]]:
-            tf_reset_default_graph()
             x_val = make_xval((1, 1, *input_shape)).transpose(NCHW_TO_NHWC)
             w = np.random.random_sample([3, 3, 1, 2]).astype(np.float32)
             strides = [1, 2, 2, 1]
@@ -812,7 +808,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_onnxruntime_incompatibility("Greater")
     def test_greater_unsupport_type(self):
         for op in [tf.greater, tf.greater_equal]:
-            tf_reset_default_graph()
             x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
             x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
             def func(x1, x2):
@@ -1224,7 +1219,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # g = self._run_test_case(func, [_OUTPUT], {}, process_args=process_args)
         # self.assertTrue(extra_opset is None
         #                 or check_node_domain(group_nodes_by_type(g)["Range"][0], extra_opset.domain))
-        # tf_reset_default_graph()
 
         delta_val = np.array(1.5, dtype=np.float32)
         def func(delta):
@@ -2196,7 +2190,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         num_class = 5
         data_shape = [100, num_class]
         for np_dtype in [np.int32, np.int64]:
-            tf_reset_default_graph()
             label_val = np.random.randint(0, num_class - 1, data_shape).astype(np_dtype)
             logits_val = np.random.random(data_shape).astype(np.float32)
 
@@ -2888,6 +2881,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
 
     @check_opset_min_version(8, "CategoryMapper")
+    @skip_tf2()
     def test_hashtable_lookup(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]

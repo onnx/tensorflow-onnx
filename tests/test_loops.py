@@ -12,7 +12,7 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version, check_onnxruntime_min_version
+from common import unittest_main, check_tf_min_version, check_tf_max_version, check_onnxruntime_min_version, skip_tf2
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -33,12 +33,8 @@ _OUTPUT1 = "output1:0"
 class LoopTests(Tf2OnnxBackendTestBase):
 
     def test_simple_while_loop(self):
-        if is_tf2():
-            x_val = np.array([0], dtype=np.int32)
-        else:
-            x_val = np.array(0, dtype=np.int32)
-
         def func(i):
+            # tf2 works a little different than tf1 - that is why there is a is_tf2() here
             if is_tf2():
                 one = tf.constant(np.array([1], dtype=np.int32))
             else:
@@ -46,11 +42,19 @@ class LoopTests(Tf2OnnxBackendTestBase):
             c = lambda i: tf.less(i, 10)
             b = lambda i: tf.add(i, one)
             r = tf.while_loop(c, b, [i])
+            if is_tf2():
+                r = tf.reshape(r, [-1])
             return tf.identity(r, name=_TFOUTPUT)
+
+        if is_tf2():
+            x_val = np.array([0], dtype=np.int32)
+        else:
+            x_val = np.array(0, dtype=np.int32)
         self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06)
 
     def test_simple_while_loop_2(self):
         def func(i):
+            # tf2 works a little different than tf1 - that is why there is a is_tf2() here
             if is_tf2():
                 one = tf.constant(np.array([1], dtype=np.int32))
             else:
@@ -58,6 +62,8 @@ class LoopTests(Tf2OnnxBackendTestBase):
             c = lambda i: tf.logical_and(tf.less(i, 10), tf.greater_equal(i, 3))
             b = lambda i: tf.add(i, one)
             r = tf.while_loop(c, b, [i])
+            if is_tf2():
+                r = tf.reshape(r, [-1])
             return tf.identity(r, name="output")
         if is_tf2():
             x_val = np.array([3], dtype=np.int32)
@@ -205,48 +211,54 @@ class LoopTests(Tf2OnnxBackendTestBase):
             return tf.identity(i_final, name="i"), tf.identity(out_final.stack(), name="output_ta")
 
         input_names_with_port = ["input_1:0", "input_2:0"]
-        feed_dict = {"input_1:0": np.array(20, dtype=np.int32),
+        feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
         output_names_with_port = ["i:0", "output_ta:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
-    def test_map_fn(self):
-        def fn0(elem):
+    @skip_tf2()
+    def test_map_fn_1(self):
+        x_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
+
+        def fn(elem):
             res = elem + elem * elem
             return res
 
-        def fn1(elem):
-            res = elem[0] * elem[1] + elem[0]
-            return res
-
-        x_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
-        y_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
-
-        # test fn0
-        def func0(x):
-            x_ = tf.identity(x)
-            res_ = tf.map_fn(fn0, x_, dtype=tf.float32)
+        def func(x):
+            x = tf.identity(x)
+            res_ = tf.map_fn(fn, x, dtype=tf.float32)
             return tf.identity(res_, name="output_0")
+
         feed_dict = {"input_0:0": x_val}
         input_names_with_port = ["input_0:0"]
         output_names_with_port = ["output_0:0"]
-        self.run_test_case(func0, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
 
-        # test fn1
-        def func1(x, y):
+    @skip_tf2()
+    def test_map_fn_2(self):
+        x_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
+        y_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
+
+        def fn(elem):
+            res = elem[0] * elem[1] + elem[0]
+            return res
+
+        def func(x, y):
             x_ = tf.identity(x)
             y_ = tf.identity(y)
-            res_ = tf.map_fn(fn1, (x_, y_), dtype=tf.float32)
+            res_ = tf.map_fn(fn, (x_, y_), dtype=tf.float32)
             return tf.identity(res_, name="output_0")
         feed_dict = {"input_0:0": x_val, "input_1:0": y_val}
         input_names_with_port = ["input_0:0", "input_1:0"]
         output_names_with_port = ["output_0:0"]
-        self.run_test_case(func1, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
 
     @check_tf_min_version("1.9")
+    @check_tf_max_version("1.15")
     def test_simple_while_loop_var_shape(self):
         # test for while_loop with variant shape variables
         # may not meet ONNX Loop spec
+        # Note: this is not working on tf2 itself.
         def func(i):
             const = tf.constant(np.array([2], dtype=np.int32))
             c = lambda i: tf.reduce_all(tf.shape(i) < 10)
