@@ -65,6 +65,7 @@ if is_tf2():
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.math.floormod
+    matrix_diag_part = tf.compat.v1.matrix_diag_part
 elif LooseVersion(tf.__version__) >= "1.13":
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
     multinomial = tf.compat.v1.random.multinomial
@@ -80,6 +81,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.math.floormod
+    matrix_diag_part = tf.compat.v1.matrix_diag_part
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
     multinomial = tf.multinomial
@@ -95,6 +97,7 @@ else:
     is_nan = tf.is_nan
     is_inf = tf.is_inf
     floormod = tf.floormod
+    matrix_diag_part = tf.matrix_diag_part
 
 
 def make_xval(shape):
@@ -2906,7 +2909,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                       [[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]]], dtype=np.int64)]
 
         def func(input_holder):
-            return tf.compat.v1.matrix_diag_part(input_holder, name=_TFOUTPUT)
+            return matrix_diag_part(input_holder, name=_TFOUTPUT)
 
         for input_val in input_vals:
             self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
