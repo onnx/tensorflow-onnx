@@ -1796,9 +1796,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         y_val = np.array(9, dtype=np.int32)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
-    @skip_caffe2_backend("fails with schema error")
     @check_opset_min_version(7, "batchnorm")
-    def test_batchnorm(self):
+    def test_fused_batchnorm(self):
         x_shape = [1, 28, 28, 2]
         x_dtype = np.float32
         scale_dtype = np.float32
@@ -1821,6 +1820,25 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 epsilon=epsilon, data_format=data_format, is_training=False)
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
+
+    @check_opset_min_version(7, "batchnorm")
+    @check_tf_min_version("1.13")
+    def test_batchnorm(self):
+        x_shape = [1, 128, 128, 2]
+        x_dtype = np.float32
+        scale_dtype = np.float32
+        scale_shape = [2]
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        mean_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        def func(x, mean, offset, var):
+            scale = tf.constant(scale_val, name='scale')
+            epsilon = 0.001
+            y = tf.nn.batch_normalization(x, mean, var, offset, scale, epsilon)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: mean_val, _INPUT2: offset_val, _INPUT3: var_val})
 
     @skip_caffe2_backend()
     @check_opset_min_version(7, "resize_nearest_neighbor")
