@@ -15,9 +15,10 @@ from onnx import TensorProto
 from onnx import helper, numpy_helper
 
 import tensorflow as tf
-from tf2onnx import utils
+from tf2onnx import utils, tf_utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.graph import GraphUtil
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main
@@ -249,8 +250,8 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
             "one_item_array": np.array([1.], dtype=np.float32),
             "normal_array": np.array([[1., 2.], [2., 3.]], dtype=np.float32)
         }
-        tf.reset_default_graph()
-        with tf.Session() as sess:
+        tf_reset_default_graph()
+        with tf_session() as sess:
             for n, data in tensors.items():
                 tf.constant(data, dtype=tf.float32, name=n)
 
@@ -260,8 +261,8 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
 
             self.assertTrue("value" in tf_node.node_def.attr)
             # convert to onnx tensor value
-            tensor_value = utils.tf_to_onnx_tensor(
-                utils.get_tf_node_attr(tf_node, "value"),
+            tensor_value = tf_utils.tf_to_onnx_tensor(
+                tf_utils.get_tf_node_attr(tf_node, "value"),
                 name=utils.port_name(tf_node.name)
             )
             attr = helper.make_attribute("value", tensor_value)

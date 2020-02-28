@@ -8,6 +8,9 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
+# pylint: disable=wrong-import-position
+
 import argparse
 import os
 import re
@@ -17,20 +20,26 @@ import time
 import zipfile
 from collections import namedtuple
 
-import PIL.Image
+import yaml
 import numpy as np
+import PIL.Image
 import six
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
+
 # contrib ops are registered only when the module is imported, the following import statement is needed,
 # otherwise tf runtime error will show up when the tf model is restored from pb file because of un-registered ops.
-import tensorflow.contrib.rnn  # pylint: disable=unused-import
-import yaml
+try:
+    import tensorflow.contrib.rnn  # pylint: disable=unused-import
+except:  # pylint: disable=bare-except
+    # not needed for tf-2.0
+    pass
 
-import tf2onnx
-from tf2onnx import loader, logging, optimizer, utils
+from tf2onnx import tf_loader, logging, optimizer, utils
 from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx.tf_loader import tf_session, tf_reset_default_graph
 
-# pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
 
 logger = logging.getLogger("run_pretrained")
 
@@ -206,22 +215,21 @@ class Test(object):
         input_names = list(self.input_names.keys())
         outputs = self.output_names
         if self.model_type in ["checkpoint"]:
-            graph_def, input_names, outputs = loader.from_checkpoint(model_path, input_names, outputs)
+            graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
-            graph_def, input_names, outputs = loader.from_saved_model(model_path, input_names, outputs)
+            graph_def, input_names, outputs = tf_loader.from_saved_model(model_path, input_names, outputs)
         else:
-            graph_def, input_names, outputs = loader.from_graphdef(model_path, input_names, outputs)
+            graph_def, input_names, outputs = tf_loader.from_graphdef(model_path, input_names, outputs)
 
-        # remove unused input names
-        input_names = list(set(input_names).intersection(self.input_names.keys()))
-        graph_def = tf2onnx.tfonnx.tf_optimize(input_names, self.output_names, graph_def, fold_const)
         if utils.is_debug_mode():
             utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
 
         inputs = {}
         shape_override = {}
+        tf_reset_default_graph()
         g = tf.import_graph_def(graph_def, name='')
-        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
+        # with tf_session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
+        with tf_session(graph=g) as sess:
             # create the input data
             for k in input_names:
                 v = self.input_names[k]
@@ -247,19 +255,19 @@ class Test(object):
                 tf_results = self.run_tensorflow(sess, inputs)
                 logger.info("TensorFlow OK")
 
-            model_proto = None
-            try:
-                # convert model to onnx
-                onnx_graph = self.to_onnx(sess.graph, opset=opset, extra_opset=extra_opset,
-                                          shape_override=shape_override, input_names=inputs.keys())
-                onnx_graph = optimizer.optimize_graph(onnx_graph)
-                model_proto = onnx_graph.make_model("converted from tf2onnx")
-                logger.info("To_ONNX, OK")
-                if onnx_file:
-                    self.create_onnx_file(name, model_proto, inputs, onnx_file)
-            except Exception:
-                logger.error("To_ONNX FAIL", exc_info=1)
-                return False
+        model_proto = None
+        try:
+            # convert model to onnx
+            onnx_graph = self.to_onnx(sess.graph, opset=opset, extra_opset=extra_opset,
+                                      shape_override=shape_override, input_names=inputs.keys())
+            onnx_graph = optimizer.optimize_graph(onnx_graph)
+            model_proto = onnx_graph.make_model("converted from tf2onnx")
+            logger.info("To_ONNX, OK")
+            if onnx_file:
+                self.create_onnx_file(name, model_proto, inputs, onnx_file)
+        except Exception:
+            logger.error("To_ONNX FAIL", exc_info=1)
+            return False
 
         try:
             onnx_results = None
