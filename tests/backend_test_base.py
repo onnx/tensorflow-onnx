@@ -127,7 +127,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # use graph to execute the tensorflow func
             #
             with tf_session() as sess:
-                tf.compat.v1.set_random_seed(1)
+                tf.set_random_seed(1)
                 input_list = []
                 for k, v in clean_feed_dict.items():
                     input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
