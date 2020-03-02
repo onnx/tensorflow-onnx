@@ -175,12 +175,6 @@ class LSTMBlockCell:
 class CudnnRNN:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        #print ("CudnnRNN captured")
-        #print (node.attr["direction"].s)
-        #ii = input(os.getpid())
-        #print ("input\n", node.input)
-        #print ("\noutput\n", node.output)
-        #print ("\nattr\n", node.attr)
         X = node.input[0]
         X_shape = ctx.get_shape(X)
         H = node.input[1]
@@ -189,6 +183,14 @@ class CudnnRNN:
         utils.make_sure(
             node.attr["rnn_mode"].s == b"gru",
             "rnn mode other than gru are not supported yet"
+        )
+        utils.make_sure(
+            node.attr["dropout"].f == 0,
+            "dropout not supported yet"
+        )
+        utils.make_sure(
+            node.attr["input_mode"].s == b"linear_input",
+            "input mode must be linear input"
         )
         num_dirs = 1 if node.attr["direction"].s == b"unidirectional" else 2
         num_layers = int(H_shape[0]/num_dirs)
@@ -217,26 +219,24 @@ class CudnnRNN:
         W_flattened = ctx.make_node('Slice', [P, zero_const.output[0], w_end_const.output[0]])
         R_flattened = ctx.make_node('Slice', [P, w_end_const.output[0], r_end_const.output[0]])
         B_flattened = ctx.make_node('Slice', [P, r_end_const.output[0], b_end_const.output[0]])
-        #W = utils.make_name('W')
-        #R = utils.make_name('R')
-        #B = utils.make_name('B')
-        W = ctx.make_node('Reshape', [W_flattened.output[0], w_shape_const.output[0]])
-        R = ctx.make_node('Reshape', [R_flattened.output[0], r_shape_const.output[0]])
-        B = ctx.make_node('Reshape', [B_flattened.output[0], b_shape_const.output[0]])
-        ctx.make_node('Split', [W.output[0]], outputs = WS)
-        ctx.make_node('Split', [R.output[0]], outputs = RS)
-        ctx.make_node('Split', [B.output[0]], outputs = BS)
+        W = utils.make_name('W')
+        R = utils.make_name('R')
+        B = utils.make_name('B')
+        ctx.make_node('Reshape', [W_flattened.output[0], w_shape_const.output[0]], outputs=[W])
+        ctx.make_node('Reshape', [R_flattened.output[0], r_shape_const.output[0]], outputs=[R])
+        ctx.make_node('Reshape', [B_flattened.output[0], b_shape_const.output[0]], outputs=[B])
+        ctx.make_node('Split', [W], outputs = WS)
+        ctx.make_node('Split', [R], outputs = RS)
+        ctx.make_node('Split', [B], outputs = BS)
         ctx.make_node('Split', [H], outputs = HS)
         XNF = XNB = X
-        gru_nodes = []
-        squeeze_nodes = []
         for i in range(num_layers):
-            suffix = '_' + str(i*2)
-            gru_nodes.append(ctx.make_node('GRU', [XNF, NM('W' + suffix), NM('R' + suffix), NM('B' + suffix), '', NM('H'+ suffix)],
-                             outputs = [NM('Y' + suffix), NM('YH' + suffix)],
-                             attr={'direction':'forward', 'hidden_size':num_units}))
+            suffix = '_' + str(i*num_dirs)
+            ctx.make_node('GRU', [XNF, NM('W' + suffix), NM('R' + suffix), NM('B' + suffix), '', NM('H'+ suffix)],
+                          outputs = [NM('Y' + suffix), NM('YH' + suffix)],
+                          attr={'direction':'forward', 'hidden_size':num_units})
             XNF = NM(X + suffix)
-            squeeze_nodes.append(ctx.make_node('Squeeze', [NM('Y' + suffix)], outputs = [XNF], attr={'axes': [1]}))
+            ctx.make_node('Squeeze', [NM('Y' + suffix)], outputs = [XNF], attr={'axes': [1]})
             if num_dirs == 2:
                 suffix = '_' + str(i*2+1)
                 ctx.make_node('GRU', [XNB, NM('W' + suffix), NM('R' + suffix), NM('B' + suffix), '', NM('H'+ suffix)],
@@ -250,4 +250,3 @@ class CudnnRNN:
         else:
             identity_0 = ctx.make_node('Identity', [XNF], outputs = [node.output[0]])
         concat_0 = ctx.make_node('Concat', YHS, outputs = [node.output[1]], attr={'axis': 0})
-        #print ("Done")

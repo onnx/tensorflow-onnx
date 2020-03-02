@@ -20,6 +20,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tensorflow.python.ops import init_ops
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 
@@ -3009,6 +3010,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
         lookup_results = hash_table.lookup(query_holder)
         self._run_test_case([lookup_results.name], {_INPUT: query})
         os.remove(filnm)
+
+    @check_opset_min_version(11, "GRU")
+    def test_cudnngru(self):
+        seq_length = 3
+        batch_size = 5
+        input_size = 2
+        num_layers = 2
+        num_units = 2
+        num_dirs = 2
+        initializer = init_ops.constant_initializer(0.5)
+        x = np.random.randint(0, 100, [seq_length, batch_size, input_size]).astype(np.float32)
+        h = np.random.randint(0, 100, [num_layers * num_dirs, batch_size, num_units]).astype(np.float32).reshape(
+            [num_layers * num_dirs, batch_size, num_units])
+        cudnngru = tf.contrib.cudnn_rnn.CudnnGRU(num_layers, num_units, 'linear_input', 'bidirectional',
+                                                 kernel_initializer=initializer, bias_initializer=initializer)
+        cudnngru.build([seq_length, batch_size, input_size])
+        outputs = cudnngru.call(x, tuple([h]))
+        self.run_test_case({}, [], [outputs[0].name], rtol=1e-05, atol=1e-04)
 
 
 if __name__ == '__main__':
