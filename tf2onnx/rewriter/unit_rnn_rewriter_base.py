@@ -11,7 +11,7 @@ import logging
 
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_pattern, \
-    get_rnn_scope_name, parse_rnn_loop, seq_len_pattern
+    get_rnn_scope_name, parse_rnn_loop, seq_len_pattern0, seq_len_pattern1
 from tf2onnx.utils import is_tf_select_op, is_tf_tensor_array_write_op
 from tf2onnx.graph_matcher import GraphMatcher
 
@@ -136,24 +136,24 @@ class UnitRnnRewriterBase(LoopRewriterBase):
 
     def _match_cell(self, context, unittype):
         """match unit cell"""
-        cell_pattern = get_pattern(unittype)
-        matcher = GraphMatcher(cell_pattern, allow_reorder=True)
+        for cell_pattern in get_pattern(unittype):
+            matcher = GraphMatcher(cell_pattern, allow_reorder=True)
 
-        loop_props = context.loop_properties
-        inputs = loop_props.state_inputs + loop_props.scan_inputs
-        input_ids = [input_tensor_value_info.id for input_tensor_value_info in inputs]
-        outputs = loop_props.state_outputs + loop_props.scan_outputs
-        output_ids = [out_tensor_value_info.id for out_tensor_value_info in outputs]
-        body_graph_ops, _, _ = LoopRewriterBase.find_subgraph(
-            set(input_ids),
-            set(output_ids),
-            self.g, merge_as_end=True
-        )
+            loop_props = context.loop_properties
+            inputs = loop_props.state_inputs + loop_props.scan_inputs
+            input_ids = [input_tensor_value_info.id for input_tensor_value_info in inputs]
+            outputs = loop_props.state_outputs + loop_props.scan_outputs
+            output_ids = [out_tensor_value_info.id for out_tensor_value_info in outputs]
+            body_graph_ops, _, _ = LoopRewriterBase.find_subgraph(
+                set(input_ids),
+                set(output_ids),
+                self.g, merge_as_end=True
+            )
 
-        match_results = list(matcher.match_ops(body_graph_ops))
-        if len(match_results) != 1:
-            return None
-        return match_results[0]
+            match_results = list(matcher.match_ops(body_graph_ops))
+            if len(match_results) == 1:
+                return match_results[0]
+        return None
 
     def get_weight_and_bias(self, context):
         raise NotImplementedError()
@@ -212,10 +212,13 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         if not is_tf_select_op(next_iter_input_node):
             logger.debug("no sequence length node is given")
             return None
-        matcher = GraphMatcher(seq_len_pattern)
+        matcher = GraphMatcher(seq_len_pattern0)
         match_result = matcher.match_op(next_iter_input_node)
         if not match_result:
-            raise RuntimeError("failed to find sequence length.")
+            matcher = GraphMatcher(seq_len_pattern1)
+            match_result = matcher.match_op(next_iter_input_node)
+            if not match_result:
+                raise RuntimeError("failed to find sequence length.")
         return match_result.get_op("seq_len_node")
 
     def process_weights_and_bias(self, context):

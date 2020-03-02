@@ -54,8 +54,7 @@ def _wrap_concat_with_cast(ctx, node):
         next_nodes = ctx.find_output_consumers(node.output[0])
         # cast output back to dtype unless the next op is a cast
         if next_nodes[0].type != "Cast":
-            op_name = utils.make_name(node.name)
-            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=op_name)
+            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=node.child_name())
             output_cast.set_attr("to", dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(output_name, output_cast.output[0])
@@ -119,6 +118,15 @@ class Identity:
             ctx.remove_node(node.name)
 
 
+@tf_op("IdentityN")
+class IdentityN:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        ctx.remove_node(node.name)
+        for input_name, output_name in zip(node.input, node.output):
+            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name)
+
+
 @tf_op("Reshape")
 class Reshape:
     @classmethod
@@ -154,8 +162,7 @@ class Reshape:
         # if the next node is already a cast we don't need to insert another one
         next_nodes = ctx.find_output_consumers(node.output[0])
         if len(next_nodes) != 1 or next_nodes[0].type != "Cast":
-            op_name = utils.make_name(node.name)
-            output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
+            output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=node.child_name())
             output_cast.set_attr("to", dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(node.output[0], output_cast.output[0])
@@ -513,7 +520,7 @@ class ScatterND:
 
         # onnx requires pre-generated tensor for data
         np_val = np.array([0], dtype=np.int64)
-        onnx_tensor = numpy_helper.from_array(np_val, utils.make_name(node.name))
+        onnx_tensor = numpy_helper.from_array(np_val, node.child_name())
         const_of_shape = ctx.insert_new_node_on_input(node, "ConstantOfShape", node.input[2], value=onnx_tensor)
 
         # cast edge to INT64 if not already
@@ -908,8 +915,7 @@ class StridedSlice:
         node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
         node = ctx.get_node_by_output(node)
         if needs_squeeze:
-            name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], node.child_name())
             squeeze_node.set_attr("axes", needs_squeeze)
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
@@ -1738,3 +1744,51 @@ class Unique:
                 ctx.set_dtype(cast_node.output[0], dtypes[1])
                 ctx.copy_shape(node.output[1], cast_node.output[0])
             # FIXME: the indices in onnx are not the same as in tensorflow.
+
+
+@tf_op("MatrixDiagPart")
+class MatrixDiagPart:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # MatrixDiagPart by slice and gather
+        const_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero', np.array([0]).astype(np.int64))
+        const_zero_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero_zero',
+                                         np.array([0, 0]).astype(np.int64))
+        const_one = ctx.make_const(utils.make_name(node.name) + 'const_one', np.array([1]).astype(np.int64))
+        const_two = ctx.make_const(utils.make_name(node.name) + 'const_two', np.array([2]).astype(np.int64))
+        const_negative_one = ctx.make_const(utils.make_name(node.name) + 'const_negative_one',
+                                            np.array([-1]).astype(np.int64))
+        const_negative_two = ctx.make_const(utils.make_name(node.name) + 'const_negative_two',
+                                            np.array([-2]).astype(np.int64))
+        const_negative_two_one = ctx.make_const(utils.make_name(node.name) + 'const_negative_two_one',
+                                                np.array([-2, -1]).astype(np.int64))
+        input_shape = ctx.make_node('Shape', [node.input[0]])
+        input_shape_size = ctx.make_node('Shape', [input_shape.output[0]])
+        matrice_shape = ctx.make_node('Slice',
+                                      [input_shape.output[0], const_negative_two.output[0], input_shape_size.output[0]])
+        matrice_shape_float = ctx.make_node('Cast', [matrice_shape.output[0]], attr={'to': TensorProto.FLOAT})
+        matrice_shape_float_x = ctx.make_node('Slice', [matrice_shape_float.output[0], const_zero.output[0],
+                                                        const_one.output[0]])
+        matrice_shape_float_y = ctx.make_node('Slice',
+                                              [matrice_shape_float.output[0], const_one.output[0], const_two.output[0]])
+        min_matrice_dim_float = ctx.make_node('Min', [matrice_shape_float_x.output[0], matrice_shape_float_y.output[0]])
+        min_matrice_dim = ctx.make_node('Cast', [min_matrice_dim_float.output[0]], attr={'to': TensorProto.INT64})
+        double_matrice_dim = ctx.make_node('Concat', [min_matrice_dim.output[0], min_matrice_dim.output[0]],
+                                           attr={'axis': -1})
+        sliced_input = ctx.make_node('Slice', [node.input[0], const_zero_zero.output[0], double_matrice_dim.output[0],
+                                               const_negative_two_one.output[0]])
+        sliced_input_shape = ctx.make_node('Shape', [sliced_input.output[0]])
+        sliced_input_shape_half = ctx.make_node('Slice', [sliced_input_shape.output[0], const_zero.output[0],
+                                                          const_negative_one.output[0]])
+        sliced_input_shape_new = ctx.make_node('Concat', [sliced_input_shape_half.output[0], const_one.output[0]],
+                                               attr={'axis': -1})
+        matrice_range = ctx.make_node('Range', [const_zero.output[0], min_matrice_dim.output[0], const_one.output[0]])
+        unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0]], attr={"axes": [-1]})
+        expanded_range = ctx.make_node('Expand', [unsqueezed_matrice_range.output[0], sliced_input_shape_new.output[0]])
+        gathered_result = ctx.make_node('GatherElements', [sliced_input.output[0], expanded_range.output[0]],
+                                        attr={'axis': -1})
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        squeezed_result = ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
+                                        name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
