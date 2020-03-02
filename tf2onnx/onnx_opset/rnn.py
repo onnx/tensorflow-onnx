@@ -17,7 +17,7 @@ from tf2onnx.handler import tf_op
 logger = logging.getLogger(__name__)
 
 
-# pylint: disable=unused-argument,missing-docstring
+# pylint: disable=unused-argument,missing-docstring,invalid-name
 
 @tf_op("LSTMBlockCell")
 class LSTMBlockCell:
@@ -224,28 +224,28 @@ class CudnnRNN:
         ctx.make_node('Reshape', [W_flattened.output[0], w_shape_const.output[0]], outputs=[W])
         ctx.make_node('Reshape', [R_flattened.output[0], r_shape_const.output[0]], outputs=[R])
         ctx.make_node('Reshape', [B_flattened.output[0], b_shape_const.output[0]], outputs=[B])
-        ctx.make_node('Split', [W], outputs = WS)
-        ctx.make_node('Split', [R], outputs = RS)
-        ctx.make_node('Split', [B], outputs = BS)
-        ctx.make_node('Split', [H], outputs = HS)
+        ctx.make_node('Split', [W], outputs=WS)
+        ctx.make_node('Split', [R], outputs=RS)
+        ctx.make_node('Split', [B], outputs=BS)
+        ctx.make_node('Split', [H], outputs=HS)
         XNF = XNB = X
         for i in range(num_layers):
             suffix = '_' + str(i*num_dirs)
             ctx.make_node('GRU', [XNF, NM('W' + suffix), NM('R' + suffix), NM('B' + suffix), '', NM('H'+ suffix)],
-                          outputs = [NM('Y' + suffix), NM('YH' + suffix)],
+                          outputs=[NM('Y' + suffix), NM('YH' + suffix)],
                           attr={'direction':'forward', 'hidden_size':num_units})
             XNF = NM(X + suffix)
-            ctx.make_node('Squeeze', [NM('Y' + suffix)], outputs = [XNF], attr={'axes': [1]})
+            ctx.make_node('Squeeze', [NM('Y' + suffix)], outputs=[XNF], attr={'axes': [1]})
             if num_dirs == 2:
                 suffix = '_' + str(i*2+1)
                 ctx.make_node('GRU', [XNB, NM('W' + suffix), NM('R' + suffix), NM('B' + suffix), '', NM('H'+ suffix)],
-                              outputs = [NM('Y' + suffix), NM('YH' + suffix)],
+                              outputs=[NM('Y' + suffix), NM('YH' + suffix)],
                               attr={'direction':'reverse', 'hidden_size':num_units})
                 XNB = NM(X + suffix)
-                ctx.make_node('Squeeze', [NM('Y' + suffix)], outputs = [XNB],  attr={'axes': [1]})
+                ctx.make_node('Squeeze', [NM('Y' + suffix)], outputs=[XNB], attr={'axes': [1]})
         ctx.remove_node(node.name)
         if num_dirs == 2:
-            ctx.make_node('Concat', [XNF, XNB], outputs = [node.output[0]], attr={'axis': -1})
+            ctx.make_node('Concat', [XNF, XNB], outputs=[node.output[0]], attr={'axis': -1})
         else:
-            identity_0 = ctx.make_node('Identity', [XNF], outputs = [node.output[0]])
-        concat_0 = ctx.make_node('Concat', YHS, outputs = [node.output[1]], attr={'axis': 0})
+            ctx.make_node('Identity', [XNF], outputs=[node.output[0]])
+        ctx.make_node('Concat', YHS, outputs=[node.output[1]], attr={'axis': 0})
