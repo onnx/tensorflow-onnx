@@ -20,6 +20,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.tf_loader import is_tf2
 from tensorflow.python.ops import init_ops
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
