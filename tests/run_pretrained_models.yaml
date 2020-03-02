@@ -28,6 +28,7 @@ regression-saved-model:
     - pred:0
 
 saved_model_with_redundant_inputs:
+  disabled: true # grappler will remove the unconnected inputs - no chance to test this
   model: models/saved_model_with_redundant_inputs
   model_type: saved_model
   input_get: get_ramp
@@ -38,6 +39,7 @@ saved_model_with_redundant_inputs:
     - Add:0
 
 graphdef_with_redundant_inputs:
+  disabled: true # grappler will remove the unconnected inputs - no chance to test this
   model: models/regression/graphdef/frozen.pb
   input_get: get_ramp
   inputs:
@@ -47,6 +49,7 @@ graphdef_with_redundant_inputs:
     - Add:0
 
 checkpoint_with_redundant_inputs:
+  disabled: true # grappler will remove the unconnected inputs - no chance to test this
   model: models/regression/checkpoint/model.meta
   model_type: checkpoint
   input_get: get_ramp

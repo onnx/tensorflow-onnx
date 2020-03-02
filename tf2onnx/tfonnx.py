@@ -14,10 +14,7 @@ import sys
 import traceback
 
 import numpy as np
-from onnx import helper, onnx_pb
-import tensorflow as tf
-from tensorflow.python.framework import graph_util
-from tensorflow.tools.graph_transforms import TransformGraph
+from onnx import onnx_pb
 
 import tf2onnx
 import tf2onnx.onnx_opset  # pylint: disable=unused-import
@@ -25,103 +22,16 @@ import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
-from tf2onnx.utils import port_name
+from tf2onnx.tf_loader import is_function, resolve_functions, set_function
+from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version
+
 from . import constants, logging, schemas, utils, handler
 
 logger = logging.getLogger(__name__)
 
 
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
-# FIXME:
 # pylint: disable=unused-variable
-
-
-def tflist_to_onnx(node_list, shape_override):
-    """
-    Convert the tf-node list into an onnx graph with minimal rewrites so
-    we can use the onnx graph as intermediate graph.
-    """
-
-    # ignore the following attributes
-    ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
-                    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
-                    "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "T_threshold",
-                    "output_types", "output_shapes", "key_dtype", "value_dtype", "Tin", "Tout"]
-
-    # some stats
-    op_cnt = collections.Counter()
-    attr_cnt = collections.Counter()
-    onnx_nodes = []
-    output_shapes = {}
-    dtypes = {}
-
-    # find outputs
-    ops = node_list
-
-    # create dict with output to shape mappings
-    for node in ops:
-        for out in node.outputs:
-            shape = shape_override.get(out.name)
-            if shape is None:
-                shape = utils.get_tf_tensor_shape(out)
-            dtypes[out.name] = utils.map_tf_dtype(out.dtype)
-            output_shapes[out.name] = shape
-
-    # minimal conversion of attributes
-    for node in ops:
-        attr = {}
-        takeit = True
-        op_cnt[node.type] += 1
-        for a in node.node_def.attr:
-            attr_cnt[a] += 1
-            if a == "dtype":
-                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "dtype"))
-            elif a == "T":
-                dtype = utils.get_tf_node_attr(node, "T")
-                if dtype:
-                    if not isinstance(dtype, list):
-                        dtypes[node.name] = utils.map_tf_dtype(dtype)
-            elif a in ["output_type", "output_dtype", "out_type", "Tidx", "out_idx"]:
-                # Tidx is used by Range
-                # out_idx is used by ListDiff
-                attr[a] = utils.map_tf_dtype(utils.get_tf_node_attr(node, a))
-            elif a == "shape":
-                shape = utils.get_tf_shape_attr(node)
-                if shape is not None:
-                    attr[a] = shape
-            elif a == "Tperm":
-                pass
-            elif a == "value":
-                onnx_tensor = utils.tf_to_onnx_tensor(utils.get_tf_node_attr(node, a), name=port_name(node.name))
-                attr[a] = onnx_tensor
-            elif a == "DstT":
-                attr["to"] = utils.map_tf_dtype(utils.get_tf_node_attr(node, "DstT"))
-            elif a == "SrcT":
-                continue
-            elif a in ignored_attr:
-                continue
-            else:
-                attr[a] = utils.get_tf_node_attr(node, a)
-
-        if takeit:
-            try:
-                input_names = [i.name for i in node.inputs]
-                output_names = [i.name for i in node.outputs]
-                onnx_node = helper.make_node(node.type, input_names, output_names, name=node.name, **attr)
-                onnx_nodes.append(onnx_node)
-            except Exception as ex:
-                logger.error("pass1 convert failed for %s, ex=%s", node, ex)
-                raise
-
-    return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes
-
-
-def tensorflow_to_onnx(graph, shape_override):
-    """
-    Load tensorflow graph and do a conversion.
-    """
-    return tflist_to_onnx(graph.get_operations(), shape_override)
 
 
 def rewrite_constant_fold(g, ops):
@@ -386,25 +296,6 @@ def transpose_inputs(ctx, inputs_as_nchw):
     ctx.reset_nodes(ops)
 
 
-def tf_optimize(inputs, outputs, graph_def, fold_constant=None):
-    """Optimize tensorflow graph for inference."""
-    transforms = []
-    if fold_constant:
-        transforms.extend([
-            "fold_constants(ignore_errors=true)",
-            "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
-        ])
-
-    transforms.extend([
-        "fold_batch_norms",
-        "fold_old_batch_norms",
-    ])
-    needed_names = [utils.node_name(i) for i in inputs] + [utils.node_name(i) for i in outputs]
-    graph_def = graph_util.extract_sub_graph(graph_def, needed_names)
-    graph_def = TransformGraph(graph_def, inputs, outputs, transforms)
-    return graph_def
-
-
 def topological_sort(g, continue_on_error):
     ops = g.get_nodes()
     if not continue_on_error:
@@ -452,7 +343,7 @@ def run_rewriters(g, funcs, continue_on_error):
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
-                     input_names=None, output_names=None):
+                     input_names=None, output_names=None, is_subgraph=False):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -475,17 +366,19 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         logger.warning("Argument verbose for process_tf_graph is deprecated. Please use --verbose option instead.")
     del verbose
 
-    logger.info("Using tensorflow=%s, onnx=%s, tf2onnx=%s/%s",
-                tf.__version__, utils.get_onnx_version(), tf2onnx.__version__, tf2onnx.version.git_version[:6])
-
     opset = utils.find_opset(opset)
-    logger.info("Using opset <onnx, %s>", opset)
-    if opset > schemas.get_max_supported_opset_version():
-        logger.warning("Currently installed onnx package %s is too low to support opset %s, "
-                       "please upgrade onnx package to avoid potential conversion issue.",
-                       utils.get_onnx_version(), opset)
+    if not is_subgraph:
+        logger.info("Using tensorflow=%s, onnx=%s, tf2onnx=%s/%s",
+                    get_tf_version(), utils.get_onnx_version(), tf2onnx.__version__, tf2onnx.version.git_version[:6])
+        logger.info("Using opset <onnx, %s>", opset)
+        if opset > schemas.get_max_supported_opset_version():
+            logger.warning("Currently installed onnx package %s is too low to support opset %s, "
+                           "please upgrade onnx package to avoid potential conversion issue.",
+                           utils.get_onnx_version(), opset)
 
-    tf_graph = infer_shape(tf_graph, shape_override)
+    is_func = is_function(tf_graph)
+    if not is_func:
+        tf_graph = infer_shape(tf_graph, shape_override)
 
     if shape_override is None:
         shape_override = {}
@@ -494,7 +387,20 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if target is None:
         target = constants.DEFAULT_TARGET
 
-    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes = tensorflow_to_onnx(tf_graph, shape_override)
+    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = tensorflow_to_onnx(tf_graph, shape_override)
+    if not is_subgraph:
+        # make tf2onnx internal subgraphs from the tensorflow subgraphs
+        ordered_func = resolve_functions(tf_graph)
+        for func in ordered_func:
+            f_inputs_names = [t.name for t in func.inputs]
+            f_output_names = [t.name for t in func.outputs]
+            fg = process_tf_graph(func, continue_on_error, False, target, opset,
+                                  custom_op_handlers, custom_rewriter,
+                                  extra_opset, shape_override, inputs_as_nchw,
+                                  f_inputs_names, f_output_names, is_subgraph=True)
+            fg.graph_name = func.name
+            fg.func_inputs = f_inputs_names
+            set_function(func.name, fg)
 
     io_to_check = []
     if input_names:
@@ -511,7 +417,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                          non_exists)
             raise ValueError("Inputs/Outputs Not Found")
 
-    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names)
+    g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names, is_subgraph=is_subgraph)
 
     # create ops mapping for the desired opsets
     ops_mapping = handler.tf_op.create_mapping(g.opset, g.extra_opset)

@@ -9,13 +9,19 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+# pylint: disable=unused-argument,unused-import,ungrouped-imports,wrong-import-position
+
 import argparse
+import os
 import sys
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import tensorflow as tf
 
-from tf2onnx.tfonnx import process_tf_graph, tf_optimize
-from tf2onnx import constants, loader, logging, utils, optimizer
+from tf2onnx.tfonnx import process_tf_graph
+from tf2onnx import constants, logging, utils, optimizer
+from tf2onnx import tf_loader
 
 
 # pylint: disable=unused-argument
@@ -44,6 +50,7 @@ def get_args():
     parser.add_argument("--saved-model", help="input from saved model")
     parser.add_argument("--signature_def", help="signature_def from saved model to use")
     parser.add_argument("--checkpoint", help="input from checkpoint")
+    parser.add_argument("--keras", help="input from keras model")
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names")
     parser.add_argument("--outputs", help="model output_names")
@@ -69,7 +76,7 @@ def get_args():
     if args.graphdef or args.checkpoint:
         if not args.input and not args.outputs:
             parser.error("graphdef and checkpoint models need to provide inputs and outputs")
-    if not any([args.graphdef, args.checkpoint, args.saved_model]):
+    if not any([args.graphdef, args.checkpoint, args.saved_model, args.keras]):
         parser.print_help()
         sys.exit(1)
     if args.inputs:
@@ -113,26 +120,27 @@ def main():
 
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:
-        graph_def, inputs, outputs = loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
+        graph_def, inputs, outputs = tf_loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
         model_path = args.graphdef
     if args.checkpoint:
-        graph_def, inputs, outputs = loader.from_checkpoint(args.checkpoint, args.inputs, args.outputs)
+        graph_def, inputs, outputs = tf_loader.from_checkpoint(args.checkpoint, args.inputs, args.outputs)
         model_path = args.checkpoint
     if args.saved_model:
-        graph_def, inputs, outputs = loader.from_saved_model(
+        graph_def, inputs, outputs = tf_loader.from_saved_model(
             args.saved_model, args.inputs, args.outputs, args.signature_def)
         model_path = args.saved_model
+    if args.keras:
+        graph_def, inputs, outputs = tf_loader.from_keras(
+            args.keras, args.inputs, args.outputs)
+        model_path = args.keras
 
     if args.verbose:
-        logger.info("inputs: %s", inputs)
-        logger.info("outputs: %s", outputs)
-
-    # todo: consider to enable const folding by default?
-    graph_def = tf_optimize(inputs, outputs, graph_def, args.fold_const)
+        logger.info("inputs: %s", inputs.keys())
+        logger.info("outputs: %s", outputs.keys())
 
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')
-    with tf.Session(graph=tf_graph):
+    with tf_loader.tf_session(graph=tf_graph):
         g = process_tf_graph(tf_graph,
                              continue_on_error=args.continue_on_error,
                              target=args.target,
@@ -140,8 +148,8 @@ def main():
                              custom_op_handlers=custom_ops,
                              extra_opset=extra_opset,
                              shape_override=args.shape_override,
-                             input_names=inputs,
-                             output_names=outputs,
+                             input_names=list(inputs.keys()),
+                             output_names=list(outputs.keys()),
                              inputs_as_nchw=args.inputs_as_nchw)
 
     onnx_graph = optimizer.optimize_graph(g)

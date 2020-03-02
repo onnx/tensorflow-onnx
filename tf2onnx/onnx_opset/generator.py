@@ -28,12 +28,28 @@ class DirectOp:
         pass
 
 
-@tf_op(["RandomNormal", "RandomUniform", "RandomNormalLike", "RandomUniformLike"])
+@tf_op(["RandomNormal", "RandomUniform"])
+class RandomOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        # in tf-2.0 grappler optimizes the graph pretty well and our matching logic
+        # in the rewriter does not trigger. grappler will send the random uniform
+        # with shape as input so we need to pickup the input here and if the shape is
+        # const we make it an attribute.
+        seed = node.get_attr("seed")
+        node.set_attr("seed", float(seed.f))
+        if len(node.input) > 0:
+            shape = node.inputs[0].get_tensor_value()
+            ctx.remove_input(node, node.input[0])
+            node.set_attr("shape", shape)
+            ctx.set_shape(node.output[0], shape)
+
+
+@tf_op(["RandomNormalLike", "RandomUniformLike"])
 class PassThroughOp:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         pass
-
 
 @tf_op("Fill")
 class Fill:

@@ -346,9 +346,11 @@ class LoopRewriterBase(object):
         if switch_true_consumer_cnt == 0:
             switch_true_identity_output = None
         elif switch_true_consumer_cnt == 1:
-            if switch_consumers[0].type != "Identity":
-                raise ValueError("switch has consumer that is not Identity")
-            switch_true_identity_output = switch_consumers[0].output[0]
+            if switch_consumers[0].type == "Identity":
+                switch_true_identity_output = switch_consumers[0].output[0]
+            else:
+                # using grappler there is not necessarily an identity behind switch
+                switch_true_identity_output = switch_node.output[1]
         else:
             raise ValueError("switch_true " + switch_node.name + " has unexpected count of consumers:",
                              [n.name for n in switch_consumers])
