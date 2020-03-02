@@ -80,7 +80,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     resize_bilinear = tf.compat.v1.image.resize_bilinear
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
-    floormod = tf.math.floormod
+    floormod = tf.floormod
     matrix_diag_part = tf.compat.v1.matrix_diag_part
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
