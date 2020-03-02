@@ -2933,6 +2933,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         for input_val in input_vals:
             self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
+    @skip_tf_cpu("only tf_gpu can run CudnnGPU")
     @check_opset_min_version(11, "GRU")
     def test_cudnngru(self):
         def func():
