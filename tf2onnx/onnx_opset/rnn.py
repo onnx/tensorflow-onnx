@@ -10,7 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import logging
-import os
 import numpy as np
 from tf2onnx import utils
 from tf2onnx.handler import tf_op

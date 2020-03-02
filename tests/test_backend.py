@@ -3029,6 +3029,5 @@ class BackendTests(Tf2OnnxBackendTestBase):
         outputs = cudnngru.call(x, tuple([h]))
         self.run_test_case({}, [], [outputs[0].name], rtol=1e-05, atol=1e-04)
 
-
 if __name__ == '__main__':
     unittest_main()
