@@ -233,14 +233,14 @@ class CudnnRNN:
             suffix = '_' + str(i*num_dirs)
             ctx.make_node('GRU', [XNF, NM('W' + suffix), NM('R' + suffix), NM('B' + suffix), '', NM('H'+ suffix)],
                           outputs=[NM('Y' + suffix), NM('YH' + suffix)],
-                          attr={'direction':'forward', 'hidden_size':num_units})
+                          attr={'direction': 'forward', 'hidden_size': num_units})
             XNF = NM(X + suffix)
             ctx.make_node('Squeeze', [NM('Y' + suffix)], outputs=[XNF], attr={'axes': [1]})
             if num_dirs == 2:
                 suffix = '_' + str(i*2+1)
                 ctx.make_node('GRU', [XNB, NM('W' + suffix), NM('R' + suffix), NM('B' + suffix), '', NM('H'+ suffix)],
                               outputs=[NM('Y' + suffix), NM('YH' + suffix)],
-                              attr={'direction':'reverse', 'hidden_size':num_units})
+                              attr={'direction': 'reverse', 'hidden_size': num_units})
                 XNB = NM(X + suffix)
                 ctx.make_node('Squeeze', [NM('Y' + suffix)], outputs=[XNB], attr={'axes': [1]})
         ctx.remove_node(node.name)
