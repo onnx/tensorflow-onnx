@@ -13,14 +13,14 @@ import tensorflow as tf
 
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import skip_tf2, skip_tf_cpu, check_opset_min_version, unittest_main
+from common import check_tf_max_version, skip_tf_cpu, check_opset_min_version, unittest_main
 
 
 class CudnnTests(Tf2OnnxBackendTestBase):
     """ test cudnn cases """
-    @skip_tf2()
+    @check_tf_max_version("1.15.0", "not supported in tf-2.0")
     @skip_tf_cpu("only tf_gpu can run CudnnGPU")
-    @check_opset_min_version(11, "CudnnGRU")
+    @check_opset_min_version(10, "CudnnGRU")
     def test_cudnngru(self):
         """ test contrib cudnn gru """
         seq_length = 3

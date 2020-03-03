@@ -173,7 +173,7 @@ class LSTMBlockCell:
 @tf_op("CudnnRNN")
 class CudnnRNN:
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def version_10(cls, ctx, node, **kwargs):
         x = node.input[0]
         x_shape = ctx.get_shape(x)
         h = node.input[1]
