@@ -17,7 +17,7 @@ from tf2onnx.handler import tf_op
 logger = logging.getLogger(__name__)
 
 
-# pylint: disable=unused-argument,missing-docstring,invalid-name
+# pylint: disable=unused-argument,missing-docstring
 
 @tf_op("LSTMBlockCell")
 class LSTMBlockCell:
