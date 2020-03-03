@@ -192,14 +192,14 @@ class CudnnRNN:
             "input mode must be linear input"
         )
         num_dirs = 1 if node.attr["direction"].s == b"unidirectional" else 2
-        num_layers = int(h_shape[0]/num_dirs)
+        num_layers = int(h_shape[0] / num_dirs)
         num_units = hidden_size = h_shape[2]
         input_size = x_shape[2]
-        w_shape = [num_layers*num_dirs, 3*hidden_size, input_size]
+        w_shape = [num_layers * num_dirs, 3 * hidden_size, input_size]
         w_shape_const = ctx.make_const(utils.make_name("w_shape"), np.array(w_shape, dtype=np.int64))
-        r_shape = [num_layers*num_dirs, 3*hidden_size, hidden_size]
+        r_shape = [num_layers * num_dirs, 3 * hidden_size, hidden_size]
         r_shape_const = ctx.make_const(utils.make_name("r_shape"), np.array(r_shape, dtype=np.int64))
-        b_shape = [num_layers*num_dirs, 6*hidden_size]
+        b_shape = [num_layers * num_dirs, 6 * hidden_size]
         b_shape_const = ctx.make_const(utils.make_name("b_shape"), np.array(b_shape, dtype=np.int64))
         zero_const = ctx.make_const(utils.make_name("zero"), np.array([0], dtype=np.int64))
         w_end = np.prod(w_shape)
@@ -208,13 +208,15 @@ class CudnnRNN:
         r_end_const = ctx.make_const(utils.make_name("r_end"), np.array([r_end], dtype=np.int64))
         b_end = r_end + np.prod(b_shape)
         b_end_const = ctx.make_const(utils.make_name("b_end"), np.array([b_end], dtype=np.int64))
-        def Name(nm):
+
+        def name(nm):
             return node.name + "_" + nm
-        ws = [Name('W_' + str(i)) for i in range(num_layers*num_dirs)]
-        rs = [Name('R_' + str(i)) for i in range(num_layers*num_dirs)]
-        bs = [Name('B_' + str(i)) for i in range(num_layers*num_dirs)]
-        hs = [Name('H_' + str(i)) for i in range(num_layers*num_dirs)]
-        yhs = [Name('YH_' + str(i)) for i in range(num_layers*num_dirs)]
+
+        ws = [name('W_' + str(i)) for i in range(num_layers * num_dirs)]
+        rs = [name('R_' + str(i)) for i in range(num_layers * num_dirs)]
+        bs = [name('B_' + str(i)) for i in range(num_layers * num_dirs)]
+        hs = [name('H_' + str(i)) for i in range(num_layers * num_dirs)]
+        yhs = [name('YH_' + str(i)) for i in range(num_layers * num_dirs)]
         w_flattened = ctx.make_node('Slice', [p, zero_const.output[0], w_end_const.output[0]])
         r_flattened = ctx.make_node('Slice', [p, w_end_const.output[0], r_end_const.output[0]])
         b_flattened = ctx.make_node('Slice', [p, r_end_const.output[0], b_end_const.output[0]])
@@ -230,19 +232,21 @@ class CudnnRNN:
         ctx.make_node('Split', [h], outputs=hs)
         xnf = xnb = x
         for i in range(num_layers):
-            suffix = '_' + str(i*num_dirs)
-            ctx.make_node('GRU', [xnf, Name('W' + suffix), Name('R' + suffix), Name('B' + suffix), '', Name('H'+ suffix)],
-                          outputs=[Name('Y' + suffix), Name('YH' + suffix)],
+            suffix = '_' + str(i * num_dirs)
+            ctx.make_node('GRU',
+                          [xnf, name('W' + suffix), name('R' + suffix), name('B' + suffix), '', name('H' + suffix)],
+                          outputs=[name('Y' + suffix), name('YH' + suffix)],
                           attr={'direction': 'forward', 'hidden_size': num_units})
-            xnf = Name(x + suffix)
-            ctx.make_node('Squeeze', [Name('Y' + suffix)], outputs=[xnf], attr={'axes': [1]})
+            xnf = name(x + suffix)
+            ctx.make_node('Squeeze', [name('Y' + suffix)], outputs=[xnf], attr={'axes': [1]})
             if num_dirs == 2:
-                suffix = '_' + str(i*2+1)
-                ctx.make_node('GRU', [xnb, Name('W' + suffix), Name('R' + suffix), Name('B' + suffix), '', Name('H'+ suffix)],
-                              outputs=[Name('Y' + suffix), Name('YH' + suffix)],
+                suffix = '_' + str(i * 2 + 1)
+                ctx.make_node('GRU',
+                              [xnb, name('W' + suffix), name('R' + suffix), name('B' + suffix), '', name('H' + suffix)],
+                              outputs=[name('Y' + suffix), name('YH' + suffix)],
                               attr={'direction': 'reverse', 'hidden_size': num_units})
-                xnb = Name(x + suffix)
-                ctx.make_node('Squeeze', [Name('Y' + suffix)], outputs=[xnb], attr={'axes': [1]})
+                xnb = name(x + suffix)
+                ctx.make_node('Squeeze', [name('Y' + suffix)], outputs=[xnb], attr={'axes': [1]})
         ctx.remove_node(node.name)
         if num_dirs == 2:
             ctx.make_node('Concat', [xnf, xnb], outputs=[node.output[0]], attr={'axis': -1})
