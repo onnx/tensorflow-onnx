@@ -16,7 +16,6 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
-
 from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
