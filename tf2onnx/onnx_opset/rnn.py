@@ -10,7 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import logging
-
 import numpy as np
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
@@ -169,3 +168,88 @@ class LSTMBlockCell:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         cls.version_1(ctx, node, **kwargs)
+
+
+@tf_op("CudnnRNN")
+class CudnnRNN:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        x = node.input[0]
+        x_shape = ctx.get_shape(x)
+        h = node.input[1]
+        h_shape = ctx.get_shape(h)
+        p = node.input[3]
+        utils.make_sure(
+            node.attr["rnn_mode"].s == b"gru",
+            "rnn mode other than gru are not supported yet"
+        )
+        utils.make_sure(
+            node.attr["dropout"].f == 0,
+            "dropout not supported yet"
+        )
+        utils.make_sure(
+            node.attr["input_mode"].s == b"linear_input",
+            "input mode must be linear input"
+        )
+        num_dirs = 1 if node.attr["direction"].s == b"unidirectional" else 2
+        num_layers = int(h_shape[0] / num_dirs)
+        num_units = hidden_size = h_shape[2]
+        input_size = x_shape[2]
+        w_shape = [num_layers * num_dirs, 3 * hidden_size, input_size]
+        w_shape_const = ctx.make_const(utils.make_name("w_shape"), np.array(w_shape, dtype=np.int64))
+        r_shape = [num_layers * num_dirs, 3 * hidden_size, hidden_size]
+        r_shape_const = ctx.make_const(utils.make_name("r_shape"), np.array(r_shape, dtype=np.int64))
+        b_shape = [num_layers * num_dirs, 6 * hidden_size]
+        b_shape_const = ctx.make_const(utils.make_name("b_shape"), np.array(b_shape, dtype=np.int64))
+        zero_const = ctx.make_const(utils.make_name("zero"), np.array([0], dtype=np.int64))
+        w_end = np.prod(w_shape)
+        w_end_const = ctx.make_const(utils.make_name("w_end"), np.array([w_end], dtype=np.int64))
+        r_end = w_end + np.prod(r_shape)
+        r_end_const = ctx.make_const(utils.make_name("r_end"), np.array([r_end], dtype=np.int64))
+        b_end = r_end + np.prod(b_shape)
+        b_end_const = ctx.make_const(utils.make_name("b_end"), np.array([b_end], dtype=np.int64))
+
+        def name(nm):
+            return node.name + "_" + nm
+
+        ws = [name('W_' + str(i)) for i in range(num_layers * num_dirs)]
+        rs = [name('R_' + str(i)) for i in range(num_layers * num_dirs)]
+        bs = [name('B_' + str(i)) for i in range(num_layers * num_dirs)]
+        hs = [name('H_' + str(i)) for i in range(num_layers * num_dirs)]
+        yhs = [name('YH_' + str(i)) for i in range(num_layers * num_dirs)]
+        w_flattened = ctx.make_node('Slice', [p, zero_const.output[0], w_end_const.output[0]])
+        r_flattened = ctx.make_node('Slice', [p, w_end_const.output[0], r_end_const.output[0]])
+        b_flattened = ctx.make_node('Slice', [p, r_end_const.output[0], b_end_const.output[0]])
+        w = utils.make_name('W')
+        r = utils.make_name('R')
+        b = utils.make_name('B')
+        ctx.make_node('Reshape', [w_flattened.output[0], w_shape_const.output[0]], outputs=[w])
+        ctx.make_node('Reshape', [r_flattened.output[0], r_shape_const.output[0]], outputs=[r])
+        ctx.make_node('Reshape', [b_flattened.output[0], b_shape_const.output[0]], outputs=[b])
+        ctx.make_node('Split', [w], outputs=ws)
+        ctx.make_node('Split', [r], outputs=rs)
+        ctx.make_node('Split', [b], outputs=bs)
+        ctx.make_node('Split', [h], outputs=hs)
+        xnf = xnb = x
+        for i in range(num_layers):
+            suffix = '_' + str(i * num_dirs)
+            ctx.make_node('GRU',
+                          [xnf, name('W' + suffix), name('R' + suffix), name('B' + suffix), '', name('H' + suffix)],
+                          outputs=[name('Y' + suffix), name('YH' + suffix)],
+                          attr={'direction': 'forward', 'hidden_size': num_units})
+            xnf = name(x + suffix)
+            ctx.make_node('Squeeze', [name('Y' + suffix)], outputs=[xnf], attr={'axes': [1]})
+            if num_dirs == 2:
+                suffix = '_' + str(i * 2 + 1)
+                ctx.make_node('GRU',
+                              [xnb, name('W' + suffix), name('R' + suffix), name('B' + suffix), '', name('H' + suffix)],
+                              outputs=[name('Y' + suffix), name('YH' + suffix)],
+                              attr={'direction': 'reverse', 'hidden_size': num_units})
+                xnb = name(x + suffix)
+                ctx.make_node('Squeeze', [name('Y' + suffix)], outputs=[xnb], attr={'axes': [1]})
+        ctx.remove_node(node.name)
+        if num_dirs == 2:
+            ctx.make_node('Concat', [xnf, xnb], outputs=[node.output[0]], attr={'axis': -1})
+        else:
+            ctx.make_node('Identity', [xnf], outputs=[node.output[0]])
+        ctx.make_node('Concat', yhs, outputs=[node.output[1]], attr={'axis': 0})

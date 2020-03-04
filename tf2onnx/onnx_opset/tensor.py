@@ -1653,23 +1653,35 @@ class ReverseV2:
                     inputs = [new_node.output[0]]
 
                 # Add a Constant node (seq_len) for ReverseSequence.
-
-                # Index 1 for the shape should not return 0
-                # since the input must have rank >= 2.
-                rs_batch_size = ctx.get_shape(inputs[-1])[1]
-
-                # Make sure rs_batch_size and input_shape[axis] are not -1 each
-                utils.make_sure(input_shape[axis] is not -1 \
-                                , "shape of axis {} is unknown".format(axis))
-                utils.make_sure(rs_batch_size is not -1 \
-                                , "ReverseSequence batch size for axis {} is unknown".format(axis))
-
-                seq_list = [input_shape[axis]] * rs_batch_size
-                seq_array = np.asarray(seq_list, dtype=np.int64)  # dtype should be int64
-
-                const_seq_name = utils.make_name(const_name_root)
-                new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
-                inputs.append(new_node.output[0])
+                if ctx.opset >= 11:
+                    batch_shape = ctx.make_node("Shape", [inputs[-1]])
+                    const_one = ctx.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
+                    const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
+                    batch_size = ctx.make_node("Slice",
+                                               [batch_shape.output[0], const_one.output[0], const_two.output[0]])
+                    input_shape = ctx.make_node("Shape", [node.input[0]])
+                    const_axis = ctx.make_const(utils.make_name(node.name + "_const_axis"),
+                                                np.array([axis], dtype=np.int64))
+                    const_axis_next = ctx.make_const(utils.make_name(node.name + "_const_axis_next"),
+                                                     np.array([axis + 1], dtype=np.int64))
+                    input_axis = ctx.make_node("Slice",
+                                               [input_shape.output[0], const_axis.output[0], const_axis_next.output[0]])
+                    seq_array = ctx.make_node("Expand", [input_axis.output[0], batch_size.output[0]])
+                    inputs.append(seq_array.output[0])
+                else:
+                    # Index 1 for the shape should not return 0
+                    # since the input must have rank >= 2.
+                    rs_batch_size = ctx.get_shape(inputs[-1])[1]
+                    # Make sure rs_batch_size and input_shape[axis] are not -1 each
+                    utils.make_sure(input_shape[axis] is not -1 \
+                                    , "shape of axis {} is unknown".format(axis))
+                    utils.make_sure(rs_batch_size is not -1 \
+                                    , "ReverseSequence batch size for axis {} is unknown".format(axis))
+                    seq_list = [input_shape[axis]] * rs_batch_size
+                    seq_array = np.asarray(seq_list, dtype=np.int64)  # dtype should be int64
+                    const_seq_name = utils.make_name(const_name_root)
+                    new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
+                    inputs.append(new_node.output[0])
 
                 # Add a ReverseSequence node.
 
