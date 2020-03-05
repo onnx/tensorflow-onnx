@@ -1788,6 +1788,32 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(10, "Slice")
+    def test_strided_slice_reverse_1(self):
+        tf.reset_default_graph()
+        x_val = np.arange(16 * 32).astype(np.float32).reshape((1, 16, 32, 1))
+        def func(x):
+            return tf.concat([x[:, :, :10], x[:, :, :21:-1]], axis=0, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_strided_slice_reverse_2(self):
+        tf.reset_default_graph()
+        x_val = np.arange(16 * 32).astype(np.float32).reshape((1, 16, 32, 1))
+        def func(x):
+            return tf.concat([x[:, :, :10], x[:, :, 9::-1]], axis=0, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_strided_slice_reverse_3(self):
+        tf.reset_default_graph()
+        x_val = np.zeros((1, 16, 32, 1)).astype(np.float32)
+        y_val = np.array(9).astype(np.int32)
+        z_val = np.array(-1).astype(np.int32)
+        def func(x, y, z):
+            return tf.concat([x[:, :, :10], x[:, :, y::z]], axis=0, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_opset_min_version(10, "Slice")
     def test_new_axis_mask(self):
         def func(x, y):
             x_ = x[tf.newaxis, 0:y, y::2, tf.newaxis, :, tf.newaxis, :y, tf.newaxis, ..., 9]
