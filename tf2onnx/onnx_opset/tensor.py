@@ -846,10 +846,8 @@ class StridedSlice:
         new_begin_mask = np.array(new_begin_mask, dtype=np_dtype)
         if not np.all(new_begin_mask == 1):
             if begin.is_const() and strides.is_const():
-                begin_vals = begin.get_tensor_value(as_list=False)
-                strides_vals = strides.get_tensor_value(as_list=False)
-                new_begin_vals = np.copy(begin_vals)
-                for i, v in enumerate(strides_vals):
+                new_begin_vals = np.copy(begin.get_tensor_value(as_list=False))
+                for i, v in enumerate(strides.get_tensor_value(as_list=False)):
                     if v < 0 and new_begin_mask[i] == 0:
                         new_begin_vals[i] = max_size
                 begin = ctx.make_const(utils.make_name("begin_masked"), new_begin_vals)
