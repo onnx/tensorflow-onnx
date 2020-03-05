@@ -847,33 +847,32 @@ class StridedSlice:
         if not np.all(new_begin_mask == 1):
             if begin.is_const() and strides.is_const():
                 new_begin_vals = np.copy(begin.get_tensor_value(as_list=False))
-                for i, v in enumerate(strides.get_tensor_value(as_list=False)):
-                    if v < 0 and new_begin_mask[i] == 0:
-                        new_begin_vals[i] = max_size
+                strides_vals = strides.get_tensor_value(as_list=False)
+                idx1 = np.where(new_begin_mask == 0)
+                idx2 = np.where(strides_vals < 0)
+                idx3 = np.intersect1d(idx1, idx2)
+                new_begin_vals[idx3] = max_size
                 begin = ctx.make_const(utils.make_name("begin_masked"), new_begin_vals)
             else:
                 begin_mask_const = ctx.make_const(utils.make_name("begin_mask"), np.equal(new_begin_mask, 0))
                 zero_const = ctx.make_const(utils.make_name("zero_const"), np.zeros(1, dtype=np_dtype))
                 max_const = ctx.make_const(utils.make_name("max_const"), np.array(max_size, dtype=np_dtype))
-                is_reverse_steps = ctx.make_node("Less", [strides.output[0], zero_const.output[0]],
-                                                 op_name_scope=node.name)
-                is_reverse_and_full_range = ctx.make_node("And", [is_reverse_steps.output[0],
-                                                                  begin_mask_const.output[0]], op_name_scope=node.name)
-                begin = ctx.make_node("Where", [is_reverse_and_full_range.output[0], max_const.output[0],
-                                                begin.output[0]], op_name_scope=node.name)
+                op1 = ctx.make_node("Less", [strides.output[0], zero_const.output[0]], op_name_scope=node.name)
+                op2 = ctx.make_node("And", [op1.output[0], begin_mask_const.output[0]], op_name_scope=node.name)
+                begin = ctx.make_node("Where", [op2.output[0], max_const.output[0], begin.output[0]],
+                                      op_name_scope=node.name)
 
         # mask end
         new_end_mask = np.array(new_end_mask, dtype=np_dtype)
         end_output = end.output[0]
         if not np.all(new_end_mask == min_size):
-            if end.is_const() and strides.is_const() and False:
+            if end.is_const() and strides.is_const():
                 new_end_mask = np.maximum(end.get_tensor_value(as_list=False), new_end_mask)
-                for i, v in enumerate(strides.get_tensor_value(as_list=False)):
-                    if new_end_mask[i] == max_size:
-                        new_end_mask[i] *= np.sign(v)
+                idx = np.where(new_end_mask == max_size)
+                sign = np.sign(strides.get_tensor_value(as_list=False))[idx]
+                new_end_mask[idx] = new_end_mask[idx] * sign
                 end = ctx.make_const(utils.make_name("end_masked"), new_end_mask)
                 end_output = end.output[0]
-
             else:
                 # Overlay new_end_mask with specified end values.
                 # Adjust max_size to min_size if steps are < 0
@@ -884,13 +883,10 @@ class StridedSlice:
                 outputname = utils.make_name("{}__newendmask".format(node.name))
                 new_end_mask = math.make_min_or_max_op(ctx, "Max", [end.output[0], end_mask_const.output[0]],
                                                        [outputname])
-                is_reverse_steps = ctx.make_node("Less", [strides.output[0], zero_const.output[0]],
-                                                 op_name_scope=node.name)
-                is_full_range = ctx.make_node("Equal", [new_end_mask.output[0], max_const.output[0]],
-                                              op_name_scope=node.name)
-                is_reverse_and_full_range = ctx.make_node("And", [is_full_range.output[0], is_reverse_steps.output[0]],
-                                                          op_name_scope=node.name)
-                final_end = ctx.make_node("Where", [is_reverse_and_full_range.output[0], min_const.output[0],
+                op1 = ctx.make_node("Less", [strides.output[0], zero_const.output[0]], op_name_scope=node.name)
+                op2 = ctx.make_node("Equal", [new_end_mask.output[0], max_const.output[0]], op_name_scope=node.name)
+                op3 = ctx.make_node("And", [op2.output[0], op1.output[0]], op_name_scope=node.name)
+                final_end = ctx.make_node("Where", [op3.output[0], min_const.output[0],
                                                     new_end_mask.output[0]], op_name_scope=node.name)
                 end_output = final_end.output[0]
 
