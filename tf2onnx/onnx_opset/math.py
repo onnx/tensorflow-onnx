@@ -97,8 +97,8 @@ def make_min_or_max_op(ctx, op_type, inputs, outputs,
         ctx.set_dtype(cast_node.output[0], origin_dtype)
         ctx.copy_shape(node.output[0], cast_node.output[0])
         actual_outputs = cast_node.output
-    ctx.make_node("Identity", actual_outputs, outputs=outputs,
-                  shapes=output_shapes, dtypes=output_dtypes)
+    final_node = ctx.make_node("Identity", actual_outputs, outputs=outputs,
+                               shapes=output_shapes, dtypes=output_dtypes)
 
     # tensorflow minimum/maximum does support broadcast, onnx < opset 8 does not.
     # handle this by doing something like:
@@ -124,6 +124,7 @@ def make_min_or_max_op(ctx, op_type, inputs, outputs,
             add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
                                      op_name_scope=input_node.name)
             node.input[i] = add_node.output[0]
+    return final_node
 
 
 @tf_op("Minimum", onnx_op="Min")
