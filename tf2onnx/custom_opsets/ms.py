@@ -92,3 +92,14 @@ class ConvTransposeWithDynamicPads:
         node.attr.pop("padding")
         if "explicit_paddings" in node.attr:
             node.attr.pop("explicit_paddings")
+
+@tf_op("CropAndResize", domain=constants.MICROSOFT_DOMAIN)
+class CropAndResize:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        """ utilize contrib cropandresize """
+        node.attr['method'].name = 'mode'
+        node.domain = constants.MICROSOFT_DOMAIN
+        ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
+        ctx.insert_new_node_on_output("Transpose", node.output[0], node.name + '_transposed',
+                                      None, perm=constants.NCHW_TO_NHWC)
