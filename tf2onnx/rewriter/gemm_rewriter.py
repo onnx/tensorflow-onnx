@@ -99,4 +99,16 @@ def get_gemm_attr(match):
                     return attr, False
                 match_args = match_args[0]
             attr[arg] = match_args
+     for arg in ["matmul"]:
+        arg_op = match.get_op(arg)
+        if arg_op is not None:
+            match_args = arg_op.attr
+            if isinstance(match_args, dict):
+                keys = list(match_args.keys())
+                if 'transpose_a' not in keys and 'transpose_b' not in keys:
+                    return attr, False
+                match_args_a = match_args['transpose_a'].i
+                attr['transA'] = match_args_a
+                match_args_b = match_args['transpose_b'].i
+                attr['transB'] = match_args_b
     return attr, True
