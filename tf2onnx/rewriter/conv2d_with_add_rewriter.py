@@ -4,10 +4,7 @@
 """
 tf2onnx.rewriter - rewrite tensorflow subgraph to onnx conv2d op with BiasAdd
 """
-
-import numpy as np
-
-from tf2onnx import handler, logging
+from tf2onnx import logging
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 logger = logging.getLogger(__name__)
@@ -15,14 +12,14 @@ logger = logging.getLogger(__name__)
 
 # pylint: disable=missing-docstring
 
-def rewrite_biasadd_with_conv2d(g, ops) :
+def rewrite_biasadd_with_conv2d(g, ops):
     pattern = \
-        OpTypePattern('BiasAdd', name = 'biasadd', inputs=[
-            OpTypePattern('Conv2D|Conv2DBackpropInput', name = 'conv', inputs=['*', '*']), '*'])
+        OpTypePattern('BiasAdd', name='biasadd', inputs=[
+            OpTypePattern('Conv2D|Conv2DBackpropInput', name='conv', inputs=['*', '*']), '*'])
     matcher = GraphMatcher(pattern)
     match_results = list(matcher.match_ops(ops))
     for match in match_results:
-        biasAdd = match.get_op('biasadd')
+        biasadd = match.get_op('biasadd')
         conv = match.get_op('conv')
 
         #backup the conv and biasadd values
@@ -31,13 +28,13 @@ def rewrite_biasadd_with_conv2d(g, ops) :
         conv_attr = conv.attr
         dtype = g.get_dtype(conv.output[0])
         shape = g.get_shape(conv.output[0])
-        conv_name = biasAdd.name
-        conv_output = biasAdd.output
-        conv_inputs = [conv_input[0], conv_input[1], biasAdd.input[1]]
+        conv_name = biasadd.name
+        conv_output = biasadd.output
+        conv_inputs = [conv_input[0], conv_input[1], biasadd.input[1]]
 
         # Remove the Conv and BiasAdd node 
         g.remove_node(conv.name)
-        g.remove_node(biasAdd.name)
+        g.remove_node(biasadd.name)
 
-        g.make_node(conv_type, conv_inputs, attr=conv_attr, name = conv_name, outputs = conv_output, shapes = [shape], dtypes = [dtype], skip_conversion=False)
+        g.make_node(conv_type, conv_inputs, attr=conv_attr, name=conv_name, outputs=conv_output, shapes=[shape], dtypes=[dtype], skip_conversion=False)
     return ops
