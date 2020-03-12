@@ -2,6 +2,8 @@
 # Licensed under the MIT license.
 """tf2onnx.rewriter module."""
 
+# pylint: disable=wildcard-import
+
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -20,9 +22,9 @@ from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direc
     rewrite_custom_rnn_cell, rewrite_generic_loop
 from tf2onnx.rewriter.thresholded_relu_rewriter import rewrite_thresholded_relu
 from tf2onnx.rewriter.transpose_rewriter import rewrite_transpose
-from tf2onnx.rewriter.conv2d_with_add_rewriter import rewrite_biasadd_with_conv2d  # pylint: disable=wildcard-import
+from tf2onnx.rewriter.conv2d_with_add_rewriter import rewrite_biasadd_with_conv2d  
 
-
+# pylint: disable=wildcard-import
 __all__ = [
     "rewrite_cond",
     "rewrite_conv2d_with_pad",
