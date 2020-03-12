@@ -20,7 +20,7 @@ from tf2onnx.rewriter.rnn import rewrite_single_direction_lstm, rewrite_bi_direc
     rewrite_custom_rnn_cell, rewrite_generic_loop
 from tf2onnx.rewriter.thresholded_relu_rewriter import rewrite_thresholded_relu
 from tf2onnx.rewriter.transpose_rewriter import rewrite_transpose
-from tf2onnx.rewriter.conv2d_with_add_rewriter import rewrite_biasadd_with_conv2d
+from tf2onnx.rewriter.conv2d_with_add_rewriter import rewrite_biasadd_with_conv2d  # pylint: disable=wildcard-import
 
 
 __all__ = [
