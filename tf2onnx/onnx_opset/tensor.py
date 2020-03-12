@@ -1807,6 +1807,7 @@ class MatrixDiagPart:
         squeezed_result = ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
                                         name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
+
 @tf_op("BroadcastTo")
 class BroadcastTo:
     @classmethod

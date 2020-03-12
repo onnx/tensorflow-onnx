@@ -2958,9 +2958,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(8)
     def test_broadcast(self):
         input_tensor_val = np.random.randint(low=0, high=256, size=[2, 3]).astype(np.float32)
-        new_shape_val = np.array([3,2,3]).astype(np.int64)
+        new_shape_val = np.array([3, 2, 3]).astype(np.int64)
+
         def func(input_tensor, new_shape):
             return tf.broadcast_to(input_tensor, new_shape, _TFOUTPUT)
+
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_tensor_val, _INPUT1: new_shape_val})
 
 
