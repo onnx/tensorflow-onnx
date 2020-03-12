@@ -1806,3 +1806,10 @@ class MatrixDiagPart:
         ctx.remove_node(node.name)
         squeezed_result = ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
                                         name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+@tf_op("BroadcastTo")
+class BroadcastTo:
+    @classmethod
+    def version_8(cls, ctx, node, **kwargs):
+        node.type = "Expand"
+        ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
