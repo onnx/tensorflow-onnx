@@ -155,11 +155,6 @@ def tflist_to_onnx(g, shape_override):
 
     # create dict with output to shape mappings
     for node in ops:
-        '''
-        if node.type.startswith('FIFOQueueV2') or node.type.startswith('QueueDequeueV2'):
-            print ('attr:\n', node.node_def.attr, '\ninputs:\n', node.inputs, '\noutputs:\n', node.outputs)
-            ii = input('ii')
-        '''
         for out in node.outputs:
             shape = shape_override.get(out.name)
             if shape is None:
