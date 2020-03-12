@@ -138,7 +138,7 @@ def tflist_to_onnx(g, shape_override):
                     "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
                     "T_threshold", "element_dtype", "shape_type", "_lower_using_switch_merge",
                     "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
-                    "key_dtype", "value_dtype", "Tin", "Tout"]
+                    "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes"]
 
     node_list = g.get_operations()
     functions = {}
@@ -155,6 +155,11 @@ def tflist_to_onnx(g, shape_override):
 
     # create dict with output to shape mappings
     for node in ops:
+        '''
+        if node.type.startswith('FIFOQueueV2') or node.type.startswith('QueueDequeueV2'):
+            print ('attr:\n', node.node_def.attr, '\ninputs:\n', node.inputs, '\noutputs:\n', node.outputs)
+            ii = input('ii')
+        '''
         for out in node.outputs:
             shape = shape_override.get(out.name)
             if shape is None:
