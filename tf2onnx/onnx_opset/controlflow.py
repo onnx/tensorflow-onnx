@@ -372,14 +372,14 @@ class Where:
         ctx.copy_dtype(node.output[0], transpose_node.output[0])
 
 
-@tf_op("IteratorV2")
+@tf_op("IteratorV2", "FIFOQueueV2")
 class Iterator:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
         ctx.remove_node(node.name)
 
 
-@tf_op("IteratorGetNext")
+@tf_op("IteratorGetNext", "QueueDequeueV2")
 class IteratorGetNext:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
