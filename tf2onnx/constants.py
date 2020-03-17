@@ -41,5 +41,5 @@ ENV_TF2ONNX_DEBUG_MODE = "TF2ONNX_DEBUG_MODE"
 # Mapping opset to IR version.
 # When adding here, make sure that the IR changes don't impact that we do.
 OPSET_TO_IR_VERSION = {
-    1: 3, 2:3, 3: 3, 4: 4, 5: 3, 6:3, 7:3, 8:4, 9:4, 10:5, 11:6, 12:7
+    1: 3, 2: 3, 3: 3, 4: 4, 5: 3, 6: 3, 7: 3, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7
 }
