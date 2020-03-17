@@ -433,7 +433,24 @@ class TransposeOptimizer(GraphOptimizerBase):
                 multiplier_input_node = input_node
 
         # node's inputs may come from one same node. if so the multiplier_input_node may be none
-        if multiplier_input_node is None or not multiplier_input_node.is_const():
+        if multiplier_input_node is None:
+            return False
+
+        # convert  mul(trans(x), trans(y)) ->  trans(mul(x, y))
+        if multiplier_input_node.type == "Transpose":
+            if is_nhwc_transpose(multiplier_input_node):
+                if not self._nodes_has_single_consumer_node([multiplier_input_node]):
+                    return False
+                input_index = self._get_input_index_for_trans(node, multiplier_input_node)
+                if not self._switch_transpose_and_node(node, trans):
+                    return False
+
+                node.input[input_index] = multiplier_input_node.input[0]
+                self._g.remove_node(multiplier_input_node.name)
+                return True
+
+        # handle const multipliers
+        if not multiplier_input_node.is_const():
             return False
         multiplier = multiplier_input_node.get_tensor_value(as_list=False)
 
