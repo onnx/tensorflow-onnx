@@ -275,6 +275,27 @@ class Range:
 @tf_op(["Select", "SelectV2"])
 class Select:
     @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        # T output = Select(bool condition, T x, T y)
+        # Select_res = Add(Multiply(Cast(bool condition, float32), T x,),
+        #                  Multiply(Cast(Not(bool condition), float32), T y)).
+        utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
+        positive_cast = ctx.make_node("Cast", [node.input[0]], name=utils.make_name(node.name),
+                                      attr={"to": TensorProto.FLOAT})
+        negative = ctx.make_node("Not", [node.input[0]], name=utils.make_name(node.name))
+        negative_cast = ctx.make_node("Cast", [negative.output[0]], name=utils.make_name(node.name),
+                                      attr={"to": TensorProto.FLOAT})
+        multiply_1 = ctx.make_node("Mul", [positive_cast.output[0], node.input[1]], name=utils.make_name(node.name))
+        multiply_2 = ctx.make_node("Mul", [node.input[2], negative_cast.output[0]], name=utils.make_name(node.name))
+        add_name = node.name
+        add_out = node.output
+        dtype = ctx.get_dtype(node.output[0])
+        shape = ctx.get_shape(node.output[0])
+        ctx.remove_node(node.name)
+        ctx.make_node("Add", [multiply_1.output[0], multiply_2.output[0]], outputs=add_out, name=add_name,
+                      dtypes=[dtype], shapes=[shape])
+
+    @classmethod
     def version_8(cls, ctx, node, **kwargs):
         # T output = Select(bool condition, T x, T y)
         # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
