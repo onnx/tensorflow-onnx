@@ -37,7 +37,7 @@ def rewrite_conv2d_with_pad(g, ops):
         if mode not in [None, "constant"] or len(pad.input) >= 3:
             continue
         # Conv2D already has a pad
-        if conv.get_attr("padding") == "SAME":
+        if conv.get_attr("padding").s.decode("utf-8") == "SAME":
             continue
 
         logger.debug("merge pad [%s] into conv [%s]", pad.name, conv.name)
