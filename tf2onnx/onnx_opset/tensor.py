@@ -1812,5 +1812,6 @@ class MatrixDiagPart:
 class BroadcastTo:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
+        # broadcast by expanding
         node.type = "Expand"
         ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
