@@ -136,7 +136,7 @@ class Node(object):
     def data_format(self):
         """Return data_format."""
         attr_str = self.get_attr_value("data_format")
-        return "unkown" if attr_str == None else attr_str.decode("utf-8")
+        return "unkown" if attr_str is None else attr_str.decode("utf-8")
 
     @data_format.setter
     def data_format(self, val):
