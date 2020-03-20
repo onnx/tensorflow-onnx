@@ -590,6 +590,48 @@ class DepthToSpace:
 @tf_op(["CropAndResize"])
 class CropAndResize:
     @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        utils.make_sure(node.inputs[1].type == "Const", "boxes input must be a Const")
+        utils.make_sure(node.inputs[3].type == "Const", "boxes input must be a Const")
+        name = node.name
+        output_height = node.inputs[3].get_tensor_value()[0]
+        output_width = node.inputs[3].get_tensor_value()[1]
+        rois = node.inputs[1].get_tensor_value()
+        rois_shape = ctx.get_shape(node.input[1])
+        img_shape = ctx.get_shape(node.input[0])
+        transform_rois = np.zeros(list(rois_shape), dtype=np.float32)
+        for i in range(rois_shape[0]):
+            y1, x1, y2, x2 = rois[i]
+            y1 = y1 * (img_shape[1] - 1)
+            y2 = y2 * (img_shape[1] - 1)
+            x1 = x1 * (img_shape[2] - 1)
+            x2 = x2 * (img_shape[2] - 1)
+            spacing_h = (y2 - y1)
+            spacing_w = (x2 - x1)
+            b1 = y1 - 0.5 * spacing_h / (output_height - 1)
+            a1 = x1 - 0.5 * spacing_w / (output_width - 1)
+            b2 = y2 + 0.5 * spacing_h / (output_height - 1)
+            a2 = x2 + 0.5 * spacing_w / (output_width - 1)
+            transform_rois[i][0] = a1
+            transform_rois[i][1] = b1
+            transform_rois[i][2] = a2
+            transform_rois[i][3] = b2
+        cast_node = ctx.make_node("Cast", [node.input[2]], attr={"to": onnx_pb.TensorProto.INT64})
+        bbox_node = ctx.make_const(utils.make_name("bbox"), transform_rois)
+        dtypes = [ctx.get_dtype(node.output[0])]
+        shapes = [ctx.get_shape(node.output[0])]
+        input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": [0, 3, 1, 2]},
+                                   name=utils.make_name(node.name))
+        crop_and_resize = ctx.make_node("RoiAlign", inputs=[input_nchw.output[0], bbox_node.output[0],
+                                                            cast_node.output[0]],
+                                        attr={"output_height": output_height, "output_width": output_width,
+                                              "spatial_scale": 1.0, "sampling_ratio": 1},
+                                        name=utils.make_name(node.name), dtypes=dtypes, shapes=shapes)
+        ctx.remove_node(name)
+        res = ctx.make_node("Transpose", crop_and_resize.output, {"perm": [0, 2, 3, 1]},
+                            name=name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+    @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # create loop of resize to cater to tensorflow CropAndResize, one box one iteration
         mode = "nearest" if node.get_attr("method") is not None and node.get_attr(
