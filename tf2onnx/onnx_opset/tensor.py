@@ -1101,16 +1101,10 @@ class OneHot:
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
-        # T output = OneHot(uint8/int32/int64 input, T depth, T on-value, T off-value, @int axis, @dtype)
+        # T output = OneHot(T input, T depth, T on-value, T off-value, @int axis, @dtype)
         # tf requires that dtype is same as on-value's and off-value's dtype
         # in ONNX, op's schema is (input, depth, value, @int axis), meaning of "value" is [off-value, on-value]
-        # onnxruntime only supports int64
         output_dtype = ctx.get_dtype(node.input[2])
-        if ctx.is_target(constants.TARGET_RS6) \
-                and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
-            logger.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
-            cls.version_1(ctx, node, **kwargs)
-            return
 
         depth = node.input[1]
         depth = ctx.make_node("Unsqueeze", [depth], attr={"axes": [0]}).output[0]
@@ -1122,29 +1116,9 @@ class OneHot:
         off_on_value = ctx.make_node("Concat", [off_value, on_value], attr={"axis": 0}).output[0]
 
         indices = node.input[0]
-        if ctx.is_target(constants.TARGET_RS6) \
-                and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
-            indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
-        node.input[0] = indices
-
-        if ctx.is_target(constants.TARGET_RS6) \
-                and ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64:
-            depth = ctx.make_node("Cast", [depth], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
-        node.input[1] = depth
-
-        if ctx.is_target(constants.TARGET_RS6) \
-                and output_dtype != onnx_pb.TensorProto.INT64:
-            off_on_value = ctx.make_node("Cast", [off_on_value], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
         node.input[2] = off_on_value
 
         del node.input[3]
-
-        if ctx.is_target(constants.TARGET_RS6) \
-                and output_dtype != onnx_pb.TensorProto.INT64:
-            new_node_name = utils.make_name("onehot_output")
-            new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
-            ctx.set_dtype(new_node.output[0], output_dtype)
-            ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
