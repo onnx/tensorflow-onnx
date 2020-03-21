@@ -29,6 +29,7 @@ if is_tf2():
     from tensorflow.python.framework import convert_to_constants, func_graph, function_def_to_graph
 else:
     from tensorflow.python.framework.graph_util import convert_variables_to_constants
+    from tensorflow.python.framework import function_def_to_graph
 
 
 if is_tf2():
