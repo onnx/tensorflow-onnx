@@ -1,3 +1,4 @@
+
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
@@ -2488,6 +2489,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
                     return space_to_batch_nd(x, y, z, name=_TFOUTPUT)
                 self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT2: z_val})
 
+    @check_opset_min_version(10, "CropAndResize")
+    def test_crop_and_resize(self):
+        boxes_val = [[0.5, 0.7, 0.7, 0.9], [0.2, 0.4, 0.4, 0.6]]
+        def func(input_x, box_ind):
+            boxes = tf.constant(boxes_val, dtype=tf.float32)
+            corp_size = tf.constant(np.array([20, 20]).astype(np.int32))
+            return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='bilinear')
+
+        input_x_val = np.random.randint(low=0, high=256, size=[2, 36, 36, 3]).astype(np.float32)  # NHWC
+        box_ind_val = np.array([1, 0]).astype(np.int32)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x_val, _INPUT2: box_ind_val},
+                            rtol=1e-04, atol=1e-03)
+
     @check_opset_min_version(11, "CropAndResize")
     def test_crop_and_resize_linear(self):
         def func(input_x, boxes, box_ind, corp_size):
@@ -2965,6 +2979,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         for input_val in input_vals:
             self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
+
+    @check_opset_min_version(8)
+    def test_broadcast(self):
+        input_tensor_val = np.random.randint(low=0, high=256, size=[2, 3]).astype(np.float32)
+        new_shape_val = np.array([3, 2, 3]).astype(np.int64)
+
+        def func(input_tensor, new_shape):
+            return tf.broadcast_to(input_tensor, new_shape, _TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_tensor_val, _INPUT1: new_shape_val})
 
 
 if __name__ == '__main__':
