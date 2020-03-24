@@ -41,7 +41,7 @@ try:
     from tensorflow.python.framework.function_def_to_graph import function_def_to_graph
 except ImportError:
     function_def_to_graph = _not_implemented_tf_placeholder('function_def_to_graph')
-    
+
 if is_tf2():
     convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
     from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
