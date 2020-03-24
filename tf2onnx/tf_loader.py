@@ -21,15 +21,33 @@ logger = logging.getLogger(__name__)
 # pylint: disable=unused-argument,unused-import,no-value-for-parameter,unexpected-keyword-arg,ungrouped-imports
 # pylint: disable=missing-function-docstring,import-outside-toplevel,useless-import-alias,missing-docstring
 
+
 def is_tf2():
     return tf.__version__.startswith("2.")
 
 
+def _not_implemented_tf_placeholder(name):
+    """Creates a placeholder function for missing Tensorflow imports"""
+
+    def not_implemented_tf_placeholder(*args, **kwargs):
+        raise NotImplementedError(
+            f'Tensorflow verison {tf.__version__} does not implement '
+            f'`{name}`, try converting your model with a different version.'
+        )
+    return not_implemented_tf_placeholder
+
+
+try:
+    from tensorflow.python.framework.function_def_to_graph import function_def_to_graph
+except ImportError:
+    function_def_to_graph = _not_implemented_tf_placeholder('function_def_to_graph')
+    
 if is_tf2():
-    from tensorflow.python.framework import convert_to_constants, func_graph, function_def_to_graph
+    convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
+    from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
 else:
     from tensorflow.python.framework.graph_util import convert_variables_to_constants
-    from tensorflow.python.framework import function_def_to_graph
+    convert_variables_to_constants_v2 = _not_implemented_tf_placeholder('convert_variables_to_constants_v2')
 
 
 if is_tf2():
@@ -64,7 +82,7 @@ else:
 
 
 def from_function(func, input_names, output_names):
-    frozen_func = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=False)
+    frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
     # output_tensors = {i.name: i for i in frozen_func.outputs}
     tf_reset_default_graph()
@@ -88,10 +106,7 @@ def freeze_session(sess, input_names=None, output_names=None):
         graph_def = sess.graph.as_graph_def(add_shapes=True)
         for node in graph_def.node:
             node.device = ""
-        if is_tf2():
-            graph_def = tf.compat.v1.graph_util.convert_variables_to_constants(sess, graph_def, output_node_names)
-        else:
-            graph_def = convert_variables_to_constants(sess, graph_def, output_node_names)
+        graph_def = convert_variables_to_constants(sess, graph_def, output_node_names)
     return graph_def
 
 
@@ -367,7 +382,7 @@ def resolve_functions(tf_graph):
         fdef = fdef.definition
         if input_shapes and len(fdef.signature.input_arg) < len(input_shapes):
             input_shapes = input_shapes[:len(fdef.signature.input_arg)]
-        func = function_def_to_graph.function_def_to_graph(fdef, input_shapes=input_shapes)
+        func = function_def_to_graph(fdef, input_shapes=input_shapes)
         _FUNCTIONS[k] = func
         _, _, _, _, _, tfunctions = tflist_to_onnx(func, {})
         functions.update(tfunctions)
