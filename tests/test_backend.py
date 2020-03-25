@@ -2580,13 +2580,54 @@ class BackendTests(Tf2OnnxBackendTestBase):
         box_num = 10
         boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
         scores_val = np.random.random_sample([box_num]).astype(np.float32)
+
         def func(boxes, scores):
             res1 = tf.image.non_max_suppression(boxes, scores, max_output_size=int(box_num / 2))
             res2 = tf.image.non_max_suppression(boxes, scores, max_output_size=0)
             return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1)
+
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
-    def _conv1d_test(self, x_val, w, stride=None, padding="VALID", rtol=1e-07):
+    @check_opset_min_version(11, "NonMaxSuppressionV4")
+    def test_non_max_suppression_v4(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+
+        def func(boxes, scores):
+            ret1, ret2 = tf.image.non_max_suppression_padded(boxes, scores, max_output_size=int(box_num * 2),
+                                                             pad_to_max_output_size=True)
+            return tf.identity(ret1, name=_TFOUTPUT), tf.identity(ret2, name=_TFOUTPUT1)
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+    @check_opset_min_version(11, "NonMaxSuppressionV4")
+    def test_non_max_suppression_v4_no_padding(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+
+        def func(boxes, scores):
+            ret1, ret2 = tf.image.non_max_suppression_padded(boxes, scores, max_output_size=int(box_num / 2),
+                                                             pad_to_max_output_size=True)
+            return tf.identity(ret1, name=_TFOUTPUT), tf.identity(ret2, name=_TFOUTPUT1)
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+    @check_opset_min_version(11, "NonMaxSuppressionV5")
+    def test_non_max_suppression_v5(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+
+        def func(boxes, scores):
+            ret1, ret2 = tf.image.non_max_suppression_with_scores(boxes, scores, max_output_size=int(box_num / 2),
+                                                                  soft_nms_sigma=0.0)
+            return tf.identity(ret1, name=_TFOUTPUT), tf.identity(ret2, name=_TFOUTPUT1)
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+    def _conv1d_test(self, x_val, w, s_tride=None, padding="VALID", rtol=1e-07):
         if stride is None:
             stride = 1
         def func(x):
