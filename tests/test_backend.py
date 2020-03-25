@@ -2627,7 +2627,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
-    def _conv1d_test(self, x_val, w, s_tride=None, padding="VALID", rtol=1e-07):
+    def _conv1d_test(self, x_val, w, stride=None, padding="VALID", rtol=1e-07):
         if stride is None:
             stride = 1
         def func(x):
