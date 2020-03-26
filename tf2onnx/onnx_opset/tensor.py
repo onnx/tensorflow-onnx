@@ -1471,13 +1471,14 @@ class NonMaxSuppression:
         dtypes = [[ctx.get_dtype(output)] for output in node.output]
         shapes = [[ctx.get_shape(output)] for output in node.output]
         max_output_size = node.input[2]
+        utils.make_sure(len(node.inputs) <= 5 or int(node.inputs[5].get_tensor_value(False)) == 0,
+                        "soft_nms_sigma must be 0")
         ctx.remove_node(node.name)
         new_nonmaxsurppress = ctx.make_node(node.type, node.input[: 5]).output[0]
         slice_op = GraphBuilder(ctx).make_slice({"data": new_nonmaxsurppress,
                                                  "axes": [1], "ends": [3], "starts": [2]})
         squeeze_op = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
         if len(node.input) > 5:  # V5
-            logger.warning("NonMaxSuppressionV5 only parltially supported, soft_nms_sigma must be 0.0")
             ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                           outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
             ctx.make_node("Gather", inputs=[input_score.input[0], squeeze_op.output[0]],

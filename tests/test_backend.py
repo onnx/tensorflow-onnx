@@ -2608,12 +2608,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
         scores_val = np.random.random_sample([box_num]).astype(np.float32)
 
         def func(boxes, scores):
-            ret1, ret2 = tf.image.non_max_suppression_padded(boxes, scores, max_output_size=int(box_num / 2),
-                                                             pad_to_max_output_size=True)
+            ret1, ret2 = tf.image.non_max_suppression_padded(boxes, scores, max_output_size=int(box_num),
+                                                             pad_to_max_output_size=False)
             return tf.identity(ret1, name=_TFOUTPUT), tf.identity(ret2, name=_TFOUTPUT1)
 
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
+    @check_tf_min_version("1.15")
     @check_opset_min_version(11, "NonMaxSuppressionV5")
     def test_non_max_suppression_v5(self):
         box_num = 10
