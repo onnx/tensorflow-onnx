@@ -1478,7 +1478,7 @@ class NonMaxSuppression:
         slice_op = GraphBuilder(ctx).make_slice({"data": new_nonmaxsurppress,
                                                  "axes": [1], "ends": [3], "starts": [2]})
         squeeze_op = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
-        if len(node.input) > 5:  # V5
+        if len(node.input) > 5:  # v5, called by ..._with_scores(), pad_to_max_output_size always False
             ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                           outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
             ctx.make_node("Gather", inputs=[input_score.input[0], squeeze_op.output[0]],
