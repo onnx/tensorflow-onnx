@@ -2392,7 +2392,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-    @check_opset_min_version(11, "ReduceSums")
+    @check_opset_min_version(11, "ReduceSum")
     def test_reduce_any_negative_axis(self):
         input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
         def func(x):
