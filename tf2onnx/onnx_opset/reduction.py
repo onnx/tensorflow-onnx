@@ -102,7 +102,8 @@ class AllAny:
         if np.isscalar(reduce_dim):
             reduce_dim = [reduce_dim]
 
-        utils.make_sure(all(i >= 0 for i in reduce_dim), "negative reduce axis is not supported in onnx for now")
+        if ctx.opset < 11:
+            utils.make_sure(all(i >= 0 for i in reduce_dim), "negative reduce axis is not supported in onnx for now")
 
         cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.FLOAT})
         keepdims = helper.get_attribute_value(node.get_attr("keep_dims"))
