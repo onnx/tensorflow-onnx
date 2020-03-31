@@ -37,3 +37,8 @@ NCHW_TO_HWCN = [2, 3, 1, 0]
 
 # Environment variables
 ENV_TF2ONNX_DEBUG_MODE = "TF2ONNX_DEBUG_MODE"
+
+# Mapping opset to IR version.
+OPSET_TO_IR_VERSION = {
+    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7
+}
