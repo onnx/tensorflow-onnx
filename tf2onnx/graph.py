@@ -990,6 +990,12 @@ class Graph(object):
             kwargs["opset_imports"] = opsets
         model_proto = helper.make_model(graph, **kwargs)
 
+        # set the IR version based on opset
+        try:
+            model_proto.ir_version = constants.OPSET_TO_IR_VERSION.get(self.opset, model_proto.ir_version)
+        except: # pylint: disable=bare-except
+            logger.error("ir_version override failed - install the latest onnx version")
+
         # optimize the model proto.
         # TODO: this is disabled by default because of bugs in fuse_consecutive_transposes
         if optimize:
