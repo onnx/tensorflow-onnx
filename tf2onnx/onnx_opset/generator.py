@@ -15,7 +15,6 @@ import numpy as np
 from onnx import onnx_pb, numpy_helper
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
-from onnx.onnx_pb import TensorProto
 
 logger = logging.getLogger(__name__)
 
@@ -155,10 +154,10 @@ class ZerosLike:
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        casted_input = ctx.make_node("Cast", node.input, attr={'to': TensorProto.INT64})
+        casted_input = ctx.make_node("Cast", node.input, attr={'to': onnx_pb.TensorProto.INT64})
         const_zero = ctx.make_const(utils.make_name("zero"), np.array(0).astype(np.int64))
         mul_node = ctx.make_node('Mul', inputs=[casted_input.output[0], const_zero.output[0]])
-        casted_output = ctx.make_node("Cast", inputs=[mul_node.output[0]],
-                                      attr={'to': dtypes[0]},
-                                      name=node.name, outputs=node.output,
-                                      shapes=shapes, dtypes=dtypes)
+        ctx.make_node("Cast", inputs=[mul_node.output[0]],
+                      attr={'to': dtypes[0]},
+                      name=node.name, outputs=node.output,
+                      shapes=shapes, dtypes=dtypes)
