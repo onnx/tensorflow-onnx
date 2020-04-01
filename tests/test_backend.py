@@ -2410,16 +2410,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(7, "fill")
     def test_zeros_like(self):
-        input_val = np.random.random_sample([10, 20]).astype(np.float32)
-        def func(x):
-            res = tf.zeros_like(x)
-            return tf.identity(res, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
+        input_x = np.random.random_sample([10, 20]).astype(np.float32)
+        input_y = np.array([20, 10]).astype(np.int64)
 
-        def func(x):
-            res = tf.zeros_like(x, dtype=tf.int32)
-            return tf.identity(res, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
+        def func(x, y):
+            z = tf.reshape(x, y)
+            return tf.zeros_like(z, name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x, _INPUT1: input_y})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x.astype(np.int32), _INPUT1: input_y})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x > 0.5, _INPUT1: input_y})
 
     @check_opset_min_version(9, "is_nan")
     def test_isnan(self):

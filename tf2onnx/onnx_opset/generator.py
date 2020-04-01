@@ -151,13 +151,13 @@ class Multinomial:
 class ZerosLike:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        # T output = ZerosLike(T x)
-        # when params "dtype" used, tf will call another op "Fill" instead, so Cast is not needed here.
-        input_dtype = ctx.get_dtype(node.input[0])
-        node_name = utils.make_name("zero")
-        const_zero = ctx.make_const(node_name, np.array(0).astype(utils.map_onnx_to_numpy_type(input_dtype)))
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node(op_type="Mul", inputs=[node.input[0], const_zero.output[0]],
-                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        casted_input = ctx.make_node("Cast", node.input, attr={'to': onnx_pb.TensorProto.INT64})
+        const_zero = ctx.make_const(utils.make_name("zero"), np.array(0).astype(np.int64))
+        mul_node = ctx.make_node('Mul', inputs=[casted_input.output[0], const_zero.output[0]])
+        ctx.make_node("Cast", inputs=[mul_node.output[0]],
+                      attr={'to': dtypes[0]},
+                      name=node.name, outputs=node.output,
+                      shapes=shapes, dtypes=dtypes)
