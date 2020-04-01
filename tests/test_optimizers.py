@@ -9,7 +9,7 @@ from __future__ import unicode_literals
 
 import numpy as np
 from onnx import helper, TensorProto, OperatorSetIdProto
-from tf2onnx import utils
+from tf2onnx import utils, constants
 from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version
@@ -69,8 +69,11 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
     def make_model(self, graph, producer_name="onnx-tests"):
         imp = OperatorSetIdProto()
         imp.version = self.config.opset
-
         model_proto = helper.make_model(graph, producer_name=producer_name, opset_imports=[imp])
+        try:
+            model_proto.ir_version = constants.OPSET_TO_IR_VERSION.get(self.config.opset, model_proto.ir_version)
+        except:  # pylint: disable=bare-except
+            pass
         return model_proto
 
     # Tranpose Optimizer Tests Start
