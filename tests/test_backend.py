@@ -1374,7 +1374,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @skip_caffe2_backend()
     def test_randomuniform_dyn_shape(self):
         # test for dynamic shape coming from a shape op
-        x_val = np.array([0,1,2,3,5], dtype=np.int64)
+        x_val = np.array([0, 1, 2, 3, 5], dtype=np.int64)
         def func(x):
             return random_uniform(x[3:], name=_TFOUTPUT, dtype=tf.float32)
         # since results are random, compare the shapes only
