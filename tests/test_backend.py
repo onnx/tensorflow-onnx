@@ -1370,18 +1370,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
-
+    '''
     @skip_caffe2_backend()
     def test_randomuniform_dyn_shape(self):
         # test for dynamic shape coming from a shape op
-        x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
+        x_val = np.array([0,1,2,3,5], dtype=np.int64)
         def func(x):
-            x_ = tf.stack([x, x])
-            x_ = tf.identity(x_)
-            x_ = tf.shape(x_, name="shape")
-            x_ = random_uniform(x_, name="rand", dtype=tf.float32)
-            x_ = tf.identity(x_)
-            return tf.identity(x_, name=_TFOUTPUT)
+            return random_uniform(x[3:], name=_TFOUTPUT, dtype=tf.float32)
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
 

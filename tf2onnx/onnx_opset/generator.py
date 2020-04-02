@@ -39,16 +39,22 @@ class RandomOp:
         seed = node.get_attr("seed")
         node.set_attr("seed", float(seed.f))
         if len(node.input) > 0:
-            if node.inputs[0].is_const():
-                shape = node.inputs[0].get_tensor_value()
-                ctx.remove_input(node, node.input[0])
-                node.set_attr("shape", shape)
-                ctx.set_shape(node.output[0], shape)
-            else:
-                cast_node = ctx.make_node("Cast", node.input, attr={'to': onnx_pb.TensorProto.INT64})
-                const_node = ctx.make_node("ConstantOfShape", cast_node.output)
-                node.input = const_node.output
-                node.type = node.type + 'Like'
+            shape = node.inputs[0].get_tensor_value()
+            ctx.remove_input(node, node.input[0])
+            node.set_attr("shape", shape)
+            ctx.set_shape(node.output[0], shape)
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        if node.inputs[0].is_const():
+            version_1(cls, ctx, node, **kwargs)
+        else:
+            seed = node.get_attr("seed")
+            node.set_attr("seed", float(seed.f))
+            cast_node = ctx.make_node("Cast", node.input, attr={'to': onnx_pb.TensorProto.INT64})
+            const_node = ctx.make_node("ConstantOfShape", cast_node.output)
+            node.input = const_node.output
+            node.type = node.type + 'Like'
 
 
 @tf_op(["RandomNormalLike", "RandomUniformLike"])
