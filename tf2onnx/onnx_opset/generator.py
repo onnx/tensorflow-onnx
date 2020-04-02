@@ -47,7 +47,7 @@ class RandomOp:
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
         if node.inputs[0].is_const():
-            version_1(cls, ctx, node, **kwargs)
+            cls.version_1(ctx, node, **kwargs)
         else:
             seed = node.get_attr("seed")
             node.set_attr("seed", float(seed.f))
