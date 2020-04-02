@@ -44,6 +44,18 @@ class RandomOp:
             node.set_attr("shape", shape)
             ctx.set_shape(node.output[0], shape)
 
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        if node.inputs[0].is_const():
+            cls.version_1(ctx, node, **kwargs)
+        else:
+            seed = node.get_attr("seed")
+            node.set_attr("seed", float(seed.f))
+            cast_node = ctx.make_node("Cast", node.input, attr={'to': onnx_pb.TensorProto.INT64})
+            const_node = ctx.make_node("ConstantOfShape", cast_node.output)
+            node.input = const_node.output
+            node.type = node.type + 'Like'
+
 
 @tf_op(["RandomNormalLike", "RandomUniformLike"])
 class PassThroughOp:
