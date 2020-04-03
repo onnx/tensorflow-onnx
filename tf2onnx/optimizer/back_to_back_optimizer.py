@@ -7,6 +7,7 @@
 
 from __future__ import unicode_literals
 
+import numpy as np
 from tf2onnx.utils import ONNX_DTYPE_NAMES  # lgtm[py/unsafe-cyclic-import]
 from .optimizer_base import GraphOptimizerBase  # lgtm[py/unsafe-cyclic-import]
 
@@ -152,7 +153,6 @@ class BackToBackOptimizer(GraphOptimizerBase):
     @_register_func(('Squeeze', 'Unsqueeze'))
     def _optimize_squeeze_unsqueeze(g, node, consumer_nodes):
         """remove pairs of squeeze-unsqueeze nodes"""
-
         if node.type != 'Squeeze' or len(consumer_nodes) != 1:
             # no need to return any value, since not removing long chain of nodes
             return []
@@ -176,4 +176,68 @@ class BackToBackOptimizer(GraphOptimizerBase):
         g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0])
         g.remove_node(node.name)
         g.remove_node(node2.name)
+        return []
+
+    @staticmethod
+    @_register_func(('Conv', 'BatchNormalization'))
+    def _optimize_conv_batchnorm_fusion(g, node, consumer_nodes):
+        """fuse conv and batchnorm"""
+        if node.type != 'Conv' or len(consumer_nodes) != 1:
+            # can only fuse 1 conv + batchnorm
+            return []
+
+        node2 = consumer_nodes[0]
+        if node2.type != 'BatchNormalization':
+            return []
+
+        # if batchnorm is a graph output, skip
+        if set(node2.output) & set(g.outputs):
+            return []
+
+        if not node.inputs[1].is_const():
+            return []
+        weights = node.inputs[1].get_tensor_value(as_list=False)
+        # if not 4D, NCHW skip
+        if len(weights.shape) != 4:
+            return []
+
+        bias = 0
+        # optional bias value
+        if len(node.inputs) > 2:
+            if not node.inputs[2].is_const():
+                return []
+            bias = node.inputs[2].get_tensor_value(as_list=False)
+
+        # scale, offset, mean, var be const, otherwise skip
+        if False in [node2.inputs[i].is_const() for i in [1, 2, 3, 4]]:
+            return []
+
+        # if bn outputs used elsewhere, cannot fuse
+        for i in range(1, len(node2.output)):
+            if g.find_output_consumers(node2.output[i]):
+                return []
+
+        weights = weights.transpose(2, 3, 1, 0)
+        scale = node2.inputs[1].get_tensor_value(as_list=False)
+        offset = node2.inputs[2].get_tensor_value(as_list=False)
+        mean = node2.inputs[3].get_tensor_value(as_list=False)
+        var = node2.inputs[4].get_tensor_value(as_list=False)
+        epsilon = node2.get_attr('epsilon').f
+
+        scale_new = scale / np.sqrt(var + epsilon)
+        weights_new = weights * scale_new
+        weights_new = weights_new.transpose(3, 2, 0, 1)
+        bias_new = (bias - mean) * scale_new + offset
+        bias_new_const = g.make_const(node.name + '_bias_fused_bn', bias_new)
+        weights_new_const = g.make_const(node.name + '_weights_fused_bn', weights_new)
+        node.input = [node.input[0], weights_new_const.output[0], bias_new_const.output[0]]
+
+        # fuse conv and bn, delete bn
+        node2_output = node2.output[:1]
+        node2_shape = g.get_shape(node2.output[0])
+        node2_dtype = g.get_dtype(node2.output[0])
+        g.remove_node(node2.name)
+        node.output = node2_output
+        g.set_shape(node2_output[0], node2_shape)
+        g.set_dtype(node2_output[0], node2_dtype)
         return []

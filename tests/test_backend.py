@@ -1870,6 +1870,45 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: mean_val, _INPUT2: offset_val, _INPUT3: var_val})
 
+    @check_opset_min_version(7, "batchnorm")
+    def test_conv2d_batchnorm_fusion(self):
+        x_shape = [1, 28, 28, 2]
+        x_val = np.random.random_sample(x_shape).astype(np.float32)
+        w = np.array([[2., 1., 1.],
+                      [1., 3., 1.],
+                      [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
+        # 2 channels for input and output
+        w = np.concatenate([w, w, w, w]).reshape([3, 3, 2, 2])
+        scale_dtype = np.float32
+        scale_shape = x_shape[-1:]
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        mean_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+
+        def func_conv2d(x):
+            kernel = tf.constant(w, dtype=tf.float32, name='k')
+            conv = tf.nn.conv2d(x, kernel, strides=[1, 1, 1, 1], padding='VALID')
+            return conv
+
+        def func_fusedbn(x):
+            scale = tf.constant(scale_val, name='scale')
+            offset = tf.constant(offset_val, name='offset')
+            mean = tf.constant(mean_val, name='mean')
+            var = tf.constant(var_val, name='variance')
+            epsilon = 0.1234
+            y, _, _ = fused_batch_norm(
+                func_conv2d(x), scale, offset, mean=mean, variance=var,
+                epsilon=epsilon, data_format='NHWC', is_training=False)
+            return tf.identity(y, name=_TFOUTPUT)
+
+        def graph_validator(g):
+            if 'BatchNormalization' in [n.type for n in g.get_nodes()]:
+                return False
+            return True
+
+        self._run_test_case(func_fusedbn, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator)
+
     @skip_caffe2_backend()
     @check_opset_min_version(7, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor(self):
