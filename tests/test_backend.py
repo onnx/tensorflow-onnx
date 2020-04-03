@@ -1888,7 +1888,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         def func_conv2d(x):
             kernel = tf.constant(w, dtype=tf.float32, name='k')
-            conv = tf.nn.conv2d(x, kernel, padding='VALID')
+            conv = tf.nn.conv2d(x, kernel, strides=[1, 1, 1, 1], padding='VALID')
             return conv
 
         def func_fusedbn(x):
