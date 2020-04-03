@@ -2832,7 +2832,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         y_val = np.array([[[5, 5, 5, 5], [6, 6, 6, 6],
                            [7, 7, 7, 7], [8, 8, 8, 8]],
                           [[5, 5, 5, 5], [6, 6, 6, 6],
-                           [7, 7, 7, 7], [8, 8, 8, 8]]], dtype=np.int64).reshape((2, 4, 4))
+                           [7, 7, 7, 7], [8, 8, 8, 8]]], dtype=np.float32).reshape((2, 4, 4))
         z_val = np.array([4, 4, 4], dtype=np.int32).reshape(3)
 
         def func(x, y, z):

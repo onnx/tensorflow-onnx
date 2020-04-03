@@ -13,7 +13,6 @@ import logging
 import sys
 
 import numpy as np
-from onnx import numpy_helper
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 
@@ -517,22 +516,12 @@ class GatherND:
 class ScatterND:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-
-        # onnx requires pre-generated tensor for data
-        np_val = np.array([0], dtype=np.int64)
-        onnx_tensor = numpy_helper.from_array(np_val, node.child_name())
-        const_of_shape = ctx.insert_new_node_on_input(node, "ConstantOfShape", node.input[2], value=onnx_tensor)
-
-        # cast edge to INT64 if not already
-        input0 = const_of_shape.input[0]
-        if ctx.get_dtype(input0) != TensorProto.INT64:
-            ctx.insert_new_node_on_input(const_of_shape, "Cast", input0, to=TensorProto.INT64)
-
-        # cast edge to INT64 if not already
-        input0 = node.input[0]
-        if ctx.get_dtype(input0) != TensorProto.INT64:
-            ctx.insert_new_node_on_input(node, "Cast", input0, to=TensorProto.INT64)
-
+        onnxdtype = ctx.get_dtype(node.input[1])
+        dtype = utils.map_onnx_to_numpy_type(onnxdtype)
+        const_of_shape = ctx.insert_new_node_on_input(node, "ConstantOfShape", node.input[2])
+        ctx.insert_new_node_on_input(const_of_shape, "Cast", const_of_shape.input[0], to=TensorProto.INT64)
+        ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=TensorProto.INT64)
+        ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnxdtype)
         # reorder inputs to match onnx
         node.input = [node.input[2], node.input[0], node.input[1]]
 
