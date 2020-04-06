@@ -763,7 +763,7 @@ class Resize:
             resize_inputs = [
                 input_nchw.output[0],
                 roi.output[0],
-                None,
+                const_empty_float.output[0],,
                 final_target_size.output[0]
             ]
             upsample = ctx.make_node("Resize", resize_inputs,
