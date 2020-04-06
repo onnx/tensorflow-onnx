@@ -39,7 +39,7 @@ Check [tips](examples/rnn_tips.md) when converting RNN models.
 
 You find a list of supported Tensorflow ops and their mapping to ONNX [here](support_status.md).
 
-Tensorflow has broad functionality and occacional mapping it to ONNX creates issues.
+Tensorflow has broad functionality and occasionally mapping it to ONNX creates issues.
 The common issues we run into we try to document here [Troubleshooting Guide](Troubleshooting.md).
 
 # Prerequisites
