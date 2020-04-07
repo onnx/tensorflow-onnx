@@ -721,7 +721,30 @@ class Resize:
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        cls._convert_since_9(ctx, node, op_type="Resize", use_target_size=True)
+        mode = "linear" if node.type == "ResizeBilinear" else "nearest"
+        roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
+        const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0]).astype(np.int64))
+        const_two = ctx.make_const(utils.make_name("const_two"), np.array([2]).astype(np.int64))
+        const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([]).astype(np.float32))
+        input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
+        shape_input = ctx.make_node("Shape", [input_nchw.output[0]])
+        sliced_shape = ctx.make_node("Slice", [shape_input.output[0], const_zero.output[0], const_two.output[0]])
+        size_int64 = ctx.make_node("Cast", [node.input[1]], attr={"to": onnx_pb.TensorProto.INT64})
+        concat_shape = ctx.make_node("Concat", [sliced_shape.output[0], size_int64.output[0]], {'axis': 0})
+        resize_inputs = [
+            input_nchw.output[0],
+            roi.output[0],
+            const_empty_float.output[0],
+            concat_shape.output[0]
+        ]
+        resize = ctx.make_node("Resize", resize_inputs,
+                               attr={"mode": mode, "nearest_mode": "floor",
+                                     "coordinate_transformation_mode": "asymmetric"})
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("Transpose", resize.output, {"perm": constants.NCHW_TO_NHWC},
+                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
     @classmethod
     def _convert_since_9(cls, ctx, node, op_type, use_target_size=False):
