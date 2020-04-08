@@ -105,7 +105,7 @@ To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providi
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-directory --output model.onnx```
 
-The above command uses a default of `7` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation]()  
+The above command uses a default of `7` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).  
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-directory --opset 10 --output model.onnx```
 
