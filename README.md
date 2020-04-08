@@ -42,20 +42,20 @@ Check [tips](examples/rnn_tips.md) when converting RNN models.
 
 You find a list of supported Tensorflow ops and their mapping to ONNX [here](support_status.md).
 
-Tensorflow has broad functionality and occasionally mapping it to ONNX creates issues.
+TensorFlow has broad functionality and occasionally mapping it to ONNX creates issues.
 The common issues we run into we try to document here [Troubleshooting Guide](Troubleshooting.md).
 
 ## Prerequisites
 
 ### TensorFlow
 
-If you don't have tensorflow installed already, install the desired tensorflow build, for example:
+If you don't have TensorFlow installed already, install the desired TensorFlow build, for example:
 
-```
-pip install tensorflow
+```pip install tensorflow```
+
 or
-pip install tensorflow-gpu
-```
+
+```pip install tensorflow-gpu```
 
 ### (Optional) Runtime
 
@@ -101,11 +101,11 @@ To create a distribution:
 
 ## Getting started
 
-To get started with the `tensorflow-onnx` converter, provide the name of your TensorFlow model directory (where the model is in `saved model` format), and a name for the ONNX output file, to the `t2onnx.convert` command:
+To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providing the name of your TensorFlow model directory (where the model is in `saved model` format), and a name for the ONNX output file:
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-directory --output model.onnx```
 
-The above command uses a default of `7` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command.
+The above command uses a default of `7` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation]()  
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-directory --opset 10 --output model.onnx```
 
@@ -119,7 +119,7 @@ For `checkpoint` format:
 
 ```python -m tf2onnx.convert --checkpoint  tensorflow-model-meta-file --output model.onnx --inputs input0:0,input1:0 --outputs output0:0```
 
-If your model is not in `saved model` format and you do not know the input and output nodes of the model, you can use the [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms)  TensorFlow utility. The `summarize_graph` tool does need to be downloaded and built from source. If you have the option of going to your model provider and obtaining the model in `saved model` format, then we recommend doing so.
+If your model is not in `saved model` format and you do not know the input and output nodes of the model, you can use the [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) TensorFlow utility. The `summarize_graph` tool does need to be downloaded and built from source. If you have the option of going to your model provider and obtaining the model in `saved model` format, then we recommend doing so.
 
 You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSDMobilenetToONNX.ipynb)
 
@@ -154,7 +154,7 @@ TensorFlow model as checkpoint. We expect the path to the .meta file. tf2onnx wi
 #### --output 
 the target onnx file path.
 #### --inputs, --outputs
-Tensorflow model's input/output names, which can be found with [summarize graph tool](#summarize_graph). Those names typically end on ```:0```, for example ```--inputs input0:0,input1:0```. inputs and outputs are ***not*** needed for models in saved-model format.
+TensorFlow model's input/output names, which can be found with [summarize graph tool](#summarize_graph). Those names typically end on ```:0```, for example ```--inputs input0:0,input1:0```. inputs and outputs are ***not*** needed for models in saved-model format.
 #### --inputs-as-nchw
 By default we preserve the image format of inputs (nchw or nhwc) as given in the TensorFlow model. If your hosts (for example windows) native format nchw and the model is written for nhwc, ```--inputs-as-nchw``` tensorflow-onnx will transpose the input. Doing so is convinient for the application and the converter in many cases can optimize the transpose away. For example ```--inputs input0:0,input1:0 --inputs-as-nchw input0:0``` assumes that images are passed into ```input0:0``` as nchw while the TensorFlow model given uses nhwc.
 #### --opset
@@ -359,4 +359,3 @@ If you like to contribute and add new conversions to tf2onnx, the process is som
 ## License
 
 [MIT License](LICENSE)
-
