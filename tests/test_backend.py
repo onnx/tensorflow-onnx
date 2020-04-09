@@ -3069,13 +3069,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.cast(s_, tf.float32, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
-    @check_opset_min_version(11)
-    def test_bfloat(self):
-        x_val = np.array([0, 1, 2], dtype=np.float16)
-        def func(x):
-            return tf.cast(x, tf.bfloat16, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
-
 
 if __name__ == '__main__':
     unittest_main()
