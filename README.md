@@ -166,7 +166,7 @@ The target onnx file path.
 
 #### --inputs, --outputs
 
-TensorFlow model's input/output names, which can be found with [summarize graph tool](#summarize_graph). Those names typically end with ```:0```, for example ```--inputs input0:0,input1:0```. inputs and outputs are ***not*** needed for models in saved-model format. Some models specify placeholders with unknown ranks and dims which can not be mapped to onnx. In those cases one can add the shape after the input name inside `[]`, for example `--inputs X:0[1,28,28,3]`
+TensorFlow model's input/output names, which can be found with [summarize graph tool](#summarize_graph). Those names typically end with ```:0```, for example ```--inputs input0:0,input1:0```. Inputs and outputs are ***not*** needed for models in saved-model format. Some models specify placeholders with unknown ranks and dims which can not be mapped to onnx. In those cases one can add the shape after the input name inside `[]`, for example `--inputs X:0[1,28,28,3]`
 
 #### --inputs-as-nchw
 
