@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 TF_TO_ONNX_DTYPE = {
     types_pb2.DT_FLOAT: onnx_pb.TensorProto.FLOAT,
     types_pb2.DT_HALF: onnx_pb.TensorProto.FLOAT16,
-    types_pb2.DT_BFLOAT16: onnx_pb.TensorProto.FLOAT,
+    types_pb2.DT_BFLOAT16: onnx_pb.TensorProto.FLOAT16,
     types_pb2.DT_DOUBLE: onnx_pb.TensorProto.DOUBLE,
     types_pb2.DT_INT32: onnx_pb.TensorProto.INT32,
     types_pb2.DT_INT16: onnx_pb.TensorProto.INT16,
