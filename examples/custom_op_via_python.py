@@ -22,7 +22,7 @@ def print_handler(ctx, node, name, args):
 with tf.Session() as sess:
     x = tf.placeholder(tf.float32, [2, 3], name="input")
     x_ = tf.add(x, x)
-    x_ = tf.Print(x, [x], "hello")
+    x_ = tf.Print(x_, [x_], "hello")
     _ = tf.identity(x_, name="output")
     onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph,
                                                  custom_op_handlers={"Print": (print_handler, [])},

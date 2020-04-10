@@ -16,7 +16,6 @@ import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 
-import tf2onnx
 from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
@@ -422,7 +421,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     # outter loop for each index
     # for (int i=0; i<outter_shape; i++) inner_loop(params, flatten_indices[i])
     cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
-    dummy_const = ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
+    ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
 
     # body graph creation
     g = ctx.create_new_graph_with_same_config()
@@ -964,9 +963,9 @@ class TopKV2:
                                       shapes=shapes, dtypes=[dtypes[0], onnx_pb.TensorProto.INT64])
 
         new_cast_name = utils.make_name(topk_node_name)
-        cast_to_int32 = ctx.make_node("Cast", [new_topk_node.output[1]], outputs=[topk_output2],
-                                      name=new_cast_name, attr={"to": onnx_pb.TensorProto.INT32},
-                                      shapes=[shapes[1]], dtypes=[onnx_pb.TensorProto.INT32])
+        ctx.make_node("Cast", [new_topk_node.output[1]], outputs=[topk_output2],
+                      name=new_cast_name, attr={"to": onnx_pb.TensorProto.INT32},
+                      shapes=[shapes[1]], dtypes=[onnx_pb.TensorProto.INT32])
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
@@ -1636,7 +1635,7 @@ class ReverseV2:
         # Empty axis vector.
         if len_axes == 0:
             # Replace ReverseV2 with an identity block.
-            new_node = ctx.make_node(
+            ctx.make_node(
                 "Identity",
                 inputs=inputs,
                 outputs=node.output,
@@ -1744,7 +1743,7 @@ class ReverseV2:
                             curr_perm[ax], curr_perm[0]
 
                 # Add a Transpose node to restore shape.
-                new_node = ctx.make_node(
+                ctx.make_node(
                     "Transpose",
                     inputs=inputs,
                     op_name_scope=rv2_node_name,
@@ -1816,8 +1815,8 @@ class MatrixDiagPart:
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        squeezed_result = ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
-                                        name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
+                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 
 @tf_op("BroadcastTo")

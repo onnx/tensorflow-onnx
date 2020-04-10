@@ -13,7 +13,7 @@ import logging
 import numpy as np
 from tf2onnx import utils
 from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher # pylint: disable=unused-import
+from tf2onnx.graph_matcher import OpTypePattern # pylint: disable=unused-import
 
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring

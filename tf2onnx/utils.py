@@ -19,8 +19,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import numpy as np
 from google.protobuf import text_format
-import onnx
-from onnx import helper, onnx_pb, defs, numpy_helper
+from onnx import helper, onnx_pb, defs, numpy_helper, __version__
 
 from . import constants
 
@@ -324,7 +323,7 @@ def create_vague_shape_like(shape):
 
 
 def get_onnx_version():
-    return onnx.__version__
+    return __version__
 
 
 def make_opsetid(domain, version):

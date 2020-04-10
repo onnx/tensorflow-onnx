@@ -78,7 +78,7 @@ def train(model_path):
 
         p = os.path.abspath(os.path.join(model_path, "checkpoint"))
         os.makedirs(p, exist_ok=True)
-        p = saver.save(sess, os.path.join(p, "model"))
+        saver.save(sess, os.path.join(p, "model"))
 
         frozen_graph = freeze_session(sess, output_names=["pred:0"])
         p = os.path.abspath(os.path.join(model_path, "graphdef"))
