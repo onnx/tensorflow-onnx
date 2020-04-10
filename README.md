@@ -130,8 +130,10 @@ You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSD
 
 ```
 python -m tf2onnx.convert
-    --saved-model SOURCE_SAVED_MODEL | [--input | --graphdef] SOURCE_GRAPHDEF_PB | --checkpoint SOURCE_CHECKPOINT
-    [--output TARGET_ONNX_MODEL]
+    --saved-model SOURCE_SAVED_MODEL |
+    --checkpoint SOURCE_CHECKPOINT |
+    --input | --graphdef SOURCE_GRAPHDEF_PB
+    --output TARGET_ONNX_MODEL
     [--inputs GRAPH_INPUTS]
     [--outputs GRAPH_OUTPUS]
     [--inputs-as-nchw inputs_provided_as_nchw]
@@ -149,13 +151,13 @@ python -m tf2onnx.convert
 
 TensorFlow model as saved_model. We expect the path to the saved_model directory.
 
-#### --input or --graphdef
-
-TensorFlow model as graphdef file.
-
 #### --checkpoint
 
 TensorFlow model as checkpoint. We expect the path to the .meta file.
+
+#### --input or --graphdef
+
+TensorFlow model as graphdef file.
 
 #### --output
 
