@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import tarfile
+import tempfile
 import time
 import zipfile
 from collections import namedtuple
@@ -362,7 +363,7 @@ class Test(object):
 def get_args():
     """Parse commandline."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cache", default=os.path.join(os.environ['TMP'], 'pre-trained'),
+    parser.add_argument("--cache", default=os.path.join(tempfile.gettempdir(), 'pre-trained'),
                         help="pre-trained models cache dir")
     parser.add_argument("--config", default="tests/run_pretrained_models.yaml", help="yaml config to use")
     parser.add_argument("--tests", help="tests to run")
