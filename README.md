@@ -73,15 +73,15 @@ We tested with pytorch/caffe2 and onnxruntime and unit tests are passing for tho
 
 ## Installation
 
-### From pypi
+### Install from pypi
 
 ```pip install -U tf2onnx```
 
-### Latest from GitHub
+### Install latest from source
 
 ```pip install git+https://github.com/onnx/tensorflow-onnx```
 
-### From source
+### Build and install latest from source (for development)
 
 ```git clone https://github.com/onnx/tensorflow-onnx```
 
@@ -129,11 +129,10 @@ You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSD
 ## CLI reference
 
 ```
-python -m tf2onnx.convert 
-    [--input SOURCE_GRAPHDEF_PB]
-    [--graphdef SOURCE_GRAPHDEF_PB]
-    [--checkpoint SOURCE_CHECKPOINT]
-    [--saved-model SOURCE_SAVED_MODEL]
+python -m tf2onnx.convert
+    [[--saved-model SOURCE_SAVED_MODEL] |
+     [[--input | --graphdef] SOURCE_GRAPHDEF_PB] |
+     [--checkpoint SOURCE_CHECKPOINT]]
     [--output TARGET_ONNX_MODEL]
     [--inputs GRAPH_INPUTS]
     [--outputs GRAPH_OUTPUS]
