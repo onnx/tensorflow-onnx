@@ -103,26 +103,26 @@ To create a distribution:
 
 To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providing:
 
-* the name of your TensorFlow model directory (where the model is in `saved model` format)
+* the path to your TensorFlow model (where the model is in `saved model` format)
 * a name for the ONNX output file:
 
-```python -m tf2onnx.convert --saved-model tensorflow-model-directory --output model.onnx```
+```python -m tf2onnx.convert --saved-model tensorflow-model-path --output model.onnx```
 
 The above command uses a default of `7` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).  
 
-```python -m tf2onnx.convert --saved-model tensorflow-model-directory --opset 10 --output model.onnx```
+```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 10 --output model.onnx```
 
 If your TensorFlow model is in a format other than `saved model`, then you need to provide the inputs and outputs of the model graph.
+
+For `checkpoint` format:
+
+```python -m tf2onnx.convert --checkpoint  tensorflow-model-meta-file-path --output model.onnx --inputs input0:0,input1:0 --outputs output0:0```
 
 For `graphdef` format:
 
 ```python -m tf2onnx.convert --graphdef  tensorflow-model-graphdef-file --output model.onnx --inputs input0:0,input1:0 --outputs output0:0```
 
-For `checkpoint` format:
-
-```python -m tf2onnx.convert --checkpoint  tensorflow-model-meta-file --output model.onnx --inputs input0:0,input1:0 --outputs output0:0```
-
-If your model is not in `saved model` format and you do not know the input and output nodes of the model, you can use the [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) TensorFlow utility. The `summarize_graph` tool does need to be downloaded and built from source. If you have the option of going to your model provider and obtaining the model in `saved model` format, then we recommend doing so.
+If your model is in `checkpoint` or `graphdef` format and you do not know the input and output nodes of the model, you can use the [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) TensorFlow utility. The `summarize_graph` tool does need to be downloaded and built from source. If you have the option of going to your model provider and obtaining the model in `saved model` format, then we recommend doing so.
 
 You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSDMobilenetToONNX.ipynb)
 
