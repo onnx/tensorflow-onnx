@@ -130,8 +130,8 @@ You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSD
 
 ```
 python -m tf2onnx.convert
-    --saved-model SOURCE_SAVED_MODEL |
-    --checkpoint SOURCE_CHECKPOINT |
+    --saved-model SOURCE_SAVED_MODEL_PATH |
+    --checkpoint SOURCE_CHECKPOINT_METAFILE_PATH |
     --input | --graphdef SOURCE_GRAPHDEF_PB
     --output TARGET_ONNX_MODEL
     [--inputs GRAPH_INPUTS]
