@@ -393,7 +393,7 @@ faster_rcnn_inception_v2_coco:
     - num_detections:0
 
 keras_resnet50:
-  tf_min_version: 2.2
+  tf_min_version: 2.1
   disabled: false
   url: module://tensorflow.keras.applications.resnet50/ResNet50
   model: ResNet50
