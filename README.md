@@ -47,7 +47,7 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 ## Prerequisites
 
-### TensorFlow
+### Install TensorFlow
 
 If you don't have TensorFlow installed already, install the desired TensorFlow build, for example:
 
@@ -57,7 +57,7 @@ or
 
 ```pip install tensorflow-gpu```
 
-### (Optional) Runtime
+### (Optional) Install runtime
 
 If you want to run tests, install a runtime that can run ONNX models. For example:
 
@@ -108,7 +108,7 @@ To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providi
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-path --output model.onnx```
 
-The above command uses a default of `7` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).  
+The above command uses a default of `8` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 10 --output model.onnx```
 
@@ -173,15 +173,11 @@ By default we preserve the image format of inputs (`nchw` or `nhwc`) as given in
 
 #### --opset
 
-By default we use the opset 7 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
+By default we use the opset 8 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
 
 #### --target
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
-
-#### --custom-ops
-
-The runtime may support custom ops that are not defined in onnx. A user can asked the converter to map to custom ops by listing them with the --custom-ops option. Tensorflow ops listed here will be mapped to a custom op with the same name as the tensorflow op but in the onnx domain ai.onnx.converters.tensorflow. For example: ```--custom-ops Print``` will insert a op ```Print``` in the onnx domain ```ai.onnx.converters.tensorflow``` into the graph. We also support a python api for custom ops documented later in this readme. 
 
 #### --fold_const
 
@@ -293,9 +289,12 @@ with tf.Session() as sess:
     with open("/tmp/model.onnx", "wb") as f:
         f.write(model_proto.SerializeToString())
 ```
+
 ### Creating custom op mappings from python
-For complex custom ops that require graph rewrites or input / attribute rewrites using the python interface to insert a custom op will be the eaiest way to accomplish the task.
+
+For complex custom ops that require graph rewrites or input / attribute rewrites using the python interface to insert a custom op will be the easiest way to accomplish the task.
 A dictionary of name->custom_op_handler can be passed to tf2onnx.tfonnx.process_tf_graph. If the op name is found in the graph the handler will have access to all internal structures and can rewrite that is needed. For example [examples/custom_op_via_python.py]():
+
 ```
 import tensorflow as tf
 import tf2onnx
@@ -330,7 +329,9 @@ with tf.Session() as sess:
 ```
 
 ## How tf2onnx works
+
 The converter needs to take care of a few things:
+
 1. Convert the protobuf format. Since the format is similar this step is straight forward.
 2. TensorFlow types need to be mapped to their ONNX equivalent.
 3. For many ops TensorFlow passes parameters like shapes as inputs where ONNX wants to see them as attributes. Since we use a frozen graph, the converter will fetch the input as constant, converts it to an attribute and remove the original input.
@@ -339,30 +340,37 @@ The converter needs to take care of a few things:
 6. There are some ops like relu6 that are not supported in ONNX but the converter can be composed out of other ONNX ops.
 7. ONNX backends are new and their implementations are not complete yet. For some ops the converter generate ops with deal with issues in existing backends.
 
-#### Step 1 - start with a frozen graph.
+### Step 1 - start with a frozen graph
+
 tf2onnx starts with a frozen graph. This is because of item 3 above.
 
-#### Step 2 - 1:1 convertion of the protobuf from tensorflow to onnx
-tf2onnx first does a simple convertion from the TensorFlow protobuf format to the ONNX protobuf format without looking at individual ops.
+### Step 2 - 1:1 convertion of the protobuf from tensorflow to onnx
+
+tf2onnx first does a simple conversion from the TensorFlow protobuf format to the ONNX protobuf format without looking at individual ops.
 We do this so we can use the ONNX graph as internal representation and write helper functions around it.
-The code that does the conversion is in tensorflow_to_onnx(). tensorflow_to_onnx() will return the ONNX graph and a dictionary with shape information from TensorFlow. The shape information is helpful in some cases when processing individual ops. 
+The code that does the conversion is in tensorflow_to_onnx(). tensorflow_to_onnx() will return the ONNX graph and a dictionary with shape information from TensorFlow. The shape information is helpful in some cases when processing individual ops.
 The ONNX graph is wrapped in a Graph object and nodes in the graph are wrapped in a Node object to allow easier graph manipulations on the graph. All code that deals with nodes and graphs is in graph.py.
 
-#### Step 3 - rewrite subgraphs
+### Step 3 - rewrite subgraphs
+
 In the next step we apply graph matching code on the graph to re-write subgraphs for ops like transpose and lstm. For an example looks at rewrite_transpose().
 
-#### Step 4 - process individual ops
+### Step 4 - process individual ops
+
 In the fourth step we look at individual ops that need attention. The dictionary _OPS_MAPPING will map tensorflow op types to a method that is used to process the op. The simplest case is direct_op() where the op can be taken as is. Whenever possible we try to group ops into common processing, for example all ops that require dealing with broadcasting are mapped to broadcast_op(). For an op that composes the tensorflow op from multiple onnx ops, see relu6_op().
 
-#### Step 5 - final processing
+### Step 5 - final processing
+
 Once all ops are converted, we need to do a topological sort since ONNX requires it. process_tf_graph() is the method that takes care of all above steps.
 
 ## Extending tf2onnx
+
 If you like to contribute and add new conversions to tf2onnx, the process is something like:
+
 1. See if the op fits into one of the existing mappings. If so adding it to _OPS_MAPPING is all that is needed.
-2. If the new op needs extra procesing, start a new mapping function.
+2. If the new op needs extra processing, start a new mapping function.
 3. If the tensorflow op is composed of multiple ops, consider using a graph re-write. While this might be a little harder initially, it works better for complex patterns.
-4. Add a unit test in tests/test_backend.py. The unit tests mostly create the tensorflow graph, run it and capture the output, than convert to onnx, run against a onnx backend and compare tensorflow and onnx results. 
+4. Add a unit test in tests/test_backend.py. The unit tests mostly create the tensorflow graph, run it and capture the output, than convert to onnx, run against a onnx backend and compare tensorflow and onnx results.
 5. If there are pre-trained models that use the new op, consider adding those to test/run_pretrained_models.py.
 
 ## License
