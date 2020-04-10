@@ -246,9 +246,8 @@ class ConvTranspose:
 
         node.type = "ConvTranspose"
         # Note: inputs are reversed from what one would expect.
-        kernel_shape = conv_kernel_shape(ctx, node, 1)
+        conv_kernel_shape(ctx, node, 1)
         input_shape = ctx.get_shape(node.input[2])
-        append_slice = False
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
         if node.inputs[0].is_const():
@@ -292,7 +291,7 @@ class ConvTranspose:
             downstream_nodes.remove(slice_node)
             ctx.replace_all_inputs(downstream_nodes, node.output[0], slice_node.output[0])
 
-        strides = conv_dims_attr(node, "strides")
+        conv_dims_attr(node, "strides")
         conv_dims_attr(node, "dilations")
 
         # remove output_shapes input
@@ -628,8 +627,8 @@ class CropAndResize:
                                               "spatial_scale": 1.0, "sampling_ratio": 1},
                                         name=utils.make_name(node.name), dtypes=dtypes, shapes=shapes)
         ctx.remove_node(name)
-        res = ctx.make_node("Transpose", crop_and_resize.output, {"perm": [0, 2, 3, 1]},
-                            name=name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        ctx.make_node("Transpose", crop_and_resize.output, {"perm": [0, 2, 3, 1]},
+                      name=name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -987,8 +986,8 @@ def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_nod
     shapes = tf_ori_node.output_shapes
     dtypes = tf_ori_node.output_dtypes
     ctx.remove_node(tf_ori_node.name)
-    res = ctx.make_node(op_type="Mul", inputs=[log_prob, const_negative_one],
-                        outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
+    ctx.make_node(op_type="Mul", inputs=[log_prob, const_negative_one],
+                  outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 @tf_op("SparseSoftmaxCrossEntropyWithLogits")

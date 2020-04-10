@@ -19,7 +19,6 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import numpy as np
 from google.protobuf import text_format
-import onnx
 from onnx import helper, onnx_pb, defs, numpy_helper
 
 from . import constants

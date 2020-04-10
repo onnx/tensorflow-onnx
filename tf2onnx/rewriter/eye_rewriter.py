@@ -111,7 +111,7 @@ def rewrite_eye(g, ops):
             matrix_shape_int64 = g.make_node("Cast", matrix_shape.output, attr={"to": onnx_pb.TensorProto.INT64})
             zero_matrix = g.make_node("ConstantOfShape", matrix_shape_int64.output)
 
-            new_output = g.make_node("EyeLike", zero_matrix.output, attr={"dtype": output_dtypes[0]},
-                                     name=old_output.name, shapes=output_shapes, dtypes=output_dtypes)
+            g.make_node("EyeLike", zero_matrix.output, attr={"dtype": output_dtypes[0]},
+                        name=old_output.name, shapes=output_shapes, dtypes=output_dtypes)
 
     return g.get_nodes()
