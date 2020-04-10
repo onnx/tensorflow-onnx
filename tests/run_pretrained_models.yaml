@@ -391,3 +391,15 @@ faster_rcnn_inception_v2_coco:
     - detection_classes:0
     - detection_scores:0
     - num_detections:0
+
+keras_resnet50:
+  tf_min_version: 2.1
+  disabled: false
+  url: module://tensorflow.keras.applications.resnet50/ResNet50
+  model: ResNet50
+  model_type: keras
+  input_get: get_ramp
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0

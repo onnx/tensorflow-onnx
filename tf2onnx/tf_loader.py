@@ -18,6 +18,7 @@ from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx
 
 logger = logging.getLogger(__name__)
 
+
 # pylint: disable=unused-argument,unused-import,no-value-for-parameter,unexpected-keyword-arg,ungrouped-imports
 # pylint: disable=missing-function-docstring,import-outside-toplevel,useless-import-alias,missing-docstring
 
@@ -34,6 +35,7 @@ def _not_implemented_tf_placeholder(name):
             f'Tensorflow verison {tf.__version__} does not implement '
             f'`{name}`, try converting your model with a different version.'
         )
+
     return not_implemented_tf_placeholder
 
 
@@ -47,8 +49,8 @@ if is_tf2():
     from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
 else:
     from tensorflow.python.framework.graph_util import convert_variables_to_constants
-    convert_variables_to_constants_v2 = _not_implemented_tf_placeholder('convert_variables_to_constants_v2')
 
+    convert_variables_to_constants_v2 = _not_implemented_tf_placeholder('convert_variables_to_constants_v2')
 
 if is_tf2():
     tf_reset_default_graph = tf.compat.v1.reset_default_graph
@@ -207,7 +209,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, signatures):
 
     imported = tf.saved_model.load(model_path)  # pylint: disable=no-value-for-parameter
 
-    #f = meta_graph_def.signatures[tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY]
+    # f = meta_graph_def.signatures[tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY]
     for k in imported.signatures.keys():
         if k.startswith("_"):
             # consider signatures starting with '_' private
@@ -259,8 +261,10 @@ def from_keras(model_path, input_names, output_names):
 
         function = _saving_utils.trace_model_call(keras_model)
         concrete_func = function.get_concrete_function()
-        inputs = {input_tensor.name: input_tensor for input_tensor in concrete_func.inputs}
-        outputs = {output_tensor.name: output_tensor for output_tensor in concrete_func.outputs}
+        inputs = {input_tensor.name: input_tensor for input_tensor in concrete_func.inputs if
+                  input_tensor.name in input_names}
+        outputs = {output_tensor.name: output_tensor for output_tensor in concrete_func.outputs if
+                   output_tensor.name in output_names}
         frozen_graph = from_function(concrete_func, list(inputs.keys()), list(outputs.keys()))
     else:
         # Handles Keras when Eager mode is disabled.
@@ -317,7 +321,7 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=True):
 
     # TODO: is this needed ?
     needed_names = [utils.node_name(i) for i in input_tensors.keys()] + \
-               [utils.node_name(i) for i in output_tensors.keys()]
+                   [utils.node_name(i) for i in output_tensors.keys()]
     graph_def = extract_sub_graph(graph_def, needed_names)
 
     if fold_constant:
@@ -362,6 +366,7 @@ def is_function(g):
     if is_tf2():
         return 'tensorflow.python.framework.func_graph.FuncGraph' in str(type(g))
     return False
+
 
 _FUNCTIONS = {}
 
