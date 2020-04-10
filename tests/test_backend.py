@@ -3098,6 +3098,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_tensor_val, _INPUT1: new_shape_val})
 
+    def test_bfloat(self):
+        x_val = np.array([0, 1, 2], dtype=np.float32)
+        y_val = np.array([3, 4, 5], dtype=np.float32)
+        def func(x, y):
+            x_ = tf.cast(x, tf.bfloat16)
+            y_ = tf.cast(y, tf.bfloat16)
+            s_ = tf.add(x_, y_)
+            return tf.cast(s_, tf.float32, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
 
 if __name__ == '__main__':
     unittest_main()
