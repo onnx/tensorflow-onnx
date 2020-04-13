@@ -229,7 +229,6 @@ def _from_saved_model_v2(model_path, input_names, output_names, signatures):
         input_names = [input_tensor.name for input_tensor in concrete_func.inputs]
         output_names = [output_tensor.name for output_tensor in concrete_func.outputs]
 
-    input_names = inputs_without_resource(sess, input_names)
     frozen_graph = from_function(concrete_func, input_names, output_names)
     return frozen_graph, input_names, output_names
 
