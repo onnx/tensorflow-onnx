@@ -146,9 +146,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf_reset_default_graph()
             with tf_session() as sess:
                 tf.import_graph_def(graph_def, name='')
-                input_tensors = {i: sess.graph.get_tensor_by_name(i) for i in list(feed_dict.keys())}
-                output_tensors = {i: sess.graph.get_tensor_by_name(i) for i in output_names_with_port}
-                graph_def = tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=constant_fold)
+                graph_def = tf_optimize(list(feed_dict.keys()), output_names_with_port,
+                                        graph_def, fold_constant=constant_fold)
 
         tf_reset_default_graph()
         with tf_session() as sess:

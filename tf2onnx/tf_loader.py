@@ -83,16 +83,28 @@ else:
     extract_sub_graph = tf.graph_util.extract_sub_graph
 
 
+def inputs_without_resource(sess, input_names):
+    try:
+        new_input_names = []
+        for n in input_names:
+            t = sess.graph.get_tensor_by_name(n)
+            if t.dtype != tf.dtypes.resource:
+                new_input_names.append(n)
+        input_names = new_input_names
+    except:  # pylint: disable=bare-except
+        pass
+    return input_names
+
+
 def from_function(func, input_names, output_names):
     frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
-    # output_tensors = {i.name: i for i in frozen_func.outputs}
+    # output_names = [i.name for i in frozen_func.outputs]
     tf_reset_default_graph()
     with tf_session() as sess:
         tf.import_graph_def(graph_def, name='')
-        input_tensors = {i: sess.graph.get_tensor_by_name(i) for i in input_names}
-        output_tensors = {i: sess.graph.get_tensor_by_name(i) for i in output_names}
-        graph_def = tf_optimize(input_tensors, output_tensors, graph_def)
+        input_names = inputs_without_resource(sess, input_names)
+        graph_def = tf_optimize(input_names, output_names, graph_def)
     return graph_def
 
 
@@ -101,7 +113,6 @@ def freeze_session(sess, input_names=None, output_names=None):
     output_node_names = [i.split(':')[:-1][0] for i in output_names]
     keep_var_names = [i.split(':')[:-1][0] for i in input_names]
     with sess.graph.as_default():
-        # freeze_var_names = list(set(v.op.name for v in tf_global_variables()).difference(keep_var_names or []))
         output_node_names = output_node_names or []
         output_node_names += [v.op.name for v in tf_global_variables()]
         output_node_names += keep_var_names
@@ -135,16 +146,16 @@ def from_graphdef(model_path, input_names, output_names):
         with tf_gfile.GFile(model_path, 'rb') as f:
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def, name='')
+        input_names = inputs_without_resource(sess, input_names)
         frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
         input_names = remove_redundant_inputs(frozen_graph, input_names)
-        inputs = {i: sess.graph.get_tensor_by_name(i) for i in input_names}
-        outputs = {i: sess.graph.get_tensor_by_name(i) for i in output_names}
 
     tf_reset_default_graph()
     with tf_session() as sess:
-        frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
+        input_names = inputs_without_resource(sess, input_names)
+        frozen_graph = tf_optimize(input_names, output_names, frozen_graph)
     tf_reset_default_graph()
-    return frozen_graph, inputs, outputs
+    return frozen_graph, input_names, output_names
 
 
 def from_checkpoint(model_path, input_names, output_names):
@@ -156,16 +167,15 @@ def from_checkpoint(model_path, input_names, output_names):
         saver = tf_import_meta_graph(model_path, clear_devices=True)
         # restore from model_path minus the ".meta"
         saver.restore(sess, model_path[:-5])
+        input_names = inputs_without_resource(sess, input_names)
         frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
         input_names = remove_redundant_inputs(frozen_graph, input_names)
-        inputs = {i: sess.graph.get_tensor_by_name(i) for i in input_names}
-        outputs = {i: sess.graph.get_tensor_by_name(i) for i in output_names}
 
     tf_reset_default_graph()
     with tf_session() as sess:
-        frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
+        frozen_graph = tf_optimize(input_names, output_names, frozen_graph)
     tf_reset_default_graph()
-    return frozen_graph, inputs, outputs
+    return frozen_graph, input_names, output_names
 
 
 def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures):
@@ -197,16 +207,15 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures
         for _, output_tensor in outputs_tensor_info.items():
             outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
 
-    frozen_graph = freeze_session(sess, input_names=list(inputs.keys()), output_names=list(outputs.keys()))
-    return frozen_graph, inputs, outputs
+    input_names = list(inputs.keys())
+    input_names = inputs_without_resource(sess, input_names)
+    output_names = list(outputs.keys())
+    frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
+    return frozen_graph, input_names, output_names
 
 
 def _from_saved_model_v2(model_path, input_names, output_names, signatures):
     """Load tensorflow graph from saved_model."""
-    # make sure we start with clean default graph
-    inputs = {}
-    outputs = {}
-
     imported = tf.saved_model.load(model_path)  # pylint: disable=no-value-for-parameter
 
     # f = meta_graph_def.signatures[tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY]
@@ -217,26 +226,25 @@ def _from_saved_model_v2(model_path, input_names, output_names, signatures):
         signatures.append(k)
     for k in signatures:
         concrete_func = imported.signatures[k]
-        inputs = {input_tensor.name: input_tensor for input_tensor in concrete_func.inputs}
-        outputs = {output_tensor.name: output_tensor for output_tensor in concrete_func.outputs}
+        input_names = [input_tensor.name for input_tensor in concrete_func.inputs]
+        output_names = [output_tensor.name for output_tensor in concrete_func.outputs]
 
-    frozen_graph = from_function(concrete_func, list(inputs.keys()), list(outputs.keys()))
-    return frozen_graph, inputs, outputs
+    input_names = inputs_without_resource(sess, input_names)
+    frozen_graph = from_function(concrete_func, input_names, output_names)
+    return frozen_graph, input_names, output_names
 
 
 def from_saved_model(model_path, input_names, output_names, signatures=None):
     """Load tensorflow graph from saved_model."""
-    # make sure we start with clean default graph
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
     if is_tf2():
-        frozen_graph, inputs, outputs = \
+        frozen_graph, input_names, output_names = \
             _from_saved_model_v2(model_path, input_names, output_names, signatures)
-        inputs = {k: v for k, v in inputs.items() if v.dtype != tf.dtypes.resource}
     else:
         with tf_session() as sess:
-            frozen_graph, inputs, outputs = \
+            frozen_graph, input_names, output_names = \
                 _from_saved_model_v1(sess, model_path, input_names, output_names, signatures)
 
     if len(signatures) > 1:
@@ -244,7 +252,7 @@ def from_saved_model(model_path, input_names, output_names, signatures=None):
                        signatures)
 
     tf_reset_default_graph()
-    return frozen_graph, inputs, outputs
+    return frozen_graph, input_names, output_names
 
 
 def from_keras(model_path, input_names, output_names):
@@ -261,33 +269,38 @@ def from_keras(model_path, input_names, output_names):
 
         function = _saving_utils.trace_model_call(keras_model)
         concrete_func = function.get_concrete_function()
-        inputs = {input_tensor.name: input_tensor for input_tensor in concrete_func.inputs if
-                  input_tensor.name in input_names}
-        outputs = {output_tensor.name: output_tensor for output_tensor in concrete_func.outputs if
-                   output_tensor.name in output_names}
-        frozen_graph = from_function(concrete_func, list(inputs.keys()), list(outputs.keys()))
+        # allow to pass inputs and outputs from caller if we don't want all of them
+        input_names = [input_tensor.name for input_tensor in concrete_func.inputs
+                       if input_names is None or input_tensor.name in input_names]
+        output_names = [output_tensor.name for output_tensor in concrete_func.outputs
+                        if output_names is None or output_tensor.name in output_names]
+        frozen_graph = from_function(concrete_func, input_names, output_names)
     else:
         # Handles Keras when Eager mode is disabled.
         _keras.backend.clear_session()
         _keras.backend.set_learning_phase(False)
         keras_model = _keras.models.load_model(model_path, custom_objects)
+        # allow to pass inputs and outputs from caller if we don't want all of them
+        if input_names:
+            input_names = [i for i in keras_model.inputs if i in input_names]
+        else:
+            input_names = keras_model.inputs
+        if output_names:
+            output_names = [i for i in keras_model.outputs if i in output_names]
+        else:
+            output_names = keras_model.outputs
         sess = _keras.backend.get_session()
         frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-        inputs = {i: sess.graph.get_tensor_by_name(i) for i in keras_model.inputs}
-        outputs = {i: sess.graph.get_tensor_by_name(i) for i in keras_model.outputs}
         tf_reset_default_graph()
         with tf_session() as sess:
-            frozen_graph = tf_optimize(inputs, outputs, frozen_graph)
+            frozen_graph = tf_optimize(input_names, output_names, frozen_graph)
         tf_reset_default_graph()
-    return frozen_graph, inputs, outputs
+    return frozen_graph, input_names, output_names
 
 
-def tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant=None):
+def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=None):
     from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
-
-    # don't use resource type as input
-    output_tensors = list(output_tensors)
 
     config = config_pb2.ConfigProto()
     rewrite_options = config.graph_options.rewrite_options
@@ -300,34 +313,27 @@ def tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant
     ]
     meta_graph = tf.compat.v1.train.export_meta_graph(graph_def=graph_def)
     fetch_collection = meta_graph_pb2.CollectionDef()
-    for t in list(input_tensors) + output_tensors:
+    for t in input_names + output_names:
         fetch_collection.node_list.value.append(t)
     meta_graph.collection_def["train_op"].CopyFrom(fetch_collection)
     graph_def = tf_opt.OptimizeGraph(config, meta_graph)
     return graph_def
 
 
-def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=True):
+def tf_optimize(input_names, output_names, graph_def, fold_constant=True):
     """Extract inference subgraph and optimize graph."""
-    assert isinstance(input_tensors, dict)
-    assert isinstance(output_tensors, dict)
-    try:
-        input_tensors = {
-            name: tensor for name, tensor in input_tensors.items()
-            if tensor.dtype != tf.dtypes.resource
-        }
-    except:  # pylint: disable=bare-except
-        pass
+    assert isinstance(input_names, list)
+    assert isinstance(output_names, list)
 
     # TODO: is this needed ?
-    needed_names = [utils.node_name(i) for i in input_tensors.keys()] + \
-                   [utils.node_name(i) for i in output_tensors.keys()]
+    needed_names = [utils.node_name(i) for i in input_names] + \
+                   [utils.node_name(i) for i in output_names]
     graph_def = extract_sub_graph(graph_def, needed_names)
 
     if fold_constant:
         want_grappler = is_tf2() or LooseVersion(tf.__version__) >= "1.15"
         if want_grappler:
-            graph_def = tf_optimize_grappler(input_tensors, output_tensors, graph_def, fold_constant)
+            graph_def = tf_optimize_grappler(input_names, output_names, graph_def, fold_constant)
         else:
             # the older transform path
             from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name
@@ -341,7 +347,7 @@ def tf_optimize(input_tensors, output_tensors, graph_def, fold_constant=True):
                 "fold_batch_norms",
                 "fold_old_batch_norms",
             ])
-            graph_def = TransformGraph(graph_def, input_tensors.keys(), output_tensors.keys(), transforms)
+            graph_def = TransformGraph(graph_def, input_names, output_names, transforms)
 
     return graph_def
 
@@ -367,7 +373,6 @@ def is_function(g):
         return 'tensorflow.python.framework.func_graph.FuncGraph' in str(type(g))
     return False
 
-
 _FUNCTIONS = {}
 
 
@@ -387,7 +392,12 @@ def resolve_functions(tf_graph):
         fdef = fdef.definition
         if input_shapes and len(fdef.signature.input_arg) < len(input_shapes):
             input_shapes = input_shapes[:len(fdef.signature.input_arg)]
-        func = function_def_to_graph(fdef, input_shapes=input_shapes)
+        try:
+            func = function_def_to_graph(fdef, input_shapes=input_shapes)
+        except:  # pylint: disable=bare-except
+            # if there is a missmatch between caller and function use the functions shape
+            logger.warning("shape missmatch between caller and function: %s", k)
+            func = function_def_to_graph(fdef)
         _FUNCTIONS[k] = func
         _, _, _, _, _, tfunctions = tflist_to_onnx(func, {})
         functions.update(tfunctions)

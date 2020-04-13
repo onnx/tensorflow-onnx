@@ -361,7 +361,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
-    # TODO: remove verbose argument in future release
     if verbose:
         logger.warning("Argument verbose for process_tf_graph is deprecated. Please use --verbose option instead.")
     del verbose
@@ -507,3 +506,9 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         "\tonnx unmapped: {}".format(op_cnt, attr_cnt, mapped_op, unmapped_op))
 
     return g
+
+
+def tf_optimize(input_names, output_names, graph_def, fold_constant=True):
+    """optimize tensorflow graph. This is in tf_loader but some apps call this
+       so we proxy into tf_loader to keep them working."""
+    return tf2onnx.tf_loader.tf_optimize(input_names, output_names, graph_def, fold_constant)
