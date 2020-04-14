@@ -185,6 +185,8 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Relu": self._simple_through_handler,
             "Sigmoid": self._simple_through_handler,
             "Shape": self._shape_handler,
+            "Sigmoid": self._simple_through_handler,
+            "Sum": self._sum_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
             "Squeeze": self._squeeze_handler,
@@ -477,6 +479,50 @@ class TransposeOptimizer(GraphOptimizerBase):
             return self._switch_transpose_and_node(node, trans)
 
         return False
+
+    def _sum_handler(self, trans, node):
+        inputs = node.inputs
+        trans_shape = self._g.get_shape(trans.output[0])
+        perm = list(trans.get_attr('perm').ints)
+        untrans_idx = [perm.index(i) for i in range(len(perm))]
+
+        # check if sum(trans(x1), trans(x2), const(x3), ...) can be switched
+        for n in inputs:
+            if n.type not in ["Transpose", "Const"]:
+                return False
+            if not self._nodes_has_single_consumer_node([n]):
+                return False
+            if n.is_const():
+                # if graph is valid, op shapes should be valid
+                # const is special case, in case of broadcasting
+                # ensure rank matches
+                n_shape = self._g.get_shape(n.output[0])
+                if len(n_shape) != len(trans_shape):
+                    return False
+            else:
+                if list(n.get_attr('perm').ints) != perm:
+                    return False
+
+        # switch to trans(sum(x1, x2, x3, ...))
+        ops = self._g.get_nodes()
+        self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
+        node.input = [n.output[0] if n.is_const() else n.input[0] for n in inputs]
+        trans.input[0] = node.output[0]
+
+        # adjust shape if present
+        shape = self._g.get_shape(node.output[0])
+        if shape:
+            self._g.set_shape(node.output[0], [shape[i] for i in untrans_idx])
+
+        # update constants, remove dangling transposes
+        for n in inputs:
+            if n.is_const():
+                val = n.get_tensor_value(as_list=False)
+                new_val = np.transpose(val, untrans_idx)
+                n.set_tensor_value(new_val)
+            elif n.name != trans.name:
+                self._g.remove_node(n.name)
+        return True
 
     def _identity_handler(self, trans, node):
         if node.output[0] in node.graph.outputs:
