@@ -201,12 +201,10 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures
     for k in signatures:
         inputs_tensor_info = get_signature_def(imported, k).inputs
         for _, input_tensor in inputs_tensor_info.items():
-            if input_tensor.dtype != tf.dtypes.resource:
-                input_names.append(input_tensor.name)
+            input_names.append(input_tensor.name)
         outputs_tensor_info = get_signature_def(imported, k).outputs
         for _, output_tensor in outputs_tensor_info.items():
-            if output_tensor.dtype != tf.dtypes.resource:
-                output_names.append(output_tensor.name)
+            output_names.append(output_tensor.name)
     frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
     return frozen_graph, input_names, output_names
 
