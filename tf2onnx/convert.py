@@ -135,8 +135,8 @@ def main():
         model_path = args.keras
 
     if args.verbose:
-        logger.info("inputs: %s", inputs.keys())
-        logger.info("outputs: %s", outputs.keys())
+        logger.info("inputs: %s", inputs)
+        logger.info("outputs: %s", outputs)
 
     with tf.Graph().as_default() as tf_graph:
         tf.import_graph_def(graph_def, name='')
@@ -148,8 +148,8 @@ def main():
                              custom_op_handlers=custom_ops,
                              extra_opset=extra_opset,
                              shape_override=args.shape_override,
-                             input_names=list(inputs.keys()),
-                             output_names=list(outputs.keys()),
+                             input_names=inputs,
+                             output_names=outputs,
                              inputs_as_nchw=args.inputs_as_nchw)
 
     onnx_graph = optimizer.optimize_graph(g)
