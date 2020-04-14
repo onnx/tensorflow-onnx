@@ -180,9 +180,6 @@ def from_checkpoint(model_path, input_names, output_names):
 
 def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures):
     """Load tensorflow graph from saved_model."""
-    # make sure we start with clean default graph
-    inputs = {}
-    outputs = {}
 
     imported = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
     for k in imported.signature_def.keys():
@@ -199,17 +196,17 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures
         # TF1.12 changed the api
         get_signature_def = lambda meta_graph_def, k: meta_graph_def.signature_def[k]
 
+    input_names = []
+    output_names = []
     for k in signatures:
         inputs_tensor_info = get_signature_def(imported, k).inputs
         for _, input_tensor in inputs_tensor_info.items():
-            inputs[input_tensor.name] = sess.graph.get_tensor_by_name(input_tensor.name)
+            if input_tensor.dtype != tf.dtypes.resource:
+                input_names.append(input_tensor.name)
         outputs_tensor_info = get_signature_def(imported, k).outputs
         for _, output_tensor in outputs_tensor_info.items():
-            outputs[output_tensor.name] = sess.graph.get_tensor_by_name(output_tensor.name)
-
-    input_names = list(inputs.keys())
-    input_names = inputs_without_resource(sess, input_names)
-    output_names = list(outputs.keys())
+            if output_tensor.dtype != tf.dtypes.resource:
+                output_names.append(output_tensor.name)
     frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
     return frozen_graph, input_names, output_names
 
@@ -226,8 +223,10 @@ def _from_saved_model_v2(model_path, input_names, output_names, signatures):
         signatures.append(k)
     for k in signatures:
         concrete_func = imported.signatures[k]
-        input_names = [input_tensor.name for input_tensor in concrete_func.inputs]
-        output_names = [output_tensor.name for output_tensor in concrete_func.outputs]
+        input_names = [input_tensor.name for input_tensor in concrete_func.inputs
+                       if input_tensor.dtype != tf.dtypes.resource]
+        output_names = [output_tensor.name for output_tensor in concrete_func.outputs
+                        if output_tensor.dtype != tf.dtypes.resource]
 
     frozen_graph = from_function(concrete_func, input_names, output_names)
     return frozen_graph, input_names, output_names
@@ -270,9 +269,10 @@ def from_keras(model_path, input_names, output_names):
         concrete_func = function.get_concrete_function()
         # allow to pass inputs and outputs from caller if we don't want all of them
         input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                       if input_names is None or input_tensor.name in input_names]
+                       if input_tensor.dtype != tf.dtypes.resource]
         output_names = [output_tensor.name for output_tensor in concrete_func.outputs
-                        if output_names is None or output_tensor.name in output_names]
+                        if output_tensor.dtype != tf.dtypes.resource]
+
         frozen_graph = from_function(concrete_func, input_names, output_names)
     else:
         # Handles Keras when Eager mode is disabled.
@@ -280,15 +280,10 @@ def from_keras(model_path, input_names, output_names):
         _keras.backend.set_learning_phase(False)
         keras_model = _keras.models.load_model(model_path, custom_objects)
         # allow to pass inputs and outputs from caller if we don't want all of them
-        if input_names:
-            input_names = [i for i in keras_model.inputs if i in input_names]
-        else:
-            input_names = keras_model.inputs
-        if output_names:
-            output_names = [i for i in keras_model.outputs if i in output_names]
-        else:
-            output_names = keras_model.outputs
+        input_names = keras_model.inputs
+        output_names = keras_model.outputs
         sess = _keras.backend.get_session()
+        input_names = inputs_without_resource(sess, input_names)
         frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
         tf_reset_default_graph()
         with tf_session() as sess:

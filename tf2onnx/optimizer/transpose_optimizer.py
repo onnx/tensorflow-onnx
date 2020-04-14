@@ -183,6 +183,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Pad": self._pad_handler,
             "ReduceMean": self._reducemean_handler,
             "Relu": self._simple_through_handler,
+            "Sigmoid": self._simple_through_handler,
             "Shape": self._shape_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
