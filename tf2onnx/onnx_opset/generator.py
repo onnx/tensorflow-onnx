@@ -173,3 +173,24 @@ class ZerosLike:
                       attr={'to': dtypes[0]},
                       name=node.name, outputs=node.output,
                       shapes=shapes, dtypes=dtypes)
+
+
+@tf_op(["IteratorV2", "FIFOQueueV2"])
+class Iterator:
+    @classmethod
+    def version_8(cls, ctx, node, **kwargs):
+        ctx.remove_node(node.name)
+
+
+@tf_op(["IteratorGetNext", "QueueDequeueV2"])
+class IteratorGetNext:
+    @classmethod
+    def version_8(cls, ctx, node, **kwargs):
+        output_names = node.output
+        type_0 = ctx.get_dtype(output_names[0])
+        type_1 = ctx.get_dtype(output_names[1])
+        shape_0 = ctx.get_shape(output_names[0])
+        shape_1 = ctx.get_shape(output_names[1])
+        ctx.remove_node(node.name)
+        ctx.add_graph_input(output_names[0], type_0, shape_0)
+        ctx.add_graph_input(output_names[1], type_1, shape_1)
