@@ -1819,6 +1819,220 @@ class MatrixDiagPart:
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 
+@tf_op(["MatrixDiagPartV2", "MatrixDiagPartV3"])
+class MatrixDiagPart:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        Input = node.input[0]
+        K = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+        Padding = node.input[2]
+        Align = 'LEFT_LEFT'
+        if node.op.op_type == 'MatrixDiagPartV3':
+            Align = node.get_attr_str('align') if 'align' in node.attr else 'LEFT_RIGHT'
+        input_rank = len(ctx.get_shape(Input))
+        raw_input_shape = [-1] * input_rank
+        per_loop_shape = raw_input_shape[:-1]
+        raw_output_shape = raw_input_shape[:-2] + [-1]
+        loop_output_shape = raw_output_shape + [-1]
+        ctx.set_shape(node.output[0], raw_output_shape)
+        ctx.set_shape('output:0', raw_output_shape)
+        # define constants
+        const_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero', np.array([0]).astype(np.int64))
+        const_one = ctx.make_const(utils.make_name(node.name) + 'const_one', np.array([1]).astype(np.int64))
+        const_two = ctx.make_const(utils.make_name(node.name) + 'const_two', np.array([2]).astype(np.int64))
+        const_neg_one = ctx.make_const(utils.make_name(node.name) + 'const_neg_one', np.array([-1]).astype(np.int64))
+        const_neg_two = ctx.make_const(utils.make_name(node.name) + 'const_neg_two', np.array([-2]).astype(np.int64))
+        # prepare new_shape of input
+        input_shape = ctx.make_node('Shape', [Input])
+        shape_input_shape = ctx.make_node('Shape', [input_shape.output[0]])
+        matrix_shape = ctx.make_node('Slice',
+                                     [input_shape.output[0], const_neg_two.output[0], shape_input_shape.output[0]])
+        min_dim = ctx.make_node('ReduceMin', [matrix_shape.output[0]])
+        input_depth = ctx.make_node('Slice', [matrix_shape.output[0], const_neg_two.output[0], const_neg_one.output[0]])
+        input_width = ctx.make_node('Slice', [matrix_shape.output[0], const_neg_one.output[0], const_two.output[0]])
+        temp_shape = ctx.make_node('Concat', [const_neg_one.output[0], matrix_shape.output[0]], attr={'axis': 0})
+        temp_input = ctx.make_node('Reshape', [Input, temp_shape.output[0]])
+        temp_transposed = ctx.make_node('Transpose', [temp_input.output[0]], attr={'perm': [0, 2, 1]})
+        half_shape = ctx.make_node('Slice', [input_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
+        new_shape = ctx.make_node('Concat', [half_shape.output[0], input_width.output[0], input_depth.output[0]],
+                                  attr={'axis': 0}, name='concat_new_shape')
+        # define body graph for main loop
+        k_shape = ctx.make_node('Shape', [K])
+        k_start = ctx.make_node('Slice', [K, const_zero.output[0], const_one.output[0]])
+        k_end = ctx.make_node('Slice', [K, const_neg_one.output[0], k_shape.output[0]])
+        raw_total_k = ctx.make_node('Sub', [k_end.output[0], k_start.output[0]])
+        total_k = ctx.make_node('Add', [raw_total_k.output[0], const_one.output[0]])
+        trip_name = utils.make_name(node.name + "_i")
+        cond_name = utils.make_name(node.name + "_cond")
+        body_graph = ctx.create_new_graph_with_same_config()
+        body_graph.add_graph_input(trip_name, TensorProto.INT64, [1])
+        body_graph.add_graph_input(cond_name, TensorProto.BOOL, [])
+        body_graph.parent_graph = ctx
+        # identity of input
+        identity_input_graph = body_graph.create_new_graph_with_same_config()
+        identity_input_graph.parent_graph = body_graph
+        identity_input = identity_input_graph.make_node('Identity', [Input], name='id_c')
+        identity_input_graph.add_graph_output(identity_input.output[0], ctx.get_dtype(node.input[0]), raw_input_shape)
+        # transposed input
+        transposed_input_graph = body_graph.create_new_graph_with_same_config()
+        transposed_input_graph.parent_graph = body_graph
+        next_shape = transposed_input_graph.make_node('Concat', [half_shape.output[0], input_width.output[0],
+                                                                 input_depth.output[0]], attr={'axis': 0})
+        transposed_input = transposed_input_graph.make_node('Reshape',
+                                                            [temp_transposed.output[0], next_shape.output[0]])
+        transposed_input_graph.add_graph_output(transposed_input.output[0], ctx.get_dtype(node.input[0]),
+                                                raw_input_shape)
+        # compute current k of the loop
+        current_k = body_graph.make_node('Sub', [k_end.output[0], trip_name])
+        is_k_noneg = body_graph.make_node('Greater', [current_k.output[0], const_neg_one.output[0]])
+        processed_input = body_graph.make_node('If', [is_k_noneg.output[0]], name="If_process")
+        processed_input.set_body_graph_as_attr('then_branch', identity_input_graph)
+        processed_input.set_body_graph_as_attr('else_branch', transposed_input_graph)
+        processed_shape = body_graph.make_node('Shape', [processed_input.output[0]])
+        shape_processed_shape = body_graph.make_node('Shape', [processed_shape.output[0]])
+        new_depth = body_graph.make_node('Slice',
+                                         [processed_shape.output[0], const_neg_two.output[0], const_neg_one.output[0]])
+        new_width = body_graph.make_node('Slice', [processed_shape.output[0], const_neg_one.output[0],
+                                                   shape_processed_shape.output[0]])
+        abs_k = body_graph.make_node('Abs', [current_k.output[0]])
+        range_k = body_graph.make_node('Range', [abs_k.output[0], new_width.output[0], const_one.output[0]],
+                                       domain="com.microsoft")
+        sliced_range = body_graph.make_node('Slice', [range_k.output[0], const_zero.output[0], new_depth.output[0]])
+        sliced_shape = body_graph.make_node('Shape', [sliced_range.output[0]])
+        pad_length = body_graph.make_node('Sub', [new_depth.output[0], sliced_shape.output[0]])
+        pad_length_2 = body_graph.make_node('Concat', [const_zero.output[0], pad_length.output[0]], attr={'axis': 0})
+        padded_range = body_graph.make_node('Pad', [sliced_range.output[0], pad_length_2.output[0]])
+        unsqueezed_range = body_graph.make_node('Unsqueeze', [padded_range.output[0]], attr={'axes': [1]})
+        half_shape_x = body_graph.make_node('Slice',
+                                            [new_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
+        shape_range = body_graph.make_node('Shape', [unsqueezed_range.output[0]])
+        full_shape = body_graph.make_node('Concat', [half_shape_x.output[0], shape_range.output[0]], attr={'axis': 0})
+        expanded_range = body_graph.make_node('Expand', [unsqueezed_range.output[0], full_shape.output[0]])
+        gathered_input = body_graph.make_node('GatherElements', [processed_input.output[0], expanded_range.output[0]],
+                                              attr={'axis': -1})
+        squeezed_input = body_graph.make_node('Squeeze', [gathered_input.output[0]], attr={'axes': [-1]})
+        left_width = body_graph.make_node('Sub', [new_width.output[0], abs_k.output[0]])
+        dims = body_graph.make_node('Concat', [left_width.output[0], new_depth.output[0]], attr={'axis': 0})
+        valid_dim = body_graph.make_node('ReduceMin', [dims.output[0]])
+        raw_output = body_graph.make_node('Slice', [squeezed_input.output[0], const_zero.output[0], valid_dim.output[0],
+                                                    const_neg_one.output[0]])
+        gap_output = body_graph.make_node('Sub', [min_dim.output[0], valid_dim.output[0]])
+        gaps = body_graph.make_node('Concat', [const_zero.output[0], gap_output.output[0]], attr={'axis': 0})
+        processed_gap = body_graph.make_node('ReduceMax', [gaps.output[0]])
+        pad_zero = body_graph.make_node('Mul', [new_shape.output[0], const_zero.output[0]])
+        sliced_zero = body_graph.make_node('Slice', [pad_zero.output[0], const_zero.output[0], const_neg_two.output[0]])
+        # gap_pos_k_graph
+        gap_pos_k_graph = body_graph.create_new_graph_with_same_config()
+        gap_pos_k_graph.parent_graph = body_graph
+        gap_pos_k = gap_pos_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]],
+                                              attr={'axis': 0}) if Align.startswith(
+            'LEFT') else gap_pos_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]],
+                                                   attr={'axis': 0})
+        gap_pos_k_graph.add_graph_output(gap_pos_k.output[0], TensorProto.INT64, [-1])
+        # gap_neg_k_graph
+        gap_neg_k_graph = body_graph.create_new_graph_with_same_config()
+        gap_neg_k_graph.parent_graph = body_graph
+        gap_neg_k = gap_neg_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]],
+                                              attr={'axis': 0}) if Align.endswith(
+            'LEFT') else gap_neg_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]],
+                                                   attr={'axis': 0})
+        gap_neg_k_graph.add_graph_output(gap_neg_k.output[0], TensorProto.INT64, [-1])
+        # pad output with gap
+        gap_k = body_graph.make_node('If', [is_k_noneg.output[0]], name='if_gap_k')
+        gap_k.set_body_graph_as_attr("then_branch", gap_pos_k_graph)
+        gap_k.set_body_graph_as_attr("else_branch", gap_neg_k_graph)
+        gap_left = body_graph.make_node('Slice', [gap_k.output[0], const_zero.output[0], const_one.output[0]])
+        gap_right = body_graph.make_node('Slice', [gap_k.output[0], const_one.output[0], const_two.output[0]])
+        gap_all = body_graph.make_node('Concat', [sliced_zero.output[0], gap_left.output[0], sliced_zero.output[0],
+                                                  gap_right.output[0]], attr={'axis': 0})
+        padded_output = body_graph.make_node('Pad', [raw_output.output[0], gap_all.output[0], Padding])
+        cond_output = body_graph.make_node('Identity', [cond_name])
+        body_graph.add_graph_output(cond_output.output[0], TensorProto.BOOL, [])
+        body_graph.add_graph_output(padded_output.output[0], ctx.get_dtype(node.input[0]), per_loop_shape)
+        body_graph.add_graph_output(gap_k.output[0], TensorProto.INT64, [-1])
+        # make loop
+        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+        main_loop = ctx.make_node('Loop', [total_k.output[0], cond_const.output[0]], output_count=2)
+        main_loop.set_body_graph_as_attr("body", body_graph)
+        # reshape output
+        next_padded_shape = ctx.make_node('Concat', [total_k.output[0], const_neg_one.output[0], min_dim.output[0]],
+                                          attr={'axis': 0})
+        reshaped_padded = ctx.make_node('Reshape', [main_loop.output[0], next_padded_shape.output[0]])
+        transposed_padded = ctx.make_node('Transpose', [reshaped_padded.output[0]], attr={'perm': [1, 0, 2]})
+        output_shape = ctx.make_node('Concat', [half_shape.output[0], total_k.output[0], const_neg_one.output[0]],
+                                     attr={'axis': 0})
+        reshaped_output = ctx.make_node('Reshape', [transposed_padded.output[0], output_shape.output[0]])
+        # compute pads
+        left_pads = ctx.make_node('Slice', [main_loop.output[1], const_neg_two.output[0], const_neg_one.output[0],
+                                            const_neg_one.output[0]])
+        flattened_left_pads = ctx.make_node('Reshape', [left_pads.output[0], const_neg_one.output[0]])
+        min_left_pads = ctx.make_node('ReduceMin', [flattened_left_pads.output[0]])
+        right_pads = ctx.make_node('Slice', [main_loop.output[1], const_neg_one.output[0], const_two.output[0],
+                                             const_neg_one.output[0]])
+        flattened_right_pads = ctx.make_node('Reshape', [right_pads.output[0], const_neg_one.output[0]])
+        min_right_pads = ctx.make_node('ReduceMin', [flattened_right_pads.output[0]])
+        # trim left pads
+        identity_left_sliced_graph = ctx.create_new_graph_with_same_config()
+        identity_left_sliced_graph.parent_graph = ctx
+        identity_left_sliced = identity_left_sliced_graph.make_node('Identity', [reshaped_output.output[0]],
+                                                                    name='id_d')
+        identity_left_sliced_graph.add_graph_output(identity_left_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                                    loop_output_shape)
+        output_left_sliced_graph = ctx.create_new_graph_with_same_config()
+        output_left_sliced_graph.parent_graph = ctx
+        output_left_sliced = output_left_sliced_graph.make_node('Slice',
+                                                                [reshaped_output.output[0], min_left_pads.output[0],
+                                                                 min_dim.output[0], const_neg_one.output[0]])
+        output_left_sliced_graph.add_graph_output(output_left_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                                  loop_output_shape)
+        left_pads_greater_than_zero = ctx.make_node('Greater', [min_left_pads.output[0], const_zero.output[0]])
+        final_output_left_sliced = ctx.make_node('If', [left_pads_greater_than_zero.output[0]], name='if_left')
+        final_output_left_sliced.set_body_graph_as_attr("then_branch", output_left_sliced_graph)
+        final_output_left_sliced.set_body_graph_as_attr("else_branch", identity_left_sliced_graph)
+        # trim right pads
+        valid_right_dim = ctx.make_node('Sub', [min_dim.output[0], min_right_pads.output[0]])
+        identity_right_sliced_graph = ctx.create_new_graph_with_same_config()
+        identity_right_sliced_graph.parent_graph = ctx
+        identity_right_sliced = identity_right_sliced_graph.make_node('Identity', [final_output_left_sliced.output[0]],
+                                                                      name='id_e')
+        identity_right_sliced_graph.add_graph_output(identity_right_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                                     loop_output_shape)
+        output_right_sliced_graph = ctx.create_new_graph_with_same_config()
+        output_right_sliced_graph.parent_graph = ctx
+        output_right_sliced = output_right_sliced_graph.make_node('Slice', [final_output_left_sliced.output[0],
+                                                                            const_zero.output[0],
+                                                                            valid_right_dim.output[0],
+                                                                            const_neg_one.output[0]])
+        output_right_sliced_graph.add_graph_output(output_right_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                                   loop_output_shape)
+        right_dim_greater_than_valid = ctx.make_node('Greater', [min_dim.output[0], valid_right_dim.output[0]])
+        final_output_right_sliced = ctx.make_node('If', [right_dim_greater_than_valid.output[0]], name='if_right')
+        final_output_right_sliced.set_body_graph_as_attr("then_branch", output_right_sliced_graph)
+        final_output_right_sliced.set_body_graph_as_attr("else_branch", identity_right_sliced_graph)
+        # squeeze output
+        latest_shape = ctx.make_node('Shape', [final_output_right_sliced.output[0]])
+        latest_depth = ctx.make_node('Slice',
+                                     [latest_shape.output[0], const_neg_two.output[0], const_neg_one.output[0]])
+        need_squeeze = ctx.make_node('Equal', [latest_depth.output[0], const_one.output[0]])
+        identity_sliced_graph = ctx.create_new_graph_with_same_config()
+        identity_sliced_graph.parent_graph = ctx
+        identity_sliced = identity_sliced_graph.make_node('Identity', [final_output_right_sliced.output[0]])
+        identity_sliced_graph.add_graph_output(identity_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                               raw_output_shape + [-1])
+        squeeze_sliced_graph = ctx.create_new_graph_with_same_config()
+        squeeze_sliced_graph.parent_graph = ctx
+        squeeze_sliced = squeeze_sliced_graph.make_node('Squeeze', [final_output_right_sliced.output[0]],
+                                                        attr={'axes': [-2]}, name='final_squeeze')
+        squeeze_sliced_graph.add_graph_output(squeeze_sliced.output[0], ctx.get_dtype(node.input[0]), raw_output_shape)
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        squeeze_if = ctx.make_node('If', [need_squeeze.output[0]], name=node.name, outputs=node.output, shapes=shapes,
+                                   dtypes=dtypes)
+        squeeze_if.set_body_graph_as_attr("then_branch", squeeze_sliced_graph)
+        squeeze_if.set_body_graph_as_attr("else_branch", identity_sliced_graph)
+
+
 @tf_op("BroadcastTo")
 class BroadcastTo:
     @classmethod
