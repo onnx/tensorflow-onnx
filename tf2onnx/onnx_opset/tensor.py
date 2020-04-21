@@ -1820,7 +1820,7 @@ class MatrixDiagPart:
 
 
 @tf_op(["MatrixDiagPartV2", "MatrixDiagPartV3"])
-class MatrixDiagPart:
+class MatrixDiagPartV2V3:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         Input = node.input[0]
@@ -1835,7 +1835,9 @@ class MatrixDiagPart:
         raw_output_shape = raw_input_shape[:-2] + [-1]
         loop_output_shape = raw_output_shape + [-1]
         ctx.set_shape(node.output[0], raw_output_shape)
-        ctx.set_shape('output:0', raw_output_shape)
+        for out in ctx.find_output_consumers(node.output[0]):
+            if out.op.op_type == 'Identity':
+                ctx.set_shape(out.output[0], raw_output_shape)
         # define constants
         const_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero', np.array([0]).astype(np.int64))
         const_one = ctx.make_const(utils.make_name(node.name) + 'const_one', np.array([1]).astype(np.int64))
@@ -1855,7 +1857,7 @@ class MatrixDiagPart:
         temp_transposed = ctx.make_node('Transpose', [temp_input.output[0]], attr={'perm': [0, 2, 1]})
         half_shape = ctx.make_node('Slice', [input_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
         new_shape = ctx.make_node('Concat', [half_shape.output[0], input_width.output[0], input_depth.output[0]],
-                                  attr={'axis': 0}, name='concat_new_shape')
+                                  attr={'axis': 0})
         # define body graph for main loop
         k_shape = ctx.make_node('Shape', [K])
         k_start = ctx.make_node('Slice', [K, const_zero.output[0], const_one.output[0]])
@@ -1871,7 +1873,7 @@ class MatrixDiagPart:
         # identity of input
         identity_input_graph = body_graph.create_new_graph_with_same_config()
         identity_input_graph.parent_graph = body_graph
-        identity_input = identity_input_graph.make_node('Identity', [Input], name='id_c')
+        identity_input = identity_input_graph.make_node('Identity', [Input])
         identity_input_graph.add_graph_output(identity_input.output[0], ctx.get_dtype(node.input[0]), raw_input_shape)
         # transposed input
         transposed_input_graph = body_graph.create_new_graph_with_same_config()
@@ -1885,7 +1887,7 @@ class MatrixDiagPart:
         # compute current k of the loop
         current_k = body_graph.make_node('Sub', [k_end.output[0], trip_name])
         is_k_noneg = body_graph.make_node('Greater', [current_k.output[0], const_neg_one.output[0]])
-        processed_input = body_graph.make_node('If', [is_k_noneg.output[0]], name="If_process")
+        processed_input = body_graph.make_node('If', [is_k_noneg.output[0]])
         processed_input.set_body_graph_as_attr('then_branch', identity_input_graph)
         processed_input.set_body_graph_as_attr('else_branch', transposed_input_graph)
         processed_shape = body_graph.make_node('Shape', [processed_input.output[0]])
@@ -1924,21 +1926,19 @@ class MatrixDiagPart:
         # gap_pos_k_graph
         gap_pos_k_graph = body_graph.create_new_graph_with_same_config()
         gap_pos_k_graph.parent_graph = body_graph
-        gap_pos_k = gap_pos_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]],
-                                              attr={'axis': 0}) if Align.startswith(
-            'LEFT') else gap_pos_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]],
-                                                   attr={'axis': 0})
+        gap_pos_k = gap_pos_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]], attr={'axis': 0}) \
+                    if Align.startswith('LEFT') \
+                    else gap_pos_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]], attr={'axis': 0})
         gap_pos_k_graph.add_graph_output(gap_pos_k.output[0], TensorProto.INT64, [-1])
         # gap_neg_k_graph
         gap_neg_k_graph = body_graph.create_new_graph_with_same_config()
         gap_neg_k_graph.parent_graph = body_graph
-        gap_neg_k = gap_neg_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]],
-                                              attr={'axis': 0}) if Align.endswith(
-            'LEFT') else gap_neg_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]],
-                                                   attr={'axis': 0})
+        gap_neg_k = gap_neg_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]], attr={'axis': 0}) \
+                    if Align.endswith('LEFT') \
+                    else gap_neg_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]], attr={'axis': 0})
         gap_neg_k_graph.add_graph_output(gap_neg_k.output[0], TensorProto.INT64, [-1])
         # pad output with gap
-        gap_k = body_graph.make_node('If', [is_k_noneg.output[0]], name='if_gap_k')
+        gap_k = body_graph.make_node('If', [is_k_noneg.output[0]])
         gap_k.set_body_graph_as_attr("then_branch", gap_pos_k_graph)
         gap_k.set_body_graph_as_attr("else_branch", gap_neg_k_graph)
         gap_left = body_graph.make_node('Slice', [gap_k.output[0], const_zero.output[0], const_one.output[0]])
@@ -1974,8 +1974,7 @@ class MatrixDiagPart:
         # trim left pads
         identity_left_sliced_graph = ctx.create_new_graph_with_same_config()
         identity_left_sliced_graph.parent_graph = ctx
-        identity_left_sliced = identity_left_sliced_graph.make_node('Identity', [reshaped_output.output[0]],
-                                                                    name='id_d')
+        identity_left_sliced = identity_left_sliced_graph.make_node('Identity', [reshaped_output.output[0]])
         identity_left_sliced_graph.add_graph_output(identity_left_sliced.output[0], ctx.get_dtype(node.input[0]),
                                                     loop_output_shape)
         output_left_sliced_graph = ctx.create_new_graph_with_same_config()
@@ -1986,15 +1985,14 @@ class MatrixDiagPart:
         output_left_sliced_graph.add_graph_output(output_left_sliced.output[0], ctx.get_dtype(node.input[0]),
                                                   loop_output_shape)
         left_pads_greater_than_zero = ctx.make_node('Greater', [min_left_pads.output[0], const_zero.output[0]])
-        final_output_left_sliced = ctx.make_node('If', [left_pads_greater_than_zero.output[0]], name='if_left')
+        final_output_left_sliced = ctx.make_node('If', [left_pads_greater_than_zero.output[0]])
         final_output_left_sliced.set_body_graph_as_attr("then_branch", output_left_sliced_graph)
         final_output_left_sliced.set_body_graph_as_attr("else_branch", identity_left_sliced_graph)
         # trim right pads
         valid_right_dim = ctx.make_node('Sub', [min_dim.output[0], min_right_pads.output[0]])
         identity_right_sliced_graph = ctx.create_new_graph_with_same_config()
         identity_right_sliced_graph.parent_graph = ctx
-        identity_right_sliced = identity_right_sliced_graph.make_node('Identity', [final_output_left_sliced.output[0]],
-                                                                      name='id_e')
+        identity_right_sliced = identity_right_sliced_graph.make_node('Identity', [final_output_left_sliced.output[0]])
         identity_right_sliced_graph.add_graph_output(identity_right_sliced.output[0], ctx.get_dtype(node.input[0]),
                                                      loop_output_shape)
         output_right_sliced_graph = ctx.create_new_graph_with_same_config()
@@ -2006,7 +2004,7 @@ class MatrixDiagPart:
         output_right_sliced_graph.add_graph_output(output_right_sliced.output[0], ctx.get_dtype(node.input[0]),
                                                    loop_output_shape)
         right_dim_greater_than_valid = ctx.make_node('Greater', [min_dim.output[0], valid_right_dim.output[0]])
-        final_output_right_sliced = ctx.make_node('If', [right_dim_greater_than_valid.output[0]], name='if_right')
+        final_output_right_sliced = ctx.make_node('If', [right_dim_greater_than_valid.output[0]])
         final_output_right_sliced.set_body_graph_as_attr("then_branch", output_right_sliced_graph)
         final_output_right_sliced.set_body_graph_as_attr("else_branch", identity_right_sliced_graph)
         # squeeze output
@@ -2022,7 +2020,7 @@ class MatrixDiagPart:
         squeeze_sliced_graph = ctx.create_new_graph_with_same_config()
         squeeze_sliced_graph.parent_graph = ctx
         squeeze_sliced = squeeze_sliced_graph.make_node('Squeeze', [final_output_right_sliced.output[0]],
-                                                        attr={'axes': [-2]}, name='final_squeeze')
+                                                        attr={'axes': [-2]})
         squeeze_sliced_graph.add_graph_output(squeeze_sliced.output[0], ctx.get_dtype(node.input[0]), raw_output_shape)
         shapes = node.output_shapes
         dtypes = node.output_dtypes
