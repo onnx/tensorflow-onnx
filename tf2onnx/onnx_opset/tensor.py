@@ -1823,6 +1823,7 @@ class MatrixDiagPart:
 class MatrixDiagPartV2V3:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
+        # assemble MatrixDiagPart V2&V3 by looping k diagonals with proper pads
         input_tensor = node.input[0]
         k = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
         padding = node.input[2]
