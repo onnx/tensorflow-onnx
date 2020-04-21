@@ -3117,41 +3117,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
             v3 = tf.raw_ops.MatrixDiagPartV3(input=X, k=K, padding_value=0.123, align='RIGHT_LEFT', name=_TFOUTPUT1)
             return v2, v3
 
-        x_val = np.random.random([4, 5]).astype(np.float32)
-        k_val = np.array([0]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([1]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([3]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([-1]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([-3]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([1, 2]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([-2, -1]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([-1, 1]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-
-        x_val = np.random.random([2, 3, 4, 5]).astype(np.float32)
-        k_val = np.array([0]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([1]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([3]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([-1]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([-3]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([1, 2]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([-2, -1]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
-        k_val = np.array([-1, 1]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
+        for x_shape in ([4, 5], [2, 3, 4, 5]):
+            x_val = np.random.random(x_shape).astype(np.float32)
+            for raw_k in ([0], [1], [3], [-1], [-3], [1, 2], [-2, -1], [-1, 1]):
+                k_val = np.array(raw_k).astype(np.int32)
+                self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
 
 
 if __name__ == '__main__':
