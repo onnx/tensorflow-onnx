@@ -1927,16 +1927,24 @@ class MatrixDiagPartV2V3:
         # gap_pos_k_graph
         gap_pos_k_graph = body_graph.create_new_graph_with_same_config()
         gap_pos_k_graph.parent_graph = body_graph
-        gap_pos_k = gap_pos_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]], attr={'axis': 0}) \
+        gap_pos_k = gap_pos_k_graph.make_node('Concat', [const_zero.output[0],
+                                                         processed_gap.output[0]],
+                                              attr={'axis': 0}) \
                     if align.startswith('LEFT') \
-                    else gap_pos_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]], attr={'axis': 0})
+                    else gap_pos_k_graph.make_node('Concat', [processed_gap.output[0],
+                                                              const_zero.output[0]],
+                                                   attr={'axis': 0})
         gap_pos_k_graph.add_graph_output(gap_pos_k.output[0], TensorProto.INT64, [-1])
         # gap_neg_k_graph
         gap_neg_k_graph = body_graph.create_new_graph_with_same_config()
         gap_neg_k_graph.parent_graph = body_graph
-        gap_neg_k = gap_neg_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]], attr={'axis': 0}) \
+        gap_neg_k = gap_neg_k_graph.make_node('Concat', [const_zero.output[0],
+                                                         processed_gap.output[0]],
+                                              attr={'axis': 0}) \
                     if align.endswith('LEFT') \
-                    else gap_neg_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]], attr={'axis': 0})
+                    else gap_neg_k_graph.make_node('Concat', [processed_gap.output[0],
+                                                              const_zero.output[0]],
+                                                   attr={'axis': 0})
         gap_neg_k_graph.add_graph_output(gap_neg_k.output[0], TensorProto.INT64, [-1])
         # pad output with gap
         gap_k = body_graph.make_node('If', [is_k_noneg.output[0]])
