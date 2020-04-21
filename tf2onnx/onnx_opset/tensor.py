@@ -1823,13 +1823,13 @@ class MatrixDiagPart:
 class MatrixDiagPartV2V3:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        Input = node.input[0]
-        K = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
-        Padding = node.input[2]
-        Align = 'LEFT_LEFT'
+        input_tensor = node.input[0]
+        k = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+        padding = node.input[2]
+        align = 'LEFT_LEFT'
         if node.op.op_type == 'MatrixDiagPartV3':
-            Align = node.get_attr_str('align') if 'align' in node.attr else 'LEFT_RIGHT'
-        input_rank = len(ctx.get_shape(Input))
+            align = node.get_attr_str('align') if 'align' in node.attr else 'LEFT_RIGHT'
+        input_rank = len(ctx.get_shape(input_tensor))
         raw_input_shape = [-1] * input_rank
         per_loop_shape = raw_input_shape[:-1]
         raw_output_shape = raw_input_shape[:-2] + [-1]
@@ -1845,7 +1845,7 @@ class MatrixDiagPartV2V3:
         const_neg_one = ctx.make_const(utils.make_name(node.name) + 'const_neg_one', np.array([-1]).astype(np.int64))
         const_neg_two = ctx.make_const(utils.make_name(node.name) + 'const_neg_two', np.array([-2]).astype(np.int64))
         # prepare new_shape of input
-        input_shape = ctx.make_node('Shape', [Input])
+        input_shape = ctx.make_node('Shape', [input_tensor])
         shape_input_shape = ctx.make_node('Shape', [input_shape.output[0]])
         matrix_shape = ctx.make_node('Slice',
                                      [input_shape.output[0], const_neg_two.output[0], shape_input_shape.output[0]])
@@ -1853,15 +1853,15 @@ class MatrixDiagPartV2V3:
         input_depth = ctx.make_node('Slice', [matrix_shape.output[0], const_neg_two.output[0], const_neg_one.output[0]])
         input_width = ctx.make_node('Slice', [matrix_shape.output[0], const_neg_one.output[0], const_two.output[0]])
         temp_shape = ctx.make_node('Concat', [const_neg_one.output[0], matrix_shape.output[0]], attr={'axis': 0})
-        temp_input = ctx.make_node('Reshape', [Input, temp_shape.output[0]])
+        temp_input = ctx.make_node('Reshape', [input_tensor, temp_shape.output[0]])
         temp_transposed = ctx.make_node('Transpose', [temp_input.output[0]], attr={'perm': [0, 2, 1]})
         half_shape = ctx.make_node('Slice', [input_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
         new_shape = ctx.make_node('Concat', [half_shape.output[0], input_width.output[0], input_depth.output[0]],
                                   attr={'axis': 0})
         # define body graph for main loop
-        k_shape = ctx.make_node('Shape', [K])
-        k_start = ctx.make_node('Slice', [K, const_zero.output[0], const_one.output[0]])
-        k_end = ctx.make_node('Slice', [K, const_neg_one.output[0], k_shape.output[0]])
+        k_shape = ctx.make_node('Shape', [k])
+        k_start = ctx.make_node('Slice', [k, const_zero.output[0], const_one.output[0]])
+        k_end = ctx.make_node('Slice', [k, const_neg_one.output[0], k_shape.output[0]])
         raw_total_k = ctx.make_node('Sub', [k_end.output[0], k_start.output[0]])
         total_k = ctx.make_node('Add', [raw_total_k.output[0], const_one.output[0]])
         trip_name = utils.make_name(node.name + "_i")
@@ -1873,7 +1873,7 @@ class MatrixDiagPartV2V3:
         # identity of input
         identity_input_graph = body_graph.create_new_graph_with_same_config()
         identity_input_graph.parent_graph = body_graph
-        identity_input = identity_input_graph.make_node('Identity', [Input])
+        identity_input = identity_input_graph.make_node('Identity', [input_tensor])
         identity_input_graph.add_graph_output(identity_input.output[0], ctx.get_dtype(node.input[0]), raw_input_shape)
         # transposed input
         transposed_input_graph = body_graph.create_new_graph_with_same_config()
@@ -1927,14 +1927,14 @@ class MatrixDiagPartV2V3:
         gap_pos_k_graph = body_graph.create_new_graph_with_same_config()
         gap_pos_k_graph.parent_graph = body_graph
         gap_pos_k = gap_pos_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]], attr={'axis': 0}) \
-                    if Align.startswith('LEFT') \
+                    if align.startswith('LEFT') \
                     else gap_pos_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]], attr={'axis': 0})
         gap_pos_k_graph.add_graph_output(gap_pos_k.output[0], TensorProto.INT64, [-1])
         # gap_neg_k_graph
         gap_neg_k_graph = body_graph.create_new_graph_with_same_config()
         gap_neg_k_graph.parent_graph = body_graph
         gap_neg_k = gap_neg_k_graph.make_node('Concat', [const_zero.output[0], processed_gap.output[0]], attr={'axis': 0}) \
-                    if Align.endswith('LEFT') \
+                    if align.endswith('LEFT') \
                     else gap_neg_k_graph.make_node('Concat', [processed_gap.output[0], const_zero.output[0]], attr={'axis': 0})
         gap_neg_k_graph.add_graph_output(gap_neg_k.output[0], TensorProto.INT64, [-1])
         # pad output with gap
@@ -1945,7 +1945,7 @@ class MatrixDiagPartV2V3:
         gap_right = body_graph.make_node('Slice', [gap_k.output[0], const_one.output[0], const_two.output[0]])
         gap_all = body_graph.make_node('Concat', [sliced_zero.output[0], gap_left.output[0], sliced_zero.output[0],
                                                   gap_right.output[0]], attr={'axis': 0})
-        padded_output = body_graph.make_node('Pad', [raw_output.output[0], gap_all.output[0], Padding])
+        padded_output = body_graph.make_node('Pad', [raw_output.output[0], gap_all.output[0], padding])
         cond_output = body_graph.make_node('Identity', [cond_name])
         body_graph.add_graph_output(cond_output.output[0], TensorProto.BOOL, [])
         body_graph.add_graph_output(padded_output.output[0], ctx.get_dtype(node.input[0]), per_loop_shape)
