@@ -1160,6 +1160,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.split(x, [4, 15, 11], 1, name="split_test")
         self._run_test_case(func, ["split_test:0", "split_test:1", "split_test:2"], {_INPUT: x_val})
 
+    def test_negative_split(self):
+        x_val = np.linspace(1.0, 5 * 30.0, 5 * 30).astype(np.float32).reshape((5, 30))
+        def func(x):
+            x_, _, _ = tf.split(x, [4, 15, -1], 1)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     def test_reducesum(self):
         # not supported by onnx-caffe2
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))

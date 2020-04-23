@@ -553,6 +553,14 @@ class SplitV:
         node.type = "Split"
         split = node.inputs[1].get_tensor_value()
         split_dims = node.inputs[2].get_tensor_value()
+        if -1 in split:
+            # negative split = use the remaining size
+            shape = ctx.get_shape(node.input[0])
+            final_sum = shape[split_dims]
+            sums = sum([i for i in split if i >= 0])
+            for i, v in enumerate(split):
+                if v == -1:
+                    split[i] = final_sum - sums
         ctx.remove_input(node, node.input[2])
         ctx.remove_input(node, node.input[1])
         node.set_attr("split", split)
