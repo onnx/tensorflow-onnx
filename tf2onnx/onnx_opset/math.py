@@ -555,7 +555,7 @@ class Inverse:
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         ctx.make_node("Inverse", inputs=node.input, outputs=node.output, name=node.name,
-                      shapes=shapes, dtypes=dtypes)
+                      domain=constants.MICROSOFT_DOMAIN, shapes=shapes, dtypes=dtypes)
 
 @tf_op("SquaredDistance")
 class SquaredDistance:
