@@ -3130,6 +3130,29 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 k_val = np.array(raw_k).astype(np.int32)
                 self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
 
+    @check_opset_min_version(12)
+    def test_inverse(self):
+        x_val = np.random.random([5, 5]).astype(np.float32)
+        def func(x):
+            return tf.linalg.inv(x, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(12)
+    def test_less_or_equal(self):
+        x_val = np.random.random([4, 5]).astype(np.float32)
+        y_val = np.random.random([4, 5]).astype(np.float32)
+        def func(x, y):
+            return tf.math.less_equal(x, y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(12)
+    def test_squared_distance(self):
+        x_val = np.random.random([4, 5]).astype(np.float32)
+        y_val = np.random.random([4, 5]).astype(np.float32)
+        def func(x, y):
+            return tf.math.squared_difference(x, y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
 
 if __name__ == '__main__':
     unittest_main()
