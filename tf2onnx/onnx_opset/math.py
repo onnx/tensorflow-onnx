@@ -561,11 +561,13 @@ class SquaredDistance:
     def version_12(cls, ctx, node, **kwargs):
         node.attr["reduction"] = "none"
 
+
 @tf_op("Einsum")
 class Einsum:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         del node.attr["N"]
+
 
 
 

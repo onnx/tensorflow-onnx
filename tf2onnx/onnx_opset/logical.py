@@ -121,3 +121,17 @@ class GreaterLessEqual:
         new_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
         ctx.copy_shape(output_name, new_node.output[0])
         ctx.set_dtype(new_node.output[0], ctx.get_dtype(output_name))
+
+
+@tf_op("GreaterEqual", onnx_op="GreaterOrEqual")
+class GreaterEqual:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        pass
+
+
+@tf_op("LessEqual", onnx_op="LessOrEqual")
+class LessEqual:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):')
+        pass

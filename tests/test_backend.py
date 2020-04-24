@@ -3153,7 +3153,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x, y):
             ret = tf.einsum("i,j->ij", x, y)
             return tf.identity(ret, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT],  {_INPUT: x_val, _INPUT1: y_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(12)
+    def test_compare(self):
+        x_val = np.random.random([10, 20]).astype(np.float32)
+        y_val = np.random.random([10, 20]).astype(np.float32)
+        def func(x, y):
+            return tf.math.less_equal(x, y, name=_TFOUTPUT), \
+                   tf.math.greater_equal(x, y, name=_TFOUTPUT1)
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: y_val})
 
 
 if __name__ == '__main__':
