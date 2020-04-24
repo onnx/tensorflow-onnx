@@ -133,5 +133,5 @@ class GreaterEqual:
 @tf_op("LessEqual", onnx_op="LessOrEqual")
 class LessEqual:
     @classmethod
-    def version_12(cls, ctx, node, **kwargs):')
+    def version_12(cls, ctx, node, **kwargs):
         pass
