@@ -567,8 +567,3 @@ class Einsum:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         del node.attr["N"]
-
-
-
-
-
