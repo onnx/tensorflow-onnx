@@ -1488,10 +1488,10 @@ class NonMaxSuppression:
             pad_val = ctx.make_node("Cast", inputs=[relu_op.output[0]], attr={"to": onnx_pb.TensorProto.INT64})
             pad_op = ctx.make_node("Pad", inputs=[squeeze_op.output[0], pad_val.output[0]])
             ctx.make_node("Cast", inputs=pad_op.output, name="cast_A", attr={"to": onnx_pb.TensorProto.INT32},
-                          outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
+                          outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0], op_name_scope=node.name)
             reduce_op = ctx.make_node("ReduceSum", inputs=shape_op.output, attr={"axes": [0], "keepdims": 0})
             ctx.make_node("Cast", inputs=[reduce_op.output[0]], name="cast_B", attr={"to": onnx_pb.TensorProto.INT32},
-                          outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
+                          outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1], op_name_scope=node.name)
         else:
             ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                           name=node.name, outputs=node.output, dtypes=dtypes[0], shapes=shapes[0])
