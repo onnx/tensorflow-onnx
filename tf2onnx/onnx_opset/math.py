@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring
 
-@tf_op(["Add", "AddV2", "Div", "Mul", "Sub", "LessOrEqual"])
+@tf_op(["Add", "AddV2", "Div", "Mul", "Sub"])
 class BroadcastOp(common.BroadcastOp):
     pass
 
@@ -545,25 +545,19 @@ class BitShift:
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
-@tf_op("MatrixInverse")
-class Inverse:
 
+@tf_op("MatrixInverse", onnx_op="Inverse")
+class Inverse:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         utils.make_sure(node.get_attr('adjoint').i == 0, "adjoint must be false")
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node("Inverse", inputs=node.input, outputs=node.output, name=node.name,
-                      domain=constants.MICROSOFT_DOMAIN, shapes=shapes, dtypes=dtypes)
+        del node.attr["adjoint"]
+        node.domain = constants.MICROSOFT_DOMAIN
 
-@tf_op("SquaredDistance")
+
+@tf_op("SquaredDistance", onnx_op="MeanSquaredDistance")
 class SquaredDistance:
-
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node("MeanSquaredDistance", inputs=node.input, outputs=node.output, name=node.name,
-                      shapes=shapes, dtypes=dtypes, attr={"reduction": "none"})
+        node.attr["reduction"] = "none"
+
