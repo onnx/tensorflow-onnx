@@ -3155,7 +3155,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(ret, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
-    @check_opset_min_version(12)
+    @check_opset_min_version(7)
     def test_compare(self):
         x_val = np.random.random([10, 20]).astype(np.float32)
         y_val = np.random.random([10, 20]).astype(np.float32)
