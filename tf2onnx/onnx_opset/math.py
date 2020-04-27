@@ -558,3 +558,12 @@ class Einsum:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         del node.attr["N"]
+
+
+@tf_op("MatrixInverse", onnx_op="Inverse")
+class Inverse:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        utils.make_sure(node.get_attr('adjoint').i == 0, "adjoint must be false")
+        del node.attr["adjoint"]
+        node.domain = constants.MICROSOFT_DOMAIN

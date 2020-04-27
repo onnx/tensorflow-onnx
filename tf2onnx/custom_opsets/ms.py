@@ -104,7 +104,7 @@ class CropAndResize:
         ctx.insert_new_node_on_output("Transpose", node.output[0], node.name + '_transposed',
                                       None, perm=constants.NCHW_TO_NHWC)
 
-@tf_op("MatrixInverse", onnx_op="Inverse")
+@tf_op("MatrixInverse", domain=constants.MICROSOFT_DOMAIN, onnx_op="Inverse")
 class Inverse:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
