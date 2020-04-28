@@ -110,28 +110,17 @@ class GreaterLess:
         target_dtype = TensorProto.FLOAT
         _add_cast_to_inputs(ctx, node, supported_dtypes, target_dtype)
 
-
-@tf_op("GreaterEqual", onnx_op="Less")
-@tf_op("LessEqual", onnx_op="Greater")
+@tf_op(["GreaterEqual", "LessEqual"])
 class GreaterLessEqual:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         GreaterLess.version_7(ctx, node, **kwargs)
         output_name = node.output[0]
+        node.op.op_type = "Less" if node.op.op_type == "GreaterEqual" else "Greater"
         new_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
         ctx.copy_shape(output_name, new_node.output[0])
         ctx.set_dtype(new_node.output[0], ctx.get_dtype(output_name))
 
-
-@tf_op("GreaterEqual", onnx_op="GreaterOrEqual")
-class GreaterEqual:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
-        pass
-
-
-@tf_op("LessEqual", onnx_op="LessOrEqual")
-class LessEqual:
-    @classmethod
-    def version_12(cls, ctx, node, **kwargs):
-        pass
+        node.op.op_type = "GreaterOrEqual" if node.op.op_type == "GreaterEqual" else "LessOrEqual"
