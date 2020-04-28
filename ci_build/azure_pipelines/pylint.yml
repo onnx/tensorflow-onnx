@@ -8,8 +8,7 @@ jobs:
       steps:
       - bash: |
           set -ex
-          pip install pylint
+          pip install pylint==2.4.4
           pip freeze
-          set PYTHONHOME=%PYTHONHOME%;tf2onnx;tests
           pylint --rcfile=tools/pylintrc --ignore=version.py --disable=cyclic-import tf2onnx tests/*.py tools -j 0
         displayName: 'Pylint'
