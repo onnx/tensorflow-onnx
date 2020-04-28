@@ -544,3 +544,26 @@ class BitShift:
             cast_back_node.set_attr("to", dtypes[0])
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
+
+
+@tf_op("SquaredDistance", onnx_op="MeanSquaredDistance")
+class SquaredDistance:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        node.attr["reduction"] = "none"
+
+
+@tf_op("Einsum")
+class Einsum:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        del node.attr["N"]
+
+
+@tf_op("MatrixInverse", onnx_op="Inverse")
+class Inverse:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        utils.make_sure(node.get_attr('adjoint').i == 0, "adjoint must be false")
+        del node.attr["adjoint"]
+        node.domain = constants.MICROSOFT_DOMAIN
