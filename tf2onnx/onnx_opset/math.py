@@ -137,6 +137,9 @@ class MinMaxOp:
         ctx.remove_node(node.name)
         make_min_or_max_op(ctx, node.type, node.input, node.output, shapes, dtypes)
 
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        pass # support all numeric types and broadcasting
 
 @tf_op("ClipByValue")
 class ClipByValueOp:
@@ -178,6 +181,9 @@ class ClipByValueOp:
             ctx.set_dtype(new_node.output[0], dtypes[0])
             ctx.set_shape(new_node.output[0], shapes[0])
 
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        node.name = 'Clip' # clip supports all types now
 
 @tf_op("Softmax")
 class Softmax:

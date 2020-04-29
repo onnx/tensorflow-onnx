@@ -100,6 +100,10 @@ class Dropout:
     def version_10(cls, ctx, node, **kwargs):
         pass
 
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        pass
+
 
 @tf_op("Identity")
 class Identity:
