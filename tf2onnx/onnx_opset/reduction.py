@@ -89,6 +89,11 @@ class ArgMax:
         # Opset 11 supports negative axis, but core logic same
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        # Opset 12 adds extra attribute 'select_last_index'
+        # No changes needed
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op(["All", "Any"])
 class AllAny:
