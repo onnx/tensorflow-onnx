@@ -2859,6 +2859,31 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
                             graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
+    # test for gemm pattern0: alpha*A*B + beta*C
+    @check_opset_min_version(12, "Optimizer bug in ORT 1.2")
+    def test_gemm_pattern0_fail_broadcast(self):
+        # shapes (3, 3) * (3, 1) + (1, 4) => (3, 1) + (1, 4)
+        # c not uni-broadcastable to a * b, so should not use GEMM
+        m, n, k = 3, 3, 1
+        x_val1 = np.random.rand(m, n).astype("float32")
+        x_val2 = np.random.rand(n, k).astype("float32")
+        x_val3 = np.random.rand(k, 4).astype("float32")
+
+        def func(a, b, c):
+            alpha = tf.constant(1.0, dtype=tf.float32)
+            beta = tf.constant(2.0, dtype=tf.float32)
+            mul1 = tf.multiply(alpha, tf.matmul(a, b))
+            mul2 = tf.multiply(beta, c)
+            x_ = mul1 + mul2
+            return tf.identity(x_, name=_TFOUTPUT)
+
+        def graph_validator(g):
+            if 'Gemm' in [n.type for n in g.get_nodes()]: return False
+            return True
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
+                            graph_validator=graph_validator)
+
     def test_graph_matcher(self):
         shape = [2, 6]
         x_val = np.random.random(shape).astype(np.float32)
