@@ -2860,6 +2860,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
     # test for gemm pattern0: alpha*A*B + beta*C
+    @check_opset_min_version(12, "Optimizer bug in ORT 1.2")
     def test_gemm_pattern0_fail_broadcast(self):
         # shapes (3, 3) * (3, 1) + (1, 4) => (3, 1) + (1, 4)
         # c not uni-broadcastable to a * b, so should not use GEMM
