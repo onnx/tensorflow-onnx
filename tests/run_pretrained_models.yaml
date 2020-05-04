@@ -403,3 +403,15 @@ keras_resnet50:
     "input_1:0": [1, 224, 224, 3]
   outputs:
     - Identity:0
+
+keras_mobilenet_v2:
+  tf_min_version: 2.1
+  disabled: false
+  url: module://tensorflow.keras.applications.mobilenet_v2/MobileNetV2
+  model: MobileNetV2
+  model_type: keras
+  input_get: get_ramp
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0

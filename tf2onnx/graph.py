@@ -504,6 +504,13 @@ class Graph(object):
         self.set_dtype(name, utils.map_numpy_to_onnx_dtype(np_val.dtype))
         return node
 
+    def copy_const(self, node, name=None):
+        """Copy a const node, using name is specified"""
+        # TODO: support attr copy starting opset 12
+        if name is None:
+            name = utils.make_name(node.name)
+        return self.make_const(name, node.get_tensor_value(as_list=False))
+
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
                   op_name_scope=None, name=None, shapes=None, dtypes=None, domain=constants.ONNX_DOMAIN,
                   infer_shape_dtype=True):

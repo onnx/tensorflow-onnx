@@ -602,14 +602,19 @@ class TransposeOptimizer(GraphOptimizerBase):
             new_pads = [pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]]
             node.set_attr("pads", new_pads)
             return self._switch_transpose_and_node(node, trans)
-        if node.inputs[1].is_const():
-            if node.inputs[1].data_format in ["NHWC", "unkown"]:
-                pads = node.inputs[1].get_tensor_value()
+
+        input1 = node.inputs[1]
+        if input1.is_const():
+            if input1.data_format in ["NHWC", "unkown"]:
+                if not self._nodes_has_single_consumer_node([input1]):
+                    input1 = self.g.copy_const(input1)
+                    self.input[1] = input1.output[0]
+                pads = input1.get_tensor_value()
                 # NHWC->NCHW
                 new_pads = np.array([pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]],
                                     dtype=np.int64)
-                node.inputs[1].set_tensor_value(new_pads)
-                node.inputs[1].data_format = "NCHW"
+                input1.set_tensor_value(new_pads)
+                input1.data_format = "NCHW"
             return self._switch_transpose_and_node(node, trans)
         return False
 
