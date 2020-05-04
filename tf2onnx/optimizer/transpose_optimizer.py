@@ -607,8 +607,8 @@ class TransposeOptimizer(GraphOptimizerBase):
         if input1.is_const():
             if input1.data_format in ["NHWC", "unkown"]:
                 if not self._nodes_has_single_consumer_node([input1]):
-                    input1 = self.g.copy_const(input1)
-                    self.input[1] = input1.output[0]
+                    input1 = self._g.copy_const(input1)
+                    node.input[1] = input1.output[0]
                 pads = input1.get_tensor_value()
                 # NHWC->NCHW
                 new_pads = np.array([pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]],
