@@ -260,6 +260,7 @@ def from_keras(model_path, input_names, output_names):
     # Handles Keras when Eager mode is enabled.
     custom_objects = None
     if context.executing_eagerly():
+        _keras.backend.clear_session()
         _keras.backend.set_learning_phase(False)
         keras_model = _keras.models.load_model(model_path, custom_objects)
 
