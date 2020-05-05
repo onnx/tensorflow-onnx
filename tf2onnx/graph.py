@@ -506,7 +506,7 @@ class Graph(object):
 
     def copy_const(self, node, name=None):
         """Copy a const node, using name if specified"""
-        # TODO: support attr copy starting opset 12
+        # TODO: support attr copy starting at opset 12
         if name is None:
             name = utils.make_name(node.name)
         return self.make_const(name, node.get_tensor_value(as_list=False))
