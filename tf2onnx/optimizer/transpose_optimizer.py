@@ -188,6 +188,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Sum": self._sum_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
+            "Softplus": self._simple_through_handler,
             "Squeeze": self._squeeze_handler,
             "Sub": self._sub_handler,
             "Tanh": self._simple_through_handler,
