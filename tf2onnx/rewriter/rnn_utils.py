@@ -51,10 +51,10 @@ lstmcell_pattern = \
     OpTypePattern('Mul', name='ht', inputs=[
         OpTypePattern("Sigmoid", name="ot", inputs=[xc_pattern]),
         OpTypePattern('Tanh', inputs=[
-            OpTypePattern("Add", name="ct", inputs=[
+            OpTypePattern("Add|AddV2", name="ct", inputs=[
                 OpTypePattern("Mul", name="ct_identity_consumer", inputs=[
                     OpTypePattern("Sigmoid", name="ft", inputs=[
-                        OpTypePattern("Add", inputs=[
+                        OpTypePattern("Add|AddV2", inputs=[
                             xc_pattern,
                             OpTypePattern("*", name="ft_bias"),
                         ]),

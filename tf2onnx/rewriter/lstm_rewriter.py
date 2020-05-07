@@ -98,15 +98,18 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         # check https://www.tensorflow.org/versions/r1.8/api_docs/cc/class/tensorflow/ops/bias-add
         # for bias_add data format
         bias_add = match.get_op("bias_add")
-        if bias_add.data_format != "NHWC":
+        if bias_add is not None and bias_add.data_format != "NHWC":
             logger.debug("BiasAdd data_format is not NHWC, SKIP")
             return None
 
         b_e = match.get_op("cell_bias")
-        b = get_weights_from_const_node(self.g, b_e)
-        if b is None or b.shape[0] != w.shape[1]:
-            logger.warning("cell_kernel and cell_bias's dimensions does not match, skip")
-            return None
+        if b_e is None:
+            b = np.array([0 for i in range(len(w[0]))]).astype(w.dtype)
+        else:
+            b = get_weights_from_const_node(self.g, b_e)
+            if b is None or b.shape[0] != w.shape[1]:
+                logger.warning("cell_kernel and cell_bias's dimensions does not match, skip")
+                return None
 
         ft_bias_node = match.get_op("ft_bias")
         ft_bias = get_weights_from_const_node(self.g, ft_bias_node)
