@@ -30,30 +30,31 @@ class REWRITER_RESULT(Enum):
 
 
 # TensorFlow LSTMCell/BasicLSTMCell computation graph matching
-xc_pattern = OpTypePattern('Split', inputs=[
-    OpTypePattern("Const"), # axis for split
-    OpTypePattern("BiasAdd", name="bias_add", inputs=[
-        OpTypePattern("MatMul", inputs=[
-            OpTypePattern("ConcatV2|Concat", name="xh"),
+
+xc_pattern = \
+    OpTypePattern('Split', inputs=[
+        OpTypePattern("Const"), # axis for split
+        OpTypePattern("BiasAdd", name="bias_add", inputs=[
+            OpTypePattern("MatMul", inputs=[
+                OpTypePattern("ConcatV2|Concat", name="xh"),
+                OpTypePattern("Enter", inputs=[
+                    OpTypePattern("*", name="cell_kernel"),
+                ]),
+            ]),
             OpTypePattern("Enter", inputs=[
-                OpTypePattern("*", name="cell_kernel"),
+                OpTypePattern("*", name="cell_bias"),
             ]),
         ]),
-        OpTypePattern("Enter", inputs=[
-            OpTypePattern("*", name="cell_bias"),
-        ]),
-    ]),
-])
-
+    ])
 
 lstmcell_pattern = \
     OpTypePattern('Mul', name='ht', inputs=[
         OpTypePattern("Sigmoid", name="ot", inputs=[xc_pattern]),
         OpTypePattern('Tanh', inputs=[
-            OpTypePattern("Add", name="ct", inputs=[
+            OpTypePattern("Add|AddV2", name="ct", inputs=[
                 OpTypePattern("Mul", name="ct_identity_consumer", inputs=[
                     OpTypePattern("Sigmoid", name="ft", inputs=[
-                        OpTypePattern("Add", inputs=[
+                        OpTypePattern("Add|AddV2", inputs=[
                             xc_pattern,
                             OpTypePattern("*", name="ft_bias"),
                         ]),
@@ -63,6 +64,39 @@ lstmcell_pattern = \
                 OpTypePattern("Mul", inputs=[
                     OpTypePattern("Sigmoid", name="it", inputs=[xc_pattern]),
                     OpTypePattern("Tanh", name="gt", inputs=[xc_pattern]),
+                ]),
+            ]),
+        ]),
+    ])
+
+xc_pattern_optimized = \
+    OpTypePattern('Split', inputs=[
+        OpTypePattern("Const"),
+        OpTypePattern("Identity", inputs=[
+            OpTypePattern("MatMul", inputs=[
+                OpTypePattern("ConcatV2|Concat", name="xh"),
+                OpTypePattern("Const", name="cell_kernel"),
+            ]),
+        ]),
+    ])
+
+lstmcell_pattern_optimized = \
+    OpTypePattern('Mul', name='ht', inputs=[
+        OpTypePattern("Sigmoid", name="ot", inputs=[xc_pattern_optimized]),
+        OpTypePattern('Tanh', inputs=[
+            OpTypePattern("Add|AddV2", name="ct", inputs=[
+                OpTypePattern("Mul", name="ct_identity_consumer", inputs=[
+                    OpTypePattern("Sigmoid", name="ft", inputs=[
+                        OpTypePattern("Add|AddV2", inputs=[
+                            xc_pattern_optimized,
+                            OpTypePattern("*", name="ft_bias"),
+                        ]),
+                    ]),
+                    OpTypePattern("*"),
+                ]),
+                OpTypePattern("Mul", inputs=[
+                    OpTypePattern("Sigmoid", name="it", inputs=[xc_pattern_optimized]),
+                    OpTypePattern("Tanh", name="gt", inputs=[xc_pattern_optimized]),
                 ]),
             ]),
         ]),
@@ -237,7 +271,7 @@ class RNNUnitType(Enum):
 
 
 rnn_cell_patterns = {
-    RNNUnitType.LSTMCell: [lstmcell_pattern],
+    RNNUnitType.LSTMCell: [lstmcell_pattern, lstmcell_pattern_optimized],
     RNNUnitType.LSTMBlockCell: [lstmblockcell_pattern],
     RNNUnitType.GRUCell: [grucell_pattern],
     RNNUnitType.GRUBlockCell: [grublockcell_pattern0, grublockcell_pattern1],

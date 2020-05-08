@@ -332,7 +332,7 @@ def check_op_count(graph, op_type, expected_count):
 
 
 def check_lstm_count(graph, expected_count):
-    return check_op_count(graph, "LSTM", expected_count)
+    return len(group_nodes_by_type(graph)["LSTM"]) == expected_count
 
 
 def check_gru_count(graph, expected_count):
