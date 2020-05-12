@@ -1917,7 +1917,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func_fusedbn, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator)
 
-    @check_tf_min_version("1.15", "not supported in tf-2.0")
+    @check_tf_min_version("1.15", "skip_tf2")
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_unsigned_input(self):
         x_shape = [3, 3, 2]
@@ -1927,7 +1927,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-    @check_tf_min_version("1.15", "not supported in tf-2.0")
+    @check_tf_min_version("1.15", "skip_tf2")
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_signed_input(self):
         x_shape = [3, 3, 2]
