@@ -1916,7 +1916,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return True
 
         self._run_test_case(func_fusedbn, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator)
-    
+
+    @check_tf_min_version("1.15", "not supported in tf-2.0")
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_unsigned_input(self):
         x_shape = [3, 3, 2]
@@ -1925,7 +1926,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = quantize_and_dequantize(x, 1.0, 6.0, signed_input=False, narrow_range=False, range_given=True)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
-    
+
+    @check_tf_min_version("1.15", "not supported in tf-2.0")
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_signed_input(self):
         x_shape = [3, 3, 2]
@@ -1934,7 +1936,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = quantize_and_dequantize(x, -6.0, 6.0, signed_input=True, narrow_range=True, range_given=True)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
-    
+
     @skip_caffe2_backend()
     @check_opset_min_version(7, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor(self):
