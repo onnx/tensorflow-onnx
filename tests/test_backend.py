@@ -197,6 +197,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._test_expand_dims_more_unknown_rank(i)
 
     @check_opset_min_version(9, "ConstantOfShape")
+    @check_tf_max_version("2.1", "MatrixDiagV3 needs to be implemented for 2.2")
     def test_eye_non_const1(self):
         # tf.eye(num_rows), num_rows is not const here
         x_val = np.array(5, dtype=np.int32)
@@ -217,6 +218,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val}, rtol=0)
 
     @check_tf_min_version("1.11", "eye has bug when version is below 1.11")
+    @check_tf_max_version("2.1", "MatrixDiagV3 needs to be implemented for 2.2")
     @check_opset_min_version(9, "ConstantOfShape")
     def test_eye_non_const2(self):
         # tf.eye(num_rows), num_rows is not const here
@@ -1383,7 +1385,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # test for dynamic shape coming from a shape op
         x_val = np.array([0, 1, 2, 3, 5], dtype=np.int64)
         def func(x):
-            return random_uniform(x[3:], name=_TFOUTPUT, dtype=tf.float32)
+            y = random_uniform(x[3:], dtype=tf.float32)
+            return tf.identity(y, name=_TFOUTPUT)
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
 
@@ -3107,6 +3110,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         os.remove(filnm)
 
     @check_opset_min_version(11)
+    @check_tf_max_version("2.1", "tf2onnx writes wrong axis into onnx file when using tf-2.2")
     def test_matrix_diag_part(self):
         input_vals = [
             np.array([[[1, 2, 3, 4, 5], [6, 7, 8, 9, 10], [11, 12, 13, 14, 15], [16, 17, 18, 19, 20]]], dtype=np.int64),
