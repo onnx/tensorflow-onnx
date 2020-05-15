@@ -45,7 +45,7 @@ def create_qdq_nodes(g, match_results):
         else:
             scale = scale_from_max_side
 
-        assert scale > 0
+        utils.make_sure(scale > 0, "Quantize/Dequantize scale must be greater than zero")
 
         if signed_input:
             zero_point = np.int8(0)

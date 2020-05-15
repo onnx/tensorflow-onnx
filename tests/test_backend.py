@@ -62,6 +62,7 @@ if is_tf2():
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
+    quantize_and_dequantize = tf.quantization.quantize_and_dequantize
     resize_bilinear = tf.compat.v1.image.resize_bilinear
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
@@ -1918,18 +1919,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func_fusedbn, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator)
 
     @check_tf_min_version("1.15")
-    @skip_tf2()
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_unsigned_input(self):
         x_shape = [3, 3, 2]
         x_val = np.arange(1, 1+np.prod(x_shape)).astype("float32").reshape(x_shape)
         def func(x):
-            x_ = quantize_and_dequantize(x, 1.0, 6.0, signed_input=False, narrow_range=False, range_given=True)
+            x_ = quantize_and_dequantize(x, 1.0, 6.0, signed_input=False, range_given=True)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.15")
-    @skip_tf2()
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_signed_input(self):
         x_shape = [3, 3, 2]
