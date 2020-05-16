@@ -16,7 +16,7 @@ from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.rnn_utils import RNNUnitType, get_weights_from_const_node
 from tf2onnx.utils import is_tf_concat_op, is_tf_slice_op
 
-from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
+from tf2onnx.rewriter.lstm_rewriter_base import LSTMRewriterBase
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 
@@ -24,28 +24,32 @@ from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
 logger = logging.getLogger(__name__)
 
 
-class LSTMUnitRewriter(UnitRnnRewriterBase):
+class LSTMRewriter(LSTMRewriterBase):
     def __init__(self, g):
-        super(LSTMUnitRewriter, self).__init__(g)
+        super(LSTMRewriter, self).__init__(g)
         self.lstm_cell_type = None
-        self.state_variable_handlers = [
-            {
-                "ct": (self._ct_variable_finder, self._connect_lstm_yc_to_graph),
-                "ht": (self._ht_variable_finder, self._connect_lstm_yh_to_graph)
-            },
-            {
-                "ct_ht": (self._ct_ht_shared_variable_finder, self._connect_lstm_ych_to_graph)
-            }
-        ]
+        self.num_lstm_layers = 0
 
     def run(self):
         logger.debug("enter lstm rewriter")
-        return super(LSTMUnitRewriter, self).run()
+        return super(LSTMRewriter, self).run()
 
     def find_cell(self, context):
         lstm_cell_types = [RNNUnitType.LSTMCell, RNNUnitType.LSTMBlockCell]
         for cell_type in lstm_cell_types:
             cell_match = self._match_cell(context, cell_type)
+            if cell_match and len(cell_match) >= 1:
+                self.num_lstm_layers = len(cell_match)
+                logger.debug("number of lstm layers: " + str(self.num_lstm_layers))
+                for i in range(self.num_lstm_layers):
+                    self.state_variable_handlers.append({
+                        "ct" + str(i): (self._ct_variable_finder, self._connect_lstm_yc_to_graph, i),
+                        "ht" + str(i): (self._ht_variable_finder, self._connect_lstm_yh_to_graph, i)
+                    })
+                    self.state_variable_handlers.append({
+                         "ct_ht" + str(i): (self._ct_ht_shared_variable_finder, self._connect_lstm_ych_to_graph, i)
+                    })
+                logger.debug("parsing unit is %s, num layers is %d", cell_type, self.num_lstm_layers)
             if cell_match:
                 self.lstm_cell_type = cell_type
                 logger.debug("parsing unit is %s", cell_type)
@@ -54,14 +58,16 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         return None
 
     def get_weight_and_bias(self, context):
-        if self.lstm_cell_type == RNNUnitType.LSTMCell:
-            return self._get_weight_and_bias_for_lstm_cell(context)
-        if self.lstm_cell_type == RNNUnitType.LSTMBlockCell:
-            return self._get_weight_and_bias_for_lstmblock_cell(context)
-        return None
+        weight_and_bias = list()
+        for i in range(self.num_lstm_layers):
+            if self.lstm_cell_type == RNNUnitType.LSTMCell:
+                weight_and_bias.append(self._get_weight_and_bias_for_lstm_cell(context, i))
+            if self.lstm_cell_type == RNNUnitType.LSTMBlockCell:
+                weight_and_bias.append(self._get_weight_and_bias_for_lstmblock_cell(context, i))
+        return weight_and_bias
 
-    def _get_weight_and_bias_for_lstmblock_cell(self, context):
-        cell_match = context.cell_match
+    def _get_weight_and_bias_for_lstmblock_cell(self, context, i):
+        cell_match = context.cell_match[i]
 
         w_node = cell_match.get_op("cell_kernel")
         w = get_weights_from_const_node(self.g, w_node)
@@ -87,12 +93,12 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
             "ft_bias": ft_bias_val
         }
 
-    def _get_weight_and_bias_for_lstm_cell(self, context):
-        match = context.cell_match
+    def _get_weight_and_bias_for_lstm_cell(self, context, i):
+        match = context.cell_match[i]
 
         w_e = match.get_op("cell_kernel")
         w = get_weights_from_const_node(self.g, w_e)
-        if w is None:
+        if w is None or w.size == 0:
             return None
 
         # check https://www.tensorflow.org/versions/r1.8/api_docs/cc/class/tensorflow/ops/bias-add
@@ -127,8 +133,8 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
 
     def parse_attributes(self, context):
         if self.lstm_cell_type == RNNUnitType.LSTMBlockCell:
-            lstm_block_cell = context.cell_match.get_op("lstm_block_cell")
-            clip = lstm_block_cell.get_attr_value("cell_clip")
+            lstm_block_cell = context.cell_match[0].get_op("lstm_block_cell")
+            clip = float(lstm_block_cell.get_attr("cell_clip").f)
             # current LSTM op cannot handle clip
             if clip > 0:
                 return False
@@ -138,16 +144,16 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
                 return False
         return True
 
-    def _ct_variable_finder(self, context):
+    def _ct_variable_finder(self, context, i):
         if self.lstm_cell_type == RNNUnitType.LSTMCell:
-            lstm_cell = context.cell_match
+            lstm_cell = context.cell_match[i]
             return self._find_state_variable_with_select(
                 context,
                 lstm_cell.get_op("ct").output[0],
                 [lstm_cell.get_op("ct_identity_consumer")]
             )
         if self.lstm_cell_type == RNNUnitType.LSTMBlockCell:
-            lstm_block_cell = context.cell_match.get_op("lstm_block_cell")
+            lstm_block_cell = context.cell_match[i].get_op("lstm_block_cell")
             return self._find_state_variable_with_select(
                 context,
                 lstm_block_cell.output[1],
@@ -155,16 +161,16 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
             )
         return None
 
-    def _ht_variable_finder(self, context):
+    def _ht_variable_finder(self, context, i):
         if self.lstm_cell_type == RNNUnitType.LSTMCell:
-            lstm_cell = context.cell_match
+            lstm_cell = context.cell_match[i]
             return self._find_state_variable_with_select(
                 context,
                 lstm_cell.get_op("ht").output[0],
                 [lstm_cell.get_op("xh")]
             )
         if self.lstm_cell_type == RNNUnitType.LSTMBlockCell:
-            lstm_block_cell = context.cell_match.get_op("lstm_block_cell")
+            lstm_block_cell = context.cell_match[i].get_op("lstm_block_cell")
             return self._find_state_variable_with_select(
                 context,
                 lstm_block_cell.output[6],
@@ -172,11 +178,11 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
             )
         return None
 
-    def _ct_ht_shared_variable_finder(self, context):
+    def _ct_ht_shared_variable_finder(self, context, i):
         if self.lstm_cell_type == RNNUnitType.LSTMBlockCell:
             return None
 
-        lstm_cell = context.cell_match
+        lstm_cell = context.cell_match[i]
         ct = lstm_cell.get_op("ct").output[0]
         ht = lstm_cell.get_op("ht").output[0]
         ct_concat = [c for c in self.g.find_output_consumers(ct) if is_tf_concat_op(c)]
@@ -215,8 +221,8 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
             return False
         return True
 
-    def process_weights_and_bias(self, context):
-        weights = context.weights
+    def process_weights_and_bias_per_layer(self, context, i):
+        weights = context.weights[i]
         w_r_icfo = weights["weight"]
         w_dtype = weights["weight"].dtype
         b_r_icfo = weights["bias"]
@@ -226,7 +232,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         # split bias for each hidden unit
         # b_r_icfo: (4 * num_units,)
         bias_dim = b_r_icfo.shape[0]
-        hidden_size = int(bias_dim/4)
+        hidden_size = int(bias_dim / 4)
         b_r_icfo = np.reshape(b_r_icfo, (1, bias_dim))
         bias_gates = np.split(b_r_icfo, 4, axis=1)
         ft_bias = np.add(bias_gates[2], ft_bias_scalar)
@@ -240,7 +246,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         [wx, wh] = np.split(w_r_icfo, [-1 * hidden_size])
         input_size = wx.shape[0]
         assert wx.shape[0] == input_size
-        assert int(wx.shape[1]/4) == hidden_size
+        assert int(wx.shape[1] / 4) == hidden_size
 
         # split weight for gates
         w_gates = np.split(wx, 4, axis=1)
@@ -255,53 +261,61 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         R = np.array([R_iofc], w_dtype)
 
         # create node
-        w_name = utils.make_name("W")
+        w_name = utils.make_name("W" + str(i))
         w_node = self.g.make_const(w_name, W, skip_conversion=True)
 
-        r_name = utils.make_name("R")
+        r_name = utils.make_name("R" + str(i))
         r_node = self.g.make_const(r_name, R, skip_conversion=True)
 
-        b_name = utils.make_name("B")
+        b_name = utils.make_name("B" + str(i))
         b_node = self.g.make_const(b_name, B, skip_conversion=True)
 
-        context.input_size = input_size
-        context.hidden_size = hidden_size
-        context.onnx_input_ids["W"] = w_node.output[0]
-        context.onnx_input_ids["R"] = r_node.output[0]
-        context.onnx_input_ids["B"] = b_node.output[0]
+        context.input_size[i] = input_size
+        context.hidden_size[i] = hidden_size
+        context.onnx_input_ids[i]["W"] = w_node.output[0]
+        context.onnx_input_ids[i]["R"] = r_node.output[0]
+        context.onnx_input_ids[i]["B"] = b_node.output[0]
+
+    def process_weights_and_bias(self, context):
+        for i in range(self.num_lstm_layers):
+            self.process_weights_and_bias_per_layer(context, i)
 
     def process_var_init_nodes(self, context):
+        for i in range(self.num_lstm_layers):
+            self.process_var_init_nodes_per_layer(context, i)
+
+    def process_var_init_nodes_per_layer(self, context, i):
         init_h_id = None
         init_c_id = None
-        if "ct_ht" in context.state_variables:
-            init_h_id, init_c_id = self._process_non_tuple_ch_init_nodes(context)
-        elif "ct" in context.state_variables and "ht" in context.state_variables:
-            init_h_id, init_c_id = self._process_tuple_ch_init_nodes(context)
+        if ("ct_ht" + str(i)) in context.state_variables:
+            init_h_id, init_c_id = self._process_non_tuple_ch_init_nodes(context, i)
+        elif ("ct" + str(i)) in context.state_variables and ("ht" + str(i)) in context.state_variables:
+            init_h_id, init_c_id = self._process_tuple_ch_init_nodes(context, i)
         else:
             raise ValueError("no initializers, unexpected")
         assert init_h_id and init_c_id
-        context.onnx_input_ids["initial_h"] = init_h_id
-        context.onnx_input_ids["initial_c"] = init_c_id
+        context.onnx_input_ids[i]["initial_h"] = init_h_id
+        context.onnx_input_ids[i]["initial_c"] = init_c_id
 
-    def _process_non_tuple_ch_init_nodes(self, context):
-        input_id = context.state_variables["ct_ht"].enter_input_id
-        hidden_size = context.hidden_size
+    def _process_non_tuple_ch_init_nodes(self, context, i):
+        input_id = context.state_variables["ct_ht" + str(i)].enter_input_id
+        hidden_size = context.hidden_size[i]
 
         attr = {"axes": [1], "starts": [0], "ends": [hidden_size]}
         inputs_map = {"data": input_id, **attr}
         slice_node1 = GraphBuilder(self.g).make_slice(inputs_map)
         unsqueeze_node_1 = self.g.make_node("Unsqueeze", [slice_node1], attr={"axes": [0]})
 
-        attr = {"axes": [1], "starts": [hidden_size], "ends": [hidden_size*2]}
+        attr = {"axes": [1], "starts": [hidden_size], "ends": [hidden_size * 2]}
         inputs_map = {"data": input_id, **attr}
         slice_node2 = GraphBuilder(self.g).make_slice(inputs_map)
         unsqueeze_node_2 = self.g.make_node("Unsqueeze", [slice_node2], attr={"axes": [0]})
 
         return unsqueeze_node_1.output[0], unsqueeze_node_2.output[0]
 
-    def _process_tuple_ch_init_nodes(self, context):
-        h_init_input_id = context.state_variables["ht"].enter_input_id
-        c_init_input_id = context.state_variables["ct"].enter_input_id
+    def _process_tuple_ch_init_nodes(self, context, i):
+        h_init_input_id = context.state_variables["ht" + str(i)].enter_input_id
+        c_init_input_id = context.state_variables["ct" + str(i)].enter_input_id
         h_node_output = self._process_c_or_h_init_nodes(h_init_input_id, context)
         c_node_output = self._process_c_or_h_init_nodes(c_init_input_id, context)
         return h_node_output, c_node_output
@@ -319,7 +333,7 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         self.g.replace_all_inputs(to_replace, initializer_input_id, squeeze_node.output[0])
         return squeeze_node.output[0]
 
-    def create_rnn_node(self, context):
+    def create_single_rnn_node(self, context, i):
         # specify if the RNN is forward, reverse, or bidirectional.
         # Must be one of forward (default), reverse, or bidirectional.
         # Here we won't mark bidirectional/reverse, we will have another rewriter running
@@ -327,34 +341,50 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
         # backward LSTM into a bidirectional one.
         num_direction = 1
         # todo: input_forget
-        context.attributes["direction"] = "forward"
-        context.attributes["hidden_size"] = context.hidden_size
-        inputs = context.onnx_input_ids
-        # sequence len input is optional
-        seq_len_input = utils.ONNX_EMPTY_INPUT
-        if inputs["sequence_lens"]:
-            seq_len_input = inputs["sequence_lens"]
+        context.attributes[i]["direction"] = "forward"
+        context.attributes[i]["hidden_size"] = context.hidden_size[i]
+        inputs = context.onnx_input_ids[i]
         lstm_inputs = [
             inputs["X"], inputs["W"], inputs["R"], inputs["B"],
-            seq_len_input, inputs["initial_h"], inputs["initial_c"]]
+            inputs["sequence_lens"], inputs["initial_h"], inputs["initial_c"]]
 
         x_shape = self.g.get_shape(lstm_inputs[0])
         x_seq_length = x_shape[0]
         x_batch_size = x_shape[1]
         out_dtype = self.g.get_dtype(lstm_inputs[0])
 
-        lstm_node = self.g.make_node("LSTM", lstm_inputs, attr=context.attributes, output_count=3,
+        lstm_node = self.g.make_node("LSTM", lstm_inputs, attr=context.attributes[i], output_count=3,
                                      shapes=[[x_seq_length, num_direction, x_batch_size, context.hidden_size],
                                              [num_direction, x_batch_size, context.hidden_size],
                                              [num_direction, x_batch_size, context.hidden_size]],
                                      dtypes=[out_dtype, out_dtype, out_dtype], op_name_scope=context.rnn_scope)
         return lstm_node
 
-    def _connect_lstm_yh_to_graph(self, context):
+    def create_rnn_node(self, context):
+        rnn_nodes = list()
+        outputs = context.loop_properties.scan_outputs_exits
+        logger.debug("number of rnn node outputs:" + str(len(outputs)))
+        for i in range(len(outputs)):
+            logger.debug("output " + str(i) + " with id=" + outputs[i].id)
+        for i in range(self.num_lstm_layers):
+            logger.debug("creating rnn node for layer: " + str(i))
+            rnn_nodes.append(self.create_single_rnn_node(context, i))
+            output_id = rnn_nodes[i].output[0]
+            rnn_output_shape = self.g.get_shape(output_id)
+            squeeze_output_shape = [rnn_output_shape[0], rnn_output_shape[2], rnn_output_shape[3]]
+            squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
+                                            shapes=[squeeze_output_shape],
+                                            dtypes=[self.g.get_dtype(output_id)])
+            if i + 1 < self.num_lstm_layers:
+                logger.debug("setting input for layer: " + str(i + 1))
+                context.onnx_input_ids[i + 1]["X"] = squeeze_node.output[0]
+        return rnn_nodes
+
+    def _connect_lstm_yh_to_graph(self, context, i):
         # in tf, y_h output shape is: [batch, hidden]
         # in onnx, output shape is: [number_directions, batch, hidden]
-        exit_output = context.state_variables["ht"].exit_output
-        output_id = context.rnn_node.output[1]
+        exit_output = context.state_variables["ht" + str(i)].exit_output
+        output_id = context.rnn_node[i].output[1]
         lstm_yh_shape = self.g.get_shape(output_id)
         squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
                                         shapes=[[lstm_yh_shape[1], lstm_yh_shape[2]]],
@@ -362,11 +392,11 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
 
         self.g.replace_all_inputs(self.g.get_nodes(), exit_output.id, squeeze_node.output[0])
 
-    def _connect_lstm_yc_to_graph(self, context):
+    def _connect_lstm_yc_to_graph(self, context, i):
         # in tf, y_c output shape is: [batch, hidden]
         # in onnx, output shape is: [number_directions, batch, hidden]
-        exit_output = context.state_variables["ct"].exit_output
-        output_id = context.rnn_node.output[2]
+        exit_output = context.state_variables["ct" + str(i)].exit_output
+        output_id = context.rnn_node[i].output[2]
         lstm_yc_shape = self.g.get_shape(output_id)
         squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
                                         shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
@@ -374,11 +404,11 @@ class LSTMUnitRewriter(UnitRnnRewriterBase):
 
         self.g.replace_all_inputs(self.g.get_nodes(), exit_output.id, squeeze_node.output[0])
 
-    def _connect_lstm_ych_to_graph(self, context):
+    def _connect_lstm_ych_to_graph(self, context, i):
         # in tf, concat of y_c and y_h output shape is: [batch, hidden *2]
         # in onnx, y_c/y_h output shape is: [number_directions, batch, hidden]
-        exit_output = context.state_variables["ct_ht"].exit_output
-        lstm_node = context.rnn_node
+        exit_output = context.state_variables["ct_ht" + str(i)].exit_output
+        lstm_node = context.rnn_node[i]
         yc_shape = self.g.get_shape(lstm_node.output[2])
         concat_output_shape = [yc_shape[0], yc_shape[1], yc_shape[2] * 2]
         concat = self.g.make_node("Concat", [lstm_node.output[2], lstm_node.output[1]],
