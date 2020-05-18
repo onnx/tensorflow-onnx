@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_lstm_count
+from common import unittest_main, check_lstm_count, check_opset_after_tf_version, skip_tf2
 
 from tf2onnx.tf_loader import is_tf2
 
@@ -25,6 +25,8 @@ else:
 
 
 class LSTMLayeredTests(Tf2OnnxBackendTestBase):
+    @check_opset_after_tf_version("1.15", 8, "might need Scan")
+    @skip_tf2()
     def test_layered_lstm(self):
         units = 5
         batch_size = 6
