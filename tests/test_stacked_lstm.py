@@ -5,9 +5,13 @@ import tensorflow as tf
 
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_lstm_count, skip_tf2
+from common import unittest_main, check_lstm_count
 
 from tf2onnx.tf_loader import is_tf2
+
+
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
+# pylint: disable=invalid-name
 
 if is_tf2():
     LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
@@ -18,6 +22,7 @@ else:
     LSTMBlockCell = tf.contrib.rnn.LSTMBlockCell
     MultiRNNCell = tf.contrib.rnn.MultiRNNCell
     dynamic_rnn = tf.nn.dynamic_rnn
+
 
 class LSTMLayeredTests(Tf2OnnxBackendTestBase):
     def test_layered_lstm(self):
@@ -51,6 +56,7 @@ class LSTMLayeredTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "cell_state:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
                            graph_validator=lambda g: check_lstm_count(g, 2))
+
 
 if __name__ == '__main__':
     unittest_main()

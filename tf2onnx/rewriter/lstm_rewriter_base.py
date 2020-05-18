@@ -21,7 +21,7 @@ from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase, UnitRnn
 logger = logging.getLogger(__name__)
 
 
-# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,broad-except,protected-access
+# pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,broad-except,protected-access,W0223
 
 class LSTMContext(UnitRnnContext):
     def __init__(self):
@@ -45,6 +45,7 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
         2 find needed info from tensorflow graph
     3 process found info according to ONNX requirement
     """
+
     def __init__(self, g):
         super(LSTMRewriterBase, self).__init__(g)
         # {var_name: (finder, connector)}
@@ -100,7 +101,8 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
             context.input_size.append(None)
             context.hidden_size.append(None)
             context.attributes.append({})
-            context.onnx_input_ids[i]["sequence_lens"] = seq_len_node.output[0] if seq_len_node else utils.ONNX_EMPTY_INPUT
+            context.onnx_input_ids[i]["sequence_lens"] = \
+                seq_len_node.output[0] if seq_len_node else utils.ONNX_EMPTY_INPUT
 
         context.onnx_input_ids[0]["X"] = inputs[0]
         if not self.parse_attributes(context):
@@ -126,10 +128,9 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
             )
 
             match_results = list(matcher.match_ops(body_graph_ops))
-            logger.debug("number of match results: " + str(len(match_results)))
-            if len(match_results) < 1:
-                return None
-            return match_results
+            logger.debug("number of match results: %s", len(match_results))
+            if len(match_results) > 0:
+                return match_results
         return None
 
     def get_state_variables(self, context):

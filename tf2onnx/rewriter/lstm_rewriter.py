@@ -40,14 +40,14 @@ class LSTMRewriter(LSTMRewriterBase):
             cell_match = self._match_cell(context, cell_type)
             if cell_match and len(cell_match) >= 1:
                 self.num_lstm_layers = len(cell_match)
-                logger.debug("number of lstm layers: " + str(self.num_lstm_layers))
+                logger.debug("number of LSTM layers: %s", self.num_lstm_layers)
                 for i in range(self.num_lstm_layers):
                     self.state_variable_handlers.append({
                         "ct" + str(i): (self._ct_variable_finder, self._connect_lstm_yc_to_graph, i),
                         "ht" + str(i): (self._ht_variable_finder, self._connect_lstm_yh_to_graph, i)
                     })
                     self.state_variable_handlers.append({
-                         "ct_ht" + str(i): (self._ct_ht_shared_variable_finder, self._connect_lstm_ych_to_graph, i)
+                        "ct_ht" + str(i): (self._ct_ht_shared_variable_finder, self._connect_lstm_ych_to_graph, i)
                     })
                 logger.debug("parsing unit is %s, num layers is %d", cell_type, self.num_lstm_layers)
             if cell_match:
@@ -287,9 +287,9 @@ class LSTMRewriter(LSTMRewriterBase):
     def process_var_init_nodes_per_layer(self, context, i):
         init_h_id = None
         init_c_id = None
-        if ("ct_ht" + str(i)) in context.state_variables:
+        if "ct_ht" + str(i) in context.state_variables:
             init_h_id, init_c_id = self._process_non_tuple_ch_init_nodes(context, i)
-        elif ("ct" + str(i)) in context.state_variables and ("ht" + str(i)) in context.state_variables:
+        elif "ct" + str(i) in context.state_variables and ("ht" + str(i)) in context.state_variables:
             init_h_id, init_c_id = self._process_tuple_ch_init_nodes(context, i)
         else:
             raise ValueError("no initializers, unexpected")
@@ -363,11 +363,10 @@ class LSTMRewriter(LSTMRewriterBase):
     def create_rnn_node(self, context):
         rnn_nodes = list()
         outputs = context.loop_properties.scan_outputs_exits
-        logger.debug("number of rnn node outputs:" + str(len(outputs)))
-        for i in range(len(outputs)):
-            logger.debug("output " + str(i) + " with id=" + outputs[i].id)
+        logger.debug("number of rnn node outputs: %s", len(outputs))
+
         for i in range(self.num_lstm_layers):
-            logger.debug("creating rnn node for layer: " + str(i))
+            logger.debug("creating rnn node for layer: %s", i)
             rnn_nodes.append(self.create_single_rnn_node(context, i))
             output_id = rnn_nodes[i].output[0]
             rnn_output_shape = self.g.get_shape(output_id)
@@ -376,7 +375,7 @@ class LSTMRewriter(LSTMRewriterBase):
                                             shapes=[squeeze_output_shape],
                                             dtypes=[self.g.get_dtype(output_id)])
             if i + 1 < self.num_lstm_layers:
-                logger.debug("setting input for layer: " + str(i + 1))
+                logger.debug("setting input for layer: %s", i + 1)
                 context.onnx_input_ids[i + 1]["X"] = squeeze_node.output[0]
         return rnn_nodes
 
