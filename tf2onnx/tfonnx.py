@@ -42,24 +42,18 @@ def rewrite_constant_fold(g, ops):
     tensorflow missed something, make another pass over the graph and fix want we care about.
     """
     func_map = {
-        # "Add": np.add,
-        # "GreaterEqual": np.greater_equal,
-        # "Cast": np.cast,
+        "Add": np.add,
+        "GreaterEqual": np.greater_equal,
+        "Cast": np.cast,
         "ConcatV2": np.concatenate,
-        # "Less": np.less,
-        # "ListDiff": np.setdiff1d,
-        # "Mul": np.multiply,
-        # "Pack": np.stack,
-        # "Range": np.arange,
-        # "Sqrt": np.sqrt,
-        # "Sub": np.subtract,
+        "Less": np.less,
+        "ListDiff": np.setdiff1d,
+        "Mul": np.multiply,
+        "Pack": np.stack,
+        "Range": np.arange,
+        "Sqrt": np.sqrt,
+        "Sub": np.subtract,
     }
-    ref_cnt_per_node = {}
-    for idx, op in enumerate(ops):
-        for op_input in op.inputs:
-            if op_input.name not in ref_cnt_per_node:
-                ref_cnt_per_node[op_input.name] = 0
-            ref_cnt_per_node[op_input.name] += 1
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
@@ -67,14 +61,18 @@ def rewrite_constant_fold(g, ops):
         keep_looking = False
         for idx, op in enumerate(ops):
             func = func_map.get(op.type)
-            if func is None:
-                continue
+            if func is None: continue
+            if set(op.output) & set(g.outputs): continue
             try:
                 inputs = []
+                skip = False
                 for node in op.inputs:
                     if not node.is_const():
+                        skip = True
                         break
                     inputs.append(node.get_tensor_value(as_list=False))
+
+                if skip: continue
 
                 logger.debug("op name %s, %s, %s", op.name, len(op.input), len(inputs))
                 if inputs and len(op.input) == len(inputs):
@@ -109,7 +107,6 @@ def rewrite_constant_fold(g, ops):
                     old_node_name = op.name
                     logger.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
                     ops[idx] = g.make_const(new_node_name, val)
-                    ref_cnt_per_node[new_node_name] = ref_cnt_per_node[old_node_name]
 
                     logger.debug("replace old output [%s] with new output [%s]", old_output_name, new_output_name)
                     # need to re-write the consumers input name to use the const name
@@ -117,10 +114,8 @@ def rewrite_constant_fold(g, ops):
                     if consumers:
                         for consumer in consumers:
                             g.replace_input(consumer, old_output_name, new_output_name)
-                    for node in op.inputs:
-                        ref_cnt_per_node[node.name] -= 1
-                        if ref_cnt_per_node[node.name] == 0:
-                            g.remove_node(node.name)
+                    g.remove_node(old_node_name)
+
                     # keep looking until there is nothing we can fold.
                     # We keep the graph in topological order so if we folded,
                     # the result might help a following op.
