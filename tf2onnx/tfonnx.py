@@ -54,12 +54,6 @@ def rewrite_constant_fold(g, ops):
         "Sqrt": np.sqrt,
         "Sub": np.subtract,
     }
-    ref_cnt_per_node = {}
-    for idx, op in enumerate(ops):
-        for op_input in op.inputs:
-            if op_input.name not in ref_cnt_per_node:
-                ref_cnt_per_node[op_input.name] = 0
-            ref_cnt_per_node[op_input.name] += 1
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
@@ -67,8 +61,8 @@ def rewrite_constant_fold(g, ops):
         keep_looking = False
         for idx, op in enumerate(ops):
             func = func_map.get(op.type)
-            if func is None:
-                continue
+            if func is None: continue
+            if set(op.output) & set(g.outputs): continue
             try:
                 inputs = []
                 for node in op.inputs:
@@ -109,7 +103,6 @@ def rewrite_constant_fold(g, ops):
                     old_node_name = op.name
                     logger.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
                     ops[idx] = g.make_const(new_node_name, val)
-                    ref_cnt_per_node[new_node_name] = ref_cnt_per_node[old_node_name]
 
                     logger.debug("replace old output [%s] with new output [%s]", old_output_name, new_output_name)
                     # need to re-write the consumers input name to use the const name
@@ -117,10 +110,7 @@ def rewrite_constant_fold(g, ops):
                     if consumers:
                         for consumer in consumers:
                             g.replace_input(consumer, old_output_name, new_output_name)
-                    for node in op.inputs:
-                        ref_cnt_per_node[node.name] -= 1
-                        if ref_cnt_per_node[node.name] == 0:
-                            g.remove_node(node.name)
+
                     # keep looking until there is nothing we can fold.
                     # We keep the graph in topological order so if we folded,
                     # the result might help a following op.
@@ -459,8 +449,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
-    rewriters = [rewrite_quantize_and_dequantize, rewrite_transpose, rewrite_flatten, rewrite_gemm,
-                 rewrite_random_uniform, rewrite_random_uniform_fold_const,
+    rewriters = [rewrite_constant_fold, rewrite_quantize_and_dequantize, rewrite_transpose, rewrite_flatten,
+                 rewrite_gemm, rewrite_random_uniform, rewrite_random_uniform_fold_const,
                  rewrite_random_normal, rewrite_dropout, rewrite_eye,
                  rewrite_leakyrelu, rewrite_thresholded_relu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,

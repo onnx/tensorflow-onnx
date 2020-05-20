@@ -196,6 +196,7 @@ class Squeeze:
             shape = ctx.get_shape(node.input[0])
             utils.make_sure(shape is not None, "squeeze input shape cannot be None")
             axis = [i for i, j in enumerate(shape) if j == 1]
+            if not axis: axis = [0]
         node.set_attr("axes", axis)
 
     @classmethod
