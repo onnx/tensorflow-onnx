@@ -1069,7 +1069,7 @@ class Graph(object):
             utils.make_sure(dtype is not None, "missing output dtype for " + name)
             # TODO: allow None output shape or not? e.g. shape=(?,)
             #utils.make_sure(shape is not None, "missing output shape for " + name)
-            if shape is None: logger.warning("missing output shape for " + name)
+            if shape is None: logger.warning("missing output shape for %s", name)
 
             v = utils.make_onnx_inputs_outputs(name, dtype, shape)
             tensor_value_infos.append(v)
