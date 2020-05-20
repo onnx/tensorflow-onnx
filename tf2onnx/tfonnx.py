@@ -42,17 +42,17 @@ def rewrite_constant_fold(g, ops):
     tensorflow missed something, make another pass over the graph and fix want we care about.
     """
     func_map = {
-        "Add": np.add,
-        "GreaterEqual": np.greater_equal,
-        "Cast": np.cast,
+        # "Add": np.add,
+        # "GreaterEqual": np.greater_equal,
+        # "Cast": np.cast,
         "ConcatV2": np.concatenate,
-        "Less": np.less,
-        "ListDiff": np.setdiff1d,
-        "Mul": np.multiply,
-        "Pack": np.stack,
-        "Range": np.arange,
-        "Sqrt": np.sqrt,
-        "Sub": np.subtract,
+        # "Less": np.less,
+        # "ListDiff": np.setdiff1d,
+        # "Mul": np.multiply,
+        # "Pack": np.stack,
+        # "Range": np.arange,
+        # "Sqrt": np.sqrt,
+        # "Sub": np.subtract,
     }
     ref_cnt_per_node = {}
     for idx, op in enumerate(ops):
@@ -466,7 +466,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_bi_direction_gru,
                  rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond,
-                 rewrite_biasadd_with_conv2d,
+                 rewrite_biasadd_with_conv2d, rewrite_constant_fold
                  ]
 
     if custom_rewriter is not None:
