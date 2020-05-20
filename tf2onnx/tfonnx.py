@@ -114,7 +114,6 @@ def rewrite_constant_fold(g, ops):
                     if consumers:
                         for consumer in consumers:
                             g.replace_input(consumer, old_output_name, new_output_name)
-                    g.remove_node(old_node_name)
 
                     # keep looking until there is nothing we can fold.
                     # We keep the graph in topological order so if we folded,
