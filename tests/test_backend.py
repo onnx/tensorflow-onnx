@@ -62,6 +62,7 @@ if is_tf2():
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
+    quantize_and_dequantize = tf.quantization.quantize_and_dequantize
     resize_bilinear = tf.compat.v1.image.resize_bilinear
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
@@ -77,6 +78,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     random_uniform = tf.compat.v1.random_uniform
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
+    quantize_and_dequantize = tf.compat.v1.quantization.quantize_and_dequantize
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
     is_nan = tf.math.is_nan
@@ -1915,6 +1917,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return True
 
         self._run_test_case(func_fusedbn, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator)
+
+    @check_tf_min_version("1.15")
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_qdq_unsigned_input(self):
+        x_shape = [3, 3, 2]
+        x_val = np.arange(1, 1+np.prod(x_shape)).astype("float32").reshape(x_shape)
+        def func(x):
+            x_ = quantize_and_dequantize(x, 1.0, 6.0, signed_input=False, range_given=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.15")
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_qdq_signed_input(self):
+        x_shape = [3, 3, 2]
+        x_val = np.arange(-np.prod(x_shape)/2, np.prod(x_shape)/2).astype("float32").reshape(x_shape)
+        def func(x):
+            x_ = quantize_and_dequantize(x, -6.0, 6.0, signed_input=True, narrow_range=True, range_given=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @skip_caffe2_backend()
     @check_opset_min_version(7, "resize_nearest_neighbor")
