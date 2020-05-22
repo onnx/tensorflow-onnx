@@ -2045,7 +2045,7 @@ class MatrixDiagPartV2V3:
 @tf_op("MatrixDiagV3")
 class MatrixDiagV3:
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def version_12(cls, ctx, node, **kwargs):
         # MatrixDiagV3
         diag = node.input[0]
         k = ctx.make_node("Cast", [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
