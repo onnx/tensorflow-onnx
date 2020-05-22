@@ -2042,6 +2042,222 @@ class MatrixDiagPartV2V3:
         squeeze_if.set_body_graph_as_attr("then_branch", squeeze_sliced_graph)
         squeeze_if.set_body_graph_as_attr("else_branch", identity_sliced_graph)
 
+@tf_op("MatrixDiagV3")
+class MatrixDiagV3:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # MatrixDiagV3
+        diag = node.input[0]
+        k = ctx.make_node("Cast", [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+        row = ctx.make_node("Cast", [node.input[2]], attr={'to': TensorProto.INT64}).output[0]
+        col = ctx.make_node("Cast", [node.input[3]], attr={'to': TensorProto.INT64}).output[0]
+        padding = node.input[4]
+        align = node.get_attr_str('align')
+        diag_shape = [-1] * len(ctx.get_shape(diag))
+        expanded_diag_shape = diag_shape + [-1]
+        # define constants
+        const_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero', np.array([0]).astype(np.int64))
+        const_one = ctx.make_const(utils.make_name(node.name) + 'const_one', np.array([1]).astype(np.int64))
+        const_two = ctx.make_const(utils.make_name(node.name) + 'const_two', np.array([2]).astype(np.int64))
+        const_neg_one = ctx.make_const(utils.make_name(node.name) + 'const_neg_one', np.array([-1]).astype(np.int64))
+        const_neg_two = ctx.make_const(utils.make_name(node.name) + 'const_neg_two', np.array([-2]).astype(np.int64))
+        # compute min and max of k
+        k_min = ctx.make_node("ReduceMin", [k])
+        k_max = ctx.make_node("ReduceMax", [k])
+        k_max_inc = ctx.make_node("Add", [k_max.output[0], const_one.output[0]])
+        k_count = ctx.make_node("Sub", [k_max_inc.output[0], k_min.output[0]])
+        # expand diag
+        initial_diag_shape = ctx.make_node("Shape", [diag])
+        initial_diag_rank = ctx.make_node("Shape", [initial_diag_shape.output[0]])
+        initial_diag_rank_greater = ctx.make_node("Greater", [initial_diag_rank.output[0], const_one.output[0]])
+        identity_diag_graph = ctx.create_new_graph_with_same_config()
+        identity_diag_graph.parent_graph = ctx
+        identity_diag = identity_diag_graph.make_node("Identity", [diag])
+        identity_diag_graph.add_graph_output(identity_diag.output[0], ctx.get_dtype(diag), diag_shape)
+        expanded_diag_graph = ctx.create_new_graph_with_same_config()
+        expanded_diag_graph.parent_graph = ctx
+        expanded_diag = expanded_diag_graph.make_node("Unsqueeze", [diag], attr={'axes': [0]})
+        expanded_diag_graph.add_graph_output(expanded_diag.output[0], ctx.get_dtype(diag), expanded_diag_shape)
+        if_expanded_diag = ctx.make_node("If", [initial_diag_rank_greater.output[0]])
+        if_expanded_diag.set_body_graph_as_attr("then_branch", identity_diag_graph)
+        if_expanded_diag.set_body_graph_as_attr("else_branch", expanded_diag_graph)
+        temp_diag_shape = ctx.make_node("Shape", [if_expanded_diag.output[0]])
+        temp_diag_rank = ctx.make_node("Shape", [temp_diag_shape.output[0]])
+        temp_diag_depth = ctx.make_node("Slice", [temp_diag_shape.output[0], const_neg_two.output[0], const_neg_one.output[0]])
+        temp_diag_width = ctx.make_node("Slice", [temp_diag_shape.output[0], const_neg_one.output[0], temp_diag_rank.output[0]])
+        depth_match = ctx.make_node("Equal", [k_count.output[0], temp_diag_depth.output[0]])
+        identity_expanded_diag_graph = ctx.create_new_graph_with_same_config()
+        identity_expanded_diag_graph.parent_graph = ctx
+        identity_expanded_diag = identity_expanded_diag_graph.make_node("Identity", [if_expanded_diag.output[0]])
+        identity_expanded_diag_graph.add_graph_output(identity_expanded_diag.output[0], ctx.get_dtype(diag), expanded_diag_shape)
+        further_expanded_diag_graph = ctx.create_new_graph_with_same_config()
+        further_expanded_diag_graph.parent_graph = ctx
+        further_expanded_diag = further_expanded_diag_graph.make_node("Unsqueeze", [if_expanded_diag.output[0]], attr={'axes': [-2]})
+        further_expanded_diag_graph.add_graph_output(further_expanded_diag.output[0], ctx.get_dtype(diag), expanded_diag_shape)
+        final_expanded_diag = ctx.make_node("If", [depth_match.output[0]])
+        final_expanded_diag.set_body_graph_as_attr("then_branch", identity_expanded_diag_graph)
+        final_expanded_diag.set_body_graph_as_attr("else_branch", further_expanded_diag_graph)
+        # compute diagonal length
+        diag_shape = ctx.make_node("Shape", [final_expanded_diag.output[0]])
+        half_diag_shape = ctx.make_node("Slice", [diag_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
+        last_diag_shape = ctx.make_node("Slice", [diag_shape.output[0], const_zero.output[0], const_neg_one.output[0]])
+        diag_rank = ctx.make_node("Shape", [diag_shape.output[0]])
+        diag_width = ctx.make_node("Slice", [diag_shape.output[0], const_neg_one.output[0], diag_rank.output[0]])
+        k_range = ctx.make_node("Range", [k_min.output[0], k_max_inc.output[0]], domain="com.microsoft")
+        abs_k_range = ctx.make_node("Abs", [k_range.output[0]])
+        min_abs_k_range = ctx.make_node("ReduceMin", [abs_k_range.output[0]])
+        diag_len = ctx.make_node("Add", [diag_width.output[0], min_abs_k_range.output[0]])
+        max_col_graph = ctx.create_new_graph_with_same_config()
+        max_col_graph.parent_graph = ctx
+        max_col = max_col_graph.make_node("Max", [diag_len.output[0], col])
+        max_col_graph.add_graph_output(max_col.output[0], ctx.get_dtype(col), [-1])
+        max_row_graph = ctx.create_new_graph_with_same_config()
+        max_row_graph.parent_graph = ctx
+        max_row = max_row_graph.make_node("Max", [diag_len.output[0], row])
+        max_row_graph.add_graph_output(max_row.output[0], ctx.get_dtype(row), [-1])
+        raw_sub_max = ctx.make_node("Min", [const_zero.output[0], k_max.output[0]])
+        sub_max = ctx.make_node("Abs", [raw_sub_max.output[0]])
+        sup_min = ctx.make_node("Max", [const_zero.output[0], k_min.output[0]])
+        min_col_graph = ctx.create_new_graph_with_same_config()
+        min_col_graph.parent_graph = ctx
+        min_col = min_col_graph.make_node("Add", [diag_width.output[0], sup_min.output[0]])
+        min_col_graph.add_graph_output(min_col.output[0], ctx.get_dtype(col), [-1])
+        min_row_graph = ctx.create_new_graph_with_same_config()
+        min_row_graph.parent_graph = ctx
+        min_row = min_row_graph.make_node("Add", [diag_width.output[0], sub_max.output[0]])
+        min_row_graph.add_graph_output(min_row.output[0], ctx.get_dtype(row), [-1])
+        col_not_set = ctx.make_node("Equal", [col, const_neg_one.output[0]])
+        col_set = ctx.make_node("Not", [col_not_set.output[0]])
+        row_not_set = ctx.make_node("Equal", [row, const_neg_one.output[0]])
+        row_set = ctx.make_node("Not", [row_not_set.output[0]])
+        need_min_col = ctx.make_node("And", [col_not_set.output[0], row_set.output[0]])
+        need_min_row = ctx.make_node("And", [row_not_set.output[0], col_set.output[0]])
+        final_col = ctx.make_node("If", [need_min_col.output[0]])
+        final_col.set_body_graph_as_attr("then_branch", min_col_graph)
+        final_col.set_body_graph_as_attr("else_branch", max_col_graph)
+        final_row = ctx.make_node("If", [need_min_row.output[0]])
+        final_row.set_body_graph_as_attr("then_branch", min_row_graph)
+        final_row.set_body_graph_as_attr("else_branch", max_row_graph)
+        diag_max = ctx.make_node("Sub", [final_col.output[0], const_one.output[0]])
+        diag_min = ctx.make_node("Sub", [const_one.output[0], final_row.output[0]])
+        raw_row_col_diff = ctx.make_node("Sub", [final_col.output[0], final_row.output[0]])
+        row_col_diff = ctx.make_node("Abs", [raw_row_col_diff.output[0]])
+        row_col_diff_inc = ctx.make_node("Add", [row_col_diff.output[0], const_one.output[0]])
+        final_diag_len = ctx.make_node("Min", [final_col.output[0], final_row.output[0]])
+        final_diag_len_dec = ctx.make_node("Sub", [final_diag_len.output[0], const_one.output[0]])
+        k_iter_1 = ctx.make_node("Range", [const_one.output[0], final_diag_len.output[0]], domain="com.microsoft")
+        k_iter_2 = ctx.make_node("Expand", [final_diag_len.output[0], row_col_diff_inc.output[0]])
+        k_iter_3 = ctx.make_node("Range", [final_diag_len_dec.output[0], const_zero.output[0], const_neg_one.output[0]], domain="com.microsoft")
+        k_lens = ctx.make_node("Concat", [k_iter_1.output[0], k_iter_2.output[0], k_iter_3.output[0]], attr={"axis": -1})
+        k_alls = ctx.make_node("Shape", [k_lens.output[0]])
+        target_shape = ctx.make_node("Concat", [half_diag_shape.output[0], final_row.output[0], final_col.output[0]], attr={"axis": -1})
+        const_zero_casted = ctx.make_node("Cast", [const_zero.output[0]], attr={'to': ctx.get_dtype(diag)})
+        base_matrix = ctx.make_node("Expand", [const_zero_casted.output[0], target_shape.output[0]])
+        #main loop
+        trip_name = utils.make_name(node.name + "_i")
+        cond_name = utils.make_name(node.name + "_cond")
+        base_matrix_name = utils.make_name(node.name + "_base_matrix")
+        body_graph = ctx.create_new_graph_with_same_config()
+        body_graph.parent_graph = ctx
+        body_graph.add_graph_input(trip_name, TensorProto.INT64, [1])
+        body_graph.add_graph_input(cond_name, TensorProto.BOOL, [])
+        body_graph.add_graph_input(base_matrix_name, ctx.get_dtype(diag), expanded_diag_shape)
+        current_k = body_graph.make_node("Sub", [diag_max.output[0], trip_name])
+        offset_to_diag_min = body_graph.make_node("Sub", [current_k.output[0], diag_min.output[0]])
+        offset_to_diag_min_inc = body_graph.make_node("Add", [offset_to_diag_min.output[0], const_one.output[0]])
+        valid_diag_width = body_graph.make_node("Slice", [k_lens.output[0], offset_to_diag_min.output[0], offset_to_diag_min_inc.output[0]])
+        is_k_negative = body_graph.make_node("Less", [current_k.output[0], const_zero.output[0]])
+        # gen_diag_graph
+        gen_diag_graph = body_graph.create_new_graph_with_same_config()
+        gen_diag_graph.parent_graph = body_graph
+        expected_gen_shape = gen_diag_graph.make_node("Concat", [half_diag_shape.output[0], const_one.output[0], valid_diag_width.output[0]], attr = {"axis": -1})
+        gen_diag = gen_diag_graph.make_node("Expand", [padding, expected_gen_shape.output[0]])
+        gen_diag_graph.add_graph_output(gen_diag.output[0], ctx.get_dtype(diag), expanded_diag_shape)
+        # cut_diag_graph
+        cut_diag_graph = body_graph.create_new_graph_with_same_config()
+        cut_diag_graph.parent_graph = body_graph
+        offset_to_max = cut_diag_graph.make_node("Sub", [k_max.output[0], current_k.output[0]])
+        offset_to_max_inc = cut_diag_graph.make_node("Add", [offset_to_max.output[0], const_one.output[0]])
+        raw_diag = cut_diag_graph.make_node("Slice", [final_expanded_diag.output[0], offset_to_max.output[0], offset_to_max_inc.output[0], const_neg_two.output[0]])
+        raw_diag_shape = cut_diag_graph.make_node("Shape", [raw_diag.output[0]])
+        raw_diag_rank = cut_diag_graph.make_node("Shape", [raw_diag_shape.output[0]])
+        raw_diag_width = cut_diag_graph.make_node("Slice", [raw_diag_shape.output[0], const_neg_one.output[0], raw_diag_rank.output[0]])
+        raw_width_gap = cut_diag_graph.make_node("Sub", [raw_diag_width.output[0], valid_diag_width.output[0]])
+        width_gap = cut_diag_graph.make_node("Abs", [raw_width_gap.output[0]])
+        width_left = cut_diag_graph.make_node("Sub", [raw_diag_width.output[0], width_gap.output[0]])
+        slice_super_graph = cut_diag_graph.create_new_graph_with_same_config()
+        slice_super_graph.parent_graph = cut_diag_graph
+        slice_super = slice_super_graph.make_node("Slice", [raw_diag.output[0], width_gap.output[0], raw_diag_width.output[0], const_neg_one.output[0]]) \
+                      if align.startswith("RIGHT") else \
+                      slice_super_graph.make_node("Slice", [raw_diag.output[0], const_zero.output[0], width_left.output[0], const_neg_one.output[0]])
+        slice_super_graph.add_graph_output(slice_super.output[0], ctx.get_dtype(diag), expanded_diag_shape)
+        slice_sub_graph = cut_diag_graph.create_new_graph_with_same_config()
+        slice_sub = slice_sub_graph.make_node("Slice", [raw_diag.output[0], width_gap.output[0], raw_diag_width.output[0], const_neg_one.output[0]]) \
+                    if align.endswith("RIGHT") else \
+                    slice_sub_graph.make_node("Slice", [raw_diag.output[0], const_zero.output[0], width_left.output[0], const_neg_one.output[0]])
+        slice_sub_graph.parent_graph = cut_diag_graph
+        slice_sub_graph.add_graph_output(slice_sub.output[0], ctx.get_dtype(diag), expanded_diag_shape)
+        sliced_diag = cut_diag_graph.make_node("If", [is_k_negative.output[0]])
+        sliced_diag.set_body_graph_as_attr("then_branch", slice_sub_graph)
+        sliced_diag.set_body_graph_as_attr("else_branch", slice_super_graph)
+        cut_diag_graph.add_graph_output(sliced_diag.output[0], ctx.get_dtype(diag), expanded_diag_shape)
+        less_equal_max = body_graph.make_node("LessOrEqual", [current_k.output[0], k_max.output[0]])
+        greater_equal_min = body_graph.make_node("GreaterOrEqual", [current_k.output[0], k_min.output[0]])
+        in_valid_range = body_graph.make_node("And", [less_equal_max.output[0], greater_equal_min.output[0]])
+        current_diag = body_graph.make_node("If", [in_valid_range.output[0]])
+        current_diag.set_body_graph_as_attr("then_branch", cut_diag_graph)
+        current_diag.set_body_graph_as_attr("else_branch", gen_diag_graph)
+        current_diag_shape = body_graph.make_node("Shape", [current_diag.output[0]])
+        half_current_diag_shape = body_graph.make_node("Slice", [current_diag_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
+        current_diag_rank = body_graph.make_node("Shape", [current_diag_shape.output[0]])
+        current_diag_width = body_graph.make_node("Slice", [current_diag_shape.output[0], const_neg_one.output[0], current_diag_rank.output[0]], name = utils.make_name("current_diag_width"))
+        expect_diag_shape = body_graph.make_node("Concat", [half_current_diag_shape.output[0], current_diag_width.output[0], current_diag_width.output[0]], attr = {"axis": -1})
+        expanded_current_diag = body_graph.make_node("Expand", [current_diag.output[0], expect_diag_shape.output[0]])
+        eye_like_shape = body_graph.make_node("Concat", [valid_diag_width.output[0], valid_diag_width.output[0]], attr = {"axis": -1})
+        eye_like_zeros = body_graph.make_node("Expand", [const_one.output[0], eye_like_shape.output[0]])
+        eye_like_matrix = body_graph.make_node("EyeLike", [eye_like_zeros.output[0]], attr = {"dtype": ctx.get_dtype(diag)})
+        reshaped_diag = body_graph.make_node("Mul", [expanded_current_diag.output[0], eye_like_matrix.output[0]])
+        reshaped_diag_shape = body_graph.make_node("Shape", [reshaped_diag.output[0]])
+        reshaped_diag_rank = body_graph.make_node("Shape", [reshaped_diag_shape.output[0]])
+        reshaped_diag_rank_dec = body_graph.make_node("Sub", [reshaped_diag_rank.output[0], const_one.output[0]])
+        reshaped_diag_rank_dec2 = body_graph.make_node("Sub", [reshaped_diag_rank.output[0], const_two.output[0]])
+        pads_dec = body_graph.make_node("Expand", [const_zero.output[0], reshaped_diag_rank_dec.output[0]])
+        pads_dec2 = body_graph.make_node("Expand", [const_zero.output[0], reshaped_diag_rank_dec2.output[0]])
+        col_gap = body_graph.make_node("Sub", [final_col.output[0], current_diag_width.output[0]])
+        row_gap = body_graph.make_node("Sub", [final_row.output[0], current_diag_width.output[0]])
+        # get padded diag
+        sub_pads_graph = body_graph.create_new_graph_with_same_config()
+        sub_pads_graph.parent_graph = body_graph
+        sub_pads_top = sub_pads_graph.make_node("Sub", [const_zero.output[0], current_k.output[0]])
+        sub_pads_btm = sub_pads_graph.make_node("Sub", [row_gap.output[0], sub_pads_top.output[0]])
+        sub_pads = sub_pads_graph.make_node("Concat", [pads_dec2.output[0], sub_pads_top.output[0], const_zero.output[0],
+                                                       pads_dec2.output[0], sub_pads_btm.output[0], col_gap.output[0]], attr = {"axis": -1})
+        sub_pads_graph.add_graph_output(sub_pads.output[0], TensorProto.INT64, [-1])
+        super_pads_graph = body_graph.create_new_graph_with_same_config()
+        super_pads_graph.parent_graph = body_graph
+        super_pads_rit = super_pads_graph.make_node("Sub", [col_gap.output[0], current_k.output[0]])
+        super_pads = super_pads_graph.make_node("Concat", [pads_dec.output[0], current_k.output[0], pads_dec2.output[0],
+                                                           row_gap.output[0], super_pads_rit.output[0]], attr = {"axis": -1})
+        super_pads_graph.add_graph_output(super_pads.output[0], TensorProto.INT64, [-1])
+        diag_pads = body_graph.make_node("If", [is_k_negative.output[0]])
+        diag_pads.set_body_graph_as_attr("then_branch", sub_pads_graph)
+        diag_pads.set_body_graph_as_attr("else_branch", super_pads_graph)
+        padded_diag = body_graph.make_node("Pad", [reshaped_diag.output[0], diag_pads.output[0]])
+        # add to base matrix
+        target_matrix = body_graph.make_node("Add", [padded_diag.output[0], base_matrix_name])
+        cond_output = body_graph.make_node('Identity', [cond_name])
+        body_graph.add_graph_output(cond_output.output[0], TensorProto.BOOL, [])
+        body_graph.add_graph_output(target_matrix.output[0], ctx.get_dtype(diag), expanded_diag_shape)
+        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+        main_loop = ctx.make_node("Loop", [k_alls.output[0], cond_const.output[0], base_matrix.output[0]],
+                                  output_count=1)
+        main_loop.set_body_graph_as_attr("body", body_graph)
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("Identity", [main_loop.output[0]], name=node.name,
+                                  outputs=node.output, shapes=shapes, dtypes=dtypes)
+
 
 @tf_op("BroadcastTo")
 class BroadcastTo:
