@@ -1995,6 +1995,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
+    @check_tf_min_version("1.14")
     @check_opset_min_version(11, "resize_bilinear_v2")
     def test_resize_bilinear_v2_with_non_const(self):
         x_shape = [3, 10, 8, 5]
