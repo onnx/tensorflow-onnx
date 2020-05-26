@@ -2185,7 +2185,8 @@ class MatrixDiagV3:
         final_row.set_body_graph_as_attr("then_branch", MinRowGraph())
         final_row.set_body_graph_as_attr("else_branch", MaxRowGraph())
 
-        # next, compute lengths of all possilbe k into k_lens, e.g. if target matrix is of shape [2,2], k_lens will be [1,2,1]
+        '''next, compute lengths of all possilbe k into k_lens, e.g. if target matrix is of shape [2,2],
+        k_lens will be [1,2,1]'''
         diag_max = ctx.make_node("Sub", [final_col.output[0], const_one.output[0]])
         diag_min = ctx.make_node("Sub", [const_one.output[0], final_row.output[0]])
         raw_row_col_diff = ctx.make_node("Sub", [final_col.output[0], final_row.output[0]])
