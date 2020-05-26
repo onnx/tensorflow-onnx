@@ -3224,6 +3224,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
                    tf.math.greater_equal(x, y, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: y_val})
 
+    @check_opset_min_version(10)
+    def test_is_finite(self):
+        x_val = np.array([5.0, 4.8, 6.8, np.inf, np.nan], dtype=np.float32)
+        def func(x):
+            y = tf.math.is_finite(x)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
 
 if __name__ == '__main__':
     unittest_main()
