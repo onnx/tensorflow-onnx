@@ -2051,7 +2051,7 @@ class MatrixDiagV3:
         First, expand diag if necessary
         Next, compute final_col and final_rows
         Then, compute the lengths of all diagonalss into k_lens
-        Last, loop through all k in [1-fianl_col, final_row-1], for each k:
+        Last, loop through all k in [1-fianl_row, final_col-1], for each k:
         1. Get correspoding row from node.input[0] if k is between [k_min, k_max],
            otherwise compose a row out of padding;
         2. Make it a diagonal;
