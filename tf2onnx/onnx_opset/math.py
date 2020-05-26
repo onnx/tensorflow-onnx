@@ -583,7 +583,6 @@ class IsFinite:
         nan_node = ctx.make_node("IsNaN", inputs=node.input, name=utils.make_name(node.name),
                                  shapes=shapes, dtypes=dtypes)
         or_node = ctx.make_node("Or", inputs=[inf_node.output[0], nan_node.output[0]], name=utils.make_name(node.name),
-                                 shapes=shapes, dtypes=dtypes)
-
+                                shapes=shapes, dtypes=dtypes)
         _ = ctx.make_node("Not", inputs=or_node.output, name=node.name,
-                                 shapes=shapes, dtypes=dtypes)
+                          shapes=shapes, dtypes=dtypes)
