@@ -645,7 +645,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 if axes == [0, 1, 2, 3]:
                     # axes node might be shared
                     new_axes = np.array(NCHW_TO_NHWC, dtype=np.int64)
-                    if self._nodes_has_single_consumer_node([node]):
+                    if self._nodes_has_single_consumer_node([node.inputs[3]]):
                         node.inputs[3].set_tensor_value(new_axes)
                     else:
                         new_axes_const = self._g.make_const(
