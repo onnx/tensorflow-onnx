@@ -2184,6 +2184,7 @@ class MatrixDiagV3:
         final_row = ctx.make_node("If", [need_min_row.output[0]])
         final_row.set_body_graph_as_attr("then_branch", MinRowGraph())
         final_row.set_body_graph_as_attr("else_branch", MaxRowGraph())
+
         # next, compute lengths of all possilbe k into k_lens, e.g. if target matrix is of shape [2,2], k_lens will be [1,2,1]
         diag_max = ctx.make_node("Sub", [final_col.output[0], const_one.output[0]])
         diag_min = ctx.make_node("Sub", [const_one.output[0], final_row.output[0]])
@@ -2290,7 +2291,7 @@ class MatrixDiagV3:
         less_equal_max = body_graph.make_node("LessOrEqual", [current_k.output[0], k_max.output[0]])
         greater_equal_min = body_graph.make_node("GreaterOrEqual", [current_k.output[0], k_min.output[0]])
         in_valid_range = body_graph.make_node("And", [less_equal_max.output[0], greater_equal_min.output[0]])
-        # now got the current diagonal
+        # got the current diagonal
         current_diag = body_graph.make_node("If", [in_valid_range.output[0]])
         current_diag.set_body_graph_as_attr("then_branch", CutDiagGraph())
         current_diag.set_body_graph_as_attr("else_branch", GenDiagGraph())
