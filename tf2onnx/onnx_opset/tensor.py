@@ -2083,7 +2083,6 @@ class MatrixDiagV3:
         if_expanded_diag.set_body_graph_as_attr("then_branch", identity_diag_graph)
         if_expanded_diag.set_body_graph_as_attr("else_branch", expanded_diag_graph)
         temp_diag_shape = ctx.make_node("Shape", [if_expanded_diag.output[0]])
-        temp_diag_rank = ctx.make_node("Shape", [temp_diag_shape.output[0]])
         temp_diag_depth = ctx.make_node("Slice",
                                         [temp_diag_shape.output[0], const_neg_two.output[0], const_neg_one.output[0]])
         depth_match = ctx.make_node("Equal", [k_count.output[0], temp_diag_depth.output[0]])
