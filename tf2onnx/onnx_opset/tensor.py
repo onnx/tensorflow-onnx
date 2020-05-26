@@ -2086,8 +2086,6 @@ class MatrixDiagV3:
         temp_diag_rank = ctx.make_node("Shape", [temp_diag_shape.output[0]])
         temp_diag_depth = ctx.make_node("Slice",
                                         [temp_diag_shape.output[0], const_neg_two.output[0], const_neg_one.output[0]])
-        temp_diag_width = ctx.make_node("Slice",
-                                        [temp_diag_shape.output[0], const_neg_one.output[0], temp_diag_rank.output[0]])
         depth_match = ctx.make_node("Equal", [k_count.output[0], temp_diag_depth.output[0]])
         identity_expanded_diag_graph = ctx.create_new_graph_with_same_config()
         identity_expanded_diag_graph.parent_graph = ctx
@@ -2106,7 +2104,6 @@ class MatrixDiagV3:
         # compute diagonal length
         diag_shape = ctx.make_node("Shape", [final_expanded_diag.output[0]])
         half_diag_shape = ctx.make_node("Slice", [diag_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
-        last_diag_shape = ctx.make_node("Slice", [diag_shape.output[0], const_zero.output[0], const_neg_one.output[0]])
         diag_rank = ctx.make_node("Shape", [diag_shape.output[0]])
         diag_width = ctx.make_node("Slice", [diag_shape.output[0], const_neg_one.output[0], diag_rank.output[0]])
         k_range = ctx.make_node("Range", [k_min.output[0], k_max_inc.output[0]], domain="com.microsoft")

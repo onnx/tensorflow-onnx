@@ -3212,6 +3212,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
     def test_matrix_diag_v3_multi_dim(self):
         raw_diag = [[[1.0, 2.0, 3.0],
                      [4.0, 5.0, 6.0],
@@ -3232,6 +3233,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                               _INPUT2: row_val, _INPUT3: col_val})
 
     @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
     def test_matrix_diag_v3_multi_dim_min_row(self):
         raw_diag = [[[1.0, 2.0, 3.0],
                      [4.0, 5.0, 6.0]],
@@ -3250,6 +3252,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                               _INPUT2: row_val, _INPUT3: col_val})
 
     @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
     def test_matrix_diag_v3_single_dim_min_col(self):
         raw_diag = [1.0, 2.0, 3.0]
         diag_val = np.array(raw_diag).astype(np.float32)
