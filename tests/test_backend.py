@@ -3196,7 +3196,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.random.random([5, 5]).astype(np.float32)
         def func(x):
             return tf.linalg.inv(x, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, process_args={"extra_opset": [extra_opset]})
 
     @check_opset_min_version(12)
     def test_squared_distance(self):
