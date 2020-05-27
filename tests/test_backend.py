@@ -64,6 +64,7 @@ if is_tf2():
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     quantize_and_dequantize = tf.quantization.quantize_and_dequantize
     resize_bilinear = tf.compat.v1.image.resize_bilinear
+    resize_bilinear_v2 = tf.compat.v2.image.resize
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.math.floormod
@@ -81,6 +82,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     quantize_and_dequantize = tf.compat.v1.quantization.quantize_and_dequantize
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
+    resize_bilinear_v2 = tf.compat.v2.image.resize
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.floormod
@@ -1993,6 +1995,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "resize_bilinear_v2")
+    def test_resize_bilinear_v2_with_non_const(self):
+        x_shape = [3, 10, 8, 5]
+        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_new_size = np.array([20, 16]).astype(np.int32)
+        def func(x, x_new_size_):
+            x_ = resize_bilinear_v2(x, x_new_size_)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
+
     @check_opset_min_version(10, "resize scale can less than 1")
     def test_resize_nearest_neighbor2(self):
         x_shape = [1, 300, 20, 2]
@@ -3177,12 +3190,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 k_val = np.array(raw_k).astype(np.int32)
                 self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
 
-    @check_opset_min_version(12)
-    def test_inverse(self):
+    @test_ms_domain()
+    def test_inverse(self, extra_opset):
+        # this depends on onnx Inverse which was removed from opset-12 but does exists in the ms-domain
         x_val = np.random.random([5, 5]).astype(np.float32)
         def func(x):
             return tf.linalg.inv(x, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, process_args={"extra_opset": [extra_opset]})
 
     @check_opset_min_version(12)
     def test_squared_distance(self):
@@ -3266,6 +3280,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
                                               _INPUT2: row_val, _INPUT3: col_val})
+
+    @check_tf_min_version("1.14", "required for tf.math.is_finite")
+    @check_opset_min_version(10)
+    def test_is_finite(self):
+        x_val = np.array([5.0, 4.8, 6.8, np.inf, np.nan], dtype=np.float32)
+        def func(x):
+            y = tf.math.is_finite(x)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 
 if __name__ == '__main__':

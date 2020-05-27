@@ -736,9 +736,12 @@ class Resize:
             const_empty_float.output[0],
             concat_shape.output[0]
         ]
+        transformation_mode = "asymmetric"
+        if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
+            transformation_mode = "half_pixel"
         resize = ctx.make_node("Resize", resize_inputs,
                                attr={"mode": mode, "nearest_mode": "floor",
-                                     "coordinate_transformation_mode": "asymmetric"})
+                                     "coordinate_transformation_mode": transformation_mode})
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)

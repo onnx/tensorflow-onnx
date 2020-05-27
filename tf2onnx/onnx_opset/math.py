@@ -566,10 +566,23 @@ class Einsum:
         del node.attr["N"]
 
 
-@tf_op("MatrixInverse", onnx_op="Inverse")
-class Inverse:
+@tf_op("IsFinite")
+class IsFinite:
     @classmethod
-    def version_12(cls, ctx, node, **kwargs):
-        utils.make_sure(node.get_attr('adjoint').i == 0, "adjoint must be false")
-        del node.attr["adjoint"]
-        node.domain = constants.MICROSOFT_DOMAIN
+    def version_10(cls, ctx, node, **kwargs):
+        # map to onnx as:
+        # not (isinf(x) or isnan(x))
+
+        shapes = node.output_shapes
+        dtypes = [onnx_pb.TensorProto.BOOL] * len(node.output_dtypes)
+
+        ctx.remove_node(node.name)
+
+        inf_node = ctx.make_node("IsInf", inputs=node.input, name=utils.make_name(node.name),
+                                 shapes=shapes, dtypes=dtypes)
+        nan_node = ctx.make_node("IsNaN", inputs=node.input, name=utils.make_name(node.name),
+                                 shapes=shapes, dtypes=dtypes)
+        or_node = ctx.make_node("Or", inputs=[inf_node.output[0], nan_node.output[0]], name=utils.make_name(node.name),
+                                shapes=shapes, dtypes=dtypes)
+        _ = ctx.make_node("Not", inputs=or_node.output, name=node.name,
+                          shapes=shapes, dtypes=dtypes)

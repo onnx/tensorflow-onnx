@@ -625,6 +625,16 @@ class ExpandDims:
             return
         raise ValueError("non-const dim is not supported")
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        dim_node = node.inputs[1]
+        if dim_node.is_const():
+            node.type = "Unsqueeze"
+            dim = dim_node.get_tensor_value()
+            node.set_attr("axes", [dim])
+            ctx.remove_input(node, node.input[1])
+            return
+        raise ValueError("non-const dim is not supported")
 
 @tf_op("StridedSlice")
 class StridedSlice:
