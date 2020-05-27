@@ -14,6 +14,7 @@ import argparse
 import collections
 import re
 
+import onnx
 from onnx import ModelProto
 from onnx import helper, shape_inference
 
