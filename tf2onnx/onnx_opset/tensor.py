@@ -2136,8 +2136,9 @@ class MatrixDiagV3:
         half_diag_shape = ctx.make_node("Slice", [diag_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
         diag_rank = ctx.make_node("Shape", [diag_shape.output[0]])
         diag_width = ctx.make_node("Slice", [diag_shape.output[0], const_neg_one.output[0], diag_rank.output[0]])
-        k_range = ctx.make_node("Range", [ctx.make_node("Squeeze", [k_min.output[0]], attr = {"axes": [-1]}).output[0],
-                                          ctx.make_node("Squeeze", [k_max_inc.output[0]], attr = {"axes": [-1]}).output[0],
+        k_range = ctx.make_node("Range", [ctx.make_node("Squeeze", [k_min.output[0]], attr={"axes": [-1]}).output[0],
+                                          ctx.make_node("Squeeze", [k_max_inc.output[0]], attr={"axes": [-1]}).output[
+                                              0],
                                           const_one_squeezed.output[0]])
         abs_k_range = ctx.make_node("Abs", [k_range.output[0]])
         min_abs_k_range = ctx.make_node("ReduceMin", [abs_k_range.output[0]])
@@ -2198,15 +2199,17 @@ class MatrixDiagV3:
         final_diag_len = ctx.make_node("Min", [final_col.output[0], final_row.output[0]])
         final_diag_len_dec = ctx.make_node("Sub", [final_diag_len.output[0], const_one.output[0]])
         # k_iter_1 is length of diagonals in right top corner
-        k_iter_1 = ctx.make_node("Range", [ctx.make_node("Squeeze", [const_one.output[0]], attr = {"axes": [-1]}).output[0],
-                                           ctx.make_node("Squeeze", [final_diag_len.output[0]], attr = {"axes": [-1]}).output[0],
-                                           const_one_squeezed.output[0]])
+        k_iter_1 = ctx.make_node("Range",
+                                 [ctx.make_node("Squeeze", [const_one.output[0]], attr={"axes": [-1]}).output[0],
+                                  ctx.make_node("Squeeze", [final_diag_len.output[0]], attr={"axes": [-1]}).output[0],
+                                  const_one_squeezed.output[0]])
         # k_iter_2 is length of diagonals in the middle
         k_iter_2 = ctx.make_node("Expand", [final_diag_len.output[0], row_col_diff_inc.output[0]])
         # k_iter_3 is length of diagonals in left bottom corner
-        k_iter_3 = ctx.make_node("Range", [ctx.make_node("Squeeze", [final_diag_len_dec.output[0]], attr = {"axes": [-1]}).output[0],
-                                           ctx.make_node("Squeeze", [const_zero.output[0]], attr = {"axes": [-1]}).output[0],
-                                           ctx.make_node("Squeeze", [const_neg_one.output[0]], attr = {"axes": [-1]}).output[0]])
+        k_iter_3 = ctx.make_node("Range", [
+            ctx.make_node("Squeeze", [final_diag_len_dec.output[0]], attr={"axes": [-1]}).output[0],
+            ctx.make_node("Squeeze", [const_zero.output[0]], attr={"axes": [-1]}).output[0],
+            ctx.make_node("Squeeze", [const_neg_one.output[0]], attr={"axes": [-1]}).output[0]])
         ''' e.g. for matrix of shape [2,4] like:
         [[ 0, 0, 1, 2]
          [-1, 0, 0, 1]], k_iter_1 refers to length of diagonal [1,1] and [2], k_iter_2 refers to [0,0] and [0,0],
