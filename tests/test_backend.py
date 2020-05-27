@@ -3190,7 +3190,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 k_val = np.array(raw_k).astype(np.int32)
                 self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
 
-    @check_opset_min_version(12)
     @test_ms_domain()
     def test_inverse(self):
         # this depends on onnx Inverse which was removed from opset-12 but does exists in the ms-domain
