@@ -2122,7 +2122,7 @@ class MatrixDiagV3:
                                         [temp_diag_shape.output[0], const_neg_two.output[0], const_neg_one.output[0]])
         depth_match = ctx.make_node("Equal", [k_count.output[0], temp_diag_depth.output[0]])
 
-        def IdentityExpanedGraph():
+        def IdentityExpandGraph():
             identity_expanded_diag_graph = ctx.create_new_graph_with_same_config()
             identity_expanded_diag_graph.parent_graph = ctx
             identity_expanded_diag = identity_expanded_diag_graph.make_node("Identity", [if_expanded_diag.output[0]])
@@ -2130,7 +2130,7 @@ class MatrixDiagV3:
                                                           expanded_diag_shape)
             return identity_expanded_diag_graph
 
-        def FurtherExpanedDiag():
+        def FurtherExpandDiag():
             further_expanded_diag_graph = ctx.create_new_graph_with_same_config()
             further_expanded_diag_graph.parent_graph = ctx
             further_expanded_diag = further_expanded_diag_graph.make_node("Unsqueeze", [if_expanded_diag.output[0]],
@@ -2141,8 +2141,8 @@ class MatrixDiagV3:
 
         # if depth of diag is not equal to k_max - k_min + 1, which is actually 1, expand diag on axis -2
         final_expanded_diag = ctx.make_node("If", [depth_match.output[0]])
-        final_expanded_diag.set_body_graph_as_attr("then_branch", IdentityExpanedGraph())
-        final_expanded_diag.set_body_graph_as_attr("else_branch", FurtherExpanedDiag())
+        final_expanded_diag.set_body_graph_as_attr("then_branch", IdentityExpandGraph())
+        final_expanded_diag.set_body_graph_as_attr("else_branch", FurtherExpandDiag())
         # compute diag_len which is the length of diagonal when k is 0
         diag_shape = ctx.make_node("Shape", [final_expanded_diag.output[0]])
         half_diag_shape = ctx.make_node("Slice", [diag_shape.output[0], const_zero.output[0], const_neg_two.output[0]])
