@@ -3225,6 +3225,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
                    tf.math.greater_equal(x, y, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: y_val})
 
+    @check_tf_min_version("1.14", "required for tf.math.is_finite")
+    @check_opset_min_version(10)
+    def test_is_finite(self):
+        x_val = np.array([5.0, 4.8, 6.8, np.inf, np.nan], dtype=np.float32)
+        def func(x):
+            y = tf.math.is_finite(x)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(12)
     @check_tf_min_version("2.2")
     def test_matrix_diag_v3_multi_dim(self):
@@ -3270,7 +3279,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_matrix_diag_v3_single_dim_min_col(self):
         raw_diag = [1.0, 2.0, 3.0]
         diag_val = np.array(raw_diag).astype(np.float32)
-        k_val = np.array([-1]).astype(np.int32)
+        k_val = np.array(-1).astype(np.int32)
         row_val = np.array(5).astype(np.int32)
         col_val = np.array(-1).astype(np.int32)
 
@@ -3281,14 +3290,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
                                               _INPUT2: row_val, _INPUT3: col_val})
 
-    @check_tf_min_version("1.14", "required for tf.math.is_finite")
-    @check_opset_min_version(10)
-    def test_is_finite(self):
-        x_val = np.array([5.0, 4.8, 6.8, np.inf, np.nan], dtype=np.float32)
-        def func(x):
-            y = tf.math.is_finite(x)
-            return tf.identity(y, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_set_diag_v3(self):
+        input_val = np.array([[[7, 7, 7, 7],
+                               [7, 7, 7, 7],
+                               [7, 7, 7, 7]],
+                              [[7, 7, 7, 7],
+                               [7, 7, 7, 7],
+                               [7, 7, 7, 7]]]).astype(np.int64)
+        diag_val = np.array([[1, 2, 3],
+                             [4, 5, 6]]).astype(np.int64)
+        k_val = np.array([0])
+
+        def func(input, diag, k):
+            return tf.raw_ops.MatrixSetDiagV3(input=input, diagonal=diag, k=k, align='RIGHT_LEFT', name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
 
 
 if __name__ == '__main__':
