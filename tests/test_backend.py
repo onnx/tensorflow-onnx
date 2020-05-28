@@ -3303,8 +3303,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
                              [4, 5, 6]]).astype(np.int64)
         k_val = np.array([0])
 
-        def func(input, diag, k):
-            return tf.raw_ops.MatrixSetDiagV3(input=input, diagonal=diag, k=k, align='RIGHT_LEFT', name=_TFOUTPUT)
+        def func(base_matrix, diag, k):
+            return tf.raw_ops.MatrixSetDiagV3(input=base_matrix, diagonal=diag, k=k, align='RIGHT_LEFT', name=_TFOUTPUT)
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
 
