@@ -2519,7 +2519,7 @@ class MatrixSetDiagV3:
         # sum top, mid and btm
         diag_sum = ctx.make_node("Add", [diag_top.output[0], diag_mid.output[0]])
         ctx.make_node("Add", [diag_sum.output[0], diag_btm.output[0]],
-                              name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 @tf_op("BroadcastTo")
 class BroadcastTo:
