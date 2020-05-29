@@ -356,7 +356,6 @@ def tf_reload_graph(tf_graph):
         )
 
     graph_def = tf_graph.as_graph_def(add_shapes=True)
-    #tf_reset_default_graph()
     with tf.Graph().as_default() as inferred_graph:
         tf.import_graph_def(graph_def, name="")
     return inferred_graph

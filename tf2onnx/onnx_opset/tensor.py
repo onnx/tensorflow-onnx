@@ -2151,9 +2151,8 @@ class MatrixDiagPartV2V3:
         else:
             ydiags = ctx.make_node('Min', [ydiags_2.output[0], const_ymax])
 
-        # flatten last dimension of matrix
+        # flatten last dimension of matrix, extract diagonal values
         m2 = ctx.make_node('Reshape', [m_padded.output[0], const_m2_shape])
-
         diags_0 = ctx.make_node('Concat', [xdiags.output[0], ydiags.output[0]], attr={'axis': 0})
         diags_1 = ctx.make_node('Reshape', [diags_0.output[0], const_neg_one])
         diags_2 = ctx.make_node('Expand', [diags_1.output[0], const_gather_shape])
@@ -2163,11 +2162,11 @@ class MatrixDiagPartV2V3:
             g = ctx.create_new_graph_with_same_config()
             g.parent_graph = ctx
             if k0_k1_same:
-                outshape = g.make_node('Concat', [const_partial_shape, maxsize_0.output[0]], attr={'axis': 0})
+                dims = [const_partial_shape, maxsize_0.output[0]]
             else:
-                outshape = g.make_node('Concat', [const_partial_shape, const_neg_one, maxsize_0.output[0]],
-                                       attr={'axis': 0})
-            g.add_graph_output(outshape.output[0], TensorProto.INT64, [-1])
+                dims = [const_partial_shape, const_neg_one, maxsize_0.output[0]]
+            out_shape = g.make_node('Concat', dims, attr={'axis': 0})
+            g.add_graph_output(out_shape.output[0], TensorProto.INT64, [-1])
             return g
 
         # if k0==k1, rank of output matrix is 1 less than usual
