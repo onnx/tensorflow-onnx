@@ -2052,6 +2052,140 @@ class MatrixDiagPartV2V3:
         squeeze_if.set_body_graph_as_attr("then_branch", squeeze_sliced_graph)
         squeeze_if.set_body_graph_as_attr("else_branch", identity_sliced_graph)
 
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+
+        def mkconst(npval, desc):
+            name = utils.make_name(node.name) + f'_{desc}'
+            return ctx.make_const(name, npval).output[0]
+
+        # assemble MatrixDiagPart V2&V3
+        m = node.input[0]
+        m_shape = ctx.get_shape(m)
+        utils.make_sure(-1 not in m_shape, 'At least one dim is unknown %s', str(m_shape))
+
+        xlen = m_shape[-1]
+        ylen = m_shape[-2]
+        xlenp = xlen + 1
+        pads = np.zeros(2 * len(m_shape), dtype=np.int64)
+        pads[-2:] = [1, 1]
+
+        align = 'LEFT_LEFT'
+        if node.op.op_type == 'MatrixDiagPartV3':
+            align = node.get_attr_str('align') if 'align' in node.attr else 'LEFT_RIGHT'
+        xalign, yalign = align.split('_')
+
+        # consts
+        const_neg_one = mkconst(np.array([-1]).astype(np.int64), 'const_neg_one')
+        const_pad_vals = mkconst(pads, 'pads')
+        const_zero = mkconst(np.array([0], np.int64), 'const_zero_dtype')
+        const_one = mkconst(np.array([1], np.int64), 'const_one_dtype')
+        const_t = mkconst(np.array([-1, 1], np.int64), 'const_t')
+        const_xlen = mkconst(np.array([xlen], np.int64), 'const_xlen')
+        const_ylen = mkconst(np.array([ylen], np.int64), 'const_ylen')
+        const_stride = mkconst(np.array([xlenp + 1], np.int64), 'const_stride')
+        const_xlenp = mkconst(np.array([xlenp], np.int64), 'const_xlenp')
+        const_minxy = mkconst(np.array([min(xlen, ylen)], np.int64), 'const_minxy')
+        const_xmax = mkconst(np.array([xlen * xlenp + xlenp - 1], np.int64), 'const_xmax')
+        const_ymax = mkconst(np.array([xlenp * ylen - 1], np.int64), 'const_ymax')
+        const_partial_shape = mkconst(np.asarray(m_shape[:-2], np.int64), 'partial_shape')
+        const_m2_shape = mkconst(np.asarray(m_shape[:-2] + [-1], np.int64), 'm2_shape')
+        const_gather_shape = mkconst(np.asarray(m_shape[:-2] + [1], np.int64), 'gather_shape')
+
+        # get k0, k1 values. diags to be extracted
+        input1 = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64})
+        k0 = ctx.make_node('ReduceMin', [input1.output[0]])
+        k1 = ctx.make_node('ReduceMax', [input1.output[0]])
+        k1_scalar = ctx.make_node('Squeeze', [k1.output[0]])
+        m_padded = ctx.make_node('Pad', [m, const_pad_vals, node.input[2]])
+
+        # starting index for super diagonals
+        xstart_0 = ctx.make_node('Max', [const_zero, k0.output[0]])
+        xstart_1 = ctx.make_node('Add', [xstart_0.output[0], const_neg_one])
+        xstart_2 = ctx.make_node('Range', [k1_scalar.output[0], xstart_1.output[0], const_neg_one])
+        xstart = ctx.make_node('Reshape', [xstart_2.output[0], const_t])
+
+        # starting indices for sub diagonals
+        ystart_0 = ctx.make_node('Min', [const_neg_one, k1.output[0]])
+        ystart_0_scalar = ctx.make_node('Squeeze', [ystart_0.output[0]])
+        ystart_1 = ctx.make_node('Add', [k0.output[0], const_neg_one])
+        ystart_2 = ctx.make_node('Range', [ystart_0_scalar.output[0], ystart_1.output[0], const_neg_one])
+        ystart = ctx.make_node('Reshape', [ystart_2.output[0], const_t])
+
+        xmax_0 = ctx.make_node('Mul', [xstart.output[0], const_xlenp])
+        xmax = ctx.make_node('Sub', [const_xmax, xmax_0.output[0]])
+
+        # lengths of super/sub diags to extract
+        xsize_0 = ctx.make_node('Sub', [const_xlen, xstart.output[0]])
+        xsize = ctx.make_node('Min', [xsize_0.output[0], const_minxy])
+        ysize_0 = ctx.make_node('Add', [const_ylen, ystart.output[0]])
+        ysize = ctx.make_node('Min', [ysize_0.output[0], const_minxy])
+        diagsize = ctx.make_node('Concat', [xsize.output[0], ysize.output[0]], attr={'axis': 0})
+        maxsize = ctx.make_node('ReduceMax', [diagsize.output[0]], attr={'keep_dims': 0})
+        maxsize_0 = ctx.make_node('Reshape', [maxsize.output[0], const_neg_one])
+        maxsize_scalar = ctx.make_node('Squeeze', [maxsize.output[0]])
+
+        diagdistances_0 = ctx.make_node('Range', [const_zero, maxsize_scalar.output[0], const_one])
+        diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], const_stride])
+
+        def right_align(sizes, indices, starts, maxval):
+            op1 = ctx.make_node('Sub', [maxsize.output[0], sizes.output[0]])
+            op2 = ctx.make_node('Mul', [op1.output[0], const_stride])
+            op3 = ctx.make_node('Sub', [indices.output[0], op2.output[0]])
+            op4 = ctx.make_node('Less', [op3.output[0], starts.output[0]])
+            op5 = ctx.make_node('Where', [op4.output[0], maxval, op3.output[0]])
+            return op5
+
+        # xdiags, ydiags contain indices of diagonal elements
+        xdiags_0 = ctx.make_node('Add', [xstart.output[0], diagdistances.output[0]])
+        if xalign == 'RIGHT':
+            xdiags = right_align(xsize, xdiags_0, xstart, const_ymax)
+        else:
+            xdiags = ctx.make_node('Min', [xdiags_0.output[0], xmax.output[0]])
+
+        ydiags_0_ = ctx.make_node('Abs', [ystart.output[0]])
+        ydiags_1 = ctx.make_node('Mul', [ydiags_0_.output[0], const_xlenp])
+        ydiags_2 = ctx.make_node('Add', [ydiags_1.output[0], diagdistances.output[0]])
+        if yalign == 'RIGHT':
+            ydiags = right_align(ysize, ydiags_2, ydiags_1, const_ymax)
+        else:
+            ydiags = ctx.make_node('Min', [ydiags_2.output[0], const_ymax])
+
+        # flatten last dimension of matrix
+        m2 = ctx.make_node('Reshape', [m_padded.output[0], const_m2_shape])
+
+        diags_0 = ctx.make_node('Concat', [xdiags.output[0], ydiags.output[0]], attr={'axis': 0})
+        diags_1 = ctx.make_node('Reshape', [diags_0.output[0], const_neg_one])
+        diags_2 = ctx.make_node('Expand', [diags_1.output[0], const_gather_shape])
+        diags = ctx.make_node('GatherElements', [m2.output[0], diags_2.output[0]], attr={'axis': -1})
+
+        # if k0=k1,  rank of output matrix is 1 less than usual.
+        # hence, need 'If' to compute right output matrix shape
+        def compute_out_shape(k0_k1_same=False):
+            g = ctx.create_new_graph_with_same_config()
+            g.parent_graph = ctx
+            if k0_k1_same:
+                outshape = g.make_node('Concat', [const_partial_shape, maxsize_0.output[0]], attr={'axis': 0})
+            else:
+                outshape = g.make_node('Concat', [const_partial_shape, const_neg_one, maxsize_0.output[0]], attr={'axis': 0})
+            g.add_graph_output(outshape.output[0], TensorProto.INT64, [-1])
+            return g
+
+        k0_k1_same = ctx.make_node('Equal', [k1.output[0], k0.output[0]])
+        if_node = ctx.make_node('If', [k0_k1_same.output[0]])
+        if_node.set_body_graph_as_attr('then_branch', compute_out_shape(True))
+        if_node.set_body_graph_as_attr('else_branch', compute_out_shape(False))
+
+        shapes = [-1] * len(m_shape)
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node('Reshape', [diags.output[0], if_node.output[0]], name=node.name, outputs=node.output,
+                      shapes=[shapes], dtypes=dtypes)
+
+        for consumer in ctx.find_output_consumers(node.output[0]):
+            if consumer.type == 'Identity':
+                ctx.set_shape(consumer.output[0], shapes)
+
 
 @tf_op("BroadcastTo")
 class BroadcastTo:
