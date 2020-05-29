@@ -2076,15 +2076,15 @@ class MatrixDiagPartV2V3:
         xalign, yalign = align.split('_')
 
         # consts
-        const_neg_one = mkconst(np.array([-1]).astype(np.int64), 'const_neg_one')
-        const_pad_vals = mkconst(pads, 'pads')
         const_zero = mkconst(np.array([0], np.int64), 'const_zero_dtype')
         const_one = mkconst(np.array([1], np.int64), 'const_one_dtype')
+        const_neg_one = mkconst(np.array([-1]).astype(np.int64), 'const_neg_one')
+        const_pad_vals = mkconst(pads, 'pads')
         const_t = mkconst(np.array([-1, 1], np.int64), 'const_t')
         const_xlen = mkconst(np.array([xlen], np.int64), 'const_xlen')
         const_ylen = mkconst(np.array([ylen], np.int64), 'const_ylen')
-        const_stride = mkconst(np.array([xlenp + 1], np.int64), 'const_stride')
         const_xlenp = mkconst(np.array([xlenp], np.int64), 'const_xlenp')
+        const_stride = mkconst(np.array([xlenp + 1], np.int64), 'const_stride')
         const_minxy = mkconst(np.array([min(xlen, ylen)], np.int64), 'const_minxy')
         const_xmax = mkconst(np.array([xlen * xlenp + xlenp - 1], np.int64), 'const_xmax')
         const_ymax = mkconst(np.array([xlenp * ylen - 1], np.int64), 'const_ymax')
@@ -2099,13 +2099,13 @@ class MatrixDiagPartV2V3:
         k1_scalar = ctx.make_node('Squeeze', [k1.output[0]])
         m_padded = ctx.make_node('Pad', [m, const_pad_vals, node.input[2]])
 
-        # starting index for super diagonals
+        # starting indexes for super diagonals
         xstart_0 = ctx.make_node('Max', [const_zero, k0.output[0]])
         xstart_1 = ctx.make_node('Add', [xstart_0.output[0], const_neg_one])
         xstart_2 = ctx.make_node('Range', [k1_scalar.output[0], xstart_1.output[0], const_neg_one])
         xstart = ctx.make_node('Reshape', [xstart_2.output[0], const_t])
 
-        # starting indices for sub diagonals
+        # starting indexes for sub diagonals
         ystart_0 = ctx.make_node('Min', [const_neg_one, k1.output[0]])
         ystart_0_scalar = ctx.make_node('Squeeze', [ystart_0.output[0]])
         ystart_1 = ctx.make_node('Add', [k0.output[0], const_neg_one])
@@ -2159,18 +2159,19 @@ class MatrixDiagPartV2V3:
         diags_2 = ctx.make_node('Expand', [diags_1.output[0], const_gather_shape])
         diags = ctx.make_node('GatherElements', [m2.output[0], diags_2.output[0]], attr={'axis': -1})
 
-        # if k0=k1,  rank of output matrix is 1 less than usual.
-        # hence, need 'If' to compute right output matrix shape
         def compute_out_shape(k0_k1_same=False):
             g = ctx.create_new_graph_with_same_config()
             g.parent_graph = ctx
             if k0_k1_same:
                 outshape = g.make_node('Concat', [const_partial_shape, maxsize_0.output[0]], attr={'axis': 0})
             else:
-                outshape = g.make_node('Concat', [const_partial_shape, const_neg_one, maxsize_0.output[0]], attr={'axis': 0})
+                outshape = g.make_node('Concat', [const_partial_shape, const_neg_one, maxsize_0.output[0]],
+                                       attr={'axis': 0})
             g.add_graph_output(outshape.output[0], TensorProto.INT64, [-1])
             return g
 
+        # if k0==k1, rank of output matrix is 1 less than usual
+        # hence, using 'If' to compute right output matrix shape
         k0_k1_same = ctx.make_node('Equal', [k1.output[0], k0.output[0]])
         if_node = ctx.make_node('If', [k0_k1_same.output[0]])
         if_node.set_body_graph_as_attr('then_branch', compute_out_shape(True))
