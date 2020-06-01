@@ -1867,7 +1867,6 @@ class MatrixDiagPartV2V3:
         const_ylen = mkconst(np.array([ylen], np.int64), 'const_ylen')
         const_xlenp = mkconst(np.array([xlenp], np.int64), 'const_xlenp')
         const_stride = mkconst(np.array([xlenp + 1], np.int64), 'const_stride')
-        const_minxy = mkconst(np.array([min(xlen, ylen)], np.int64), 'const_minxy')
         const_minxy_float = mkconst(np.array([min(xlen, ylen)], np.float32), 'const_minxy_f')
         const_xmax = mkconst(np.array([xlen * xlenp + xlenp - 1], np.int64), 'const_xmax')
         const_ymax = mkconst(np.array([xlenp * ylen - 1], np.int64), 'const_ymax')
