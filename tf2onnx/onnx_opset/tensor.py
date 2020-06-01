@@ -2115,7 +2115,7 @@ class MatrixDiagPartV2V3:
         xmax_0 = ctx.make_node('Mul', [xstart.output[0], const_xlenp])
         xmax = ctx.make_node('Sub', [const_xmax, xmax_0.output[0]])
 
-        # lengths of super/sub diags to extract
+        # lengths of super and sub diags to extract
         xsize_0 = ctx.make_node('Sub', [const_xlen, xstart.output[0]])
         xsize = ctx.make_node('Min', [xsize_0.output[0], const_minxy])
         ysize_0 = ctx.make_node('Add', [const_ylen, ystart.output[0]])
