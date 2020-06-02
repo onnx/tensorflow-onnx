@@ -3175,16 +3175,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.cast(s_, tf.float32, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
-    @check_opset_min_version(11)
+    @check_opset_min_version(12)
     @check_tf_min_version("2.2")
     def test_matrix_diag_part_v3(self):
 
         def func(X, K):
             v2 = tf.raw_ops.MatrixDiagPartV2(input=X, k=K, padding_value=0.123, name=_TFOUTPUT)
-            v3 = tf.raw_ops.MatrixDiagPartV3(input=X, k=K, padding_value=0.123, align='RIGHT_LEFT', name=_TFOUTPUT1)
+            v3 = tf.raw_ops.MatrixDiagPartV3(input=X, k=K, padding_value=0.123, align='RIGHT_RIGHT', name=_TFOUTPUT1)
             return v2, v3
 
-        for x_shape in ([4, 5], [2, 3, 4, 5]):
+        for x_shape in ([4, 5], [2, 3, 4, 5], [5, 4], [7, 5]):
             x_val = np.random.random(x_shape).astype(np.float32)
             for raw_k in ([0], [1], [3], [-1], [-3], [1, 2], [-2, -1], [-1, 1]):
                 k_val = np.array(raw_k).astype(np.int32)
@@ -3292,6 +3292,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(12)
     @check_tf_min_version("2.2")
+    def test_matrix_diag_v3_2single_dim_row_col(self):
+        raw_diag = [[1,2,3], [4,5,6]]
+        diag_val = np.array(raw_diag).astype(np.int64)
+        k_val = np.array(0).astype(np.int32)
+        row_val = np.array(3).astype(np.int32)
+        col_val = np.array(4).astype(np.int32)
+
+        def func(diag, k, row, col):
+            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=7, align='LEFT_RIGHT', name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
+                                              _INPUT2: row_val, _INPUT3: col_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
     def test_matrix_set_diag_v3(self):
         input_val = np.array([[[7, 7, 7, 7],
                                [7, 7, 7, 7],
@@ -3307,6 +3323,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.raw_ops.MatrixSetDiagV3(input=base_matrix, diagonal=diag, k=k, align='RIGHT_LEFT', name=_TFOUTPUT)
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_diag_v3_1single_dim_row_col(self):
+        raw_diag = [1,2,3,4,5]
+        diag_val = np.array(raw_diag).astype(np.int64)
+        k_val = np.array(0).astype(np.int32)
+        row_val = np.array(5).astype(np.int32)
+        col_val = np.array(10).astype(np.int32)
+
+        def func(diag, k, row, col):
+            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=7, align='LEFT_RIGHT', name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
+                                              _INPUT2: row_val, _INPUT3: col_val})
 
 
 if __name__ == '__main__':
