@@ -2080,10 +2080,6 @@ class MatrixDiagPartV2V3:
             mkconsts([[0], [1], [-1], [-2], pads, [-1, 1]])
         const_zero_scalar, const_one_scalar, const_neg_one_scalar = mkconsts([0, 1, -1])
 
-        const_none = mkconsts([[]])[0]
-        def scalar(name):
-            return ctx.make_node("Reshape", [name, const_none]).output[0]
-
         m_shape = ctx.make_node('Shape', [node.input[0]]).output[0]
         xlen = ctx.make_node('Gather', [m_shape, const_neg_one]).output[0]
         ylen = ctx.make_node('Gather', [m_shape, const_neg_two]).output[0]
@@ -2115,7 +2111,7 @@ class MatrixDiagPartV2V3:
         xstart_1 = ctx.make_node('Max', [const_zero_float, xstart_0.output[0]])
         xstart_2 = ctx.make_node('Cast', [xstart_1.output[0]], attr={'to': TensorProto.INT64})
         xstart_3 = ctx.make_node('Add', [xstart_2.output[0], const_neg_one_scalar])
-        xstart_4 = ctx.make_node('Range', [k1_scalar, scalar(xstart_3.output[0]), const_neg_one_scalar], name = utils.make_name("A"))
+        xstart_4 = ctx.make_node('Range', [k1_scalar, xstart_3.output[0], const_neg_one_scalar])
         xstart = ctx.make_node('Reshape', [xstart_4.output[0], const_t])
 
         # starting indexes for sub diagonals
@@ -2123,7 +2119,7 @@ class MatrixDiagPartV2V3:
         ystart_1 = ctx.make_node('Min', [const_neg_one_float, ystart_0.output[0]])
         ystart_2 = ctx.make_node('Cast', [ystart_1.output[0]], attr={'to': TensorProto.INT64})
         ystart_3 = ctx.make_node('Add', [k0_scalar, const_neg_one_scalar])
-        ystart_4 = ctx.make_node('Range', [scalar(ystart_2.output[0]), scalar(ystart_3.output[0]), const_neg_one_scalar], name = utils.make_name("B"))
+        ystart_4 = ctx.make_node('Range', [ystart_2.output[0], ystart_3.output[0], const_neg_one_scalar])
         ystart = ctx.make_node('Reshape', [ystart_4.output[0], const_t])
 
         xmax_0 = ctx.make_node('Mul', [xstart.output[0], xlenp])
@@ -2144,7 +2140,7 @@ class MatrixDiagPartV2V3:
         maxsize_0 = ctx.make_node('Reshape', [maxsize.output[0], const_neg_one])
         maxsize_scalar = ctx.make_node('Squeeze', [maxsize.output[0]])
 
-        diagdistances_0 = ctx.make_node('Range', [const_zero_scalar, maxsize_scalar.output[0], const_one_scalar], name = utils.make_name("C"))
+        diagdistances_0 = ctx.make_node('Range', [const_zero_scalar, maxsize_scalar.output[0], const_one_scalar])
         diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], stride])
 
         def right_align(sizes, indices, starts, maxval):
@@ -2216,7 +2212,6 @@ class MatrixDiagV3:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         # Assemble MatrixDiagV3 by ReverseSequence
-
         def mkconsts(values):
             return [ctx.make_const(utils.make_name('const'), \
                                    np.array(value).astype(np.int64)).output[0] for value in values]
@@ -2366,8 +2361,8 @@ class MatrixDiagV3:
         out_shape = outrowcol()
         out_row = mknode("Slice", [out_shape, zeo, one])
         out_col = mknode("Slice", [out_shape, one, two])
-        k_top = mknode("Sub", [out_col, one]) # highest possble k
-        k_btm = mknode("Sub", [one, out_row]) # lowest possible k
+        k_top = mknode("Sub", [out_col, one])  # highest possble k
+        k_btm = mknode("Sub", [one, out_row])  # lowest possible k
 
         def getklens():
             # return diag len of all ks
@@ -2553,7 +2548,6 @@ class MatrixSetDiagV3:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         # Assemble MatrixSetDiagV3 by MatrixDiagPartV3 and MatrixDiagV3
-
         def mkconsts(values):
             return [ctx.make_const(utils.make_name('const'), \
                                    np.array(value).astype(np.int64)).output[0] for value in values]
@@ -2590,9 +2584,8 @@ class MatrixSetDiagV3:
 
         # make diag of 1s
         ones_diag = ctx.make_node("MatrixDiagPartV3", [ones, k, zeo], attr)
-        # MatrixDiagPartV2V3.version_11(ctx, ones_diag)
-        ctx.set_shape(ones_diag.output[0], ctx.get_shape(node.input[0]))
-        MatrixDiagPartV2V3.version_12(ctx, ones_diag) # has exception
+        MatrixDiagPartV2V3.version_11(ctx, ones_diag)
+        # MatrixDiagPartV2V3.version_12(ctx, ones_diag) # to-do, fix exception
 
         # make matrix of bool
         ctx.set_dtype(ones_diag.output[0], TensorProto.INT64)

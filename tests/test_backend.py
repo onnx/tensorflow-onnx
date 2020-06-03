@@ -82,7 +82,8 @@ elif LooseVersion(tf.__version__) >= "1.13":
     quantize_and_dequantize = tf.compat.v1.quantization.quantize_and_dequantize
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
-    resize_bilinear_v2 = tf.compat.v2.image.resize
+    if LooseVersion(tf.__version__) >= "1.14":
+        resize_bilinear_v2 = tf.compat.v2.image.resize
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.floormod
@@ -3293,11 +3294,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(12)
     @check_tf_min_version("2.2")
     def test_matrix_diag_v3_2single_dim_row_col(self):
-        raw_diag = [[1,2,3], [4,5,6]]
+        raw_diag = [[1, 2, 3], [4, 5, 6]]
         diag_val = np.array(raw_diag).astype(np.int64)
         k_val = np.array(0).astype(np.int32)
         row_val = np.array(3).astype(np.int32)
         col_val = np.array(4).astype(np.int32)
+
+        def func(diag, k, row, col):
+            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=7, align='LEFT_RIGHT', name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
+                                              _INPUT2: row_val, _INPUT3: col_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_diag_v3_1single_dim_row_col(self):
+        raw_diag = [1, 2, 3, 4, 5]
+        diag_val = np.array(raw_diag).astype(np.int64)
+        k_val = np.array(0).astype(np.int32)
+        row_val = np.array(5).astype(np.int32)
+        col_val = np.array(10).astype(np.int32)
 
         def func(diag, k, row, col):
             return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
@@ -3323,22 +3340,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.raw_ops.MatrixSetDiagV3(input=base_matrix, diagonal=diag, k=k, align='RIGHT_LEFT', name=_TFOUTPUT)
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
-
-    @check_opset_min_version(12)
-    @check_tf_min_version("2.2")
-    def test_matrix_diag_v3_1single_dim_row_col(self):
-        raw_diag = [1,2,3,4,5]
-        diag_val = np.array(raw_diag).astype(np.int64)
-        k_val = np.array(0).astype(np.int32)
-        row_val = np.array(5).astype(np.int32)
-        col_val = np.array(10).astype(np.int32)
-
-        def func(diag, k, row, col):
-            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
-                                           padding_value=7, align='LEFT_RIGHT', name=_TFOUTPUT)
-
-        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
-                                              _INPUT2: row_val, _INPUT3: col_val})
 
 
 if __name__ == '__main__':

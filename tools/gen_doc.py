@@ -18,7 +18,7 @@ args = parser.parse_args()
 
 
 LATEST_OPSET = {
-    "": 11, # default domain
+    "": 12, # default domain
     "com.microsoft": 1 # microsoft domain
 }
 
