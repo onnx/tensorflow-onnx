@@ -1835,20 +1835,20 @@ class MatrixDiagPartV2V3:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
 
-        def mkconst(npval, desc):
-            name = utils.make_name(node.name) + f'_{desc}'
-            return ctx.make_const(name, npval).output[0]
+        def mkconsts(values, dtype=np.int64):
+            ret = []
+            for value in values:
+                name = utils.make_name(node.name + '_const')
+                ret.append(ctx.make_const(name, np.array(value, dtype=dtype)).output[0])
+            return ret
 
         # assemble MatrixDiagPart V2&V3
         m = node.input[0]
         m_shape = ctx.get_shape(m)
-        utils.make_sure(-1 not in m_shape, 'At least one dim is unknown %s', str(m_shape))
-
-        xlen = m_shape[-1]
-        ylen = m_shape[-2]
-        xlenp = xlen + 1
-        pads = np.zeros(2 * len(m_shape), dtype=np.int64)
+        m_rank = len(m_shape)
+        pads = np.zeros(2 * m_rank, dtype=np.int64)
         pads[-2:] = [1, 1]
+        utils.make_sure(m_rank > 1, 'Input data should be at least 2D %s', str(m_shape))
 
         align = 'LEFT_LEFT'
         if node.op.op_type == 'MatrixDiagPartV3':
@@ -1856,73 +1856,77 @@ class MatrixDiagPartV2V3:
         xalign, yalign = align.split('_')
 
         # consts
-        const_zero = mkconst(np.array([0], np.int64), 'const_zero_dtype')
-        const_zero_float = mkconst(np.array([0], np.float32), 'const_zero_dtype_f')
-        const_one = mkconst(np.array([1], np.int64), 'const_one_dtype')
-        const_neg_one = mkconst(np.array([-1]).astype(np.int64), 'const_neg_one')
-        const_neg_one_float = mkconst(np.array([-1]).astype(np.float32), 'const_neg_one_f')
-        const_pad_vals = mkconst(pads, 'pads')
-        const_t = mkconst(np.array([-1, 1], np.int64), 'const_t')
-        const_xlen = mkconst(np.array([xlen], np.int64), 'const_xlen')
-        const_ylen = mkconst(np.array([ylen], np.int64), 'const_ylen')
-        const_xlenp = mkconst(np.array([xlenp], np.int64), 'const_xlenp')
-        const_stride = mkconst(np.array([xlenp + 1], np.int64), 'const_stride')
-        const_minxy_float = mkconst(np.array([min(xlen, ylen)], np.float32), 'const_minxy_f')
-        const_xmax = mkconst(np.array([xlen * xlenp + xlenp - 1], np.int64), 'const_xmax')
-        const_ymax = mkconst(np.array([xlenp * ylen - 1], np.int64), 'const_ymax')
-        const_ymax_float = mkconst(np.array([xlenp * ylen - 1], np.float32), 'const_ymax_f')
-        const_partial_shape = mkconst(np.asarray(m_shape[:-2], np.int64), 'partial_shape')
-        const_m2_shape = mkconst(np.asarray(m_shape[:-2] + [-1], np.int64), 'm2_shape')
-        const_gather_shape = mkconst(np.asarray(m_shape[:-2] + [1], np.int64), 'gather_shape')
+        const_zero_float, const_neg_one_float = mkconsts([[0], [-1]], np.float32)
+        const_zero, const_one, const_neg_one, const_neg_two, const_pad_vals, const_t = \
+            mkconsts([[0], [1], [-1], [-2], pads, [-1, 1]])
+        const_zero_scalar, const_one_scalar, const_neg_one_scalar = mkconsts([0, 1, -1])
+
+        m_shape = ctx.make_node('Shape', [node.input[0]]).output[0]
+        xlen = ctx.make_node('Gather', [m_shape, const_neg_one]).output[0]
+        ylen = ctx.make_node('Gather', [m_shape, const_neg_two]).output[0]
+        xlenp = ctx.make_node('Add', [xlen, const_one]).output[0]
+        stride = ctx.make_node('Add', [xlenp, const_one]).output[0]
+        minxy_0 = ctx.make_node('Concat', [xlen, ylen], attr={'axis': 0}).output[0]
+        minxy = ctx.make_node('ReduceMin', [minxy_0]).output[0]
+        minxy_float = ctx.make_node('Cast', [minxy], attr={'to': TensorProto.FLOAT}).output[0]
+        xmax_0 = ctx.make_node('Mul', [xlen, xlenp]).output[0]
+        xmax_1 = ctx.make_node('Add', [xmax_0, xlenp]).output[0]
+        xmax = ctx.make_node('Add', [xmax_1, const_neg_one]).output[0]
+        ymax_0 = ctx.make_node('Mul', [xlenp, ylen]).output[0]
+        ymax = ctx.make_node('Add', [ymax_0, const_neg_one]).output[0]
+        ymax_float = ctx.make_node('Cast', [ymax], attr={'to': TensorProto.FLOAT}).output[0]
+        partial_shape = ctx.make_node('Slice', [m_shape, const_zero, const_neg_two]).output[0]
+        m2_shape = ctx.make_node('Concat', [partial_shape, const_neg_one], attr={'axis': 0}).output[0]
+        gather_shape = ctx.make_node('Concat', [partial_shape, const_one], attr={'axis': 0}).output[0]
 
         # get k0, k1 values. diags to be extracted
         input1 = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64})
-        k0 = ctx.make_node('ReduceMin', [input1.output[0]])
-        k1 = ctx.make_node('ReduceMax', [input1.output[0]])
-        k1_scalar = ctx.make_node('Squeeze', [k1.output[0]])
+        k0 = ctx.make_node('ReduceMin', [input1.output[0]]).output[0]
+        k1 = ctx.make_node('ReduceMax', [input1.output[0]]).output[0]
+        k0_scalar = ctx.make_node('Squeeze', [k0]).output[0]
+        k1_scalar = ctx.make_node('Squeeze', [k1]).output[0]
         m_padded = ctx.make_node('Pad', [m, const_pad_vals, node.input[2]])
 
         # starting indexes for super diagonals
-        xstart_0 = ctx.make_node('Cast', [k0.output[0]], attr={'to': TensorProto.FLOAT})
+        xstart_0 = ctx.make_node('Cast', [k0_scalar], attr={'to': TensorProto.FLOAT})
         xstart_1 = ctx.make_node('Max', [const_zero_float, xstart_0.output[0]])
         xstart_2 = ctx.make_node('Cast', [xstart_1.output[0]], attr={'to': TensorProto.INT64})
-        xstart_3 = ctx.make_node('Add', [xstart_2.output[0], const_neg_one])
-        xstart_4 = ctx.make_node('Range', [k1_scalar.output[0], xstart_3.output[0], const_neg_one])
+        xstart_3 = ctx.make_node('Add', [xstart_2.output[0], const_neg_one_scalar])
+        xstart_4 = ctx.make_node('Range', [k1_scalar, xstart_3.output[0], const_neg_one_scalar])
         xstart = ctx.make_node('Reshape', [xstart_4.output[0], const_t])
 
         # starting indexes for sub diagonals
-        ystart_0 = ctx.make_node('Cast', [k1.output[0]], attr={'to': TensorProto.FLOAT})
+        ystart_0 = ctx.make_node('Cast', [k1_scalar], attr={'to': TensorProto.FLOAT})
         ystart_1 = ctx.make_node('Min', [const_neg_one_float, ystart_0.output[0]])
         ystart_2 = ctx.make_node('Cast', [ystart_1.output[0]], attr={'to': TensorProto.INT64})
-        ystart_2_scalar = ctx.make_node('Squeeze', [ystart_2.output[0]])
-        ystart_3 = ctx.make_node('Add', [k0.output[0], const_neg_one])
-        ystart_4 = ctx.make_node('Range', [ystart_2_scalar.output[0], ystart_3.output[0], const_neg_one])
+        ystart_3 = ctx.make_node('Add', [k0_scalar, const_neg_one_scalar])
+        ystart_4 = ctx.make_node('Range', [ystart_2.output[0], ystart_3.output[0], const_neg_one_scalar])
         ystart = ctx.make_node('Reshape', [ystart_4.output[0], const_t])
 
-        xmax_0 = ctx.make_node('Mul', [xstart.output[0], const_xlenp])
-        xmax = ctx.make_node('Sub', [const_xmax, xmax_0.output[0]])
+        xmax_0 = ctx.make_node('Mul', [xstart.output[0], xlenp])
+        xmax = ctx.make_node('Sub', [xmax, xmax_0.output[0]])
         xmax_float = ctx.make_node('Cast', [xmax.output[0]], attr={'to': TensorProto.FLOAT})
 
         # lengths of super/sub diags to extract
-        xsize_0 = ctx.make_node('Sub', [const_xlen, xstart.output[0]])
+        xsize_0 = ctx.make_node('Sub', [xlen, xstart.output[0]])
         xsize_1 = ctx.make_node('Cast', [xsize_0.output[0]], attr={'to': TensorProto.FLOAT})
-        xsize_2 = ctx.make_node('Min', [xsize_1.output[0], const_minxy_float])
+        xsize_2 = ctx.make_node('Min', [xsize_1.output[0], minxy_float])
         xsize = ctx.make_node('Cast', [xsize_2.output[0]], attr={'to': TensorProto.INT64})
-        ysize_0 = ctx.make_node('Add', [const_ylen, ystart.output[0]])
+        ysize_0 = ctx.make_node('Add', [ylen, ystart.output[0]])
         ysize_1 = ctx.make_node('Cast', [ysize_0.output[0]], attr={'to': TensorProto.FLOAT})
-        ysize_2 = ctx.make_node('Min', [ysize_1.output[0], const_minxy_float])
+        ysize_2 = ctx.make_node('Min', [ysize_1.output[0], minxy_float])
         ysize = ctx.make_node('Cast', [ysize_2.output[0]], attr={'to': TensorProto.INT64})
         diagsize = ctx.make_node('Concat', [xsize.output[0], ysize.output[0]], attr={'axis': 0})
         maxsize = ctx.make_node('ReduceMax', [diagsize.output[0]], attr={'keep_dims': 0})
         maxsize_0 = ctx.make_node('Reshape', [maxsize.output[0], const_neg_one])
         maxsize_scalar = ctx.make_node('Squeeze', [maxsize.output[0]])
 
-        diagdistances_0 = ctx.make_node('Range', [const_zero, maxsize_scalar.output[0], const_one])
-        diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], const_stride])
+        diagdistances_0 = ctx.make_node('Range', [const_zero_scalar, maxsize_scalar.output[0], const_one_scalar])
+        diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], stride])
 
         def right_align(sizes, indices, starts, maxval):
             op1 = ctx.make_node('Sub', [maxsize.output[0], sizes.output[0]])
-            op2 = ctx.make_node('Mul', [op1.output[0], const_stride])
+            op2 = ctx.make_node('Mul', [op1.output[0], stride])
             op3 = ctx.make_node('Sub', [indices.output[0], op2.output[0]])
             op4 = ctx.make_node('Less', [op3.output[0], starts.output[0]])
             op5 = ctx.make_node('Where', [op4.output[0], maxval, op3.output[0]])
@@ -1932,48 +1936,48 @@ class MatrixDiagPartV2V3:
         xdiags_0 = ctx.make_node('Add', [xstart.output[0], diagdistances.output[0]])
         xdiags_1 = ctx.make_node('Cast', [xdiags_0.output[0]], attr={'to': TensorProto.FLOAT})
         if xalign == 'RIGHT':
-            xdiags = right_align(xsize, xdiags_0, xstart, const_ymax)
+            xdiags = right_align(xsize, xdiags_0, xstart, ymax)
         else:
             xdiags_2 = ctx.make_node('Min', [xdiags_1.output[0], xmax_float.output[0]])
             xdiags = ctx.make_node('Cast', [xdiags_2.output[0]], attr={'to': TensorProto.INT64})
 
         ydiags_0_ = ctx.make_node('Abs', [ystart.output[0]])
-        ydiags_1 = ctx.make_node('Mul', [ydiags_0_.output[0], const_xlenp])
+        ydiags_1 = ctx.make_node('Mul', [ydiags_0_.output[0], xlenp])
         ydiags_2 = ctx.make_node('Add', [ydiags_1.output[0], diagdistances.output[0]])
         ydiags_3 = ctx.make_node('Cast', [ydiags_2.output[0]], attr={'to': TensorProto.FLOAT})
         if yalign == 'RIGHT':
-            ydiags = right_align(ysize, ydiags_2, ydiags_1, const_ymax)
+            ydiags = right_align(ysize, ydiags_2, ydiags_1, ymax)
         else:
-            ydiags_4 = ctx.make_node('Min', [ydiags_3.output[0], const_ymax_float])
+            ydiags_4 = ctx.make_node('Min', [ydiags_3.output[0], ymax_float])
             ydiags = ctx.make_node('Cast', [ydiags_4.output[0]], attr={'to': TensorProto.INT64})
 
         # flatten last dimension of matrix
-        m2 = ctx.make_node('Reshape', [m_padded.output[0], const_m2_shape])
+        m2 = ctx.make_node('Reshape', [m_padded.output[0], m2_shape])
 
         diags_0 = ctx.make_node('Concat', [xdiags.output[0], ydiags.output[0]], attr={'axis': 0})
         diags_1 = ctx.make_node('Reshape', [diags_0.output[0], const_neg_one])
-        diags_2 = ctx.make_node('Expand', [diags_1.output[0], const_gather_shape])
+        diags_2 = ctx.make_node('Expand', [diags_1.output[0], gather_shape])
         diags = ctx.make_node('GatherElements', [m2.output[0], diags_2.output[0]], attr={'axis': -1})
 
         def compute_out_shape(k0_k1_same=False):
             g = ctx.create_new_graph_with_same_config()
             g.parent_graph = ctx
             if k0_k1_same:
-                dims = [const_partial_shape, maxsize_0.output[0]]
+                dims = [partial_shape, maxsize_0.output[0]]
             else:
-                dims = [const_partial_shape, const_neg_one, maxsize_0.output[0]]
+                dims = [partial_shape, const_neg_one, maxsize_0.output[0]]
             outshape = g.make_node('Concat', dims, attr={'axis': 0})
             g.add_graph_output(outshape.output[0], TensorProto.INT64, [-1])
             return g
 
         # if k0=k1, rank of output matrix is 1 less than usual
         # hence, need 'If' to compute right output matrix shape
-        k0_k1_same = ctx.make_node('Equal', [k1.output[0], k0.output[0]])
+        k0_k1_same = ctx.make_node('Equal', [k1, k0])
         if_node = ctx.make_node('If', [k0_k1_same.output[0]])
         if_node.set_body_graph_as_attr('then_branch', compute_out_shape(True))
         if_node.set_body_graph_as_attr('else_branch', compute_out_shape(False))
 
-        shapes = [-1] * len(m_shape)
+        shapes = ctx.get_shape(node.output[0])
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         ctx.make_node('Reshape', [diags.output[0], if_node.output[0]], name=node.name, outputs=node.output,
