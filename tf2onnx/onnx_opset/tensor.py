@@ -2240,7 +2240,6 @@ class MatrixDiagV3:
                 ctx.set_shape(diag, shape)
 
             diag_shape = mknode("Shape", [diag])
-            diag_rank = mknode("Shape", [diag_shape])
             diag_depth = mknode("Slice", [diag_shape, minus_two, minus_one])
             k = normalize(node.input[1])
             k_min, k_max = mknode("ReduceMin", [k]), mknode("ReduceMax", [k])
@@ -2361,8 +2360,7 @@ class MatrixDiagV3:
         out_shape = outrowcol()
         out_row = mknode("Slice", [out_shape, zeo, one])
         out_col = mknode("Slice", [out_shape, one, two])
-        k_top = mknode("Sub", [out_col, one])  # highest possble k
-        k_btm = mknode("Sub", [one, out_row])  # lowest possible k
+        k_btm = mknode("Sub", [one, out_row]) # lowest possible k
 
         def getklens():
             # return diag len of all ks
@@ -2438,11 +2436,6 @@ class MatrixDiagV3:
 
         tran_diag = trandiag()
 
-        def relu0(name):
-            casted = mknode("Cast", [name], attr={"to": TensorProto.FLOAT})
-            relued = mknode("Relu", [casted])
-            return mknode("Cast", [relued], attr={"to": TensorProto.INT64})
-
         def relu1(name):
             # all return values >= 1
             minusd = mknode("Sub", [name, one])
@@ -2486,7 +2479,7 @@ class MatrixDiagV3:
                 pad_left_depth = mknode("Slice", [pad_left_shape, zeo, one])
                 pad_left_width = mknode("Slice", [pad_left_shape, one, two])
                 pad_full_lenth = mknode("Expand", [pad_left_width, pad_left_depth])
-                rev= mknode("ReverseSequence", [pad_left, pad_full_lenth], attr={"batch_axis": 0, "time_axis": 1})
+                rev = mknode("ReverseSequence", [pad_left, pad_full_lenth], attr={"batch_axis": 0, "time_axis": 1})
                 fm = mknode("Add", [riht_pad, btm_pad])
                 to = mknode("Sub", [fm, diag_width])
                 rg = mknode("Range", [squeeze(fm), squeeze(to), squeeze(minus_one)])
@@ -2557,7 +2550,7 @@ class MatrixSetDiagV3:
         def mknode(op, args, **kwargs):
             return ctx.make_node(op, args, **kwargs).output[0]
 
-        def int(name):
+        def integer(name):
             return mknode("Cast", [name], attr={"to": TensorProto.INT64})
 
         def cast(name):
@@ -2579,13 +2572,13 @@ class MatrixSetDiagV3:
         col = mknode("Slice", [shape, minus_one, rank])
 
         # ones of x shape
-        zeos = mknode("Mul", [int(x), zeo])
+        zeos = mknode("Mul", [integer(x), zeo])
         ones = mknode("Add", [zeos, one])
 
         # make diag of 1s
         ones_diag = ctx.make_node("MatrixDiagPartV3", [ones, k, zeo], attr)
         MatrixDiagPartV2V3.version_11(ctx, ones_diag)
-        # MatrixDiagPartV2V3.version_12(ctx, ones_diag) # to-do, fix exception
+        # MatrixDiagPartV2V3.version_12(ctx, ones_diag) # todo: fix exception
 
         # make matrix of bool
         ctx.set_dtype(ones_diag.output[0], TensorProto.INT64)
