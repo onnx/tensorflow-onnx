@@ -2218,11 +2218,11 @@ class MatrixDiagV3:
 
         minus_two, minus_one, zeo, one, two = mkconsts([[-2], [-1], [0], [1], [2]])
 
-        def mknode(type, args, **kwargs):
-            return ctx.make_node(type, args, **kwargs).output[0]
+        def mknode(op, args, **kwargs):
+            return ctx.make_node(op, args, **kwargs).output[0]
 
-        def mknode2(g, type, args, **kwargs):
-            return g.make_node(type, args, **kwargs).output[0]
+        def mknode2(g, op, args, **kwargs):
+            return g.make_node(op, args, **kwargs).output[0]
 
         def normalize(name):
             # normalize arguments
@@ -2251,8 +2251,8 @@ class MatrixDiagV3:
             def id_diag():
                 g = ctx.create_new_graph_with_same_config()
                 g.parent_graph = ctx
-                id = mknode2(g, "Identity", [diag])
-                g.add_graph_output(id, ctx.get_dtype(node.input[0]), ctx.get_shape(diag))
+                idt = mknode2(g, "Identity", [diag])
+                g.add_graph_output(idt, ctx.get_dtype(node.input[0]), ctx.get_shape(diag))
                 return g
 
             def ex_diag():
@@ -2268,8 +2268,8 @@ class MatrixDiagV3:
             expand_diag.set_body_graph_as_attr("else_branch", ex_diag())
             return expand_diag.output[0], k, k_min, k_max, k_max_nxt
 
-        def squeeze(name, axis={"axis": -1}):
-            return ctx.make_node("Squeeze", [name], attr=axis).output[0]
+        def squeeze(name):
+            return ctx.make_node("Squeeze", [name], attr={"axis": -1}).output[0]
 
         # gather inputs
         diag, k, k_min, k_max, k_max_nxt = processdiag()
@@ -2384,8 +2384,8 @@ class MatrixDiagV3:
             shape = mknode("Shape", [name])
             temp_shape = mknode("Concat", [minus_one, shape], attr={"axis": -1})
             reshaped = mknode("Reshape", [name, temp_shape])
-            reversed = reverseseq([reshaped, shape])
-            return mknode("Reshape", [reversed, shape])
+            rev = reverseseq([reshaped, shape])
+            return mknode("Reshape", [rev, shape])
 
         def sortdiag():
             # sort diag to "LEFT_RIGHT" so each col form a line of the out matrix
@@ -2451,7 +2451,7 @@ class MatrixDiagV3:
             casted = mknode("Cast", [relued], attr={"to": TensorProto.INT64})
             return mknode("Add", [casted, one])
 
-        def abs(name):
+        def ab(name):
             return mknode("Abs", [name])
 
         def makediagonal():
@@ -2486,13 +2486,13 @@ class MatrixDiagV3:
                 pad_left_depth = mknode("Slice", [pad_left_shape, zeo, one])
                 pad_left_width = mknode("Slice", [pad_left_shape, one, two])
                 pad_full_lenth = mknode("Expand", [pad_left_width, pad_left_depth])
-                reversed = mknode("ReverseSequence", [pad_left, pad_full_lenth], attr={"batch_axis": 0, "time_axis": 1})
+                rev= mknode("ReverseSequence", [pad_left, pad_full_lenth], attr={"batch_axis": 0, "time_axis": 1})
                 fm = mknode("Add", [riht_pad, btm_pad])
                 to = mknode("Sub", [fm, diag_width])
                 rg = mknode("Range", [squeeze(fm), squeeze(to), squeeze(minus_one)])
                 expanded_range = mknode("Expand", [rg, exp_shape])
                 reshaped_range = mknode("Reshape", [expanded_range, minus_one])
-                raw_pad_right = mknode("ReverseSequence", [reversed, reshaped_range],
+                raw_pad_right = mknode("ReverseSequence", [rev, reshaped_range],
                                        attr={"batch_axis": 0, "time_axis": 1})
                 shape = mknode("Shape", [raw_pad_right])
                 width = mknode("Slice", [shape, one, two])
@@ -2509,14 +2509,14 @@ class MatrixDiagV3:
                 rg = mknode("Range", [squeeze(fm), squeeze(to), squeeze(one)])
                 expanded_range = mknode("Expand", [rg, exp_shape])
                 reshaped_range = mknode("Reshape", [expanded_range, minus_one])
-                reversed = mknode("ReverseSequence", [pad_right, reshaped_range],
-                                  attr={"batch_axis": 0, "time_axis": 1})
+                rev = mknode("ReverseSequence", [pad_right, reshaped_range],
+                             attr={"batch_axis": 0, "time_axis": 1})
                 k_max_idx = mknode("Sub", [k_max, k_btm])
                 k_max_idx_nxt = mknode("Add", [k_max_idx, one])
                 k_max_len = mknode("Slice", [k_lens, k_max_idx, k_max_idx_nxt])
-                k_gap = mknode("Sub", [abs(k_max), min_k2zeo])
+                k_gap = mknode("Sub", [ab(k_max), min_k2zeo])
                 width = mknode("Add", [k_max_len, k_gap])
-                return mknode("Slice", [reversed, zeo, width, one]), width
+                return mknode("Slice", [rev, zeo, width, one]), width
 
             diag, width = diagonize()
             shape = mknode("Concat", [head_shape, diag_width, minus_one], attr={"axis": -1})
@@ -2554,8 +2554,8 @@ class MatrixSetDiagV3:
 
         minus_two, minus_one, zeo, one = mkconsts([[-2], [-1], [0], [1]])
 
-        def mknode(type, args, **kwargs):
-            return ctx.make_node(type, args, **kwargs).output[0]
+        def mknode(op, args, **kwargs):
+            return ctx.make_node(op, args, **kwargs).output[0]
 
         def int(name):
             return mknode("Cast", [name], attr={"to": TensorProto.INT64})
