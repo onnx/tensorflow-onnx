@@ -3176,13 +3176,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.cast(s_, tf.float32, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
-    @check_opset_min_version(12)
+    @check_opset_min_version(11)
     @check_tf_min_version("2.2")
     def test_matrix_diag_part_v3(self):
 
         def func(X, K):
             v2 = tf.raw_ops.MatrixDiagPartV2(input=X, k=K, padding_value=0.123, name=_TFOUTPUT)
-            v3 = tf.raw_ops.MatrixDiagPartV3(input=X, k=K, padding_value=0.123, align='RIGHT_RIGHT', name=_TFOUTPUT1)
+            v3 = tf.raw_ops.MatrixDiagPartV3(input=X, k=K, padding_value=0.123, align='LEFT_RIGHT', name=_TFOUTPUT1)
             return v2, v3
 
         for x_shape in ([4, 5], [2, 3, 4, 5], [5, 4], [7, 5]):
