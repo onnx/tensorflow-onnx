@@ -2444,9 +2444,6 @@ class MatrixDiagV3:
             casted = mknode("Cast", [relued], attr={"to": TensorProto.INT64})
             return mknode("Add", [casted, one])
 
-        def ab(name):
-            return mknode("Abs", [name])
-
         def makediagonal():
             # padding with required value and move lines so they form diagonals
             shape = mknode("Shape", [tran_diag])
@@ -2507,7 +2504,7 @@ class MatrixDiagV3:
                 k_max_idx = mknode("Sub", [k_max, k_btm])
                 k_max_idx_nxt = mknode("Add", [k_max_idx, one])
                 k_max_len = mknode("Slice", [k_lens, k_max_idx, k_max_idx_nxt])
-                k_gap = mknode("Sub", [ab(k_max), min_k2zeo])
+                k_gap = mknode("Sub", [mknode("Abs", [k_max]), min_k2zeo])
                 width = mknode("Add", [k_max_len, k_gap])
                 return mknode("Slice", [rev, zeo, width, one]), width
 
@@ -2518,7 +2515,7 @@ class MatrixDiagV3:
         new_diag, new_depth, new_width = makediagonal()
 
         def paddiag():
-            # final padding to output shape
+            # pad to output shape
             pad_row, pad_col = mknode("Sub", [out_row, new_depth]), mknode("Sub", [out_col, new_width])
             pad_top = mknode("Max", [zeo, mknode("Sub", [zeo, k_max])])
             pad_lft = mknode("Max", [zeo, mknode("Sub", [k_min, zeo])])
