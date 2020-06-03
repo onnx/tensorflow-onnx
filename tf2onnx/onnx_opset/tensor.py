@@ -1859,6 +1859,7 @@ class MatrixDiagPartV2V3:
         const_zero_float, const_neg_one_float = mkconsts([[0], [-1]], np.float32)
         const_zero, const_one, const_neg_one, const_neg_two, const_pad_vals, const_t = \
             mkconsts([[0], [1], [-1], [-2], pads, [-1, 1]])
+        const_zero_scalar, const_one_scalar, const_neg_one_scalar = mkconsts([0, 1, -1])
 
         m_shape = ctx.make_node('Shape', [node.input[0]]).output[0]
         xlen = ctx.make_node('Gather', [m_shape, const_neg_one]).output[0]
@@ -1882,24 +1883,24 @@ class MatrixDiagPartV2V3:
         input1 = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64})
         k0 = ctx.make_node('ReduceMin', [input1.output[0]]).output[0]
         k1 = ctx.make_node('ReduceMax', [input1.output[0]]).output[0]
+        k0_scalar = ctx.make_node('Squeeze', [k0]).output[0]
         k1_scalar = ctx.make_node('Squeeze', [k1]).output[0]
         m_padded = ctx.make_node('Pad', [m, const_pad_vals, node.input[2]])
 
         # starting indexes for super diagonals
-        xstart_0 = ctx.make_node('Cast', [k0], attr={'to': TensorProto.FLOAT})
+        xstart_0 = ctx.make_node('Cast', [k0_scalar], attr={'to': TensorProto.FLOAT})
         xstart_1 = ctx.make_node('Max', [const_zero_float, xstart_0.output[0]])
         xstart_2 = ctx.make_node('Cast', [xstart_1.output[0]], attr={'to': TensorProto.INT64})
-        xstart_3 = ctx.make_node('Add', [xstart_2.output[0], const_neg_one])
-        xstart_4 = ctx.make_node('Range', [k1_scalar, xstart_3.output[0], const_neg_one])
+        xstart_3 = ctx.make_node('Add', [xstart_2.output[0], const_neg_one_scalar])
+        xstart_4 = ctx.make_node('Range', [k1_scalar, xstart_3.output[0], const_neg_one_scalar])
         xstart = ctx.make_node('Reshape', [xstart_4.output[0], const_t])
 
         # starting indexes for sub diagonals
-        ystart_0 = ctx.make_node('Cast', [k1], attr={'to': TensorProto.FLOAT})
+        ystart_0 = ctx.make_node('Cast', [k1_scalar], attr={'to': TensorProto.FLOAT})
         ystart_1 = ctx.make_node('Min', [const_neg_one_float, ystart_0.output[0]])
         ystart_2 = ctx.make_node('Cast', [ystart_1.output[0]], attr={'to': TensorProto.INT64})
-        ystart_2_scalar = ctx.make_node('Squeeze', [ystart_2.output[0]])
-        ystart_3 = ctx.make_node('Add', [k0, const_neg_one])
-        ystart_4 = ctx.make_node('Range', [ystart_2_scalar.output[0], ystart_3.output[0], const_neg_one])
+        ystart_3 = ctx.make_node('Add', [k0_scalar, const_neg_one_scalar])
+        ystart_4 = ctx.make_node('Range', [ystart_2.output[0], ystart_3.output[0], const_neg_one_scalar])
         ystart = ctx.make_node('Reshape', [ystart_4.output[0], const_t])
 
         xmax_0 = ctx.make_node('Mul', [xstart.output[0], xlenp])
@@ -1920,7 +1921,7 @@ class MatrixDiagPartV2V3:
         maxsize_0 = ctx.make_node('Reshape', [maxsize.output[0], const_neg_one])
         maxsize_scalar = ctx.make_node('Squeeze', [maxsize.output[0]])
 
-        diagdistances_0 = ctx.make_node('Range', [const_zero, maxsize_scalar.output[0], const_one])
+        diagdistances_0 = ctx.make_node('Range', [const_zero_scalar, maxsize_scalar.output[0], const_one_scalar])
         diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], stride])
 
         def right_align(sizes, indices, starts, maxval):
@@ -1976,7 +1977,7 @@ class MatrixDiagPartV2V3:
         if_node.set_body_graph_as_attr('then_branch', compute_out_shape(True))
         if_node.set_body_graph_as_attr('else_branch', compute_out_shape(False))
 
-        shapes = [-1] * m_rank
+        shapes = ctx.get_shape(node.output[0])
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         ctx.make_node('Reshape', [diags.output[0], if_node.output[0]], name=node.name, outputs=node.output,
