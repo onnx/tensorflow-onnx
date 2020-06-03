@@ -2054,20 +2054,20 @@ class MatrixDiagPartV2V3:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
 
-        def mkconst(npval, desc):
-            name = utils.make_name(node.name) + f'_{desc}'
-            return ctx.make_const(name, npval).output[0]
+        def mkconsts(values, dtype=np.int64):
+            ret = []
+            for value in values:
+                name = utils.make_name(node.name + '_const')
+                ret.append(ctx.make_const(name, np.array(value, dtype=dtype)).output[0])
+            return ret
 
         # assemble MatrixDiagPart V2&V3
         m = node.input[0]
         m_shape = ctx.get_shape(m)
-        utils.make_sure(-1 not in m_shape, 'At least one dim is unknown %s', str(m_shape))
-
-        xlen = m_shape[-1]
-        ylen = m_shape[-2]
-        xlenp = xlen + 1
-        pads = np.zeros(2 * len(m_shape), dtype=np.int64)
+        m_rank = len(m_shape)
+        pads = np.zeros(2 * m_rank, dtype=np.int64)
         pads[-2:] = [1, 1]
+        utils.make_sure(m_rank > 1, 'Input data should be at least 2D %s', str(m_shape))
 
         align = 'LEFT_LEFT'
         if node.op.op_type == 'MatrixDiagPartV3':
@@ -2075,73 +2075,81 @@ class MatrixDiagPartV2V3:
         xalign, yalign = align.split('_')
 
         # consts
-        const_zero = mkconst(np.array([0], np.int64), 'const_zero_dtype')
-        const_zero_float = mkconst(np.array([0], np.float32), 'const_zero_dtype_f')
-        const_one = mkconst(np.array([1], np.int64), 'const_one_dtype')
-        const_neg_one = mkconst(np.array([-1]).astype(np.int64), 'const_neg_one')
-        const_neg_one_float = mkconst(np.array([-1]).astype(np.float32), 'const_neg_one_f')
-        const_pad_vals = mkconst(pads, 'pads')
-        const_t = mkconst(np.array([-1, 1], np.int64), 'const_t')
-        const_xlen = mkconst(np.array([xlen], np.int64), 'const_xlen')
-        const_ylen = mkconst(np.array([ylen], np.int64), 'const_ylen')
-        const_xlenp = mkconst(np.array([xlenp], np.int64), 'const_xlenp')
-        const_stride = mkconst(np.array([xlenp + 1], np.int64), 'const_stride')
-        const_minxy_float = mkconst(np.array([min(xlen, ylen)], np.float32), 'const_minxy_f')
-        const_xmax = mkconst(np.array([xlen * xlenp + xlenp - 1], np.int64), 'const_xmax')
-        const_ymax = mkconst(np.array([xlenp * ylen - 1], np.int64), 'const_ymax')
-        const_ymax_float = mkconst(np.array([xlenp * ylen - 1], np.float32), 'const_ymax_f')
-        const_partial_shape = mkconst(np.asarray(m_shape[:-2], np.int64), 'partial_shape')
-        const_m2_shape = mkconst(np.asarray(m_shape[:-2] + [-1], np.int64), 'm2_shape')
-        const_gather_shape = mkconst(np.asarray(m_shape[:-2] + [1], np.int64), 'gather_shape')
+        const_zero_float, const_neg_one_float = mkconsts([[0], [-1]], np.float32)
+        const_zero, const_one, const_neg_one, const_neg_two, const_pad_vals, const_t = \
+            mkconsts([[0], [1], [-1], [-2], pads, [-1, 1]])
+        const_zero_scalar, const_one_scalar, const_neg_one_scalar = mkconsts([0, 1, -1])
+
+        const_none = mkconsts([[]])[0]
+        def scalar(name):
+            return ctx.make_node("Reshape", [name, const_none]).output[0]
+
+        m_shape = ctx.make_node('Shape', [node.input[0]]).output[0]
+        xlen = ctx.make_node('Gather', [m_shape, const_neg_one]).output[0]
+        ylen = ctx.make_node('Gather', [m_shape, const_neg_two]).output[0]
+        xlenp = ctx.make_node('Add', [xlen, const_one]).output[0]
+        stride = ctx.make_node('Add', [xlenp, const_one]).output[0]
+        minxy_0 = ctx.make_node('Concat', [xlen, ylen], attr={'axis': 0}).output[0]
+        minxy = ctx.make_node('ReduceMin', [minxy_0]).output[0]
+        minxy_float = ctx.make_node('Cast', [minxy], attr={'to': TensorProto.FLOAT}).output[0]
+        xmax_0 = ctx.make_node('Mul', [xlen, xlenp]).output[0]
+        xmax_1 = ctx.make_node('Add', [xmax_0, xlenp]).output[0]
+        xmax = ctx.make_node('Add', [xmax_1, const_neg_one]).output[0]
+        ymax_0 = ctx.make_node('Mul', [xlenp, ylen]).output[0]
+        ymax = ctx.make_node('Add', [ymax_0, const_neg_one]).output[0]
+        ymax_float = ctx.make_node('Cast', [ymax], attr={'to': TensorProto.FLOAT}).output[0]
+        partial_shape = ctx.make_node('Slice', [m_shape, const_zero, const_neg_two]).output[0]
+        m2_shape = ctx.make_node('Concat', [partial_shape, const_neg_one], attr={'axis': 0}).output[0]
+        gather_shape = ctx.make_node('Concat', [partial_shape, const_one], attr={'axis': 0}).output[0]
 
         # get k0, k1 values. diags to be extracted
         input1 = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64})
-        k0 = ctx.make_node('ReduceMin', [input1.output[0]])
-        k1 = ctx.make_node('ReduceMax', [input1.output[0]])
-        k1_scalar = ctx.make_node('Squeeze', [k1.output[0]])
+        k0 = ctx.make_node('ReduceMin', [input1.output[0]]).output[0]
+        k1 = ctx.make_node('ReduceMax', [input1.output[0]]).output[0]
+        k0_scalar = ctx.make_node('Squeeze', [k0]).output[0]
+        k1_scalar = ctx.make_node('Squeeze', [k1]).output[0]
         m_padded = ctx.make_node('Pad', [m, const_pad_vals, node.input[2]])
 
         # starting indexes for super diagonals
-        xstart_0 = ctx.make_node('Cast', [k0.output[0]], attr={'to': TensorProto.FLOAT})
+        xstart_0 = ctx.make_node('Cast', [k0_scalar], attr={'to': TensorProto.FLOAT})
         xstart_1 = ctx.make_node('Max', [const_zero_float, xstart_0.output[0]])
         xstart_2 = ctx.make_node('Cast', [xstart_1.output[0]], attr={'to': TensorProto.INT64})
-        xstart_3 = ctx.make_node('Add', [xstart_2.output[0], const_neg_one])
-        xstart_4 = ctx.make_node('Range', [k1_scalar.output[0], xstart_3.output[0], const_neg_one])
+        xstart_3 = ctx.make_node('Add', [xstart_2.output[0], const_neg_one_scalar])
+        xstart_4 = ctx.make_node('Range', [k1_scalar, scalar(xstart_3.output[0]), const_neg_one_scalar], name = utils.make_name("A"))
         xstart = ctx.make_node('Reshape', [xstart_4.output[0], const_t])
 
         # starting indexes for sub diagonals
-        ystart_0 = ctx.make_node('Cast', [k1.output[0]], attr={'to': TensorProto.FLOAT})
+        ystart_0 = ctx.make_node('Cast', [k1_scalar], attr={'to': TensorProto.FLOAT})
         ystart_1 = ctx.make_node('Min', [const_neg_one_float, ystart_0.output[0]])
         ystart_2 = ctx.make_node('Cast', [ystart_1.output[0]], attr={'to': TensorProto.INT64})
-        ystart_2_scalar = ctx.make_node('Squeeze', [ystart_2.output[0]])
-        ystart_3 = ctx.make_node('Add', [k0.output[0], const_neg_one])
-        ystart_4 = ctx.make_node('Range', [ystart_2_scalar.output[0], ystart_3.output[0], const_neg_one])
+        ystart_3 = ctx.make_node('Add', [k0_scalar, const_neg_one_scalar])
+        ystart_4 = ctx.make_node('Range', [scalar(ystart_2.output[0]), scalar(ystart_3.output[0]), const_neg_one_scalar], name = utils.make_name("B"))
         ystart = ctx.make_node('Reshape', [ystart_4.output[0], const_t])
 
-        xmax_0 = ctx.make_node('Mul', [xstart.output[0], const_xlenp])
-        xmax = ctx.make_node('Sub', [const_xmax, xmax_0.output[0]])
+        xmax_0 = ctx.make_node('Mul', [xstart.output[0], xlenp])
+        xmax = ctx.make_node('Sub', [xmax, xmax_0.output[0]])
         xmax_float = ctx.make_node('Cast', [xmax.output[0]], attr={'to': TensorProto.FLOAT})
 
         # lengths of super/sub diags to extract
-        xsize_0 = ctx.make_node('Sub', [const_xlen, xstart.output[0]])
+        xsize_0 = ctx.make_node('Sub', [xlen, xstart.output[0]])
         xsize_1 = ctx.make_node('Cast', [xsize_0.output[0]], attr={'to': TensorProto.FLOAT})
-        xsize_2 = ctx.make_node('Min', [xsize_1.output[0], const_minxy_float])
+        xsize_2 = ctx.make_node('Min', [xsize_1.output[0], minxy_float])
         xsize = ctx.make_node('Cast', [xsize_2.output[0]], attr={'to': TensorProto.INT64})
-        ysize_0 = ctx.make_node('Add', [const_ylen, ystart.output[0]])
+        ysize_0 = ctx.make_node('Add', [ylen, ystart.output[0]])
         ysize_1 = ctx.make_node('Cast', [ysize_0.output[0]], attr={'to': TensorProto.FLOAT})
-        ysize_2 = ctx.make_node('Min', [ysize_1.output[0], const_minxy_float])
+        ysize_2 = ctx.make_node('Min', [ysize_1.output[0], minxy_float])
         ysize = ctx.make_node('Cast', [ysize_2.output[0]], attr={'to': TensorProto.INT64})
         diagsize = ctx.make_node('Concat', [xsize.output[0], ysize.output[0]], attr={'axis': 0})
         maxsize = ctx.make_node('ReduceMax', [diagsize.output[0]], attr={'keep_dims': 0})
         maxsize_0 = ctx.make_node('Reshape', [maxsize.output[0], const_neg_one])
         maxsize_scalar = ctx.make_node('Squeeze', [maxsize.output[0]])
 
-        diagdistances_0 = ctx.make_node('Range', [const_zero, maxsize_scalar.output[0], const_one])
-        diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], const_stride])
+        diagdistances_0 = ctx.make_node('Range', [const_zero_scalar, maxsize_scalar.output[0], const_one_scalar], name = utils.make_name("C"))
+        diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], stride])
 
         def right_align(sizes, indices, starts, maxval):
             op1 = ctx.make_node('Sub', [maxsize.output[0], sizes.output[0]])
-            op2 = ctx.make_node('Mul', [op1.output[0], const_stride])
+            op2 = ctx.make_node('Mul', [op1.output[0], stride])
             op3 = ctx.make_node('Sub', [indices.output[0], op2.output[0]])
             op4 = ctx.make_node('Less', [op3.output[0], starts.output[0]])
             op5 = ctx.make_node('Where', [op4.output[0], maxval, op3.output[0]])
@@ -2151,48 +2159,48 @@ class MatrixDiagPartV2V3:
         xdiags_0 = ctx.make_node('Add', [xstart.output[0], diagdistances.output[0]])
         xdiags_1 = ctx.make_node('Cast', [xdiags_0.output[0]], attr={'to': TensorProto.FLOAT})
         if xalign == 'RIGHT':
-            xdiags = right_align(xsize, xdiags_0, xstart, const_ymax)
+            xdiags = right_align(xsize, xdiags_0, xstart, ymax)
         else:
             xdiags_2 = ctx.make_node('Min', [xdiags_1.output[0], xmax_float.output[0]])
             xdiags = ctx.make_node('Cast', [xdiags_2.output[0]], attr={'to': TensorProto.INT64})
 
         ydiags_0_ = ctx.make_node('Abs', [ystart.output[0]])
-        ydiags_1 = ctx.make_node('Mul', [ydiags_0_.output[0], const_xlenp])
+        ydiags_1 = ctx.make_node('Mul', [ydiags_0_.output[0], xlenp])
         ydiags_2 = ctx.make_node('Add', [ydiags_1.output[0], diagdistances.output[0]])
         ydiags_3 = ctx.make_node('Cast', [ydiags_2.output[0]], attr={'to': TensorProto.FLOAT})
         if yalign == 'RIGHT':
-            ydiags = right_align(ysize, ydiags_2, ydiags_1, const_ymax)
+            ydiags = right_align(ysize, ydiags_2, ydiags_1, ymax)
         else:
-            ydiags_4 = ctx.make_node('Min', [ydiags_3.output[0], const_ymax_float])
+            ydiags_4 = ctx.make_node('Min', [ydiags_3.output[0], ymax_float])
             ydiags = ctx.make_node('Cast', [ydiags_4.output[0]], attr={'to': TensorProto.INT64})
 
         # flatten last dimension of matrix
-        m2 = ctx.make_node('Reshape', [m_padded.output[0], const_m2_shape])
+        m2 = ctx.make_node('Reshape', [m_padded.output[0], m2_shape])
 
         diags_0 = ctx.make_node('Concat', [xdiags.output[0], ydiags.output[0]], attr={'axis': 0})
         diags_1 = ctx.make_node('Reshape', [diags_0.output[0], const_neg_one])
-        diags_2 = ctx.make_node('Expand', [diags_1.output[0], const_gather_shape])
+        diags_2 = ctx.make_node('Expand', [diags_1.output[0], gather_shape])
         diags = ctx.make_node('GatherElements', [m2.output[0], diags_2.output[0]], attr={'axis': -1})
 
         def compute_out_shape(k0_k1_same=False):
             g = ctx.create_new_graph_with_same_config()
             g.parent_graph = ctx
             if k0_k1_same:
-                dims = [const_partial_shape, maxsize_0.output[0]]
+                dims = [partial_shape, maxsize_0.output[0]]
             else:
-                dims = [const_partial_shape, const_neg_one, maxsize_0.output[0]]
+                dims = [partial_shape, const_neg_one, maxsize_0.output[0]]
             outshape = g.make_node('Concat', dims, attr={'axis': 0})
             g.add_graph_output(outshape.output[0], TensorProto.INT64, [-1])
             return g
 
         # if k0=k1, rank of output matrix is 1 less than usual
         # hence, need 'If' to compute right output matrix shape
-        k0_k1_same = ctx.make_node('Equal', [k1.output[0], k0.output[0]])
+        k0_k1_same = ctx.make_node('Equal', [k1, k0])
         if_node = ctx.make_node('If', [k0_k1_same.output[0]])
         if_node.set_body_graph_as_attr('then_branch', compute_out_shape(True))
         if_node.set_body_graph_as_attr('else_branch', compute_out_shape(False))
 
-        shapes = [-1] * len(m_shape)
+        shapes = ctx.get_shape(node.output[0])
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         ctx.make_node('Reshape', [diags.output[0], if_node.output[0]], name=node.name, outputs=node.output,
@@ -2207,17 +2215,19 @@ class MatrixDiagPartV2V3:
 class MatrixDiagV3:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
+        # Assemble MatrixDiagV3 by ReverseSequence
+
         def mkconsts(values):
             return [ctx.make_const(utils.make_name('const'), \
                                    np.array(value).astype(np.int64)).output[0] for value in values]
 
         minus_two, minus_one, zeo, one, two = mkconsts([[-2], [-1], [0], [1], [2]])
 
-        def mknode(type, args, attr={}):
-            return ctx.make_node(type, args, attr).output[0]
+        def mknode(type, args, **kwargs):
+            return ctx.make_node(type, args, **kwargs).output[0]
 
-        def mknode2(g, type, args, attr={}):
-            return g.make_node(type, args, attr).output[0]
+        def mknode2(g, type, args, **kwargs):
+            return g.make_node(type, args, **kwargs).output[0]
 
         def normalize(name):
             # normalize arguments
@@ -2225,13 +2235,8 @@ class MatrixDiagV3:
             reshaped = mknode("Reshape", [casted, minus_one])
             return reshaped
 
-        def expanddiag():
-            diag = node.input[0]
-            shape = ctx.get_shape(diag)
-            return mknode("Unsqueeze", [diag], attr={"axes": [0]}) if len(shape) == 1 else diag
-
         def processdiag():
-            # expand diag if necessary
+            # unsqueeze diag if necessary
             diag = node.input[0]
             shape = ctx.get_shape(diag)
             if len(shape) == 1:
@@ -2277,8 +2282,9 @@ class MatrixDiagV3:
                                node.input[4], node.get_attr_str("align")
 
         diag_shape = mknode("Shape", [diag])
-        half_shape = mknode("Slice", [diag_shape, zeo, minus_two])
         diag_rank = mknode("Shape", [diag_shape])
+        head_shape = mknode("Slice", [diag_shape, zeo, minus_two])
+        tail_shape = mknode("Slice", [diag_shape, minus_two, diag_rank])
         diag_width = mknode("Slice", [diag_shape, minus_one, diag_rank])
         diag_depth = mknode("Slice", [diag_shape, minus_two, minus_one])
         k_range = mknode("Range", [squeeze(k_min), squeeze(k_max_nxt), squeeze(one)])
@@ -2360,8 +2366,8 @@ class MatrixDiagV3:
         out_shape = outrowcol()
         out_row = mknode("Slice", [out_shape, zeo, one])
         out_col = mknode("Slice", [out_shape, one, two])
-        k_top = mknode("Sub", [out_col, one])  # highest k
-        k_btm = mknode("Sub", [one, out_row])  # lowest k
+        k_top = mknode("Sub", [out_col, one]) # highest possble k
+        k_btm = mknode("Sub", [one, out_row]) # lowest possible k
 
         def getklens():
             # return diag len of all ks
@@ -2375,16 +2381,19 @@ class MatrixDiagV3:
 
         k_lens = getklens()
 
+        def reverseseq(args):
+            return mknode("ReverseSequence", args, attr={"batch_axis": 0, "time_axis": 1})
+
         def reverse1d(name):
-            # reverse a 1D array
+            # reverse an array
             shape = mknode("Shape", [name])
             temp_shape = mknode("Concat", [minus_one, shape], attr={"axis": -1})
             reshaped = mknode("Reshape", [name, temp_shape])
-            reversed = mknode("ReverseSequence", [reshaped, shape], attr={"batch_axis": 0, "time_axis": 1})
+            reversed = reverseseq([reshaped, shape])
             return mknode("Reshape", [reversed, shape])
 
         def sortdiag():
-            # sort diag to "LEFT_RIGHT"
+            # sort diag to "LEFT_RIGHT" so each col form a line of the out matrix
             k_sup_stt = mknode("Sub", [mknode("Max", [zeo, k_min]), k_btm])
             k_sup_end = mknode("Sub", [k_max_nxt, k_btm])
             k_sup_len = mknode("Max", [zeo, mknode("Sub", [k_sup_end, k_sup_stt])])
@@ -2415,13 +2424,8 @@ class MatrixDiagV3:
             cnt_rev_len_2 = mknode("Concat", [sub_rev_len_2, sup_rev_len_2], attr={"axis": -1})
             exp_rev_len_2 = mknode("Expand", [reverse1d(cnt_rev_len_2), rev_shape])
 
-            flt_rev_len_1 = mknode("Reshape", [exp_rev_len_1, minus_one])
-            reversed_diag_1 = mknode("ReverseSequence", [reshaped_diag, flt_rev_len_1],
-                                     attr={"batch_axis": 0, "time_axis": 1})
-
-            flt_rev_len_2 = mknode("Reshape", [exp_rev_len_2, minus_one])
-            reversed_diag_2 = mknode("ReverseSequence", [reversed_diag_1, flt_rev_len_2],
-                                     attr={"batch_axis": 0, "time_axis": 1})
+            reversed_diag_1 = reverseseq([reshaped_diag, mknode("Reshape", [exp_rev_len_1, minus_one])])
+            reversed_diag_2 = reverseseq([reversed_diag_1, mknode("Reshape", [exp_rev_len_2, minus_one])])
 
             return mknode("Reshape", [reversed_diag_2, diag_shape]), \
                    mknode("Sub", [max_k_len, top_k_len]), \
@@ -2430,14 +2434,10 @@ class MatrixDiagV3:
         sorted_diag, top_pad, btm_pad = sortdiag()
 
         def trandiag():
-            shape = mknode("Shape", [sorted_diag])
-            rank = mknode("Shape", [shape])
-            head_shape = mknode("Slice", [shape, zeo, minus_two])
-            tail_shape = mknode("Slice", [shape, minus_two, rank])
+            # transpose last two dim of diag
             temp_shape = mknode("Concat", [minus_one, tail_shape], attr={"axis": -1})
             reshaped = mknode("Reshape", [sorted_diag, temp_shape])
-            perm = [0, 2, 1]
-            transposed = mknode("Transpose", [reshaped], attr={"perm": perm})
+            transposed = mknode("Transpose", [reshaped], attr={"perm": [0, 2, 1]})
             out_shape = mknode("Concat", [head_shape, reverse1d(tail_shape)], attr={"axis": -1})
             return mknode("Reshape", [transposed, out_shape])
 
@@ -2449,6 +2449,7 @@ class MatrixDiagV3:
             return mknode("Cast", [relued], attr={"to": TensorProto.INT64})
 
         def relu1(name):
+            # all return values >= 1
             minusd = mknode("Sub", [name, one])
             casted = mknode("Cast", [minusd], attr={"to": TensorProto.FLOAT})
             relued = mknode("Relu", [casted])
@@ -2459,7 +2460,7 @@ class MatrixDiagV3:
             return mknode("Abs", [name])
 
         def makediagonal():
-            # pad the lines and move them to right position to make diagnoals 
+            # padding with required value and move lines so they form diagonals
             shape = mknode("Shape", [tran_diag])
             rank = mknode("Shape", [shape])
             width = mknode("Slice", [shape, minus_one, rank])
@@ -2470,76 +2471,72 @@ class MatrixDiagV3:
             diag_pad = mknode("Pad", [reshaped, full_pad, pad])
             diag_pad_shape = mknode("Shape", [diag_pad])
             diag_pad_width = mknode("Slice", [diag_pad_shape, one, two])
-            exp_shape = mknode("Concat", [half_shape, diag_width], attr={"axis": -1})
+            exp_shape = mknode("Concat", [head_shape, diag_width], attr={"axis": -1})
 
-            def revleft():
-                # insert pads from left
+            def padleft():
+                # set pads from left
                 fm = mknode("Add", [left_pad, left_pad])
                 to = mknode("Sub", [fm, diag_width])
                 rg = reverse1d(relu1(mknode("Range", [squeeze(fm), squeeze(to), squeeze(minus_one)])))
                 expanded_range = mknode("Expand", [rg, exp_shape])
                 reshaped_range = mknode("Reshape", [expanded_range, minus_one])
-                rev_left = mknode("ReverseSequence", [diag_pad, reshaped_range], attr={"batch_axis": 0, "time_axis": 1})
-                return mknode("Slice", [rev_left, left_pad, diag_pad_width, one])
+                pad_left = mknode("ReverseSequence", [diag_pad, reshaped_range], attr={"batch_axis": 0, "time_axis": 1})
+                return mknode("Slice", [pad_left, left_pad, diag_pad_width, one])
 
-            rev_left = revleft()
+            pad_left = padleft()
 
-            def revright():
-                # insert pads from right
-                rev_left_shape = mknode("Shape", [rev_left])
-                rev_left_depth = mknode("Slice", [rev_left_shape, zeo, one])
-                rev_left_width = mknode("Slice", [rev_left_shape, one, two])
-                rev_full_lenth = mknode("Expand", [rev_left_width, rev_left_depth])
-                reversed = mknode("ReverseSequence", [rev_left, rev_full_lenth], attr={"batch_axis": 0, "time_axis": 1})
+            def padright():
+                # set pads from right
+                pad_left_shape = mknode("Shape", [pad_left])
+                pad_left_depth = mknode("Slice", [pad_left_shape, zeo, one])
+                pad_left_width = mknode("Slice", [pad_left_shape, one, two])
+                pad_full_lenth = mknode("Expand", [pad_left_width, pad_left_depth])
+                reversed = mknode("ReverseSequence", [pad_left, pad_full_lenth], attr={"batch_axis": 0, "time_axis": 1})
                 fm = mknode("Add", [riht_pad, btm_pad])
                 to = mknode("Sub", [fm, diag_width])
                 rg = mknode("Range", [squeeze(fm), squeeze(to), squeeze(minus_one)])
                 expanded_range = mknode("Expand", [rg, exp_shape])
                 reshaped_range = mknode("Reshape", [expanded_range, minus_one])
-                raw_rev_right = mknode("ReverseSequence", [reversed, reshaped_range],
+                raw_pad_right = mknode("ReverseSequence", [reversed, reshaped_range],
                                        attr={"batch_axis": 0, "time_axis": 1})
-                shape = mknode("Shape", [raw_rev_right])
+                shape = mknode("Shape", [raw_pad_right])
                 width = mknode("Slice", [shape, one, two])
-                sliced = mknode("Slice", [raw_rev_right, btm_pad, width, one])
+                sliced = mknode("Slice", [raw_pad_right, btm_pad, width, one])
                 all_width = mknode("Expand", [mknode("Sub", [width, btm_pad]), mknode("Shape", [reshaped_range])])
-                reversed = mknode("ReverseSequence", [sliced, all_width], attr={"batch_axis": 0, "time_axis": 1})
-                return reversed
+                return mknode("ReverseSequence", [sliced, all_width], attr={"batch_axis": 0, "time_axis": 1})
 
-            rev_right = revright()
+            pad_right = padright()
 
             def diagonize():
+                # move lines to right to form diagonals
                 fm = mknode("Sub", [diag_depth, btm_pad])
                 to = mknode("Add", [fm, diag_width])
                 rg = mknode("Range", [squeeze(fm), squeeze(to), squeeze(one)])
                 expanded_range = mknode("Expand", [rg, exp_shape])
                 reshaped_range = mknode("Reshape", [expanded_range, minus_one])
-                reversed = mknode("ReverseSequence", [rev_right, reshaped_range],
+                reversed = mknode("ReverseSequence", [pad_right, reshaped_range],
                                   attr={"batch_axis": 0, "time_axis": 1})
                 k_max_idx = mknode("Sub", [k_max, k_btm])
                 k_max_idx_nxt = mknode("Add", [k_max_idx, one])
                 k_max_len = mknode("Slice", [k_lens, k_max_idx, k_max_idx_nxt])
                 k_gap = mknode("Sub", [abs(k_max), min_k2zeo])
                 width = mknode("Add", [k_max_len, k_gap])
-                return mknode("Slice", [reversed, zeo, width, one])
+                return mknode("Slice", [reversed, zeo, width, one]), width
 
-            rev_diag = diagonize()
-            shape = mknode("Concat", [half_shape, diag_width, minus_one], attr={"axis": -1})
-            return mknode("Reshape", [rev_diag, shape])
+            diag, width = diagonize()
+            shape = mknode("Concat", [head_shape, diag_width, minus_one], attr={"axis": -1})
+            return mknode("Reshape", [diag, shape]), diag_width, width
 
-        new_diag = makediagonal()
+        new_diag, new_depth, new_width = makediagonal()
 
         def paddiag():
-            shape = mknode("Shape", [new_diag])
-            rank = mknode("Shape", [shape])
-            depth = mknode("Slice", [shape, minus_two, minus_one])
-            width = mknode("Slice", [shape, minus_one, rank])
-            pad_row = mknode("Sub", [out_row, depth])
-            pad_col = mknode("Sub", [out_col, width])
+            # final padding to output shape
+            pad_row, pad_col = mknode("Sub", [out_row, new_depth]), mknode("Sub", [out_col, new_width])
             pad_top = mknode("Max", [zeo, mknode("Sub", [zeo, k_max])])
             pad_lft = mknode("Max", [zeo, mknode("Sub", [k_min, zeo])])
             pad_btm = mknode("Sub", [pad_row, pad_top])
             pad_rht = mknode("Sub", [pad_col, pad_lft])
-            pad_hlf = mknode("Mul", [zeo, half_shape])
+            pad_hlf = mknode("Mul", [zeo, head_shape])
             pad_ful = mknode("Concat", [pad_hlf, pad_top, pad_lft, pad_hlf, pad_btm, pad_rht], attr={"axis": -1})
             return mknode("Pad", [new_diag, pad_ful, pad])
 
@@ -2555,6 +2552,8 @@ class MatrixDiagV3:
 class MatrixSetDiagV3:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
+        # Assemble MatrixSetDiagV3 by MatrixDiagPartV3 and MatrixDiagV3
+
         def mkconsts(values):
             return [ctx.make_const(utils.make_name('const'), \
                                    np.array(value).astype(np.int64)).output[0] for value in values]
@@ -2591,8 +2590,9 @@ class MatrixSetDiagV3:
 
         # make diag of 1s
         ones_diag = ctx.make_node("MatrixDiagPartV3", [ones, k, zeo], attr)
-        MatrixDiagPartV2V3.version_11(ctx, ones_diag)
-        # MatrixDiagPartV2V3.version_12(ctx, ones_diag) # has exception
+        # MatrixDiagPartV2V3.version_11(ctx, ones_diag)
+        ctx.set_shape(ones_diag.output[0], ctx.get_shape(node.input[0]))
+        MatrixDiagPartV2V3.version_12(ctx, ones_diag) # has exception
 
         # make matrix of bool
         ctx.set_dtype(ones_diag.output[0], TensorProto.INT64)
