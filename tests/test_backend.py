@@ -202,6 +202,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._test_expand_dims_more_unknown_rank(i)
 
     @check_opset_min_version(9, "ConstantOfShape")
+    @check_opset_after_tf_version("2.2", 12, "ConstantOfShape")
     def test_eye_non_const1(self):
         # tf.eye(num_rows), num_rows is not const here
         x_val = np.array(5, dtype=np.int32)
@@ -223,6 +224,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.11", "eye has bug when version is below 1.11")
     @check_opset_min_version(9, "ConstantOfShape")
+    @check_opset_after_tf_version("2.2", 12, "ConstantOfShape")
     def test_eye_non_const2(self):
         # tf.eye(num_rows), num_rows is not const here
         for np_dtype in [np.int32, np.int64, np.float32, np.float64]:
