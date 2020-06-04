@@ -31,19 +31,52 @@ def spatial_map(shape, perm):
     return new_shape
 
 
+def is_channels_last(node):
+    """Returns whether node is channels last, so (N, ..., C)."""
+
+    return not node.data_format.startswith("NC")
+
+
+def make_shape_channels_first(shape):
+    """Makes a (N, ..., C) shape into (N, C, ...)."""
+
+    return shape[:1] + shape[-1:] + shape[1:-1]
+
+
+def make_shape_channels_last(shape):
+    """Makes a (N, C, ...) shape into (N, ..., C)."""
+
+    return shape[:1] + shape[1:-1] + shape[1:2]
+
+
+def get_channels_first_permutation(spatial):
+    """Returns a permutation to make a (N, ..., C) array into (N, C, ...)."""
+
+    return [0, spatial + 1] + list(range(1, spatial + 1))
+
+
+def get_channels_last_permutation(spatial):
+    """Returns a permutation to make a (N, C, ...) array into (N, ..., C)."""
+
+    return [0] + list(range(2, spatial + 2)) + [1]
+
+
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
-                        input_indices=None, output_indices=None):
+                        input_indices=None, output_indices=None, spatial=2):
     """Convert input and kernel from tensorflow to onnx. This maybe require to
         to insert transpose ops for input, kernel and output unless they are constants
         and we can transpose the constant.
         We transpose inputs if they are in NHWC. We always transpose the kernel from
         HWNC to NCHW. Outputs are transposed if the format is NHWC.
         Some convolutions like depthwise_conv2d require a reshape of the kernel.
-        Args:
-            ctx: the parent graph
-            node: node of the convolution op
-            with_kernel: transpose the kernel
-            new_kernel_shape: reshape the kernel
+
+    Args:
+        ctx: The parent graph.
+        node: Node of the convolution op.
+        with_kernel: Transpose the kernel.
+        new_kernel_shape: Pass to reshape the kernel.
+        input_indices: Indices that define the inputs.
+        output_indices: Indices that define the outputs.
     """
 
     if input_indices is None:
@@ -51,144 +84,214 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     if output_indices is None:
         output_indices = [0]
 
-    if node.is_nhwc():
-        # transpose input if needed, no need to record shapes on input
+    # Transpose inputs if needed.
+    if is_channels_last(node):
+        # Ge channels first permutation.
+        permutation = get_channels_first_permutation(spatial)
+
+        # Transpose input if needed, no need to record shapes on input
         for idx in input_indices:
-            parent = node.inputs[idx]
-            if node.inputs[idx].is_const() and len(ctx.find_output_consumers(node.input[1])) == 1:
-                # if input is a constant, transpose that one if we are the only consumer
-                val = parent.get_tensor_value(as_list=False)
-                parent.set_tensor_value(val.transpose(constants.NHWC_TO_NCHW))
+            # If input is a constant, transpose that one if we are the only consumer.
+            input_node = node.inputs[idx]
+            input_name = node.input[idx]
+
+            if input_node.is_const() and len(ctx.find_output_consumers(input_name)) == 1:
+                # Transpose constant to make it channels first.
+                val = input_node.get_tensor_value(as_list=False)
+                val = np.transpose(val, permutation)
+
+                input_node.set_tensor_value(val)
             else:
-                # if input comes from a op, insert transpose op
-                input_name = node.input[idx]
+                # Insert transpose op.
                 transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
-                transpose.set_attr("perm", constants.NHWC_TO_NCHW)
+                transpose.set_attr("perm", permutation)
                 transpose.skip_conversion = True
+
                 shape = ctx.get_shape(input_name)
                 if shape is not None:
-                    new_shape = spatial_map(shape, constants.NHWC_TO_NCHW)
+                    new_shape = make_shape_channels_first(shape)
+
                     ctx.set_shape(transpose.output[0], new_shape)
 
-    # kernel must to be transposed
+    # Transpose kernel if needed.
     if with_kernel:
-        # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
+        # Some ONNX convolution ops require to reshape the kernel (ie. depthwise_conv2d).
         if new_kernel_shape:
+            kernel_name = node.input[1]
+
             if ctx.opset < 5:
-                # old reshape takes new shape as attribute
-                input_name = node.input[1]
-                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
+                # Old reshape takes new shape as attribute.
+                reshape = ctx.insert_new_node_on_input(node, "Reshape", kernel_name)
                 reshape.set_attr("shape", new_kernel_shape)
                 reshape.skip_conversion = True
             else:
-                # new reshape takes new shape as input[1]
+                # New reshape takes new shape as input[1].
                 shape_name = utils.make_name(node.name)
                 ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
-                input_name = node.input[1]
-                reshape = ctx.make_node("Reshape", [input_name, shape_name])
-                ctx.replace_input(node, input_name, reshape.output[0])
+
+                reshape = ctx.make_node("Reshape", [kernel_name, shape_name])
+                ctx.replace_input(node, kernel_name, reshape.output[0])
+
                 reshape.skip_conversion = True
+
             ctx.set_shape(reshape.output[0], new_kernel_shape)
 
-        parent = node.inputs[1]
+        # Get kernel (may have be changed to a reshape above).
+        kernel_node = node.inputs[1]
+        kernel_name = node.input[1]
+
+        # Transpose kernel from (..., C_in, C_out) to (C_out, C_in, ...)
+        permutation = [spatial + 1, spatial] + list(range(spatial))
+
+        # If kernel is a constant, transpose that one if we are the only consumer.
         need_transpose = True
-        if node.inputs[1].is_const():
-            # kernel is const - transpose the const if we are the only consumer of const
-            consumers = ctx.find_output_consumers(node.input[1])
-            if len(consumers) == 1:
-                val = parent.get_tensor_value(as_list=False)
-                val = val.transpose(constants.HWCN_TO_NCHW)
-                parent.set_tensor_value(val)
-                need_transpose = False
+        if kernel_node.is_const() and len(ctx.find_output_consumers(kernel_name)) == 1:
+            val = kernel_node.get_tensor_value(as_list=False)
+            val = np.transpose(val, permutation)
+
+            kernel_node.set_tensor_value(val)
+            need_transpose = False
 
         if need_transpose:
-            input_name = node.input[1]
-            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
-            transpose.set_attr("perm", constants.HWCN_TO_NCHW)
+            transpose = ctx.insert_new_node_on_input(node, "Transpose", kernel_name)
+            transpose.set_attr("perm", permutation)
             transpose.skip_conversion = True
-            new_shape = spatial_map(ctx.get_shape(input_name), constants.HWCN_TO_NCHW)
+
+            new_shape = spatial_map(ctx.get_shape(kernel_name), permutation)
             ctx.set_shape(transpose.output[0], new_shape)
 
-    # transpose outputs if needed
-    if node.is_nhwc():
+    # Transpose outputs back if needed.
+    if is_channels_last(node):
         for idx in output_indices:
+            # Make output channels last again by transposing.
             output_name = node.output[idx]
             output_shape = ctx.get_shape(node.output[idx])
+
+            permutation = get_channels_last_permutation(spatial)
+
             op_name = utils.make_name(node.name)
             transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
-            transpose.set_attr("perm", constants.NCHW_TO_NHWC)
+
+            transpose.set_attr("perm", permutation)
             transpose.skip_conversion = True
-            # set TF NHWC shape to transpose node output
+
+            # Set tensorflow channels last shape as the transpose node shape.
             ctx.set_shape(transpose.output[0], output_shape)
-            # Transpose TF NHWC shape back to NCHW shape for current ONNX conv node output
-            ctx.set_shape(output_name, spatial_map(output_shape, constants.NHWC_TO_NCHW))
+
+            # Make the current ONNX convolution output shape channels first.
+            ctx.set_shape(output_name, make_shape_channels_first(output_shape))
+
+        # NOTE: Not strictly correct as it can also be NCW or NCDHW for example.
+        # NOTE: Generally speaking it's channels first.
         node.data_format = "NCHW"
 
 
 def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
     padding = node.get_attr("padding")
-    if padding:
-        if dilations is None:
-            dilations = [1] * spatial * 2
-        padding = padding.s.decode("utf-8")
-        if padding == 'SAME':
-            pads = [0] * spatial * 2
-            input_shape = ctx.get_shape(node.input[0])
-            output_shape = ctx.get_shape(node.output[0])
-            # check if the input shape is valid
-            if len(input_shape) != len(pads):
-                logger.error("node %s input needs to be rank %d, is %d", node.name, len(pads), len(input_shape))
-            # transpose shape to nchw
-            if node.is_nhwc():
-                input_shape = spatial_map(input_shape, constants.NHWC_TO_NCHW)
-                output_shape = spatial_map(output_shape, constants.NHWC_TO_NCHW)
-            # calculate pads
-            if any(input_shape[i + 2] == -1 or output_shape[i + 2] == -1 for i in range(spatial)):
-                logger.debug(
-                    "node %s has unknown dim for pads calculation, fallback to auto_pad: "
-                    "input_shape=%s, output_shape=%s",
-                    node.name, input_shape, output_shape)
-                node.set_attr("auto_pad", "SAME_UPPER")
-            else:
-                for i in range(spatial):
-                    pad = (output_shape[i + 2] - 1) * strides[i] + dilations[i] * kernel_shape[i] - input_shape[i + 2]
-                    pad = max(pad, 0)
-                    pads[i] = pad // 2
-                    pads[i + spatial] = pad - pad // 2
-                node.set_attr("pads", pads)
+    if not padding:
+        return
 
-        elif padding == 'VALID':
-            pass
-        else:
-            raise ValueError("invalid padding value: " + padding)
+    if dilations is None:
+        dilations = [1] * spatial
+
+    padding = padding.s.decode("utf-8")
+    if padding == "SAME":
+        # Initialize with all zeros.
+        # Paddings are in (x_begin, y_begin, ..., x_end, y_end, ...) order.
+        pads = [0] * (spatial * 2)
+
+        # Get shapes and check whether valid.
+        input_shape = ctx.get_shape(node.input[0])
+        output_shape = ctx.get_shape(node.output[0])
+
+        if len(input_shape) != spatial + 2:
+            raise ValueError(
+                "node {} output needs to be rank {}, is {}".format(
+                    node.name, spatial + 2, len(input_shape)
+                )
+            )
+
+        if len(output_shape) != spatial + 2:
+            raise ValueError(
+                "node {} output needs to be rank {}, is {}".format(
+                    node.name, spatial + 2, len(output_shape)
+                )
+            )
+
+        # Transpose to channels first if not so.
+        if is_channels_last(node):
+            input_shape = make_shape_channels_first(input_shape)
+            output_shape = make_shape_channels_first(output_shape)
+
+        # Check for unknown input/output dimensions. Fall back to auto padding if so.
+        if any(input_shape[i + 2] == -1 or output_shape[i + 2] == -1 for i in range(spatial)):
+            logger.debug(
+                "node %s has unknown dim for pads calculation, fallback to auto_pad: "
+                "input_shape=%s, output_shape=%s",
+                node.name,
+                input_shape,
+                output_shape,
+            )
+
+            node.set_attr("auto_pad", "SAME_UPPER")
+            return
+
+        # Calculate paddings.
+        for i in range(spatial):
+            pad = (
+                (output_shape[i + 2] - 1) * strides[i]
+                + dilations[i] * kernel_shape[i]
+                - input_shape[i + 2]
+            )
+            pad = max(pad, 0)
+
+            pads[i] = pad // 2
+            pads[i + spatial] = pad - pad // 2
+
+        node.set_attr("pads", pads)
+    elif padding == "VALID":
+        pass
+    else:
+        raise ValueError("invalid padding value: {}".format(padding))
 
 
-def conv_dims_attr(node, name, new_name=None):
+def conv_dims_attr(node, name, new_name=None, spatial=2):
+    # Fetch attribute.
     if new_name is None:
         new_name = name
+
     dims = node.get_attr(name)
     if not dims:
         return None
+
+    # Get spatial part.
     dims = dims.ints
-    if node.is_nhwc():
-        if len(dims) == 2:
-            h, w = dims
-            c = n = 1
-        else:
-            n, h, w, c = dims
+    if is_channels_last(node):
+        # We have (N, ..., C) or (...).
+        if len(dims) != spatial:
+            dims = dims[1:-1]
     else:
-        n, c, h, w = dims
-    dims = [h, w]
+        # We have (N, C, ...).
+        dims = dims[2:]
+
+    # Set new value and return it.
     node.set_attr(new_name, dims)
+
     return dims
 
 
 def conv_kernel_shape(ctx, node, input_idx, spatial=2):
+    # Kernel shape is (..., C_in, C_out).
     kernel_shape = ctx.get_shape(node.input[input_idx])
-    if len(kernel_shape) != 2 * spatial:
-        raise ValueError("kernel rank must be 2* spatial")
-    kernel_shape = kernel_shape[0:spatial]
+    if len(kernel_shape) != spatial + 2:
+        raise ValueError("kernel rank must be spatial+2")
+
+    # Get spatial part.
+    kernel_shape = kernel_shape[:spatial]
+
+    # Set new value and return it.
     node.set_attr("kernel_shape", kernel_shape)
+
     return kernel_shape
 
 
@@ -218,20 +321,37 @@ def build_dynamic_target_size(ctx, transposed_intput, target_hw):
 class ConvOp:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
+        # ONNX specification:
+        #
         # T output = Conv2D(T input, T filter, @list(int) strides, @bool use_cudnn_on_gpu,
         #                       @string padding, @string data_format)
+        #
         # T Y = Conv(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
         #                       @AttrType.INTS kernel_shape, @AttrType.INTS pads, @AttrType.INTS strides)
+        #
+
+        # Determine number of spatial dimensions.
+        spatial = int(node.type[-2])
+
+        # Make it a convolution node.
         node.type = "Conv"
-        kernel_shape = conv_kernel_shape(ctx, node, 1, spatial=2)
-        strides = conv_dims_attr(node, "strides")
-        dilations = conv_dims_attr(node, "dilations")
-        add_padding(ctx, node, kernel_shape, strides, dilations=dilations, spatial=2)
-        conv_convert_inputs(ctx, node, with_kernel=True)
+
+        # Determine kernel spatial shape, strides and dilations.
+        kernel_shape = conv_kernel_shape(ctx, node, 1, spatial=spatial)
+        strides = conv_dims_attr(node, "strides", spatial=spatial)
+        dilations = conv_dims_attr(node, "dilations", spatial=spatial)
+
+        # Set padding.
+        add_padding(
+            ctx, node, kernel_shape, strides, dilations=dilations, spatial=spatial
+        )
+
+        # Convert input and filters.
+        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        # no change
+        # No change.
         cls.version_1(ctx, node, **kwargs)
 
 
