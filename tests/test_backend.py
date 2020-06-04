@@ -1390,7 +1390,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # test for dynamic shape coming from a shape op
         x_val = np.array([0, 1, 2, 3, 5], dtype=np.int64)
         def func(x):
-            return random_uniform(x[3:], name=_TFOUTPUT, dtype=tf.float32)
+            ret = random_uniform(x[3:], dtype=tf.float32)
+            return tf.identity(ret, name=_TFOUTPUT)
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
 
