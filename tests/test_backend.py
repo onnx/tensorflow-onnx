@@ -3251,10 +3251,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         def func(diag, k, row, col):
             return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
-                                           padding_value=0.123, align='RIGHT_RIGHT', name=_TFOUTPUT)
+                                           padding_value=0.123, align='RIGHT_RIGHT', name=_TFOUTPUT), \
+                   tf.raw_ops.MatrixDiagV2(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=0.123, name=_TFOUTPUT1)
 
-        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
-                                              _INPUT2: row_val, _INPUT3: col_val})
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1],
+                            {_INPUT: diag_val, _INPUT1: k_val,
+                            _INPUT2: row_val, _INPUT3: col_val})
 
     @check_opset_min_version(12)
     @check_tf_min_version("2.2")
@@ -3302,10 +3305,12 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         def func(diag, k, row, col):
             return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
-                                           padding_value=7, align='LEFT_RIGHT', name=_TFOUTPUT)
+                                           padding_value=7, align='LEFT_RIGHT', name=_TFOUTPUT), \
+                   tf.raw_ops.MatrixDiag(diagonal=diag, name=_TFOUTPUT1)
 
-        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
-                                              _INPUT2: row_val, _INPUT3: col_val})
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1],
+                            {_INPUT: diag_val, _INPUT1: k_val,
+                             _INPUT2: row_val, _INPUT3: col_val})
 
     @check_opset_min_version(12)
     @check_tf_min_version("2.2")

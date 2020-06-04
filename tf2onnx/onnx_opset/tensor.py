@@ -2207,11 +2207,13 @@ class MatrixDiagPartV2V3:
                 ctx.set_shape(consumer.output[0], shapes)
 
 
-@tf_op("MatrixDiagV3")
-class MatrixDiagV3:
+@tf_op(["MatrixDiag", "MatrixDiagV2", "MatrixDiagV3"])
+class MatrixDiag:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         # Assemble MatrixDiagV3 by ReverseSequence
+        argc = len(node.input)
+
         def mkconsts(values):
             return [ctx.make_const(utils.make_name('const'), \
                                    np.array(value).astype(np.int64)).output[0] for value in values]
@@ -2230,6 +2232,9 @@ class MatrixDiagV3:
             reshaped = mknode("Reshape", [casted, minus_one])
             return reshaped
 
+        def cast(name):
+            return mknode("Cast", [name], attr={"to": ctx.get_dtype(node.input[0])})
+
         def processdiag():
             # unsqueeze diag if necessary
             diag = node.input[0]
@@ -2241,7 +2246,7 @@ class MatrixDiagV3:
 
             diag_shape = mknode("Shape", [diag])
             diag_depth = mknode("Slice", [diag_shape, minus_two, minus_one])
-            k = normalize(node.input[1])
+            k = normalize(node.input[1]) if argc > 1 else zeo
             k_min, k_max = mknode("ReduceMin", [k]), mknode("ReduceMax", [k])
             k_max_nxt = mknode("Add", [k_max, one])
             k_depth = mknode("Sub", [k_max_nxt, k_min])
@@ -2272,8 +2277,10 @@ class MatrixDiagV3:
 
         # gather inputs
         diag, k, k_min, k_max, k_max_nxt = processdiag()
-        row, col, pad, align = normalize(node.input[2]), normalize(node.input[3]), \
-                               node.input[4], node.get_attr_str("align")
+        row, col, pad, align = normalize(node.input[2]) if argc > 2 else minus_one, \
+                               normalize(node.input[3]) if argc > 3 else minus_one, \
+                               node.input[4] if argc > 4 else cast(zeo), \
+                               node.get_attr_str("align") if "align" in node.attr else "LEFT_LEFT"
 
         diag_shape = mknode("Shape", [diag])
         diag_rank = mknode("Shape", [diag_shape])
@@ -2580,12 +2587,12 @@ class MatrixSetDiagV3:
         # make matrix of bool
         ctx.set_dtype(ones_diag.output[0], TensorProto.INT64)
         ones_matrix = ctx.make_node("MatrixDiagV3", [ones_diag.output[0], k, row, col, zeo], attr)
-        MatrixDiagV3.version_12(ctx, ones_matrix)
+        MatrixDiag.version_12(ctx, ones_matrix)
         ones_bool = mknode("Equal", [ones_matrix.output[0], one])
 
         # make matrix out of diag
         diag_matrix = ctx.make_node("MatrixDiagV3", [diag, k, row, col, cast(zeo)], attr)
-        MatrixDiagV3.version_12(ctx, diag_matrix)
+        MatrixDiag.version_12(ctx, diag_matrix)
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
