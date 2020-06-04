@@ -1835,8 +1835,16 @@ class MatrixDiagPartV2V3:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # assemble MatrixDiagPart V2&V3 by looping k diagonals with proper pads
+        const_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero', np.array([0]).astype(np.int64))
+        const_one = ctx.make_const(utils.make_name(node.name) + 'const_one', np.array([1]).astype(np.int64))
+        const_two = ctx.make_const(utils.make_name(node.name) + 'const_two', np.array([2]).astype(np.int64))
+        const_neg_one = ctx.make_const(utils.make_name(node.name) + 'const_neg_one', np.array([-1]).astype(np.int64))
+        const_neg_two = ctx.make_const(utils.make_name(node.name) + 'const_neg_two', np.array([-2]).astype(np.int64))
+        def normalize():
+            raw_k = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+            return ctx.make_node('Reshape', [raw_k, const_neg_one.output[0]]).output[0]
         input_tensor = node.input[0]
-        k = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+        k = normalize()
         padding = node.input[2]
         align = 'LEFT_LEFT'
         if node.op.op_type == 'MatrixDiagPartV3':
@@ -1850,12 +1858,7 @@ class MatrixDiagPartV2V3:
         for out in ctx.find_output_consumers(node.output[0]):
             if out.op.op_type == 'Identity':
                 ctx.set_shape(out.output[0], raw_output_shape)
-        # define constants
-        const_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero', np.array([0]).astype(np.int64))
-        const_one = ctx.make_const(utils.make_name(node.name) + 'const_one', np.array([1]).astype(np.int64))
-        const_two = ctx.make_const(utils.make_name(node.name) + 'const_two', np.array([2]).astype(np.int64))
-        const_neg_one = ctx.make_const(utils.make_name(node.name) + 'const_neg_one', np.array([-1]).astype(np.int64))
-        const_neg_two = ctx.make_const(utils.make_name(node.name) + 'const_neg_two', np.array([-2]).astype(np.int64))
+
         # prepare new_shape of input
         input_shape = ctx.make_node('Shape', [input_tensor])
         shape_input_shape = ctx.make_node('Shape', [input_shape.output[0]])
@@ -2075,7 +2078,7 @@ class MatrixDiagPartV2V3:
         xalign, yalign = align.split('_')
 
         # consts
-        const_zero_float, const_neg_one_float = mkconsts([[0], [-1]], np.float32)
+        const_zero_float, const_neg_one_float = mkconsts([0, -1], np.float32)
         const_zero, const_one, const_neg_one, const_neg_two, const_pad_vals, const_t = \
             mkconsts([[0], [1], [-1], [-2], pads, [-1, 1]])
         const_zero_scalar, const_one_scalar, const_neg_one_scalar = mkconsts([0, 1, -1])
@@ -2098,8 +2101,12 @@ class MatrixDiagPartV2V3:
         m2_shape = ctx.make_node('Concat', [partial_shape, const_neg_one], attr={'axis': 0}).output[0]
         gather_shape = ctx.make_node('Concat', [partial_shape, const_one], attr={'axis': 0}).output[0]
 
+        def normalize():
+            raw_input1 = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+            return ctx.make_node('Reshape', [raw_input1, const_neg_one])
+
         # get k0, k1 values. diags to be extracted
-        input1 = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64})
+        input1 = normalize()
         k0 = ctx.make_node('ReduceMin', [input1.output[0]]).output[0]
         k1 = ctx.make_node('ReduceMax', [input1.output[0]]).output[0]
         k0_scalar = ctx.make_node('Squeeze', [k0]).output[0]
