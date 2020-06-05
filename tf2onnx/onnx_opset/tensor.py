@@ -614,7 +614,6 @@ class ExpandDims:
         if dim_node.is_const():
             node.type = "Unsqueeze"
             dim = dim_node.get_tensor_value()
-            # TODO: isn't this always a list ?
             if isinstance(dim, list):
                 dim = dim[0]
             if dim < 0:
@@ -631,6 +630,9 @@ class ExpandDims:
         if dim_node.is_const():
             node.type = "Unsqueeze"
             dim = dim_node.get_tensor_value()
+            if isinstance(dim, list):
+                # tf.expanddims() wants a scalar per doc but quietly accepts a list too.
+                dim = dim[0]
             node.set_attr("axes", [dim])
             ctx.remove_input(node, node.input[1])
             return
