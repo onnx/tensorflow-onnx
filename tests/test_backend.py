@@ -184,15 +184,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_expand_dims_one_unknown_rank(self):
         x_val = make_xval([3, 4])
         def func(x):
-            # FIXME: this was tf_placeholder(tf.float32, shape=[None, 4], name=_TFINPUT)
             op = tf.expand_dims(x, 0)
+            return tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    def test_expand_dims_with_list(self):
+        x_val = make_xval([3, 4])
+        def func(x):
+            op = tf.expand_dims(x, [0])
             return tf.identity(op, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     def _test_expand_dims_more_unknown_rank(self, idx):
         x_val = make_xval([3, 4])
         def func(x):
-            # FIXME: this was tf_placeholder(tf.float32, shape=[None, None], name=_TFINPUT)
             op = tf.expand_dims(x, idx)
             return tf.identity(op, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
