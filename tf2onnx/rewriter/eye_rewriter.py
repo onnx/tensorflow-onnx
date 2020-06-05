@@ -79,8 +79,38 @@ def rewrite_eye(g, ops):
                 OpTypePattern("Const", name="fill_value"),
             ]),
         ])
+    pattern5 = \
+        OpTypePattern("MatrixDiagV3", name="output_eye_matrix", inputs=[
+            OpTypePattern("Fill", inputs=[
+                OpTypePattern("ConcatV2", inputs=[
+                    "*",
+                    OpTypePattern("ExpandDims", inputs=[
+                        OpTypePattern("Minimum|Cast", name="min_or_cast"),
+                        "*"
+                    ]),
+                    "*",
+                ]),
+                OpTypePattern("Const", name="fill_value"),
+            ]),
+            "*", "*", "*", "*",
+        ])
+    pattern6 = \
+        OpTypePattern("MatrixSetDiagV3", name="output_eye_matrix", inputs=[
+            OpTypePattern("Fill"),
+            OpTypePattern("Fill", inputs=[
+                OpTypePattern("ConcatV2", inputs=[
+                    "*",
+                    OpTypePattern("ExpandDims", inputs=[
+                        OpTypePattern("Minimum|Cast", name="min_or_cast"),
+                        "*"
+                    ]),
+                    "*",
+                ]),
+                OpTypePattern("Const", name="fill_value"),
+            ]), "*"
+        ])
 
-    for pattern in [pattern1, pattern2, pattern3, pattern4]:
+    for pattern in [pattern1, pattern2, pattern3, pattern4, pattern5, pattern6]:
         matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(ops))
         for match_result in match_results:
