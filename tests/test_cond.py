@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_opset_min_version, check_tf_min_version, check_tf_max_version, skip_tf2
+from common import unittest_main, check_opset_min_version, check_tf_min_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
