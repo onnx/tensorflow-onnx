@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_opset_min_version, check_tf_min_version, check_tf_max_version, skip_tf2
+from common import unittest_main, check_opset_min_version, check_tf_min_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
@@ -78,7 +78,6 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
-    @skip_tf2()
     def test_nest_cond(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
@@ -100,7 +99,6 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
-    @skip_tf2()
     def test_while_loop_in_cond(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
@@ -178,7 +176,6 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
-    @check_tf_max_version("1.15", "import issue in tf-2.1, fix later")
     def test_case_without_default_branch(self):
         def func(x, y):
             x = tf.add(x, 1, name="add_x")
@@ -212,7 +209,6 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
-    @skip_tf2()
     def test_nest_case(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
@@ -234,7 +230,6 @@ class CondTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.8", "shape inference for Reshape op screws up")
     @check_opset_min_version(9, "ConstantOfShape")
-    @skip_tf2()
     def test_cond_with_different_output_shape(self):
         input_shape = (10, 5, 20)
         def func(inputs, shape):
