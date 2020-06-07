@@ -2,8 +2,8 @@
 
 | Build Type | OS | Python | Tensorflow | Onnx opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7 | 1.12-1.15, 2.1 | 7-11 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7 | 1.12-1.15, 2.1 | 7-11 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7 | 1.12-1.15, 2.1-2.2 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7 | 1.12-1.15, 2.1-2.2 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
 
 ## Supported Versions
 
@@ -11,7 +11,7 @@
 
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support opset 6 to 11. By default we use opset 8 for the resulting ONNX graph since most runtimes will support opset 8.
+We support ONNX opset-6 to opset-12. By default we use opset-8 for the resulting ONNX graph since most runtimes will support opset-8.
 Support for future opsets add added as they are released.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 11```.
@@ -20,13 +20,14 @@ If you want the graph to be generated with a specific opset, use ```--opset``` i
 
 We support all ```tf-1.x graphs```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 and up```. tf2onnx-1.5.4 was the last version that was tested all the way back to tf-1.4.
 
-There is now ```experimental support for tf-2.x```. Basic unit tests are passing as well as control flow.
+There is now ```experimental support for tf-2.x```. 
+With the exception of LSTM unit tests, all unit tests are enabled and passing.
 Unit tests that we still need to fix are marked with ```@skip_tf2```.
 GRU/LSTM's are converting but not runnable due to type/shape inference issues at runtime (working on that one).
-All unit tests are running in eager mode and after execution we take the python function, make it a graph and convert this to onnx.
-If running under tf-2.x we are using the tensorflow V2 controlflow.
+All unit tests are running in eager mode. After execution we take the python function, make it a graph and convert it to ONNX.
+When running under tf-2.x tf2onnx will use the tensorflow V2 controlflow.
 
-You can install tf2onnx on top of tf-1.x or tf-2.x and convert tf-1.x or tf-2.x models.
+You can install tf2onnx on top of tf-1.x or tf-2.x.
 
 ### Python
 
