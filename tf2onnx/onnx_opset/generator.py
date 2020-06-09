@@ -194,3 +194,15 @@ class IteratorGetNext:
         ctx.remove_node(node.name)
         ctx.add_graph_input(output_names[0], type_0, shape_0)
         ctx.add_graph_input(output_names[1], type_1, shape_1)
+
+
+@tf_op("QueueDequeueManyV2")
+class IteratorGetNext:
+    @classmethod
+    def version_8(cls, ctx, node, **kwargs):
+        outputs = node.output
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        for i, output in enumerate(outputs):
+            ctx.add_graph_input(output, dtypes[i], [-1, -1, -1, -1] if shapes[i] is None else shapes[i])
