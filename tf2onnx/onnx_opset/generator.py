@@ -205,4 +205,4 @@ class QueueDequeueManyV2:
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         for i, output in enumerate(outputs):
-            ctx.add_graph_input(output, dtypes[i], [-1, -1, -1, -1] if shapes[i] is None else shapes[i])
+            ctx.add_graph_input(output, dtypes[i], shapes[i])
