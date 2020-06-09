@@ -197,7 +197,7 @@ class IteratorGetNext:
 
 
 @tf_op("QueueDequeueManyV2")
-class IteratorGetNext:
+class QueueDequeueManyV2:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
         outputs = node.output
