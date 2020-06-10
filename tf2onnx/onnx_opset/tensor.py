@@ -2223,11 +2223,7 @@ class MatrixDiag:
         # Assemble MatrixDiagV3 by ReverseSequence
         argc = len(node.input)
 
-        def mkconsts(values):
-            return [ctx.make_const(utils.make_name('const'), \
-                                   np.array(value).astype(np.int64)).output[0] for value in values]
-
-        minus_two, minus_one, zeo, one, two = mkconsts([[-2], [-1], [0], [1], [2]])
+        minus_two, minus_one, zeo, one, two = ctx.make_consts([[-2], [-1], [0], [1], [2]])
 
         def mknode(op, args, **kwargs):
             return ctx.make_node(op, args, **kwargs).output[0]
@@ -2554,11 +2550,8 @@ class MatrixSetDiagV3:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         # Assemble MatrixSetDiagV3 by MatrixDiagPartV3 and MatrixDiagV3
-        def mkconsts(values):
-            return [ctx.make_const(utils.make_name('const'), \
-                                   np.array(value).astype(np.int64)).output[0] for value in values]
 
-        minus_two, minus_one, zeo, one = mkconsts([[-2], [-1], [0], [1]])
+        minus_two, minus_one, zeo, one = ctx.make_consts([[-2], [-1], [0], [1]])
 
         def mknode(op, args, **kwargs):
             return ctx.make_node(op, args, **kwargs).output[0]
