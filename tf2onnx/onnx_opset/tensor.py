@@ -1267,8 +1267,8 @@ class BatchToSpace:
             # const vals
             int_max_const, one_const, minus1_const, blocklen_resize_const, \
             blocklenplus1_const, block_shape_const = \
-                ctx.make_consts([[utils.get_max_value(np.int64)], [1], [-1],\
-                                 [-1, blocklen], [blocklen + 1], block_shape])
+                [n.output[0] for n in ctx.make_consts([[utils.get_max_value(np.int64)], [1], [-1],\
+                                                       [-1, blocklen], [blocklen + 1], block_shape])]
 
             x_shape = ctx.insert_new_node_on_input(node, 'Shape', node.input[0])
 
@@ -1299,7 +1299,7 @@ class BatchToSpace:
                 p[i] = p[i - 2] + 1
 
             # reshape to create moving blocks, shuffle, and reshape to target_spatial
-            indices = ctx.make_consts([list(g)])[0]
+            indices = ctx.make_consts([list(g)])[0].output[0]
             gather = mknode('Gather', [shape1.output[0], indices])
             x2 = mknode('Reshape', [input0, gather.output[0]])
             tr2 = mknode('Transpose', [x2.output[0]], {'perm': np.array(p)})
@@ -1307,10 +1307,10 @@ class BatchToSpace:
             x3 = mknode('Reshape', [tr2.output[0], shape2.output[0]])
 
             # crop axes
-            slice_starts_const1, slice_starts_const2, slice_ends_const1,\
+            slice_starts_const1, slice_starts_const2, slice_ends_const1, \
             slice_ends_const2, axes_const = \
-                ctx.make_consts([[0, 0], [1, utils.get_max_value(np.int64)], [1, 0],\
-                                 [2, utils.get_max_value(np.int64)], range(1, blocklen + 1)])
+                [n.output[0] for n in ctx.make_consts([[0, 0], [1, utils.get_max_value(np.int64)], [1, 0],\
+                                                       [2, utils.get_max_value(np.int64)], range(1, blocklen + 1)])]
 
             crop = mknode('Cast', [input2], {'to': TensorProto.INT64})
             crop_transposed = mknode('Transpose', [crop.output[0]])
@@ -1388,8 +1388,9 @@ class SpaceToBatch:
             # const vals
             int_max_const, zero_const, one_const, minus1_const, blocklen_resize_const, \
             blocklenplus1_const, filltop_const, fillbottom_const, block_shape_const = \
-                ctx.make_consts([[utils.get_max_value(np.int64)], [0], [1], [-1], [-1, blocklen], \
-                                 [blocklen + 1], [1, 0, 0, 0], [0, 0, 1, 0], block_shape])
+                [n.output[0] for n in ctx.make_consts([[utils.get_max_value(np.int64)], [0], [1],\
+                                                       [-1], [-1, blocklen], [blocklen + 1],\
+                                                       [1, 0, 0, 0], [0, 0, 1, 0], block_shape])]
 
             x_shape = ctx.insert_new_node_on_input(node, 'Shape', node.input[0])
             x_rank = mknode('Size', [x_shape.output[0]])
@@ -1768,8 +1769,8 @@ class MatrixDiagPart:
     def version_11(cls, ctx, node, **kwargs):
         # MatrixDiagPart by slice and gather
         minus_two_one, minus_two, minus_one, zeo, zeo_zeo, one, two, two_one = \
-            ctx.make_consts([[-2, -1], [-2], [-1], [0], [0, 0], [1], [2], [2, 1]])
-        zeo_, one_ = ctx.make_consts([0, 1])
+            [n.output[0] for n in ctx.make_consts([[-2, -1], [-2], [-1], [0], [0, 0], [1], [2], [2, 1]])]
+        zeo_, one_ = [n.output[0] for n in ctx.make_consts([0, 1])]
 
         input_shape = ctx.make_node('Shape', [node.input[0]])
         input_shape_size = ctx.make_node('Shape', [input_shape.output[0]])
@@ -1807,7 +1808,8 @@ class MatrixDiagPartV2V3:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # assemble MatrixDiagPart V2&V3 by looping k diagonals with proper pads
-        minus_two, minus_one, zeo, one, two = ctx.make_consts([[-2], [-1], [0], [1], [2]])
+        minus_two, minus_one, zeo, one, two = \
+            [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1], [2]])]
 
         def normalize():
             raw_k = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
@@ -2041,10 +2043,11 @@ class MatrixDiagPartV2V3:
         xalign, yalign = align.split('_')
 
         # consts
-        const_zero_float, const_neg_one_float = ctx.make_consts([0, -1], np.float32)
+        const_zero_float, const_neg_one_float = [n.output[0] for n in ctx.make_consts([0, -1], np.float32)]
         const_zero, const_one, const_neg_one, const_neg_two, const_pad_vals, const_t = \
-            ctx.make_consts([[0], [1], [-1], [-2], pads, [-1, 1]])
-        const_zero_scalar, const_one_scalar, const_neg_one_scalar = ctx.make_consts([0, 1, -1])
+            [n.output[0] for n in ctx.make_consts([[0], [1], [-1], [-2], pads, [-1, 1]])]
+        const_zero_scalar, const_one_scalar, const_neg_one_scalar = \
+            [n.output[0] for n in ctx.make_consts([0, 1, -1])]
 
         m_shape = ctx.make_node('Shape', [node.input[0]]).output[0]
         xlen = ctx.make_node('Gather', [m_shape, const_neg_one]).output[0]
@@ -2184,7 +2187,8 @@ class MatrixDiag:
         # Assemble MatrixDiagV3 by ReverseSequence
         argc = len(node.input)
 
-        minus_two, minus_one, zeo, one, two = ctx.make_consts([[-2], [-1], [0], [1], [2]])
+        minus_two, minus_one, zeo, one, two = \
+            [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1], [2]])]
 
         def mknode(op, args, **kwargs):
             return ctx.make_node(op, args, **kwargs).output[0]
@@ -2512,7 +2516,8 @@ class MatrixSetDiagV3:
     def version_12(cls, ctx, node, **kwargs):
         # Assemble MatrixSetDiagV3 by MatrixDiagPartV3 and MatrixDiagV3
 
-        minus_two, minus_one, zeo, one = ctx.make_consts([[-2], [-1], [0], [1]])
+        minus_two, minus_one, zeo, one = \
+            [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1]])]
 
         def mknode(op, args, **kwargs):
             return ctx.make_node(op, args, **kwargs).output[0]

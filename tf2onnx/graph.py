@@ -405,7 +405,6 @@ class Graph(object):
         if target is None:
             target = []
         self._nodes = []
-        self._consts = {}
         self._nodes_by_name = {}
         self._output_to_node_name = {}
         self.shapes = {}
@@ -490,13 +489,7 @@ class Graph(object):
         consts = []
         for value in values:
             np_val = np.array(value).astype(np_type)
-            key = str(np_val) + "_" + str(np_val.dtype)
-            if key in self._consts:
-                consts.append(self._consts[key])
-            else:
-                const_node = self.make_const(utils.make_name("const"), np_val, skip_conversion, raw)
-                self._consts[key] = const_node.output[0]
-                consts.append(const_node.output[0])
+            consts.append(self.make_const(utils.make_name("const"), np_val, skip_conversion, raw))
         return consts
 
     def make_const(self, name, np_val, skip_conversion=False, raw=True):
