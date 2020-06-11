@@ -1257,11 +1257,6 @@ class BatchToSpace:
                 nodename = utils.make_name(node.name + '_' + optype.lower())
                 return ctx.make_node(optype, inputs, attrs, name=nodename)
 
-            def mkconst(desc, val, dtype=np.int64):
-                nodename = utils.make_name(node.name + '_' + desc)
-                const_node = ctx.make_const(utils.make_name(nodename), val.astype(dtype))
-                return const_node.output[0]
-
             # support non 3D/4D tensors and dynamic crop vals
             # dynamic slice starts at opset 10
             utils.make_sure(ctx.opset >= 11, 'non-4D tensor or non-const crops require opset 11')
