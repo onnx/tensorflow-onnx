@@ -490,7 +490,13 @@ class Graph(object):
         consts = []
         for value in values:
             np_val = np.array(value).astype(np_type)
-            consts.append(self.make_const(utils.make_name("const"), np_val, skip_conversion, raw).output[0])
+            key = str(np_val) + "_" + str(np_val.dtype)
+            if key in self._consts:
+                consts.append(self._consts[key])
+            else:
+                const_node = self.make_const(utils.make_name("const"), np_val, skip_conversion, raw)
+                self._consts[key] = const_node.output[0]
+                consts.append(const_node.output[0])
         return consts
 
     def make_const(self, name, np_val, skip_conversion=False, raw=True):
@@ -501,11 +507,6 @@ class Graph(object):
             skip_conversion: bool, indicate whether this created node would be mapped during conversion.
             raw: whether to store data at field of raw_data or the specific field according to its dtype
         """
-
-        key = str(np_val) + "_" + str(np_val.dtype)
-        if key in self._consts:
-            return self._consts[key]
-
         if raw:
             onnx_tensor = numpy_helper.from_array(np_val, name)
         else:
@@ -514,8 +515,6 @@ class Graph(object):
         dtype = onnx_tensor.data_type
         node = self.make_node("Const", [], outputs=[name], name=name, attr={"value": onnx_tensor},
                               skip_conversion=skip_conversion, dtypes=[dtype], infer_shape_dtype=False)
-
-        self._consts[key] = node
         self.set_shape(name, np_val.shape)
         self.set_dtype(name, utils.map_numpy_to_onnx_dtype(np_val.dtype))
         return node
