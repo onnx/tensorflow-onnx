@@ -1767,8 +1767,8 @@ class MatrixDiagPart:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # MatrixDiagPart by slice and gather
-        minus_two_one, minus_two, minus_one, zeo, zeo_zeo, one, two = \
-            ctx.make_consts([[-2, -1], [-2], [-1], [0], [0, 0], [1], [2]])
+        minus_two_one, minus_two, minus_one, zeo, zeo_zeo, one, two, two_one = \
+            ctx.make_consts([[-2, -1], [-2], [-1], [0], [0, 0], [1], [2], [2, 1]])
         zeo_, one_ = ctx.make_consts([0, 1])
 
         input_shape = ctx.make_node('Shape', [node.input[0]])
