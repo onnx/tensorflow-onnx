@@ -484,6 +484,14 @@ class Graph(object):
                 all_inputs.append(n)
         return all_inputs
 
+    def make_consts(self, values, np_type=np.int64, skip_conversion=False, raw=True):
+        """create list of consts of same type"""
+        consts = []
+        for value in values:
+            np_val = np.array(value).astype(np_type)
+            consts.append(self.make_const(utils.make_name("const"), np_val, skip_conversion, raw))
+        return consts
+
     def make_const(self, name, np_val, skip_conversion=False, raw=True):
         """Make a new constant in the graph.
         Args:
