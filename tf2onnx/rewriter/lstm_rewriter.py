@@ -354,9 +354,9 @@ class LSTMRewriter(LSTMRewriterBase):
         out_dtype = self.g.get_dtype(lstm_inputs[0])
 
         lstm_node = self.g.make_node("LSTM", lstm_inputs, attr=context.attributes[i], output_count=3,
-                                     shapes=[[x_seq_length, num_direction, x_batch_size, context.hidden_size],
-                                             [num_direction, x_batch_size, context.hidden_size],
-                                             [num_direction, x_batch_size, context.hidden_size]],
+                                     shapes=[[x_seq_length, num_direction, x_batch_size, context.hidden_size[i]],
+                                             [num_direction, x_batch_size, context.hidden_size[i]],
+                                             [num_direction, x_batch_size, context.hidden_size[i]]],
                                      dtypes=[out_dtype, out_dtype, out_dtype], op_name_scope=context.rnn_scope)
         return lstm_node
 
