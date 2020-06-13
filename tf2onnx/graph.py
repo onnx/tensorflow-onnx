@@ -301,7 +301,7 @@ class Node(object):
         self.set_attr("value", onnx_tensor)
         # track shapes in _output_shapes
         self._graph_check()
-        self.graph.set_shape(onnx_tensor.name, onnx_tensor.dims)
+        self.graph.set_shape(onnx_tensor.name, list(onnx_tensor.dims))
 
     def get_body_graphs(self):
         self._graph_check()
