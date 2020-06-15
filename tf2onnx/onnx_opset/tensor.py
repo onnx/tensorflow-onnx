@@ -1064,6 +1064,9 @@ class Unpack:
             axis += len(shape)
         # split the tensor into n outputs
         node.type = "Split"
+        output_shape = ctx.get_shape(node.output[0])
+        if output_shape:
+            ctx.set_shape(node.output[0], output_shape.insert(axis, 1))
         # for each output we need to squeeze axis
         for n in node.output:
             op_name = utils.make_name(node.name)
