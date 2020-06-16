@@ -352,8 +352,15 @@ class LoopRewriterBase(object):
                 # using grappler there is not necessarily an identity behind switch
                 switch_true_identity_output = switch_node.output[1]
         else:
-            raise ValueError("switch_true " + switch_node.name + " has unexpected count of consumers:",
-                             [n.name for n in switch_consumers])
+            # insert identity if there are 2 or more consumers. This can happen on tf-1.15.
+            switch_true_identity_output = self.g.make_node("Identity", [switch_node.output[1]],
+                                                           shapes=[switch_node.output_shapes[1]],
+                                                           dtypes=[switch_node.output_dtypes[1]])
+            switch_true_identity_output = switch_true_identity_output.output[0]
+            for n in switch_consumers:
+                for i, nn in enumerate(n.input):
+                    if nn == switch_node.output[1]:
+                        n.input[i] = switch_true_identity_output
 
         target_node_input_id = None
         enter_node = [n for n in merge_node.inputs if n.type == 'Enter'][0]
