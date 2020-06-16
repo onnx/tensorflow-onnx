@@ -1064,12 +1064,18 @@ class Unpack:
             axis += len(shape)
         # split the tensor into n outputs
         node.type = "Split"
+
         # for each output we need to squeeze axis
         for n in node.output:
             op_name = utils.make_name(node.name)
             squeeze_node = ctx.insert_new_node_on_output("Squeeze", n, name=op_name, axes=[axis])
             ctx.copy_shape(n, squeeze_node.output[0])
             ctx.copy_dtype(n, squeeze_node.output[0])
+
+        # split node is 1 rank higher than squeeze nodes
+        output_shape = ctx.get_shape(node.output[0])
+        if output_shape:
+            ctx.set_shape(node.output[0], output_shape.insert(axis, 1))
 
 
 @tf_op("OneHot")
