@@ -248,6 +248,7 @@ class ConvTranspose:
         # Note: inputs are reversed from what one would expect.
         conv_kernel_shape(ctx, node, 1)
         input_shape = ctx.get_shape(node.input[2])
+        output_shape_orig = node.output_shapes
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
         if node.inputs[0].is_const():
@@ -285,7 +286,8 @@ class ConvTranspose:
             const_one_two = ctx.make_const(utils.make_name(node.name + "_const_one_two"),
                                            np.array([1, 2], dtype=np.int64))
             slice_node = ctx.make_node("Slice",
-                                       [node.output[0], starts.output[0], ends.output[0], const_one_two.output[0]])
+                                       [node.output[0], starts.output[0], ends.output[0], const_one_two.output[0]],
+                                       shapes=output_shape_orig)
             downstream_nodes = ctx.find_output_consumers(node.output[0])
             downstream_nodes.remove(output_shape)
             downstream_nodes.remove(slice_node)
