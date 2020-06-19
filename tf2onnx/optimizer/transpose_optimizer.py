@@ -482,8 +482,21 @@ class TransposeOptimizer(GraphOptimizerBase):
                 self._g.remove_node(node.name)
                 return True
 
-        # if the shape is () or (1), we just move transpose after the mul
-        if not multiplier.shape or (len(multiplier.shape) == 1 and multiplier.shape[0] == 1):
+        # if the shape is (), we just move transpose after the mul
+        if not multiplier.shape:
+            return self._switch_transpose_and_node(node, trans)
+
+        # if multiplier is 1-D
+        if len(multiplier.shape) == 1:
+            if multiplier.shape[0] == 1:
+                # shape is (1)
+                return self._switch_transpose_and_node(node, trans)
+
+            # shape is (N). reshape so that trans(shape) = 1,1,...,N
+            perm = list(trans.get_attr('perm').ints)
+            new_shape = np.ones(len(perm), dtype=np.int32)
+            new_shape[perm[-1]] = multiplier.shape[0]
+            multiplier_input_node.set_tensor_value(multiplier.reshape(new_shape))
             return self._switch_transpose_and_node(node, trans)
 
         return False
