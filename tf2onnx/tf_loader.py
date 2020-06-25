@@ -184,6 +184,9 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
     if tag is None:
         tag = [tf.saved_model.tag_constants.SERVING]
 
+    if not isinstance(tag, list):
+        tag = [tag]
+
     imported = tf.saved_model.loader.load(sess, tag, model_path)
     for k in imported.signature_def.keys():
         if k.startswith("_"):

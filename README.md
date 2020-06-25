@@ -139,6 +139,9 @@ python -m tf2onnx.convert
     [--outputs GRAPH_OUTPUS]
     [--inputs-as-nchw inputs_provided_as_nchw]
     [--opset OPSET]
+    [--tag TAG]
+    [--signature_def SIGNATURE_DEF]
+    [--concrete_function CONCRETE_FUNCTION]
     [--target TARGET]
     [--custom-ops list-of-custom-ops]
     [--fold_const]
@@ -175,6 +178,20 @@ By default we preserve the image format of inputs (`nchw` or `nhwc`) as given in
 #### --opset
 
 By default we use the opset 8 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
+
+#### --tag
+
+Only valid with parameter `--saved_model`. Specifies the tag in the saved_model to be used. Typical value is 'serve'.
+
+#### --signature_def
+
+Only valid with parameter `--saved_model`. Specifies which signature to use within the specified --tag value. Typical value is 'serving_default'.
+
+#### --concrete_function
+
+(This is experimental, valid only for TF2.x models)
+
+Only valid with parameter `--saved_model`. If a model contains a list of concrete functions, under the function name `__call__` (as can be viewed using the command `saved_model_cli show --all`), this parameter is a 0-based integer specifying which function in that list should be converted. This parameter takes priority over `--signature_def`, which will be ignored.
 
 #### --target
 
