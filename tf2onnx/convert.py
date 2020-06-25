@@ -23,7 +23,6 @@ from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import constants, logging, utils, optimizer
 from tf2onnx import tf_loader
 
-
 # pylint: disable=unused-argument
 
 _HELP_TEXT = """
@@ -48,7 +47,10 @@ def get_args():
     parser.add_argument("--input", help="input from graphdef")
     parser.add_argument("--graphdef", help="input from graphdef")
     parser.add_argument("--saved-model", help="input from saved model")
-    parser.add_argument("--signature_def", help="signature_def from saved model to use")
+    parser.add_argument("--tag", help="tag to use for saved_model")
+    parser.add_argument("--signature_def", help="signature_def from saved_model to use")
+    parser.add_argument("--concrete_function", type=int, default=None,
+                        help="For TF2.x saved_model, index of func signature in __call__ (--signature_def is ignored)")
     parser.add_argument("--checkpoint", help="input from checkpoint")
     parser.add_argument("--keras", help="input from keras model")
     parser.add_argument("--output", help="output model file")
@@ -127,7 +129,7 @@ def main():
         model_path = args.checkpoint
     if args.saved_model:
         graph_def, inputs, outputs = tf_loader.from_saved_model(
-            args.saved_model, args.inputs, args.outputs, args.signature_def)
+            args.saved_model, args.inputs, args.outputs, args.tag, args.signature_def, args.concrete_function)
         model_path = args.saved_model
     if args.keras:
         graph_def, inputs, outputs = tf_loader.from_keras(
