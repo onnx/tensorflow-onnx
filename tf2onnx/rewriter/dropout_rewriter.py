@@ -50,18 +50,18 @@ def rewrite_dropout(g, ops):
         matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(ops))
         for match in match_results:
-            inputs2 = match.get_op('input2')
-            inputs3 = match.get_op('input3')
-            if inputs3.type == "Const":
-                ratio = inputs3.get_tensor_value()
+            input2 = match.get_op('input2')
+            input3 = match.get_op('input3')
+            if input3.is_const():
+                ratio = input3.get_tensor_value()
             else:
                 # If the ratio isn't constant, set it to 0
-                logger.error("Dropout node has non-constant ratio. Using ratio=0.0")
+                logger.warning("Dropout node has non-constant ratio. Using ratio=0.0")
                 ratio = 0.0
-            if inputs2.inputs[0].type == "RealDiv":
-                data = inputs2.input[1]
+            if input2.inputs[0].type == "RealDiv":
+                data = input2.input[1]
             else:
-                data = inputs2.input[0]
+                data = input2.input[0]
             # TODO(tomwildenhain): replace dropout node with identity if ratio is 0
             outputs = match.get_op('outputs')
             op_name = utils.make_name("Dropout")
@@ -72,10 +72,19 @@ def rewrite_dropout(g, ops):
                 outputs=[out_name],
                 name=op_name,
                 attr={"ratio": ratio},
-                shapes=[g.get_shape(inputs2.input[0])],
-                dtypes=[g.get_dtype(inputs2.input[0])]
+                shapes=[g.get_shape(input2.input[0])],
+                dtypes=[g.get_dtype(input2.input[0])]
             )
             g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
-            g.safe_remove_nodes(match.get_nodes())
+            nodes_to_remove = []
+            for node in match.get_nodes():
+                if node.name != input3.name:
+                    nodes_to_remove.append(node)
+            if g.safe_to_remove_nodes(nodes_to_remove):
+                for n in nodes_to_remove:
+                    g.remove_node(n.name)
+            else:
+                logger.warning("Nodes replaced by dropout node cannot be removed because intermediate results are "
+                               "referenced elsewhere in graph")
 
     return ops
