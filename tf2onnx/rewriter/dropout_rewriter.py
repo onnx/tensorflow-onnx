@@ -5,6 +5,7 @@
 tf2onnx.rewriter - rewrite tensorflow subgraph to onnx dropout op
 """
 
+import numpy as np
 from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx import logging
@@ -52,39 +53,51 @@ def rewrite_dropout(g, ops):
         for match in match_results:
             input2 = match.get_op('input2')
             input3 = match.get_op('input3')
-            if input3.is_const():
-                ratio = input3.get_tensor_value()
-            else:
-                # If the ratio isn't constant, set it to 0
-                logger.warning("Dropout node has non-constant ratio. Using ratio=0.0")
-                ratio = 0.0
-            if input2.inputs[0].type == "RealDiv":
-                data = input2.input[1]
-            else:
-                data = input2.input[0]
-            # TODO(tomwildenhain): replace dropout node with identity if ratio is 0
             outputs = match.get_op('outputs')
+
+            if not input3.is_scalar():
+                logger.warning("Dropout pattern rooted at %s does not have a "
+                               "constant ratio and cannot be replaced.", outputs.name)
+                continue
+            ratio = input3.get_tensor_value()
+
+            if input2.inputs[0].is_scalar():
+                data = input2.inputs[1]
+                scaling_constant = input2.inputs[0].get_tensor_value()
+            elif input2.inputs[1].is_scalar():
+                data = input2.inputs[0]
+                scaling_constant = input2.inputs[1].get_tensor_value()
+            else:
+                logger.warning("Could not find scaling constant for dropout pattern rooted at %s. "
+                               "The pattern will not be replaced with an ONNX dropout node.", outputs.name)
+                continue
+
+            #The scaling constant should be 1/(1-ratio), otherwise this isn't truly a dropout node
+            if not np.allclose([1], [scaling_constant * (1 - ratio)]):
+                logger.warning("Scaling constant %f for dropout pattern rooted at %s is inconsistent with dropout "
+                               "ratio %f. The pattern will not be replaced with an ONNX dropout node.",
+                               scaling_constant, outputs.name, ratio)
+                continue
+
+            nodes_to_remove = [n for n in match.get_nodes() if n.name != input3.name]
+            if not g.is_safe_to_remove_nodes(nodes_to_remove, [outputs.output[0]]):
+                logger.warning("Nodes in dropout pattern rooted at %s cannot be removed because intermediate results "
+                               "of some nodes are referenced elsewhere in graph.", outputs.name)
+                continue
+
             op_name = utils.make_name("Dropout")
             out_name = utils.port_name(op_name)
             new_node = g.make_node(
                 "Dropout",
-                [data],
+                inputs=[data.output[0]],
                 outputs=[out_name],
                 name=op_name,
                 attr={"ratio": ratio},
-                shapes=[g.get_shape(input2.input[0])],
-                dtypes=[g.get_dtype(input2.input[0])]
+                shapes=[g.get_shape(data.output[0])],
+                dtypes=[g.get_dtype(data.output[0])]
             )
             g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
-            nodes_to_remove = []
-            for node in match.get_nodes():
-                if node.name != input3.name:
-                    nodes_to_remove.append(node)
-            if g.safe_to_remove_nodes(nodes_to_remove):
-                for n in nodes_to_remove:
-                    g.remove_node(n.name)
-            else:
-                logger.warning("Nodes replaced by dropout node cannot be removed because intermediate results are "
-                               "referenced elsewhere in graph")
+            for n in nodes_to_remove:
+                g.remove_node(n.name)
 
     return ops
