@@ -282,8 +282,8 @@ class TransposeOptimizer(GraphOptimizerBase):
             return False
         # move transpose into branches to let Transposes can be "handled" in each branch
         for n in out_nodes:
-            branch_trans = self._g.make_node("Transpose", [trans.input[0]], attr=trans.attr_onnx)
-            self._g.replace_input(n, trans.output[0], branch_trans.output[0])
+            branch_trans = n.graph.make_node("Transpose", [trans.input[0]], attr=trans.attr_onnx)
+            n.graph.replace_input(n, trans.output[0], branch_trans.output[0])
 
         self._g.remove_node(trans.name)
         return False
