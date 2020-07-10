@@ -204,11 +204,6 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
         input_shape = ctx.get_shape(node.input[0])
         output_shape = ctx.get_shape(node.output[0])
 
-        # prefix with batch dim of [1] to satisfy rank requirements
-        if len(input_shape) == spatial + 1:
-            input_shape = [1] + input_shape
-            ctx.set_shape(node.input[0], input_shape)
-
         if len(input_shape) != spatial + 2:
             raise ValueError(
                 "node {} output needs to be rank {}, is {}".format(
@@ -345,6 +340,11 @@ class ConvOp:
         kernel_shape = conv_kernel_shape(ctx, node, 1, spatial=spatial)
         strides = conv_dims_attr(node, "strides", spatial=spatial)
         dilations = conv_dims_attr(node, "dilations", spatial=spatial)
+
+        # prefix with batch dim of [1] to satisfy rank requirements
+        input_shape = ctx.get_shape(node.input[0])
+        if len(input_shape) == spatial + 1:
+            ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
 
         # Set padding.
         add_padding(
