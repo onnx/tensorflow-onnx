@@ -204,6 +204,11 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
         input_shape = ctx.get_shape(node.input[0])
         output_shape = ctx.get_shape(node.output[0])
 
+        # prefix with batch dim of [1] to satisfy rank requirements
+        if len(input_shape) == spatial + 1:
+            input_shape = [1] + input_shape
+            ctx.set_shape(node.input[0], input_shape)
+
         if len(input_shape) != spatial + 2:
             raise ValueError(
                 "node {} output needs to be rank {}, is {}".format(
