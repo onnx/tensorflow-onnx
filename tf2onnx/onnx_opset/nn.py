@@ -341,6 +341,11 @@ class ConvOp:
         strides = conv_dims_attr(node, "strides", spatial=spatial)
         dilations = conv_dims_attr(node, "dilations", spatial=spatial)
 
+        # prefix with batch dim of [1] to satisfy rank requirements
+        input_shape = ctx.get_shape(node.input[0])
+        if len(input_shape) == spatial + 1:
+            ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
+
         # Set padding.
         add_padding(
             ctx, node, kernel_shape, strides, dilations=dilations, spatial=spatial
