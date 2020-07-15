@@ -8,6 +8,7 @@ import logging
 from onnx import onnx_pb
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
+
 # pylint: disable=missing-docstring
 
 def rewrite_gemm(g, ops):
@@ -77,16 +78,28 @@ def rewrite_gemm(g, ops):
                 b_edge_name = matmul_node.input[1]
                 c_edge_name = input_c_node.output[0]
 
+                a_mul_b_shape = g.get_shape(matmul_node.output[0])
+                c_shape = g.get_shape(c_edge_name)
+                if c_shape is None: continue
+                if a_mul_b_shape is None: continue
+                if -1 in c_shape + a_mul_b_shape: continue
+                compatible = True
+                for i in range(1, len(c_shape) + 1):
+                    if c_shape[-i] not in [1, a_mul_b_shape[-i]]:
+                        compatible = False
+                if not compatible: continue
+
                 gemm = g.make_node("Gemm", inputs=[a_edge_name, b_edge_name, c_edge_name],
                                    attr=attr,
                                    shapes=[g.get_shape(add_node.output[0])],
-                                   dtypes=[g.get_dtype(add_node.output[0])])
+                                   dtypes=[g.get_dtype(add_node.output[0])], op_name_scope=matmul_node.name)
 
                 ops.append(gemm)
                 g.replace_all_inputs(ops, add_node.output[0], gemm.output[0])
                 to_delete = [add_node, matmul_node]
                 g.safe_remove_nodes(to_delete)
     return ops
+
 
 def get_gemm_attr(match):
     attr = {}

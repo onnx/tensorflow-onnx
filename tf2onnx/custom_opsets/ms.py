@@ -96,10 +96,18 @@ class ConvTransposeWithDynamicPads:
 @tf_op("CropAndResize", domain=constants.MICROSOFT_DOMAIN)
 class CropAndResize:
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         """ utilize contrib cropandresize """
         node.attr['method'].name = 'mode'
         node.domain = constants.MICROSOFT_DOMAIN
         ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
         ctx.insert_new_node_on_output("Transpose", node.output[0], node.name + '_transposed',
                                       None, perm=constants.NCHW_TO_NHWC)
+
+@tf_op("MatrixInverse", domain=constants.MICROSOFT_DOMAIN, onnx_op="Inverse")
+class Inverse:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        utils.make_sure(node.get_attr('adjoint').i == 0, "adjoint must be false")
+        del node.attr["adjoint"]
+        node.domain = constants.MICROSOFT_DOMAIN

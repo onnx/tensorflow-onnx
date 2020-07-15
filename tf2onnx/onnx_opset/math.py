@@ -137,6 +137,9 @@ class MinMaxOp:
         ctx.remove_node(node.name)
         make_min_or_max_op(ctx, node.type, node.input, node.output, shapes, dtypes)
 
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        pass # support all numeric types and broadcasting
 
 @tf_op("ClipByValue")
 class ClipByValueOp:
@@ -178,6 +181,9 @@ class ClipByValueOp:
             ctx.set_dtype(new_node.output[0], dtypes[0])
             ctx.set_shape(new_node.output[0], shapes[0])
 
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        node.name = 'Clip' # clip supports all types now
 
 @tf_op("Softmax")
 class Softmax:
@@ -544,3 +550,39 @@ class BitShift:
             cast_back_node.set_attr("to", dtypes[0])
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
+
+
+@tf_op("SquaredDistance", onnx_op="MeanSquaredDistance")
+class SquaredDistance:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        node.attr["reduction"] = "none"
+
+
+@tf_op("Einsum")
+class Einsum:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        del node.attr["N"]
+
+
+@tf_op("IsFinite")
+class IsFinite:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # map to onnx as:
+        # not (isinf(x) or isnan(x))
+
+        shapes = node.output_shapes
+        dtypes = [onnx_pb.TensorProto.BOOL] * len(node.output_dtypes)
+
+        ctx.remove_node(node.name)
+
+        inf_node = ctx.make_node("IsInf", inputs=node.input, name=utils.make_name(node.name),
+                                 shapes=shapes, dtypes=dtypes)
+        nan_node = ctx.make_node("IsNaN", inputs=node.input, name=utils.make_name(node.name),
+                                 shapes=shapes, dtypes=dtypes)
+        or_node = ctx.make_node("Or", inputs=[inf_node.output[0], nan_node.output[0]], name=utils.make_name(node.name),
+                                shapes=shapes, dtypes=dtypes)
+        _ = ctx.make_node("Not", inputs=or_node.output, name=node.name,
+                          shapes=shapes, dtypes=dtypes)

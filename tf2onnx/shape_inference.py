@@ -51,9 +51,13 @@ def check_shape_for_tf_graph(tf_graph):
     Check whether TF graph misses any shape,
     and return all ops with None shape outputs for TF graph.
     """
+    skip_list = {'FusedBatchNormV3': 5}
     op_outputs_mapping_none_shape = defaultdict(list)
     for op in tf_graph.get_operations():
-        for out in op.outputs:
+        for i, out in enumerate(op.outputs):
+            if op.type in skip_list:
+                if skip_list[op.type] == i:
+                    continue
             if get_tf_tensor_shape(out) is None:
                 op_outputs_mapping_none_shape[op.name].append(out.name)
     return op_outputs_mapping_none_shape

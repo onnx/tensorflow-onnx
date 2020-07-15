@@ -62,7 +62,9 @@ if is_tf2():
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
+    quantize_and_dequantize = tf.quantization.quantize_and_dequantize
     resize_bilinear = tf.compat.v1.image.resize_bilinear
+    resize_bilinear_v2 = tf.compat.v2.image.resize
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.math.floormod
@@ -77,8 +79,11 @@ elif LooseVersion(tf.__version__) >= "1.13":
     random_uniform = tf.compat.v1.random_uniform
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
+    quantize_and_dequantize = tf.compat.v1.quantization.quantize_and_dequantize
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
+    if LooseVersion(tf.__version__) >= "1.14":
+        resize_bilinear_v2 = tf.compat.v2.image.resize
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
     floormod = tf.floormod
@@ -179,15 +184,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_expand_dims_one_unknown_rank(self):
         x_val = make_xval([3, 4])
         def func(x):
-            # FIXME: this was tf_placeholder(tf.float32, shape=[None, 4], name=_TFINPUT)
             op = tf.expand_dims(x, 0)
+            return tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    def test_expand_dims_with_list(self):
+        x_val = make_xval([3, 4])
+        def func(x):
+            op = tf.expand_dims(x, [0])
             return tf.identity(op, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     def _test_expand_dims_more_unknown_rank(self, idx):
         x_val = make_xval([3, 4])
         def func(x):
-            # FIXME: this was tf_placeholder(tf.float32, shape=[None, None], name=_TFINPUT)
             op = tf.expand_dims(x, idx)
             return tf.identity(op, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
@@ -1160,6 +1170,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.split(x, [4, 15, 11], 1, name="split_test")
         self._run_test_case(func, ["split_test:0", "split_test:1", "split_test:2"], {_INPUT: x_val})
 
+    def test_negative_split(self):
+        x_val = np.linspace(1.0, 5 * 30.0, 5 * 30).astype(np.float32).reshape((5, 30))
+        def func(x):
+            x_, _, _ = tf.split(x, [4, 15, -1], 1)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     def test_reducesum(self):
         # not supported by onnx-caffe2
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
@@ -1372,11 +1389,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
 
     @skip_caffe2_backend()
+    @check_opset_after_tf_version("2.2", 9, "RandomUniform")
     def test_randomuniform_dyn_shape(self):
         # test for dynamic shape coming from a shape op
         x_val = np.array([0, 1, 2, 3, 5], dtype=np.int64)
         def func(x):
-            return random_uniform(x[3:], name=_TFOUTPUT, dtype=tf.float32)
+            ret = random_uniform(x[3:], dtype=tf.float32)
+            return tf.identity(ret, name=_TFOUTPUT)
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
 
@@ -1909,6 +1928,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func_fusedbn, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator)
 
+    @check_tf_min_version("1.15")
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_qdq_unsigned_input(self):
+        x_shape = [3, 3, 2]
+        x_val = np.arange(1, 1+np.prod(x_shape)).astype("float32").reshape(x_shape)
+        def func(x):
+            x_ = quantize_and_dequantize(x, 1.0, 6.0, signed_input=False, range_given=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.15")
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_qdq_signed_input(self):
+        x_shape = [3, 3, 2]
+        x_val = np.arange(-np.prod(x_shape)/2, np.prod(x_shape)/2).astype("float32").reshape(x_shape)
+        def func(x):
+            x_ = quantize_and_dequantize(x, -6.0, 6.0, signed_input=True, narrow_range=False, range_given=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @skip_caffe2_backend()
     @check_opset_min_version(7, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor(self):
@@ -1961,6 +2000,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_bilinear(x, x_new_size_)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "resize_bilinear_v2")
+    def test_resize_bilinear_v2_with_non_const(self):
+        x_shape = [3, 10, 8, 5]
+        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_new_size = np.array([20, 16]).astype(np.int32)
+        def func(x, x_new_size_):
+            x_ = resize_bilinear_v2(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
@@ -2852,6 +2902,31 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
                             graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
+    # test for gemm pattern0: alpha*A*B + beta*C
+    @check_opset_min_version(12, "Optimizer bug in ORT 1.2")
+    def test_gemm_pattern0_fail_broadcast(self):
+        # shapes (3, 3) * (3, 1) + (1, 4) => (3, 1) + (1, 4)
+        # c not uni-broadcastable to a * b, so should not use GEMM
+        m, n, k = 3, 3, 1
+        x_val1 = np.random.rand(m, n).astype("float32")
+        x_val2 = np.random.rand(n, k).astype("float32")
+        x_val3 = np.random.rand(k, 4).astype("float32")
+
+        def func(a, b, c):
+            alpha = tf.constant(1.0, dtype=tf.float32)
+            beta = tf.constant(2.0, dtype=tf.float32)
+            mul1 = tf.multiply(alpha, tf.matmul(a, b))
+            mul2 = tf.multiply(beta, c)
+            x_ = mul1 + mul2
+            return tf.identity(x_, name=_TFOUTPUT)
+
+        def graph_validator(g):
+            if 'Gemm' in [n.type for n in g.get_nodes()]: return False
+            return True
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
+                            graph_validator=graph_validator)
+
     def test_graph_matcher(self):
         shape = [2, 6]
         x_val = np.random.random(shape).astype(np.float32)
@@ -3097,6 +3172,185 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.broadcast_to(input_tensor, new_shape, _TFOUTPUT)
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_tensor_val, _INPUT1: new_shape_val})
+
+    def test_bfloat(self):
+        x_val = np.array([0, 1, 2], dtype=np.float32)
+        y_val = np.array([3, 4, 5], dtype=np.float32)
+        def func(x, y):
+            x_ = tf.cast(x, tf.bfloat16)
+            y_ = tf.cast(y, tf.bfloat16)
+            s_ = tf.add(x_, y_)
+            return tf.cast(s_, tf.float32, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(11)
+    @check_tf_min_version("2.2")
+    def test_matrix_diag_part_v3(self):
+
+        def func(X, K):
+            v2 = tf.raw_ops.MatrixDiagPartV2(input=X, k=K, padding_value=0.123, name=_TFOUTPUT)
+            v3 = tf.raw_ops.MatrixDiagPartV3(input=X, k=K, padding_value=0.123, align='LEFT_RIGHT', name=_TFOUTPUT1)
+            return v2, v3
+
+        for x_shape in ([4, 5], [2, 3, 4, 5], [5, 4], [7, 5]):
+            x_val = np.random.random(x_shape).astype(np.float32)
+            for raw_k in ([0], [1], [3], [-1], [-3], [1, 2], [-2, -1], [-1, 1]):
+                k_val = np.array(raw_k).astype(np.int32)
+                self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: k_val})
+
+    @test_ms_domain()
+    def test_inverse(self, extra_opset):
+        # this depends on onnx Inverse which was removed from opset-12 but does exists in the ms-domain
+        x_val = np.random.random([5, 5]).astype(np.float32)
+        def func(x):
+            return tf.linalg.inv(x, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, process_args={"extra_opset": [extra_opset]})
+
+    @check_opset_min_version(12)
+    def test_squared_distance(self):
+        x_val = np.random.random([4, 5]).astype(np.float32)
+        y_val = np.random.random([4, 5]).astype(np.float32)
+        def func(x, y):
+            return tf.math.squared_difference(x, y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.1")
+    def test_einsum(self):
+        x_val = np.random.random([10]).astype(np.float32)
+        y_val = np.random.random([10]).astype(np.float32)
+        def func(x, y):
+            ret = tf.einsum("i,j->ij", x, y)
+            return tf.identity(ret, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(7)
+    def test_compare(self):
+        x_val = np.random.random([10, 20]).astype(np.float32)
+        y_val = np.random.random([10, 20]).astype(np.float32)
+        def func(x, y):
+            return tf.math.less_equal(x, y, name=_TFOUTPUT), \
+                   tf.math.greater_equal(x, y, name=_TFOUTPUT1)
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_tf_min_version("1.14", "required for tf.math.is_finite")
+    @check_opset_min_version(10)
+    def test_is_finite(self):
+        x_val = np.array([5.0, 4.8, 6.8, np.inf, np.nan], dtype=np.float32)
+        def func(x):
+            y = tf.math.is_finite(x)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_diag_v3_multi_dim(self):
+        raw_diag = [[[1.0, 2.0, 3.0],
+                     [4.0, 5.0, 6.0],
+                     [7.0, 8.0, 9.0]],
+                    [[10.0, 11.0, 12.0],
+                     [13.0, 14.0, 15.0],
+                     [16.0, 17.0, 18.0]]]
+        diag_val = np.array(raw_diag).astype(np.float32)
+        k_val = np.array([-1, 1]).astype(np.int32)
+        row_val = np.array(-1).astype(np.int32)
+        col_val = np.array(-1).astype(np.int32)
+
+        def func(diag, k, row, col):
+            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=0.123, align='RIGHT_RIGHT', name=_TFOUTPUT), \
+                   tf.raw_ops.MatrixDiagV2(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=0.123, name=_TFOUTPUT1)
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: diag_val, _INPUT1: k_val,
+                                                        _INPUT2: row_val, _INPUT3: col_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_diag_v3_multi_dim_min_row(self):
+        raw_diag = [[[1.0, 2.0, 3.0],
+                     [4.0, 5.0, 6.0]],
+                    [[7.0, 8.0, 9.0],
+                     [10.0, 11.0, 12.0]]]
+        diag_val = np.array(raw_diag).astype(np.float32)
+        k_val = np.array([2, 3]).astype(np.int32)
+        row_val = np.array(-1).astype(np.int32)
+        col_val = np.array(6).astype(np.int32)
+
+        def func(diag, k, row, col):
+            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=0.456, align='LEFT_LEFT', name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
+                                              _INPUT2: row_val, _INPUT3: col_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_diag_v3_single_dim_min_col(self):
+        raw_diag = [1.0, 2.0, 3.0]
+        diag_val = np.array(raw_diag).astype(np.float32)
+        k_val = np.array(-1).astype(np.int32)
+        row_val = np.array(5).astype(np.int32)
+        col_val = np.array(-1).astype(np.int32)
+
+        def func(diag, k, row, col):
+            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=0.789, align='LEFT_RIGHT', name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
+                                              _INPUT2: row_val, _INPUT3: col_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_diag_v3_2single_dim_row_col(self):
+        raw_diag = [[1, 2, 3], [4, 5, 6]]
+        diag_val = np.array(raw_diag).astype(np.int64)
+        k_val = np.array(0).astype(np.int32)
+        row_val = np.array(3).astype(np.int32)
+        col_val = np.array(4).astype(np.int32)
+
+        def func(diag, k, row, col):
+            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=7, align='LEFT_RIGHT', name=_TFOUTPUT), \
+                   tf.raw_ops.MatrixDiag(diagonal=diag, name=_TFOUTPUT1)
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1],
+                            {_INPUT: diag_val, _INPUT1: k_val,
+                             _INPUT2: row_val, _INPUT3: col_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_diag_v3_1single_dim_row_col(self):
+        raw_diag = [1, 2, 3, 4, 5]
+        diag_val = np.array(raw_diag).astype(np.int64)
+        k_val = np.array(0).astype(np.int32)
+        row_val = np.array(5).astype(np.int32)
+        col_val = np.array(10).astype(np.int32)
+
+        def func(diag, k, row, col):
+            return tf.raw_ops.MatrixDiagV3(diagonal=diag, k=k, num_rows=row, num_cols=col,
+                                           padding_value=7, align='LEFT_RIGHT', name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: diag_val, _INPUT1: k_val,
+                                              _INPUT2: row_val, _INPUT3: col_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.2")
+    def test_matrix_set_diag_v3(self):
+        input_val = np.array([[[7, 7, 7, 7],
+                               [7, 7, 7, 7],
+                               [7, 7, 7, 7]],
+                              [[7, 7, 7, 7],
+                               [7, 7, 7, 7],
+                               [7, 7, 7, 7]]]).astype(np.int64)
+        diag_val = np.array([[1, 2, 3],
+                             [4, 5, 6]]).astype(np.int64)
+        k_val = np.array([0]).astype(np.int32)
+
+        def func(base_matrix, diag, k):
+            return tf.raw_ops.MatrixSetDiagV3(input=base_matrix, diagonal=diag, k=k, align='RIGHT_LEFT', name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
 
 
 if __name__ == '__main__':

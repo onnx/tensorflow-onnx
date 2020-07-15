@@ -79,8 +79,38 @@ def rewrite_eye(g, ops):
                 OpTypePattern("Const", name="fill_value"),
             ]),
         ])
+    pattern5 = \
+        OpTypePattern("MatrixDiagV3", name="output_eye_matrix", inputs=[
+            OpTypePattern("Fill", inputs=[
+                OpTypePattern("ConcatV2", inputs=[
+                    "*",
+                    OpTypePattern("ExpandDims", inputs=[
+                        OpTypePattern("Minimum|Cast", name="min_or_cast"),
+                        "*"
+                    ]),
+                    "*",
+                ]),
+                OpTypePattern("Const", name="fill_value"),
+            ]),
+            "*", "*", "*", "*",
+        ])
+    pattern6 = \
+        OpTypePattern("MatrixSetDiagV3", name="output_eye_matrix", inputs=[
+            OpTypePattern("Fill"),
+            OpTypePattern("Fill", inputs=[
+                OpTypePattern("ConcatV2", inputs=[
+                    "*",
+                    OpTypePattern("ExpandDims", inputs=[
+                        OpTypePattern("Minimum|Cast", name="min_or_cast"),
+                        "*"
+                    ]),
+                    "*",
+                ]),
+                OpTypePattern("Const", name="fill_value"),
+            ]), "*"
+        ])
 
-    for pattern in [pattern1, pattern2, pattern3, pattern4]:
+    for pattern in [pattern1, pattern2, pattern3, pattern4, pattern5, pattern6]:
         matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(ops))
         for match_result in match_results:
@@ -111,7 +141,7 @@ def rewrite_eye(g, ops):
             matrix_shape_int64 = g.make_node("Cast", matrix_shape.output, attr={"to": onnx_pb.TensorProto.INT64})
             zero_matrix = g.make_node("ConstantOfShape", matrix_shape_int64.output)
 
-            new_output = g.make_node("EyeLike", zero_matrix.output, attr={"dtype": output_dtypes[0]},
-                                     name=old_output.name, shapes=output_shapes, dtypes=output_dtypes)
+            g.make_node("EyeLike", zero_matrix.output, attr={"dtype": output_dtypes[0]},
+                        name=old_output.name, shapes=output_shapes, dtypes=output_dtypes)
 
     return g.get_nodes()

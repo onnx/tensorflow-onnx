@@ -18,7 +18,7 @@ args = parser.parse_args()
 
 
 LATEST_OPSET = {
-    "": 10, # default domain
+    "": 12, # default domain
     "com.microsoft": 1 # microsoft domain
 }
 
@@ -56,7 +56,8 @@ with open(args.filename, 'w+') as doc_file:
                         unsupported_cases[name] = [handler_ver]
 
         # Document support status according to the gathered mapping.
-        for tf_op, supported_versions in tf_op_to_versions.items():
+        for tf_op in sorted(tf_op_to_versions):
+            supported_versions = tf_op_to_versions[tf_op]
             if supported_versions < LATEST_OPSET[domain]:
                 version_text = "{} ~ {}".format(supported_versions, LATEST_OPSET[domain])
                 if tf_op in unsupported_cases:

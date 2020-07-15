@@ -16,9 +16,11 @@ import os
 import re
 import sys
 import tarfile
+import tempfile
 import time
 import zipfile
 from collections import namedtuple
+from distutils.version import LooseVersion
 
 import yaml
 import numpy as np
@@ -36,10 +38,9 @@ except:  # pylint: disable=bare-except
     # not needed for tf-2.0
     pass
 
-from tf2onnx import tf_loader, logging, optimizer, utils
+from tf2onnx import tf_loader, logging, optimizer, utils, tf_utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.tf_loader import tf_session, tf_reset_default_graph
-
 
 logger = logging.getLogger("run_pretrained")
 
@@ -74,11 +75,22 @@ def get_ramp(shape):
     return np.linspace(1, size, size).reshape(shape).astype(np.float32)
 
 
+def get_ones(shape):
+    """Get ones."""
+    return np.ones(shape).astype(np.float32)
+
+def get_zeros(shape):
+    """Get zeros."""
+    return np.zeros(shape).astype(np.float32)
+
+
 _INPUT_FUNC_MAPPING = {
     "get_beach": get_beach,
     "get_random": get_random,
     "get_random256": get_random256,
-    "get_ramp": get_ramp
+    "get_ramp": get_ramp,
+    "get_ones": get_ones,
+    "get_zeros": get_zeros,
 }
 
 OpsetConstraint = namedtuple("OpsetConstraint", "domain, min_version, max_version, excluded_version")
@@ -93,7 +105,7 @@ class Test(object):
     def __init__(self, url, local, make_input, input_names, output_names,
                  disabled=False, rtol=0.01, atol=1e-6,
                  check_only_shape=False, model_type="frozen", force_input_shape=False,
-                 skip_tensorflow=False, opset_constraints=None):
+                 skip_tensorflow=False, opset_constraints=None, tf_min_version=None, tag=None):
         self.url = url
         self.make_input = make_input
         self.local = local
@@ -107,9 +119,11 @@ class Test(object):
         self.tf_runtime = 0
         self.onnx_runtime = 0
         self.model_type = model_type
+        self.tag = tag
         self.force_input_shape = force_input_shape
         self.skip_tensorflow = skip_tensorflow
         self.opset_constraints = opset_constraints
+        self.tf_min_version = tf_min_version
 
     def download_model(self):
         """Download model from url."""
@@ -117,6 +131,8 @@ class Test(object):
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
         url = self.url
+        if url.startswith(r'module://'):
+            return self.download_from_module()
         k = url.rfind('/')
         fname = self.url[k + 1:]
         dir_name = fname + "_dir"
@@ -143,6 +159,19 @@ class Test(object):
                 zip_ref.extractall(dir_name)
                 zip_ref.close()
         return fpath, dir_name
+
+    def download_from_module(self):
+        """Download a model from a python module"""
+        cache_dir = Test.cache_dir
+        from importlib import import_module
+        i = self.url.rfind('//')
+        module, model_name = self.url[i + 2:].split('/')
+        mod_object = import_module(module)
+        model_class = getattr(mod_object, model_name)
+        model = model_class()
+        fpath = os.path.join(cache_dir, self.local)
+        model.save(fpath)
+        return fpath, cache_dir
 
     def run_tensorflow(self, sess, inputs):
         """Run model on tensorflow so we have a reference output."""
@@ -217,7 +246,9 @@ class Test(object):
         if self.model_type in ["checkpoint"]:
             graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
-            graph_def, input_names, outputs = tf_loader.from_saved_model(model_path, input_names, outputs)
+            graph_def, input_names, outputs = tf_loader.from_saved_model(model_path, input_names, outputs, self.tag)
+        elif self.model_type in ["keras"]:
+            graph_def, input_names, outputs = tf_loader.from_keras(model_path, input_names, outputs)
         else:
             graph_def, input_names, outputs = tf_loader.from_graphdef(model_path, input_names, outputs)
 
@@ -338,7 +369,8 @@ class Test(object):
 def get_args():
     """Parse commandline."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cache", default="/tmp/pre-trained", help="pre-trained models cache dir")
+    parser.add_argument("--cache", default=os.path.join(tempfile.gettempdir(), 'pre-trained'),
+                        help="pre-trained models cache dir")
     parser.add_argument("--config", default="tests/run_pretrained_models.yaml", help="yaml config to use")
     parser.add_argument("--tests", help="tests to run")
     parser.add_argument("--target", default="", help="target platform")
@@ -410,7 +442,7 @@ def load_tests_from_yaml(path):
 
         kwargs = {}
         for kw in ["rtol", "atol", "disabled", "check_only_shape", "model_type",
-                   "skip_tensorflow", "force_input_shape"]:
+                   "skip_tensorflow", "force_input_shape", "tf_min_version", "tag"]:
             if settings.get(kw) is not None:
                 kwargs[kw] = settings[kw]
 
@@ -452,6 +484,11 @@ def main():
             if not condition:
                 logger.info("Skip %s: %s", test, reason)
                 continue
+
+            if t.tf_min_version:
+                if tf_utils.get_tf_version() < LooseVersion(str(t.tf_min_version)):
+                    logger.info("Skip %s: %s %s", test, "Min TF version needed:", t.tf_min_version)
+                    continue
 
         count += 1
         try:

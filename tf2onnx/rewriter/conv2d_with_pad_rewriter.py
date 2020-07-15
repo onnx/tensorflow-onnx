@@ -50,7 +50,7 @@ def rewrite_conv2d_with_pad(g, ops):
         paddings_val = paddings_val.transpose().flatten()
         g.replace_input(conv, conv.input[0], pad.input[0])
         # convert Conv2D
-        conv.type = "Conv"
+        conv.type = "Conv2D"
         func, _ = handler.tf_op.find_effective_op("Conv2D")
         func(g, conv)
         conv.skip_conversion = True

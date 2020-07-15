@@ -16,7 +16,6 @@ import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 
-import tf2onnx
 from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
@@ -25,7 +24,7 @@ from tf2onnx.onnx_opset import nn, math
 logger = logging.getLogger(__name__)
 
 
-# pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement
+# pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement,invalid-name
 
 
 def _convert_shapenode_to_int64(ctx, node, input_number):
@@ -99,6 +98,10 @@ class Dropout:
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
+        pass
+
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
         pass
 
 
@@ -193,6 +196,7 @@ class Squeeze:
             shape = ctx.get_shape(node.input[0])
             utils.make_sure(shape is not None, "squeeze input shape cannot be None")
             axis = [i for i, j in enumerate(shape) if j == 1]
+            if not axis: axis = [0]
         node.set_attr("axes", axis)
 
     @classmethod
@@ -422,7 +426,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     # outter loop for each index
     # for (int i=0; i<outter_shape; i++) inner_loop(params, flatten_indices[i])
     cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
-    dummy_const = ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
+    ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
 
     # body graph creation
     g = ctx.create_new_graph_with_same_config()
@@ -554,6 +558,14 @@ class SplitV:
         node.type = "Split"
         split = node.inputs[1].get_tensor_value()
         split_dims = node.inputs[2].get_tensor_value()
+        if -1 in split:
+            # negative split = use the remaining size
+            shape = ctx.get_shape(node.input[0])
+            final_sum = shape[split_dims]
+            sums = sum([i for i in split if i >= 0])
+            for i, v in enumerate(split):
+                if v == -1:
+                    split[i] = final_sum - sums
         ctx.remove_input(node, node.input[2])
         ctx.remove_input(node, node.input[1])
         node.set_attr("split", split)
@@ -602,7 +614,6 @@ class ExpandDims:
         if dim_node.is_const():
             node.type = "Unsqueeze"
             dim = dim_node.get_tensor_value()
-            # TODO: isn't this always a list ?
             if isinstance(dim, list):
                 dim = dim[0]
             if dim < 0:
@@ -613,6 +624,19 @@ class ExpandDims:
             return
         raise ValueError("non-const dim is not supported")
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        dim_node = node.inputs[1]
+        if dim_node.is_const():
+            node.type = "Unsqueeze"
+            dim = dim_node.get_tensor_value()
+            if isinstance(dim, list):
+                # tf.expanddims() wants a scalar per doc but quietly accepts a list too.
+                dim = dim[0]
+            node.set_attr("axes", [dim])
+            ctx.remove_input(node, node.input[1])
+            return
+        raise ValueError("non-const dim is not supported")
 
 @tf_op("StridedSlice")
 class StridedSlice:
@@ -964,9 +988,9 @@ class TopKV2:
                                       shapes=shapes, dtypes=[dtypes[0], onnx_pb.TensorProto.INT64])
 
         new_cast_name = utils.make_name(topk_node_name)
-        cast_to_int32 = ctx.make_node("Cast", [new_topk_node.output[1]], outputs=[topk_output2],
-                                      name=new_cast_name, attr={"to": onnx_pb.TensorProto.INT32},
-                                      shapes=[shapes[1]], dtypes=[onnx_pb.TensorProto.INT32])
+        ctx.make_node("Cast", [new_topk_node.output[1]], outputs=[topk_output2],
+                      name=new_cast_name, attr={"to": onnx_pb.TensorProto.INT32},
+                      shapes=[shapes[1]], dtypes=[onnx_pb.TensorProto.INT32])
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
@@ -1040,12 +1064,18 @@ class Unpack:
             axis += len(shape)
         # split the tensor into n outputs
         node.type = "Split"
+
         # for each output we need to squeeze axis
         for n in node.output:
             op_name = utils.make_name(node.name)
             squeeze_node = ctx.insert_new_node_on_output("Squeeze", n, name=op_name, axes=[axis])
             ctx.copy_shape(n, squeeze_node.output[0])
             ctx.copy_dtype(n, squeeze_node.output[0])
+
+        # split node is 1 rank higher than squeeze nodes
+        output_shape = ctx.get_shape(node.output[0])
+        if output_shape:
+            ctx.set_shape(node.output[0], output_shape.insert(axis, 1))
 
 
 @tf_op("OneHot")
@@ -1233,11 +1263,6 @@ class BatchToSpace:
                 nodename = utils.make_name(node.name + '_' + optype.lower())
                 return ctx.make_node(optype, inputs, attrs, name=nodename)
 
-            def mkconst(desc, val, dtype=np.int64):
-                nodename = utils.make_name(node.name + '_' + desc)
-                const_node = ctx.make_const(utils.make_name(nodename), val.astype(dtype))
-                return const_node.output[0]
-
             # support non 3D/4D tensors and dynamic crop vals
             # dynamic slice starts at opset 10
             utils.make_sure(ctx.opset >= 11, 'non-4D tensor or non-const crops require opset 11')
@@ -1246,12 +1271,10 @@ class BatchToSpace:
             input2 = node.input[2]
 
             # const vals
-            int_max_const = mkconst('int_max', np.array([utils.get_max_value(np.int64)]))
-            one_const = mkconst('_const_one', np.array([1]))
-            minus1_const = mkconst('_const_minus1', np.array([-1]))
-            blocklen_resize_const = mkconst('_const_blocklen_resize', np.array([-1, blocklen]))
-            blocklenplus1_const = mkconst('_const_blocklenplus1', np.array([blocklen + 1]))
-            block_shape_const = mkconst('_const_block_shape', block_shape)
+            int_max_const, one_const, minus1_const, blocklen_resize_const, \
+            blocklenplus1_const, block_shape_const = \
+                [n.output[0] for n in ctx.make_consts([[utils.get_max_value(np.int64)], [1], [-1],\
+                                                       [-1, blocklen], [blocklen + 1], block_shape])]
 
             x_shape = ctx.insert_new_node_on_input(node, 'Shape', node.input[0])
 
@@ -1282,7 +1305,7 @@ class BatchToSpace:
                 p[i] = p[i - 2] + 1
 
             # reshape to create moving blocks, shuffle, and reshape to target_spatial
-            indices = mkconst('_indicies_const', np.asarray(g))
+            indices = ctx.make_consts([list(g)])[0].output[0]
             gather = mknode('Gather', [shape1.output[0], indices])
             x2 = mknode('Reshape', [input0, gather.output[0]])
             tr2 = mknode('Transpose', [x2.output[0]], {'perm': np.array(p)})
@@ -1290,11 +1313,11 @@ class BatchToSpace:
             x3 = mknode('Reshape', [tr2.output[0], shape2.output[0]])
 
             # crop axes
-            slice_starts_const1 = mkconst('_slicestart1_const', np.asarray([0, 0]))
-            slice_starts_const2 = mkconst('_slicestart2_const', np.asarray([1, utils.get_max_value(np.int64)]))
-            slice_ends_const1 = mkconst('_sliceend1_const', np.asarray([1, 0]))
-            slice_ends_const2 = mkconst('_sliceend2_const', np.asarray([2, utils.get_max_value(np.int64)]))
-            axes_const = mkconst('_sliceaxes_const', np.asarray(range(1, blocklen + 1)))
+            slice_starts_const1, slice_starts_const2, slice_ends_const1, \
+            slice_ends_const2, axes_const = \
+                [n.output[0] for n in ctx.make_consts([[0, 0], [1, utils.get_max_value(np.int64)], [1, 0],\
+                                                       [2, utils.get_max_value(np.int64)], range(1, blocklen + 1)])]
+
             crop = mknode('Cast', [input2], {'to': TensorProto.INT64})
             crop_transposed = mknode('Transpose', [crop.output[0]])
             crop_starts = mknode('Slice', [crop_transposed.output[0], slice_starts_const1, slice_starts_const2])
@@ -1361,11 +1384,6 @@ class SpaceToBatch:
                 nodename = utils.make_name(node.name + '_' + optype.lower())
                 return ctx.make_node(optype, inputs, attrs, name=nodename)
 
-            def mkconst(desc, val, dtype=np.int64):
-                nodename = utils.make_name(node.name + '_' + desc)
-                const_node = ctx.make_const(utils.make_name(nodename), val.astype(dtype))
-                return const_node.output[0]
-
             # support non 3D/4D tensors and dynamic pad vals
             # dynamic slice starts at opset 10
             utils.make_sure(ctx.opset >= 11, 'non-4D tensor or non-const pads require opset 11')
@@ -1374,15 +1392,11 @@ class SpaceToBatch:
             input2 = node.input[2]
 
             # const vals
-            int_max_const = mkconst('int_max', np.array([utils.get_max_value(np.int64)]))
-            zero_const = mkconst('_zero_const', np.array([0]))
-            one_const = mkconst('_one_const', np.array([1]))
-            minus1_const = mkconst('_minus1_const', np.array([-1]))
-            blocklen_resize_const = mkconst('_blocklen_resize_const', np.array([-1, blocklen]))
-            blocklenplus1_const = mkconst('_blocklenplus1_const', np.array([blocklen + 1]))
-            filltop_const = mkconst('_filltop_const', np.array([1, 0, 0, 0]))
-            fillbottom_const = mkconst('_bottom_const', np.array([0, 0, 1, 0]))
-            block_shape_const = mkconst('_block_shape_const', block_shape)
+            int_max_const, zero_const, one_const, minus1_const, blocklen_resize_const, \
+            blocklenplus1_const, filltop_const, fillbottom_const, block_shape_const = \
+                [n.output[0] for n in ctx.make_consts([[utils.get_max_value(np.int64)], [0], [1],\
+                                                       [-1], [-1, blocklen], [blocklen + 1],\
+                                                       [1, 0, 0, 0], [0, 0, 1, 0], block_shape])]
 
             x_shape = ctx.insert_new_node_on_input(node, 'Shape', node.input[0])
             x_rank = mknode('Size', [x_shape.output[0]])
@@ -1481,10 +1495,10 @@ class NonMaxSuppression:
             pad_val = ctx.make_node("Cast", inputs=[relu_op.output[0]], attr={"to": onnx_pb.TensorProto.INT64})
             pad_op = ctx.make_node("Pad", inputs=[squeeze_op.output[0], pad_val.output[0]])
             ctx.make_node("Cast", inputs=pad_op.output, name="cast_A", attr={"to": onnx_pb.TensorProto.INT32},
-                          outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
+                          outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0], op_name_scope=node.name)
             reduce_op = ctx.make_node("ReduceSum", inputs=shape_op.output, attr={"axes": [0], "keepdims": 0})
             ctx.make_node("Cast", inputs=[reduce_op.output[0]], name="cast_B", attr={"to": onnx_pb.TensorProto.INT32},
-                          outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
+                          outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1], op_name_scope=node.name)
         else:
             ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                           name=node.name, outputs=node.output, dtypes=dtypes[0], shapes=shapes[0])
@@ -1613,17 +1627,16 @@ class ReverseV2:
         rv2_in_names = [node.input[0]]
 
         input_shape = ctx.get_shape(node.input[0])
+        input_rank = len(input_shape)
+        input_shape_node = ctx.make_node("Shape", [node.input[0]], op_name_scope=node.name)
+
         # Make sure input shape is not None
         utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
-
-        input_rank = len(input_shape)
 
         rv2_node_name = node.name
         # ReverseV2 has a single output.
         rv2_output_dtypes = node.output_dtypes
         rv2_output_shapes = node.output_shapes
-
-        const_name_root = rv2_node_name + '_Const'
 
         # Remove ReverseV2 node from graph.
         ctx.remove_node(rv2_node_name)
@@ -1636,7 +1649,7 @@ class ReverseV2:
         # Empty axis vector.
         if len_axes == 0:
             # Replace ReverseV2 with an identity block.
-            new_node = ctx.make_node(
+            ctx.make_node(
                 "Identity",
                 inputs=inputs,
                 outputs=node.output,
@@ -1678,36 +1691,20 @@ class ReverseV2:
 
                     inputs = [new_node.output[0]]
 
+                const_one_name = utils.make_name(f'const_one')
+                const_one = ctx.make_const(name=const_one_name, np_val=np.array([1], dtype=np.int64))
+                const_axis_name = utils.make_name(f'const_{axis}')
+                const_axis = ctx.make_const(name=const_axis_name, np_val=np.array([axis], dtype=np.int64))
+
                 # Add a Constant node (seq_len) for ReverseSequence.
-                if ctx.opset >= 11:
-                    batch_shape = ctx.make_node("Shape", [inputs[-1]])
-                    const_one = ctx.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int64))
-                    const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
-                    batch_size = ctx.make_node("Slice",
-                                               [batch_shape.output[0], const_one.output[0], const_two.output[0]])
-                    input_shape = ctx.make_node("Shape", [node.input[0]])
-                    const_axis = ctx.make_const(utils.make_name(node.name + "_const_axis"),
-                                                np.array([axis], dtype=np.int64))
-                    const_axis_next = ctx.make_const(utils.make_name(node.name + "_const_axis_next"),
-                                                     np.array([axis + 1], dtype=np.int64))
-                    input_axis = ctx.make_node("Slice",
-                                               [input_shape.output[0], const_axis.output[0], const_axis_next.output[0]])
-                    seq_array = ctx.make_node("Expand", [input_axis.output[0], batch_size.output[0]])
-                    inputs.append(seq_array.output[0])
-                else:
-                    # Index 1 for the shape should not return 0
-                    # since the input must have rank >= 2.
-                    rs_batch_size = ctx.get_shape(inputs[-1])[1]
-                    # Make sure rs_batch_size and input_shape[axis] are not -1 each
-                    utils.make_sure(input_shape[axis] is not -1 \
-                                    , "shape of axis {} is unknown".format(axis))
-                    utils.make_sure(rs_batch_size is not -1 \
-                                    , "ReverseSequence batch size for axis {} is unknown".format(axis))
-                    seq_list = [input_shape[axis]] * rs_batch_size
-                    seq_array = np.asarray(seq_list, dtype=np.int64)  # dtype should be int64
-                    const_seq_name = utils.make_name(const_name_root)
-                    new_node = ctx.make_const(name=const_seq_name, np_val=seq_array)
-                    inputs.append(new_node.output[0])
+                # Index 1 for the shape should not return 0, since rank(input) >=2
+                input_shape = ctx.make_node("Shape", [inputs[-1]], op_name_scope=rv2_node_name)
+                batch_size = ctx.make_node("Gather", [input_shape.output[0], const_one.output[0]],
+                                           op_name_scope=rv2_node_name)
+                axis_dim = ctx.make_node("Gather", [input_shape_node.output[0], const_axis.output[0]],
+                                         op_name_scope=rv2_node_name)
+                seq_array = ctx.make_node("Expand", [axis_dim.output[0], batch_size.output[0]])
+                inputs.append(seq_array.output[0])
 
                 # Add a ReverseSequence node.
 
@@ -1744,7 +1741,7 @@ class ReverseV2:
                             curr_perm[ax], curr_perm[0]
 
                 # Add a Transpose node to restore shape.
-                new_node = ctx.make_node(
+                ctx.make_node(
                     "Transpose",
                     inputs=inputs,
                     op_name_scope=rv2_node_name,
@@ -1777,38 +1774,30 @@ class MatrixDiagPart:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # MatrixDiagPart by slice and gather
-        const_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero', np.array([0]).astype(np.int64))
-        const_zero_zero = ctx.make_const(utils.make_name(node.name) + 'const_zero_zero',
-                                         np.array([0, 0]).astype(np.int64))
-        const_one = ctx.make_const(utils.make_name(node.name) + 'const_one', np.array([1]).astype(np.int64))
-        const_two = ctx.make_const(utils.make_name(node.name) + 'const_two', np.array([2]).astype(np.int64))
-        const_negative_one = ctx.make_const(utils.make_name(node.name) + 'const_negative_one',
-                                            np.array([-1]).astype(np.int64))
-        const_negative_two = ctx.make_const(utils.make_name(node.name) + 'const_negative_two',
-                                            np.array([-2]).astype(np.int64))
-        const_negative_two_one = ctx.make_const(utils.make_name(node.name) + 'const_negative_two_one',
-                                                np.array([-2, -1]).astype(np.int64))
+        minus_two_one, minus_two, minus_one, zeo, zeo_zeo, one, two, two_one = \
+            [n.output[0] for n in ctx.make_consts([[-2, -1], [-2], [-1], [0], [0, 0], [1], [2], [2, 1]])]
+        zeo_, one_ = [n.output[0] for n in ctx.make_consts([0, 1])]
+
         input_shape = ctx.make_node('Shape', [node.input[0]])
         input_shape_size = ctx.make_node('Shape', [input_shape.output[0]])
         matrice_shape = ctx.make_node('Slice',
-                                      [input_shape.output[0], const_negative_two.output[0], input_shape_size.output[0]])
+                                      [input_shape.output[0], minus_two, input_shape_size.output[0]])
         matrice_shape_float = ctx.make_node('Cast', [matrice_shape.output[0]], attr={'to': TensorProto.FLOAT})
-        matrice_shape_float_x = ctx.make_node('Slice', [matrice_shape_float.output[0], const_zero.output[0],
-                                                        const_one.output[0]])
+        matrice_shape_float_x = ctx.make_node('Slice', [matrice_shape_float.output[0], zeo, one])
         matrice_shape_float_y = ctx.make_node('Slice',
-                                              [matrice_shape_float.output[0], const_one.output[0], const_two.output[0]])
+                                              [matrice_shape_float.output[0], one, two])
         min_matrice_dim_float = ctx.make_node('Min', [matrice_shape_float_x.output[0], matrice_shape_float_y.output[0]])
         min_matrice_dim = ctx.make_node('Cast', [min_matrice_dim_float.output[0]], attr={'to': TensorProto.INT64})
         double_matrice_dim = ctx.make_node('Concat', [min_matrice_dim.output[0], min_matrice_dim.output[0]],
                                            attr={'axis': -1})
-        sliced_input = ctx.make_node('Slice', [node.input[0], const_zero_zero.output[0], double_matrice_dim.output[0],
-                                               const_negative_two_one.output[0]])
+        sliced_input = ctx.make_node('Slice', [node.input[0], zeo_zeo, double_matrice_dim.output[0], two_one])
         sliced_input_shape = ctx.make_node('Shape', [sliced_input.output[0]])
-        sliced_input_shape_half = ctx.make_node('Slice', [sliced_input_shape.output[0], const_zero.output[0],
-                                                          const_negative_one.output[0]])
-        sliced_input_shape_new = ctx.make_node('Concat', [sliced_input_shape_half.output[0], const_one.output[0]],
+        sliced_input_shape_half = ctx.make_node('Slice', [sliced_input_shape.output[0], zeo,
+                                                          minus_one])
+        sliced_input_shape_new = ctx.make_node('Concat', [sliced_input_shape_half.output[0], one],
                                                attr={'axis': -1})
-        matrice_range = ctx.make_node('Range', [const_zero.output[0], min_matrice_dim.output[0], const_one.output[0]])
+        min_matrice_dim_ = ctx.make_node('Squeeze', [min_matrice_dim.output[0]], {'axes': [0]})
+        matrice_range = ctx.make_node('Range', [zeo_, min_matrice_dim_.output[0], one_])
         unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0]], attr={"axes": [-1]})
         expanded_range = ctx.make_node('Expand', [unsqueezed_matrice_range.output[0], sliced_input_shape_new.output[0]])
         gathered_result = ctx.make_node('GatherElements', [sliced_input.output[0], expanded_range.output[0]],
@@ -1816,8 +1805,774 @@ class MatrixDiagPart:
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        squeezed_result = ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
-                                        name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
+                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+
+@tf_op(["MatrixDiagPartV2", "MatrixDiagPartV3"])
+class MatrixDiagPartV2V3:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # assemble MatrixDiagPart V2&V3 by looping k diagonals with proper pads
+        minus_two, minus_one, zeo, one, two = \
+            [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1], [2]])]
+
+        def normalize():
+            raw_k = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+            return ctx.make_node('Reshape', [raw_k, minus_one]).output[0]
+
+        input_tensor = node.input[0]
+        k = normalize()
+        padding = node.input[2]
+        align = 'LEFT_LEFT'
+        if node.op.op_type == 'MatrixDiagPartV3':
+            align = node.get_attr_str('align') if 'align' in node.attr else 'LEFT_RIGHT'
+        input_rank = len(ctx.get_shape(input_tensor))
+        raw_input_shape = [-1] * input_rank
+        per_loop_shape = raw_input_shape[:-1]
+        raw_output_shape = raw_input_shape[:-2] + [-1]
+        loop_output_shape = raw_output_shape + [-1]
+        ctx.set_shape(node.output[0], raw_output_shape)
+        for out in ctx.find_output_consumers(node.output[0]):
+            if out.op.op_type == 'Identity':
+                ctx.set_shape(out.output[0], raw_output_shape)
+
+        # prepare new_shape of input
+        input_shape = ctx.make_node('Shape', [input_tensor])
+        shape_input_shape = ctx.make_node('Shape', [input_shape.output[0]])
+        matrix_shape = ctx.make_node('Slice',
+                                     [input_shape.output[0], minus_two, shape_input_shape.output[0]])
+        min_dim = ctx.make_node('ReduceMin', [matrix_shape.output[0]])
+        input_depth = ctx.make_node('Slice', [matrix_shape.output[0], minus_two, minus_one])
+        input_width = ctx.make_node('Slice', [matrix_shape.output[0], minus_one, two])
+        temp_shape = ctx.make_node('Concat', [minus_one, matrix_shape.output[0]], attr={'axis': 0})
+        temp_input = ctx.make_node('Reshape', [input_tensor, temp_shape.output[0]])
+        temp_transposed = ctx.make_node('Transpose', [temp_input.output[0]], attr={'perm': [0, 2, 1]})
+        half_shape = ctx.make_node('Slice', [input_shape.output[0], zeo, minus_two])
+        new_shape = ctx.make_node('Concat', [half_shape.output[0], input_width.output[0], input_depth.output[0]],
+                                  attr={'axis': 0})
+        # define body graph for main loop
+        k_shape = ctx.make_node('Shape', [k])
+        k_start = ctx.make_node('Slice', [k, zeo, one])
+        k_end = ctx.make_node('Slice', [k, minus_one, k_shape.output[0]])
+        raw_total_k = ctx.make_node('Sub', [k_end.output[0], k_start.output[0]])
+        total_k = ctx.make_node('Add', [raw_total_k.output[0], one])
+        trip_name = utils.make_name(node.name + "_i")
+        cond_name = utils.make_name(node.name + "_cond")
+        body_graph = ctx.create_new_graph_with_same_config()
+        body_graph.add_graph_input(trip_name, TensorProto.INT64, [1])
+        body_graph.add_graph_input(cond_name, TensorProto.BOOL, [])
+        body_graph.parent_graph = ctx
+        # identity of input
+        identity_input_graph = body_graph.create_new_graph_with_same_config()
+        identity_input_graph.parent_graph = body_graph
+        identity_input = identity_input_graph.make_node('Identity', [input_tensor])
+        identity_input_graph.add_graph_output(identity_input.output[0], ctx.get_dtype(node.input[0]), raw_input_shape)
+        # transposed input
+        transposed_input_graph = body_graph.create_new_graph_with_same_config()
+        transposed_input_graph.parent_graph = body_graph
+        next_shape = transposed_input_graph.make_node('Concat', [half_shape.output[0], input_width.output[0],
+                                                                 input_depth.output[0]], attr={'axis': 0})
+        transposed_input = transposed_input_graph.make_node('Reshape',
+                                                            [temp_transposed.output[0], next_shape.output[0]])
+        transposed_input_graph.add_graph_output(transposed_input.output[0], ctx.get_dtype(node.input[0]),
+                                                raw_input_shape)
+        # compute current k of the loop
+        current_k = body_graph.make_node('Sub', [k_end.output[0], trip_name])
+        is_k_noneg = body_graph.make_node('Greater', [current_k.output[0], minus_one])
+        processed_input = body_graph.make_node('If', [is_k_noneg.output[0]])
+        processed_input.set_body_graph_as_attr('then_branch', identity_input_graph)
+        processed_input.set_body_graph_as_attr('else_branch', transposed_input_graph)
+        processed_shape = body_graph.make_node('Shape', [processed_input.output[0]])
+        shape_processed_shape = body_graph.make_node('Shape', [processed_shape.output[0]])
+        new_depth = body_graph.make_node('Slice',
+                                         [processed_shape.output[0], minus_two, minus_one])
+        new_width = body_graph.make_node('Slice', [processed_shape.output[0], minus_one,
+                                                   shape_processed_shape.output[0]])
+        abs_k = body_graph.make_node('Abs', [current_k.output[0]])
+
+        range_k = body_graph.make_node('Range', [abs_k.output[0], new_width.output[0], one],
+                                       domain="com.microsoft")
+        sliced_range = body_graph.make_node('Slice', [range_k.output[0], zeo, new_depth.output[0]])
+        sliced_shape = body_graph.make_node('Shape', [sliced_range.output[0]])
+        pad_length = body_graph.make_node('Sub', [new_depth.output[0], sliced_shape.output[0]])
+        pad_length_2 = body_graph.make_node('Concat', [zeo, pad_length.output[0]], attr={'axis': 0})
+        padded_range = body_graph.make_node('Pad', [sliced_range.output[0], pad_length_2.output[0]])
+        unsqueezed_range = body_graph.make_node('Unsqueeze', [padded_range.output[0]], attr={'axes': [1]})
+        half_shape_x = body_graph.make_node('Slice',
+                                            [new_shape.output[0], zeo, minus_two])
+        shape_range = body_graph.make_node('Shape', [unsqueezed_range.output[0]])
+        full_shape = body_graph.make_node('Concat', [half_shape_x.output[0], shape_range.output[0]], attr={'axis': 0})
+        expanded_range = body_graph.make_node('Expand', [unsqueezed_range.output[0], full_shape.output[0]])
+        gathered_input = body_graph.make_node('GatherElements', [processed_input.output[0], expanded_range.output[0]],
+                                              attr={'axis': -1})
+        squeezed_input = body_graph.make_node('Squeeze', [gathered_input.output[0]], attr={'axes': [-1]})
+        left_width = body_graph.make_node('Sub', [new_width.output[0], abs_k.output[0]])
+        dims = body_graph.make_node('Concat', [left_width.output[0], new_depth.output[0]], attr={'axis': 0})
+        valid_dim = body_graph.make_node('ReduceMin', [dims.output[0]])
+        raw_output = body_graph.make_node('Slice', [squeezed_input.output[0], zeo, valid_dim.output[0],
+                                                    minus_one])
+        gap_output = body_graph.make_node('Sub', [min_dim.output[0], valid_dim.output[0]])
+        gaps = body_graph.make_node('Concat', [zeo, gap_output.output[0]], attr={'axis': 0})
+        processed_gap = body_graph.make_node('ReduceMax', [gaps.output[0]])
+        pad_zero = body_graph.make_node('Mul', [new_shape.output[0], zeo])
+        sliced_zero = body_graph.make_node('Slice', [pad_zero.output[0], zeo, minus_two])
+        # gap_pos_k_graph
+        gap_pos_k_graph = body_graph.create_new_graph_with_same_config()
+        gap_pos_k_graph.parent_graph = body_graph
+        gap_pos_k = gap_pos_k_graph.make_node('Concat', [zeo,
+                                                         processed_gap.output[0]],
+                                              attr={'axis': 0}) \
+            if align.startswith('LEFT') \
+            else gap_pos_k_graph.make_node('Concat', [processed_gap.output[0],
+                                                      zeo],
+                                           attr={'axis': 0})
+        gap_pos_k_graph.add_graph_output(gap_pos_k.output[0], TensorProto.INT64, [-1])
+        # gap_neg_k_graph
+        gap_neg_k_graph = body_graph.create_new_graph_with_same_config()
+        gap_neg_k_graph.parent_graph = body_graph
+        gap_neg_k = gap_neg_k_graph.make_node('Concat', [zeo,
+                                                         processed_gap.output[0]],
+                                              attr={'axis': 0}) \
+            if align.endswith('LEFT') \
+            else gap_neg_k_graph.make_node('Concat', [processed_gap.output[0],
+                                                      zeo],
+                                           attr={'axis': 0})
+        gap_neg_k_graph.add_graph_output(gap_neg_k.output[0], TensorProto.INT64, [-1])
+        # pad output with gap
+        gap_k = body_graph.make_node('If', [is_k_noneg.output[0]])
+        gap_k.set_body_graph_as_attr("then_branch", gap_pos_k_graph)
+        gap_k.set_body_graph_as_attr("else_branch", gap_neg_k_graph)
+        gap_left = body_graph.make_node('Slice', [gap_k.output[0], zeo, one])
+        gap_right = body_graph.make_node('Slice', [gap_k.output[0], one, two])
+        gap_all = body_graph.make_node('Concat', [sliced_zero.output[0], gap_left.output[0], sliced_zero.output[0],
+                                                  gap_right.output[0]], attr={'axis': 0})
+        padded_output = body_graph.make_node('Pad', [raw_output.output[0], gap_all.output[0], padding])
+        cond_output = body_graph.make_node('Identity', [cond_name])
+        body_graph.add_graph_output(cond_output.output[0], TensorProto.BOOL, [])
+        body_graph.add_graph_output(padded_output.output[0], ctx.get_dtype(node.input[0]), per_loop_shape)
+        body_graph.add_graph_output(gap_k.output[0], TensorProto.INT64, [-1])
+        # make loop
+        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+        main_loop = ctx.make_node('Loop', [total_k.output[0], cond_const.output[0]], output_count=2)
+        main_loop.set_body_graph_as_attr("body", body_graph)
+        # reshape output
+        next_padded_shape = ctx.make_node('Concat', [total_k.output[0], minus_one, min_dim.output[0]],
+                                          attr={'axis': 0})
+        reshaped_padded = ctx.make_node('Reshape', [main_loop.output[0], next_padded_shape.output[0]])
+        transposed_padded = ctx.make_node('Transpose', [reshaped_padded.output[0]], attr={'perm': [1, 0, 2]})
+        output_shape = ctx.make_node('Concat', [half_shape.output[0], total_k.output[0], minus_one],
+                                     attr={'axis': 0})
+        reshaped_output = ctx.make_node('Reshape', [transposed_padded.output[0], output_shape.output[0]])
+        # compute pads
+        left_pads = ctx.make_node('Slice', [main_loop.output[1], minus_two, minus_one,
+                                            minus_one])
+        flattened_left_pads = ctx.make_node('Reshape', [left_pads.output[0], minus_one])
+        min_left_pads = ctx.make_node('ReduceMin', [flattened_left_pads.output[0]])
+        right_pads = ctx.make_node('Slice', [main_loop.output[1], minus_one, two,
+                                             minus_one])
+        flattened_right_pads = ctx.make_node('Reshape', [right_pads.output[0], minus_one])
+        min_right_pads = ctx.make_node('ReduceMin', [flattened_right_pads.output[0]])
+        # trim left pads
+        identity_left_sliced_graph = ctx.create_new_graph_with_same_config()
+        identity_left_sliced_graph.parent_graph = ctx
+        identity_left_sliced = identity_left_sliced_graph.make_node('Identity', [reshaped_output.output[0]])
+        identity_left_sliced_graph.add_graph_output(identity_left_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                                    loop_output_shape)
+        output_left_sliced_graph = ctx.create_new_graph_with_same_config()
+        output_left_sliced_graph.parent_graph = ctx
+        output_left_sliced = output_left_sliced_graph.make_node('Slice',
+                                                                [reshaped_output.output[0], min_left_pads.output[0],
+                                                                 min_dim.output[0], minus_one])
+        output_left_sliced_graph.add_graph_output(output_left_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                                  loop_output_shape)
+        left_pads_greater_than_zero = ctx.make_node('Greater', [min_left_pads.output[0], zeo])
+        final_output_left_sliced = ctx.make_node('If', [left_pads_greater_than_zero.output[0]])
+        final_output_left_sliced.set_body_graph_as_attr("then_branch", output_left_sliced_graph)
+        final_output_left_sliced.set_body_graph_as_attr("else_branch", identity_left_sliced_graph)
+        # trim right pads
+        valid_right_dim = ctx.make_node('Sub', [min_dim.output[0], min_right_pads.output[0]])
+        identity_right_sliced_graph = ctx.create_new_graph_with_same_config()
+        identity_right_sliced_graph.parent_graph = ctx
+        identity_right_sliced = identity_right_sliced_graph.make_node('Identity', [final_output_left_sliced.output[0]])
+        identity_right_sliced_graph.add_graph_output(identity_right_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                                     loop_output_shape)
+        output_right_sliced_graph = ctx.create_new_graph_with_same_config()
+        output_right_sliced_graph.parent_graph = ctx
+        output_right_sliced = output_right_sliced_graph.make_node('Slice', [final_output_left_sliced.output[0],
+                                                                            zeo,
+                                                                            valid_right_dim.output[0],
+                                                                            minus_one])
+        output_right_sliced_graph.add_graph_output(output_right_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                                   loop_output_shape)
+        right_dim_greater_than_valid = ctx.make_node('Greater', [min_dim.output[0], valid_right_dim.output[0]])
+        final_output_right_sliced = ctx.make_node('If', [right_dim_greater_than_valid.output[0]])
+        final_output_right_sliced.set_body_graph_as_attr("then_branch", output_right_sliced_graph)
+        final_output_right_sliced.set_body_graph_as_attr("else_branch", identity_right_sliced_graph)
+        # squeeze output
+        latest_shape = ctx.make_node('Shape', [final_output_right_sliced.output[0]])
+        latest_depth = ctx.make_node('Slice',
+                                     [latest_shape.output[0], minus_two, minus_one])
+        need_squeeze = ctx.make_node('Equal', [latest_depth.output[0], one])
+        identity_sliced_graph = ctx.create_new_graph_with_same_config()
+        identity_sliced_graph.parent_graph = ctx
+        identity_sliced = identity_sliced_graph.make_node('Identity', [final_output_right_sliced.output[0]])
+        identity_sliced_graph.add_graph_output(identity_sliced.output[0], ctx.get_dtype(node.input[0]),
+                                               raw_output_shape + [-1])
+        squeeze_sliced_graph = ctx.create_new_graph_with_same_config()
+        squeeze_sliced_graph.parent_graph = ctx
+        squeeze_sliced = squeeze_sliced_graph.make_node('Squeeze', [final_output_right_sliced.output[0]],
+                                                        attr={'axes': [-2]})
+        squeeze_sliced_graph.add_graph_output(squeeze_sliced.output[0], ctx.get_dtype(node.input[0]), raw_output_shape)
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        squeeze_if = ctx.make_node('If', [need_squeeze.output[0]], name=node.name, outputs=node.output, shapes=shapes,
+                                   dtypes=dtypes)
+        squeeze_if.set_body_graph_as_attr("then_branch", squeeze_sliced_graph)
+        squeeze_if.set_body_graph_as_attr("else_branch", identity_sliced_graph)
+
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+
+        # assemble MatrixDiagPart V2&V3
+        m = node.input[0]
+        m_shape = ctx.get_shape(m)
+        m_rank = len(m_shape)
+        pads = np.zeros(2 * m_rank, dtype=np.int64)
+        pads[-2:] = [1, 1]
+        utils.make_sure(m_rank > 1, 'Input data should be at least 2D %s', str(m_shape))
+
+        align = 'LEFT_LEFT'
+        if node.op.op_type == 'MatrixDiagPartV3':
+            align = node.get_attr_str('align') if 'align' in node.attr else 'LEFT_RIGHT'
+        xalign, yalign = align.split('_')
+
+        # consts
+        const_zero_float, const_neg_one_float = [n.output[0] for n in ctx.make_consts([0, -1], np.float32)]
+        const_zero, const_one, const_neg_one, const_neg_two, const_pad_vals, const_t = \
+            [n.output[0] for n in ctx.make_consts([[0], [1], [-1], [-2], pads, [-1, 1]])]
+        const_zero_scalar, const_one_scalar, const_neg_one_scalar = \
+            [n.output[0] for n in ctx.make_consts([0, 1, -1])]
+
+        m_shape = ctx.make_node('Shape', [node.input[0]]).output[0]
+        xlen = ctx.make_node('Gather', [m_shape, const_neg_one]).output[0]
+        ylen = ctx.make_node('Gather', [m_shape, const_neg_two]).output[0]
+        xlenp = ctx.make_node('Add', [xlen, const_one]).output[0]
+        stride = ctx.make_node('Add', [xlenp, const_one]).output[0]
+        minxy_0 = ctx.make_node('Concat', [xlen, ylen], attr={'axis': 0}).output[0]
+        minxy = ctx.make_node('ReduceMin', [minxy_0]).output[0]
+        minxy_float = ctx.make_node('Cast', [minxy], attr={'to': TensorProto.FLOAT}).output[0]
+        xmax_0 = ctx.make_node('Mul', [xlen, xlenp]).output[0]
+        xmax_1 = ctx.make_node('Add', [xmax_0, xlenp]).output[0]
+        xmax = ctx.make_node('Add', [xmax_1, const_neg_one]).output[0]
+        ymax_0 = ctx.make_node('Mul', [xlenp, ylen]).output[0]
+        ymax = ctx.make_node('Add', [ymax_0, const_neg_one]).output[0]
+        ymax_float = ctx.make_node('Cast', [ymax], attr={'to': TensorProto.FLOAT}).output[0]
+        partial_shape = ctx.make_node('Slice', [m_shape, const_zero, const_neg_two]).output[0]
+        m2_shape = ctx.make_node('Concat', [partial_shape, const_neg_one], attr={'axis': 0}).output[0]
+        gather_shape = ctx.make_node('Concat', [partial_shape, const_one], attr={'axis': 0}).output[0]
+
+        def normalize():
+            raw_input1 = ctx.make_node('Cast', [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+            return ctx.make_node('Reshape', [raw_input1, const_neg_one])
+
+        # get k0, k1 values. diags to be extracted
+        input1 = normalize()
+        k0 = ctx.make_node('ReduceMin', [input1.output[0]]).output[0]
+        k1 = ctx.make_node('ReduceMax', [input1.output[0]]).output[0]
+        k0_scalar = ctx.make_node('Squeeze', [k0]).output[0]
+        k1_scalar = ctx.make_node('Squeeze', [k1]).output[0]
+        m_padded = ctx.make_node('Pad', [m, const_pad_vals, node.input[2]])
+
+        # starting indexes for super diagonals
+        xstart_0 = ctx.make_node('Cast', [k0_scalar], attr={'to': TensorProto.FLOAT})
+        xstart_1 = ctx.make_node('Max', [const_zero_float, xstart_0.output[0]])
+        xstart_2 = ctx.make_node('Cast', [xstart_1.output[0]], attr={'to': TensorProto.INT64})
+        xstart_3 = ctx.make_node('Add', [xstart_2.output[0], const_neg_one_scalar])
+        xstart_4 = ctx.make_node('Range', [k1_scalar, xstart_3.output[0], const_neg_one_scalar])
+        xstart = ctx.make_node('Reshape', [xstart_4.output[0], const_t])
+
+        # starting indexes for sub diagonals
+        ystart_0 = ctx.make_node('Cast', [k1_scalar], attr={'to': TensorProto.FLOAT})
+        ystart_1 = ctx.make_node('Min', [const_neg_one_float, ystart_0.output[0]])
+        ystart_2 = ctx.make_node('Cast', [ystart_1.output[0]], attr={'to': TensorProto.INT64})
+        ystart_3 = ctx.make_node('Add', [k0_scalar, const_neg_one_scalar])
+        ystart_4 = ctx.make_node('Range', [ystart_2.output[0], ystart_3.output[0], const_neg_one_scalar])
+        ystart = ctx.make_node('Reshape', [ystart_4.output[0], const_t])
+
+        xmax_0 = ctx.make_node('Mul', [xstart.output[0], xlenp])
+        xmax = ctx.make_node('Sub', [xmax, xmax_0.output[0]])
+        xmax_float = ctx.make_node('Cast', [xmax.output[0]], attr={'to': TensorProto.FLOAT})
+
+        # lengths of super/sub diags to extract
+        xsize_0 = ctx.make_node('Sub', [xlen, xstart.output[0]])
+        xsize_1 = ctx.make_node('Cast', [xsize_0.output[0]], attr={'to': TensorProto.FLOAT})
+        xsize_2 = ctx.make_node('Min', [xsize_1.output[0], minxy_float])
+        xsize = ctx.make_node('Cast', [xsize_2.output[0]], attr={'to': TensorProto.INT64})
+        ysize_0 = ctx.make_node('Add', [ylen, ystart.output[0]])
+        ysize_1 = ctx.make_node('Cast', [ysize_0.output[0]], attr={'to': TensorProto.FLOAT})
+        ysize_2 = ctx.make_node('Min', [ysize_1.output[0], minxy_float])
+        ysize = ctx.make_node('Cast', [ysize_2.output[0]], attr={'to': TensorProto.INT64})
+        diagsize = ctx.make_node('Concat', [xsize.output[0], ysize.output[0]], attr={'axis': 0})
+        maxsize = ctx.make_node('ReduceMax', [diagsize.output[0]], attr={'keep_dims': 0})
+        maxsize_0 = ctx.make_node('Reshape', [maxsize.output[0], const_neg_one])
+        maxsize_scalar = ctx.make_node('Squeeze', [maxsize.output[0]])
+
+        diagdistances_0 = ctx.make_node('Range', [const_zero_scalar, maxsize_scalar.output[0], const_one_scalar])
+        diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], stride])
+
+        def right_align(sizes, indices, starts, maxval):
+            op1 = ctx.make_node('Sub', [maxsize.output[0], sizes.output[0]])
+            op2 = ctx.make_node('Mul', [op1.output[0], stride])
+            op3 = ctx.make_node('Sub', [indices.output[0], op2.output[0]])
+            op4 = ctx.make_node('Less', [op3.output[0], starts.output[0]])
+            op5 = ctx.make_node('Where', [op4.output[0], maxval, op3.output[0]])
+            return op5
+
+        # xdiags, ydiags contain indices of diagonal elements
+        xdiags_0 = ctx.make_node('Add', [xstart.output[0], diagdistances.output[0]])
+        xdiags_1 = ctx.make_node('Cast', [xdiags_0.output[0]], attr={'to': TensorProto.FLOAT})
+        if xalign == 'RIGHT':
+            xdiags = right_align(xsize, xdiags_0, xstart, ymax)
+        else:
+            xdiags_2 = ctx.make_node('Min', [xdiags_1.output[0], xmax_float.output[0]])
+            xdiags = ctx.make_node('Cast', [xdiags_2.output[0]], attr={'to': TensorProto.INT64})
+
+        ydiags_0_ = ctx.make_node('Abs', [ystart.output[0]])
+        ydiags_1 = ctx.make_node('Mul', [ydiags_0_.output[0], xlenp])
+        ydiags_2 = ctx.make_node('Add', [ydiags_1.output[0], diagdistances.output[0]])
+        ydiags_3 = ctx.make_node('Cast', [ydiags_2.output[0]], attr={'to': TensorProto.FLOAT})
+        if yalign == 'RIGHT':
+            ydiags = right_align(ysize, ydiags_2, ydiags_1, ymax)
+        else:
+            ydiags_4 = ctx.make_node('Min', [ydiags_3.output[0], ymax_float])
+            ydiags = ctx.make_node('Cast', [ydiags_4.output[0]], attr={'to': TensorProto.INT64})
+
+        # flatten last dimension of matrix
+        m2 = ctx.make_node('Reshape', [m_padded.output[0], m2_shape])
+
+        diags_0 = ctx.make_node('Concat', [xdiags.output[0], ydiags.output[0]], attr={'axis': 0})
+        diags_1 = ctx.make_node('Reshape', [diags_0.output[0], const_neg_one])
+        diags_2 = ctx.make_node('Expand', [diags_1.output[0], gather_shape])
+        diags = ctx.make_node('GatherElements', [m2.output[0], diags_2.output[0]], attr={'axis': -1})
+
+        def compute_out_shape(k0_k1_same=False):
+            g = ctx.create_new_graph_with_same_config()
+            g.parent_graph = ctx
+            if k0_k1_same:
+                dims = [partial_shape, maxsize_0.output[0]]
+            else:
+                dims = [partial_shape, const_neg_one, maxsize_0.output[0]]
+            outshape = g.make_node('Concat', dims, attr={'axis': 0})
+            g.add_graph_output(outshape.output[0], TensorProto.INT64, [-1])
+            return g
+
+        # if k0=k1, rank of output matrix is 1 less than usual
+        # hence, need 'If' to compute right output matrix shape
+        k0_k1_same = ctx.make_node('Equal', [k1, k0])
+        if_node = ctx.make_node('If', [k0_k1_same.output[0]])
+        if_node.set_body_graph_as_attr('then_branch', compute_out_shape(True))
+        if_node.set_body_graph_as_attr('else_branch', compute_out_shape(False))
+
+        shapes = ctx.get_shape(node.output[0])
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node('Reshape', [diags.output[0], if_node.output[0]], name=node.name, outputs=node.output,
+                      shapes=[shapes], dtypes=dtypes)
+
+        for consumer in ctx.find_output_consumers(node.output[0]):
+            if consumer.type == 'Identity':
+                ctx.set_shape(consumer.output[0], shapes)
+
+
+@tf_op(["MatrixDiag", "MatrixDiagV2", "MatrixDiagV3"])
+class MatrixDiag:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        # Assemble MatrixDiagV3 by ReverseSequence
+        argc = len(node.input)
+
+        minus_two, minus_one, zeo, one, two = \
+            [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1], [2]])]
+
+        def mknode(op, args, **kwargs):
+            return ctx.make_node(op, args, **kwargs).output[0]
+
+        def mknode2(g, op, args, **kwargs):
+            return g.make_node(op, args, **kwargs).output[0]
+
+        def normalize(name):
+            # normalize arguments
+            casted = mknode("Cast", [name], attr={'to': TensorProto.INT64})
+            reshaped = mknode("Reshape", [casted, minus_one])
+            return reshaped
+
+        def cast(name):
+            return mknode("Cast", [name], attr={"to": ctx.get_dtype(node.input[0])})
+
+        def processdiag():
+            # unsqueeze diag if necessary
+            diag = node.input[0]
+            shape = ctx.get_shape(diag)
+            if len(shape) == 1:
+                diag = mknode("Unsqueeze", [diag], attr={"axes": [0]})
+                shape = [1] + shape
+                ctx.set_shape(diag, shape)
+
+            diag_shape = mknode("Shape", [diag])
+            diag_depth = mknode("Slice", [diag_shape, minus_two, minus_one])
+            k = normalize(node.input[1]) if argc > 1 else zeo
+            k_min, k_max = mknode("ReduceMin", [k]), mknode("ReduceMax", [k])
+            k_max_nxt = mknode("Add", [k_max, one])
+            k_depth = mknode("Sub", [k_max_nxt, k_min])
+            equal = mknode("Equal", [k_depth, diag_depth])
+
+            def id_diag():
+                g = ctx.create_new_graph_with_same_config()
+                g.parent_graph = ctx
+                idt = mknode2(g, "Identity", [diag])
+                g.add_graph_output(idt, ctx.get_dtype(node.input[0]), ctx.get_shape(diag))
+                return g
+
+            def ex_diag():
+                g = ctx.create_new_graph_with_same_config()
+                g.parent_graph = ctx
+                ex = mknode2(g, "Unsqueeze", [diag], attr={"axes": [-2]})
+                rank = len(ctx.get_shape(diag)) + 1
+                g.add_graph_output(ex, ctx.get_dtype(node.input[0]), [-1] * rank)
+                return g
+
+            expand_diag = ctx.make_node("If", [equal])
+            expand_diag.set_body_graph_as_attr("then_branch", id_diag())
+            expand_diag.set_body_graph_as_attr("else_branch", ex_diag())
+            return expand_diag.output[0], k, k_min, k_max, k_max_nxt
+
+        def squeeze(name):
+            return ctx.make_node("Squeeze", [name], attr={"axis": -1}).output[0]
+
+        # gather inputs
+        diag, k, k_min, k_max, k_max_nxt = processdiag()
+        row, col, pad, align = normalize(node.input[2]) if argc > 2 else minus_one, \
+                               normalize(node.input[3]) if argc > 3 else minus_one, \
+                               node.input[4] if argc > 4 else cast(zeo), \
+                               node.get_attr_str("align") if "align" in node.attr else "LEFT_LEFT"
+
+        diag_shape = mknode("Shape", [diag])
+        diag_rank = mknode("Shape", [diag_shape])
+        head_shape = mknode("Slice", [diag_shape, zeo, minus_two])
+        tail_shape = mknode("Slice", [diag_shape, minus_two, diag_rank])
+        diag_width = mknode("Slice", [diag_shape, minus_one, diag_rank])
+        diag_depth = mknode("Slice", [diag_shape, minus_two, minus_one])
+        k_range = mknode("Range", [squeeze(k_min), squeeze(k_max_nxt), squeeze(one)])
+        abs_k_range = mknode("Abs", [k_range])
+        min_k2zeo = mknode("ReduceMin", [abs_k_range])
+        max_diag_len = mknode("Add", [min_k2zeo, diag_width])
+
+        def outrowcol():
+            # get output matrix shape
+            row_set = mknode("Greater", [row, zeo])
+            col_set = mknode("Greater", [col, zeo])
+
+            def rowset():
+                # if row is set
+                g = ctx.create_new_graph_with_same_config()
+                g.parent_graph = ctx
+
+                def rowsetcolset():
+                    # if col is set
+                    gg = g.create_new_graph_with_same_config()
+                    id_row = mknode2(gg, "Identity", [row])
+                    id_col = mknode2(gg, "Identity", [col])
+                    shape = mknode2(gg, "Concat", [id_row, id_col], attr={"axis": -1})
+                    gg.parent_graph = g
+                    gg.add_graph_output(shape, TensorProto.INT64, [-1])
+                    return gg
+
+                def rowsetcolnotset():
+                    # if col is not set
+                    gg = g.create_new_graph_with_same_config()
+                    gg.parent_graph = g
+                    id_row = mknode2(gg, "Identity", [row])
+                    id_diag_width = mknode2(gg, "Identity", [diag_width])
+                    shape = mknode2(gg, "Concat", [id_row, id_diag_width], attr={"axis": -1})
+                    gg.add_graph_output(shape, TensorProto.INT64, [-1])
+                    return gg
+
+                if_col_set = g.make_node("If", [col_set])
+                if_col_set.set_body_graph_as_attr("then_branch", rowsetcolset())
+                if_col_set.set_body_graph_as_attr("else_branch", rowsetcolnotset())
+                g.add_graph_output(if_col_set.output[0], TensorProto.INT64, [-1])
+                return g
+
+            def rownotset():
+                # if row is not set
+                g = ctx.create_new_graph_with_same_config()
+                g.parent_graph = ctx
+
+                def rownotsetcolset():
+                    # if col is set
+                    gg = g.create_new_graph_with_same_config()
+                    gg.parent_graph = g
+                    id_diag_width = gg.make_node("Identity", [diag_width]).output[0]
+                    id_col = gg.make_node("Identity", [col]).output[0]
+                    shape = gg.make_node("Concat", [id_diag_width, id_col], attr={"axis": -1}).output[0]
+                    gg.add_graph_output(shape, TensorProto.INT64, [-1])
+                    return gg
+
+                def rownotsetcolnotset():
+                    # if col is not set
+                    gg = g.create_new_graph_with_same_config()
+                    gg.parent_graph = g
+                    id_max_diag_len = gg.make_node("Identity", [max_diag_len]).output[0]
+                    shape = gg.make_node("Concat", [id_max_diag_len, id_max_diag_len], attr={"axis": -1}).output[0]
+                    gg.add_graph_output(shape, TensorProto.INT64, [-1])
+                    return gg
+
+                if_col_set = g.make_node("If", [col_set])
+                if_col_set.set_body_graph_as_attr("then_branch", rownotsetcolset())
+                if_col_set.set_body_graph_as_attr("else_branch", rownotsetcolnotset())
+                g.add_graph_output(if_col_set.output[0], TensorProto.INT64, [-1])
+                return g
+
+            if_row_set = ctx.make_node("If", [row_set])
+            if_row_set.set_body_graph_as_attr("then_branch", rowset())
+            if_row_set.set_body_graph_as_attr("else_branch", rownotset())
+            return if_row_set.output[0]
+
+        out_shape = outrowcol()
+        out_row = mknode("Slice", [out_shape, zeo, one])
+        out_col = mknode("Slice", [out_shape, one, two])
+        k_btm = mknode("Sub", [one, out_row]) # lowest possible k
+
+        def getklens():
+            # return diag len of all ks
+            rwcl_min = mknode("Min", [out_row, out_col])
+            rwcl_gap = mknode("Sub", [out_row, out_col])
+            absl_gap = mknode("Abs", [rwcl_gap])
+            left_btm = mknode("Range", [squeeze(one), squeeze(rwcl_min), squeeze(one)])
+            riht_top = mknode("Abs", [mknode("Sub", [left_btm, rwcl_min])])
+            klen_mid = mknode("Expand", [rwcl_min, mknode("Add", [absl_gap, one])])
+            return mknode("Concat", [left_btm, klen_mid, riht_top], attr={"axis": -1})
+
+        k_lens = getklens()
+
+        def reverseseq(args):
+            return mknode("ReverseSequence", args, attr={"batch_axis": 0, "time_axis": 1})
+
+        def reverse1d(name):
+            # reverse an array
+            shape = mknode("Shape", [name])
+            temp_shape = mknode("Concat", [minus_one, shape], attr={"axis": -1})
+            reshaped = mknode("Reshape", [name, temp_shape])
+            rev = reverseseq([reshaped, shape])
+            return mknode("Reshape", [rev, shape])
+
+        def sortdiag():
+            # sort diag to "LEFT_RIGHT" so each col form a line of the out matrix
+            k_sup_stt = mknode("Sub", [mknode("Max", [zeo, k_min]), k_btm])
+            k_sup_end = mknode("Sub", [k_max_nxt, k_btm])
+            k_sup_len = mknode("Max", [zeo, mknode("Sub", [k_sup_end, k_sup_stt])])
+            k_sub_stt = mknode("Sub", [k_min, k_btm])
+            k_sub_end = mknode("Sub", [mknode("Min", [zeo, k_max_nxt]), k_btm])
+            k_sub_len = mknode("Max", [zeo, mknode("Sub", [k_sub_end, k_sub_stt])])
+            sup_k_lens = mknode("Slice", [k_lens, k_sup_stt, k_sup_end])
+            sub_k_lens = mknode("Slice", [k_lens, k_sub_stt, k_sub_end])
+            all_k_lens = mknode("Concat", [sub_k_lens, sup_k_lens], attr={"axis": -1})
+            max_k_len = mknode("ReduceMax", [all_k_lens])
+            top_k_len = mknode("Slice", [all_k_lens, minus_one, diag_depth])
+            btm_k_len = mknode("Slice", [all_k_lens, zeo, one])
+            diag_rev_shap = mknode("Concat", [minus_one, diag_width], attr={"axis": -1})
+            reshaped_diag = mknode("Reshape", [diag, diag_rev_shap])
+            rev_shape = mknode("Slice", [diag_shape, zeo, minus_one])
+
+            sup_rev_len_1 = mknode("Expand", [one, k_sup_len]) if align.startswith("LEFT") else mknode("Expand",
+                                                                                                       [diag_width,
+                                                                                                        k_sup_len])
+            sub_rev_len_1 = mknode("Expand", [one, k_sub_len]) if align.endswith("RIGHT") else sub_k_lens
+            cnt_rev_len_1 = mknode("Concat", [sub_rev_len_1, sup_rev_len_1], attr={"axis": -1})
+            exp_rev_len_1 = mknode("Expand", [reverse1d(cnt_rev_len_1), rev_shape])
+
+            sup_rev_len_2 = mknode("Expand", [one, k_sup_len]) if align.startswith("LEFT") else sup_k_lens
+            sub_rev_len_2 = mknode("Expand", [one, k_sub_len]) if align.endswith("RIGHT") else mknode("Expand",
+                                                                                                      [diag_width,
+                                                                                                       k_sub_len])
+            cnt_rev_len_2 = mknode("Concat", [sub_rev_len_2, sup_rev_len_2], attr={"axis": -1})
+            exp_rev_len_2 = mknode("Expand", [reverse1d(cnt_rev_len_2), rev_shape])
+
+            reversed_diag_1 = reverseseq([reshaped_diag, mknode("Reshape", [exp_rev_len_1, minus_one])])
+            reversed_diag_2 = reverseseq([reversed_diag_1, mknode("Reshape", [exp_rev_len_2, minus_one])])
+
+            return mknode("Reshape", [reversed_diag_2, diag_shape]), \
+                   mknode("Sub", [max_k_len, top_k_len]), \
+                   mknode("Sub", [max_k_len, btm_k_len])
+
+        sorted_diag, top_pad, btm_pad = sortdiag()
+
+        def trandiag():
+            # transpose last two dim of diag
+            temp_shape = mknode("Concat", [minus_one, tail_shape], attr={"axis": -1})
+            reshaped = mknode("Reshape", [sorted_diag, temp_shape])
+            transposed = mknode("Transpose", [reshaped], attr={"perm": [0, 2, 1]})
+            out_shape = mknode("Concat", [head_shape, reverse1d(tail_shape)], attr={"axis": -1})
+            return mknode("Reshape", [transposed, out_shape])
+
+        tran_diag = trandiag()
+
+        def relu1(name):
+            # all return values >= 1
+            minusd = mknode("Sub", [name, one])
+            casted = mknode("Cast", [minusd], attr={"to": TensorProto.FLOAT})
+            relued = mknode("Relu", [casted])
+            casted = mknode("Cast", [relued], attr={"to": TensorProto.INT64})
+            return mknode("Add", [casted, one])
+
+        def makediagonal():
+            # padding with required value and move lines so they form diagonals
+            shape = mknode("Shape", [tran_diag])
+            rank = mknode("Shape", [shape])
+            width = mknode("Slice", [shape, minus_one, rank])
+            temp_shape = mknode("Concat", [minus_one, width], attr={"axis": -1})
+            reshaped = mknode("Reshape", [tran_diag, temp_shape])
+            left_pad, riht_pad = top_pad, mknode("Add", [btm_pad, diag_width])
+            full_pad = mknode("Concat", [zeo, left_pad, zeo, riht_pad], attr={"axis": -1})
+            diag_pad = mknode("Pad", [reshaped, full_pad, pad])
+            diag_pad_shape = mknode("Shape", [diag_pad])
+            diag_pad_width = mknode("Slice", [diag_pad_shape, one, two])
+            exp_shape = mknode("Concat", [head_shape, diag_width], attr={"axis": -1})
+
+            def padleft():
+                # set pads from left
+                fm = mknode("Add", [left_pad, left_pad])
+                to = mknode("Sub", [fm, diag_width])
+                rg = reverse1d(relu1(mknode("Range", [squeeze(fm), squeeze(to), squeeze(minus_one)])))
+                expanded_range = mknode("Expand", [rg, exp_shape])
+                reshaped_range = mknode("Reshape", [expanded_range, minus_one])
+                pad_left = mknode("ReverseSequence", [diag_pad, reshaped_range], attr={"batch_axis": 0, "time_axis": 1})
+                return mknode("Slice", [pad_left, left_pad, diag_pad_width, one])
+
+            pad_left = padleft()
+
+            def padright():
+                # set pads from right
+                pad_left_shape = mknode("Shape", [pad_left])
+                pad_left_depth = mknode("Slice", [pad_left_shape, zeo, one])
+                pad_left_width = mknode("Slice", [pad_left_shape, one, two])
+                pad_full_lenth = mknode("Expand", [pad_left_width, pad_left_depth])
+                rev = mknode("ReverseSequence", [pad_left, pad_full_lenth], attr={"batch_axis": 0, "time_axis": 1})
+                fm = mknode("Add", [riht_pad, btm_pad])
+                to = mknode("Sub", [fm, diag_width])
+                rg = mknode("Range", [squeeze(fm), squeeze(to), squeeze(minus_one)])
+                expanded_range = mknode("Expand", [rg, exp_shape])
+                reshaped_range = mknode("Reshape", [expanded_range, minus_one])
+                raw_pad_right = mknode("ReverseSequence", [rev, reshaped_range],
+                                       attr={"batch_axis": 0, "time_axis": 1})
+                shape = mknode("Shape", [raw_pad_right])
+                width = mknode("Slice", [shape, one, two])
+                sliced = mknode("Slice", [raw_pad_right, btm_pad, width, one])
+                all_width = mknode("Expand", [mknode("Sub", [width, btm_pad]), mknode("Shape", [reshaped_range])])
+                return mknode("ReverseSequence", [sliced, all_width], attr={"batch_axis": 0, "time_axis": 1})
+
+            pad_right = padright()
+
+            def diagonize():
+                # move lines to right to form diagonals
+                fm = mknode("Sub", [diag_depth, btm_pad])
+                to = mknode("Add", [fm, diag_width])
+                rg = mknode("Range", [squeeze(fm), squeeze(to), squeeze(one)])
+                expanded_range = mknode("Expand", [rg, exp_shape])
+                reshaped_range = mknode("Reshape", [expanded_range, minus_one])
+                rev = mknode("ReverseSequence", [pad_right, reshaped_range],
+                             attr={"batch_axis": 0, "time_axis": 1})
+                k_max_idx = mknode("Sub", [k_max, k_btm])
+                k_max_idx_nxt = mknode("Add", [k_max_idx, one])
+                k_max_len = mknode("Slice", [k_lens, k_max_idx, k_max_idx_nxt])
+                k_gap = mknode("Sub", [mknode("Abs", [k_max]), min_k2zeo])
+                width = mknode("Add", [k_max_len, k_gap])
+                return mknode("Slice", [rev, zeo, width, one]), width
+
+            diag, width = diagonize()
+            shape = mknode("Concat", [head_shape, diag_width, minus_one], attr={"axis": -1})
+            return mknode("Reshape", [diag, shape]), diag_width, width
+
+        new_diag, new_depth, new_width = makediagonal()
+
+        def paddiag():
+            # pad to output shape
+            pad_row, pad_col = mknode("Sub", [out_row, new_depth]), mknode("Sub", [out_col, new_width])
+            pad_top = mknode("Max", [zeo, mknode("Sub", [zeo, k_max])])
+            pad_lft = mknode("Max", [zeo, mknode("Sub", [k_min, zeo])])
+            pad_btm = mknode("Sub", [pad_row, pad_top])
+            pad_rht = mknode("Sub", [pad_col, pad_lft])
+            pad_hlf = mknode("Mul", [zeo, head_shape])
+            pad_ful = mknode("Concat", [pad_hlf, pad_top, pad_lft, pad_hlf, pad_btm, pad_rht], attr={"axis": -1})
+            return mknode("Pad", [new_diag, pad_ful, pad])
+
+        padded = paddiag()
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("Identity", [padded], name=node.name,
+                      outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+
+@tf_op("MatrixSetDiagV3")
+class MatrixSetDiagV3:
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        # Assemble MatrixSetDiagV3 by MatrixDiagPartV3 and MatrixDiagV3
+
+        minus_two, minus_one, zeo, one = \
+            [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1]])]
+
+        def mknode(op, args, **kwargs):
+            return ctx.make_node(op, args, **kwargs).output[0]
+
+        def integer(name):
+            return mknode("Cast", [name], attr={"to": TensorProto.INT64})
+
+        def cast(name):
+            return mknode("Cast", [name], attr={"to": ctx.get_dtype(node.input[0])})
+
+        def normalize():
+            k = node.input[2]
+            casted = mknode("Cast", [k], attr={"to": TensorProto.INT64})
+            return mknode("Reshape", [casted, minus_one])
+
+        x = node.input[0]
+        diag = node.input[1]
+        k = normalize()
+        attr = {"align": node.get_attr_str("align")}
+
+        shape = mknode("Shape", [x])
+        rank = mknode("Shape", [shape])
+        row = mknode("Slice", [shape, minus_two, minus_one])
+        col = mknode("Slice", [shape, minus_one, rank])
+
+        # ones of x shape
+        zeos = mknode("Mul", [integer(x), zeo])
+        ones = mknode("Add", [zeos, one])
+
+        # make diag of 1s
+        ones_diag = ctx.make_node("MatrixDiagPartV3", [ones, k, zeo], attr)
+        MatrixDiagPartV2V3.version_11(ctx, ones_diag)
+        # MatrixDiagPartV2V3.version_12(ctx, ones_diag) # todo: fix exception
+
+        # make matrix of bool
+        ctx.set_dtype(ones_diag.output[0], TensorProto.INT64)
+        ones_matrix = ctx.make_node("MatrixDiagV3", [ones_diag.output[0], k, row, col, zeo], attr)
+        MatrixDiag.version_12(ctx, ones_matrix)
+        ones_bool = mknode("Equal", [ones_matrix.output[0], one])
+
+        # make matrix out of diag
+        diag_matrix = ctx.make_node("MatrixDiagV3", [diag, k, row, col, cast(zeo)], attr)
+        MatrixDiag.version_12(ctx, diag_matrix)
+
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        mknode("Where", [ones_bool, diag_matrix.output[0], x],
+               name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 
 @tf_op("BroadcastTo")

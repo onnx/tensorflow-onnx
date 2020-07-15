@@ -301,7 +301,7 @@ class Node(object):
         self.set_attr("value", onnx_tensor)
         # track shapes in _output_shapes
         self._graph_check()
-        self.graph.set_shape(onnx_tensor.name, onnx_tensor.dims)
+        self.graph.set_shape(onnx_tensor.name, list(onnx_tensor.dims))
 
     def get_body_graphs(self):
         self._graph_check()
@@ -484,6 +484,14 @@ class Graph(object):
                 all_inputs.append(n)
         return all_inputs
 
+    def make_consts(self, values, np_type=np.int64, skip_conversion=False, raw=True):
+        """create list of consts of same type"""
+        consts = []
+        for value in values:
+            np_val = np.array(value).astype(np_type)
+            consts.append(self.make_const(utils.make_name("const"), np_val, skip_conversion, raw))
+        return consts
+
     def make_const(self, name, np_val, skip_conversion=False, raw=True):
         """Make a new constant in the graph.
         Args:
@@ -503,6 +511,13 @@ class Graph(object):
         self.set_shape(name, np_val.shape)
         self.set_dtype(name, utils.map_numpy_to_onnx_dtype(np_val.dtype))
         return node
+
+    def copy_const(self, node, name=None):
+        """Copy a const node, using name if specified"""
+        # TODO: support attr copy starting at opset 12
+        if name is None:
+            name = utils.make_name(node.name)
+        return self.make_const(name, node.get_tensor_value(as_list=False))
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
                   op_name_scope=None, name=None, shapes=None, dtypes=None, domain=constants.ONNX_DOMAIN,
@@ -1060,7 +1075,9 @@ class Graph(object):
             shape = self.get_shape(name)
 
             utils.make_sure(dtype is not None, "missing output dtype for " + name)
-            utils.make_sure(shape is not None, "missing output shape for " + name)
+            # TODO: allow None output shape or not? e.g. shape=(?,)
+            #utils.make_sure(shape is not None, "missing output shape for " + name)
+            if shape is None: logger.warning("missing output shape for %s", name)
 
             v = utils.make_onnx_inputs_outputs(name, dtype, shape)
             tensor_value_infos.append(v)

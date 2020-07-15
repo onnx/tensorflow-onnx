@@ -691,7 +691,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                        model_proto, remaining_transpose_num=0)
 
     def test_two_transposes_switch_with_mul(self):
-        const_node = self._make_onnx_const(np.array(10, dtype=np.float32), "const_10")
+        const_node = self._make_onnx_const(np.array(np.random.random(6), dtype=np.float32), "const_10")
         node0 = helper.make_node("Transpose", ["u1"], ["v1"], perm=[0, 2, 3, 1], name="trans_0")
         node1 = helper.make_node("Transpose", ["u2"], ["v2"], perm=[0, 2, 3, 1], name="trans_1")
 
@@ -710,6 +710,30 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = self.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["res"], {"u1": np.random.randn(1, 6, 8, 9).astype(np.float32),
                                              "u2": np.random.randn(1, 6, 8, 9).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_many_transposes_and_constant_switch_with_sum(self):
+        constnode = self._make_onnx_const(np.array(np.random.random((1, 8, 9, 6)), dtype=np.float32), "v4")
+        node0 = helper.make_node("Transpose", ["u1"], ["v1"], perm=[0, 2, 3, 1], name="trans_0")
+        node1 = helper.make_node("Transpose", ["u2"], ["v2"], perm=[0, 2, 3, 1], name="trans_1")
+        node11 = helper.make_node("Transpose", ["u3"], ["v3"], perm=[0, 2, 3, 1], name="trans_2")
+
+        node2 = helper.make_node("Sum", ["v1", "v2", "v3", "v4"], ["x"], name="sum_1")
+        node3 = helper.make_node("Sum", ["x", "v1"], ["y"], name="sum_2")
+        node4 = helper.make_node("Transpose", ["y"], ["res"], perm=[0, 3, 1, 2], name="trans_4")
+
+        graph = helper.make_graph(
+            [constnode, node0, node1, node11, node2, node3, node4],
+            "test-transpose-mul",
+            [helper.make_tensor_value_info("u1", TensorProto.FLOAT, (1, 6, 8, 9)),
+             helper.make_tensor_value_info("u2", TensorProto.FLOAT, (1, 6, 8, 9)),
+             helper.make_tensor_value_info("u3", TensorProto.FLOAT, (1, 6, 8, 9))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 6, 8, 9))],
+        )
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"u1": np.random.randn(1, 6, 8, 9).astype(np.float32),
+                                             "u2": np.random.randn(1, 6, 8, 9).astype(np.float32),
+                                             "u3": np.random.randn(1, 6, 8, 9).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
     # Tranpose Optimizer Tests End

@@ -21,6 +21,7 @@ regression-checkpoint:
 regression-saved-model:
   model: models/regression/saved_model
   model_type: saved_model
+  tag: serve
   input_get: get_ramp
   inputs:
     "X:0": [1]
@@ -239,9 +240,10 @@ vgg-16:
 
 resnet50_v2_nchw: # NOTE: Tensorflow 1.9.0 fails
   skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
-  model_type: saved_model
   url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NCHW.tar.gz
   model: resnet_v2_fp32_savedmodel_NCHW/1538687196
+  model_type: saved_model
+  tag: serve
   input_get: get_beach
   inputs:
     "input_tensor:0": [64, 224, 224, 3]
@@ -250,9 +252,10 @@ resnet50_v2_nchw: # NOTE: Tensorflow 1.9.0 fails
     - softmax_tensor:0
 
 resnet50_v2_nhwc:
-  model_type: saved_model
   url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NHWC.tar.gz
   model: resnet_v2_fp32_savedmodel_NHWC/1538687283
+  model_type: saved_model
+  tag: serve
   input_get: get_beach
   inputs:
     "input_tensor:0": [64, 224, 224, 3]
@@ -391,3 +394,27 @@ faster_rcnn_inception_v2_coco:
     - detection_classes:0
     - detection_scores:0
     - num_detections:0
+
+keras_resnet50:
+  tf_min_version: 2.1
+  disabled: false
+  url: module://tensorflow.keras.applications.resnet50/ResNet50
+  model: ResNet50
+  model_type: keras
+  input_get: get_ramp
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+
+keras_mobilenet_v2:
+  tf_min_version: 2.1
+  disabled: false
+  url: module://tensorflow.keras.applications.mobilenet_v2/MobileNetV2
+  model: MobileNetV2
+  model_type: keras
+  input_get: get_ramp
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0

@@ -28,6 +28,8 @@ class Tf2OnnxConvertTest(unittest.TestCase):
         self.assertTrue(run_test_case(['',
                                        '--saved-model',
                                        'tests/models/regression/saved_model',
+                                       '--tag',
+                                       'serve',
                                        '--output',
                                        'converted_saved_model.onnx']))
 
