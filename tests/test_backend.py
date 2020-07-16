@@ -69,6 +69,7 @@ if is_tf2():
     is_inf = tf.math.is_inf
     floormod = tf.math.floormod
     matrix_diag_part = tf.compat.v1.matrix_diag_part
+    fake_quant_with_min_max_args = tf.quantization.fake_quant_with_min_max_args
 elif LooseVersion(tf.__version__) >= "1.13":
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
     multinomial = tf.compat.v1.random.multinomial
@@ -88,6 +89,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     is_inf = tf.math.is_inf
     floormod = tf.floormod
     matrix_diag_part = tf.compat.v1.matrix_diag_part
+    fake_quant_with_min_max_args = tf.compat.v1.quantization.fake_quant_with_min_max_args
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
     multinomial = tf.multinomial
@@ -3352,6 +3354,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
 
+    @check_opset_min_version(10)
+    @check_tf_min_version("1.14")
+    def test_fakequant_with_min_max(self):
+        x_val = np.random.random(size=[4, 5]).astype(np.float32) * 2048. - 1024.
+        def func(x):
+            ret = fake_quant_with_min_max_args(
+                x, min=-1024, max=1024, num_bits=8, narrow_range=False, name=None)
+            return tf.identity(ret, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
 
 if __name__ == '__main__':
+    cl = BackendTests()
+    cl.setUp()
+    cl.test_fakequant_with_min_max()
     unittest_main()
