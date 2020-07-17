@@ -13,7 +13,7 @@ import logging
 import sys
 
 import numpy as np
-from onnx import onnx_pb
+from onnx import onnx_pb, numpy_helper, TensorProto
 from onnx.onnx_pb import TensorProto
 
 from tf2onnx import constants, utils
@@ -37,12 +37,19 @@ class FakeQuantWithMinMaxArgs:
         amax = node.get_attr("max").f
         narrow_range = node.get_attr("narrow_range").i
         num_bits = node.get_attr("num_bits").i
-        
+
         if narrow_range:
             raise RuntimeError(
                 "Unable to convert node FakeQuantWithMinMaxArgs with "
                 "narrow_range=%r" % narrow_range)
-        
+        if num_bits != 8:
+            raise RuntimeError(
+                "Unable to convert node FakeQuantWithMinMaxArgs with "
+                "num_bits=%r" % num_bits)
+
+        scale = (amax - amin) / (2 ** num_bits - 1)
+        min_adj = scale * int(amin / scale)
+        max_adj = amax + min_adj - amin
         if 0 < amin < amax:
             min_adj = 0
             max_adj = amax - amin
@@ -62,18 +69,27 @@ class FakeQuantWithMinMaxArgs:
 
         dtype = ctx.get_dtype(node.input[0])
         shape = ctx.get_shape(node.input[0])
+        axis = 1
+        idtype = TensorProto.UINT8
+        
+        pb_scale = ctx.make_const(
+            utils.make_name("{}_scaley".format(node.name)),
+            np.array(scale, dtype=np.float32))
+        zero_point = ctx.make_const(
+            utils.make_name("{}_zpy".format(node.name)),
+            np.array(min_adj, dtype=np.uint8))
 
         new_node = ctx.make_node(
-            "QuantizeLinear", [node.input[0], pb_scale, y_zero_point],
-            op_name_scope=node.name, attr={"axes": [axis]},
+            "QuantizeLinear", [node.input[0], pb_scale.name, zero_point.name],
+            op_name_scope=node.name, attr={"axis": axis},
             shapes=[shape], dtypes=[idtype])
         output_name = new_node.output[0]
-        node.input[i] = output_name
+        node.input[0] = output_name
 
         ctx.remove_node(node.name)
 
         last_node = ctx.make_node(
-            "DequantizeLinear", [new_node.output[0], x_scale, x_zero_point],
+            "DequantizeLinear", [new_node.output[0], pb_scale.name, zero_point.name],
             op_name_scope=node.name, attr={"axis": axis},
             shapes=[shape], dtypes=[dtype])
         ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], last_node.output[0])
