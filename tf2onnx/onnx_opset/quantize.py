@@ -44,9 +44,6 @@ class FakeQuantWithMinMaxArgs:
                 "Unable to convert node FakeQuantWithMinMaxArgs with "
                 "num_bits=%r" % num_bits)
 
-        scale = (amax - amin) / (2 ** num_bits - 1)
-        min_adj = scale * int(amin / scale)
-        max_adj = amax + min_adj - amin
         if 0 < amin < amax:
             min_adj = 0
             max_adj = amax - amin

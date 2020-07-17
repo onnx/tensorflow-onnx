@@ -3357,16 +3357,25 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(10)
     @check_tf_min_version("1.14")
     def test_fakequant_with_min_max(self):
-        x_val = np.random.random(size=[3, 3]).astype(np.float32) * 2048. - 1024.
         def func(x):
             ret = fake_quant_with_min_max_args(
                 x, min=-1024, max=1024, num_bits=8, narrow_range=False, name=None)
             return tf.identity(ret, name=_TFOUTPUT)
+
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024.
+        x_val0 = np.abs(x_val)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0})
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 
 if __name__ == '__main__':
-    # cl = BackendTests()
-    # cl.setUp()
-    # cl.test_fakequant_with_min_max()
+    #cl = BackendTests()
+    #cl.setUp()
+    #cl.test_fakequant_with_min_max()
+    #import cProfile
+    #cProfile.run('unittest_main()', 'restats')
     unittest_main()
+    #import pstats
+    #from pstats import SortKey
+    #p = pstats.Stats('restats')
+    #p.sort_stats(SortKey.CUMULATIVE).print_stats()    
