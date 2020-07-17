@@ -13,13 +13,10 @@ import logging
 import sys
 
 import numpy as np
-from onnx import onnx_pb, numpy_helper, TensorProto
 from onnx.onnx_pb import TensorProto
 
-from tf2onnx import constants, utils
-from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx import utils
 from tf2onnx.handler import tf_op
-from tf2onnx.onnx_opset import nn, math
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +68,7 @@ class FakeQuantWithMinMaxArgs:
         shape = ctx.get_shape(node.input[0])
         axis = 1
         idtype = TensorProto.UINT8
-        
+
         pb_scale = ctx.make_const(
             utils.make_name("{}_scaley".format(node.name)),
             np.array(scale, dtype=np.float32))
@@ -93,5 +90,4 @@ class FakeQuantWithMinMaxArgs:
             op_name_scope=node.name, attr={"axis": axis},
             shapes=[shape], dtypes=[dtype])
         ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], last_node.output[0])
-
 
