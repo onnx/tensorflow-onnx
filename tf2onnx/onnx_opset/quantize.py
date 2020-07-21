@@ -10,7 +10,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import logging
-import sys
 
 import numpy as np
 from onnx.onnx_pb import TensorProto
@@ -28,7 +27,7 @@ logger = logging.getLogger(__name__)
 class FakeQuantWithMinMaxArgs:
     # see https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/fake-quant-with-min-max-args
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def version_10(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx pack op
         amin = node.get_attr("min").f
         amax = node.get_attr("max").f
