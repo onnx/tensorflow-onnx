@@ -3352,6 +3352,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
 
+    @check_opset_min_version(7, "atan2")
+    def test_atan2(self):
+        # Test all possible pairs of pos, neg, zero for x and y.
+        test_pairs = [[y, x] for y in [3., -4., 0.] for x in [5., -6., 0.]]
+        y_val = np.array([y for y, x in test_pairs], dtype=np.float32)
+        x_val = np.array([x for y, x in test_pairs], dtype=np.float32)
+
+        def func(y, x):
+            atan2_ = tf.math.atan2(y, x)
+            return tf.identity(atan2_, name=_TFOUTPUT)
+
+        self._run_test_case(
+            func, [_OUTPUT], {_INPUT: y_val, _INPUT2: x_val}, rtol=1e-06)
+
 
 if __name__ == '__main__':
     unittest_main()
