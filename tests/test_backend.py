@@ -3359,23 +3359,37 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_fakequant_with_min_max(self):
         def func(x):
             ret = fake_quant_with_min_max_args(
-                x, min=-1024, max=1024, num_bits=8, narrow_range=False, name=None)
+                x, min=-1024, max=1023, num_bits=8, narrow_range=False, name=None)
             return tf.identity(ret, name=_TFOUTPUT)
 
         x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024.
         x_val0 = np.abs(x_val)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0})
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0}, rtol=1e-6, atol=1e-4)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
+
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024
+        x_val[0, 0] = -1024
+        x_val[0, 1] = -1023
+        x_val[0, 2] = 1024
+        x_val[1, 0] = 1023
+        x_val[1, 1] = 1025
+        x_val[1, 2] = -1025
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
+
+    @check_opset_min_version(10)
+    @check_tf_min_version("1.14")
+    def test_fakequant_with_min_max_same_sign(self):
+        def func_neg(x):
+            ret = fake_quant_with_min_max_args(
+                x, min=-1024*3, max=-1024, num_bits=8, narrow_range=False, name=None)
+            return tf.identity(ret, name=_TFOUTPUT)
+
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024 * 3.
+        try:
+            self._run_test_case(func_neg, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
+        except RuntimeError:
+            pass
 
 
 if __name__ == '__main__':
-    #cl = BackendTests()
-    #cl.setUp()
-    #cl.test_fakequant_with_min_max()
-    #import cProfile
-    #cProfile.run('unittest_main()', 'restats')
     unittest_main()
-    #import pstats
-    #from pstats import SortKey
-    #p = pstats.Stats('restats')
-    #p.sort_stats(SortKey.CUMULATIVE).print_stats()    

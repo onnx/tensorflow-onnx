@@ -44,22 +44,8 @@ class FakeQuantWithMinMaxArgs:
                 "Unable to convert node FakeQuantWithMinMaxArgs with "
                 "num_bits=%r" % num_bits)
 
-        if 0 < amin < amax:
-            min_adj = 0
-            max_adj = amax - amin
-            scale = 1.
-        elif amin < amax < 0:
-            min_adj = amin - amax
-            max_adj = 0
-            scale = 1.
-        elif amin <= 0 <= amax:
-            scale = (amax - amin) / (2 ** num_bits - 1)
-            min_adj = scale * int(amin / scale)
-            max_adj = amax + min_adj - amin
-        else:
-            raise RuntimeError(
-                "Unable to convert node FakeQuantWithMinMaxArgs with "
-                "min=%f and max=%f" % (amin, amax))
+        scale = (amax - amin) / (2 ** num_bits - 1)
+        min_adj = np.around(amin / scale)
 
         dtype = ctx.get_dtype(node.input[0])
         shape = ctx.get_shape(node.input[0])
@@ -69,9 +55,15 @@ class FakeQuantWithMinMaxArgs:
         pb_scale = ctx.make_const(
             utils.make_name("{}_scaley".format(node.name)),
             np.array(scale, dtype=np.float32))
+        zero = np.array(-min_adj, dtype=np.uint8)
+        if zero != -min_adj:
+            raise RuntimeError(
+                "Cannot convert FakeQuantWithMinMaxArgs with "
+                "min={} max={} numbits={} because zero_scale={} "
+                "is outside uint8 boundary".format(
+                    amin, amax, num_bits, -min_adj))
         zero_point = ctx.make_const(
-            utils.make_name("{}_zpy".format(node.name)),
-            np.array(min_adj, dtype=np.uint8))
+            utils.make_name("{}_zpy".format(node.name)), zero)
 
         new_node = ctx.make_node(
             "QuantizeLinear", [node.input[0], pb_scale.name, zero_point.name],
@@ -87,4 +79,3 @@ class FakeQuantWithMinMaxArgs:
             op_name_scope=node.name, attr={"axis": axis},
             shapes=[shape], dtypes=[dtype])
         ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], last_node.output[0])
-
