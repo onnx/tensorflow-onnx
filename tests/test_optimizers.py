@@ -7,15 +7,34 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from distutils.version import LooseVersion
+
 import numpy as np
 from onnx import helper, TensorProto, OperatorSetIdProto
-from tf2onnx import utils, constants
+import tensorflow as tf
+from tensorflow import keras, Graph, __version__
+from tf2onnx import utils, constants, tfonnx
 from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
+
+
+def is_tf2():
+    return __version__.startswith("2.")
+
+if is_tf2():
+    tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
+elif LooseVersion(tf.__version__) >= "1.13":
+    # 1.13 introduced the compat namespace
+    tf_session = compat.v1.Session  # pylint: disable=invalid-name
+else:
+    # older than 1.13
+    tf_session = tf.Session  # pylint: disable=invalid-name
+
+
 
 class OptimizerTests(Tf2OnnxBackendTestBase):
     """Run original model proto and modified model proto with onnxruntime, compare the results."""
@@ -1177,6 +1196,38 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         self.run_and_compare(["res", "res2", "res3"], {"u": np.random.randn(1, 2, 3).astype(np.float32)}, model_proto,
                              "Cast", 5)
+
+    def test_optimize_drop_out(self):
+        for k in [keras]:
+           with Graph().as_default() as graph:
+                model = k.Sequential(
+                    layers=[k.layers.Dropout(rate=0.5, input_shape=[4, 4])])
+
+                tfonnx.process_tf_graph(tf_graph=graph,
+                                        input_names=[model.input.name],
+                                        output_names=[model.output.name])
+
+    def test_optimize_drop_out_dense(self):
+
+        for k in [keras]:
+            with tf.compat.v1.Session(graph=Graph()) as session:
+                model = k.Sequential(layers=[
+                    k.layers.Dense(units=4, input_shape=[4]),
+                    k.layers.Dropout(rate=0.5),
+                    k.layers.Dense(units=2)])
+
+                session.run([v.initializer for v in model.weights])
+
+                graph_def = tf.compat.v1.graph_util.convert_variables_to_constants(
+                    sess=session, input_graph_def=session.graph_def,
+                    output_node_names=[model.output.op.name])
+
+            with tf.Graph().as_default() as graph:
+                tf.import_graph_def(graph_def=graph_def, name='')
+
+                tfonnx.process_tf_graph(tf_graph=graph,
+                                        input_names=[model.input.name],
+                                        output_names=[model.output.name])
 
 
 if __name__ == "__main__":
