@@ -16,6 +16,7 @@ from onnx.onnx_pb import TensorProto
 
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
+from tf2onnx.utils import make_sure
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +35,13 @@ class FakeQuantWithMinMaxArgs:
         narrow_range = node.get_attr("narrow_range").i
         num_bits = node.get_attr("num_bits").i
 
-        if narrow_range:
-            raise RuntimeError(
-                "Unable to convert node FakeQuantWithMinMaxArgs with "
-                "narrow_range=%r" % narrow_range)
-        if num_bits != 8:
-            raise RuntimeError(
-                "Unable to convert node FakeQuantWithMinMaxArgs with "
-                "num_bits=%r" % num_bits)
+        make_sure(
+            not narrow_range,
+            "Unable to convert node FakeQuantWithMinMaxArgs with narrow_range=%r",
+            narrow_range)
+        make_sure(num_bits == 8,
+            "Unable to convert node FakeQuantWithMinMaxArgs with "
+            "num_bits=%r", num_bits)
 
         scale = (amax - amin) / (2 ** num_bits - 1)
         min_adj = np.around(amin / scale)
@@ -55,12 +55,11 @@ class FakeQuantWithMinMaxArgs:
             utils.make_name("{}_scaley".format(node.name)),
             np.array(scale, dtype=np.float32))
         zero = np.array(-min_adj, dtype=np.uint8)
-        if zero != -min_adj:
-            raise RuntimeError(
-                "Cannot convert FakeQuantWithMinMaxArgs with "
-                "min={} max={} numbits={} because zero_scale={} "
-                "is outside uint8 boundary".format(
-                    amin, amax, num_bits, -min_adj))
+        make_sure(zero == -min_adj,
+            "Cannot convert FakeQuantWithMinMaxArgs with "
+            "min={} max={} numbits={} because zero_scale={} "
+            "is outside uint8 boundary",
+            amin, amax, num_bits, -min_adj)
         zero_point = ctx.make_const(
             utils.make_name("{}_zpy".format(node.name)), zero)
 

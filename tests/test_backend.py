@@ -3387,7 +3387,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024 * 3.
         try:
             self._run_test_case(func_neg, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
-        except RuntimeError:
+        except ValueError:
             pass
 
 
