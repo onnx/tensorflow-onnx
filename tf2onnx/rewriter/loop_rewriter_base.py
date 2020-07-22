@@ -55,9 +55,9 @@ class LoopProperties(object):
 
     def add_variable(self, var):
         utils.make_sure(var.enter_name not in self.scan_variables,
-                        "variable %s already exists as scan variable.", var.enter_name)
+                        "variable %r already exists as scan variable.", var.enter_name)
         utils.make_sure(var.enter_name not in self.state_variables,
-                        "variable %s already exists as state variable.", var.enter_name)
+                        "variable %r already exists as state variable.", var.enter_name)
         if not var.is_tensor_array:
             self.state_variables[var.enter_name] = var
         else:

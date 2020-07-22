@@ -234,7 +234,7 @@ def _merge_shapes_for_tf(shape1, shape2):
 
     utils.make_sure(utils.is_list_or_tuple(shape1), "invalid type for shape1")
     utils.make_sure(utils.is_list_or_tuple(shape2), "invalid type for shape2")
-    utils.make_sure(len(shape1) == len(shape2), "shapes rank mismatch: shape1=%s, shape2=%s", shape1, shape2)
+    utils.make_sure(len(shape1) == len(shape2), "shapes rank mismatch: shape1=%r, shape2=%r", shape1, shape2)
 
     merged = []
     for d1, d2 in zip(shape1, shape2):

@@ -56,7 +56,7 @@ class LoopRewriter(LoopRewriterBase):
                 shape = out_tensor_value_info.shape
                 utils.make_sure(
                     shape is not None,
-                    "Conversion of Loop requries output shape [{}] exists".format(out_tensor_value_info.id)
+                    "Conversion of Loop requries output shape [%r] exists", out_tensor_value_info.id
                 )
                 out_tensor_value_info.shape = utils.create_vague_shape_like(shape)
 

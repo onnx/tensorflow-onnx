@@ -265,16 +265,16 @@ class ConcatV2:
                 ctx.remove_input(node, node.input[i])
         # all inputs are deleted
         if not node.input:
-            raise RuntimeError("all inputs of {} are empty".format(node.name))
+            raise RuntimeError("all inputs of %r are empty", node.name)
 
         axis_node = node.inputs[-1]
-        utils.make_sure(axis_node.is_const(), "{} needs to be const".format(axis_node.name))
+        utils.make_sure(axis_node.is_const(), "%r needs to be const", axis_node.name)
         axis_val = axis_node.get_tensor_value()
         ctx.remove_input(node, node.input[-1])
 
         if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
             input_shape = ctx.get_shape(node.input[0])
-            utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
+            utils.make_sure(input_shape is not None, "shape of %r is None", node.input[0])
             axis_val = len(input_shape) + axis_val
         node.set_attr("axis", axis_val)
 
@@ -306,8 +306,8 @@ class Slice:
                 # get all elements
                 if size == -1:
                     dtype = ctx.get_dtype(node.input[1])
-                    utils.make_sure(dtype, "dtype of {} is None".format(node.input[1]))
-                    utils.make_sure(dtype, "dtype of {} is None".format(node.input[1]))
+                    utils.make_sure(dtype, "dtype of %r is None", node.input[1])
+                    utils.make_sure(dtype, "dtype of %r is None", node.input[1])
                     ends.append(np.iinfo(dtype).max)
                 else:
                     ends.append(start + size)
@@ -499,7 +499,7 @@ class GatherND:
         output = node.output[0]
         # same as the attr Tparams
         t_params = ctx.get_dtype(params)
-        utils.make_sure(t_params, "Dtype of {} is None".format(indices))
+        utils.make_sure(t_params, "Dtype of %r is None", indices)
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
@@ -680,7 +680,7 @@ class StridedSlice:
                 input_shape = ctx.get_shape(node.input[0])
                 utils.make_sure(
                     input_shape is not None,
-                    "StridedSlice op {} requires the shape of input".format(node.name)
+                    "StridedSlice op %r requires the shape of input", node.name
                 )
                 ellipsis_gap = len(input_shape) - len(begin)
                 continue
@@ -805,7 +805,7 @@ class StridedSlice:
                       ctx.get_shape(node.input[3])
         utils.make_sure(
             param_shape is not None,
-            "StridedSlice op {} requires the shape of begin/end/strides".format(node.name)
+            "StridedSlice op %r requires the shape of begin/end/strides", node.name
         )
         param_rank = param_shape[0]
         # use in onnx graph to mask begin
@@ -823,7 +823,7 @@ class StridedSlice:
                 input_shape = ctx.get_shape(input_x.output[0])
                 utils.make_sure(
                     input_shape is not None,
-                    "StridedSlice op {} requires the shape of input".format(node.name)
+                    "StridedSlice op %r requires the shape of input", node.name
                 )
                 ellipsis_gap = len(input_shape) - param_rank
                 # handle the redundant param
@@ -1060,7 +1060,7 @@ class Unpack:
         axis = node.get_attr("axis").i
         if axis < 0:
             shape = ctx.get_shape(node.input[0])
-            utils.make_sure(shape is not None, "shape of unpack input is None: {}".format(node.input[0]))
+            utils.make_sure(shape is not None, "shape of unpack input is None: %r", node.input[0])
             axis += len(shape)
         # split the tensor into n outputs
         node.type = "Split"
@@ -1449,7 +1449,7 @@ class IsInf:
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
         node_dtype = ctx.get_dtype(node.input[0])
-        utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
+        utils.make_sure(node_dtype, "Dtype of %r is None", node.name)
         if node_dtype not in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]:
             raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
 
@@ -1531,7 +1531,7 @@ class ReverseSequence:
             old_dtype = ctx.get_dtype(node.input[0])
             perm_val = [1, 0]
             rank = len(old_shape)
-            utils.make_sure(rank >= 2, "rank of reverse_sequence input {} is at least 2".format(node.input[0]))
+            utils.make_sure(rank >= 2, "rank of reverse_sequence input %r is at least 2", node.input[0])
             perm_val += list(range(2, rank))
             trans_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm_val)
             new_shape = nn.spatial_map(old_shape, perm_val)
@@ -1585,7 +1585,7 @@ class ReverseSequence:
         # T output = ReverseSequence(T input, int32|int64 seq_lengths, @int seq_dim, @int batch_dim)
         # T output = ReverseSequence(T input, int64 sequence_lens, @int time_axis, @int batch_axis)
         seq_dim = node.get_attr("seq_dim")
-        utils.make_sure(seq_dim is not None, "sequence dim must be given in {}".format(node.name))
+        utils.make_sure(seq_dim is not None, "sequence dim must be given in %r", node.name)
         seq_dim = seq_dim.i
         batch_dim = node.get_attr_value("batch_dim", 0)
 
@@ -1597,7 +1597,7 @@ class ReverseSequence:
             attr={"batch_axis": batch_dim, "time_axis": seq_dim})
 
         seq_len_dtype = ctx.get_dtype(node.input[1])
-        utils.make_sure(seq_len_dtype is not None, "dtype of {} is None".format(node.input[1]))
+        utils.make_sure(seq_len_dtype is not None, "dtype of %r is None", node.input[1])
         target_dtype = TensorProto.INT64
         if seq_len_dtype != target_dtype:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=target_dtype)
@@ -1631,7 +1631,7 @@ class ReverseV2:
         input_shape_node = ctx.make_node("Shape", [node.input[0]], op_name_scope=node.name)
 
         # Make sure input shape is not None
-        utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
+        utils.make_sure(input_shape is not None, "shape of %r is None", node.input[0])
 
         rv2_node_name = node.name
         # ReverseV2 has a single output.
@@ -2041,7 +2041,7 @@ class MatrixDiagPartV2V3:
         m_rank = len(m_shape)
         pads = np.zeros(2 * m_rank, dtype=np.int64)
         pads[-2:] = [1, 1]
-        utils.make_sure(m_rank > 1, 'Input data should be at least 2D %s', str(m_shape))
+        utils.make_sure(m_rank > 1, 'Input data should be at least 2D %r', str(m_shape))
 
         align = 'LEFT_LEFT'
         if node.op.op_type == 'MatrixDiagPartV3':

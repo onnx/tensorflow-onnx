@@ -206,7 +206,7 @@ class Node(object):
         attr_int = self.get_attr_value(name)
         utils.make_sure(
             attr_int is not None and isinstance(attr_int, int),
-            "attribute %s is None", name
+            "attribute %r is None", name
         )
         return attr_int
 
@@ -215,7 +215,7 @@ class Node(object):
         attr_str = self.get_attr_value(name)
         utils.make_sure(
             attr_str is not None and isinstance(attr_str, bytes),
-            "attribute %s is None", name
+            "attribute %r is None", name
         )
         return attr_str.decode(encoding)
 
@@ -366,7 +366,7 @@ class Node(object):
         return list(outer_scope_node_input_ids)
 
     def _graph_check(self):
-        utils.make_sure(self.graph is not None, "Node %s not belonging any graph",
+        utils.make_sure(self.graph is not None, "Node %r not belonging any graph",
                         self.name)
 
     def maybe_cast_input(self, supported, type_map):
@@ -551,10 +551,10 @@ class Graph(object):
                 raw_attr[a] = v
 
         n = self.get_node_by_name(name)
-        utils.make_sure(n is None, "name %s already exists in node: \n%s", name, n)
+        utils.make_sure(n is None, "name %r already exists in node: \n%s", name, n)
         for o in outputs:
             n = self.get_node_by_output_in_current_graph(o)
-            utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
+            utils.make_sure(n is None, "output tensor named %r already exists in node: \n%s", o, n)
 
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
@@ -777,7 +777,7 @@ class Graph(object):
 
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
-        utils.make_sure(new_name not in self._nodes_by_name, "node %s not unique ", new_name)
+        utils.make_sure(new_name not in self._nodes_by_name, "node %r not unique ", new_name)
         dtypes = node.output_dtypes
         shapes = node.output_shapes
         self.remove_node(node.name)
@@ -821,7 +821,7 @@ class Graph(object):
 
     def add_graph_output(self, name, dtype=None, shape=None):
         """Add node output as graph's output."""
-        utils.make_sure(name in self._output_to_node_name, "output %s not exist in the graph", name)
+        utils.make_sure(name in self._output_to_node_name, "output %r not exist in the graph", name)
 
         if dtype is None:
             dtype = self.get_dtype(name)
@@ -830,8 +830,8 @@ class Graph(object):
             shape = self.get_shape(name)
 
         if name not in self.outputs:
-            utils.make_sure(shape is not None, "shape for output %s should not be None", name)
-            utils.make_sure(dtype is not None, "dtype for output %s should not be None", name)
+            utils.make_sure(shape is not None, "shape for output %r should not be None", name)
+            utils.make_sure(dtype is not None, "dtype for output %r should not be None", name)
             self.outputs.append(name)
             self.set_shape(name, shape)
             self.set_dtype(name, dtype)
@@ -855,7 +855,7 @@ class Graph(object):
 
     def get_shape(self, name):
         """Get shape for node."""
-        utils.make_sure(isinstance(name, six.text_type), "get_shape name is invalid type: %s", name)
+        utils.make_sure(isinstance(name, six.text_type), "get_shape name is invalid type: %r", name)
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
         shape = node.graph._output_shapes.get(name) if node else None
         if shape:
@@ -878,7 +878,7 @@ class Graph(object):
         if isinstance(val, tuple):
             val = list(val)
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
-        utils.make_sure(node is not None, "cannot find node by output id %s", name)
+        utils.make_sure(node is not None, "cannot find node by output id %r", name)
         node.graph._output_shapes[name] = val
 
     def copy_shape(self, input_name, output_name):
@@ -919,7 +919,7 @@ class Graph(object):
             all_input = list(filter(lambda a: a != '', all_input))
             for inp in sorted(all_input):
                 j = self.get_node_by_output(inp)
-                utils.make_sure(j is not None, "Cannot find node with output {}".format(inp))
+                utils.make_sure(j is not None, "Cannot find node with output %r", inp)
                 if self.parent_graph and j.name not in op_name_to_index:
                     # there might be some outer-scoped inputs for an inner Graph.
                     pass
@@ -988,7 +988,7 @@ class Graph(object):
         placeholder_default_const_ops = []
         for op in placeholder_ops:
             if op.type == "PlaceholderWithDefault":
-                utils.make_sure(op.inputs[0] is not None, "Cannot find node with output {}".format(op.input[0]))
+                utils.make_sure(op.inputs[0] is not None, "Cannot find node with output %r", op.input[0])
                 utils.make_sure(op.inputs[0].is_const(),
                                 "non-const default value for PlaceholderWithDefault is not supported.")
                 # copy the tensor value, set its name to current node's output, add as initializer
@@ -1074,10 +1074,10 @@ class Graph(object):
             dtype = self.get_dtype(name)
             shape = self.get_shape(name)
 
-            utils.make_sure(dtype is not None, "missing output dtype for " + name)
+            utils.make_sure(dtype is not None, "missing output dtype for %r", name)
             # TODO: allow None output shape or not? e.g. shape=(?,)
             #utils.make_sure(shape is not None, "missing output shape for " + name)
-            if shape is None: logger.warning("missing output shape for %s", name)
+            if shape is None: logger.warning("missing output shape for %r", name)
 
             v = utils.make_onnx_inputs_outputs(name, dtype, shape)
             tensor_value_infos.append(v)
@@ -1173,9 +1173,9 @@ class Graph(object):
         Returns:
             node that was inserted
         """
-        utils.make_sure(isinstance(output_name, six.text_type), "output_name's type is not expected: %s",
+        utils.make_sure(isinstance(output_name, six.text_type), "output_name's type is not expected: %r",
                         type(output_name))
-        utils.make_sure(isinstance(op_type, six.text_type), "op_type's type is not expected: %s",
+        utils.make_sure(isinstance(op_type, six.text_type), "op_type's type is not expected: %r",
                         type(op_type))
 
         new_output = port_name(name)

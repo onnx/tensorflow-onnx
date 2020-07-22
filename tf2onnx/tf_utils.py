@@ -70,7 +70,7 @@ def get_tf_tensor_data(tensor):
     """Get data from tensor."""
     make_sure(isinstance(tensor, tensor_pb2.TensorProto), "Require TensorProto")
     np_data = tensor_util.MakeNdarray(tensor)
-    make_sure(isinstance(np_data, np.ndarray), "{} isn't ndarray".format(type(np_data)))
+    make_sure(isinstance(np_data, np.ndarray), "%r isn't ndarray", type(np_data))
     return np_data
 
 
@@ -83,7 +83,7 @@ def get_tf_const_value(op, as_list=True):
         when as_list=False, return np.array(1), type is <class 'numpy.ndarray'>
         when as_list=True, return 1, type is <class 'int'>.
     """
-    make_sure(is_tf_const_op(op), "{} isn't a const op".format(op.name))
+    make_sure(is_tf_const_op(op), "%r isn't a const op", op.name)
     value = get_tf_tensor_data(op.get_attr("value"))
     if as_list:
         value = value.tolist()

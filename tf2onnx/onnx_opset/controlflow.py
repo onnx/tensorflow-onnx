@@ -261,7 +261,7 @@ class Range:
         # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
         dtype = node.get_attr_int("Tidx")
         shape = node.output_shapes[0]
-        utils.make_sure(dtype is not None, "Tidx of %s is None", node.name)
+        utils.make_sure(dtype is not None, "Tidx of %r is None", node.name)
         ctx.remove_node(node.name)
         make_range(ctx, node.input[0], node.input[1], node.input[2],
                    node.output[0], node.name, shape, dtype)
@@ -307,7 +307,7 @@ class Select:
         make_sure(true_data_shape is not None, "select true data shape cannot be None")
 
         condition_shape = ctx.get_shape(node.input[0])
-        utils.make_sure(condition_shape is not None, "Shape of {} is None".format(node.input[0]))
+        utils.make_sure(condition_shape is not None, "Shape of %r is None", node.input[0])
         rank = len(condition_shape)
 
         utils.make_sure(rank >= 0, "rank should be >= 0")
@@ -364,11 +364,11 @@ class Select:
         # it should be broadcastable with other two inputs
         node.type = "Where"
         cond_shape = ctx.get_shape(node.input[0])
-        make_sure(cond_shape is not None, "shape of {} is None".format(node.input[0]))
+        make_sure(cond_shape is not None, "shape of %r is None", node.input[0])
         input_shape = ctx.get_shape(node.input[1])
         if input_shape is None:
             input_shape = ctx.get_shape(node.input[2])
-        make_sure(input_shape is not None, "input shape of {} is None".format(node.name))
+        make_sure(input_shape is not None, "input shape of %r is None", node.name)
         input_rank = len(input_shape)
         # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
         if len(cond_shape) == 1 and input_rank > 1:

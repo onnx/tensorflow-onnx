@@ -78,7 +78,7 @@ def make_min_or_max_op(ctx, op_type, inputs, outputs,
     cast_inputs = []
     for inp in inputs:
         dtype = ctx.get_dtype(inp)
-        utils.make_sure(dtype is not None, "dtype of {} is None".format(inp))
+        utils.make_sure(dtype is not None, "dtype of %r is None", inp)
         if dtype not in supported_dtypes:
             cast_inp = ctx.make_node("Cast", [inp], attr={"to": target_dtype})
             cast_inputs.append(cast_inp.output[0])
@@ -256,7 +256,7 @@ class Sign:
         """Sign op."""
         # T sign = Sign(T Input)
         node_dtype = ctx.get_dtype(node.output[0])
-        utils.make_sure(node_dtype, "Dtype of {} is None".format(node.name))
+        utils.make_sure(node_dtype, "Dtype of %r is None", node.name)
         if node_dtype in [onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
             raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
         zero_name = utils.make_name("{}_zero".format(node.name))
@@ -280,7 +280,7 @@ class Sign:
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
         node_dtype = ctx.get_dtype(node.output[0])
-        utils.make_sure(node_dtype, "dtype of {} is None".format(node.name))
+        utils.make_sure(node_dtype, "dtype of %r is None", node.name)
         if node_dtype in [onnx_pb.TensorProto.BOOL, onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128]:
             raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
 

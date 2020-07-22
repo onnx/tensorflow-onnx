@@ -1045,7 +1045,7 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
     logit_name = node.input[0]
     logit_dtype = ctx.get_dtype(logit_name)
     logit_shape = ctx.get_shape(logit_name)
-    utils.make_sure(logit_dtype, "Dtype of {} is None".format(logit_name))
+    utils.make_sure(logit_dtype, "Dtype of %r is None", logit_name)
     indices_dtype = ctx.get_dtype(indices_name)
     if indices_dtype != TensorProto.INT64:
         indices_cast = ctx.make_node("Cast", [indices_name], attr={"to": TensorProto.INT64})
@@ -1138,7 +1138,7 @@ class SparseSoftmaxCrossEntropyWithLogits:
             sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
             return
         logit_dtype = ctx.get_dtype(logit_name)
-        utils.make_sure(logit_dtype, "Dtype of {} is None".format(logit_name))
+        utils.make_sure(logit_dtype, "Dtype of %r is None", logit_name)
 
         dtype = utils.map_onnx_to_numpy_type(logit_dtype)
         eye = np.eye(depth).astype(dtype)
