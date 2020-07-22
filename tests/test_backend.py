@@ -3353,7 +3353,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
 
-    @check_opset_min_version(7, "atan2")
+    @check_opset_min_version(9, "atan2")
     def test_atan2(self):
         # Test all possible pairs of pos, neg, zero for x and y.
 
