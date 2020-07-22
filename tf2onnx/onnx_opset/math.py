@@ -586,3 +586,113 @@ class IsFinite:
                                 shapes=shapes, dtypes=dtypes)
         _ = ctx.make_node("Not", inputs=or_node.output, name=node.name,
                           shapes=shapes, dtypes=dtypes)
+
+
+@tf_op("Atan2")
+class Atan2Op:
+    # support more dtype
+    supported_dtypes = [
+        onnx_pb.TensorProto.FLOAT,
+        onnx_pb.TensorProto.FLOAT16,
+        onnx_pb.TensorProto.DOUBLE
+    ]
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        """
+        Obtained with a linear regression.
+
+        ::
+
+            def atan2(y, x):
+                sx = numpy.sign(x)
+                sy = numpy.sign(y)
+                pi_part = (sy + sx * (sy ** 2 - 1)) * (sx - 1) * (-numpy.pi/2)
+                atan_part = numpy.arctan(y / (x + (1 - sx ** 2))) * sx ** 2
+                return atan_part + pi_part
+        """
+
+        onnx_dtype = ctx.get_dtype(node.input[0])
+        shape = ctx.get_shape(node.input[0])
+        np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
+
+        # sign part
+
+        sign_x_node = ctx.make_node(
+            "Sign", inputs=node.input[1:],
+            name=utils.make_name(node.name + 'signx'))
+        sign_y_node = ctx.make_node(
+            "Sign", inputs=node.input[:1],
+            name=utils.make_name(node.name + 'signy'))
+
+        sx_node = ctx.make_node(
+            "Cast", sign_x_node.output[:1], attr={"to": onnx_dtype},
+            name=utils.make_name(node.name + 'csignx'))
+        sy_node = ctx.make_node(
+            "Cast", sign_y_node.output[:1], attr={"to": onnx_dtype},
+            name=utils.make_name(node.name + 'csigny'))
+
+        # cst
+
+        one_node = ctx.make_const(
+            utils.make_name("{}_one".format(node.name)),
+            np.array([1], dtype=np_dtype))
+
+        pib2_node = ctx.make_const(
+            utils.make_name("{}_pi".format(node.name)),
+            np.array(- np.pi / 2, dtype=np_dtype))
+
+        # pi_part = (sy + sx * (sy ** 2 - 1)) * (sx - 1) * (-numpy.pi/2)
+
+        sxm1_node = ctx.make_node(
+            "Sub", [sx_node.output[0], one_node.output[0]],
+            name=utils.make_name(node.name + 'sxm1'))
+        sy2_node = ctx.make_node(
+            "Mul", [sy_node.output[0], sy_node.output[0]],
+            name=utils.make_name(node.name + 'sy2'))
+        sy2m1_node = ctx.make_node(
+            "Sub", [sy2_node.output[0], one_node.output[0]],
+            name=utils.make_name(node.name + 'sy2m1'))
+        sxsy2m1_node = ctx.make_node(
+            "Mul", [sx_node.output[0], sy2m1_node.output[0]],
+            name=utils.make_name(node.name + 'sxsy2m1'))
+        sysxsy2m1_node = ctx.make_node(
+            "Add", [sy_node.output[0], sxsy2m1_node.output[0]],
+            name=utils.make_name(node.name + 'sysxsy2m1'))
+        m1_node = ctx.make_node(
+            "Mul", [sysxsy2m1_node.output[0], sxm1_node.output[0]],
+            name=utils.make_name(node.name + 'm1'))
+        pi_part = ctx.make_node(
+            "Mul", [m1_node.output[0], pib2_node.output[0]],
+            name=utils.make_name(node.name + 'pip'))
+
+        # atan
+
+        sx2_node = ctx.make_node(
+            "Mul", [sx_node.output[0], sx_node.output[0]],
+            name=utils.make_name(node.name + 'sx2'))
+        sx2m1_node = ctx.make_node(
+            "Sub", [sx2_node.output[0], one_node.output[0]],
+            name=utils.make_name(node.name + 'sx2m1'))
+        xsx2m1_node = ctx.make_node(
+            "Add", [node.input[1], sx2m1_node.output[0]],
+            name=utils.make_name(node.name + 'xsx2m1'))
+        div_node = ctx.make_node(
+            "Div", inputs=[node.input[0], xsx2m1_node.output[0]],
+            name=utils.make_name(node.name + 'div'))
+        atan0_node = ctx.make_node(
+            "Atan", inputs=[div_node.output[0]],
+            name=utils.make_name(node.name + 'atan0'))
+        atan_node = ctx.make_node(
+            "Mul", inputs=[sx2_node.output[0], atan0_node.output[0]],
+            name=utils.make_name(node.name + 'atan'))
+
+        # final
+
+        ctx.remove_node(node.name)
+
+        last_node = ctx.make_node(
+            "Add", inputs=[atan_node.output[0], pi_part.output[0]],
+            op_name_scope=node.name + 'all',
+            shapes=[shape], dtypes=[onnx_dtype])
+        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], last_node.output[0])

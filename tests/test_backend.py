@@ -14,6 +14,7 @@ from distutils.version import LooseVersion
 from itertools import product
 
 import numpy as np
+from numpy.testing import assert_almost_equal
 import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
@@ -3389,6 +3390,29 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func_neg, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
         except ValueError:
             pass
+
+    @check_opset_min_version(9, "atan2")
+    def test_atan2(self):
+        # Test all possible pairs of pos, neg, zero for x and y.
+
+        def atan2(y, x):
+            sx = np.sign(x)
+            sy = np.sign(y)
+            pi_part = (sy + sx * (sy ** 2 - 1)) * (sx - 1) * (-np.pi/2)
+            atan_part = np.arctan(y / (x + (1 - sx ** 2))) * sx ** 2
+            return atan_part + pi_part
+
+        test_pairs = [[y, x] for x in [3., -4., 0.] for y in [5., -6., 0.]]
+        y_val = np.array([y for y, x in test_pairs], dtype=np.float32)
+        x_val = np.array([x for y, x in test_pairs], dtype=np.float32)
+        assert_almost_equal(np.arctan2(y_val, x_val), atan2(y_val, x_val))
+
+        def func(y, x):
+            atan2_ = tf.math.atan2(y, x)
+            return tf.identity(atan2_, name=_TFOUTPUT)
+
+        self._run_test_case(
+            func, [_OUTPUT], {_INPUT: y_val, _INPUT2: x_val}, rtol=1e-06)
 
 
 if __name__ == '__main__':
