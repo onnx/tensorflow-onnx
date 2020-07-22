@@ -39,7 +39,8 @@ class FakeQuantWithMinMaxArgs:
             not narrow_range,
             "Unable to convert node FakeQuantWithMinMaxArgs with narrow_range=%r",
             narrow_range)
-        make_sure(num_bits == 8,
+        make_sure(
+            num_bits == 8,
             "Unable to convert node FakeQuantWithMinMaxArgs with "
             "num_bits=%r", num_bits)
 
@@ -55,7 +56,8 @@ class FakeQuantWithMinMaxArgs:
             utils.make_name("{}_scaley".format(node.name)),
             np.array(scale, dtype=np.float32))
         zero = np.array(-min_adj, dtype=np.uint8)
-        make_sure(zero == -min_adj,
+        make_sure(
+            zero == -min_adj,
             "Cannot convert FakeQuantWithMinMaxArgs with "
             "min=%r max=%r numbits=%r because zero_scale=%r "
             "is outside uint8 boundary",
