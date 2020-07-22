@@ -428,14 +428,28 @@ def resolve_functions(tf_graph):
     for k, fdef in tf_graph._functions.items():  # pylint: disable=protected-access
         input_shapes = functions.get(k)
         fdef = fdef.definition
-        if input_shapes and len(fdef.signature.input_arg) < len(input_shapes):
-            input_shapes = input_shapes[:len(fdef.signature.input_arg)]
-        try:
-            func = function_def_to_graph(fdef, input_shapes=input_shapes)
-        except:  # pylint: disable=bare-except
-            # if there is a missmatch between caller and function use the functions shape
-            logger.warning("shape missmatch between caller and function: %s", k)
-            func = function_def_to_graph(fdef)
+        try_input_shape = True
+        for nn in fdef.node_def:
+            if nn.op == 'OptionalFromValue':
+                try_input_shape = False
+                break
+        if try_input_shape:
+            if input_shapes and len(fdef.signature.input_arg) < len(input_shapes):
+                input_shapes = input_shapes[:len(fdef.signature.input_arg)]
+            try:
+                func = function_def_to_graph(fdef, input_shapes=input_shapes)
+            except ValueError as e:  # pylint: disable=bare-except
+                if (input_shapes is None or (
+                        "Length of input_shapes must match the" not in str(e) and
+                        "Shape must be rank" not in str(e))):
+                    raise ValueError(
+                        "function_def_to_graph failed: {}".format(
+                            input_shapes)) from e
+                # if there is a missmatch between caller and function use the functions shape
+                logger.warning("shape missmatch between caller and function: %s", k)
+                func = function_def_to_graph(fdef)
+        else:
+                func = function_def_to_graph(fdef)
         _FUNCTIONS[k] = func
         _, _, _, _, _, tfunctions = tflist_to_onnx(func, {})
         functions.update(tfunctions)
