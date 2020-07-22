@@ -57,7 +57,7 @@ class FakeQuantWithMinMaxArgs:
         zero = np.array(-min_adj, dtype=np.uint8)
         make_sure(zero == -min_adj,
             "Cannot convert FakeQuantWithMinMaxArgs with "
-            "min={} max={} numbits={} because zero_scale={} "
+            "min=%r max=%r numbits=%r because zero_scale=%r "
             "is outside uint8 boundary",
             amin, amax, num_bits, -min_adj)
         zero_point = ctx.make_const(
