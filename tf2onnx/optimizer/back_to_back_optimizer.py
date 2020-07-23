@@ -237,7 +237,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
         node2_shape = g.get_shape(node2.output[0])
         node2_dtype = g.get_dtype(node2.output[0])
         g.remove_node(node2.name)
-        node.output = node2_output
+        node.output = node2_output.copy()
         g.set_shape(node2_output[0], node2_shape)
         g.set_dtype(node2_output[0], node2_dtype)
         return []
