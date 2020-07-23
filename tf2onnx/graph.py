@@ -1199,7 +1199,8 @@ class Graph(object):
                     nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
-    def replace_all_inputs(self, ops, old_input, new_input, process_outputs=False):
+    @staticmethod
+    def replace_all_inputs(ops, old_input, new_input):
         """Replace all inputs pointing to old_input with new_input."""
         if old_input == new_input:
             return
@@ -1217,9 +1218,6 @@ class Graph(object):
             if body_graphs:
                 for g in body_graphs.values():
                     g.replace_all_inputs(g.get_nodes(), old_input, new_input)
-
-        if process_outputs and old_input in self.outputs:
-            self.make_node('Identity', [new_input], outputs=[old_input])
 
     @staticmethod
     def replace_input(node, old_input, new_input):
