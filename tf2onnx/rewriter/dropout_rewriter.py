@@ -64,8 +64,10 @@ def rewrite_dropout(g, ops):
                 shapes=[g.get_shape(inputs2.input[0])],
                 dtypes=[g.get_dtype(inputs2.input[0])]
             )
-            g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
+
             g.safe_remove_nodes(match.get_nodes())
+            g.replace_all_inputs(ops, outputs.output[0], new_node.output[0],
+                                 process_outputs=True)
 
     # remove dropout if its ratio is 1.0
     for node in g.get_nodes():

@@ -931,7 +931,6 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                                 op_type="ReduceSum", remaining_op_num=2)
 
     def _check_initializer_num(self, graph_proto, num):
-        print(len(graph_proto.initializer))
         return num == len(graph_proto.initializer)
 
     def test_duplicated_duplicated_constant(self):
