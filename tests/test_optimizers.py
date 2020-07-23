@@ -1198,7 +1198,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
     def test_optimize_drop_out(self):
         for k in [keras]:
-           with Graph().as_default() as graph:
+            with Graph().as_default() as graph:
                 model = k.Sequential(
                     layers=[k.layers.Dropout(rate=0.5, input_shape=[4, 4])])
 
