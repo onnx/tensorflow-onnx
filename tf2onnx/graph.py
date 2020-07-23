@@ -264,7 +264,9 @@ class Node(object):
                 when as_list=True, return 1, type is <class 'int'>.
         """
         if not self.is_const():
-            raise ValueError("get tensor value: {} must be Const".format(self.name))
+            raise ValueError(
+                "get tensor value: '{}' must be Const not '{}'".format(
+                    self.name, self.type))
 
         t = self.get_attr("value")
         if t:

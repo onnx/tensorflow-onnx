@@ -29,7 +29,7 @@ if is_tf2():
     tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
 elif LooseVersion(tf.__version__) >= "1.13":
     # 1.13 introduced the compat namespace
-    tf_session = compat.v1.Session  # pylint: disable=invalid-name
+    tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
 else:
     # older than 1.13
     tf_session = tf.Session  # pylint: disable=invalid-name
