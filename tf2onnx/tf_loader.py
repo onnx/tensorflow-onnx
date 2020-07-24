@@ -178,10 +178,24 @@ def from_checkpoint(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures):
+def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures):
     """Load tensorflow graph from saved_model."""
 
-    imported = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
+    wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
+    wrn_empty_tag = "'--tag' value is empty string. Using tag =[[]]"
+
+    if tag is None:
+        tag = [tf.saved_model.tag_constants.SERVING]
+        logger.warning(wrn_no_tag)
+
+    if tag == '':
+        tag = [[]]
+        logger.warning(wrn_empty_tag)
+
+    if not isinstance(tag, list):
+        tag = [tag]
+
+    imported = tf.saved_model.loader.load(sess, tag, model_path)
     for k in imported.signature_def.keys():
         if k.startswith("_"):
             # consider signatures starting with '_' private
@@ -209,43 +223,73 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures
     return frozen_graph, input_names, output_names
 
 
-def _from_saved_model_v2(model_path, input_names, output_names, signatures):
+def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def, concrete_function_index):
     """Load tensorflow graph from saved_model."""
-    imported = tf.saved_model.load(model_path)  # pylint: disable=no-value-for-parameter
 
-    # f = meta_graph_def.signatures[tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY]
-    for k in imported.signatures.keys():
-        if k.startswith("_"):
-            # consider signatures starting with '_' private
-            continue
-        signatures.append(k)
-    for k in signatures:
-        concrete_func = imported.signatures[k]
-        input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                       if input_tensor.dtype != tf.dtypes.resource]
-        output_names = [output_tensor.name for output_tensor in concrete_func.outputs
-                        if output_tensor.dtype != tf.dtypes.resource]
+    wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
+    wrn_empty_tag = "'--tag' value is empty string. Using tag =[[]]"
+    wrn_sig_1 = "'--signature_def' not specified, using first signature: %s"
+    err_many_sig = "Cannot load multiple signature defs in TF2.x: %s"
+    err_no_call = "Model doesn't contain usable concrete functions under  __call__. Try --signature-def instead."
+    err_index = "Invalid concrete_function value: %i. Valid values are [0 to %i]"
+    err_no_sig = "No signatures found in model. Try --concrete_function instead."
+    err_sig_nomatch = "Specified signature not in model %s"
 
-    frozen_graph = from_function(concrete_func, input_names, output_names)
-    return frozen_graph, input_names, output_names
+    if tag is None:
+        tag = ['serve']
+        logger.warning(wrn_no_tag)
+
+    if tag == '':
+        tag = [[]]
+        logger.warning(wrn_empty_tag)
+
+    utils.make_sure(len(signature_def) < 2, err_many_sig, str(signature_def))
+    imported = tf.saved_model.load(model_path, tags=tag)  # pylint: disable=no-value-for-parameter
+
+    all_sigs = imported.signatures.keys()
+    valid_sigs = [s for s in all_sigs if not s.startswith("_")]
+    logger.info("Signatures found in model: %s", "[" + ",".join(valid_sigs) + "].")
+
+    concrete_func = None
+    if concrete_function_index is not None:
+        utils.make_sure(hasattr(imported, "__call__"), err_no_call)
+        utils.make_sure(concrete_function_index < len(imported.__call__.concrete_functions),
+                        err_index, concrete_function_index, len(imported.__call__.concrete_functions) - 1)
+        sig = imported.__call__.concrete_functions[concrete_function_index].structured_input_signature[0][0]
+        concrete_func = imported.__call__.get_concrete_function(sig)
+    elif signature_def:
+        utils.make_sure(signature_def[0] in valid_sigs, err_sig_nomatch, signature_def[0])
+        concrete_func = imported.signatures[signature_def[0]]
+    else:
+        utils.make_sure(len(valid_sigs) > 0, err_no_sig)
+        logger.warning(wrn_sig_1, valid_sigs[0])
+        concrete_func = imported.signatures[valid_sigs[0]]
+
+    inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
+    outputs = [tensor.name for tensor in concrete_func.outputs if tensor.dtype != tf.dtypes.resource]
+
+    # filter by user specified inputs/outputs
+    if input_names:
+        inputs = list(set(input_names) & set(inputs))
+    if output_names:
+        outputs = list(set(output_names) & set(outputs))
+
+    frozen_graph = from_function(concrete_func, inputs, outputs)
+    return frozen_graph, inputs, outputs
 
 
-def from_saved_model(model_path, input_names, output_names, signatures=None):
+def from_saved_model(model_path, input_names, output_names, tag=None, signatures=None, concrete_function=None):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
     if is_tf2():
         frozen_graph, input_names, output_names = \
-            _from_saved_model_v2(model_path, input_names, output_names, signatures)
+            _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function)
     else:
         with tf_session() as sess:
             frozen_graph, input_names, output_names = \
-                _from_saved_model_v1(sess, model_path, input_names, output_names, signatures)
-
-    if len(signatures) > 1:
-        logger.warning("found multiple signatures %s in saved_model, pass --signature_def in command line",
-                       signatures)
+                _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
 
     tf_reset_default_graph()
     return frozen_graph, input_names, output_names
@@ -365,6 +409,7 @@ def is_function(g):
     if is_tf2():
         return 'tensorflow.python.framework.func_graph.FuncGraph' in str(type(g))
     return False
+
 
 _FUNCTIONS = {}
 

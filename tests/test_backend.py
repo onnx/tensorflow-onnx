@@ -14,6 +14,7 @@ from distutils.version import LooseVersion
 from itertools import product
 
 import numpy as np
+from numpy.testing import assert_almost_equal
 import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
@@ -69,6 +70,7 @@ if is_tf2():
     is_inf = tf.math.is_inf
     floormod = tf.math.floormod
     matrix_diag_part = tf.compat.v1.matrix_diag_part
+    fake_quant_with_min_max_args = tf.quantization.fake_quant_with_min_max_args
 elif LooseVersion(tf.__version__) >= "1.13":
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
     multinomial = tf.compat.v1.random.multinomial
@@ -88,6 +90,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     is_inf = tf.math.is_inf
     floormod = tf.floormod
     matrix_diag_part = tf.compat.v1.matrix_diag_part
+    fake_quant_with_min_max_args = tf.compat.v1.quantization.fake_quant_with_min_max_args
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
     multinomial = tf.multinomial
@@ -3351,6 +3354,65 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.raw_ops.MatrixSetDiagV3(input=base_matrix, diagonal=diag, k=k, align='RIGHT_LEFT', name=_TFOUTPUT)
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: diag_val, _INPUT2: k_val})
+
+    @check_opset_min_version(10)
+    @check_tf_min_version("1.14")
+    def test_fakequant_with_min_max(self):
+        def func(x):
+            ret = fake_quant_with_min_max_args(
+                x, min=-1024, max=1023, num_bits=8, narrow_range=False, name=None)
+            return tf.identity(ret, name=_TFOUTPUT)
+
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024.
+        x_val0 = np.abs(x_val)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0}, rtol=1e-6, atol=1e-4)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
+
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024
+        x_val[0, 0] = -1024
+        x_val[0, 1] = -1023
+        x_val[0, 2] = 1024
+        x_val[1, 0] = 1023
+        x_val[1, 1] = 1025
+        x_val[1, 2] = -1025
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
+
+    @check_opset_min_version(10)
+    @check_tf_min_version("1.14")
+    def test_fakequant_with_min_max_same_sign(self):
+        def func_neg(x):
+            ret = fake_quant_with_min_max_args(
+                x, min=-1024*3, max=-1024, num_bits=8, narrow_range=False, name=None)
+            return tf.identity(ret, name=_TFOUTPUT)
+
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024 * 3.
+        try:
+            self._run_test_case(func_neg, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
+        except ValueError:
+            pass
+
+    @check_opset_min_version(9, "atan2")
+    def test_atan2(self):
+        # Test all possible pairs of pos, neg, zero for x and y.
+
+        def atan2(y, x):
+            sx = np.sign(x)
+            sy = np.sign(y)
+            pi_part = (sy + sx * (sy ** 2 - 1)) * (sx - 1) * (-np.pi/2)
+            atan_part = np.arctan(y / (x + (1 - sx ** 2))) * sx ** 2
+            return atan_part + pi_part
+
+        test_pairs = [[y, x] for x in [3., -4., 0.] for y in [5., -6., 0.]]
+        y_val = np.array([y for y, x in test_pairs], dtype=np.float32)
+        x_val = np.array([x for y, x in test_pairs], dtype=np.float32)
+        assert_almost_equal(np.arctan2(y_val, x_val), atan2(y_val, x_val))
+
+        def func(y, x):
+            atan2_ = tf.math.atan2(y, x)
+            return tf.identity(atan2_, name=_TFOUTPUT)
+
+        self._run_test_case(
+            func, [_OUTPUT], {_INPUT: y_val, _INPUT2: x_val}, rtol=1e-06)
 
 
 if __name__ == '__main__':

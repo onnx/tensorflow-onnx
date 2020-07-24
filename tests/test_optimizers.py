@@ -691,7 +691,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                        model_proto, remaining_transpose_num=0)
 
     def test_two_transposes_switch_with_mul(self):
-        const_node = self._make_onnx_const(np.array(10, dtype=np.float32), "const_10")
+        const_node = self._make_onnx_const(np.array(np.random.random(6), dtype=np.float32), "const_10")
         node0 = helper.make_node("Transpose", ["u1"], ["v1"], perm=[0, 2, 3, 1], name="trans_0")
         node1 = helper.make_node("Transpose", ["u2"], ["v2"], perm=[0, 2, 3, 1], name="trans_1")
 

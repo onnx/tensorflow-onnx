@@ -79,13 +79,18 @@ def get_ones(shape):
     """Get ones."""
     return np.ones(shape).astype(np.float32)
 
+def get_zeros(shape):
+    """Get zeros."""
+    return np.zeros(shape).astype(np.float32)
+
 
 _INPUT_FUNC_MAPPING = {
     "get_beach": get_beach,
     "get_random": get_random,
     "get_random256": get_random256,
     "get_ramp": get_ramp,
-    "get_ones": get_ones
+    "get_ones": get_ones,
+    "get_zeros": get_zeros,
 }
 
 OpsetConstraint = namedtuple("OpsetConstraint", "domain, min_version, max_version, excluded_version")
@@ -100,7 +105,7 @@ class Test(object):
     def __init__(self, url, local, make_input, input_names, output_names,
                  disabled=False, rtol=0.01, atol=1e-6,
                  check_only_shape=False, model_type="frozen", force_input_shape=False,
-                 skip_tensorflow=False, opset_constraints=None, tf_min_version=None):
+                 skip_tensorflow=False, opset_constraints=None, tf_min_version=None, tag=None):
         self.url = url
         self.make_input = make_input
         self.local = local
@@ -114,6 +119,7 @@ class Test(object):
         self.tf_runtime = 0
         self.onnx_runtime = 0
         self.model_type = model_type
+        self.tag = tag
         self.force_input_shape = force_input_shape
         self.skip_tensorflow = skip_tensorflow
         self.opset_constraints = opset_constraints
@@ -240,7 +246,7 @@ class Test(object):
         if self.model_type in ["checkpoint"]:
             graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
-            graph_def, input_names, outputs = tf_loader.from_saved_model(model_path, input_names, outputs)
+            graph_def, input_names, outputs = tf_loader.from_saved_model(model_path, input_names, outputs, self.tag)
         elif self.model_type in ["keras"]:
             graph_def, input_names, outputs = tf_loader.from_keras(model_path, input_names, outputs)
         else:
@@ -436,7 +442,7 @@ def load_tests_from_yaml(path):
 
         kwargs = {}
         for kw in ["rtol", "atol", "disabled", "check_only_shape", "model_type",
-                   "skip_tensorflow", "force_input_shape", "tf_min_version"]:
+                   "skip_tensorflow", "force_input_shape", "tf_min_version", "tag"]:
             if settings.get(kw) is not None:
                 kwargs[kw] = settings[kw]
 
