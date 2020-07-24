@@ -392,6 +392,77 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
         self._conv_test(x_val, kernel_val, strides=strides, padding="VALID", rtol=1e-05)
 
+    def test_conv3d_1(self):
+        strides = [1, 1, 1, 1, 1]
+        dilations = [1, 1, 1, 1, 1]
+        x_val = np.random.random_sample([2, 10, 9, 8, 5]).astype(np.float32)
+        w = np.random.random_sample([2, 3, 4, 5, 6]).astype(np.float32)
+        padding = "VALID"
+        def func(x):
+            kernel = tf.constant(w, dtype=tf.float32, name='k')
+            conv = tf.nn.conv3d(x, kernel, strides=strides, padding=padding, data_format="NDHWC", dilations=dilations)
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
+
+    def test_conv3d_2(self):
+        strides = [1, 2, 3, 1, 1]
+        dilations = [1, 1, 1, 1, 1]
+        x_val = np.random.random_sample([2, 10, 9, 8, 5]).astype(np.float32)
+        w = np.random.random_sample([2, 3, 4, 5, 6]).astype(np.float32)
+        padding = "VALID"
+        def func(x):
+            kernel = tf.constant(w, dtype=tf.float32, name='k')
+            conv = tf.nn.conv3d(x, kernel, strides=strides, padding=padding, data_format="NDHWC", dilations=dilations)
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
+
+    def test_conv3d_3(self):
+        strides = [1, 2, 3, 1, 1]
+        dilations = [1, 1, 1, 1, 1]
+        x_val = np.random.random_sample([2, 10, 9, 8, 5]).astype(np.float32)
+        w = np.random.random_sample([2, 3, 4, 5, 6]).astype(np.float32)
+        padding = "SAME"
+        def func(x):
+            kernel = tf.constant(w, dtype=tf.float32, name='k')
+            conv = tf.nn.conv3d(x, kernel, strides=strides, padding=padding, data_format="NDHWC", dilations=dilations)
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
+
+    def test_avgpool3d(self):
+        strides = [1, 1, 1, 1, 1]
+        ksize = [1, 2, 2, 3, 1]
+        x_val = np.random.random_sample([2, 10, 9, 8, 5]).astype(np.float32)
+        padding = "VALID"
+
+        def func(x):
+            mp = tf.nn.avg_pool3d(x, ksize, strides, padding=padding, data_format="NDHWC")
+            return tf.identity(mp, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    def test_maxpool3d(self):
+        strides = [1, 1, 1, 1, 1]
+        ksize = [1, 2, 2, 3, 1]
+        x_val = np.random.random_sample([2, 10, 9, 8, 5]).astype(np.float32)
+        padding = "VALID"
+
+        def func(x):
+            mp = tf.nn.max_pool3d(x, ksize, strides, padding=padding, data_format="NDHWC")
+            return tf.identity(mp, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14", "tf.nn.avg_pool2d doesn't exist before tf 1.14")
+    def test_avgpool2d(self):
+        strides = [1, 1, 1, 1]
+        ksize = [1, 2, 3, 1]
+        x_val = make_xval([2, 10, 12, 3])
+        padding = "VALID"
+
+        def func(x):
+            mp = tf.nn.avg_pool2d(x, ksize, strides, padding=padding, data_format="NHWC")
+            return tf.identity(mp, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+
     @check_tf_min_version("1.7", "tf only support dilation is 1 for now")
     def test_conv2d_7(self):
         x_shape = [1, 35, 35, 288]  # out: [1, 17, 17, 384]
