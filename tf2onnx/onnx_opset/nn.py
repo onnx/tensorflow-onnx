@@ -254,6 +254,15 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
     else:
         raise ValueError("invalid padding value: {}".format(padding))
 
+def parse_dims_attr(node, dims, spatial):
+    if is_channels_last(node):
+        # We have (N, ..., C) or (...).
+        if len(dims) != spatial:
+            dims = dims[1:-1]
+    else:
+        # We have (N, C, ...).
+        dims = dims[2:]
+    return dims
 
 def conv_dims_attr(node, name, new_name=None, spatial=2):
     # Fetch attribute.
@@ -266,13 +275,7 @@ def conv_dims_attr(node, name, new_name=None, spatial=2):
 
     # Get spatial part.
     dims = dims.ints
-    if is_channels_last(node):
-        # We have (N, ..., C) or (...).
-        if len(dims) != spatial:
-            dims = dims[1:-1]
-    else:
-        # We have (N, C, ...).
-        dims = dims[2:]
+    dims = parse_dims_attr(node, dims, spatial)
 
     # Set new value and return it.
     node.set_attr(new_name, dims)
@@ -475,7 +478,7 @@ class DepthwiseConv2d:
 
 
 @tf_op(["AvgPool", "AvgPool3D"], onnx_op="AveragePool")
-@tf_op(["MaxPool", "MaxPoolV2"], onnx_op="MaxPool")
+@tf_op(["MaxPool", "MaxPoolV2", "MaxPool3D"], onnx_op="MaxPool")
 class PoolOp:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -497,6 +500,11 @@ class PoolOp:
         #               @AttrType.INTS strides)
         # above seems wrong - input[1] is ksize, input[2] is strides
         # stride and ksize in tf is not always NHWC, so watch out when converting into onnx's NCHW
+        if kwargs["tf_op"] in ["AvgPool3D", "MaxPool3D"]:
+            spatial = 3
+        else:
+            spatial = 2
+
         if len(node.input) < 3:
             kernel_shape_tf = node.get_attr("ksize").ints
             strides_tf = node.get_attr("strides").ints
@@ -506,17 +514,14 @@ class PoolOp:
             ctx.remove_input(node, node.input[2])
             ctx.remove_input(node, node.input[1])
 
-        if node.is_nhwc():
-            kernel_shape_hw = kernel_shape_tf[1:3]
-            strides_hw = strides_tf[1:3]
-        else:
-            kernel_shape_hw = kernel_shape_tf[2:4]
-            strides_hw = strides_tf[2:4]
+        kernel_shape_hw = parse_dims_attr(node, kernel_shape_tf, spatial)
+        strides_hw = parse_dims_attr(node, strides_tf, spatial)
+
         node.set_attr("kernel_shape", kernel_shape_hw)
         node.set_attr("strides", strides_hw)
-        conv_dims_attr(node, "dilations")
-        add_padding(ctx, node, kernel_shape_hw, strides_hw)
-        conv_convert_inputs(ctx, node, with_kernel=False)
+        dilations = conv_dims_attr(node, "dilations", spatial=spatial)
+        add_padding(ctx, node, kernel_shape_hw, strides_hw, dilations=dilations, spatial=spatial)
+        conv_convert_inputs(ctx, node, with_kernel=False, spatial=spatial)
 
 
 @tf_op(["MaxPoolWithArgmax"], onnx_op="MaxPool")

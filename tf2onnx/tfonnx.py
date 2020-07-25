@@ -235,6 +235,7 @@ def tensorflow_onnx_mapping(g, ops_mapping):
             # if there is a onnx_op key we'll map the old type to a new type
             onnx_op = kwargs.get("onnx_op")
             if onnx_op:
+                kwargs["tf_op"] = op
                 node.type = onnx_op
         body_graphs = node.get_body_graphs()
         if body_graphs:
