@@ -666,6 +666,7 @@ class BatchNorm:
         consumers = [ctx.find_output_consumers(output_name) for output_name in node.output[1:]]
         if not any(consumers):
             new_output = [node.output[0]]
+            # the setter makes a copy of new_output
             node.output = new_output
 
         conv_convert_inputs(ctx, node, with_kernel=False)

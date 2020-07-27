@@ -60,7 +60,7 @@ class Node(object):
 
     @property
     def output(self):
-        return copy.deepcopy(self._output)
+        return self._output
 
     @output.setter
     def output(self, val):
@@ -71,7 +71,7 @@ class Node(object):
         for o in self._output:
             del self.graph._output_to_node_name[o]
 
-        self._output = val
+        self._output = val.copy()
         for o in self._output:
             utils.make_sure(o not in self.graph._output_to_node_name, "output %s already in output mapping", o)
             self.graph._output_to_node_name[o] = self.name

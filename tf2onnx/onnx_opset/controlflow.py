@@ -515,7 +515,9 @@ class While:
 
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
-        output_names = node.output
+        # node.output must be copied as some element
+        # may be removed from output_names below
+        output_names = node.output.copy()
 
         # Make maximum_iterations int64 and replace -1(tf) with maxsize(onnx). If the const node has no other consumers,
         # modify it in place. Otherwise, make a new const node and leave the original unchanged.
