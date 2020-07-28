@@ -93,7 +93,7 @@ def make_min_or_max_op(ctx, op_type, inputs, outputs,
             origin_dtype = output_dtypes[0]
         ctx.set_dtype(node.output[0], target_dtype)
         cast_name = utils.make_name(node.name)
-        cast_node = ctx.insert_new_node_on_output("Cast", node.output[0], name=cast_name, to=origin_dtype)
+        cast_node = ctx.insert_new_node_on_output(node, "Cast", node.output[0], name=cast_name, to=origin_dtype)
         ctx.set_dtype(cast_node.output[0], origin_dtype)
         ctx.copy_shape(node.output[0], cast_node.output[0])
         actual_outputs = cast_node.output
@@ -166,16 +166,16 @@ class ClipByValueOp:
                                  shapes=shapes, dtypes=dtypes)
         if input_dtype not in supported:
             # cast the data tensor if needed
-            ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[0], to=onnx_pb.TensorProto.FLOAT)
+            ctx.insert_new_node_on_input("Cast", new_node.input[0], to=onnx_pb.TensorProto.FLOAT)
 
-        new_node = ctx.insert_new_node_on_output("Min", new_node.output[0], name=utils.make_name(name))
+        new_node = ctx.insert_new_node_on_output(new_node,"Min", new_node.output[0], name=utils.make_name(name))
         new_node.input.append(max_node.output[0])
         # copy shape and type
         ctx.set_dtype(new_node.output[0], dtypes[0])
         ctx.set_shape(new_node.output[0], shapes[0])
         if dtypes[0] not in supported:
             # cast output if needed
-            new_node = ctx.insert_new_node_on_output("Cast", new_node.output[0],
+            new_node = ctx.insert_new_node_on_output(new_node, "Cast", new_node.output[0],
                                                      name=utils.make_name(name), to=dtypes[0])
             # copy shape and type
             ctx.set_dtype(new_node.output[0], dtypes[0])
@@ -235,7 +235,7 @@ class Rsqrt:
     def version_1(cls, ctx, node, **kwargs):
         node.type = "Sqrt"
         op_name = utils.make_name(node.name)
-        reciprocal = ctx.insert_new_node_on_output("Reciprocal", node.output[0], name=op_name)
+        reciprocal = ctx.insert_new_node_on_output(node,"Reciprocal", node.output[0], name=op_name)
         ctx.copy_shape(node.output[0], reciprocal.output[0])
 
 
@@ -245,7 +245,7 @@ class SquaredDifference:
     def version_1(cls, ctx, node, **kwargs):
         node.type = "Sub"
         op_name = utils.make_name(node.name)
-        mul = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
+        mul = ctx.insert_new_node_on_output(node, "Mul", node.output[0], name=op_name)
         mul.input.append(node.output[0])
 
 
@@ -295,10 +295,10 @@ class Pow:
             b = node.input[1]
             ctx.remove_input(node, node.input[1])
             op_name = utils.make_name(node.name)
-            mul_op = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
+            mul_op = ctx.insert_new_node_on_output(node, "Mul", node.output[0], name=op_name)
             mul_op.input.append(b)
             op_name = utils.make_name(node.name)
-            exp_op = ctx.insert_new_node_on_output("Exp", mul_op.output[0], name=op_name)
+            exp_op = ctx.insert_new_node_on_output(mul_op, "Exp", mul_op.output[0], name=op_name)
             ctx.copy_shape(node.output[0], exp_op.output[0])
             BroadcastOp.version_1(ctx, mul_op, **kwargs)
 
@@ -327,7 +327,7 @@ class LRN:
         ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
         ctx.update_node_shape_dtype(node, override=True)
         op_name = utils.make_name(node.name)
-        ctx.insert_new_node_on_output("Transpose", node.output[0], perm=constants.NCHW_TO_NHWC,
+        ctx.insert_new_node_on_output(node, "Transpose", node.output[0], perm=constants.NCHW_TO_NHWC,
                                       name=op_name, shapes=shapes, dtypes=dtypes)
 
 
@@ -545,7 +545,7 @@ class BitShift:
                              shapes=shapes, dtypes=dtypes, domain=constants.ONNX_DOMAIN, attr={'direction': direction})
 
         if node.maybe_cast_input([supported, supported], type_map):
-            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+            cast_back_node = ctx.insert_new_node_on_output(node, "Cast", node.output[0],
                                                            name=utils.make_name(node.name) + "_castback")
             cast_back_node.set_attr("to", dtypes[0])
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])

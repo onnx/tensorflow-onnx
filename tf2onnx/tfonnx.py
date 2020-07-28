@@ -171,7 +171,7 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                     name = utils.make_name(op.name)
                     logger.debug("insert cast back for node %s on output %s [dtype=%s]", op.name, output_name,
                                  output_dtype)
-                    output_cast = g.insert_new_node_on_output("Cast", output_name, name=name)
+                    output_cast = g.insert_new_node_on_output(op, "Cast", output_name, name=name)
                     output_cast.set_attr("to", output_dtype)
                     g.set_dtype(output_cast.output[0], output_dtype)
                     g.copy_shape(output_name, output_cast.output[0])
@@ -276,7 +276,7 @@ def transpose_inputs(ctx, inputs_as_nchw):
                     continue
                 # insert transpose
                 op_name = utils.make_name(node.name)
-                transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
+                transpose = ctx.insert_new_node_on_output(node, "Transpose", output_name, name=op_name)
                 transpose.set_attr("perm", constants.NCHW_TO_NHWC)
                 ctx.copy_shape(output_name, transpose.output[0])
                 ctx.set_shape(output_name, np.array(shape)[constants.NHWC_TO_NCHW])

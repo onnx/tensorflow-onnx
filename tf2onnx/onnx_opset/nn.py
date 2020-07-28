@@ -170,7 +170,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             permutation = get_channels_last_permutation(spatial)
 
             op_name = utils.make_name(node.name)
-            transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
+            transpose = ctx.insert_new_node_on_output(node, "Transpose", output_name, name=op_name)
 
             transpose.set_attr("perm", permutation)
             transpose.skip_conversion = True
@@ -614,7 +614,7 @@ class Pad:
             ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
             ctx.copy_shape(node.name, cast_node.output[0])
 
-            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+            cast_back_node = ctx.insert_new_node_on_output(node, "Cast", node.output[0],
                                                            name=utils.make_name(node.name) + "_castback")
             cast_back_node.set_attr("to", origin_dtype)
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)
@@ -644,7 +644,7 @@ class Pad:
             ctx.set_dtype(cast_node.output[0], TensorProto.FLOAT)
             ctx.copy_shape(node.name, cast_node.output[0])
 
-            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+            cast_back_node = ctx.insert_new_node_on_output(node, "Cast", node.output[0],
                                                            name=utils.make_name(node.name) + "_castback")
             cast_back_node.set_attr("to", origin_dtype)
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)

@@ -56,7 +56,7 @@ class Equal:
         if need_not:
             node.type = "Equal"
             output_name = node.output[0]
-            not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
+            not_node = ctx.insert_new_node_on_output(node, "Not", output_name, name=utils.make_name(node.name))
             ctx.copy_shape(output_name, not_node.output[0])
             ctx.copy_dtype(output_name, not_node.output[0])
 
@@ -75,7 +75,7 @@ class Equal:
         if need_not:
             node.type = "Equal"
             output_name = node.output[0]
-            not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
+            not_node = ctx.insert_new_node_on_output(node, "Not", output_name, name=utils.make_name(node.name))
             ctx.copy_shape(output_name, not_node.output[0])
             ctx.copy_dtype(output_name, not_node.output[0])
 
@@ -86,7 +86,7 @@ class Equal:
         if need_not:
             node.type = "Equal"
             output_name = node.output[0]
-            not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
+            not_node = ctx.insert_new_node_on_output(node, "Not", output_name, name=utils.make_name(node.name))
             ctx.copy_shape(output_name, not_node.output[0])
             ctx.copy_dtype(output_name, not_node.output[0])
 
@@ -117,7 +117,7 @@ class GreaterLessEqual:
         GreaterLess.version_7(ctx, node, **kwargs)
         output_name = node.output[0]
         node.op.op_type = "Less" if node.op.op_type == "GreaterEqual" else "Greater"
-        new_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
+        new_node = ctx.insert_new_node_on_output(node, "Not", output_name, name=utils.make_name(node.name))
         ctx.copy_shape(output_name, new_node.output[0])
         ctx.set_dtype(new_node.output[0], ctx.get_dtype(output_name))
 

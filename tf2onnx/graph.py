@@ -190,6 +190,10 @@ class Node(object):
         if self.input:
             lines.append("Inputs:")
             for name in self.input:
+                if g is None:
+                    raise AttributeError(
+                        "graph is fill for node '{}' (type='{}')".format(
+                            self.name, self.type))
                 node = g.get_node_by_output(name)
                 op = node.type if node else "N/A"
                 lines.append("\t{}={}, {}, {}".format(name, op, g.get_shape(name), g.get_dtype(name)))
@@ -275,7 +279,9 @@ class Node(object):
                 when as_list=True, return 1, type is <class 'int'>.
         """
         if not self.is_const():
-            raise ValueError("get tensor value: {} must be Const".format(self.name))
+            raise ValueError(
+                "get tensor value: '{}' must be 'Const' but is '{}'.".format(
+                    self.name, self.type))
 
         t = self.get_attr("value")
         if t:
@@ -464,7 +470,7 @@ class Graph(object):
                         body_graph.parent_graph = self
                         new_node.set_body_graph_as_attr(attr_name, body_graph)
 
-                self.replace_all_inputs(self.get_nodes(), o, new_output_name)
+                self.replace_all_inputs(self.get_nodes(), o, new_output_name, add_identity=False)
                 self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
                 self.copy_shape(new_output_name, o)
                 self.copy_dtype(new_output_name, o)
@@ -607,7 +613,7 @@ class Graph(object):
             self.set_dtype(name, output_dtypes[i])
             self.set_shape(name, output_shapes[i])
 
-    def remove_node(self, node_name):
+    def remove_node(self, node_name, remove_output=True):
         """Remove node in current graph."""
         utils.make_sure(node_name in self._nodes_by_name, "node %s not in current graph, cannot remove", node_name)
         node = self.get_node_by_name(node_name)
@@ -618,13 +624,14 @@ class Graph(object):
         if node in self._order_sensitive_inputs:
             self._order_sensitive_inputs.remove(node)
 
-        for op_output in node.output:
-            del self._output_to_node_name[op_output]
+        if remove_output:
+            for op_output in node.output:
+                del self._output_to_node_name[op_output]
 
-            if op_output in self._output_shapes:
-                del self._output_shapes[op_output]
-            if op_output in self._dtypes:
-                del self._dtypes[op_output]
+                if op_output in self._output_shapes:
+                    del self._output_shapes[op_output]
+                if op_output in self._dtypes:
+                    del self._dtypes[op_output]
 
         self._nodes.remove(node)
         node.graph = None
@@ -1173,9 +1180,10 @@ class Graph(object):
                 break
         return new_node
 
-    def insert_new_node_on_output(self, op_type, output_name, name, domain=None, **kwargs):
+    def insert_new_node_on_output(self, node, op_type, output_name, name, domain=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
+            node: node which creates the output
             op_type: type for new operation
             output_name: the names of the outputs above us
             name: the name of the new op
@@ -1189,12 +1197,24 @@ class Graph(object):
         utils.make_sure(isinstance(op_type, six.text_type), "op_type's type is not expected: %s",
                         type(op_type))
 
-        new_output = port_name(name)
-        new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
+        if node is None:
+            new_output = port_name(name)
+            new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
-        to_replace = [n for n in self.get_nodes() if n != new_node]
-        self.replace_all_inputs(to_replace, output_name, new_output)
-        return new_node
+            to_replace = [n for n in self.get_nodes() if n != new_node]
+            self.replace_all_inputs(to_replace, output_name, new_output, add_identity=True)
+            return new_node
+        else:
+            new_output = port_name(name)
+            self.replace_output(node, output_name, new_output)
+            self._output_to_node_name[new_output] = node.name
+            del self._output_to_node_name[output_name]
+            if output_name in self._output_shapes:
+                del self._output_shapes[output_name]
+            if output_name in self._dtypes:
+                del self._dtypes[output_name]
+            new_node = self.make_node(op_type, [new_output], attr=kwargs, outputs=[output_name], name=name, domain=domain)
+            return new_node
 
     def find_output_consumers(self, output_name):
         """Find all nodes consuming a given output."""
@@ -1210,12 +1230,28 @@ class Graph(object):
                     nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
-    @staticmethod
-    def replace_all_inputs(ops, old_input, new_input):
+    def replace_all_inputs(self, ops, old_input, new_input, add_identity=None):
         """Replace all inputs pointing to old_input with new_input."""
         if old_input == new_input:
             return
 
+        if add_identity:
+            self._replace_all_inputs_identity(ops, old_input, new_input)
+        else:
+            self._replace_all_inputs(ops, old_input, new_input)
+
+    def _replace_all_inputs_identity(self, ops, old_input, new_input):
+        """Use identity for rename an output"""
+        if old_input in self._output_to_node_name:
+            del self._output_to_node_name[old_input]
+        if old_input in self._output_shapes:
+            del self._output_shapes[old_input]
+        if old_input in self._dtypes:
+            del self._dtypes[old_input]
+        self.make_node("Identity", [new_input], outputs=[old_input])
+
+    def _replace_all_inputs(self, ops, old_input, new_input):
+        """Replace all inputs pointing to old_input with new_input."""
         for node in ops:
             if old_input in node.input and new_input in node.output:
                 raise RuntimeError("creating a circle in the graph is not allowed: " + node.name)
@@ -1228,7 +1264,7 @@ class Graph(object):
             body_graphs = node.get_body_graphs()
             if body_graphs:
                 for g in body_graphs.values():
-                    g.replace_all_inputs(g.get_nodes(), old_input, new_input)
+                    g._replace_all_inputs(g.get_nodes(), old_input, new_input)
 
     @staticmethod
     def replace_input(node, old_input, new_input):
@@ -1238,6 +1274,17 @@ class Graph(object):
         for i, input_name in enumerate(node.input):
             if input_name == old_input:
                 node.input[i] = new_input
+                is_replaced = True
+        return is_replaced
+
+    @staticmethod
+    def replace_output(node, old_output, new_output):
+        """Replace node."""
+        assert isinstance(node, Node) and isinstance(old_output, six.text_type) and isinstance(new_output, six.text_type)
+        is_replaced = False
+        for i, output_name in enumerate(node.output):
+            if output_name == old_output:
+                node.output[i] = new_output
                 is_replaced = True
         return is_replaced
 

@@ -387,7 +387,7 @@ class Where:
         # in onnx, indices are returned in this way [[ind_a_0, ind_b_0, ...], [ind_a_1, ind_b_1,...]];
         # while in tf, the result will be [[ind_a_0, ind_a_1, ...], [ind_b_0, ind_b_1, ...], ...]
         # this is the reason a transpose node inserted here.
-        transpose_node = ctx.insert_new_node_on_output("Transpose",
+        transpose_node = ctx.insert_new_node_on_output(node, "Transpose",
                                                        node.output[0], name=utils.make_name("where_op_added"))
         ctx.copy_shape(node.output[0], transpose_node.output[0])
         ctx.copy_dtype(node.output[0], transpose_node.output[0])
@@ -459,7 +459,7 @@ class TensorListGetItem:
         node.type = "Gather"
         node.input = [node.input[0], node.input[1]]
         ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])
-        ctx.insert_new_node_on_output("Squeeze", node.output[0], name=node.child_name(), axes=[0])
+        ctx.insert_new_node_on_output(node, "Squeeze", node.output[0], name=node.child_name(), axes=[0])
 
 
 @tf_op(["TensorListLength"])
@@ -814,10 +814,10 @@ def prefix_graph(g, scope):
                 if old_output == oname:
                     g.outputs[i] = new_output
                     break
-            g.replace_all_inputs(ops, old_output, new_output)
+            g.replace_all_inputs(ops, old_output, new_output, add_identity=True)
         to_remove.append(node)
     for node in to_remove:
-        g.remove_node(node.name)
+        g.remove_node(node.name, remove_output=False)
 
 
 def dump_graph(g):

@@ -111,7 +111,7 @@ class Fill:
         if need_cast:
             attr = {"to": val_dtype}
             op_name = utils.make_name(node.name + "/cast_back")
-            cast_back = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name, **attr)
+            cast_back = ctx.insert_new_node_on_output(node, "Cast", node.output[0], name=op_name, **attr)
             ctx.set_dtype(cast_back.output[0], val_dtype)
 
     @classmethod

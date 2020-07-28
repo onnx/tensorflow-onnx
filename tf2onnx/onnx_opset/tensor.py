@@ -52,7 +52,7 @@ def _wrap_concat_with_cast(ctx, node):
         next_nodes = ctx.find_output_consumers(node.output[0])
         # cast output back to dtype unless the next op is a cast
         if next_nodes[0].type != "Cast":
-            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=node.child_name())
+            output_cast = ctx.insert_new_node_on_output(node, "Cast", output_name, name=node.child_name())
             output_cast.set_attr("to", dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(output_name, output_cast.output[0])
@@ -164,7 +164,7 @@ class Reshape:
         # if the next node is already a cast we don't need to insert another one
         next_nodes = ctx.find_output_consumers(node.output[0])
         if len(next_nodes) != 1 or next_nodes[0].type != "Cast":
-            output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=node.child_name())
+            output_cast = ctx.insert_new_node_on_output(node, "Cast", node.output[0], name=node.child_name())
             output_cast.set_attr("to", dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(node.output[0], output_cast.output[0])
@@ -725,7 +725,7 @@ class StridedSlice:
         nodes = [node]
         if needs_squeeze:
             name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+            squeeze_node = ctx.insert_new_node_on_output(node, "Squeeze", node.output[0], name)
             squeeze_node.set_attr("axes", needs_squeeze)
             nodes.append(squeeze_node)
             input_dtype = ctx.get_dtype(node.output[0])
@@ -747,7 +747,7 @@ class StridedSlice:
                 ctx.copy_shape(node.input[0], cast_node.output[0])
                 # undo the cast afer slice
                 name = utils.make_name(node.name)
-                cast_node = ctx.insert_new_node_on_output("Cast", nodes[-1].output[0], name)
+                cast_node = ctx.insert_new_node_on_output(nodes[-1], "Cast", nodes[-1].output[0], name)
                 cast_node.set_attr("to", input_dtype)
                 ctx.set_dtype(cast_node.output[0], input_dtype)
                 ctx.copy_shape(node.output[0], cast_node.output[0])
@@ -941,7 +941,7 @@ class StridedSlice:
         node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
         node = ctx.get_node_by_output(node)
         if needs_squeeze:
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], node.child_name())
+            squeeze_node = ctx.insert_new_node_on_output(node, "Squeeze", node.output[0], node.child_name())
             squeeze_node.set_attr("axes", needs_squeeze)
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
@@ -1002,7 +1002,7 @@ class TopKV2:
         k_1d = ctx.make_node("Unsqueeze", cast.output, attr={"axes": [0]})
         ctx.replace_input(node, k_0d, k_1d.output[0])
         # cast the index output to int32
-        cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
+        cast_out = ctx.insert_new_node_on_output(node, "Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
         ctx.set_dtype(cast_out.output[0], dtypes[1])
         ctx.copy_shape(node.output[1], cast_out.output[0])
 
@@ -1048,7 +1048,7 @@ class Pack:
         # concat all unqueezes
         concat = ctx.make_node("Concat", inputs, op_name_scope=node.name, attr={"axis": axis},
                                shapes=shapes, dtypes=dtypes)
-        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], concat.output[0])
+        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], concat.output[0], add_identity=True)
 
 
 @tf_op("Unpack")
@@ -1068,7 +1068,7 @@ class Unpack:
         # for each output we need to squeeze axis
         for n in node.output:
             op_name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", n, name=op_name, axes=[axis])
+            squeeze_node = ctx.insert_new_node_on_output(node, "Squeeze", n, name=op_name, axes=[axis])
             ctx.copy_shape(n, squeeze_node.output[0])
             ctx.copy_dtype(n, squeeze_node.output[0])
 
@@ -1114,7 +1114,7 @@ class OneHot:
         if axis.i == 0:
             # TODO: revisit for rank > 1
             name = utils.make_name(node.name)
-            transpose_node = ctx.insert_new_node_on_output("Transpose", node.output[0], name)
+            transpose_node = ctx.insert_new_node_on_output(node, "Transpose", node.output[0], name)
             ctx.copy_shape(node.output[0], transpose_node.output[0])
 
     @classmethod
@@ -1160,7 +1160,7 @@ class OneHot:
         if ctx.is_target(constants.TARGET_RS6) \
                 and output_dtype != onnx_pb.TensorProto.INT64:
             new_node_name = utils.make_name("onehot_output")
-            new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
+            new_node = ctx.insert_new_node_on_output(node, "Cast", node.output[0], new_node_name, to=output_dtype)
             ctx.set_dtype(new_node.output[0], output_dtype)
             ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
 
@@ -1180,7 +1180,7 @@ class Shape:
         if dtype == onnx_pb.TensorProto.INT64:
             return
         op_name = utils.make_name(node.name)
-        output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
+        output_cast = ctx.insert_new_node_on_output(node, "Cast", node.output[0], name=op_name)
         output_cast.set_attr("to", dtype)
         ctx.set_dtype(output_cast.output[0], dtype)
         ctx.copy_shape(node.output[0], output_cast.output[0])
@@ -1563,7 +1563,7 @@ class ReverseSequence:
         if time_major:
             # get back to time_major
             op_name = utils.make_name(node.name)
-            trans_back_node = ctx.insert_new_node_on_output("Transpose", node.output[0],
+            trans_back_node = ctx.insert_new_node_on_output(node, "Transpose", node.output[0],
                                                             name=op_name, perm=perm_val)
             ctx.copy_dtype(node.output[0], trans_back_node.output[0])
 
@@ -1761,7 +1761,7 @@ class Unique:
         if len(node.output) > 1:
             # cast to int64 if needed
             if dtypes[1] != onnx_pb.TensorProto.UINT64:
-                cast_node = ctx.insert_new_node_on_output("Cast", node.output[1],
+                cast_node = ctx.insert_new_node_on_output(node, "Cast", node.output[1],
                                                           name=utils.make_name(node.name) + "_cast")
                 cast_node.set_attr("to", dtypes[1])
                 ctx.set_dtype(cast_node.output[0], dtypes[1])

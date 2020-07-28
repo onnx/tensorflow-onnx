@@ -258,7 +258,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
                                         shapes=[squeeze_output_shape],
                                         dtypes=[self.g.get_dtype(output_id)])
-        self.g.replace_all_inputs(self.g.get_nodes(), gather_output_id, squeeze_node.output[0])
+        self.g.replace_all_inputs(self.g.get_nodes(), gather_output_id, squeeze_node.output[0], add_identity=True)
 
     def _find_state_variable_with_select(self, context,
                                          next_iteration_input,
