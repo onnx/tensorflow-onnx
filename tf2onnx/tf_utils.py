@@ -70,7 +70,7 @@ def get_tf_tensor_data(tensor):
     """Get data from tensor."""
     make_sure(isinstance(tensor, tensor_pb2.TensorProto), "Require TensorProto")
     np_data = tensor_util.MakeNdarray(tensor)
-    make_sure(isinstance(np_data, np.ndarray), "{} isn't ndarray".format(np_data))
+    make_sure(isinstance(np_data, np.ndarray), "%r isn't ndarray", type(np_data))
     return np_data
 
 

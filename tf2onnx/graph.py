@@ -321,7 +321,8 @@ class Node(object):
         self.graph.set_shape(onnx_tensor.name, list(onnx_tensor.dims))
 
     def get_body_graphs(self):
-        self._graph_check()
+        if self.graph is None:
+            self._graph_check()
         return self.graph.contained_graphs.get(self.name, None)
 
     def set_body_graph_as_attr(self, attr_name, graph):
@@ -596,7 +597,19 @@ class Graph(object):
                 self.set_dtype(node.output[i], dtypes[i])
 
         if (not shapes or not dtypes) and infer_shape_dtype:
-            self.update_node_shape_dtype(node, override=False)
+            if op_type == 'Identity':
+                all_done = True
+                for i, out in zip(node.input, node.output):
+                    shape, dtype = self.get_shape(i), self.get_dtype(i)
+                    if shape is None or dtype is None:
+                        all_done = False
+                        break
+                    self.set_shape(out, shape)
+                    self.set_dtype(out, dtype)
+                if not all_done:
+                    self.update_node_shape_dtype(node, override=False)
+            else:
+                self.update_node_shape_dtype(node, override=False)
 
         logger.debug("Made node: %s\n%s", node.name, node.summary)
         self._nodes.append(node)
