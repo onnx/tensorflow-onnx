@@ -252,6 +252,16 @@ class Node(object):
     def need_skip(self):
         return self._skip_conversion
 
+    def get_shape(self, name):
+        if self.graph is None:
+            self.graph_check()
+        return self.graph.get_shape(name)
+
+    def get_dtype(self, name):
+        if self.graph is None:
+            self.graph_check()
+        return self.graph.get_dtype(name)
+
     @property
     def output_shapes(self):
         """Get output shapes."""
@@ -909,7 +919,7 @@ class Graph(object):
         if isinstance(val, tuple):
             val = list(val)
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
-        utils.make_sure(node is not None, "cannot find node by output id %s", name)
+        utils.make_sure(node is not None, "cannot find node by output id %r", name)
         node.graph._output_shapes[name] = val
 
     def copy_shape(self, input_name, output_name):
@@ -1215,19 +1225,33 @@ class Graph(object):
             new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
             to_replace = [n for n in self.get_nodes() if n != new_node]
-            self.replace_all_inputs(to_replace, output_name, new_output, add_identity=True)
+            self.replace_all_inputs(to_replace, output_name, new_output, add_identity=False)
             return new_node
-        else:
-            new_output = port_name(name)
-            self.replace_output(node, output_name, new_output)
-            self._output_to_node_name[new_output] = node.name
-            del self._output_to_node_name[output_name]
-            if output_name in self._output_shapes:
-                del self._output_shapes[output_name]
-            if output_name in self._dtypes:
-                del self._dtypes[output_name]
-            new_node = self.make_node(op_type, [new_output], attr=kwargs, outputs=[output_name], name=name, domain=domain)
-            return new_node
+
+        if node.name not in self._nodes_by_name:
+            raise RuntimeError("Unable to find %r" % node.name)
+        shapes = [self.get_shape(output_name)]
+        dtypes = [self.get_dtype(output_name)]
+        new_output = port_name(name)
+
+        self.replace_output(node, output_name, new_output)
+        self._output_to_node_name[new_output] = node.name
+        check = self.get_node_by_output(new_output, search_in_parent_graphs=True)
+        if check is None:
+            raise RuntimeError(
+                "Unable to find %r (node.name=%r)" % (new_output, node.name))
+        self.set_shape(new_output, shapes[0])
+        self.set_dtype(new_output, dtypes[0])
+
+        del self._output_to_node_name[output_name]
+        if output_name in self._output_shapes:
+            del self._output_shapes[output_name]
+        if output_name in self._dtypes:
+            del self._dtypes[output_name]
+        new_node = self.make_node(op_type, [new_output], attr=kwargs, outputs=[output_name],
+                                  name=name, domain=domain,
+                                  shapes=shapes, dtypes=dtypes)
+        return new_node
 
     def find_output_consumers(self, output_name):
         """Find all nodes consuming a given output."""
@@ -1243,17 +1267,19 @@ class Graph(object):
                     nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
-    def replace_all_inputs(self, ops, old_input, new_input, add_identity=None):
+    def replace_all_inputs(self, ops, old_input, new_input, add_identity=None,
+                           shapes=None, dtypes=None):
         """Replace all inputs pointing to old_input with new_input."""
         if old_input == new_input:
             return
 
         if add_identity:
-            self._replace_all_inputs_identity(ops, old_input, new_input)
+            self._replace_all_inputs_identity(ops, old_input, new_input,
+                                              shapes, dtypes)
         else:
             self._replace_all_inputs(ops, old_input, new_input)
 
-    def _replace_all_inputs_identity(self, ops, old_input, new_input):
+    def _replace_all_inputs_identity(self, ops, old_input, new_input, shapes, dtypes):
         """Use identity for rename an output"""
         if old_input in self._output_to_node_name:
             del self._output_to_node_name[old_input]
@@ -1261,7 +1287,8 @@ class Graph(object):
             del self._output_shapes[old_input]
         if old_input in self._dtypes:
             del self._dtypes[old_input]
-        self.make_node("Identity", [new_input], outputs=[old_input])
+        self.make_node("Identity", [new_input], outputs=[old_input],
+                       shapes=shapes, dtypes=dtypes)
 
     def _replace_all_inputs(self, ops, old_input, new_input):
         """Replace all inputs pointing to old_input with new_input."""

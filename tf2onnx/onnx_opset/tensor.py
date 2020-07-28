@@ -116,17 +116,23 @@ class Identity:
             # if identity has a const as input, remove it
             input_name = node.input[0]
             output_name = node.output[0]
+            shapes = [node.get_shape(output_name)]
+            dtypes = [node.get_dtype(output_name)]
             ctx.remove_node(node.name)
-            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name, add_identity=True)
+            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name, add_identity=True,
+                                   shapes=shapes, dtypes=dtypes)
 
 
 @tf_op("IdentityN")
 class IdentityN:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        for input_name, output_name in zip(node.input, node.output):
-            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name, add_identity=True)
+        for input_name, output_name, shape, dtype in zip(node.input, node.output, shapes, dtypes):
+            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name, add_identity=True,
+                                   shapes=[shape], dtypes=[dtype])
 
 
 @tf_op("Reshape")
@@ -1048,7 +1054,8 @@ class Pack:
         # concat all unqueezes
         concat = ctx.make_node("Concat", inputs, op_name_scope=node.name, attr={"axis": axis},
                                shapes=shapes, dtypes=dtypes)
-        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], concat.output[0], add_identity=True)
+        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], concat.output[0],
+                               add_identity=True, shapes=shapes, dtypes=dtypes)
 
 
 @tf_op("Unpack")
