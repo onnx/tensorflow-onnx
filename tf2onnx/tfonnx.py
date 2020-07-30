@@ -276,7 +276,7 @@ def transpose_inputs(ctx, inputs_as_nchw):
                     continue
                 # insert transpose
                 op_name = utils.make_name(node.name)
-                transpose = ctx.insert_new_node_on_output(node, "Transpose", output_name, name=op_name)
+                transpose = ctx.insert_new_node_on_output(None, "Transpose", output_name, name=op_name)
                 transpose.set_attr("perm", constants.NCHW_TO_NHWC)
                 ctx.copy_shape(output_name, transpose.output[0])
                 ctx.set_shape(output_name, np.array(shape)[constants.NHWC_TO_NCHW])

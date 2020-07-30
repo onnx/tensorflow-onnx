@@ -77,7 +77,7 @@ class LoopOptimizer(GraphOptimizerBase):
                 new_perm = [0] + [i + 1 for i in ori_perm]  # body output's rank is m > rank of loop's output is m+1
                 name = make_name("trans_moved_from_loop_body")
                 _ = parent_graph.insert_new_node_on_output(
-                        parent_graph.get_node_by_name(node.name), "Transpose",
+                        None, "Transpose",
                         name_in_parent, name, perm=new_perm)
                 graph_is_changed = True
 

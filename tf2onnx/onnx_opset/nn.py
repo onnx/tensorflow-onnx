@@ -170,7 +170,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
             permutation = get_channels_last_permutation(spatial)
 
             op_name = utils.make_name(node.name)
-            transpose = ctx.insert_new_node_on_output(node, "Transpose", output_name, name=op_name)
+            transpose = ctx.insert_new_node_on_output(None, "Transpose", output_name, name=op_name)
 
             transpose.set_attr("perm", permutation)
             transpose.skip_conversion = True

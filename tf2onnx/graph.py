@@ -329,6 +329,7 @@ class Node(object):
         # track shapes in _output_shapes
         self._graph_check()
         self.graph.set_shape(onnx_tensor.name, list(onnx_tensor.dims))
+        self.graph._check_shapes_types()
 
     def get_body_graphs(self):
         if self.graph is None:
@@ -547,6 +548,9 @@ class Graph(object):
             name = utils.make_name(node.name)
         return self.make_const(name, node.get_tensor_value(as_list=False))
 
+    def _check_shapes_types(self):
+        pass
+
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
                   op_name_scope=None, name=None, shapes=None, dtypes=None, domain=constants.ONNX_DOMAIN,
                   infer_shape_dtype=True):
@@ -692,6 +696,7 @@ class Graph(object):
 
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
+        self._check_shapes_types()
 
     def is_empty_input(self, name):
         # in ONNX, operation may have optional input and an empty string may be used
@@ -921,6 +926,7 @@ class Graph(object):
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
         utils.make_sure(node is not None, "cannot find node by output id %r", name)
         node.graph._output_shapes[name] = val
+        node.graph._check_shapes_types()
 
     def copy_shape(self, input_name, output_name):
         """Copy shape from another node."""
@@ -1214,13 +1220,20 @@ class Graph(object):
 
         Returns:
             node that was inserted
+
+        Note:
+            An output is produced by another node and still used by
+            forward nodes, the output shape and type should not change.
+            However, if it happens (Transpose for example), node should
+            be None to force a new inference of them.
         """
         utils.make_sure(isinstance(output_name, six.text_type), "output_name's type is not expected: %s",
                         type(output_name))
         utils.make_sure(isinstance(op_type, six.text_type), "op_type's type is not expected: %s",
                         type(op_type))
 
-        if node is None:
+        if node is None or op_type in {'Transpose', 'Reshape'}:
+            # See note.
             new_output = port_name(name)
             new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
@@ -1231,7 +1244,10 @@ class Graph(object):
         if node.name not in self._nodes_by_name:
             raise RuntimeError("Unable to find %r" % node.name)
         shapes = [self.get_shape(output_name)]
-        dtypes = [self.get_dtype(output_name)]
+        if op_type == 'Cast':
+            dtypes = [kwargs['to']]
+        else:
+            dtypes = [self.get_dtype(output_name)]
         new_output = port_name(name)
 
         self.replace_output(node, output_name, new_output)

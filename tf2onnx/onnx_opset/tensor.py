@@ -731,7 +731,7 @@ class StridedSlice:
         nodes = [node]
         if needs_squeeze:
             name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output(node, "Squeeze", node.output[0], name)
+            squeeze_node = ctx.insert_new_node_on_output(None, "Squeeze", node.output[0], name)
             squeeze_node.set_attr("axes", needs_squeeze)
             nodes.append(squeeze_node)
             input_dtype = ctx.get_dtype(node.output[0])
@@ -947,7 +947,7 @@ class StridedSlice:
         node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
         node = ctx.get_node_by_output(node)
         if needs_squeeze:
-            squeeze_node = ctx.insert_new_node_on_output(node, "Squeeze", node.output[0], node.child_name())
+            squeeze_node = ctx.insert_new_node_on_output(None, "Squeeze", node.output[0], node.child_name())
             squeeze_node.set_attr("axes", needs_squeeze)
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
@@ -1075,7 +1075,7 @@ class Unpack:
         # for each output we need to squeeze axis
         for n in node.output:
             op_name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output(node, "Squeeze", n, name=op_name, axes=[axis])
+            squeeze_node = ctx.insert_new_node_on_output(None, "Squeeze", n, name=op_name, axes=[axis])
             ctx.copy_shape(n, squeeze_node.output[0])
             ctx.copy_dtype(n, squeeze_node.output[0])
 
@@ -1121,7 +1121,7 @@ class OneHot:
         if axis.i == 0:
             # TODO: revisit for rank > 1
             name = utils.make_name(node.name)
-            transpose_node = ctx.insert_new_node_on_output(node, "Transpose", node.output[0], name)
+            transpose_node = ctx.insert_new_node_on_output(None, "Transpose", node.output[0], name)
             ctx.copy_shape(node.output[0], transpose_node.output[0])
 
     @classmethod
@@ -1570,7 +1570,7 @@ class ReverseSequence:
         if time_major:
             # get back to time_major
             op_name = utils.make_name(node.name)
-            trans_back_node = ctx.insert_new_node_on_output(node, "Transpose", node.output[0],
+            trans_back_node = ctx.insert_new_node_on_output(None, "Transpose", node.output[0],
                                                             name=op_name, perm=perm_val)
             ctx.copy_dtype(node.output[0], trans_back_node.output[0])
 

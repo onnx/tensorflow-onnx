@@ -100,8 +100,8 @@ class CropAndResize:
         """ utilize contrib cropandresize """
         node.attr['method'].name = 'mode'
         node.domain = constants.MICROSOFT_DOMAIN
-        ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
-        ctx.insert_new_node_on_output(node, "Transpose", node.output[0], node.name + '_transposed',
+        ctx.insert_new_node_on_input(None, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
+        ctx.insert_new_node_on_output(None, "Transpose", node.output[0], node.name + '_transposed',
                                       None, perm=constants.NCHW_TO_NHWC)
 
 @tf_op("MatrixInverse", domain=constants.MICROSOFT_DOMAIN, onnx_op="Inverse")

@@ -168,7 +168,7 @@ class ClipByValueOp:
             # cast the data tensor if needed
             ctx.insert_new_node_on_input("Cast", new_node.input[0], to=onnx_pb.TensorProto.FLOAT)
 
-        new_node = ctx.insert_new_node_on_output(new_node,"Min", new_node.output[0], name=utils.make_name(name))
+        new_node = ctx.insert_new_node_on_output(new_node, "Min", new_node.output[0], name=utils.make_name(name))
         new_node.input.append(max_node.output[0])
         # copy shape and type
         ctx.set_dtype(new_node.output[0], dtypes[0])
@@ -324,10 +324,10 @@ class LRN:
         shapes = node.output_shapes[0]
         dtypes = node.output_dtypes[0]
 
-        ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
+        ctx.insert_new_node_on_input(None, "Transpose", node.input[0], perm=constants.NHWC_TO_NCHW)
         ctx.update_node_shape_dtype(node, override=True)
         op_name = utils.make_name(node.name)
-        ctx.insert_new_node_on_output(node, "Transpose", node.output[0], perm=constants.NCHW_TO_NHWC,
+        ctx.insert_new_node_on_output(None, "Transpose", node.output[0], perm=constants.NCHW_TO_NHWC,
                                       name=op_name, shapes=shapes, dtypes=dtypes)
 
 
@@ -472,7 +472,7 @@ class FloorDiv:
         dtype = ctx.get_dtype(node.input[0])
         if dtype in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
             new_node_name = utils.make_name("floor_div_res")
-            floor_res = ctx.insert_new_node_on_output(op_type="Floor", output_name=node.output[0],
+            floor_res = ctx.insert_new_node_on_output(node, op_type="Floor", output_name=node.output[0],
                                                       name=new_node_name)
             ctx.copy_dtype(node.output[0], floor_res.output[0])
             ctx.copy_shape(node.output[0], floor_res.output[0])
