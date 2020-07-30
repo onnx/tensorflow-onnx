@@ -412,8 +412,8 @@ class Node(object):
                 if tdtype is None:
                     raise RuntimeError("don't know how to cast type {} on node {}".format(dtype, name))
                 shape = self.graph.get_shape(name)
-                cast_node = self.graph.insert_new_node_on_input(self, "Cast", name)
-                cast_node.set_attr("to", tdtype)
+                cast_node = self.graph.insert_new_node_on_input(
+                    self, "Cast", name, to=dtype)
                 self.graph.set_dtype(cast_node.output[0], [tdtype])
                 self.graph.set_shape(cast_node.output[0], shape)
                 did_cast = True
@@ -943,7 +943,9 @@ class Graph(object):
         def _push_stack(stack, node, in_stack):
             stack.append(node)
             if node in in_stack:
-                raise ValueError('Graph has cycles, node=' + ops[node].name)
+                raise ValueError(
+                    'Graph has cycles, node=%r inputs=%r outputs=%r'
+                    '' % (ops[node].name, ops[node].input, ops[node].output))
             in_stack[node] = True
 
         def _get_unvisited_child(g, node, not_visited):
@@ -1245,6 +1247,9 @@ class Graph(object):
             raise RuntimeError("Unable to find %r" % node.name)
         shapes = [self.get_shape(output_name)]
         if op_type == 'Cast':
+            if 'to' not in kwargs:
+                raise RuntimeError(
+                    "Parameter 'to' must be set for operator 'Cast'.")
             dtypes = [kwargs['to']]
         else:
             dtypes = [self.get_dtype(output_name)]
