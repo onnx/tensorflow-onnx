@@ -97,7 +97,7 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
     def test_insert_node2(self):
         graph_proto = self.sample_net()
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
-        g.insert_new_node_on_output("Abs", "n1:0", name="n7")
+        g.insert_new_node_on_output(None, "Abs", "n1:0", name="n7")
         ops = g.get_nodes()
         g.topological_sort(ops)
         result = onnx_to_graphviz(g)
