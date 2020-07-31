@@ -3487,8 +3487,4 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
-    cl = BackendTests()
-    cl.setUp()
-    cl.test_bitshift_right()
-    stop
     unittest_main()
