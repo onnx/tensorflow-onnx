@@ -3091,7 +3091,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "BitShift")
     def test_bitshift_right(self):
         info = np.iinfo(np.int32)
-        x_val = np.array([-1, 0, 1, info.max, info.min], dtype=np.int32)
+        x_val = np.array([-1, 0, 1, info.max, info.min], dtype=np.int64)
         def func(x):
             x_ = tf.bitwise.right_shift(x, 1)
             return tf.identity(x_, name=_TFOUTPUT)
@@ -3487,4 +3487,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
+    cl = BackendTests()
+    cl.setUp()
+    cl.test_bitshift_right()
+    stop
     unittest_main()
