@@ -18,8 +18,14 @@ import unittest
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import numpy as np
+import onnx
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
+try:
+    from onnxruntime.capi.onnxruntime_pybind11_state import Fail, InvalidGraph
+except ImportError:
+    Fail = RuntimeError
+    InvalidGraph = RuntimeError
 from common import get_test_config
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
@@ -68,7 +74,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
-        m = rt.InferenceSession(model_path, opt)
+        try:
+            m = rt.InferenceSession(model_path, opt)
+        except (Fail, InvalidGraph) as e:
+            raise RuntimeError(
+                "Unable to load model '{}' due to {}\n---\n{}".format(
+                    model_path, e, onnx.load(model_path)))
         results = m.run(output_names, inputs)
         return results
 

@@ -523,15 +523,18 @@ class While:
         # modify it in place. Otherwise, make a new const node and leave the original unchanged.
         maximum_iterations_name = node.input[1]
         maximum_iterations = node.inputs[1].get_tensor_value()
+        dtype_loop = np.int64  # only type allowed for loops
+        # dtype_loop = map_onnx_to_numpy_type(
+        #     node.inputs[-1].output_dtypes[0])
         if maximum_iterations == -1:
-            maximum_iterations = sys.maxsize
+            maximum_iterations = np.iinfo(dtype_loop).max
         consumers = ctx.find_output_consumers(maximum_iterations_name)
         external_consumers = [c for c in consumers if c != node and c.type != 'TensorListReserve']
         if len(external_consumers) == 0:
             ctx.remove_node(node.inputs[1].name)
         else:
             maximum_iterations_name = utils.make_name(node.inputs[1].name)
-        ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
+        ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=dtype_loop))
         node.input[1] = maximum_iterations_name
 
         cond_name = node.get_attr_str("cond")

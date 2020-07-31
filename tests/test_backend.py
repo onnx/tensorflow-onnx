@@ -3081,8 +3081,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "BitShift")
     def test_bitshift_left(self):
-        x_val = np.array([16, 4, 1], dtype=np.int32)
-        y_val = np.array([1, 2, 3], dtype=np.int32)
+        x_val = np.array([16, 4, 1], dtype=np.uint32)
+        y_val = np.array([1, 2, 3], dtype=np.uint32)
         def func(x, y):
             x_ = tf.bitwise.left_shift(x, y)
             return tf.identity(x_, name=_TFOUTPUT)

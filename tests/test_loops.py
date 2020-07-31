@@ -266,7 +266,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             r = tf.while_loop(c, b, [i], shape_invariants=[tf.TensorShape([None])])
             return tf.identity(r, name="output")
         input_names_with_port = ["input_1:0"]
-        feed_dict = {"input_1:0": np.array([0], dtype=np.int32)}
+        feed_dict = {"input_1:0": np.array([0], dtype=np.int64)}
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
