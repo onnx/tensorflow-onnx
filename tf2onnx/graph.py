@@ -670,7 +670,16 @@ class Graph(object):
         for op in ops:
             for op_output in op.output:
                 self._output_to_node_name[op_output] = op.name
-            for op_input in op.input:
+            if op.type == 'Placeholder':
+                inps = [op.name]
+            elif op.type == 'Const':
+                inps = [op.name]
+            else:
+                inps = op.input
+            if len(inps) == 0:
+                raise RuntimeError(
+                    "Node %r (type: %r) has no inputs." % (op.name, op.type))
+            for op_input in inps:
                 if op_input not in self._input_to_node_name:
                     self._input_to_node_name[op_input] = set()
                 self._input_to_node_name[op_input].add(op.name)
@@ -684,7 +693,7 @@ class Graph(object):
         for i in self.inputs:
             if i.name.startswith('Placeholder'):
                 continue
-            if i.name not in self._input_to_node_name and i.name + ':0' not in self._input_to_node_name:
+            if i.name not in self._input_to_node_name:
                 raise ValueError("graph input %r not exist in graph." % i.name)
 
         self._dtypes = remained_dtypes
