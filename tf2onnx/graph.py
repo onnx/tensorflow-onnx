@@ -67,7 +67,8 @@ class Node(object):
         """Set op output. Output should be updated explicitly,
         changing it would require output mapping changed.
         """
-        self._graph_check()
+        if self.graph is None:
+            self._graph_check()
         for o in self._output:
             del self.graph._output_to_node_name[o]
 
@@ -80,7 +81,8 @@ class Node(object):
     @property
     def inputs(self):
         """Input node objects."""
-        self._graph_check()
+        if self.graph is None:
+            self._graph_check()
         val = [self.graph.get_node_by_output(n) for n in self._input]
         return val
 
@@ -251,14 +253,16 @@ class Node(object):
     @property
     def output_shapes(self):
         """Get output shapes."""
-        self._graph_check()
+        if self.graph is None:
+            self._graph_check()
         val = [self.graph.get_shape(n) for n in self._output]
         return val
 
     @property
     def output_dtypes(self):
         """Get output dtypes."""
-        self._graph_check()
+        if self.graph is None:
+            self._graph_check()
         val = [self.graph.get_dtype(n) for n in self._output]
         return val
 
@@ -569,6 +573,8 @@ class Graph(object):
             utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
 
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
+        if onnx_node.name == 'cell_state/input':
+            stop
 
         for name in onnx_node.input:
             if name not in self._input_to_node_name:
@@ -1179,8 +1185,7 @@ class Graph(object):
 
         return op_cnt
 
-    @staticmethod
-    def remove_input(node, to_be_removed):
+    def remove_input(self, node, to_be_removed):
         """Remove input from Node.
         Args:
             node: the node we expect the input on
@@ -1189,6 +1194,10 @@ class Graph(object):
         assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
         for i, name in enumerate(node.input):
             if name == to_be_removed:
+                if node.input[i] in self._input_to_node_name:
+                    to_ops = self._input_to_node_name[node.input[i]]
+                    if node.name in to_ops:
+                        to_ops.remove(node.name)
                 del node.input[i]
                 break
         # don't remove output from parent since others might depend on it
@@ -1217,7 +1226,7 @@ class Graph(object):
         new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
         for i, n in enumerate(node.input):
             if n == input_name[0]:
-                node.input[i] = new_output
+                self.replace_input(node, node.input[i], new_output)
                 break
         return new_node
 
@@ -1277,12 +1286,7 @@ class Graph(object):
 
             for i, input_name in enumerate(node.input):
                 if input_name == old_input:
-                    node.input[i] = new_input
-                    if node.name not in to_ops:
-                        raise RuntimeError(
-                            "Unable to replace %r by %r. Node %r is not using input %r." % (
-                                old_input, new_input, node.name, old_input))
-                
+                    self.replace_input(node, node.input[i], new_input, i)
 
             # modify references in sub graphs
             body_graphs = node.get_body_graphs()
@@ -1290,23 +1294,50 @@ class Graph(object):
                 for g in body_graphs.values():
                     g.replace_all_inputs(g.get_nodes(), old_input, new_input)
 
-    def replace_input(self, node, old_input, new_input):
-        """Replace node."""
+    def replace_input(self, node, old_input, new_input, i=None):
+        """Replace one input in a node."""
         assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
         is_replaced = False
-        for i, input_name in enumerate(node.input):
-            if input_name == old_input:
-                node.input[i] = new_input
-                is_replaced = True
+        if i is None:
+            for i, input_name in enumerate(node.input):
+                if input_name == old_input:
+                    node.input[i] = new_input
+                    is_replaced = True
+        elif node.input[i] == old_input:
+            node.input[i] = new_input
+            is_replaced = True
+        else:
+            raise RuntimeError("Unable to replace input %r into %r for node %r." % (old_input, new_input, node.name))
         
         to_ops = self._input_to_node_name.get(old_input, None)
         if to_ops is not None:
+            # That might be an issue if a node
+            # takes twice the same entry.
             to_ops.remove(node.name)
         if new_input not in self._input_to_node_name:
             self._input_to_node_name[new_input] = set()
         self._input_to_node_name[new_input].add(node.name)
 
         return is_replaced
+
+    def replace_inputs(self, node, new_inputs):
+        """Replace node inputs."""
+        assert isinstance(node, Node) and isinstance(new_inputs, list)
+
+        for old_input in node.input:
+            to_ops = self._input_to_node_name.get(old_input, None)
+            if to_ops is not None and old_input in to_ops:
+                # To avoid issues when a node
+                # takes twice the same entry.
+                to_ops.remove(old_input)
+        
+        for input_name in new_inputs:
+            assert isinstance(input_name, six.text_type)
+            if input_name not in self._input_to_node_name:
+                self._input_to_node_name[input_name] = set()
+            self._input_to_node_name[input_name].add(node.name)
+        node.input = new_inputs
+        return True
 
     def _extract_sub_graph_nodes(self, dest_node, input_checker=None):
         """Return nodes of subgraph ending with dest_node.

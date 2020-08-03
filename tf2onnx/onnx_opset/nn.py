@@ -428,8 +428,8 @@ class ConvTranspose:
         ctx.remove_input(node, node.input[0])
         # swap data and kernel
         t = node.input[0]
-        node.input[0] = node.input[1]
-        node.input[1] = t
+        ctx.replace_input(node, node.input[0], node.input[1])
+        ctx.replace_input(node, node.input[1], t)
 
         conv_convert_inputs(ctx, node, with_kernel=True)
 
@@ -681,14 +681,14 @@ class BatchNorm:
                                       dtype=val_type)
             new_mean_node_name = utils.make_name(node.name)
             ctx.make_const(new_mean_node_name, new_mean_value)
-            node.input[3] = new_mean_node_name
+            ctx.replace_input(node, node.input[3], new_mean_node_name)
 
         if var_shape != scale_shape:
             new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(as_list=False), scale_shape),
                                      dtype=val_type)
             new_val_node_name = utils.make_name(node.name)
             ctx.make_const(new_val_node_name, new_var_value)
-            node.input[4] = new_val_node_name
+            ctx.replace_input(node, node.input[4], new_val_node_name)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):

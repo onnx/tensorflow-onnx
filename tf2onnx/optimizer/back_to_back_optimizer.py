@@ -83,7 +83,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
             type2 = pnode.get_attr('to').i
             if type1 == type2:
                 for node2 in consumer_nodes:
-                    node2.input[0] = node.input[0]
+                    g.replace_input(node2, node2.input[0], node.input[0])
                     q2.append(node2.output[0])
                 g.remove_node(node.name)
                 return q2
@@ -118,7 +118,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
 
         if can_reduce:
             for node2 in consumer_nodes:
-                node2.input[0] = node.input[0]
+                g.replace_input(node2, node2.input[0], node.input[0])
             g.remove_node(node.name)
         return q2
 
@@ -129,7 +129,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
         t1 = list(node.get_attr('perm').ints)
         q2 = []
         for node2 in consumer_nodes:
-            node2.input[0] = node.input[0]
+            g.replace_input(node2, node2.input[0], node.input[0])
             t2 = list(node2.get_attr('perm').ints)
             new_perm = [t1[i] for i in t2]
             # check if node2 can be removed. otherwise only update
@@ -230,7 +230,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
         bias_new = (bias - mean) * scale_new + offset
         bias_new_const = g.make_const(node.name + '_bias_fused_bn', bias_new)
         weights_new_const = g.make_const(node.name + '_weights_fused_bn', weights_new)
-        node.input = [node.input[0], weights_new_const.output[0], bias_new_const.output[0]]
+        ctx.replace_inputs(node, [node.input[0], weights_new_const.output[0], bias_new_const.output[0]])
 
         # fuse conv and bn, delete bn
         node2_output = node2.output[:1]

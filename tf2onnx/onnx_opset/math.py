@@ -123,7 +123,7 @@ def make_min_or_max_op(ctx, op_type, inputs, outputs,
             # use add as 'broadcast' op
             add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
                                      op_name_scope=input_node.name)
-            node.input[i] = add_node.output[0]
+            ctx.replace_input(node, node.input[i], add_node.output[0])
     return final_node
 
 

@@ -109,6 +109,10 @@ class Dropout:
 class Identity:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
+        if node.inputs[0] is None:
+            raise RuntimeError(
+                "Issue with node {}\nI={}\nI2={}\nO={}.".format(
+                    node, node.input, node._input, node.output))
         if node.inputs[0].is_const():
             # should not remove the identity node if it is output of the graph
             if node.output[0] in ctx.outputs:
@@ -526,7 +530,7 @@ class ScatterND:
         ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=TensorProto.INT64)
         ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnxdtype)
         # reorder inputs to match onnx
-        node.input = [node.input[2], node.input[0], node.input[1]]
+        ctx.replace_inputs(node, [node.input[2], node.input[0], node.input[1]])
 
 
 @tf_op("Split")
@@ -1039,7 +1043,7 @@ class Pack:
             new_node = ctx.make_node("Unsqueeze", [node.input[i]], op_name_scope=node.name, attr={"axes": [axis]},
                                      shapes=[shape], dtypes=[dtype])
             output_name = new_node.output[0]
-            node.input[i] = output_name
+            ctx.replace_input(node, node.input[i], output_name)
             inputs.append(output_name)
 
         shapes = node.output_shapes
@@ -1107,9 +1111,7 @@ class OneHot:
         const_name = utils.make_name(node.name)
         ctx.make_const(const_name, eye)
         # setup gather inputs
-        del node.input[:]
-        node.input.append(const_name)
-        node.input.append(indices_name)
+        ctx.replace_inputs(node, [const_name, indices_name])
         node.type = "Gather"
         if axis.i == 0:
             # TODO: revisit for rank > 1
@@ -1143,19 +1145,19 @@ class OneHot:
         if ctx.is_target(constants.TARGET_RS6) \
                 and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
             indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
-        node.input[0] = indices
+        ctx.replace_input(node, node.input[0], indices)
 
         if ctx.is_target(constants.TARGET_RS6) \
                 and ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64:
             depth = ctx.make_node("Cast", [depth], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
-        node.input[1] = depth
+        ctx.replace_input(node, node.input[1], depth)
 
         if ctx.is_target(constants.TARGET_RS6) \
                 and output_dtype != onnx_pb.TensorProto.INT64:
             off_on_value = ctx.make_node("Cast", [off_on_value], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
-        node.input[2] = off_on_value
+        ctx.replace_input(node, node.input[2], off_on_value)
 
-        del node.input[3]
+        ctx.remove_input(node, node.input[3])
 
         if ctx.is_target(constants.TARGET_RS6) \
                 and output_dtype != onnx_pb.TensorProto.INT64:
@@ -1568,8 +1570,8 @@ class ReverseSequence:
             ctx.copy_dtype(node.output[0], trans_back_node.output[0])
 
         tmp = node.input[0]
-        node.input[0] = node.input[1]
-        node.input[1] = tmp
+        ctx.replace_input(node, node.input[0], node.input[1])
+        ctx.replace_input(node, node.input[1], tmp)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
