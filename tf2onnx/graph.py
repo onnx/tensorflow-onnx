@@ -418,6 +418,7 @@ class Graph(object):
         self._nodes = []
         self._nodes_by_name = {}
         self._output_to_node_name = {}
+        self._input_to_node_name = {}
         self.shapes = {}
         self.graph_name = graph_name or "tf2onnx"
         self._is_subgraph = is_subgraph
@@ -442,7 +443,7 @@ class Graph(object):
 
         ops = [Node(node, self) for node in nodes]
         self.reset_nodes(ops)
-
+        
         if not is_subgraph:
             # add identity node after each output, in case it is renamed during conversion.
             for o in self.outputs:
@@ -569,6 +570,11 @@ class Graph(object):
 
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
+        for name in onnx_node.input:
+            if name not in self._input_to_node_name:
+                self._input_to_node_name[name] = set()
+            self._input_to_node_name[name].add(onnx_node.name)
+
         if op_type in ["If", "Loop", "Scan"]:
             # we force the op containing inner graphs not skipped during conversion.
             skip_conversion = False
@@ -606,6 +612,10 @@ class Graph(object):
             self._output_to_node_name[name] = node.name
             self.set_dtype(name, output_dtypes[i])
             self.set_shape(name, output_shapes[i])
+        for name in node.input:
+            if name not in self._input_to_node_name:
+                self._input_to_node_name[name] = set()
+            self._input_to_node_name[name].add(node.name)
 
     def remove_node(self, node_name):
         """Remove node in current graph."""
@@ -625,6 +635,13 @@ class Graph(object):
                 del self._output_shapes[op_output]
             if op_output in self._dtypes:
                 del self._dtypes[op_output]
+
+        for op_input in node.input:
+            if op_input not in self._input_to_node_name:
+                raise RuntimeError(
+                    "Input %r of node %r not found." % (op_input, node.name))
+            if node.name in self._input_to_node_name[op_input]:
+                self._input_to_node_name[op_input].remove(node.name)
 
         self._nodes.remove(node)
         node.graph = None
@@ -649,16 +666,26 @@ class Graph(object):
         self.contained_graphs = remained_sub_graphs
         self._nodes_by_name = {op.name: op for op in ops}
         self._output_to_node_name = {}
+        self._input_to_node_name = {}
         for op in ops:
             for op_output in op.output:
                 self._output_to_node_name[op_output] = op.name
+            for op_input in op.input:
+                if op_input not in self._input_to_node_name:
+                    self._input_to_node_name[op_input] = set()
+                self._input_to_node_name[op_input].add(op.name)
 
         for n in self._order_sensitive_inputs:
             if n not in ops:
                 self._order_sensitive_inputs.remove(n)
         for o in self.outputs:
             if o not in self._output_to_node_name:
-                raise ValueError("graph output " + o + " not exist")
+                raise ValueError("graph output %r not exist" % o)
+        for i in self.inputs:
+            if i.name.startswith('Placeholder'):
+                continue
+            if i.name not in self._input_to_node_name:
+                raise ValueError("graph input %r not exist in graph." % i.name)
 
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
@@ -775,6 +802,14 @@ class Graph(object):
             ret = self._nodes_by_name.get(name)
         return ret
 
+    def get_node_by_input_in_current_graph(self, input):
+        """Get nodes by node input id."""
+        names = self._output_to_node_name.get(input)
+        ret = None
+        if name:
+            ret = [self._nodes_by_name.get(name) for name in names]
+        return ret
+
     def get_node_by_name(self, name):
         """Get node by name."""
         ret = self._nodes_by_name.get(name)
@@ -785,6 +820,10 @@ class Graph(object):
         self._nodes_by_name[node.name] = node
         for op_output in node.output:
             self._output_to_node_name[op_output] = node.name
+        for name in node.input:
+            if name not in self._input_to_node_name:
+                self._input_to_node_name[name] = set()
+            self._input_to_node_name[name].add(node.name)
 
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
@@ -1210,19 +1249,31 @@ class Graph(object):
                     nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
-    @staticmethod
-    def replace_all_inputs(ops, old_input, new_input):
+    def replace_all_inputs(self, ops, old_input, new_input):
         """Replace all inputs pointing to old_input with new_input."""
         if old_input == new_input:
             return
+        if new_input not in self._input_to_node_name:
+            self._input_to_node_name[new_input] = set()
+        
+        to_ops = self._input_to_node_name.get(old_input, None)
+        if to_ops is None:
+            # This means old_input is a final output.
+            to_ops = set()
 
         for node in ops:
             if old_input in node.input and new_input in node.output:
                 raise RuntimeError("creating a circle in the graph is not allowed: " + node.name)
+            self._input_to_node_name[new_input].add(node.name)
 
             for i, input_name in enumerate(node.input):
                 if input_name == old_input:
                     node.input[i] = new_input
+                    if node.name not in to_ops:
+                        raise RuntimeError(
+                            "Unable to replace %r by %r. Node %r is not using input %r." % (
+                                old_input, new_input, node.name, old_input))
+                
 
             # modify references in sub graphs
             body_graphs = node.get_body_graphs()
@@ -1230,8 +1281,7 @@ class Graph(object):
                 for g in body_graphs.values():
                     g.replace_all_inputs(g.get_nodes(), old_input, new_input)
 
-    @staticmethod
-    def replace_input(node, old_input, new_input):
+    def replace_input(self, node, old_input, new_input):
         """Replace node."""
         assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
         is_replaced = False
@@ -1239,6 +1289,14 @@ class Graph(object):
             if input_name == old_input:
                 node.input[i] = new_input
                 is_replaced = True
+        
+        to_ops = self._input_to_node_name.get(old_input, None)
+        if to_ops is not None:
+            to_ops.remove(node.name)
+        if new_input not in self._input_to_node_name:
+            self._input_to_node_name[new_input] = set()
+        self._input_to_node_name[new_input].add(node.name)
+
         return is_replaced
 
     def _extract_sub_graph_nodes(self, dest_node, input_checker=None):
