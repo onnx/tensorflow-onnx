@@ -684,7 +684,7 @@ class Graph(object):
         for i in self.inputs:
             if i.name.startswith('Placeholder'):
                 continue
-            if i.name not in self._input_to_node_name:
+            if i.name not in self._input_to_node_name and i.name + ':0' not in self._input_to_node_name:
                 raise ValueError("graph input %r not exist in graph." % i.name)
 
         self._dtypes = remained_dtypes
