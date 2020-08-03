@@ -572,9 +572,7 @@ class Graph(object):
             n = self.get_node_by_output_in_current_graph(o)
             utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
 
-        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
-        if onnx_node.name == 'cell_state/input':
-            stop
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)        
 
         for name in onnx_node.input:
             if name not in self._input_to_node_name:
