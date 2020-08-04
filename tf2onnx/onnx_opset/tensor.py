@@ -111,8 +111,8 @@ class Identity:
     def version_1(cls, ctx, node, **kwargs):
         if node.inputs[0] is None:
             raise RuntimeError(
-                "Issue with node {}\nI={}\nI2={}\nO={}.".format(
-                    node, node.input, node._input, node.output))
+                "Issue with node {}\nI={}\nO={}.".format(
+                    node, node.input, node.output))
         if node.inputs[0].is_const():
             # should not remove the identity node if it is output of the graph
             if node.output[0] in ctx.outputs:

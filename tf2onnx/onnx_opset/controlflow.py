@@ -11,7 +11,6 @@ from __future__ import unicode_literals
 
 import copy
 import logging
-import sys
 
 import numpy as np
 

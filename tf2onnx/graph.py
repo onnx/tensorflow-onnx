@@ -447,7 +447,7 @@ class Graph(object):
 
         ops = [Node(node, self) for node in nodes]
         self.reset_nodes(ops)
-        
+
         if not is_subgraph:
             # add identity node after each output, in case it is renamed during conversion.
             for o in self.outputs:
@@ -572,7 +572,7 @@ class Graph(object):
             n = self.get_node_by_output_in_current_graph(o)
             utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
 
-        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)        
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
         for name in onnx_node.input:
             if name not in self._input_to_node_name:
@@ -607,6 +607,7 @@ class Graph(object):
         return node
 
     def append_node(self, node):
+        "Add a node to the graph."
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
         node.graph = self
@@ -815,9 +816,9 @@ class Graph(object):
             ret = self._nodes_by_name.get(name)
         return ret
 
-    def get_node_by_input_in_current_graph(self, input):
+    def get_node_by_input_in_current_graph(self, input_name):
         """Get nodes by node input id."""
-        names = self._output_to_node_name.get(input)
+        names = self._output_to_node_name.get(input_name)
         ret = None
         if name:
             ret = [self._nodes_by_name.get(name) for name in names]
@@ -1198,15 +1199,15 @@ class Graph(object):
                 if node.name in to_ops:
                     to_ops.remove(node.name)
             del node.input[i]
-            return
+            return True
 
-        for i, name in enumerate(node.input):
+        for i2, name in enumerate(node.input):
             if name == to_be_removed:
-                if node.input[i] in self._input_to_node_name:
-                    to_ops = self._input_to_node_name[node.input[i]]
+                if node.input[i2] in self._input_to_node_name:
+                    to_ops = self._input_to_node_name[node.input[i2]]
                     if node.name in to_ops:
                         to_ops.remove(node.name)
-                del node.input[i]
+                del node.input[i2]
                 break
         # don't remove output from parent since others might depend on it
         return True
@@ -1281,7 +1282,7 @@ class Graph(object):
             return
         if new_input not in self._input_to_node_name:
             self._input_to_node_name[new_input] = set()
-        
+
         to_ops = self._input_to_node_name.get(old_input, None)
         if to_ops is None:
             # This means old_input is a final output.
@@ -1307,16 +1308,16 @@ class Graph(object):
         assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
         is_replaced = False
         if i is None:
-            for i, input_name in enumerate(node.input):
+            for i2, input_name in enumerate(node.input):
                 if input_name == old_input:
-                    node.input[i] = new_input
+                    node.input[i2] = new_input
                     is_replaced = True
         elif node.input[i] == old_input:
             node.input[i] = new_input
             is_replaced = True
         else:
             raise RuntimeError("Unable to replace input %r into %r for node %r." % (old_input, new_input, node.name))
-        
+
         to_ops = self._input_to_node_name.get(old_input, None)
         if to_ops is not None:
             # That might be an issue if a node
@@ -1338,7 +1339,7 @@ class Graph(object):
                 # To avoid issues when a node
                 # takes twice the same entry.
                 to_ops.remove(old_input)
-        
+
         for input_name in new_inputs:
             assert isinstance(input_name, six.text_type)
             if input_name not in self._input_to_node_name:
