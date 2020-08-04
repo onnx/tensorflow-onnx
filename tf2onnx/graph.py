@@ -1266,7 +1266,8 @@ class Graph(object):
         new_output = port_name(name)
         new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
-        to_replace = [n for n in self.get_nodes() if n != new_node]
+        # to_replace = [n for n in self.get_nodes() if n != new_node]
+        to_replace = None
         self.replace_all_inputs(to_replace, output_name, new_output)
         return new_node
 
@@ -1284,8 +1285,11 @@ class Graph(object):
                     nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
-    def replace_all_inputs(self, ops, old_input, new_input):
-        """Replace all inputs pointing to old_input with new_input."""
+    def replace_all_inputs(self, ops, old_input, new_input, debug=False):
+        """
+        Replace all inputs pointing to old_input with new_input.
+        *ops* is unused.
+        """        
         if old_input == new_input:
             return
         if new_input not in self._input_to_node_name:
@@ -1298,16 +1302,19 @@ class Graph(object):
 
         # Verification that we can use the index to
         # remove nodes.
-        for node in ops:
-            if old_input in node.input:
-                if old_input not in self._input_to_node_name:
-                    raise RuntimeError(
-                        "Input %r of node %r, old_input %r not in _input_to_node_name." % (
-                            old_input, node.name, old_input))
-                if node.name not in self._input_to_node_name[old_input]:
-                    raise RuntimeError(
-                        "Input %r of node %r, node %r not in _input_to_node_name[%r]." % (
-                            old_input, node.name, node.name, old_input))
+        if debug and ops is not None:
+            for node in ops:
+                if old_input in node.input:
+                    if old_input not in self._input_to_node_name:
+                        raise RuntimeError(
+                            "Input %r of node %r, old_input %r not in _input_to_node_name." % (
+                                old_input, node.name, old_input))
+                    if node.name not in self._input_to_node_name[old_input]:
+                        raise RuntimeError(
+                            "Input %r of node %r, node %r not in _input_to_node_name[%r]." % (
+                                old_input, node.name, node.name, old_input))
+        else:
+            ops = self._input_to_node_name[old_input]
 
         for node in ops:
             if old_input in node.input and new_input in node.output:
