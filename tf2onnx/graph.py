@@ -56,6 +56,11 @@ class Node(object):
 
     @input.setter
     def input(self, val):
+        # The setter can catch that all inputs are change
+        # but it cannot catch that one input is changed.
+        # That's method replace_input and replace_inputs must
+        # be used to change inputs to let the graph instance
+        # update its internal indices.
         self._input = copy.deepcopy(val)
 
     @property
@@ -1290,6 +1295,19 @@ class Graph(object):
         if to_ops is None:
             # This means old_input is a final output.
             to_ops = set()
+
+        # Verification that we can use the index to
+        # remove nodes.
+        for node in ops:
+            if old_input in node.input:
+                if old_input not in self._input_to_node_name:
+                    raise RuntimeError(
+                        "Input %r of node %r, old_input %r not in _input_to_node_name." % (
+                            old_input, node.name, old_input))
+                if node.name not in self._input_to_node_name[old_input]:
+                    raise RuntimeError(
+                        "Input %r of node %r, node %r not in _input_to_node_name[%r]." % (
+                            old_input, node.name, node.name, old_input))
 
         for node in ops:
             if old_input in node.input and new_input in node.output:
