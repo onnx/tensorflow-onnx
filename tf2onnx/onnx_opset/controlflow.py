@@ -375,7 +375,7 @@ class Select:
             broadcast_shape = [cond_shape[0]] + [1] * (input_rank - 1)
             shape_const = ctx.make_const(utils.make_name(node.name), np.array(broadcast_shape, dtype=np.int64))
             reshape = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
-            ctx.replace_input(node, node.input[0], reshape.output[0])
+            ctx.replace_input(node, node.input[0], reshape.output[0], 0)
 
 
 @tf_op("Where")
@@ -532,7 +532,7 @@ class While:
         else:
             maximum_iterations_name = utils.make_name(node.inputs[1].name)
         ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
-        ctx.replace_input(node, node.input[1], maximum_iterations_name)
+        ctx.replace_input(node, node.input[1], maximum_iterations_name, 1)
 
         cond_name = node.get_attr_str("cond")
         cond_graph = find_function(cond_name)

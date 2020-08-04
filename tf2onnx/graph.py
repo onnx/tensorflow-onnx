@@ -1183,13 +1183,23 @@ class Graph(object):
 
         return op_cnt
 
-    def remove_input(self, node, to_be_removed):
+    def remove_input(self, node, to_be_removed, i=None):
         """Remove input from Node.
         Args:
             node: the node we expect the input on
             to_be_removed: the node name we want to remove
+            i: if not None, index of the input to be removed
         """
         assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
+        if i is not None:
+            assert node.input[i] == to_be_removed
+            if node.input[i] in self._input_to_node_name:
+                to_ops = self._input_to_node_name[node.input[i]]
+                if node.name in to_ops:
+                    to_ops.remove(node.name)
+            del node.input[i]
+            return
+
         for i, name in enumerate(node.input):
             if name == to_be_removed:
                 if node.input[i] in self._input_to_node_name:
@@ -1224,7 +1234,7 @@ class Graph(object):
         new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
         for i, n in enumerate(node.input):
             if n == input_name[0]:
-                self.replace_input(node, node.input[i], new_output)
+                self.replace_input(node, node.input[i], new_output, i)
                 break
         return new_node
 
