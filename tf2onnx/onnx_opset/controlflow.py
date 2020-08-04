@@ -523,7 +523,7 @@ class While:
         maximum_iterations_name = node.input[1]
         maximum_iterations = node.inputs[1].get_tensor_value()
         if maximum_iterations == -1:
-            maximum_iterations = np.iinfo(dtype_loop).max
+            maximum_iterations = np.iinfo(np.int64).max
         consumers = ctx.find_output_consumers(maximum_iterations_name)
         external_consumers = [c for c in consumers if c != node and c.type != 'TensorListReserve']
         if len(external_consumers) == 0:
@@ -729,7 +729,7 @@ def wire_if_branch(parent_g, g, inputs, output_shapes, output_dtypes, scope, par
     for node in g.inputs:
         parent_name = binding.get(node.output[0])
         if parent_name and parent_name != "@@ALLOC":
-            ctx.replace_inputs(node, [parent_name])
+            g.replace_inputs(node, [parent_name])
             node.type = "Identity"
         else:
             to_remove.append(node)

@@ -192,14 +192,20 @@ class Node(object):
         if self.input:
             lines.append("Inputs:")
             for name in self.input:
-                node = g.get_node_by_output(name)
-                op = node.type if node else "N/A"
-                lines.append("\t{}={}, {}, {}".format(name, op, g.get_shape(name), g.get_dtype(name)))
+                if g:
+                    node = g.get_node_by_output(name)
+                    op = node.type if node else "N/A"
+                    lines.append("\t{}={}, {}, {}".format(name, op, g.get_shape(name), g.get_dtype(name)))
+                else:
+                    lines.append("\t{}={}, ?, ?".format(name, op))
 
         if self.output:
             for name in self.output:
                 lines.append("Outpus:")
-                lines.append("\t{}={}, {}".format(name, g.get_shape(name), g.get_dtype(name)))
+                if g:
+                    lines.append("\t{}={}, {}".format(name, g.get_shape(name), g.get_dtype(name)))
+                else:
+                    lines.append("\t{}=?, ?".format(name))
 
         return '\n'.join(lines)
 
@@ -681,9 +687,6 @@ class Graph(object):
                 inps = [op.name]
             else:
                 inps = op.input
-            if len(inps) == 0:
-                raise RuntimeError(
-                    "Node %r (type: %r) has no inputs." % (op.name, op.type))
             for op_input in inps:
                 if op_input not in self._input_to_node_name:
                     self._input_to_node_name[op_input] = set()
