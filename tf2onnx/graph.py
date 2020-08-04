@@ -574,10 +574,10 @@ class Graph(object):
 
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
-        for name in onnx_node.input:
-            if name not in self._input_to_node_name:
-                self._input_to_node_name[name] = set()
-            self._input_to_node_name[name].add(onnx_node.name)
+        for name2 in onnx_node.input:
+            if name2 not in self._input_to_node_name:
+                self._input_to_node_name[name2] = set()
+            self._input_to_node_name[name2].add(onnx_node.name)
 
         if op_type in ["If", "Loop", "Scan"]:
             # we force the op containing inner graphs not skipped during conversion.
