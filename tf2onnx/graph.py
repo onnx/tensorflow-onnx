@@ -202,7 +202,7 @@ class Node(object):
                     op = node.type if node else "N/A"
                     lines.append("\t{}={}, {}, {}".format(name, op, g.get_shape(name), g.get_dtype(name)))
                 else:
-                    lines.append("\t{}={}, ?, ?".format(name, op))
+                    lines.append("\t{}={}, ?, ?".format(name, "N/A"))
 
         if self.output:
             for name in self.output:
@@ -1267,7 +1267,8 @@ class Graph(object):
         new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
         # to_replace = [n for n in self.get_nodes() if n != new_node]
-        to_replace = None
+        to_replace = [self.get_node_by_name(n) for n in self._input_to_node_name[output_name]]
+        to_replace = [n for n in to_replace if n != new_node]
         self.replace_all_inputs(to_replace, output_name, new_output)
         return new_node
 
