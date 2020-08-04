@@ -230,7 +230,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
         bias_new = (bias - mean) * scale_new + offset
         bias_new_const = g.make_const(node.name + '_bias_fused_bn', bias_new)
         weights_new_const = g.make_const(node.name + '_weights_fused_bn', weights_new)
-        ctx.replace_inputs(node, [node.input[0], weights_new_const.output[0], bias_new_const.output[0]])
+        g.replace_inputs(node, [node.input[0], weights_new_const.output[0], bias_new_const.output[0]])
 
         # fuse conv and bn, delete bn
         node2_output = node2.output[:1]
