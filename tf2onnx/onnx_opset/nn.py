@@ -363,7 +363,7 @@ class ConvOp:
         cls.version_1(ctx, node, **kwargs)
 
 
-@tf_op("Conv2DBackpropInput")
+@tf_op(["Conv2DBackpropInput", "Conv3DBackpropInputV2"])
 class ConvTranspose:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -372,9 +372,14 @@ class ConvTranspose:
         # T Y = ConvTranspose(T X, T W, T B, @STRING auto_pad, @INTS dilations,
         #    @INT group, @INTS kernel_shape, @INTS output_shape, @INTS pads, @INTS strides)
 
+        if(node.type=="Conv3DBackpropInputV2"):
+            spatial = 3
+        else:
+            spatial = 2
+
         node.type = "ConvTranspose"
         # Note: inputs are reversed from what one would expect.
-        conv_kernel_shape(ctx, node, 1)
+        conv_kernel_shape(ctx, node, 1, spatial)
         input_shape = ctx.get_shape(node.input[2])
         output_shape_orig = node.output_shapes
 
@@ -385,8 +390,12 @@ class ConvTranspose:
                 new_output_shape = [output_shape[1], output_shape[2]]
                 input_hw = [input_shape[1], input_shape[2]]
             else:
-                new_output_shape = [output_shape[2], output_shape[3]]
-                input_hw = [input_shape[2], input_shape[3]]
+                if node.data_format=='NDHWC':
+                    new_output_shape = [output_shape[1], output_shape[2], output_shape[3]]
+                    input_hw = [input_shape[1], input_shape[2], input_shape[3]]
+                else:
+                    new_output_shape = [output_shape[2], output_shape[3]]
+                    input_hw = [input_shape[2], input_shape[3]]
             utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
             utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
                             "output h and w cannot be smaller than input h and w.")
@@ -421,8 +430,8 @@ class ConvTranspose:
             downstream_nodes.remove(slice_node)
             ctx.replace_all_inputs(downstream_nodes, node.output[0], slice_node.output[0])
 
-        conv_dims_attr(node, "strides")
-        conv_dims_attr(node, "dilations")
+        conv_dims_attr(node, "strides", spatial=spatial)
+        conv_dims_attr(node, "dilations", spatial=spatial)
 
         # remove output_shapes input
         ctx.remove_input(node, node.input[0])
@@ -431,7 +440,7 @@ class ConvTranspose:
         node.input[0] = node.input[1]
         node.input[1] = t
 
-        conv_convert_inputs(ctx, node, with_kernel=True)
+        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
