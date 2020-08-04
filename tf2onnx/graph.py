@@ -1320,9 +1320,9 @@ class Graph(object):
 
         to_ops = self._input_to_node_name.get(old_input, None)
         if to_ops is not None:
-            # That might be an issue if a node
-            # takes twice the same entry.
-            to_ops.remove(node.name)
+            if node.name in to_ops:
+                # A node may take twice the same entry.
+                to_ops.remove(node.name)
         if new_input not in self._input_to_node_name:
             self._input_to_node_name[new_input] = set()
         self._input_to_node_name[new_input].add(node.name)
