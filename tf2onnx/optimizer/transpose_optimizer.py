@@ -317,7 +317,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         for consumer in non_nchw_trans_consumers:
             nchw_node = self._g.make_node("Transpose", [node.output[0]], attr={"perm": NHWC_TO_NCHW})
             nhwc_node = self._g.make_node("Transpose", [nchw_node.output[0]], attr={"perm": NCHW_TO_NHWC})
-            self._g.replace_input(consumer, node.output[0], nhwc_node.output[0], 0)
+            self._g.replace_input(consumer, node.output[0], nhwc_node.output[0])
 
     def _create_transpose_pairs_before_node(self, node):
         def shape_after_expand(ori_shape):
