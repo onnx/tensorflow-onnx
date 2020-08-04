@@ -1302,7 +1302,7 @@ class Graph(object):
 
         # Verification that we can use the index to
         # remove nodes.
-        if debug and ops is not None:
+        if True or (debug and ops is not None):
             for node in ops:
                 if old_input in node.input:
                     if old_input not in self._input_to_node_name:
@@ -1313,8 +1313,15 @@ class Graph(object):
                         raise RuntimeError(
                             "Input %r of node %r, node %r not in _input_to_node_name[%r]." % (
                                 old_input, node.name, node.name, old_input))
-        else:
-            ops = self._input_to_node_name[old_input]
+                    if id(self.get_node_by_name(node.name)) != id(node):
+                        raise RuntimeError(
+                            "Mismatch with input %r of node %r." % (
+                                old_input, node.name))
+                        
+        #elif old_input in self._input_to_node_name:
+        #    ops = [self.get_node_by_name(n) for n in self._input_to_node_name[old_input]]
+        #else:
+        #    ops = []
 
         for node in ops:
             if old_input in node.input and new_input in node.output:
