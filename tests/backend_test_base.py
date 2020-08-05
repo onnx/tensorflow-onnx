@@ -72,6 +72,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
+        import onnx
+        with open(model_path, 'rb') as f:
+            onx = onnx.load(f)
+        print(onx)
         try:
             m = rt.InferenceSession(model_path, opt)
         except Fail as e:

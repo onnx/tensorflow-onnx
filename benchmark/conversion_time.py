@@ -42,7 +42,7 @@ def convert(name):
         spy_convert(graph_def, model)
 
 
-def profile(profiler="pyinstrument", name="EfficientNetB2"):
+def profile(profiler="pyinstrument", name="EfficientNetB2", show_all=False):
     """
     Profiles the conversion of a model.
     
@@ -61,7 +61,7 @@ def profile(profiler="pyinstrument", name="EfficientNetB2"):
         convert(name)
 
         profiler.stop()
-        print(profiler.output_text(unicode=False, color=False, show_all=True))
+        print(profiler.output_text(unicode=False, color=False, show_all=show_all))
     elif profiler == "cProfile":
         import cProfile, pstats, io
         from pstats import SortKey

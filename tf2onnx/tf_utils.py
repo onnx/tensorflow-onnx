@@ -13,7 +13,6 @@ import collections
 from distutils.version import LooseVersion
 
 import numpy as np
-import six
 import tensorflow as tf
 
 from tensorflow.core.framework import types_pb2, tensor_pb2
@@ -119,9 +118,6 @@ def map_tf_dtype(dtype):
 
 def get_tf_node_attr(node, name):
     """Parser TF node attribute."""
-    if six.PY2:
-        # For python2, TF get_attr does not accept unicode
-        name = str(name)
     return node.get_attr(name)
 
 
@@ -176,11 +172,10 @@ def tflist_to_onnx(g, shape_override):
             attr_cnt[a] += 1
             if a == "dtype":
                 attr[a] = map_tf_dtype(get_tf_node_attr(node, "dtype"))
-            elif a in ["T"]:
+            elif a == "T":
                 dtype = get_tf_node_attr(node, a)
-                if dtype:
-                    if not isinstance(dtype, list):
-                        dtypes[node.name] = map_tf_dtype(dtype)
+                if dtype and not isinstance(dtype, list):
+                    dtypes[node.name] = map_tf_dtype(dtype)
             elif a in {"output_type", "output_dtype", "out_type", "Tidx", "out_idx"}:
                 # Tidx is used by Range
                 # out_idx is used by ListDiff

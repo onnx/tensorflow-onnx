@@ -1300,6 +1300,17 @@ class Graph(object):
         Replace all inputs pointing to old_input with new_input.
         *ops* is unused unless keep_ops is True.
         """
+        try:
+            assert False
+        except AssertionError:
+            import traceback
+            import sys
+            tb = traceback.extract_stack()
+            print()
+            for line in tb:
+                if "tf2onnx" in line.filename:
+                    print('  File "{}", line {}'.format(line.filename, line.lineno))
+
         if old_input == new_input:
             return
         if new_input not in self._input_to_node_name:
