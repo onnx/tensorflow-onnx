@@ -61,8 +61,7 @@ def profile(profiler="pyinstrument", name="EfficientNetB2"):
         convert(name)
 
         profiler.stop()
-
-        print(profiler.output_text(unicode=False, color=False))
+        print(profiler.output_text(unicode=False, color=False, show_all=True))
     elif profiler == "cProfile":
         import cProfile, pstats, io
         from pstats import SortKey

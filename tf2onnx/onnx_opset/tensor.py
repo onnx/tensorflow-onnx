@@ -31,8 +31,7 @@ def _convert_shapenode_to_int64(ctx, node, input_number):
     """cast int32 shape into int64 shape."""
     name = node.input[input_number]
 
-    cast_node = ctx.insert_new_node_on_input(node, "Cast", name)
-    cast_node.set_attr("to", onnx_pb.TensorProto.INT64)
+    cast_node = ctx.insert_new_node_on_input(node, "Cast", name, to=onnx_pb.TensorProto.INT64)
     ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.INT64)
     ctx.copy_shape(name, cast_node.output[0])
 
@@ -46,14 +45,14 @@ def _wrap_concat_with_cast(ctx, node):
         output_name = node.output[0]
         # cast each inputs to float
         for i, inp in enumerate(node.inputs):
-            input_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[i])
-            input_cast.set_attr("to", onnx_pb.TensorProto.FLOAT)
+            input_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[i],
+                                                      to=onnx_pb.TensorProto.FLOAT)
             ctx.set_dtype(input_cast.output[0], onnx_pb.TensorProto.FLOAT)
         next_nodes = ctx.find_output_consumers(node.output[0])
         # cast output back to dtype unless the next op is a cast
         if next_nodes[0].type != "Cast":
-            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=node.child_name())
-            output_cast.set_attr("to", dtype)
+            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=node.child_name(),
+                                                        to=dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(output_name, output_cast.output[0])
 
@@ -161,15 +160,14 @@ class Reshape:
             return
 
         # onnx < opset 8 does not know reshape for other types than float*, wrap the reshape in casts
-        input_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
-        input_cast.set_attr("to", onnx_pb.TensorProto.FLOAT)
+        input_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
         ctx.copy_shape(node.output[0], input_cast.output[0])
 
         # if the next node is already a cast we don't need to insert another one
         next_nodes = ctx.find_output_consumers(node.output[0])
         if len(next_nodes) != 1 or next_nodes[0].type != "Cast":
-            output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=node.child_name())
-            output_cast.set_attr("to", dtype)
+            output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=node.child_name(),
+                                                        to=dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(node.output[0], output_cast.output[0])
 
@@ -272,13 +270,13 @@ class ConcatV2:
             raise RuntimeError("all inputs of {} are empty".format(node.name))
 
         axis_node = node.inputs[-1]
-        utils.make_sure(axis_node.is_const(), "{} needs to be const".format(axis_node.name))
+        utils.make_sure(axis_node.is_const(), "%r needs to be const", axis_node.name)
         axis_val = axis_node.get_tensor_value()
-        ctx.remove_input(node, node.input[-1])
+        ctx.remove_input(node, node.input[-1], len(node.input) - 1)
 
         if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
             input_shape = ctx.get_shape(node.input[0])
-            utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
+            utils.make_sure(input_shape is not None, "shape of %r is None", node.input[0])
             axis_val = len(input_shape) + axis_val
         node.set_attr("axis", axis_val)
 
@@ -743,16 +741,17 @@ class StridedSlice:
                 if node.inputs[0].type == "Cast" and len(ctx.find_output_consumers(node.inputs[0].output[0])) == 1:
                     # override the previous cast
                     cast_node = node.inputs[0]
+                    cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
                 else:
-                    cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
+                    cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0],
+                                                             to=onnx_pb.TensorProto.FLOAT)
                     nodes.insert(0, cast_node)
-                cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
                 ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
                 ctx.copy_shape(node.input[0], cast_node.output[0])
                 # undo the cast afer slice
                 name = utils.make_name(node.name)
-                cast_node = ctx.insert_new_node_on_output("Cast", nodes[-1].output[0], name)
-                cast_node.set_attr("to", input_dtype)
+                cast_node = ctx.insert_new_node_on_output("Cast", nodes[-1].output[0], name,
+                                                          to=input_dtype)
                 ctx.set_dtype(cast_node.output[0], input_dtype)
                 ctx.copy_shape(node.output[0], cast_node.output[0])
                 nodes.append(cast_node)
@@ -1181,8 +1180,7 @@ class Shape:
         if dtype == onnx_pb.TensorProto.INT64:
             return
         op_name = utils.make_name(node.name)
-        output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name)
-        output_cast.set_attr("to", dtype)
+        output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name, to=dtype)
         ctx.set_dtype(output_cast.output[0], dtype)
         ctx.copy_shape(node.output[0], output_cast.output[0])
 
@@ -1556,8 +1554,7 @@ class ReverseSequence:
 
         seq_len_dtype = ctx.get_dtype(node.input[1])
         if seq_len_dtype != onnx_pb.TensorProto.INT64:
-            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[1])
-            cast_node.set_attr("to", onnx_pb.TensorProto.INT64)
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
             ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.INT64)
             ctx.copy_shape(node.input[1], cast_node.output[0])
 
@@ -1763,8 +1760,8 @@ class Unique:
             # cast to int64 if needed
             if dtypes[1] != onnx_pb.TensorProto.UINT64:
                 cast_node = ctx.insert_new_node_on_output("Cast", node.output[1],
-                                                          name=utils.make_name(node.name) + "_cast")
-                cast_node.set_attr("to", dtypes[1])
+                                                          name=utils.make_name(node.name) + "_cast",
+                                                          to=dtypes[1])
                 ctx.set_dtype(cast_node.output[0], dtypes[1])
                 ctx.copy_shape(node.output[1], cast_node.output[0])
             # FIXME: the indices in onnx are not the same as in tensorflow.
