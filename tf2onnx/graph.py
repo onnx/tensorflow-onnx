@@ -480,7 +480,7 @@ class Graph(object):
                         body_graph.parent_graph = self
                         new_node.set_body_graph_as_attr(attr_name, body_graph)
 
-                self.replace_all_inputs(self.get_nodes(), o, new_output_name)
+                self.replace_all_inputs(self.get_nodes(), o, new_output_name, keep_ops=True)
                 self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
                 self.copy_shape(new_output_name, o)
                 self.copy_dtype(new_output_name, o)
@@ -705,6 +705,8 @@ class Graph(object):
                 raise ValueError("graph output %r not exist" % o)
         for i in self.inputs:
             if i.name.startswith('Placeholder'):
+                continue
+            if i.name in {'keras_learning_phase'}:
                 continue
             if i.name not in self._input_to_node_name:
                 raise ValueError("graph input %r not exist in graph." % i.name)
@@ -991,7 +993,7 @@ class Graph(object):
             all_input = list(filter(lambda a: a != '', all_input))
             for inp in sorted(all_input):
                 j = self.get_node_by_output(inp)
-                utils.make_sure(j is not None, "Cannot find node with output {}".format(inp))
+                utils.make_sure(j is not None, "Cannot find node with output %r", inp)
                 if self.parent_graph and j.name not in op_name_to_index:
                     # there might be some outer-scoped inputs for an inner Graph.
                     pass
@@ -1269,13 +1271,20 @@ class Graph(object):
         # to_replace = [n for n in self.get_nodes() if n != new_node]
         to_replace = [self.get_node_by_name(n) for n in self._input_to_node_name[output_name]]
         to_replace = [n for n in to_replace if n != new_node]
-        self.replace_all_inputs(to_replace, output_name, new_output)
+        self.replace_all_inputs(to_replace, output_name, new_output, keep_ops=True)
         return new_node
 
     def find_output_consumers(self, output_name):
         """Find all nodes consuming a given output."""
+        if output_name in self._input_to_node_name:
+            ops = self._input_to_node_name[output_name]
+            ops = [self.get_node_by_name(n) for n in ops]
+        else:
+            ops = self.get_nodes()
         nodes = []
-        for node in self.get_nodes():
+        for node in ops:
+            if node is None:
+                continue
             if output_name in node.input:
                 nodes.append(node)
 
@@ -1286,11 +1295,11 @@ class Graph(object):
                     nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
-    def replace_all_inputs(self, ops, old_input, new_input, debug=False):
+    def replace_all_inputs(self, ops, old_input, new_input, debug=False, keep_ops=False):
         """
         Replace all inputs pointing to old_input with new_input.
-        *ops* is unused.
-        """        
+        *ops* is unused unless keep_ops is True.
+        """
         if old_input == new_input:
             return
         if new_input not in self._input_to_node_name:
@@ -1301,9 +1310,11 @@ class Graph(object):
             # This means old_input is a final output.
             to_ops = set()
 
-        # Verification that we can use the index to
-        # remove nodes.
-        if True or (debug and ops is not None):
+        if keep_ops and ops is not None:
+            pass
+        elif debug and ops is not None:
+            # Verification that all nodes ingested the input
+            # are listed in self._input_to_node_name.
             for node in ops:
                 if old_input in node.input:
                     if old_input not in self._input_to_node_name:
@@ -1318,11 +1329,11 @@ class Graph(object):
                         raise RuntimeError(
                             "Mismatch with input %r of node %r." % (
                                 old_input, node.name))
-                        
-        #elif old_input in self._input_to_node_name:
-        #    ops = [self.get_node_by_name(n) for n in self._input_to_node_name[old_input]]
-        #else:
-        #    ops = []
+
+        elif old_input in self._input_to_node_name:
+            ops = [self.get_node_by_name(n) for n in self._input_to_node_name[old_input]]
+        else:
+            ops = []
 
         for node in ops:
             if old_input in node.input and new_input in node.output:
@@ -1337,7 +1348,7 @@ class Graph(object):
             body_graphs = node.get_body_graphs()
             if body_graphs:
                 for g in body_graphs.values():
-                    g.replace_all_inputs(g.get_nodes(), old_input, new_input)
+                    g.replace_all_inputs(g.get_nodes(), old_input, new_input, keep_ops=keep_ops, debug=debug)
 
     def replace_input(self, node, old_input, new_input, i=None):
         """Replace one input in a node."""

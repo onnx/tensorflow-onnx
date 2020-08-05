@@ -120,7 +120,7 @@ class Identity:
             # if identity has a const as input, remove it
             input_name = node.input[0]
             output_name = node.output[0]
-            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name)
+            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name, keep_ops=False)
             ctx.remove_node(node.name)
 
 
@@ -130,7 +130,7 @@ class IdentityN:
     def version_1(cls, ctx, node, **kwargs):
         ctx.remove_node(node.name)
         for input_name, output_name in zip(node.input, node.output):
-            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name)
+            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name, keep_ops=False)
 
 
 @tf_op("Reshape")
@@ -1052,7 +1052,7 @@ class Pack:
         # concat all unqueezes
         concat = ctx.make_node("Concat", inputs, op_name_scope=node.name, attr={"axis": axis},
                                shapes=shapes, dtypes=dtypes)
-        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], concat.output[0])
+        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], concat.output[0], keep_ops=False)
 
 
 @tf_op("Unpack")

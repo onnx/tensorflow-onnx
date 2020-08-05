@@ -95,7 +95,7 @@ def rewrite_gemm(g, ops):
                                    dtypes=[g.get_dtype(add_node.output[0])], op_name_scope=matmul_node.name)
 
                 ops.append(gemm)
-                g.replace_all_inputs(ops, add_node.output[0], gemm.output[0])
+                g.replace_all_inputs(ops, add_node.output[0], gemm.output[0], keep_ops=False)
                 to_delete = [add_node, matmul_node]
                 g.safe_remove_nodes(to_delete)
     return ops

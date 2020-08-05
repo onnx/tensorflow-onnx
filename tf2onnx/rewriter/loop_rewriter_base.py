@@ -275,7 +275,7 @@ class LoopRewriterBase(object):
 
         for enter_node in enter_nodes:
             # connect Enter's output to Enter's input
-            self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0])
+            self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0], keep_ops=False)
 
         return GraphInfo(ops, inputs, outputs)
 
@@ -287,7 +287,7 @@ class LoopRewriterBase(object):
 
         for enter_node in enter_nodes:
             # connect Enter's output to Enter's input
-            self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0])
+            self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0], keep_ops=True)
 
         dependent_vars = []
         for merge_node in merge_nodes:
@@ -299,11 +299,11 @@ class LoopRewriterBase(object):
             # to consumer cell graph outputs.
             non_switch_consumers = [n for n in self.g.find_output_consumers(merge_node.output[0]) if n.type != "Switch"]
             self.g.replace_all_inputs(non_switch_consumers, merge_node.output[0],
-                                      loop_var.next_iteration_input.id)
+                                      loop_var.next_iteration_input.id, keep_ops=True)
             dependent_vars.append(loop_var)
 
         # cut off connection between condition graph and LoopCond node.
-        self.g.replace_all_inputs([context.loop_cond], context.loop_cond.output[0], INVALID_INPUT_ID)
+        self.g.replace_all_inputs([context.loop_cond], context.loop_cond.output[0], INVALID_INPUT_ID, keep_ops=True)
 
         graph_info = GraphInfo(ops, [], outputs)
         graph_info.dependent_vars = dependent_vars
@@ -319,11 +319,11 @@ class LoopRewriterBase(object):
             if val.is_tensor_array:
                 # connect NextIteration to an invalid node, to cut off an ending node of the cell.
                 ta_write_nodes = [n for n in self.g.get_nodes() if is_tf_tensor_array_write_op(n)]
-                self.g.replace_all_inputs(ta_write_nodes, val.next_iteration_input.id, INVALID_INPUT_ID)
+                self.g.replace_all_inputs(ta_write_nodes, val.next_iteration_input.id, INVALID_INPUT_ID, keep_ops=True)
             else:
                 # connect NextIteration to an invalid node, to cut off an ending node of the cell.
                 next_iter_nodes = [n for n in self.g.get_nodes() if n.type == "NextIteration"]
-                self.g.replace_all_inputs(next_iter_nodes, val.next_iteration_input.id, INVALID_INPUT_ID)
+                self.g.replace_all_inputs(next_iter_nodes, val.next_iteration_input.id, INVALID_INPUT_ID, keep_ops=True)
 
         for scan_input in context.loop_properties.scan_inputs:
             # remove the node to cut off connection between scan_input and the cell.
