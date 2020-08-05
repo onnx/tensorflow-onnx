@@ -50,6 +50,7 @@ class OpTypePattern(object):
             input_pattern if isinstance(input_pattern, OpTypePattern) else
             OpTypePattern(input_pattern) for input_pattern in inputs
         ]
+        self.op_type_set = set(op_type.split('|')) if op_type else set()
 
     @property
     def op_type(self):
@@ -154,7 +155,7 @@ class GraphMatcher(object):
         if pattern.op_type == "*":
             return True
 
-        if op.type in pattern.op_type.split('|'):
+        if op.type in pattern.op_type_set:
             return True
 
         return False

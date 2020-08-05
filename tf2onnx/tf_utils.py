@@ -136,14 +136,14 @@ def tflist_to_onnx(g, shape_override):
     """
 
     # ignore the following attributes
-    ignored_attr = ["unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
+    ignored_attr = {"unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
                     "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
                     "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
                     "T_threshold", "element_dtype", "shape_type", "_lower_using_switch_merge",
                     "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
                     "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
-                    "Toutput_types"]
+                    "Toutput_types"}
 
     node_list = g.get_operations()
     functions = {}
@@ -181,7 +181,7 @@ def tflist_to_onnx(g, shape_override):
                 if dtype:
                     if not isinstance(dtype, list):
                         dtypes[node.name] = map_tf_dtype(dtype)
-            elif a in ["output_type", "output_dtype", "out_type", "Tidx", "out_idx"]:
+            elif a in {"output_type", "output_dtype", "out_type", "Tidx", "out_idx"}:
                 # Tidx is used by Range
                 # out_idx is used by ListDiff
                 attr[a] = map_tf_dtype(get_tf_node_attr(node, a))
@@ -192,7 +192,7 @@ def tflist_to_onnx(g, shape_override):
             elif a == "output_shapes":
                 # we should not need it since we pull the shapes above already
                 pass
-            elif a in ["body", "cond", "then_branch", "else_branch"]:
+            elif a in {"body", "cond", "then_branch", "else_branch"}:
                 input_shapes = [inp.get_shape() for inp in node.inputs]
                 nattr = get_tf_node_attr(node, a)
                 attr[a] = nattr.name
