@@ -1336,6 +1336,8 @@ class Graph(object):
             ops = []
 
         for node in ops:
+            if node is None:
+                continue
             if old_input in node.input and new_input in node.output:
                 raise RuntimeError("creating a circle in the graph is not allowed: " + node.name)
             self._input_to_node_name[new_input].add(node.name)
