@@ -212,7 +212,7 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
             return
         squeeze_node = self.g.make_node("Unsqueeze", [initializer_input_id], attr={"axes": [0]})
         to_replace = [n for n in self.g.get_nodes() if n != squeeze_node]
-        self.g.replace_all_inputs(to_replace, initializer_input_id, squeeze_node.output[0], keep_ops=False)
+        self.g.replace_all_inputs(to_replace, initializer_input_id, squeeze_node.output[0], keep_ops=True)
         context.onnx_input_ids["initial_state"] = squeeze_node.output[0]
 
     def create_rnn_node(self, context):

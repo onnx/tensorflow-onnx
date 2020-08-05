@@ -249,8 +249,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         input_index = self._get_input_index_for_trans(node, trans)
 
-        ops = self._g.get_nodes()
-        self._g.replace_all_inputs(ops, node.output[0], trans.output[0], keep_ops=False)
+        self._g.replace_all_inputs(self._g.get_nodes(), node.output[0], trans.output[0], keep_ops=False)
         self._g.replace_input(node, node.input[input_index], trans.input[0], input_index)
         self._g.replace_input(trans, trans.input[0], node.output[0], 0)
 
@@ -408,9 +407,8 @@ class TransposeOptimizer(GraphOptimizerBase):
 
                 conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
                 conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.attr_onnx)
-                ops = self._g.get_nodes()
                 self._g.replace_input(trans, trans.input[0], utils.port_name(conv_node.name), 0)
-                self._g.replace_all_inputs(ops, node.output[0], trans.output[0], keep_ops=False)
+                self._g.replace_all_inputs(self._g.get_nodes(), node.output[0], trans.output[0], keep_ops=False)
                 self._g.remove_node(t_p.name)
                 self._g.remove_node(node.name)
                 return True
@@ -419,8 +417,7 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _transpose_handler(self, trans, node):
         if is_nchw_transpose(node):
             for g in {self._g, node.graph}:
-                ops = g.get_nodes()
-                g.replace_all_inputs(ops, node.output[0], trans.input[0], keep_ops=False)
+                g.replace_all_inputs(g.get_nodes(), node.output[0], trans.input[0], keep_ops=False)
 
             shape = node.graph.get_shape(node.output[0])
             dtype = node.graph.get_dtype(node.output[0])
@@ -550,8 +547,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         if node.output[0] in node.graph.outputs:
             return False
         for g in {self._g, node.graph}:
-            ops = g.get_nodes()
-            g.replace_all_inputs(ops, node.output[0], trans.output[0], keep_ops=False)
+            g.replace_all_inputs(g.get_nodes(), node.output[0], trans.output[0], keep_ops=False)
         node.graph.remove_node(node.name)
         return True
 
@@ -591,8 +587,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         if node.get_attr("axes"):
             # switch tran and squeeze
             # 1 switch
-            ops = self._g.get_nodes()
-            self._g.replace_all_inputs(ops, node.output[0], trans.output[0], keep_ops=False)
+            self._g.replace_all_inputs(self._g.get_nodes(), node.output[0], trans.output[0], keep_ops=False)
             self._g.replace_input(node, node.input[0], trans.input[0], 0)
             self._g.replace_input(trans, trans.input[0], node.output[0], 0)
             # 2 correct attr of nodes

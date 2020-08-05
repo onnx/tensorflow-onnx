@@ -275,7 +275,7 @@ class LoopRewriterBase(object):
 
         for enter_node in enter_nodes:
             # connect Enter's output to Enter's input
-            self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0], keep_ops=False)
+            self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0], keep_ops=True)
 
         return GraphInfo(ops, inputs, outputs)
 
