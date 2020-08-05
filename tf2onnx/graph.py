@@ -1308,7 +1308,7 @@ class Graph(object):
             tb = traceback.extract_stack()
             print()
             for line in tb:
-                if "tf2onnx" in line.filename:
+                if "tf2onnx" in line.filename and "site-packages" not in line.filename:
                     print('  File "{}", line {}'.format(line.filename, line.lineno))
 
         if old_input == new_input:
