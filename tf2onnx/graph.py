@@ -1305,11 +1305,6 @@ class Graph(object):
         if new_input not in self._input_to_node_name:
             self._input_to_node_name[new_input] = set()
 
-        to_ops = self._input_to_node_name.get(old_input, None)
-        if to_ops is None:
-            # This means old_input is a final output.
-            to_ops = set()
-
         if keep_ops and ops is not None:
             pass
         elif debug and ops is not None:
