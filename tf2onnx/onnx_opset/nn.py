@@ -240,7 +240,7 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
         for i in range(spatial):
             pad = (
                 (output_shape[i + 2] - 1) * strides[i]
-                + dilations[i] * kernel_shape[i]
+                + dilations[i] * (kernel_shape[i] - 1) + 1
                 - input_shape[i + 2]
             )
             pad = max(pad, 0)
