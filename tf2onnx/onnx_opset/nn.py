@@ -390,6 +390,7 @@ class ConvTranspose:
                 new_output_shape = [output_shape[1], output_shape[2]]
                 input_hw = [input_shape[1], input_shape[2]]
             else:
+                # TODO: NCDHW
                 if node.data_format=='NDHWC':
                     new_output_shape = [output_shape[1], output_shape[2], output_shape[3]]
                     input_hw = [input_shape[1], input_shape[2], input_shape[3]]
