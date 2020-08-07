@@ -113,7 +113,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
     @staticmethod
     @_register_func("Reshape")
     def _fold_reshape(node, graph):
-        const_val_data = node.inputs[0].get_tensor_value(as_list=False) 
+        const_val_data = node.inputs[0].get_tensor_value(as_list=False)
         const_val_shape = node.inputs[1].get_tensor_value(as_list=False)
         const_val_after_trans = const_val_data.reshape(const_val_shape)
         return [const_val_after_trans]
