@@ -398,6 +398,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
         self._conv_test(x_val, kernel_val, strides=strides, padding="VALID", rtol=1e-05)
 
+    def test_conv2d_dilation_same(self):
+        x_shape = [1, 35, 35, 288]  # NHWC
+        kernel_shape = [3, 3, 288, 384]  # [filter_height, filter_width, in_channels, out_channels]
+        strides = [1, 1, 1, 1]  # NHWC
+        dilations = [1, 3, 1, 1]  # NHWC
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
+        self._conv_test(x_val, kernel_val, strides=strides, padding="SAME", dilations=dilations, rtol=1e-05)
+
+    def test_conv2d_dilation_strides_same(self):
+        x_shape = [1, 35, 35, 288]  # NHWC
+        kernel_shape = [3, 3, 288, 384]  # [filter_height, filter_width, in_channels, out_channels]
+        strides = [1, 2, 4, 1]  # NHWC
+        dilations = [1, 3, 1, 1]  # NHWC
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
+        self._conv_test(x_val, kernel_val, strides=strides, padding="SAME", dilations=dilations, rtol=1e-05)
+
     def test_conv3d_1(self):
         strides = [1, 1, 1, 1, 1]
         dilations = [1, 1, 1, 1, 1]
