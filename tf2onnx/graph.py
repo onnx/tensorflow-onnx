@@ -1286,7 +1286,10 @@ class Graph(object):
             if output_name in node.input:
                 nodes.append(node)
 
-            # find consumers in sub graphs
+        for node in self.get_nodes():
+            # find consumers in sub graphs,
+            # should we keep an index of nodes including
+            # a subgraphs?
             body_graphs = node.get_body_graphs()
             if body_graphs:
                 for g in body_graphs.values():
