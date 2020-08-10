@@ -20,6 +20,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
+import onnx
 from common import get_test_config
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
@@ -63,12 +64,23 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_onnxruntime(self, model_path, inputs, output_names):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
+        try:
+            from onnxruntime.capi.onnxruntime_pybind11_state import Fail
+        except ImportError:
+            Fail = RuntimeError
         opt = rt.SessionOptions()
         # in case of issues with the runtime, one can enable more logging
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
-        m = rt.InferenceSession(model_path, opt)
+        with open(model_path, 'rb') as f:
+            onx = onnx.load(f)
+        try:
+            m = rt.InferenceSession(model_path, opt)
+        except Fail as e:
+            with open(model_path, 'rb') as f:
+                onx = onnx.load(f)
+            raise AssertionError("Unable to load model '{}'\n{}".format(model_path, onx)) from e
         results = m.run(output_names, inputs)
         return results
 

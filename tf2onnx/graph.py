@@ -56,6 +56,11 @@ class Node(object):
 
     @input.setter
     def input(self, val):
+        # The setter can catch that all inputs are change
+        # but it cannot catch that one input is changed.
+        # That's method replace_input and replace_inputs must
+        # be used to change inputs to let the graph instance
+        # update its internal indices.
         self._input = copy.deepcopy(val)
 
     @property
@@ -988,7 +993,7 @@ class Graph(object):
             all_input = list(filter(lambda a: a != '', all_input))
             for inp in sorted(all_input):
                 j = self.get_node_by_output(inp)
-                utils.make_sure(j is not None, "Cannot find node with output {}".format(inp))
+                utils.make_sure(j is not None, "Cannot find node with output %r", inp)
                 if self.parent_graph and j.name not in op_name_to_index:
                     # there might be some outer-scoped inputs for an inner Graph.
                     pass
@@ -1294,6 +1299,8 @@ class Graph(object):
             to_ops = set()
 
         for node in ops:
+            if node is None:
+                continue
             if old_input in node.input and new_input in node.output:
                 raise RuntimeError("creating a circle in the graph is not allowed: " + node.name)
             self._input_to_node_name[new_input].add(node.name)
