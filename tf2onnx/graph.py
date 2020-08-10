@@ -1280,7 +1280,7 @@ class Graph(object):
         else:
             ops = self.get_nodes()
         nodes = []
-        for node in self.get_nodes():
+        for node in ops:
             if node is None:
                 continue
             if output_name in node.input:
