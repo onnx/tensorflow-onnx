@@ -9,6 +9,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import traceback
+import sys
 import collections
 import copy
 import logging
@@ -1305,8 +1307,6 @@ class Graph(object):
         try:
             assert False
         except AssertionError:
-            import traceback
-            import sys
             tb = traceback.extract_stack()
             print()
             for line in tb:

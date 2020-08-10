@@ -21,6 +21,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
 from common import get_test_config
+import onnx
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
@@ -72,14 +73,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
-        import onnx
         with open(model_path, 'rb') as f:
             onx = onnx.load(f)
         print(onx)
         try:
             m = rt.InferenceSession(model_path, opt)
         except Fail as e:
-            import onnx
             with open(model_path, 'rb') as f:
                 onx = onnx.load(f)
             raise AssertionError("Unable to load model '{}'\n{}".format(model_path, onx)) from e
