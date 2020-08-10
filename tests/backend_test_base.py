@@ -20,8 +20,8 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
-from common import get_test_config
 import onnx
+from common import get_test_config
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
@@ -73,8 +73,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
-        with open(model_path, 'rb') as f:
-            onx = onnx.load(f)
         try:
             m = rt.InferenceSession(model_path, opt)
         except Fail as e:

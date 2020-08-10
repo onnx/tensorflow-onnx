@@ -9,8 +9,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import traceback
-import sys
 import collections
 import copy
 import logging
@@ -1290,7 +1288,10 @@ class Graph(object):
             if output_name in node.input:
                 nodes.append(node)
 
-            # find consumers in sub graphs
+        for node in self.get_nodes():
+            # find consumers in sub graphs,
+            # should we keep an index of nodes including
+            # a subgraphs?
             body_graphs = node.get_body_graphs()
             if body_graphs:
                 for g in body_graphs.values():
@@ -1302,16 +1303,6 @@ class Graph(object):
         Replace all inputs pointing to old_input with new_input.
         *ops* is unused unless keep_ops is True.
         """
-        try:
-            assert False
-        except AssertionError:
-            tb = traceback.extract_stack()
-            print()
-            for line in tb:
-                if ("tf2onnx" in line.filename and "site-packages" not in line.filename and
-                        'python3' not in line.filename):
-                    print('  File "{}", line {}'.format(line.filename, line.lineno))
-
         if old_input == new_input:
             return
         if new_input not in self._input_to_node_name:
