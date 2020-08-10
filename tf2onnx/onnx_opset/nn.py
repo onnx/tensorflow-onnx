@@ -240,7 +240,7 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
         for i in range(spatial):
             pad = (
                 (output_shape[i + 2] - 1) * strides[i]
-                + dilations[i] * kernel_shape[i]
+                + dilations[i] * (kernel_shape[i] - 1) + 1
                 - input_shape[i + 2]
             )
             pad = max(pad, 0)
@@ -362,8 +362,7 @@ class ConvOp:
         # No change.
         cls.version_1(ctx, node, **kwargs)
 
-
-@tf_op("Conv2DBackpropInput")
+@tf_op(["Conv2DBackpropInput", "Conv3DBackpropInputV2"])
 class ConvTranspose:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -372,24 +371,36 @@ class ConvTranspose:
         # T Y = ConvTranspose(T X, T W, T B, @STRING auto_pad, @INTS dilations,
         #    @INT group, @INTS kernel_shape, @INTS output_shape, @INTS pads, @INTS strides)
 
+        if node.type == "Conv3DBackpropInputV2":
+            spatial = 3
+        else:
+            spatial = 2
         node.type = "ConvTranspose"
         # Note: inputs are reversed from what one would expect.
-        conv_kernel_shape(ctx, node, 1)
+        conv_kernel_shape(ctx, node, 1, spatial=spatial)
         input_shape = ctx.get_shape(node.input[2])
         output_shape_orig = node.output_shapes
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
         if node.inputs[0].is_const():
             output_shape = ctx.get_shape(node.output[0])
-            if node.is_nhwc():
+            if is_channels_last(node):
                 new_output_shape = [output_shape[1], output_shape[2]]
-                input_hw = [input_shape[1], input_shape[2]]
+                input_dims = [input_shape[1], input_shape[2]]
+                if spatial == 3:
+                    new_output_shape.append(output_shape[3])
+                    input_dims.append(input_shape[3])
             else:
                 new_output_shape = [output_shape[2], output_shape[3]]
-                input_hw = [input_shape[2], input_shape[3]]
-            utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
-            utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
-                            "output h and w cannot be smaller than input h and w.")
+                input_dims = [input_shape[2], input_shape[3]]
+                if spatial == 3:
+                    new_output_shape.append(output_shape[4])
+                    input_dims.append(input_shape[4])
+
+            utils.make_sure(new_output_shape.count(-1) <= 0, "output dims need to be known")
+            utils.make_sure(all(new_output_shape[i] >= input_dims[i] for i in range(spatial)),
+                            "output dims cannot be smaller than input dims.")
+
             node.set_attr("output_shape", new_output_shape)
         else:
             input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
@@ -409,20 +420,37 @@ class ConvTranspose:
             start_w = ctx.make_node("Div", [diff_w.output[0], const_two.output[0]])
             end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
             end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
-            starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
-            ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0})
-            const_one_two = ctx.make_const(utils.make_name(node.name + "_const_one_two"),
-                                           np.array([1, 2], dtype=np.int64))
+            if spatial == 3:
+                output_d = GraphBuilder(ctx).make_slice(
+                    {"data": output_shape.output[0], "ends": [4], "starts": [3], "axes": [0]})
+                expect_d = GraphBuilder(ctx).make_slice(
+                    {"data": input_shape.output[0], "ends": [4], "starts": [3], "axes": [0]})
+                diff_d = ctx.make_node("Sub", [output_d, expect_d])
+                start_d = ctx.make_node("Div", [diff_d.output[0], const_two.output[0]])
+                end_d = ctx.make_node("Add", [start_d.output[0], expect_d])
+
+                starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0], start_d.output[0]],
+                                       attr={"axis": 0})
+                ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0], end_d.output[0]], attr={"axis": 0})
+                slice_axes = ctx.make_const(utils.make_name(node.name + "_const_slice_axes"),
+                                            np.array([1, 2, 3], dtype=np.int64))
+            else:
+                starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
+                ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0})
+                slice_axes = ctx.make_const(utils.make_name(node.name + "_const_slice_axes"),
+                                            np.array([1, 2], dtype=np.int64))
+
             slice_node = ctx.make_node("Slice",
-                                       [node.output[0], starts.output[0], ends.output[0], const_one_two.output[0]],
+                                       [node.output[0], starts.output[0], ends.output[0], slice_axes.output[0]],
                                        shapes=output_shape_orig)
+
             downstream_nodes = ctx.find_output_consumers(node.output[0])
             downstream_nodes.remove(output_shape)
             downstream_nodes.remove(slice_node)
             ctx.replace_all_inputs(downstream_nodes, node.output[0], slice_node.output[0])
 
-        conv_dims_attr(node, "strides")
-        conv_dims_attr(node, "dilations")
+        conv_dims_attr(node, "strides", spatial=spatial)
+        conv_dims_attr(node, "dilations", spatial=spatial)
 
         # remove output_shapes input
         ctx.remove_input(node, node.input[0], 0)
@@ -431,7 +459,7 @@ class ConvTranspose:
         ctx.replace_input(node, node.input[0], node.input[1], 0)
         ctx.replace_input(node, node.input[1], t, 1)
 
-        conv_convert_inputs(ctx, node, with_kernel=True)
+        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
