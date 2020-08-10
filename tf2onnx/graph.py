@@ -153,6 +153,8 @@ class Node(object):
 
     def is_nhwc(self):
         """Return True if node is in NHWC format."""
+        utils.make_sure('D' not in self.data_format, "is_nhwc called on %s with spatial=2 but data_format=%s",
+                        self.name, self.data_format)
         return self.data_format == "NHWC"
 
     def is_const(self):
