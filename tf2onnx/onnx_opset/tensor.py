@@ -272,7 +272,7 @@ class ConcatV2:
         axis_node = node.inputs[-1]
         utils.make_sure(axis_node.is_const(), "%r needs to be const", axis_node.name)
         axis_val = axis_node.get_tensor_value()
-        ctx.remove_input(node, node.input[-1])
+        ctx.remove_input(node, node.input[-1], len(node.input) - 1)
 
         if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
             input_shape = ctx.get_shape(node.input[0])

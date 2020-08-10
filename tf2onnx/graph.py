@@ -482,7 +482,7 @@ class Graph(object):
                         body_graph.parent_graph = self
                         new_node.set_body_graph_as_attr(attr_name, body_graph)
 
-                self.replace_all_inputs(self.get_nodes(), o, new_output_name)
+                self.replace_all_inputs(self.get_nodes(), o, new_output_name, keep_ops=True)
                 self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
                 self.copy_shape(new_output_name, o)
                 self.copy_dtype(new_output_name, o)
@@ -1269,7 +1269,7 @@ class Graph(object):
         new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
         to_replace = [n for n in self.get_nodes() if n != new_node]
-        self.replace_all_inputs(to_replace, output_name, new_output)
+        self.replace_all_inputs(to_replace, output_name, new_output, keep_ops=True)
         return new_node
 
     def find_output_consumers(self, output_name):
@@ -1286,8 +1286,11 @@ class Graph(object):
                     nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
-    def replace_all_inputs(self, ops, old_input, new_input):
-        """Replace all inputs pointing to old_input with new_input."""
+    def replace_all_inputs(self, ops, old_input, new_input, keep_ops=True):
+        """
+        Replace all inputs pointing to old_input with new_input.
+        *ops* is unused unless keep_ops is True.
+        """
         if old_input == new_input:
             return
         if new_input not in self._input_to_node_name:

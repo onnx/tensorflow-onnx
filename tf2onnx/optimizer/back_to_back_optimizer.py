@@ -138,7 +138,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
                 shape = g.get_shape(node2.output[0])
                 dtype = g.get_dtype(node2.output[0])
                 node2_consumers = g.find_output_consumers(node2.output[0])
-                g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0])
+                g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0], keep_ops=True)
                 g.remove_node(node2.name)
                 if set(node2.output) & set(g.outputs):
                     g.make_node("Identity", [node.input[0]],
@@ -173,7 +173,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
             return []
 
         node2_consumers = g.find_output_consumers(node2.output[0])
-        g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0])
+        g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0], keep_ops=True)
         g.remove_node(node.name)
         g.remove_node(node2.name)
         return []

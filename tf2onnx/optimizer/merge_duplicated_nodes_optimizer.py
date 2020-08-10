@@ -99,7 +99,7 @@ class MergeDuplicatedNodesOptimizer(GraphOptimizerBase):
             if set(node_to_delete.output).intersection(set(graph.outputs)):
                 continue
             for old_input, new_input in zip(node_to_delete.output, node_to_retain.output):
-                graph.replace_all_inputs(graph.get_nodes(), old_input, new_input)
+                graph.replace_all_inputs(graph.get_nodes(), old_input, new_input, keep_ops=True)
             graph.remove_node(node_to_delete.name)
             self._graph_can_be_optimized = True
 

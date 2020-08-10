@@ -813,7 +813,7 @@ def prefix_graph(g, scope):
                 if old_output == oname:
                     g.outputs[i] = new_output
                     break
-            g.replace_all_inputs(ops, old_output, new_output)
+            g.replace_all_inputs(ops, old_output, new_output, keep_ops=True)
         to_remove.append(node)
     for node in to_remove:
         g.remove_node(node.name)
