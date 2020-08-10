@@ -1291,6 +1291,7 @@ class Graph(object):
         Replace all inputs pointing to old_input with new_input.
         *ops* is unused unless keep_ops is True.
         """
+        assert keep_ops
         if old_input == new_input:
             return
         if new_input not in self._input_to_node_name:
