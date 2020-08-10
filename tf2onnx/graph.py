@@ -1274,8 +1274,15 @@ class Graph(object):
 
     def find_output_consumers(self, output_name):
         """Find all nodes consuming a given output."""
+        if output_name in self._input_to_node_name:
+            ops = self._input_to_node_name[output_name]
+            ops = [self.get_node_by_name(n) for n in ops]
+        else:
+            ops = self.get_nodes()
         nodes = []
         for node in self.get_nodes():
+            if node is None:
+                continue
             if output_name in node.input:
                 nodes.append(node)
 
