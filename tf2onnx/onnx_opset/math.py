@@ -183,7 +183,7 @@ class ClipByValueOp:
 
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
-        node.name = 'Clip' # clip supports all types now
+        node.type = 'Clip' # clip supports all types now
 
 @tf_op("Softmax")
 class Softmax:
