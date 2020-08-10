@@ -75,7 +75,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # opt.enable_profiling = True
         with open(model_path, 'rb') as f:
             onx = onnx.load(f)
-        print(onx)
         try:
             m = rt.InferenceSession(model_path, opt)
         except Fail as e:

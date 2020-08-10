@@ -206,7 +206,7 @@ class Node(object):
                     op = node.type if node else "N/A"
                     lines.append("\t{}={}, {}, {}".format(name, op, g.get_shape(name), g.get_dtype(name)))
                 else:
-                    lines.append("\t{}={}, ?, ?".format(name, "N/A"))
+                    lines.append("\t{}={}, ?, ?".format(name, op))
 
         if self.output:
             for name in self.output:
@@ -709,8 +709,6 @@ class Graph(object):
                 raise ValueError("graph output %r not exist" % o)
         for i in self.inputs:
             if i.name.startswith('Placeholder'):
-                continue
-            if i.name in {'keras_learning_phase'}:
                 continue
             if i.name not in self._input_to_node_name:
                 raise ValueError("graph input %r not exist in graph." % i.name)
