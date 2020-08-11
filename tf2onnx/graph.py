@@ -332,7 +332,8 @@ class Node(object):
         self.graph.set_shape(onnx_tensor.name, list(onnx_tensor.dims))
 
     def get_body_graphs(self):
-        self._graph_check()
+        if graph is None:
+            self._graph_check()
         return self.graph.contained_graphs.get(self.name, None)
 
     def set_body_graph_as_attr(self, attr_name, graph):
@@ -1268,7 +1269,9 @@ class Graph(object):
         new_output = port_name(name)
         new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
-        to_replace = [n for n in self.get_nodes() if n != new_node]
+        # to_replace = [n for n in self.get_nodes() if n != new_node]
+        to_replace = [self.get_node_by_name(n) for n in self._input_to_node_name[output_name]]
+        to_replace = [n for n in to_replace if n != new_node]
         self.replace_all_inputs(to_replace, output_name, new_output, keep_ops=True)
         return new_node
 
@@ -1307,10 +1310,6 @@ class Graph(object):
         if new_input not in self._input_to_node_name:
             self._input_to_node_name[new_input] = set()
 
-        to_ops = self._input_to_node_name.get(old_input, None)
-        if to_ops is None:
-            # This means old_input is a final output.
-            to_ops = set()
 
         for node in ops:
             if node is None:
@@ -1323,11 +1322,12 @@ class Graph(object):
                 if input_name == old_input:
                     self.replace_input(node, node.input[i], new_input, i)
 
+        for node in self.get_nodes():
             # modify references in sub graphs
             body_graphs = node.get_body_graphs()
             if body_graphs:
                 for g in body_graphs.values():
-                    g.replace_all_inputs(g.get_nodes(), old_input, new_input)
+                    g.replace_all_inputs(g.get_nodes(), old_input, new_input, keep_ops=keep_ops)
 
     def replace_input(self, node, old_input, new_input, i=None):
         """Replace one input in a node."""
