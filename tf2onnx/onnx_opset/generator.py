@@ -197,7 +197,7 @@ class IteratorGetNext:
         ctx.add_graph_input(output_names[1], type_1, shape_1)
 
 
-@tf_op("QueueDequeueManyV2", "QueueDequeueUpToV2")
+@tf_op(["QueueDequeueManyV2", "QueueDequeueUpToV2"])
 class QueueDequeueManyV2:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
