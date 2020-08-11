@@ -63,6 +63,7 @@ def profile(profiler="pyinstrument", name="EfficientNetB2", show_all=False,
     graph_def, model = create(name, module)
     print("profile(%r, %r, %r)" % (profiler, name, module))
     if profiler == "spy":
+        # py-spy record -r 10 -o profile.svg -- python conversion_time.py spy
         convert(graph_def, model)
     elif profiler == "pyinstrument":
         from pyinstrument import Profiler

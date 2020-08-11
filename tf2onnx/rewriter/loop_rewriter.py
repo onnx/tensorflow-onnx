@@ -86,7 +86,7 @@ class LoopRewriter(LoopRewriterBase):
                 gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, index_node.output[0]])
                 data_node = loop_body_g.make_node("Squeeze", [gather_node.output[0]], attr={"axes": [0]})
                 loop_body_g.replace_all_inputs(
-                    loop_body_g.get_nodes(), input_ta.consumer.id, data_node.output[0], keep_ops=False)
+                    None, input_ta.consumer.id, data_node.output[0], keep_ops=False)  # loop_body_g.get_nodes()
 
             ## create Loop node
             loop_node = self._create_loop_node(context, loop_props, init_cond_output)

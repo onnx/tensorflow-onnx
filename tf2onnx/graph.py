@@ -1281,27 +1281,15 @@ class Graph(object):
                 nodes.append(node)
 
         if output_name in self._input_to_graph:
-            for idg, g in self._input_to_graph[output_name].items():
+            for _, g in self._input_to_graph[output_name].items():
                 nodes.extend(g.find_output_consumers(output_name))
-        else:
-            for node in self.get_nodes():
-                # find consumers in sub graphs,
-                # should we keep an index of nodes including
-                # a subgraphs?
-                body_graphs = node.get_body_graphs()
-                if body_graphs:
-                    for g in body_graphs.values():
-                        ext = g.find_output_consumers(output_name)
-                        if len(ext) > 0:
-                            raise RuntimeError(
-                                "Inconsistency in _input_to_graph.")
-                            # nodes.extend(ext)
         return nodes
 
     def _register_input_name(self, input_name, node, only_graph=False):
+        "Register node taking a specific input."
         if not only_graph:
             if input_name not in self._input_to_node_name:
-                self._input_to_node_name[input_name] = set()        
+                self._input_to_node_name[input_name] = set()
             self._input_to_node_name[input_name].add(node.name)
         if self.parent_graph is not None:
             if input_name not in self.parent_graph._input_to_graph:
@@ -1310,6 +1298,7 @@ class Graph(object):
             self.parent_graph._register_input_name(input_name, node, only_graph=True)
 
     def _unregister_input_name(self, input_name, node, only_graph=False):
+        "Unregister node taking a specific input."
         node_name = node.name
         if not only_graph:
             if node_name in self._input_to_node_name[input_name]:
@@ -1350,15 +1339,8 @@ class Graph(object):
                     self.replace_input(node, node.input[i], new_input, i)
 
         if old_input in self._input_to_graph:
-            for idg, g in self._input_to_graph[old_input].items():
+            for _, g in self._input_to_graph[old_input].items():
                 g.replace_all_inputs(g.get_nodes(), old_input, new_input, keep_ops=keep_ops)
-        #~ else:
-            #~ for node in self.get_nodes():
-                #~ # modify references in sub graphs
-                #~ body_graphs = node.get_body_graphs()
-                #~ if body_graphs:
-                    #~ for g in body_graphs.values():
-                        #~ g.replace_all_inputs(g.get_nodes(), old_input, new_input, keep_ops=keep_ops)
 
     def replace_input(self, node, old_input, new_input, i=None):
         """Replace one input in a node."""

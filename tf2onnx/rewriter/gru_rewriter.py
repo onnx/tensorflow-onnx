@@ -255,4 +255,4 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
                                         shapes=[output_shape], dtypes=[self.g.get_dtype(output_id)])
 
-        self.g.replace_all_inputs(self.g.get_nodes(), exit_output_id, squeeze_node.output[0], keep_ops=False)
+        self.g.replace_all_inputs(None, exit_output_id, squeeze_node.output[0], keep_ops=False)  # self.g.get_nodes()
