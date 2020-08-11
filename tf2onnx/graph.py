@@ -332,7 +332,7 @@ class Node(object):
         self.graph.set_shape(onnx_tensor.name, list(onnx_tensor.dims))
 
     def get_body_graphs(self):
-        if graph is None:
+        if self.graph is None:
             self._graph_check()
         return self.graph.contained_graphs.get(self.name, None)
 
