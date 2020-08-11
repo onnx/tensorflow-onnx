@@ -332,7 +332,8 @@ class Node(object):
         self.graph.set_shape(onnx_tensor.name, list(onnx_tensor.dims))
 
     def get_body_graphs(self):
-        self._graph_check()
+        if graph is None:
+            self._graph_check()
         return self.graph.contained_graphs.get(self.name, None)
 
     def set_body_graph_as_attr(self, attr_name, graph):
@@ -1344,6 +1345,7 @@ class Graph(object):
                 if input_name == old_input:
                     self.replace_input(node, node.input[i], new_input, i)
 
+        for node in self.get_nodes():
             # modify references in sub graphs
             body_graphs = node.get_body_graphs()
             if body_graphs:
