@@ -709,6 +709,8 @@ class Graph(object):
         for i in self.inputs:
             if i.name.startswith('Placeholder'):
                 continue
+            if i.name.startswith('keras_learning_phase'):
+                continue
             if i.name not in self._input_to_node_name:
                 raise ValueError("graph input %r not exist in graph." % i.name)
 
