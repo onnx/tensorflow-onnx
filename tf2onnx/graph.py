@@ -590,13 +590,7 @@ class Graph(object):
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
         for name2 in onnx_node.input:
-            if name2 not in self._input_to_node_name:
-                self._input_to_node_name[name2] = set()
-            self._input_to_node_name[name2].add(onnx_node.name)
-            if self.parent_graph is not None:
-                if name2 not in self.parent_graph._input_to_graph:
-                    self.parent_graph._input_to_graph[name2] = {}
-                self.parent_graph._input_to_graph[name2][id(self)] = self
+            self._register_input_name(name2, onnx_node)
 
         if op_type in ["If", "Loop", "Scan"]:
             # we force the op containing inner graphs not skipped during conversion.
@@ -637,13 +631,7 @@ class Graph(object):
             self.set_dtype(name, output_dtypes[i])
             self.set_shape(name, output_shapes[i])
         for name in node.input:
-            if name not in self._input_to_node_name:
-                self._input_to_node_name[name] = set()
-            self._input_to_node_name[name].add(node.name)
-            if self.parent_graph is not None:
-                if name not in self.parent_graph._input_to_graph:
-                    self.parent_graph._input_to_graph[name] = {}
-                self.parent_graph._input_to_graph[name][id(self)] = self
+            self._register_input_name(name, node)
 
     def remove_node(self, node_name):
         """Remove node in current graph."""
@@ -667,9 +655,8 @@ class Graph(object):
         for op_input in node.input:
             if op_input not in self._input_to_node_name:
                 raise RuntimeError(
-                    "Input %r of node %r not found." % (op_input, node.name))
-            if node.name in self._input_to_node_name[op_input]:
-                self._input_to_node_name[op_input].remove(node.name)
+                    "Input %r of node %r not found." % (op_input, node_name))
+            self._unregister_input_name(op_input, node)
 
         self._nodes.remove(node)
         node.graph = None
@@ -705,13 +692,7 @@ class Graph(object):
             else:
                 inps = op.input
             for op_input in inps:
-                if op_input not in self._input_to_node_name:
-                    self._input_to_node_name[op_input] = set()
-                self._input_to_node_name[op_input].add(op.name)
-                if self.parent_graph is not None:
-                    if op_input not in self.parent_graph._input_to_graph:
-                        self.parent_graph._input_to_graph[op_input] = {}
-                    self.parent_graph._input_to_graph[op_input][id(self)] = self
+                self._register_input_name(op_input, op)
 
         for n in self._order_sensitive_inputs:
             if n not in ops:
@@ -861,13 +842,7 @@ class Graph(object):
         for op_output in node.output:
             self._output_to_node_name[op_output] = node.name
         for name in node.input:
-            if name not in self._input_to_node_name:
-                self._input_to_node_name[name] = set()
-            self._input_to_node_name[name].add(node.name)
-            if self.parent_graph is not None:
-                if name not in self.parent_graph._input_to_graph:
-                    self.parent_graph._input_to_graph[name] = {}
-                self.parent_graph._input_to_graph[name][id(self)] = self
+            self._register_input_name(name, node)
 
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
@@ -1233,10 +1208,7 @@ class Graph(object):
 
         for i2, name in enumerate(node.input):
             if name == to_be_removed:
-                if node.input[i2] in self._input_to_node_name:
-                    to_ops = self._input_to_node_name[node.input[i2]]
-                    if node.name in to_ops:
-                        to_ops.remove(node.name)
+                self._unregister_input_name(node.input[i2], node)
                 del node.input[i2]
                 break
         # don't remove output from parent since others might depend on it
@@ -1308,15 +1280,46 @@ class Graph(object):
             if output_name in node.input:
                 nodes.append(node)
 
-        for node in self.get_nodes():
-            # find consumers in sub graphs,
-            # should we keep an index of nodes including
-            # a subgraphs?
-            body_graphs = node.get_body_graphs()
-            if body_graphs:
-                for g in body_graphs.values():
-                    nodes.extend(g.find_output_consumers(output_name))
+        if output_name in self._input_to_graph:
+            for idg, g in self._input_to_graph[output_name].items():
+                nodes.extend(g.find_output_consumers(output_name))
+        else:
+            for node in self.get_nodes():
+                # find consumers in sub graphs,
+                # should we keep an index of nodes including
+                # a subgraphs?
+                body_graphs = node.get_body_graphs()
+                if body_graphs:
+                    for g in body_graphs.values():
+                        ext = g.find_output_consumers(output_name)
+                        if len(ext) > 0:
+                            raise RuntimeError(
+                                "Inconsistency in _input_to_graph.")
+                            # nodes.extend(ext)
         return nodes
+
+    def _register_input_name(self, input_name, node, only_graph=False):
+        if not only_graph:
+            if input_name not in self._input_to_node_name:
+                self._input_to_node_name[input_name] = set()        
+            self._input_to_node_name[input_name].add(node.name)
+        if self.parent_graph is not None:
+            if input_name not in self.parent_graph._input_to_graph:
+                self.parent_graph._input_to_graph[input_name] = {}
+            self.parent_graph._input_to_graph[input_name][id(self)] = self
+            self.parent_graph._register_input_name(input_name, node, only_graph=True)
+
+    def _unregister_input_name(self, input_name, node, only_graph=False):
+        node_name = node.name
+        if not only_graph:
+            if node_name in self._input_to_node_name[input_name]:
+                if node_name in self._input_to_node_name[input_name]:
+                    self._input_to_node_name[input_name].remove(node_name)
+        if (self.parent_graph is not None and
+                input_name in self.parent_graph._input_to_graph and
+                id(self) in self.parent_graph._input_to_graph[input_name]):
+            del self.parent_graph._input_to_graph[input_name][id(self)]
+            self.parent_graph._unregister_input_name(input_name, node, only_graph=True)
 
     def replace_all_inputs(self, ops, old_input, new_input, keep_ops=False):
         """
@@ -1327,10 +1330,6 @@ class Graph(object):
             return
         if new_input not in self._input_to_node_name:
             self._input_to_node_name[new_input] = set()
-            if self.parent_graph is not None:
-                if new_input not in self.parent_graph._input_to_graph:
-                    self.parent_graph._input_to_graph[new_input] = {}
-                self.parent_graph._input_to_graph[new_input][id(self)] = self
 
         if keep_ops and ops is not None:
             pass
@@ -1344,22 +1343,22 @@ class Graph(object):
                 continue
             if old_input in node.input and new_input in node.output:
                 raise RuntimeError("creating a circle in the graph is not allowed: " + node.name)
-            self._input_to_node_name[new_input].add(node.name)
-            if self.parent_graph is not None:
-                if new_input not in self.parent_graph._input_to_graph:
-                    self.parent_graph._input_to_graph[new_input] = {}
-                self.parent_graph._input_to_graph[new_input][id(self)] = self
+            self._register_input_name(new_input, node)
 
             for i, input_name in enumerate(node.input):
                 if input_name == old_input:
                     self.replace_input(node, node.input[i], new_input, i)
 
-        for node in self.get_nodes():
-            # modify references in sub graphs
-            body_graphs = node.get_body_graphs()
-            if body_graphs:
-                for g in body_graphs.values():
-                    g.replace_all_inputs(g.get_nodes(), old_input, new_input, keep_ops=keep_ops)
+        if old_input in self._input_to_graph:
+            for idg, g in self._input_to_graph[old_input].items():
+                g.replace_all_inputs(g.get_nodes(), old_input, new_input, keep_ops=keep_ops)
+        #~ else:
+            #~ for node in self.get_nodes():
+                #~ # modify references in sub graphs
+                #~ body_graphs = node.get_body_graphs()
+                #~ if body_graphs:
+                    #~ for g in body_graphs.values():
+                        #~ g.replace_all_inputs(g.get_nodes(), old_input, new_input, keep_ops=keep_ops)
 
     def replace_input(self, node, old_input, new_input, i=None):
         """Replace one input in a node."""
@@ -1382,14 +1381,7 @@ class Graph(object):
                 # A node may take twice the same entry.
                 to_ops.remove(node.name)
 
-        if new_input not in self._input_to_node_name:
-            self._input_to_node_name[new_input] = set()
-        self._input_to_node_name[new_input].add(node.name)
-        if self.parent_graph is not None:
-            if new_input not in self.parent_graph._input_to_graph:
-                self.parent_graph._input_to_graph[new_input] = {}
-            self.parent_graph._input_to_graph[new_input][id(self)] = self
-
+        self._register_input_name(new_input, node)
         return is_replaced
 
     def replace_inputs(self, node, new_inputs):
@@ -1405,13 +1397,8 @@ class Graph(object):
 
         for input_name in new_inputs:
             assert isinstance(input_name, six.text_type)
-            if input_name not in self._input_to_node_name:
-                self._input_to_node_name[input_name] = set()
-            self._input_to_node_name[input_name].add(node.name)
-            if self.parent_graph is not None:
-                if input_name not in self.parent_graph._input_to_graph:
-                    self.parent_graph._input_to_graph[input_name] = {}
-                self.parent_graph._input_to_graph[input_name][id(self)] = self
+            self._register_input_name(input_name, node)
+
         node.input = new_inputs
         return True
 
