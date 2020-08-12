@@ -1260,7 +1260,6 @@ class Graph(object):
         new_output = port_name(name)
         new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
-        # to_replace = [n for n in self.get_nodes() if n != new_node]
         to_replace = [self.get_node_by_name(n) for n in self._input_to_node_name[output_name]]
         to_replace = [n for n in to_replace if n != new_node]
         self.replace_all_inputs(to_replace, output_name, new_output)
@@ -1324,7 +1323,9 @@ class Graph(object):
         if ops is not None:
             keep_ops = True
         elif old_input in self._input_to_node_name:
-            ops = [self.get_node_by_name(n) for n in self._input_to_node_name[old_input]]
+            ops = list(
+                filter(lambda a: a is not None,
+                       map(self.get_node_by_name, self._input_to_node_name[old_input])))
             keep_ops = False
         else:
             ops = []

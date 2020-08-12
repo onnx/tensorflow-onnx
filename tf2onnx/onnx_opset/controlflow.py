@@ -577,8 +577,8 @@ class While:
             del output_names[idx]
             del body.outputs[idx]
 
-        # remove tensor array that are passed in to the loop
         removed_scan_outputs = {}
+        # remove tensor array that are passed in to the loop
         for idx, n in reversed(to_remove):
             ctx.remove_node(n.name)
             # make the node output bad
