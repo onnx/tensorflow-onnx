@@ -396,8 +396,8 @@ class Node(object):
                 if tdtype is None:
                     raise RuntimeError("don't know how to cast type {} on node {}".format(dtype, name))
                 shape = self.graph.get_shape(name)
-                cast_node = self.graph.insert_new_node_on_input(
-                    self, "Cast", name, to=tdtype)
+                cast_node = self.graph.insert_new_node_on_input(self, "Cast", name)
+                cast_node.set_attr("to", tdtype)
                 self.graph.set_dtype(cast_node.output[0], [tdtype])
                 self.graph.set_shape(cast_node.output[0], shape)
                 did_cast = True
