@@ -11,7 +11,6 @@ from __future__ import unicode_literals
 
 import copy
 import logging
-import sys
 
 import numpy as np
 
@@ -524,7 +523,7 @@ class While:
         maximum_iterations_name = node.input[1]
         maximum_iterations = node.inputs[1].get_tensor_value()
         if maximum_iterations == -1:
-            maximum_iterations = sys.maxsize
+            maximum_iterations = np.iinfo(np.int64).max
         consumers = ctx.find_output_consumers(maximum_iterations_name)
         external_consumers = [c for c in consumers if c != node and c.type != 'TensorListReserve']
         if len(external_consumers) == 0:
