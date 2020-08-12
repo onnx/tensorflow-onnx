@@ -1313,7 +1313,9 @@ class Graph(object):
         if ops is not None:
             keep_ops = True
         elif old_input in self._input_to_node_name:
-            ops = [self.get_node_by_name(n) for n in self._input_to_node_name[old_input]]
+            ops = list(
+                filter(lambda a: a is not None,
+                       map(self.get_node_by_name, self._input_to_node_name[old_input])))
             keep_ops = False
         else:
             ops = []
