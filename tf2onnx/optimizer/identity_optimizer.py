@@ -47,7 +47,7 @@ class IdentityOptimizer(GraphOptimizerBase):
     def _handle_non_graph_output_identity(graph, identity):
         old_name = identity.output[0]
         new_name = identity.input[0]
-        graph.replace_all_inputs(graph.get_nodes(), old_name, new_name, keep_ops=True)
+        graph.replace_all_inputs(graph.get_nodes(), old_name, new_name)
         graph.remove_node(identity.name)
         return True
 
@@ -81,5 +81,5 @@ class IdentityOptimizer(GraphOptimizerBase):
         graph.set_shape(output_id, output_shape)
         graph.set_dtype(output_id, output_dtype)
 
-        graph.replace_all_inputs(graph.get_nodes(), input_id, output_id, keep_ops=True)
+        graph.replace_all_inputs(graph.get_nodes(), input_id, output_id)
         return True

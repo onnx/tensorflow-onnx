@@ -492,7 +492,7 @@ class TensorListStack:
     def version_7(cls, ctx, node, **kwargs):
         if node.inputs[0].is_while():
             ctx.remove_node(node.name)
-            ctx.replace_all_inputs(None, node.output[0], node.input[0], keep_ops=False)  # ctx.get_nodes()
+            ctx.replace_all_inputs(None, node.output[0], node.input[0])  # ctx.get_nodes()
 
 
 @tf_op(["While", "StatelessWhile"])
@@ -582,7 +582,7 @@ class While:
         for idx, n in reversed(to_remove):
             ctx.remove_node(n.name)
             # make the node output bad
-            ctx.replace_all_inputs(None, n.output[0], "@@ALLOC", keep_ops=False)  # ctx.get_nodes()
+            ctx.replace_all_inputs(None, n.output[0], "@@ALLOC")  # ctx.get_nodes()
             del body.func_inputs[idx]
             del cond_graph.func_inputs[idx]
             del tf_while_inputs[idx]
@@ -618,7 +618,7 @@ class While:
 
         # shift output consumers
         for k, v in output_map.items():
-            ctx.replace_all_inputs(None, k, v, keep_ops=False)  # ctx.get_nodes()
+            ctx.replace_all_inputs(None, k, v)  # ctx.get_nodes()
 
         wire_while_body(ctx, body, loop_node.inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
                         output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, removed_scan_outputs)
@@ -813,7 +813,7 @@ def prefix_graph(g, scope):
                 if old_output == oname:
                     g.outputs[i] = new_output
                     break
-            g.replace_all_inputs(ops, old_output, new_output, keep_ops=True)
+            g.replace_all_inputs(ops, old_output, new_output)
         to_remove.append(node)
     for node in to_remove:
         g.remove_node(node.name)

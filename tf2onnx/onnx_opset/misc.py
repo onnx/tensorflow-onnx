@@ -30,7 +30,7 @@ class MoveToIdent:
             # if identity has a const as input, remove it
             input_name = node.input[0]
             output_name = node.output[0]
-            ctx.replace_all_inputs(None, output_name, input_name, keep_ops=False)  # ctx.get_nodes()
+            ctx.replace_all_inputs(None, output_name, input_name)  # ctx.get_nodes()
             ctx.remove_node(node.name)
 
 

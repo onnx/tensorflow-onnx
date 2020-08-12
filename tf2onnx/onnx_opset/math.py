@@ -695,4 +695,4 @@ class Atan2Op:
             "Add", inputs=[atan_node.output[0], pi_part.output[0]],
             op_name_scope=node.name + 'all',
             shapes=[shape], dtypes=[onnx_dtype])
-        ctx.replace_all_inputs(None, node.output[0], last_node.output[0], keep_ops=False)  # ctx.get_nodes()
+        ctx.replace_all_inputs(None, node.output[0], last_node.output[0])  # ctx.get_nodes()

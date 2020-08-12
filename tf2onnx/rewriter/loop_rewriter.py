@@ -86,7 +86,7 @@ class LoopRewriter(LoopRewriterBase):
                 gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, index_node.output[0]])
                 data_node = loop_body_g.make_node("Squeeze", [gather_node.output[0]], attr={"axes": [0]})
                 loop_body_g.replace_all_inputs(
-                    None, input_ta.consumer.id, data_node.output[0], keep_ops=False)  # loop_body_g.get_nodes()
+                    None, input_ta.consumer.id, data_node.output[0])  # loop_body_g.get_nodes()
 
             ## create Loop node
             loop_node = self._create_loop_node(context, loop_props, init_cond_output)
@@ -136,7 +136,7 @@ class LoopRewriter(LoopRewriterBase):
         for loop_var in cond_graph.dependent_vars:
             self.g.replace_all_inputs(
                 copied_nodes, loop_var.next_iteration_input.id,
-                loop_var.enter_input_id, keep_ops=True)
+                loop_var.enter_input_id)
         init_cond_output = "{}/{}".format(name_scope, cond_graph.outputs[0].id)
         self.g.set_dtype(init_cond_output, cond_graph.outputs[0].dtype)
         self.g.set_shape(init_cond_output, cond_graph.outputs[0].shape)

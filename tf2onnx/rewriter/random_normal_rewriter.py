@@ -55,6 +55,6 @@ def rewrite_random_normal(g, ops):
                 new_node = g.make_node("RandomNormal", [], outputs=[out_name], name=op_name,
                                        attr={"shape": shape, "mean": mean, "scale": 1.0, "dtype": dtype, "seed": seed})
 
-            g.replace_all_inputs(ops, output.output[0], new_node.output[0], keep_ops=True)
+            g.replace_all_inputs(ops, output.output[0], new_node.output[0])
             g.safe_remove_nodes(match.get_nodes())
     return ops

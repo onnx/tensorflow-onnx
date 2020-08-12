@@ -330,7 +330,7 @@ class LSTMRewriter(LSTMRewriterBase):
             return const_node.output[0]
         squeeze_node = self.g.make_node("Unsqueeze", [initializer_input_id], attr={"axes": [0]})
         to_replace = [n for n in self.g.get_nodes() if n != squeeze_node]
-        self.g.replace_all_inputs(to_replace, initializer_input_id, squeeze_node.output[0], keep_ops=True)
+        self.g.replace_all_inputs(to_replace, initializer_input_id, squeeze_node.output[0])
         return squeeze_node.output[0]
 
     def create_single_rnn_node(self, context, i):
@@ -389,7 +389,7 @@ class LSTMRewriter(LSTMRewriterBase):
                                         shapes=[[lstm_yh_shape[1], lstm_yh_shape[2]]],
                                         dtypes=[self.g.get_dtype(output_id)])
 
-        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0], keep_ops=False)  # self.g.get_nodes()
+        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0])  # self.g.get_nodes()
 
     def _connect_lstm_yc_to_graph(self, context, i):
         # in tf, y_c output shape is: [batch, hidden]
@@ -401,7 +401,7 @@ class LSTMRewriter(LSTMRewriterBase):
                                         shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
                                         dtypes=[self.g.get_dtype(output_id)])
 
-        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0], keep_ops=False)  # self.g.get_nodes()
+        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0])  # self.g.get_nodes()
 
     def _connect_lstm_ych_to_graph(self, context, i):
         # in tf, concat of y_c and y_h output shape is: [batch, hidden *2]
@@ -419,4 +419,4 @@ class LSTMRewriter(LSTMRewriterBase):
                                         shapes=[squeeze_output_shape],
                                         dtypes=[self.g.get_dtype(concat.output[0])])
 
-        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0], keep_ops=False)  # self.g.get_nodes()
+        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0])  # self.g.get_nodes()
