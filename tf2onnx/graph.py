@@ -1262,18 +1262,6 @@ class Graph(object):
     def replace_inputs(self, node, new_inputs):
         """Replace node inputs."""
         assert isinstance(node, Node) and isinstance(new_inputs, list)
-
-        for old_input in node.input:
-            to_ops = self._input_to_node_name.get(old_input, None)
-            if to_ops is not None and old_input in to_ops:
-                # To avoid issues when a node
-                # takes twice the same entry.
-                to_ops.remove(old_input)
-
-        for input_name in new_inputs:
-            assert isinstance(input_name, six.text_type)
-            self._register_input_name(input_name, node)
-
         node.input = new_inputs
         return True
 
