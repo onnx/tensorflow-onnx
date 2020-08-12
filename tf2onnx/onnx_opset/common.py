@@ -40,8 +40,8 @@ class BroadcastOp:
                         shape1 = node.inputs[1].scalar_to_dim1()
             if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
                 tmp = node.input[0]
-                node.input[0] = node.input[1]
-                node.input[1] = tmp
+                ctx.replace_input(node, node.input[0], node.input[1], 0)
+                ctx.replace_input(node, node.input[1], tmp, 1)
         else:
             node.set_attr("broadcast", 0)
 
@@ -65,5 +65,5 @@ class BroadcastOp:
                         shape1 = node.inputs[1].scalar_to_dim1()
             if shape0 and shape1 and len(shape0) < len(shape1) and node.type in ["Mul", "Add"]:
                 tmp = node.input[0]
-                node.input[0] = node.input[1]
-                node.input[1] = tmp
+                ctx.replace_input(node, node.input[0], node.input[1], 0)
+                ctx.replace_input(node, node.input[1], tmp, 1)

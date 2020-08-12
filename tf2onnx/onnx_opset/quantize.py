@@ -70,7 +70,7 @@ class FakeQuantWithMinMaxArgs:
             op_name_scope=node.name, attr={"axis": axis},
             shapes=[shape], dtypes=[idtype])
         output_name = new_node.output[0]
-        node.input[0] = output_name
+        ctx.replace_input(node, node.input[0], output_name, 0)
 
         ctx.remove_node(node.name)
 

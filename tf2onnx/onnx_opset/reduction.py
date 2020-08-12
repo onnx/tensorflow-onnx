@@ -43,7 +43,7 @@ class ReduceOpBase:
             axes = [val + input_rank if val < 0 else val for val in axes]
 
         node.set_attr("axes", axes)
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[1], 1)
         keep_dims = node.get_attr("keep_dims")
         if keep_dims:
             del node.attr['keep_dims']
@@ -82,7 +82,7 @@ class ArgMax:
 
         node.set_attr("axis", axis)
         node.set_attr("keepdims", 0)
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[1], 1)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):

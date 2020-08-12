@@ -592,8 +592,8 @@ class TransposeOptimizer(GraphOptimizerBase):
             # 1 switch
             ops = self._g.get_nodes()
             self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-            node.input[0] = trans.input[0]
-            trans.input[0] = node.output[0]
+            self._g.replace_input(node, node.input[0], trans.input[0], 0)
+            self._g.replace_input(trans, trans.input[0], node.output[0], 0)
             # 2 correct attr of nodes
             squeeze_axes = sorted(list(node.get_attr("axes").ints))
             trans_perm = list(trans.get_attr("perm").ints)
@@ -630,7 +630,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             if input1.data_format in ["NHWC", "unkown"]:
                 if not self._nodes_has_single_consumer_node([input1]):
                     input1 = self._g.copy_const(input1)
-                    node.input[1] = input1.output[0]
+                    self._g.replace_input(node, node.input[1], input1.output[0], 1)
                 pads = input1.get_tensor_value()
                 # NHWC->NCHW
                 new_pads = np.array([pads[0], pads[3], pads[1], pads[2], pads[4], pads[7], pads[5], pads[6]],
@@ -670,7 +670,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                         new_axes_const = self._g.make_const(
                             utils.make_name(node.inputs[3].name), new_axes
                         )
-                        self._g.replace_input(node, node.input[3], new_axes_const.output[0])
+                        self._g.replace_input(node, node.input[3], new_axes_const.output[0], 3)
                     return self._switch_transpose_and_node(node, trans)
         return False
 
