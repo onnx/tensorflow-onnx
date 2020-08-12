@@ -251,8 +251,8 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         ops = self._g.get_nodes()
         self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-        node.input[input_index] = trans.input[0]
-        trans.input[0] = node.output[0]
+        self._g.replace_input(node, node.input[input_index], trans.input[0], input_index)
+        self._g.replace_input(trans, trans.input[0], node.output[0], 0)
 
         # need to transpose node shape in backward direction as well after switch
         # otherwise, reshape added in post_optimize_action may not work correctly
@@ -409,7 +409,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
                 conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.attr_onnx)
                 ops = self._g.get_nodes()
-                trans.input[0] = utils.port_name(conv_node.name)
+                self._g.replace_input(trans, trans.input[0], utils.port_name(conv_node.name), 0)
                 self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
                 self._g.remove_node(t_p.name)
                 self._g.remove_node(node.name)
@@ -456,7 +456,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 if not self._switch_transpose_and_node(node, trans):
                     return False
 
-                node.input[input_index] = multiplier_input_node.input[0]
+                self._g.replace_input(node, node.input[input_index], multiplier_input_node.input[0], input_index)
                 self._g.remove_node(multiplier_input_node.name)
                 return True
 
@@ -527,8 +527,9 @@ class TransposeOptimizer(GraphOptimizerBase):
         # switch to trans(sum(x1, x2, x3, ...))
         ops = self._g.get_nodes()
         self._g.replace_all_inputs(ops, node.output[0], trans.output[0])
-        node.input = [n.output[0] if n.is_const() else n.input[0] for n in inputs]
-        trans.input[0] = node.output[0]
+        new_input = [n.output[0] if n.is_const() else n.input[0] for n in inputs]
+        self._g.replace_inputs(node, new_input)
+        self._g.replace_input(trans, trans.input[0], node.output[0], 0)
 
         # adjust shape if present
         shape = self._g.get_shape(node.output[0])
