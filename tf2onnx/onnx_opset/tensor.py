@@ -262,9 +262,12 @@ class ConcatV2:
         # if any input is empty, remove the input and concat the others
         # NOTE: workaround for https://github.com/Microsoft/onnxruntime/issues/681
         node.type = "Concat"
+        removed_indices = []
         for i, inp in enumerate(node.inputs):
             if inp.is_const() and inp.get_tensor_value(as_list=False).size == 0:
-                ctx.remove_input(node, node.input[i], i)
+                removed_indices.append(i)
+        for i in reverse(dremoved_indices):
+            ctx.remove_input(node, node.input[i], i)
         # all inputs are deleted
         if not node.input:
             raise RuntimeError("all inputs of {} are empty".format(node.name))
