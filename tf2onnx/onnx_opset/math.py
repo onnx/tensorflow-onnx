@@ -545,9 +545,9 @@ class BitShift:
                              shapes=shapes, dtypes=dtypes, domain=constants.ONNX_DOMAIN, attr={'direction': direction})
 
         if node.maybe_cast_input([supported, supported], type_map):
-            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                                           name=utils.make_name(node.name) + "_castback")
-            cast_back_node.set_attr("to", dtypes[0])
+            cast_back_node = ctx.insert_new_node_on_output(
+                "Cast", node.output[0], name=utils.make_name(node.name) + "_castback",
+                to=dtypes[0])
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
