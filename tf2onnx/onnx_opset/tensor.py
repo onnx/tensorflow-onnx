@@ -264,7 +264,7 @@ class ConcatV2:
         for i, inp in enumerate(node.inputs):
             if inp.is_const() and inp.get_tensor_value(as_list=False).size == 0:
                 removed_indices.append(i)
-        for i in reverse(dremoved_indices):
+        for i in reverse(removed_indices):
             ctx.remove_input(node, node.input[i], i)
                 ctx.remove_input(node, node.input[i], i)
         # all inputs are deleted
