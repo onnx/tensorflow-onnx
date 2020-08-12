@@ -579,7 +579,7 @@ def remove_reverse_in_bw_input(g, bw_rnn_input_x, rnn_type):
         if reverse_node.type == "Transpose":
             reverse_node = reverse_node.inputs[0]
 
-        g.replace_all_inputs(g.get_nodes(), reverse_node.output[0], reverse_node.input[0])
+        g.replace_all_inputs(None, reverse_node.output[0], reverse_node.input[0])  # g.get_nodes()
         g.remove_node(reverse_node.name)
     else:
         raise ValueError("Reverse is still used by RNN as input, cannot remove")

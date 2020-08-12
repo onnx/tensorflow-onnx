@@ -389,7 +389,7 @@ class LSTMRewriter(LSTMRewriterBase):
                                         shapes=[[lstm_yh_shape[1], lstm_yh_shape[2]]],
                                         dtypes=[self.g.get_dtype(output_id)])
 
-        self.g.replace_all_inputs(self.g.get_nodes(), exit_output.id, squeeze_node.output[0])
+        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0])  # self.g.get_nodes()
 
     def _connect_lstm_yc_to_graph(self, context, i):
         # in tf, y_c output shape is: [batch, hidden]
@@ -401,7 +401,7 @@ class LSTMRewriter(LSTMRewriterBase):
                                         shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
                                         dtypes=[self.g.get_dtype(output_id)])
 
-        self.g.replace_all_inputs(self.g.get_nodes(), exit_output.id, squeeze_node.output[0])
+        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0])  # self.g.get_nodes()
 
     def _connect_lstm_ych_to_graph(self, context, i):
         # in tf, concat of y_c and y_h output shape is: [batch, hidden *2]
@@ -419,4 +419,4 @@ class LSTMRewriter(LSTMRewriterBase):
                                         shapes=[squeeze_output_shape],
                                         dtypes=[self.g.get_dtype(concat.output[0])])
 
-        self.g.replace_all_inputs(self.g.get_nodes(), exit_output.id, squeeze_node.output[0])
+        self.g.replace_all_inputs(None, exit_output.id, squeeze_node.output[0])  # self.g.get_nodes()
