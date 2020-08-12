@@ -637,14 +637,13 @@ class Pad:
         origin_dtype = ctx.get_dtype(node.output[0])
         if origin_dtype not in [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT,
                                 onnx_pb.TensorProto.DOUBLE]:
-            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
-            cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
             ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
             ctx.copy_shape(node.name, cast_node.output[0])
 
             cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                                           name=utils.make_name(node.name) + "_castback")
-            cast_back_node.set_attr("to", origin_dtype)
+                                                           name=utils.make_name(node.name) + "_castback",
+                                                           to=origin_dtype)
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
@@ -667,14 +666,13 @@ class Pad:
         origin_dtype = ctx.get_dtype(node.output[0])
         if origin_dtype not in [TensorProto.FLOAT, TensorProto.DOUBLE,
                                 TensorProto.INT32, TensorProto.INT64]:
-            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
-            cast_node.set_attr("to", TensorProto.FLOAT)
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=TensorProto.FLOAT)
             ctx.set_dtype(cast_node.output[0], TensorProto.FLOAT)
             ctx.copy_shape(node.name, cast_node.output[0])
 
             cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                                           name=utils.make_name(node.name) + "_castback")
-            cast_back_node.set_attr("to", origin_dtype)
+                                                           name=utils.make_name(node.name) + "_castback",
+                                                           to=origin_dtype)
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
