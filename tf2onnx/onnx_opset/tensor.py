@@ -266,7 +266,6 @@ class ConcatV2:
                 removed_indices.append(i)
         for i in reverse(removed_indices):
             ctx.remove_input(node, node.input[i], i)
-                ctx.remove_input(node, node.input[i], i)
         # all inputs are deleted
         if not node.input:
             raise RuntimeError("all inputs of {} are empty".format(node.name))
