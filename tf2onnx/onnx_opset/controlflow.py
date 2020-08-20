@@ -374,7 +374,7 @@ class Select:
             broadcast_shape = [cond_shape[0]] + [1] * (input_rank - 1)
             shape_const = ctx.make_const(utils.make_name(node.name), np.array(broadcast_shape, dtype=np.int64))
             reshape = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
-            ctx.replace_input(node, node.input[0], reshape.output[0])
+            ctx.replace_input(node, node.input[0], reshape.output[0], 0)
 
 
 @tf_op("Where")
@@ -456,7 +456,7 @@ class TensorListGetItem:
     def version_7(cls, ctx, node, **kwargs):
         ctx.ta_reads.append(node.input[0])
         node.type = "Gather"
-        node.input = [node.input[0], node.input[1]]
+        ctx.replace_inputs(node, [node.input[0], node.input[1]])
         ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])
         ctx.insert_new_node_on_output("Squeeze", node.output[0], name=node.child_name(), axes=[0])
 
@@ -531,7 +531,7 @@ class While:
         else:
             maximum_iterations_name = utils.make_name(node.inputs[1].name)
         ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
-        node.input[1] = maximum_iterations_name
+        ctx.replace_input(node, node.input[1], maximum_iterations_name, 1)
 
         cond_name = node.get_attr_str("cond")
         cond_graph = find_function(cond_name)
@@ -642,7 +642,7 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
     for n in g.inputs:
         if n.output[0] in body_input_to_state_var:
             n.type = "Identity"
-            n.input = [body_input_to_state_var[n.output[0]]]
+            g.replace_inputs(n, [body_input_to_state_var[n.output[0]]])
 
     # onnx will pass in cond as argument
     cond_node = g.make_node("Placeholder", [], name=utils.make_name("cond"),
@@ -673,7 +673,7 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
             node.type = "Identity"
             g.set_shape(node.output[0], g.get_shape(node.input[2]))
             g.set_dtype(node.output[0], g.get_dtype(node.input[2]))
-            node.input = [node.input[2]]
+            g.replace_inputs(node, [node.input[2]])
             scan_outputs.append(node.output[0])
 
     if len(scan_outputs) != len(removed_scan_outputs):
@@ -729,7 +729,7 @@ def wire_if_branch(parent_g, g, inputs, output_shapes, output_dtypes, scope, par
     for node in g.inputs:
         parent_name = binding.get(node.output[0])
         if parent_name and parent_name != "@@ALLOC":
-            node.input = [parent_name]
+            g.replace_inputs(node, [parent_name])
             node.type = "Identity"
         else:
             to_remove.append(node)
@@ -753,7 +753,7 @@ def inline_subgraph(parent, g, scope, binding):
     for node in g.inputs:
         parent_name = binding.get(node.output[0])
         if parent_name and parent_name != "@@ALLOC":
-            node.input = [parent_name]
+            g.replace_inputs(node, [parent_name])
             node.type = "Identity"
         else:
             to_remove.append(node)

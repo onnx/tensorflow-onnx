@@ -139,7 +139,7 @@ class Reshape:
         if shape is None:
             logger.error("Reshape on node %s does not have a const shape", node.name)
             return
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[1], 1)
         node.set_attr("shape", shape)
         ctx.set_shape(node.output[0], shape)
 
@@ -214,7 +214,7 @@ class Transpose:
             if perm.is_const():
                 # perms is passed as const
                 dims = perm.get_tensor_value()
-                ctx.remove_input(node, node.input[1])
+                ctx.remove_input(node, node.input[1], 1)
                 node.set_attr("perm", dims)
             else:
                 utils.make_sure(False, "perm can't be dynamic in ONNX")
@@ -231,7 +231,7 @@ class Concat:
         node.type = "Concat"
         axis_node = node.inputs[0]
         axis_val = axis_node.get_tensor_value()
-        ctx.remove_input(node, node.input[0])
+        ctx.remove_input(node, node.input[0], 0)
 
         if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
             input_shape = ctx.get_shape(node.input[0])
@@ -258,9 +258,12 @@ class ConcatV2:
         # if any input is empty, remove the input and concat the others
         # NOTE: workaround for https://github.com/Microsoft/onnxruntime/issues/681
         node.type = "Concat"
+        removed_indices = []
         for i, inp in enumerate(node.inputs):
             if inp.is_const() and inp.get_tensor_value(as_list=False).size == 0:
-                ctx.remove_input(node, node.input[i])
+                removed_indices.append(i)
+        for i in reversed(removed_indices):
+            ctx.remove_input(node, node.input[i], i)
         # all inputs are deleted
         if not node.input:
             raise RuntimeError("all inputs of {} are empty".format(node.name))
@@ -268,7 +271,7 @@ class ConcatV2:
         axis_node = node.inputs[-1]
         utils.make_sure(axis_node.is_const(), "{} needs to be const".format(axis_node.name))
         axis_val = axis_node.get_tensor_value()
-        ctx.remove_input(node, node.input[-1])
+        ctx.remove_input(node, node.input[-1], len(node.input) - 1)
 
         if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
             input_shape = ctx.get_shape(node.input[0])
@@ -356,7 +359,7 @@ class GatherV2:
         # for GatherV2 axis come as input
         node.type = "Gather"
         axis = node.inputs[2].get_tensor_value()
-        ctx.remove_input(node, node.input[2])
+        ctx.remove_input(node, node.input[2], 2)
         node.set_attr("axis", axis)
 
     @classmethod
@@ -524,7 +527,7 @@ class ScatterND:
         ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=TensorProto.INT64)
         ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnxdtype)
         # reorder inputs to match onnx
-        node.input = [node.input[2], node.input[0], node.input[1]]
+        ctx.replace_inputs(node, [node.input[2], node.input[0], node.input[1]])
 
 
 @tf_op("Split")
@@ -534,7 +537,7 @@ class Split:
         # T output = Split(int32 split_dim, T value, @int num_split)
         # T outputs = Split(T input, @INT axis, @INTS split)
         split_dims = node.inputs[0].get_tensor_value()
-        ctx.remove_input(node, node.input[0])
+        ctx.remove_input(node, node.input[0], 0)
         node.set_attr("axis", split_dims)
 
     @classmethod
@@ -564,8 +567,8 @@ class SplitV:
             for i, v in enumerate(split):
                 if v == -1:
                     split[i] = final_sum - sums
-        ctx.remove_input(node, node.input[2])
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[2], 2)
+        ctx.remove_input(node, node.input[1], 1)
         node.set_attr("split", split)
         node.set_attr("axis", split_dims)
 
@@ -586,7 +589,7 @@ class ExpandDims:
             # tensorflow already infers the output shape so we can just take it
             shape = ctx.get_shape(node.output[0])
             node.type = "Reshape"
-            ctx.remove_input(node, node.input[1])
+            ctx.remove_input(node, node.input[1], 1)
             node.set_attr("shape", shape)
             return
 
@@ -599,7 +602,7 @@ class ExpandDims:
                 input_rank = len(ctx.get_shape(node.input[0]))
                 dim = dim + input_rank + 1
             node.set_attr("axes", [dim])
-            ctx.remove_input(node, node.input[1])
+            ctx.remove_input(node, node.input[1], 1)
             return
         raise ValueError("non-const dim is not supported")
 
@@ -618,7 +621,7 @@ class ExpandDims:
                 input_rank = len(ctx.get_shape(node.input[0]))
                 dim = dim + input_rank + 1
             node.set_attr("axes", [dim])
-            ctx.remove_input(node, node.input[1])
+            ctx.remove_input(node, node.input[1], 1)
             return
         raise ValueError("non-const dim is not supported")
 
@@ -632,7 +635,7 @@ class ExpandDims:
                 # tf.expanddims() wants a scalar per doc but quietly accepts a list too.
                 dim = dim[0]
             node.set_attr("axes", [dim])
-            ctx.remove_input(node, node.input[1])
+            ctx.remove_input(node, node.input[1], 1)
             return
         raise ValueError("non-const dim is not supported")
 
@@ -999,7 +1002,7 @@ class TopKV2:
         k_0d = node.input[1]
         cast = ctx.make_node("Cast", [k_0d], attr={"to": onnx_pb.TensorProto.INT64})
         k_1d = ctx.make_node("Unsqueeze", cast.output, attr={"axes": [0]})
-        ctx.replace_input(node, k_0d, k_1d.output[0])
+        ctx.replace_input(node, k_0d, k_1d.output[0], 1)
         # cast the index output to int32
         cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
         ctx.set_dtype(cast_out.output[0], dtypes[1])
@@ -1038,7 +1041,7 @@ class Pack:
             new_node = ctx.make_node("Unsqueeze", [node.input[i]], op_name_scope=node.name, attr={"axes": [axis]},
                                      shapes=[shape], dtypes=[dtype])
             output_name = new_node.output[0]
-            node.input[i] = output_name
+            ctx.replace_input(node, node.input[i], output_name, i)
             inputs.append(output_name)
 
         shapes = node.output_shapes
@@ -1106,9 +1109,7 @@ class OneHot:
         const_name = utils.make_name(node.name)
         ctx.make_const(const_name, eye)
         # setup gather inputs
-        del node.input[:]
-        node.input.append(const_name)
-        node.input.append(indices_name)
+        ctx.replace_inputs(node, [const_name, indices_name])
         node.type = "Gather"
         if axis.i == 0:
             # TODO: revisit for rank > 1
@@ -1142,19 +1143,18 @@ class OneHot:
         if ctx.is_target(constants.TARGET_RS6) \
                 and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
             indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
-        node.input[0] = indices
+        ctx.replace_input(node, node.input[0], indices, 0)
 
         if ctx.is_target(constants.TARGET_RS6) \
                 and ctx.get_dtype(depth) != onnx_pb.TensorProto.INT64:
             depth = ctx.make_node("Cast", [depth], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
-        node.input[1] = depth
+        ctx.replace_input(node, node.input[1], depth, 1)
 
         if ctx.is_target(constants.TARGET_RS6) \
                 and output_dtype != onnx_pb.TensorProto.INT64:
             off_on_value = ctx.make_node("Cast", [off_on_value], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
-        node.input[2] = off_on_value
-
-        del node.input[3]
+        ctx.replace_input(node, node.input[2], off_on_value, 2)
+        ctx.remove_input(node, node.input[3], 3)
 
         if ctx.is_target(constants.TARGET_RS6) \
                 and output_dtype != onnx_pb.TensorProto.INT64:
@@ -1565,8 +1565,8 @@ class ReverseSequence:
             ctx.copy_dtype(node.output[0], trans_back_node.output[0])
 
         tmp = node.input[0]
-        node.input[0] = node.input[1]
-        node.input[1] = tmp
+        ctx.replace_input(node, node.input[0], node.input[1], 0)
+        ctx.replace_input(node, node.input[1], tmp, 1)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):

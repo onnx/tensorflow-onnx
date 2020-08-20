@@ -56,6 +56,11 @@ class Node(object):
 
     @input.setter
     def input(self, val):
+        # The setter can catch that all inputs are change
+        # but it cannot catch that one input is changed.
+        # That's method replace_input and replace_inputs must
+        # be used to change inputs to let the graph instance
+        # update its internal indices.
         self._input = copy.deepcopy(val)
 
     @property
@@ -1134,13 +1139,21 @@ class Graph(object):
         return op_cnt
 
     @staticmethod
-    def remove_input(node, to_be_removed):
+    def remove_input(node, to_be_removed, input_index=None):
         """Remove input from Node.
         Args:
             node: the node we expect the input on
             to_be_removed: the node name we want to remove
+            input_index: if not None, index of the input to be removed,
+                the method is more efficient if *input_index* is specified,
+                otherwise, it has to look for every input named *old_input*.
         """
         assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
+        if input_index is not None:
+            assert node.input[input_index] == to_be_removed
+            del node.input[input_index]
+            return True
+
         for i, name in enumerate(node.input):
             if name == to_be_removed:
                 del node.input[i]
@@ -1171,7 +1184,7 @@ class Graph(object):
         new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
         for i, n in enumerate(node.input):
             if n == input_name[0]:
-                node.input[i] = new_output
+                self.replace_input(node, node.input[i], new_output, i)
                 break
         return new_node
 
@@ -1232,16 +1245,31 @@ class Graph(object):
                 for g in body_graphs.values():
                     g.replace_all_inputs(g.get_nodes(), old_input, new_input)
 
-    @staticmethod
-    def replace_input(node, old_input, new_input):
-        """Replace node."""
+    def replace_input(self, node, old_input, new_input, input_index=None):
+        """
+        Replace one input in a node.
+        The method is more efficient if *input_index* is specified.
+        Otherwise, it renames every output named *old_input*.
+        """
         assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
         is_replaced = False
-        for i, input_name in enumerate(node.input):
-            if input_name == old_input:
-                node.input[i] = new_input
-                is_replaced = True
+        if input_index is None:
+            for i, input_name in enumerate(node.input):
+                if input_name == old_input:
+                    node.input[i] = new_input
+                    is_replaced = True
+        elif node.input[input_index] == old_input:
+            node.input[input_index] = new_input
+            is_replaced = True
+        else:
+            raise RuntimeError("Unable to replace input %r into %r for node %r." % (old_input, new_input, node.name))
         return is_replaced
+
+    def replace_inputs(self, node, new_inputs):
+        """Replace node inputs."""
+        assert isinstance(node, Node) and isinstance(new_inputs, list)
+        node.input = new_inputs
+        return True
 
     def _extract_sub_graph_nodes(self, dest_node, input_checker=None):
         """Return nodes of subgraph ending with dest_node.

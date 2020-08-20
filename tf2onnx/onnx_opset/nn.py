@@ -130,7 +130,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
 
                 reshape = ctx.make_node("Reshape", [kernel_name, shape_name])
-                ctx.replace_input(node, kernel_name, reshape.output[0])
+                ctx.replace_input(node, kernel_name, reshape.output[0], 1)
 
                 reshape.skip_conversion = True
 
@@ -453,11 +453,11 @@ class ConvTranspose:
         conv_dims_attr(node, "dilations", spatial=spatial)
 
         # remove output_shapes input
-        ctx.remove_input(node, node.input[0])
+        ctx.remove_input(node, node.input[0], 0)
         # swap data and kernel
         t = node.input[0]
-        node.input[0] = node.input[1]
-        node.input[1] = t
+        ctx.replace_input(node, node.input[0], node.input[1], 0)
+        ctx.replace_input(node, node.input[1], t, 1)
 
         conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
 
@@ -539,8 +539,8 @@ class PoolOp:
         else:
             kernel_shape_tf = node.inputs[1].get_tensor_value()
             strides_tf = node.inputs[2].get_tensor_value()
-            ctx.remove_input(node, node.input[2])
-            ctx.remove_input(node, node.input[1])
+            ctx.remove_input(node, node.input[2], 2)
+            ctx.remove_input(node, node.input[1], 1)
 
         kernel_shape_hw = parse_dims_attr(node, kernel_shape_tf, spatial)
         strides_hw = parse_dims_attr(node, strides_tf, spatial)
@@ -605,7 +605,7 @@ class BiasAdd:
                 ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
                 op_name = node.input[1]
                 reshape_node = ctx.make_node("Reshape", [op_name, shape_name])
-                ctx.replace_input(node, op_name, reshape_node.output[0])
+                ctx.replace_input(node, op_name, reshape_node.output[0], 1)
                 ctx.set_shape(reshape_node.output[0], new_broadcast_shape)
 
 
@@ -629,9 +629,9 @@ class Pad:
         if mode in [None, "constant"] and len(node.input) == 3:
             const_val = node.inputs[2].get_tensor_value()
             node.set_attr("value", const_val)
-            ctx.remove_input(node, node.input[2])
+            ctx.remove_input(node, node.input[2], 2)
 
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[1], 1)
         node.set_attr("pads", paddings)
 
         origin_dtype = ctx.get_dtype(node.output[0])
@@ -707,14 +707,14 @@ class BatchNorm:
                                       dtype=val_type)
             new_mean_node_name = utils.make_name(node.name)
             ctx.make_const(new_mean_node_name, new_mean_value)
-            node.input[3] = new_mean_node_name
+            ctx.replace_input(node, node.input[3], new_mean_node_name, 3)
 
         if var_shape != scale_shape:
             new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(as_list=False), scale_shape),
                                      dtype=val_type)
             new_val_node_name = utils.make_name(node.name)
             ctx.make_const(new_val_node_name, new_var_value)
-            node.input[4] = new_val_node_name
+            ctx.replace_input(node, node.input[4], new_val_node_name, 4)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
@@ -865,7 +865,7 @@ class Resize:
         scaler = [1., 1., float(nh) / h, float(nw) / w]
         node.set_attr("scales", scaler)
         node.set_attr("mode", mode)
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[1], 1)
         node.data_format = "NHWC"
         conv_convert_inputs(ctx, node, with_kernel=False)
 

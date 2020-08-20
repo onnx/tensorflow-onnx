@@ -123,7 +123,7 @@ def make_min_or_max_op(ctx, op_type, inputs, outputs,
             # use add as 'broadcast' op
             add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
                                      op_name_scope=input_node.name)
-            node.input[i] = add_node.output[0]
+            ctx.replace_input(node, node.input[i], add_node.output[0], i)
     return final_node
 
 
@@ -293,7 +293,7 @@ class Pow:
             # workaround a bug in caffe2 pre Feb2018, pow(a, b) becomes np.exp(np.log(a) * b)
             node.type = "Log"
             b = node.input[1]
-            ctx.remove_input(node, node.input[1])
+            ctx.remove_input(node, node.input[1], 1)
             op_name = utils.make_name(node.name)
             mul_op = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
             mul_op.input.append(b)
