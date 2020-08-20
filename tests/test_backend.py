@@ -2995,6 +2995,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.matmul(a, b) + c
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
+                            graph_validator=lambda g: check_op_count(g, "Gemm", 1) )
+
+    # test for gemm pattern4: A*B + C [addbias] - 1D bias!
+    def test_gemm_pattern4(self):
+        max_number = 10
+        m = np.random.randint(max_number)
+        n = np.random.randint(max_number)
+        k = np.random.randint(max_number) # bias add requires 1D tensor
+        x_val1 = np.random.rand(m, n).astype("float32")
+        x_val2 = np.random.rand(n, k).astype("float32")
+        x_val3 = np.random.rand(k).astype("float32")
+        def func(a, b, c):
+            x_ = tf.nn.bias_add(tf.matmul(a, b), c)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
                             graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
     # test for gemm pattern0: alpha*A*B + beta*C
