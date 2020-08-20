@@ -1178,27 +1178,29 @@ class Graph(object):
 
         return op_cnt
 
-    def remove_input(self, node, to_be_removed, i=None):
+    def remove_input(self, node, to_be_removed, input_index=None):
         """Remove input from Node.
         Args:
             node: the node we expect the input on
             to_be_removed: the node name we want to remove
-            i: if not None, index of the input to be removed
+            input_index: if not None, index of the input to be removed,
+                the method is more efficient if *input_index* is specified,
+                otherwise, it has to look for every input named *old_input*.
         """
         assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
-        if i is not None:
-            assert node.input[i] == to_be_removed
-            if node.input[i] in self._input_to_node_name:
-                to_ops = self._input_to_node_name[node.input[i]]
+        if input_index is not None:
+            assert node.input[input_index] == to_be_removed
+            if node.input[input_index] in self._input_to_node_name:
+                to_ops = self._input_to_node_name[node.input[input_index]]
                 if node.name in to_ops:
                     to_ops.remove(node.name)
-            del node.input[i]
+            del node.input[input_index]
             return True
 
-        for i2, name in enumerate(node.input):
+        for i, name in enumerate(node.input):
             if name == to_be_removed:
-                self._unregister_input_name(node.input[i2], node)
-                del node.input[i2]
+                self._unregister_input_name(node.input[i], node)
+                del node.input[i]
                 break
         # don't remove output from parent since others might depend on it
         return True
@@ -1336,17 +1338,21 @@ class Graph(object):
             for _, g in self._input_to_graph[old_input].items():
                 g.replace_all_inputs(g.get_nodes() if keep_ops else None, old_input, new_input)
 
-    def replace_input(self, node, old_input, new_input, i=None):
-        """Replace one input in a node."""
+    def replace_input(self, node, old_input, new_input, input_index=None):
+        """
+        Replace one input in a node.
+        The method is more efficient if *input_index* is specified.
+        Otherwise, it renames every output named *old_input*.
+        """
         assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
         is_replaced = False
-        if i is None:
-            for i2, input_name in enumerate(node.input):
+        if input_index is None:
+            for i, input_name in enumerate(node.input):
                 if input_name == old_input:
-                    node.input[i2] = new_input
+                    node.input[i] = new_input
                     is_replaced = True
-        elif node.input[i] == old_input:
-            node.input[i] = new_input
+        elif node.input[input_index] == old_input:
+            node.input[input_index] = new_input
             is_replaced = True
         else:
             raise RuntimeError("Unable to replace input %r into %r for node %r." % (old_input, new_input, node.name))
