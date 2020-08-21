@@ -55,7 +55,14 @@ def rewrite_gemm(g, ops):
             OpTypePattern('*', name='C'),
         ])
 
-    pattern_list = [pattern0, pattern1, pattern2, pattern3]
+    # pattern4: A*B + c
+    pattern4 = \
+        OpTypePattern('BiasAdd', name='add', inputs=[
+            OpTypePattern('MatMul', name='matmul'),
+            OpTypePattern('*', name='C'),
+        ])
+
+    pattern_list = [pattern0, pattern1, pattern2, pattern3, pattern4]
 
     for pattern in pattern_list:
         matcher = GraphMatcher(pattern, allow_reorder=True)
