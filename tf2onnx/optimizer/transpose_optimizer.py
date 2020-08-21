@@ -102,7 +102,8 @@ class TransposeOptimizer(GraphOptimizerBase):
                 if not input_shape:
                     continue
 
-                if (is_nchw_transpose(op) and (input_shape[3] == 1 or (input_shape[1:3] == [1, 1]))) \
+                if (is_nchw_transpose(op) and len(input_shape) == 4 and
+                    (input_shape[3] == 1 or (input_shape[1:3] == [1, 1]))) \
                         or (is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2:4] == [1, 1]))):
                     new_shape = _calculate_new_shape(self._g, op)
                     # replace transpose with reshape
@@ -257,7 +258,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         # need to transpose node shape in backward direction as well after switch
         # otherwise, reshape added in post_optimize_action may not work correctly
         shape = self._g.get_shape(node.output[0])
-        if shape:
+        if shape and len(shape) == len(NHWC_TO_NCHW):
             # only nhwc transpose can reach here
             new_shape = [shape[i] for i in NHWC_TO_NCHW]
             self._g.set_shape(node.output[0], new_shape)
@@ -606,7 +607,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.set_shape(trans.output[0], squeeze_shape)
             input_shape = self._g.get_shape(node.input[0])
             if input_shape is not None:
-                new_squeeze_output_shape = [input_shape[i] for i in range(4) if i not in new_squeeze_axes]
+                new_squeeze_output_shape = [input_shape[i] for i in range(len(input_shape)) if i not in new_squeeze_axes]
             else:
                 new_squeeze_output_shape = [-1] * 4
                 self.logger.warning("%s's shape is unknown, which may interfere further optimization", node.input[0])
@@ -693,3 +694,4 @@ class TransposeOptimizer(GraphOptimizerBase):
         self._g.set_shape(gather_node.output[0], output_shape)
         self._g.set_dtype(gather_node.output[0], output_dtype)
         return True
+
