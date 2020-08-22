@@ -1177,6 +1177,25 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_and_compare(["res", "res2", "res3"], {"u": np.random.randn(1, 2, 3).astype(np.float32)}, model_proto,
                              "Cast", 5)
 
+    def test_upsample_all_ones_removed(self):
+        node1 = helper.make_node("Upsample", ["X"], ["Y"], scales=[1, 1, 1, 1], name="upsample1")
+
+        graph = helper.make_graph(
+            [node1],
+            "test_upsample_all_ones",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (32, 16))],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, (32, 16))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+
+        self.run_and_compare(
+            ["Y"],
+            {"X": np.random.randn(32, 16).astype(np.float32)},
+            model_proto,
+            "Upsample",
+            0)
+
 
 if __name__ == "__main__":
     unittest_main()
