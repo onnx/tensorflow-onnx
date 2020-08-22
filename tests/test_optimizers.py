@@ -1177,26 +1177,28 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_and_compare(["res", "res2", "res3"], {"u": np.random.randn(1, 2, 3).astype(np.float32)}, model_proto,
                              "Cast", 5)
 
+    @check_opset_max_version(8, "until opset 8 scales is in attributes")
     def test_upsample_all_ones_removed(self):
+        shape = (1, 1, 32, 32)
         node1 = helper.make_node(
-            "Upsample",
-            ["X"],
-            ["Y"],
+            op_type="Upsample",
+            inputs=["X"],
+            outputs=["Y"],
             scales=[1., 1., 1., 1.],
             name="upsample1")
 
         graph = helper.make_graph(
             [node1],
             "test_upsample_all_ones",
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 32, 32, 1))],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, (1, 32, 32, 1))],
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, shape)],
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
 
         self.run_and_compare(
             ["Y"],
-            {"X": np.random.randn(1, 32, 32, 1).astype(np.float32)},
+            {"X": np.random.randn(*shape).astype(np.float32)},
             model_proto,
             "Upsample",
             0)
