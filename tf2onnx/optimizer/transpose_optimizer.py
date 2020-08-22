@@ -103,7 +103,8 @@ class TransposeOptimizer(GraphOptimizerBase):
                     continue
 
                 if (is_nchw_transpose(op) and len(input_shape) == 4 and
-                    (input_shape[3] == 1 or (input_shape[1:3] == [1, 1]))) \
+                        (input_shape[3] == 1 or (input_shape[1:3] == [1, 1]))) \
+
                         or (is_nhwc_transpose(op) and (input_shape[1] == 1 or (input_shape[2:4] == [1, 1]))):
                     new_shape = _calculate_new_shape(self._g, op)
                     # replace transpose with reshape
@@ -694,4 +695,3 @@ class TransposeOptimizer(GraphOptimizerBase):
         self._g.set_shape(gather_node.output[0], output_shape)
         self._g.set_dtype(gather_node.output[0], output_dtype)
         return True
-
