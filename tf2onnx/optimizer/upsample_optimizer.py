@@ -3,7 +3,6 @@
 """
 
 from __future__ import unicode_literals
-from onnx import helper
 
 from .optimizer_base import GraphOptimizerBase
 
