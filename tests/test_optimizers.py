@@ -1209,7 +1209,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_tensor = helper.make_tensor(
             name="S",
             data_type=TensorProto.FLOAT,
-            dims=(1,4),
+            dims=(1, 4),
             vals=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32))
         node0 = helper.make_node("Constant", [], ["S"], value=const_tensor)
         node1 = helper.make_node(
