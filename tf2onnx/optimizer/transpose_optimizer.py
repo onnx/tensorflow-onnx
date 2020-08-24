@@ -474,8 +474,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 result = np.multiply(transposed_val, mul_val)
                 conv.inputs[1].set_tensor_value(np.transpose(result, (3, 2, 0, 1)))
 
-                ops = self._g.get_nodes()
-                self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # ops
+                self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # self._g.get_nodes()
                 self._g.remove_node(node.name)
                 return True
 
@@ -522,8 +521,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                     return False
 
         # switch to trans(sum(x1, x2, x3, ...))
-        ops = self._g.get_nodes()
-        self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # ops
+        self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # self._g.get_nodes()
         new_input = [n.output[0] if n.is_const() else n.input[0] for n in inputs]
         self._g.replace_inputs(node, new_input)
         self._g.replace_input(trans, trans.input[0], node.output[0], 0)
