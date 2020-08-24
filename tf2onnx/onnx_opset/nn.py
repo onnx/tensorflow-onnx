@@ -122,7 +122,6 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 val = input_node.get_tensor_value(as_list=False)
                 val = np.reshape(val, new_kernel_shape)
                 input_node.set_tensor_value(val)
-                node.input = [node.input[0]]
             else:
                 kernel_name = node.input[1]
                 if ctx.opset < 5:
