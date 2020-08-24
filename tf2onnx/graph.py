@@ -1173,7 +1173,7 @@ class Graph(object):
             op_cnt[n.type] += 1
             body_graphs = n.get_body_graphs()
             if body_graphs:
-                for _, b_g in body_graphs.items():
+                for b_g in body_graphs.values():
                     op_cnt += b_g.dump_node_statistics()
 
         return op_cnt
@@ -1272,7 +1272,7 @@ class Graph(object):
 
         # find consumers in sub graphs
         if output_name in self._input_to_graph:
-            for _, g in self._input_to_graph[output_name].items():
+            for g in self._input_to_graph[output_name].values():
                 nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
@@ -1292,7 +1292,7 @@ class Graph(object):
         "Unregister node taking a specific input."
         node_name = node.name
         if not only_graph:
-            if node_name in self._input_to_node_name[input_name]:
+            if input_name in self._input_to_node_name[input_name]:
                 if node_name in self._input_to_node_name[input_name]:
                     self._input_to_node_name[input_name].remove(node_name)
         if (self.parent_graph is not None and
@@ -1335,7 +1335,7 @@ class Graph(object):
 
         # modify references in sub graphs
         if old_input in self._input_to_graph:
-            for _, g in self._input_to_graph[old_input].items():
+            for g in self._input_to_graph[old_input].values():
                 g.replace_all_inputs(g.get_nodes() if keep_ops else None, old_input, new_input)
 
     def replace_input(self, node, old_input, new_input, input_index=None):
@@ -1456,7 +1456,7 @@ class Graph(object):
         for node in related_nodes:
             attr_body_graphs = node.get_body_graphs()
             if attr_body_graphs:
-                for _, body_graph in attr_body_graphs.items():
+                for body_graph in attr_body_graphs.values():
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
 
