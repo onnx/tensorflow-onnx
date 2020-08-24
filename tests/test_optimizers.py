@@ -1204,6 +1204,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             0)
 
     @check_opset_min_version(9, ">= 9 scales is in input[1]")
+    @check_opset_max_version(9, "Upscale is deprecated in opsets >= 10")
     def test_upsample_all_ones_removed_in_input(self):
         shape = (1, 1, 32, 32)
         const_tensor = helper.make_tensor(
