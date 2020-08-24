@@ -1203,6 +1203,37 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             "Upsample",
             0)
 
+    @check_opset_min_version(9, ">= 9 scales is in input[1]")
+    def test_upsample_all_ones_removed_in_input(self):
+        shape = (1, 1, 32, 32)
+        const_tensor = helper.make_tensor(
+            name="S",
+            data_type=TensorProto.FLOAT,
+            dims=(1,4),
+            vals=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32))
+        node0 = helper.make_node("Constant", [], ["S"], value=const_tensor)
+        node1 = helper.make_node(
+            op_type="Upsample",
+            inputs=["X", "S"],
+            outputs=["Y"],
+            name="upsample1")
+
+        graph = helper.make_graph(
+            [node0, node1],
+            "test_upsample_all_ones",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+
+        self.run_and_compare(
+            ["Y"],
+            {"X": np.random.randn(*shape).astype(np.float32)},
+            model_proto,
+            "Upsample",
+            0)
+
 
 if __name__ == "__main__":
     unittest_main()
