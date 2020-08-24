@@ -3565,6 +3565,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(
             func, [_OUTPUT], {_INPUT: y_val, _INPUT2: x_val}, rtol=1e-06)
 
+    def test_conv2d_kernel_as_input(self):
+        return
 
 if __name__ == '__main__':
     unittest_main()
