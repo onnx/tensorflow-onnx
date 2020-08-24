@@ -1262,7 +1262,7 @@ class Graph(object):
             ops = self._input_to_node_name[output_name]
             ops = [self.get_node_by_name(n) for n in ops]
         else:
-            ops = self.get_nodes()
+            ops = []  # self.get_nodes()
         nodes = []
         for node in ops:
             if node is None:
