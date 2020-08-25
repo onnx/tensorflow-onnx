@@ -812,14 +812,6 @@ class Graph(object):
             ret = self._nodes_by_name.get(name)
         return ret
 
-    def get_node_by_input_in_current_graph(self, input_name):
-        """Get nodes by node input id."""
-        names = self._output_to_node_name.get(input_name)
-        ret = None
-        if name:
-            ret = [self._nodes_by_name.get(name) for name in names]
-        return ret
-
     def get_node_by_name(self, name):
         """Get node by name."""
         ret = self._nodes_by_name.get(name)
@@ -1195,15 +1187,20 @@ class Graph(object):
                 if node.name in to_ops:
                     to_ops.remove(node.name)
             del node.input[input_index]
-            return True
+            return
 
         for i, name in enumerate(node.input):
             if name == to_be_removed:
+                if node.input.count(node.input[i]) > 1:
+                    raise RuntimeError(
+                        "Node '{}' takes multiple times the same input '{}'. "
+                        "This case is not handled.".format(
+                            node.name, node.input[i]))
                 self._unregister_input_name(node.input[i], node)
                 del node.input[i]
                 break
+
         # don't remove output from parent since others might depend on it
-        return True
 
     def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, **kwargs):
         """Create and insert a new node into the graph.
