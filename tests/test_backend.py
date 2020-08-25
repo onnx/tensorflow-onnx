@@ -3587,5 +3587,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
                       [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
         self._conv_kernel_as_input_test(x_val, w_val)
 
+
 if __name__ == '__main__':
     unittest_main()
