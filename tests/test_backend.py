@@ -3583,8 +3583,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_conv2d_1_kernel_as_input(self):
         x_val = make_xval((1, 1, 5, 5)).transpose(NCHW_TO_NHWC)
         w_val = np.array([[2., 1., 1.],
-                      [1., 3., 1.],
-                      [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
+                          [1., 3., 1.],
+                          [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
         self._conv_kernel_as_input_test(x_val, w_val)
 
 
