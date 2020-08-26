@@ -15,11 +15,13 @@ from .merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
 from .transpose_optimizer import TransposeOptimizer
 from .loop_optimizer import LoopOptimizer
 from .back_to_back_optimizer import BackToBackOptimizer
+from .upsample_optimizer import UpsampleOptimizer
 from .. import logging
 
 # optimizer sequence need to be considered carefully
 _optimizers = OrderedDict([
     ("optimize_transpose", TransposeOptimizer),
+    ("remove_redundant_upsample", UpsampleOptimizer),
     ("fold_constants", ConstFoldOptimizer),
     ("loop_optimizer", LoopOptimizer),
     # merge_duplication should be used after optimize_transpose
