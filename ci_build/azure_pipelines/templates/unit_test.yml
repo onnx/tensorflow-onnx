@@ -18,7 +18,7 @@ steps:
   - bash: |
       export TF2ONNX_TEST_BACKEND=$CI_ONNX_BACKEND
       export TF2ONNX_TEST_OPSET=$CI_ONNX_OPSET
-      pip install fire
+      pip install fire pyinstrument
       python benchmarks/profile_conversion_time.py
     timeoutInMinutes: 15
     displayName: ${{ format('Run profile_conversion_time.py - Opset{0}', onnx_opset) }}
