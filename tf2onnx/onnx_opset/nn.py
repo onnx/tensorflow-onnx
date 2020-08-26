@@ -117,7 +117,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     if with_kernel:
         # Some ONNX convolution ops require to reshape the kernel (ie. depthwise_conv2d).
         if new_kernel_shape:
-            if len(node.inputs) >= 2 and node.inputs[1].is_const():
+            if node.inputs[1].is_const():
                 input_node = node.inputs[1]
                 val = input_node.get_tensor_value(as_list=False)
                 val = np.reshape(val, new_kernel_shape)
