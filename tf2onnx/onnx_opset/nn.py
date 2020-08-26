@@ -117,24 +117,28 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     if with_kernel:
         # Some ONNX convolution ops require to reshape the kernel (ie. depthwise_conv2d).
         if new_kernel_shape:
-            kernel_name = node.input[1]
-
-            if ctx.opset < 5:
-                # Old reshape takes new shape as attribute.
-                reshape = ctx.insert_new_node_on_input(node, "Reshape", kernel_name)
-                reshape.set_attr("shape", new_kernel_shape)
-                reshape.skip_conversion = True
+            if node.inputs[1].is_const():
+                input_node = node.inputs[1]
+                val = input_node.get_tensor_value(as_list=False)
+                val = np.reshape(val, new_kernel_shape)
+                input_node.set_tensor_value(val)
             else:
-                # New reshape takes new shape as input[1].
-                shape_name = utils.make_name(node.name)
-                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
+                kernel_name = node.input[1]
+                if ctx.opset < 5:
+                    # Old reshape takes new shape as attribute.
+                    reshape = ctx.insert_new_node_on_input(node, "Reshape", kernel_name)
+                    reshape.set_attr("shape", new_kernel_shape)
+                    reshape.skip_conversion = True
+                else:
+                    # New reshape takes new shape as input[1].
+                    shape_name = utils.make_name(node.name)
+                    ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
 
-                reshape = ctx.make_node("Reshape", [kernel_name, shape_name])
-                ctx.replace_input(node, kernel_name, reshape.output[0], 1)
+                    reshape = ctx.make_node("Reshape", [kernel_name, shape_name])
+                    ctx.replace_input(node, kernel_name, reshape.output[0], 1)
 
-                reshape.skip_conversion = True
-
-            ctx.set_shape(reshape.output[0], new_kernel_shape)
+                    reshape.skip_conversion = True
+                ctx.set_shape(reshape.output[0], new_kernel_shape)
 
         # Get kernel (may have be changed to a reshape above).
         kernel_node = node.inputs[1]
