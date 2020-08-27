@@ -33,9 +33,9 @@ def spy_convert(graph_def, model):
         tf.import_graph_def(graph_def=graph_def, name='')
 
         def spy_convert_in():
-            return tfonnx.process_tf_graph(tf_graph=graph,
-                                    input_names=[model.input.name],
-                                    output_names=[model.output.name])
+            return tfonnx.process_tf_graph(
+                tf_graph=graph, input_names=[model.input.name],
+                output_names=[model.output.name])
 
         spy_convert_in()
 
@@ -55,19 +55,21 @@ def convert(graph_def, model):
     spy_convert(graph_def, model)
 
 
-def profile(profiler="pyinstrument", name="MobileNet", show_all=False,
+def profile(profiler="none", name="MobileNet", show_all=False,
             module='tf.keras'):
     """
     Profiles the conversion of a model.
-    
-    :param profiler: one among spy, pyinstrument, cProfile
+
+    :param profiler: one among none, spy, pyinstrument, cProfile
     :param name: model to profile, MobileNet, EfficientNetB2
     :param show_all: use by pyinstrument to show all functions
     """
     print("create(%r, %r, %r)" % (profiler, name, module))
     graph_def, model = create(name, module)
     print("profile(%r, %r, %r)" % (profiler, name, module))
-    if profiler == "spy":
+    if profiler == 'none':
+        convert(graph_def, model)
+    elif profiler == "spy":
         # py-spy record -r 10 -o profile.svg -- python conversion_time.py spy
         convert(graph_def, model)
     elif profiler == "pyinstrument":
