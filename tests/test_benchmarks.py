@@ -21,7 +21,7 @@ class BenchmarksTests(Tf2OnnxBackendTestBase):
         proc = subprocess.Popen(
             ["python", filename], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
-            outs, errs = proc.communicate(timeout=15)
+            outs = proc.communicate(timeout=15)[0]
         except subprocess.TimeoutExpired:
             proc.kill()
             return
