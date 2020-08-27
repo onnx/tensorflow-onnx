@@ -101,3 +101,4 @@ def profile(profiler="none", name="MobileNet", show_all=False,
 
 if __name__ == '__main__':
     fire.Fire(profile)
+    print('Profile complete.')
