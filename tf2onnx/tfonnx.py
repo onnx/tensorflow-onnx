@@ -258,7 +258,7 @@ def tensorflow_onnx_mapping(g, ops_mapping):
             node.skip_conversion = True
         except Exception as ex:
             logger.error("Failed to convert node %r (fct=%r)\n%r",
-                node.name, func, node.summary, exc_info=1)
+                         node.name, func, node.summary, exc_info=1)
             exceptions.append(ex)
 
     return mapped_op, unmapped_op, exceptions
@@ -451,29 +451,30 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
-    rewriters = [# single directional
-                 rewrite_constant_fold,
-                 rewrite_quantize_and_dequantize,
-                 rewrite_transpose,
-                 rewrite_flatten,
-                 rewrite_random_uniform,
-                 rewrite_random_uniform_fold_const,
-                 rewrite_random_normal,
-                 rewrite_dropout,
-                 rewrite_eye,
-                 rewrite_leakyrelu,
-                 rewrite_thresholded_relu,
-                 rewrite_conv2d_with_pad,
-                 rewrite_single_direction_lstm,
-                 # bi-directional
-                 rewrite_bi_direction_lstm,
-                 rewrite_single_direction_gru,
-                 rewrite_bi_direction_gru,
-                 rewrite_custom_rnn_cell,
-                 rewrite_generic_loop, rewrite_cond,
-                 rewrite_biasadd_with_conv2d,
-                 rewrite_gemm,
-                 ]
+    rewriters = [
+        # single directional
+        rewrite_constant_fold,
+        rewrite_quantize_and_dequantize,
+        rewrite_transpose,
+        rewrite_flatten,
+        rewrite_random_uniform,
+        rewrite_random_uniform_fold_const,
+        rewrite_random_normal,
+        rewrite_dropout,
+        rewrite_eye,
+        rewrite_leakyrelu,
+        rewrite_thresholded_relu,
+        rewrite_conv2d_with_pad,
+        rewrite_single_direction_lstm,
+        # bi-directional
+        rewrite_bi_direction_lstm,
+        rewrite_single_direction_gru,
+        rewrite_bi_direction_gru,
+        rewrite_custom_rnn_cell,
+        rewrite_generic_loop, rewrite_cond,
+        rewrite_biasadd_with_conv2d,
+        rewrite_gemm,
+    ]
 
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
