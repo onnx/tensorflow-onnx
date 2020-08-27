@@ -74,7 +74,7 @@ setup(
     version=VersionInfo.version,
     description='Tensorflow to ONNX converter',
     setup_requires=['pytest-runner'],
-    tests_require=['graphviz', 'parameterized', 'pytest', 'pytest-cov', 'pyyaml'],
+    tests_require=['graphviz', 'parameterized', 'pytest', 'pytest-cov', 'pyyaml', 'fire'],
     cmdclass=cmdclass,
     packages=find_packages(),
     author='onnx@microsoft.com',

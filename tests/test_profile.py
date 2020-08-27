@@ -11,13 +11,13 @@ from common import check_opset_after_tf_version, unittest_main
 # pylint: disable=invalid-name
 # pylint: enable=invalid-name
 
-class BenchmarksTests(Tf2OnnxBackendTestBase):
+class ProfileTests(Tf2OnnxBackendTestBase):
 
-    folder = os.path.join(os.path.dirname(__file__), '..', 'benchmarks')
+    folder = os.path.join(os.path.dirname(__file__), '..', 'tools')
 
     @check_opset_after_tf_version("2.0", 12, "might need Scan")
     def test_profile_conversion_time(self):
-        filename = os.path.join(BenchmarksTests.folder, 'profile_conversion_time.py')
+        filename = os.path.join(ProfileTests.folder, 'profile_conversion_time.py')
         proc = subprocess.Popen(
             ["python", filename], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
