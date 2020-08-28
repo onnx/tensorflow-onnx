@@ -451,7 +451,7 @@ class ConvTranspose:
             downstream_nodes = ctx.find_output_consumers(node.output[0])
             downstream_nodes.remove(output_shape)
             downstream_nodes.remove(slice_node)
-            ctx.replace_all_inputs(downstream_nodes, node.output[0], slice_node.output[0])
+            ctx.replace_all_inputs(node.output[0], slice_node.output[0], ops=downstream_nodes)
 
         conv_dims_attr(node, "strides", spatial=spatial)
         conv_dims_attr(node, "dilations", spatial=spatial)

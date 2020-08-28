@@ -139,7 +139,7 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
             op_name = utils.make_name("ReplacedOp")
             out_name = utils.port_name(op_name)
             new_node = g.make_node("Sub", inputs=input_node.input, outputs=[out_name], name=op_name)
-            g.replace_all_inputs(None, output_node.output[0], new_node.output[0])  # ops
+            g.replace_all_inputs(output_node.output[0], new_node.output[0])  # ops=ops
             for n in set(match.get_nodes()):
                 g.remove_node(n.name)
         g.topological_sort(ops)

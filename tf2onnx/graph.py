@@ -473,7 +473,7 @@ class Graph(object):
                         body_graph.parent_graph = self
                         new_node.set_body_graph_as_attr(attr_name, body_graph)
 
-                self.replace_all_inputs(self.get_nodes(), o, new_output_name)
+                self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
                 self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
                 self.copy_shape(new_output_name, o)
                 self.copy_dtype(new_output_name, o)
@@ -839,7 +839,7 @@ class Graph(object):
                 if k == old_output:
                     self.outputs[j] = new_output
                     break
-            self.replace_all_inputs(self.get_nodes(), old_output, new_output)
+            self.replace_all_inputs(old_output, new_output, ops=self.get_nodes())
         return new_node
 
     def add_graph_input(self, name, dtype=None, shape=None):
@@ -1250,7 +1250,7 @@ class Graph(object):
 
         to_replace = [self.get_node_by_name(n) for n in self._input_to_node_name[output_name]]
         to_replace = [n for n in to_replace if n != new_node]
-        self.replace_all_inputs(to_replace, output_name, new_output)
+        self.replace_all_inputs(output_name, new_output, ops=to_replace)
         return new_node
 
     def find_output_consumers(self, output_name):
@@ -1298,11 +1298,11 @@ class Graph(object):
             del self.parent_graph._input_to_graph[input_name][id(self)]
             self.parent_graph._unregister_input_name(input_name, node, only_graph=True)
 
-    def replace_all_inputs(self, ops, old_input, new_input):
+    def replace_all_inputs(self, old_input, new_input, ops=None):
         """
         Replace all inputs pointing to old_input with new_input.
-        *ops* is used if defined, otherwise _input_to_node_name
-        is used to determine the impacted nodes.
+        *ops* is used if defined, otherwise `_input_to_node_name`
+        is used to determine the impacted nodes.        
         """
         if old_input == new_input:
             return
@@ -1333,7 +1333,8 @@ class Graph(object):
         # modify references in sub graphs
         if old_input in self._input_to_graph:
             for g in self._input_to_graph[old_input].values():
-                g.replace_all_inputs(g.get_nodes() if keep_ops else None, old_input, new_input)
+                g.replace_all_inputs(old_input, new_input,
+                                     ops=g.get_nodes() if keep_ops else None)
 
     def replace_input(self, node, old_input, new_input, input_index=None):
         """

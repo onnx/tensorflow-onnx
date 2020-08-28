@@ -545,7 +545,7 @@ def slice_birnn_for_original_rnn_consumers(g, rnn_fw, rnn_bw, bi_rnn, rnn_output
 
         for r_op in reverse_nodes:
             logger.debug("remove reverse op %s", r_op.name)
-            g.replace_all_inputs(all_nodes, r_op.output[0], r_op.input[0])
+            g.replace_all_inputs(r_op.output[0], r_op.input[0], ops=all_nodes)
             to_remove.append(r_op.name)
     elif rnn_output_index in [1, 2]:
         axis = 0
@@ -557,14 +557,14 @@ def slice_birnn_for_original_rnn_consumers(g, rnn_fw, rnn_bw, bi_rnn, rnn_output
         inputs_map = {"data": bi_rnn.output[rnn_output_index], **attr}
         slice_node_fw = GraphBuilder(g).make_slice(inputs_map)
         all_nodes.append(g.get_node_by_output(slice_node_fw))
-        g.replace_all_inputs(fw_consumers, rnn_fw.output[rnn_output_index], slice_node_fw)
+        g.replace_all_inputs(rnn_fw.output[rnn_output_index], slice_node_fw, ops=fw_consumers)
 
     if bw_consumers:
         attr = {"axes": [axis], "starts": [1], "ends": [2]}
         inputs_map = {"data": bi_rnn.output[rnn_output_index], **attr}
         slice_node_bw = GraphBuilder(g).make_slice(inputs_map)
         all_nodes.append(g.get_node_by_output(slice_node_bw))
-        g.replace_all_inputs(bw_consumers, rnn_bw.output[rnn_output_index], slice_node_bw)
+        g.replace_all_inputs(rnn_bw.output[rnn_output_index], slice_node_bw, ops=bw_consumers)
 
 
 def remove_reverse_in_bw_input(g, bw_rnn_input_x, rnn_type):
@@ -579,7 +579,7 @@ def remove_reverse_in_bw_input(g, bw_rnn_input_x, rnn_type):
         if reverse_node.type == "Transpose":
             reverse_node = reverse_node.inputs[0]
 
-        g.replace_all_inputs(None, reverse_node.output[0], reverse_node.input[0])  # g.get_nodes()
+        g.replace_all_inputs(reverse_node.output[0], reverse_node.input[0])  # ops=g.get_nodes()
         g.remove_node(reverse_node.name)
     else:
         raise ValueError("Reverse is still used by RNN as input, cannot remove")

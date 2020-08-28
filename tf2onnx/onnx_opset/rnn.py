@@ -153,7 +153,7 @@ class LSTMBlockCell:
         h_node = ctx.make_node("Mul", [co_node.output[0], o])
 
         def replace_output(old_output, new_output):
-            ctx.replace_all_inputs(None, old_output, new_output)  # ctx.get_nodes()
+            ctx.replace_all_inputs(old_output, new_output)  # ops=ctx.get_nodes()
             ctx.copy_dtype(old_output, new_output)
             ctx.copy_shape(old_output, new_output)
 

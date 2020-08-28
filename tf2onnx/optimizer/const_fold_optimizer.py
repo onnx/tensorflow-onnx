@@ -90,7 +90,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
             const_node = graph.make_const(utils.make_name("const_fold_opt"), val)
             graph.set_dtype(const_node.output[0], utils.map_numpy_to_onnx_dtype(val.dtype))
             graph.set_shape(const_node.output[0], val.shape)
-            graph.replace_all_inputs(None, old_input, const_node.output[0])  # graph.get_nodes()
+            graph.replace_all_inputs(old_input, const_node.output[0])  # ops=graph.get_nodes()
         graph.remove_node(node.name)
 
     @staticmethod

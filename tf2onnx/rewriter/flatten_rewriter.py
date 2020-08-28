@@ -94,7 +94,7 @@ def rewrite_flatten(g, ops):
                 new_dim = -1
 
             g.set_shape(out_name, input_shape[:-2] + [new_dim])
-            g.replace_all_inputs(ops, reshape_node.output[0], out_name)
+            g.replace_all_inputs(reshape_node.output[0], out_name, ops=ops)
             for n in to_remove:
                 g.remove_node(n.name)
 
