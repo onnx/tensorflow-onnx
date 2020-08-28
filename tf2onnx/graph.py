@@ -690,10 +690,10 @@ class Graph(object):
             if o not in self._output_to_node_name:
                 raise ValueError("graph output " + o + " not exist")
         for i in self.inputs:
-            if i.name.startswith('Placeholder'):
+            if i.is_graph_input():  # i.name.startswith('Placeholder'):
                 continue
-            if i.name.startswith('keras_learning_phase'):
-                continue
+            # if i.name.startswith('keras_learning_phase'):
+            #     continue
             if i.name not in self._output_to_consumers:
                 raise ValueError("graph input %r not exist in graph." % i.name)
 
@@ -1191,11 +1191,10 @@ class Graph(object):
 
         for i, name in enumerate(node.input):
             if name == to_be_removed:
-                if node.input.count(node.input[i]) > 1:
-                    raise RuntimeError(
-                        "Node '{}' takes multiple times the same input '{}'. "
-                        "This case is not handled.".format(
-                            node.name, node.input[i]))
+                utils.make_sure(
+                    node.input.count(node.input[i]) <= 1,
+                    "Node %r takes multiple times the same input %r. This case is not handled.",
+                    node.name, node.input[i])
                 self._unregister_input_name(node.input[i], node)
                 del node.input[i]
                 break
