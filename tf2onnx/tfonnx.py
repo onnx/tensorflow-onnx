@@ -160,8 +160,8 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                         input_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
                         g.set_dtype(input_name, onnx_pb.TensorProto.FLOAT)
                     else:
-                        cast_node = g.insert_new_node_on_input(op, "Cast", input_name)
-                        cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
+                        cast_node = g.insert_new_node_on_input(op, "Cast", input_name,
+                                                               to=onnx_pb.TensorProto.FLOAT)
                         g.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
                         g.copy_shape(input_name, cast_node.output[0])
                         cast_inserted.append(cast_node)
@@ -171,8 +171,8 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                     name = utils.make_name(op.name)
                     logger.debug("insert cast back for node %s on output %s [dtype=%s]", op.name, output_name,
                                  output_dtype)
-                    output_cast = g.insert_new_node_on_output("Cast", output_name, name=name)
-                    output_cast.set_attr("to", output_dtype)
+                    output_cast = g.insert_new_node_on_output("Cast", output_name, name=name,
+                                                              to=output_dtype)
                     g.set_dtype(output_cast.output[0], output_dtype)
                     g.copy_shape(output_name, output_cast.output[0])
                     cast_inserted.append(output_cast)
@@ -235,6 +235,7 @@ def tensorflow_onnx_mapping(g, ops_mapping):
             # if there is a onnx_op key we'll map the old type to a new type
             onnx_op = kwargs.get("onnx_op")
             if onnx_op:
+                kwargs["tf_op"] = op
                 node.type = onnx_op
         body_graphs = node.get_body_graphs()
         if body_graphs:
@@ -450,13 +451,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
     rewriters = [rewrite_constant_fold, rewrite_quantize_and_dequantize, rewrite_transpose, rewrite_flatten,
-                 rewrite_gemm, rewrite_random_uniform, rewrite_random_uniform_fold_const,
+                 rewrite_random_uniform, rewrite_random_uniform_fold_const,
                  rewrite_random_normal, rewrite_dropout, rewrite_eye,
                  rewrite_leakyrelu, rewrite_thresholded_relu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_bi_direction_gru,
                  rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond,
-                 rewrite_biasadd_with_conv2d,
+                 rewrite_biasadd_with_conv2d, rewrite_gemm
                  ]
 
     if custom_rewriter is not None:

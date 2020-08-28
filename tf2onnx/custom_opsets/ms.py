@@ -85,8 +85,8 @@ class ConvTransposeWithDynamicPads:
         # set node's attrs, Note: output_padding, group are left default.
         conv_dims_attr(node, "dilations")
         # set node's inputs from (output_shape, filter, input_tensor) to (input_tensor, filter, pads, Bias)
-        node.input[0] = node.input[2]
-        node.input[2] = pads.output[0]
+        ctx.replace_input(node, node.input[0], node.input[2], 0)
+        ctx.replace_input(node, node.input[2], pads.output[0], 2)
         conv_convert_inputs(ctx, node, with_kernel=True)
         node.attr.pop("data_format")
         node.attr.pop("padding")

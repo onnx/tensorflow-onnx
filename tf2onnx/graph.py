@@ -56,11 +56,16 @@ class Node(object):
 
     @input.setter
     def input(self, val):
+        # The setter can catch that all inputs are change
+        # but it cannot catch that one input is changed.
+        # That's method replace_input and replace_inputs must
+        # be used to change inputs to let the graph instance
+        # update its internal indices.
         self._input = copy.deepcopy(val)
 
     @property
     def output(self):
-        return copy.deepcopy(self._output)
+        return self._output
 
     @output.setter
     def output(self, val):
@@ -71,11 +76,12 @@ class Node(object):
         for o in self._output:
             del self.graph._output_to_node_name[o]
 
-        self._output = val
+        self._output = val.copy()
         for o in self._output:
             utils.make_sure(o not in self.graph._output_to_node_name, "output %s already in output mapping", o)
             self.graph._output_to_node_name[o] = self.name
 
+    # TODO(tomwildenhain): Rename to "input_nodes"
     @property
     def inputs(self):
         """Input node objects."""
@@ -145,11 +151,23 @@ class Node(object):
 
     def is_nhwc(self):
         """Return True if node is in NHWC format."""
+        utils.make_sure('D' not in self.data_format, "is_nhwc called on %s with spatial=2 but data_format=%s",
+                        self.name, self.data_format)
         return self.data_format == "NHWC"
 
     def is_const(self):
         """Return True if node is a constant."""
         return self.type in ["Const", "ConstV2"]
+
+    def is_scalar(self):
+        """Return True if node is a constant with a scalar value."""
+        if not self.is_const():
+            return False
+        t = self.get_attr("value", default=None)
+        if t is None:
+            return False
+        t = numpy_helper.to_array(helper.get_attribute_value(t))
+        return t.shape == tuple()
 
     def is_graph_input(self):
         return self.type in ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
@@ -383,8 +401,8 @@ class Node(object):
                 if tdtype is None:
                     raise RuntimeError("don't know how to cast type {} on node {}".format(dtype, name))
                 shape = self.graph.get_shape(name)
-                cast_node = self.graph.insert_new_node_on_input(self, "Cast", name)
-                cast_node.set_attr("to", tdtype)
+                cast_node = self.graph.insert_new_node_on_input(
+                    self, "Cast", name, to=tdtype)
                 self.graph.set_dtype(cast_node.output[0], [tdtype])
                 self.graph.set_shape(cast_node.output[0], shape)
                 did_cast = True
@@ -1121,13 +1139,21 @@ class Graph(object):
         return op_cnt
 
     @staticmethod
-    def remove_input(node, to_be_removed):
+    def remove_input(node, to_be_removed, input_index=None):
         """Remove input from Node.
         Args:
             node: the node we expect the input on
             to_be_removed: the node name we want to remove
+            input_index: if not None, index of the input to be removed,
+                the method is more efficient if *input_index* is specified,
+                otherwise, it has to look for every input named *old_input*.
         """
         assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
+        if input_index is not None:
+            assert node.input[input_index] == to_be_removed
+            del node.input[input_index]
+            return True
+
         for i, name in enumerate(node.input):
             if name == to_be_removed:
                 del node.input[i]
@@ -1158,7 +1184,7 @@ class Graph(object):
         new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
         for i, n in enumerate(node.input):
             if n == input_name[0]:
-                node.input[i] = new_output
+                self.replace_input(node, node.input[i], new_output, i)
                 break
         return new_node
 
@@ -1219,16 +1245,31 @@ class Graph(object):
                 for g in body_graphs.values():
                     g.replace_all_inputs(g.get_nodes(), old_input, new_input)
 
-    @staticmethod
-    def replace_input(node, old_input, new_input):
-        """Replace node."""
+    def replace_input(self, node, old_input, new_input, input_index=None):
+        """
+        Replace one input in a node.
+        The method is more efficient if *input_index* is specified.
+        Otherwise, it renames every output named *old_input*.
+        """
         assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
         is_replaced = False
-        for i, input_name in enumerate(node.input):
-            if input_name == old_input:
-                node.input[i] = new_input
-                is_replaced = True
+        if input_index is None:
+            for i, input_name in enumerate(node.input):
+                if input_name == old_input:
+                    node.input[i] = new_input
+                    is_replaced = True
+        elif node.input[input_index] == old_input:
+            node.input[input_index] = new_input
+            is_replaced = True
+        else:
+            raise RuntimeError("Unable to replace input %r into %r for node %r." % (old_input, new_input, node.name))
         return is_replaced
+
+    def replace_inputs(self, node, new_inputs):
+        """Replace node inputs."""
+        assert isinstance(node, Node) and isinstance(new_inputs, list)
+        node.input = new_inputs
+        return True
 
     def _extract_sub_graph_nodes(self, dest_node, input_checker=None):
         """Return nodes of subgraph ending with dest_node.
@@ -1318,6 +1359,7 @@ class Graph(object):
                 safe_to_remove.append(n)
         return safe_to_remove
 
+    # TODO(tomwildenhain): Remove this function
     def safe_remove_nodes(self, to_delete):
         """Delete nodes in `to_delete` without third-party node consuming it."""
         delete_set = set(to_delete)
@@ -1327,6 +1369,20 @@ class Graph(object):
                 out_consumers |= set(self.find_output_consumers(out))
             if out_consumers.issubset(delete_set):
                 self.remove_node(n.name)
+
+    def is_safe_to_remove_nodes(self, to_delete, outputs_to_ignore=None):
+        """Returns true if the outputs of all the nodes in to_delete have no third-party nodes consuming them"""
+        delete_set = set(to_delete)
+        outputs_to_ignore_set = set(outputs_to_ignore or [])
+        for n in delete_set:
+            out_consumers = set()
+            for out in n.output:
+                if out in outputs_to_ignore_set:
+                    continue
+                out_consumers |= set(self.find_output_consumers(out))
+            if not out_consumers.issubset(delete_set):
+                return False
+        return True
 
 
 class GraphUtil(object):
