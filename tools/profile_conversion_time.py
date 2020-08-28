@@ -89,7 +89,7 @@ def profile(profiler="none", name="MobileNet", show_all=False):
         pr.disable()
         s = io.StringIO()
         sortby = SortKey.CUMULATIVE
-        ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+        ps = Stats(pr, stream=s).sort_stats(sortby)
         ps.print_stats()
         print(s.getvalue())
     else:
