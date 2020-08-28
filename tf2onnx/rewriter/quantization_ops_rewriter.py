@@ -33,7 +33,8 @@ def create_qdq_nodes(g, match_results):
             min_quantized, max_quantized = [0, 255]
 
         # Get axis attribute for per channel implementation.
-        axis = qdq_node.attr['axis'].i
+        if 'axis' in qdq_node.attr:
+            axis = qdq_node.attr['axis'].i
 
         # Get the min and max value of the inputs to QDQ op
         min_value = extract_numpy_array(qdq_node.inputs[1])
@@ -61,7 +62,10 @@ def create_qdq_nodes(g, match_results):
         if num_channels == 1:
             scales = scales[0]
             zero_point = zero_point[0]
-            axis = np.int64(1) # Default value of axis
+            attrs = {}
+        else:
+            utils.make_sure(axis, "Axis must be specified for per channel quantization")
+            attrs = {'axis': axis}
 
         # Split it into QuantizeLinear and DequantizeLinear and remove the QDQ node reference
         inverse_scale = (1/scales).astype(np.float32)
@@ -71,7 +75,7 @@ def create_qdq_nodes(g, match_results):
                                  inputs=[qdq_node.input[0], y_quant_scale.output[0],
                                          y_zero_point.output[0]],
                                  shapes=[qdq_node_output_shape],
-                                 attr={'axis': axis},
+                                 attr=attrs,
                                  dtypes=[qdq_node_output_dtype],
                                  name=utils.make_name("QuantLinearNode"))
 
@@ -86,7 +90,7 @@ def create_qdq_nodes(g, match_results):
                                            y_inv_zero_point.output[0]],
                                    outputs=[qdq_node.output[0]],
                                    shapes=[qdq_node_output_shape],
-                                   attr={'axis': axis},
+                                   attr=attrs,
                                    dtypes=[qdq_node_output_dtype],
                                    name=utils.make_name("DequantLinearNode"))
         g.set_shape(dequant_node.output[0], qdq_node_output_shape)
