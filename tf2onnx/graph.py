@@ -674,10 +674,7 @@ class Graph(object):
         for op in ops:
             for op_output in op.output:
                 self._output_to_node_name[op_output] = op.name
-            if op.type == 'Const':
-                inps = [op.name]
-            else:
-                inps = op.input
+            inps = op.input
             for op_input in inps:
                 self._register_input_name(op_input, op)
 
