@@ -425,7 +425,7 @@ class Graph(object):
         self._nodes = []
         self._nodes_by_name = {}
         self._output_to_node_name = {}
-        self._input_to_node_name = {}
+        self._output_to_consumers = {}
         self._input_to_graph = {}
         self.shapes = {}
         self.graph_name = graph_name or "tf2onnx"
@@ -642,7 +642,7 @@ class Graph(object):
                 del self._dtypes[op_output]
 
         for op_input in node.input:
-            if op_input not in self._input_to_node_name:
+            if op_input not in self._output_to_consumers:
                 raise RuntimeError(
                     "Input %r of node %r not found." % (op_input, node_name))
             self._unregister_input_name(op_input, node)
@@ -670,7 +670,7 @@ class Graph(object):
         self.contained_graphs = remained_sub_graphs
         self._nodes_by_name = {op.name: op for op in ops}
         self._output_to_node_name = {}
-        self._input_to_node_name = {}
+        self._output_to_consumers = {}
         for op in ops:
             for op_output in op.output:
                 self._output_to_node_name[op_output] = op.name
@@ -694,7 +694,7 @@ class Graph(object):
                 continue
             if i.name.startswith('keras_learning_phase'):
                 continue
-            if i.name not in self._input_to_node_name:
+            if i.name not in self._output_to_consumers:
                 raise ValueError("graph input %r not exist in graph." % i.name)
 
         self._dtypes = remained_dtypes
@@ -1182,8 +1182,8 @@ class Graph(object):
         assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
         if input_index is not None:
             assert node.input[input_index] == to_be_removed
-            if node.input[input_index] in self._input_to_node_name:
-                to_ops = self._input_to_node_name[node.input[input_index]]
+            if node.input[input_index] in self._output_to_consumers:
+                to_ops = self._output_to_consumers[node.input[input_index]]
                 if node.name in to_ops:
                     to_ops.remove(node.name)
             del node.input[input_index]
@@ -1248,15 +1248,15 @@ class Graph(object):
         new_output = port_name(name)
         new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
-        to_replace = [self.get_node_by_name(n) for n in self._input_to_node_name[output_name]]
+        to_replace = [self.get_node_by_name(n) for n in self._output_to_consumers[output_name]]
         to_replace = [n for n in to_replace if n != new_node]
         self.replace_all_inputs(output_name, new_output, ops=to_replace)
         return new_node
 
     def find_output_consumers(self, output_name):
         """Find all nodes consuming a given output."""
-        if output_name in self._input_to_node_name:
-            ops = self._input_to_node_name[output_name]
+        if output_name in self._output_to_consumers:
+            ops = self._output_to_consumers[output_name]
             ops = [self.get_node_by_name(n) for n in ops]
         else:
             ops = []  # self.get_nodes()
@@ -1276,9 +1276,9 @@ class Graph(object):
     def _register_input_name(self, input_name, node, only_graph=False):
         "Register node taking a specific input."
         if not only_graph:
-            if input_name not in self._input_to_node_name:
-                self._input_to_node_name[input_name] = set()
-            self._input_to_node_name[input_name].add(node.name)
+            if input_name not in self._output_to_consumers:
+                self._output_to_consumers[input_name] = set()
+            self._output_to_consumers[input_name].add(node.name)
         if self.parent_graph is not None:
             if input_name not in self.parent_graph._input_to_graph:
                 self.parent_graph._input_to_graph[input_name] = {}
@@ -1289,9 +1289,9 @@ class Graph(object):
         "Unregister node taking a specific input."
         node_name = node.name
         if not only_graph:
-            if input_name in self._input_to_node_name[input_name]:
-                if node_name in self._input_to_node_name[input_name]:
-                    self._input_to_node_name[input_name].remove(node_name)
+            if input_name in self._output_to_consumers[input_name]:
+                if node_name in self._output_to_consumers[input_name]:
+                    self._output_to_consumers[input_name].remove(node_name)
         if (self.parent_graph is not None and
                 input_name in self.parent_graph._input_to_graph and
                 id(self) in self.parent_graph._input_to_graph[input_name]):
@@ -1301,20 +1301,20 @@ class Graph(object):
     def replace_all_inputs(self, old_input, new_input, ops=None):
         """
         Replace all inputs pointing to old_input with new_input.
-        *ops* is used if defined, otherwise `_input_to_node_name`
+        *ops* is used if defined, otherwise `_output_to_consumers`
         is used to determine the impacted nodes.
         """
         if old_input == new_input:
             return
-        if new_input not in self._input_to_node_name:
-            self._input_to_node_name[new_input] = set()
+        if new_input not in self._output_to_consumers:
+            self._output_to_consumers[new_input] = set()
 
         if ops is not None:
             keep_ops = True
-        elif old_input in self._input_to_node_name:
+        elif old_input in self._output_to_consumers:
             ops = list(
                 filter(lambda a: a is not None,
-                       map(self.get_node_by_name, self._input_to_node_name[old_input])))
+                       map(self.get_node_by_name, self._output_to_consumers[old_input])))
             keep_ops = False
         else:
             ops = []
@@ -1355,7 +1355,7 @@ class Graph(object):
         else:
             raise RuntimeError("Unable to replace input %r into %r for node %r." % (old_input, new_input, node.name))
 
-        to_ops = self._input_to_node_name.get(old_input, None)
+        to_ops = self._output_to_consumers.get(old_input, None)
         if to_ops is not None:
             if node.name in to_ops:
                 # A node may take twice the same entry.
@@ -1369,7 +1369,7 @@ class Graph(object):
         assert isinstance(node, Node) and isinstance(new_inputs, list)
 
         for old_input in node.input:
-            to_ops = self._input_to_node_name.get(old_input, None)
+            to_ops = self._output_to_consumers.get(old_input, None)
             if to_ops is not None and old_input in to_ops:
                 # To avoid issues when a node
                 # takes twice the same entry.
