@@ -2,14 +2,19 @@
 """
 Profiles the conversion of a Keras model.
 """
+import cProfile, pstats, io
+from pstats import SortKey
 import fire
 import tensorflow as tf
 from tf2onnx import tfonnx
-from tensorflow.keras.applications import MobileNet
-from tensorflow.keras.applications import EfficientNetB2
+from tensorflow.keras.applications import MobileNet, EfficientNetB2
+try:
+    from pyinstrument import Profiler
+except ImportError:
+    Profiler = None
 
 
-def spy_model(k, name):
+def spy_model(name):
     "Creates the model."
     with tf.compat.v1.Session(graph=tf.Graph()) as session:
         if name == "MobileNet":
@@ -40,13 +45,9 @@ def spy_convert(graph_def, model):
         spy_convert_in()
 
 
-def create(name, module):
+def create(name):
     "Creates the model."
-    if module == 'tf.keras':
-        mod = tf.keras
-    else:
-        raise ValueError("Unknown module '{}'.".format(module))
-    graph_def, model = spy_model(mod, name)
+    graph_def, model = spy_model(name)
     return graph_def, model
 
 
@@ -55,8 +56,7 @@ def convert(graph_def, model):
     spy_convert(graph_def, model)
 
 
-def profile(profiler="none", name="MobileNet", show_all=False,
-            module='tf.keras'):
+def profile(profiler="none", name="MobileNet", show_all=False):
     """
     Profiles the conversion of a model.
 
@@ -64,28 +64,23 @@ def profile(profiler="none", name="MobileNet", show_all=False,
     :param name: model to profile, MobileNet, EfficientNetB2
     :param show_all: use by pyinstrument to show all functions
     """
-    print("create(%r, %r, %r)" % (profiler, name, module))
-    graph_def, model = create(name, module)
-    print("profile(%r, %r, %r)" % (profiler, name, module))
+    print("create(%r, %r)" % (profiler, name))
+    graph_def, model = create(name)
+    print("profile(%r, %r)" % (profiler, name))
     if profiler == 'none':
         convert(graph_def, model)
     elif profiler == "spy":
         # py-spy record -r 10 -o profile.svg -- python conversion_time.py spy
         convert(graph_def, model)
     elif profiler == "pyinstrument":
-        from pyinstrument import Profiler
-
+        if Profiler is None:
+            raise ImportError("pyinstrument is not installed")
         profiler = Profiler(interval=0.0001)
         profiler.start()
-
         convert(graph_def, model)
-
         profiler.stop()
         print(profiler.output_text(unicode=False, color=False, show_all=show_all))
     elif profiler == "cProfile":
-        import cProfile, pstats, io
-        from pstats import SortKey
-
         pr = cProfile.Profile()
         pr.enable()
         convert(graph_def, model)
