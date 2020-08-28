@@ -4,8 +4,7 @@ Profiles the conversion of a Keras model.
 """
 import sys
 import cProfile
-import pstats
-from pstats import SortKey
+from pstats import SortKey, Stats
 import io
 import argparse
 import tensorflow as tf
