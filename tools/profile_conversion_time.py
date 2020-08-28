@@ -9,8 +9,8 @@ from pstats import SortKey
 import io
 import argparse
 import tensorflow as tf
-from tf2onnx import tfonnx
 from tensorflow.keras.applications import MobileNet, EfficientNetB2
+from tf2onnx import tfonnx
 try:
     from pyinstrument import Profiler
 except ImportError:
