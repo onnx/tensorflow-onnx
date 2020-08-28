@@ -2043,7 +2043,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = quantize_and_dequantize(x, -6.0, 6.0, signed_input=True, narrow_range=False, range_given=True)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
-        
+
     @check_tf_min_version("2.0")
     @check_opset_min_version(13, "quantize_and_dequantize")
     def test_qdq_per_channel_signed_input(self):
