@@ -34,6 +34,7 @@ HWCN_TO_NCHW = [3, 2, 0, 1]
 
 _STRIDE1x1 = [1, 1, 1, 1]
 _KERNEL3x3 = [3, 3, 1, 1]
+_DILATIONS1x1 = [1, 1, 1, 1]
 
 # names for input and outputs for tests
 _TFINPUT = "input"
@@ -348,7 +349,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         if strides is None:
             strides = _STRIDE1x1
         if dilations is None:
-            dilations = [1, 1, 1, 1]
+            dilations = _DILATIONS1x1
         def func(x):
             kernel = tf.constant(w, dtype=tf.float32, name='k')
             conv = tf.nn.conv2d(x, kernel, strides=strides, padding=padding, dilations=dilations)
@@ -3579,6 +3580,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(
             func, [_OUTPUT], {_INPUT: y_val, _INPUT2: x_val}, rtol=1e-06)
+
+    def _conv_kernel_as_input_test(self, x_val, w_val, strides=None,
+                                   padding="VALID", dilations=None, rtol=1e-07):
+        if strides is None:
+            strides = _STRIDE1x1
+        if dilations is None:
+            dilations = _DILATIONS1x1
+
+        def func(x, kernel):
+            conv = tf.nn.conv2d(x, kernel, strides=strides, padding=padding,
+                                dilations=dilations)
+            return tf.identity(conv, name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT2: w_val}, rtol=rtol)
+
+    def test_conv2d_1_kernel_as_input(self):
+        x_val = make_xval((1, 1, 5, 5)).transpose(NCHW_TO_NHWC)
+        w_val = np.array([[2., 1., 1.],
+                          [1., 3., 1.],
+                          [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
+        self._conv_kernel_as_input_test(x_val, w_val)
 
 
 if __name__ == '__main__':
