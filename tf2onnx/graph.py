@@ -674,7 +674,7 @@ class Graph(object):
         for op in ops:
             for op_output in op.output:
                 self._output_to_node_name[op_output] = op.name
-            if op.type == 'Placeholder':
+            if op.is_graph_input():  # op.type == 'Placeholder':
                 inps = [op.name]
             elif op.type == 'Const':
                 inps = [op.name]
@@ -690,10 +690,8 @@ class Graph(object):
             if o not in self._output_to_node_name:
                 raise ValueError("graph output " + o + " not exist")
         for i in self.inputs:
-            if i.is_graph_input():  # i.name.startswith('Placeholder'):
+            if i.is_graph_input():
                 continue
-            # if i.name.startswith('keras_learning_phase'):
-            #     continue
             if i.name not in self._output_to_consumers:
                 raise ValueError("graph input %r not exist in graph." % i.name)
 
