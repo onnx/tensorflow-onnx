@@ -1302,7 +1302,7 @@ class Graph(object):
         """
         Replace all inputs pointing to old_input with new_input.
         *ops* is used if defined, otherwise `_input_to_node_name`
-        is used to determine the impacted nodes.        
+        is used to determine the impacted nodes.
         """
         if old_input == new_input:
             return
