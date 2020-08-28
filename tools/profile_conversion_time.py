@@ -2,9 +2,12 @@
 """
 Profiles the conversion of a Keras model.
 """
-import cProfile, pstats, io
+import sys
+import cProfile
+import pstats
 from pstats import SortKey
-import fire
+import io
+import argparse
 import tensorflow as tf
 from tf2onnx import tfonnx
 from tensorflow.keras.applications import MobileNet, EfficientNetB2
@@ -62,7 +65,7 @@ def profile(profiler="none", name="MobileNet", show_all=False):
 
     :param profiler: one among none, spy, pyinstrument, cProfile
     :param name: model to profile, MobileNet, EfficientNetB2
-    :param show_all: use by pyinstrument to show all functions
+    :param showall: used by pyinstrument to show all functions
     """
     print("create(%r, %r)" % (profiler, name))
     graph_def, model = create(name)
@@ -94,6 +97,21 @@ def profile(profiler="none", name="MobileNet", show_all=False):
         raise ValueError("Unknown profiler %r." % profiler)
 
 
+def main(args):
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--profiler', default='none',
+                        choices=['none', 'spy', 'pyinstrument', 'cProfile'],
+                        help='a profiler')
+    parser.add_argument('--name', default="MobileNet",
+                        choices=['MobileNet', 'EfficientNetB2'],
+                        help="a model")
+    parser.add_argument('--showall', type=bool, default=False,
+                        help="used by pyinstrument to show all functions")
+    res = parser.parse_args(args)
+    profile(res.profiler, res.name, res.showall)
+
+
 if __name__ == '__main__':
-    fire.Fire(profile)
+    print('Begin Profile with', sys.argv[1:])
+    main(sys.argv[1:])
     print('Profile complete.')
