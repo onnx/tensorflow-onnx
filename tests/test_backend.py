@@ -2044,6 +2044,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("2.0")
+    @check_opset_min_version(13, "quantize_and_dequantize")
+    def test_qdq_per_channel_signed_input(self):
+        x_shape = [3, 3, 2]
+        x_val = np.arange(-np.prod(x_shape)/2, np.prod(x_shape)/2).astype("float32").reshape(x_shape)
+        def func(x):
+            x_ = quantize_and_dequantize(x, np.array([-1.72, -3.89]).astype(np.float32), \
+                                         np.array([5.12, 2.36]).astype(np.float32), \
+                                         signed_input=True, narrow_range=False, \
+                                         range_given=True, axis=-1)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @skip_caffe2_backend()
     @check_opset_min_version(7, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor(self):
