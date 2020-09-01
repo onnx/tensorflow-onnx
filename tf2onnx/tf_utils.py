@@ -124,8 +124,24 @@ def get_tf_node_attr(node, name):
 def get_tf_version():
     return LooseVersion(tf.__version__)
 
+def compress_graph_def(graph_def):
+    """
+    Remove large const values from graph. This lets us import the graph and run shape inference without TF crashing.
+    """
+    node_defs = list(graph_def.node)
+    const_node_values = {}
+    for node_def in node_defs:
+        if node_def.op == 'Const':
+            tensor = node_def.attr["value"].tensor
+            # Small constants are sometimes used to store shape information and must be maintained
+            if len(tensor.tensor_content) > 1000:
+                make_sure(node_def.name not in const_node_values, "Two nodes in graph have same name %s", node_def.name)
+                const_node_values[node_def.name] = tensor.tensor_content
+                tensor.tensor_content = b''
+    return const_node_values
 
-def tflist_to_onnx(g, shape_override):
+
+def tflist_to_onnx(g, shape_override, const_node_values=None):
     """
     Convert the tf-node list into an onnx graph with minimal rewrites so
     we can use the onnx graph as intermediate graph.
@@ -193,7 +209,10 @@ def tflist_to_onnx(g, shape_override):
                 attr[a] = nattr.name
                 functions[nattr.name] = input_shapes
             elif a == "value":
-                onnx_tensor = tf_to_onnx_tensor(get_tf_node_attr(node, a), name=port_name(node.name))
+                tensor = get_tf_node_attr(node, a)
+                if const_node_values and node.name in const_node_values:
+                    tensor.tensor_content = const_node_values[node.name]
+                onnx_tensor = tf_to_onnx_tensor(tensor, name=port_name(node.name))
                 attr[a] = onnx_tensor
             elif a == "DstT":
                 attr["to"] = map_tf_dtype(get_tf_node_attr(node, "DstT"))
@@ -217,8 +236,8 @@ def tflist_to_onnx(g, shape_override):
     return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, functions
 
 
-def tensorflow_to_onnx(graph, shape_override):
+def tensorflow_to_onnx(graph, shape_override, const_node_values=None):
     """
     Load tensorflow graph and do a conversion.
     """
-    return tflist_to_onnx(graph, shape_override)
+    return tflist_to_onnx(graph, shape_override, const_node_values)
