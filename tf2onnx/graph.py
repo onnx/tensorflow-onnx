@@ -28,6 +28,13 @@ logger = logging.getLogger(__name__)
 # todo(pengwa): remove protected-access later
 # pylint: disable=broad-except,protected-access
 
+class ExternalTensorStorage():
+    """Passed into graph and node methods to accumulate tensors to save externally"""
+    def __init__(self):
+        self.name_to_tensor_data = {}
+        self.name_counter = 0
+        self.external_tensor_size_threshold = 1024
+        self.node_to_modified_value_attr = {}
 
 class Node(object):
     """A Node - wrapper around onnx nodes that we use for graph manipulations."""
@@ -88,16 +95,40 @@ class Node(object):
     def attr(self):
         return self._attr
 
-    @property
-    def attr_onnx(self):
-        """Return onnx valid attributes"""
+    def get_value_attr(self, external_tensor_storage=None):
+        """Return onnx attr for value property of node.
+        Attr is modified to point to external tensor data stored in external_tensor_storage, if included.
+        """
+        a = self._attr["value"]
+        if external_tensor_storage is not None and self in external_tensor_storage.node_to_modified_value_attr:
+            return external_tensor_storage.node_to_modified_value_attr[self]
+        if external_tensor_storage is None or a.type != AttributeProto.TENSOR:
+            return a
+        if np.product(a.t.dims) > external_tensor_storage.external_tensor_size_threshold:
+            a = copy.copy(a)
+            tensor_name = self.name + "_" + str(external_tensor_storage.name_counter)
+            external_tensor_storage.name_counter += 1
+            external_tensor_storage.name_to_tensor_data[tensor_name] = a.t.raw_data
+            external_tensor_storage.node_to_modified_value_attr[self] = a
+            a.t.raw_data = b'__EXTERNAL'
+            location = a.t.external_data.add()
+            location.key = "location"
+            location.value = tensor_name
+            a.t.data_location = TensorProto.EXTERNAL
+        return a
+
+    def get_onnx_attrs(self, external_tensor_storage=None):
+        """Return onnx valid attributes.
+        Attrs point to external tensor data stored in external_tensor_storage, if included."""
         schema = get_schema(self.type, self.graph.opset, self.domain)
         if schema is None and not (self.is_const() or self.is_graph_input()):
             logger.debug("Node %s uses non-stardard onnx op <%s, %s>, skip attribute check",
                          self.name, self.domain, self.type)
         onnx_attrs = {}
         for a in self._attr.values():
-            if schema is None or schema.has_attribute(a.name):
+            if a.name == "value":
+                onnx_attrs[a.name] = self.get_value_attr(external_tensor_storage)
+            elif schema is None or schema.has_attribute(a.name):
                 onnx_attrs[a.name] = a
         return onnx_attrs
 
@@ -328,7 +359,7 @@ class Node(object):
         self.graph.contained_graphs[self.name].update({attr_name: graph})
         graph.parent_graph = self.graph
 
-    def update_proto(self):
+    def update_proto(self, external_tensor_storage=None):
         """Update protobuf from internal structure."""
         nodes = list(self._op.input)
         for node in nodes:
@@ -346,10 +377,10 @@ class Node(object):
         attr_graphs = self.get_body_graphs()
         if attr_graphs:
             for attr_name, sub_graph in attr_graphs.items():
-                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name)
+                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name, external_tensor_storage)
                 self.set_attr(attr_name, graph_proto)
 
-        attr = list(self.attr_onnx.values())
+        attr = list(self.get_onnx_attrs(external_tensor_storage).values())
         if attr:
             self._op.attribute.extend(attr)
 
@@ -743,10 +774,10 @@ class Graph(object):
                 self.set_shape(output, shape)
                 logger.debug("Set shape of [%s] to %s", output, shape)
 
-    def update_proto(self):
+    def update_proto(self, external_tensor_storage=None):
         """Update the onnx protobuf from out internal Node structure."""
         for node in self._nodes:
-            node.update_proto()
+            node.update_proto(external_tensor_storage)
 
     def get_nodes(self):
         """Get node list."""
@@ -963,7 +994,7 @@ class Graph(object):
         ret = [x for _, x in sorted(zip(label, ops))]
         self.reset_nodes(ret)
 
-    def make_graph(self, doc, graph_name=None):
+    def make_graph(self, doc, graph_name=None, external_tensor_storage=None):
         """
         Create GraphProto for onnx from internal graph.
         Args:
@@ -973,7 +1004,7 @@ class Graph(object):
         graph_name = graph_name or self.graph_name
         self.delete_unused_nodes(self.outputs)
         self.topological_sort(self.get_nodes())
-        self.update_proto()
+        self.update_proto(external_tensor_storage)
 
         # TODO: we'd want to do something like this so that transpose optimizer is active
         # for  all (unit) tests
@@ -1016,7 +1047,7 @@ class Graph(object):
             # not to use numpy_helper.from_array to create a new tensor
             # because sometimes onnx will have a bug that only check the tensor data in specific field
             # such as at upsample it only checks the float_data field.
-            t = op.get_attr("value")
+            t = op.get_value_attr(external_tensor_storage)
             tensor = helper.get_attribute_value(t)
             tensor.name = op.output[0]
             initializers.append(tensor)
@@ -1045,14 +1076,14 @@ class Graph(object):
 
         return graph
 
-    def make_model(self, graph_doc, optimize=False, graph_name="tf2onnx", **kwargs):
+    def make_model(self, graph_doc, optimize=False, graph_name="tf2onnx", external_tensor_storage=None, **kwargs):
         """
         Create final ModelProto for onnx from internal graph.
         Args:
             optimize: optimize graph via onnx
             doc: text for doc string of the model
         """
-        graph = self.make_graph(graph_doc, graph_name)
+        graph = self.make_graph(graph_doc, graph_name, external_tensor_storage)
 
         if "producer_name" not in kwargs:
             kwargs = {"producer_name": "tf2onnx",
