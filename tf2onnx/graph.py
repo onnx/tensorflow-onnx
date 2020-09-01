@@ -642,9 +642,9 @@ class Graph(object):
                 del self._dtypes[op_output]
 
         for op_input in node.input:
-            if op_input not in self._output_to_consumers:
-                raise RuntimeError(
-                    "Input %r of node %r not found." % (op_input, node_name))
+            utils.make_sure(
+                op_input in self._output_to_consumers,
+                "Input %r of node %r not found.", op_input, node_name))
             self._unregister_input_name(op_input, node)
 
         self._nodes.remove(node)
@@ -684,11 +684,6 @@ class Graph(object):
         for o in self.outputs:
             if o not in self._output_to_node_name:
                 raise ValueError("graph output " + o + " not exist")
-        for i in self.inputs:
-            if i.is_graph_input():
-                continue
-            if i.name not in self._output_to_consumers:
-                raise ValueError("graph input %r not exist in graph." % i.name)
 
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
