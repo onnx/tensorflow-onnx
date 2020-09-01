@@ -644,7 +644,7 @@ class Graph(object):
         for op_input in node.input:
             utils.make_sure(
                 op_input in self._output_to_consumers,
-                "Input %r of node %r not found.", op_input, node_name))
+                "Input %r of node %r not found.", op_input, node_name)
             self._unregister_input_name(op_input, node)
 
         self._nodes.remove(node)
