@@ -111,6 +111,6 @@ def main(args):
 
 
 if __name__ == '__main__':
-    print('Begin Profile with', sys.argv[1:])
+    print('Begin profiling with', sys.argv[1:])
     main(sys.argv[1:])
     print('Profile complete.')
