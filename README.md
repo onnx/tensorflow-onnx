@@ -293,7 +293,7 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             onnx graph
     """
 ```
-For example in [examples/call_coverter_via_python.py]():
+For example in [examples/call_converter_via_python.py]():
 ```
 import tensorflow as tf
 import tf2onnx
