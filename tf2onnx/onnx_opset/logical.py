@@ -34,6 +34,16 @@ def _add_cast_to_inputs(graph, node, supported_dtypes, target_dtype):
             graph.set_dtype(inp_cast.output[0], target_dtype)
 
 
+def _add_cast_to_same_type_to_inputs(graph, node):
+    common_dtype = graph.get_dtype(node.input[0])
+
+    for inp in node.input[1:]:
+        if graph.get_dtype(inp) != common_dtype:
+            inp_cast = graph.insert_new_node_on_input(node, "Cast", inp, to=common_dtype)
+            graph.copy_shape(inp, inp_cast.output[0])
+            graph.set_dtype(inp_cast.output[0], common_dtype)
+
+
 @tf_op("LogicalNot", onnx_op="Not")
 class DirectOp:
     @classmethod
@@ -81,7 +91,8 @@ class Equal:
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        # starting with opset-11, equal supports all types
+        # starting with opset-11, equal supports all types (but both operands must be of the same type)
+        _add_cast_to_same_type_to_inputs(ctx, node)
         need_not = node.type == "NotEqual"
         if need_not:
             node.type = "Equal"

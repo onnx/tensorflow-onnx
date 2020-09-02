@@ -61,7 +61,7 @@ def _wrap_concat_with_cast(ctx, node):
 class Size:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        pass
+        ctx.set_dtype(node.output[0], onnx_pb.TensorProto.INT64)
 
 
 @tf_op("Flatten")
