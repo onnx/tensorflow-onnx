@@ -32,7 +32,7 @@ class RealDiv(common.BroadcastOp):
     pass
 
 
-@tf_op(["LeakyRelu", "LogSoftmax", "Softplus", "Softsign"])
+@tf_op(["LeakyRelu", "Softplus", "Softsign"])
 class DirectOpSinceOpset1:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -185,7 +185,7 @@ class ClipByValueOp:
     def version_12(cls, ctx, node, **kwargs):
         node.type = 'Clip' # clip supports all types now
 
-@tf_op("Softmax")
+@tf_op(["LogSoftmax", "Softmax"])
 class Softmax:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):

@@ -226,7 +226,7 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n1 = g.get_node_by_name("n1")
         self.assertTrue("my_attr" in n1.attr)
-        self.assertTrue("my_attr" not in n1.attr_onnx)
+        self.assertTrue("my_attr" not in n1.get_onnx_attrs())
 
         n1 = helper.make_node("Conv", ["X", "W"], ["Y"], name="n1", domain="my_domain", my_attr="my_attr")
         graph_proto = helper.make_graph(
@@ -240,7 +240,7 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n1 = g.get_node_by_name("n1")
         self.assertTrue("my_attr" in n1.attr)
-        self.assertTrue("my_attr" in n1.attr_onnx)
+        self.assertTrue("my_attr" in n1.get_onnx_attrs())
 
     def test_tensor_data(self):
         tensors = {

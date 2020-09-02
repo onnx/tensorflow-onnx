@@ -405,9 +405,9 @@ def have_same_inference_value(g, output_1, output_2):
         if node_1.type != node_2.type:
             return False
         # check onnx attributes
-        if node_1.attr_onnx.keys() != node_2.attr_onnx.keys():
+        if node_1.get_onnx_attrs().keys() != node_2.get_onnx_attrs().keys():
             return False
-        for name in node_1.attr_onnx.keys(): # pylint: disable=consider-iterating-dictionary
+        for name in node_1.get_onnx_attrs().keys(): # pylint: disable=consider-iterating-dictionary
             if node_1.get_attr_value(name) != node_2.get_attr_value(name):
                 return False
         return True
