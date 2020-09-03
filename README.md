@@ -193,6 +193,12 @@ Only valid with parameter `--saved_model`. Specifies which signature to use with
 
 Only valid with parameter `--saved_model`. If a model contains a list of concrete functions, under the function name `__call__` (as can be viewed using the command `saved_model_cli show --all`), this parameter is a 0-based integer specifying which function in that list should be converted. This parameter takes priority over `--signature_def`, which will be ignored.
 
+#### --large_model
+
+(This is experimental, valid only for TF2.x models)
+
+Only valid with parameter `--saved_model`. When set, creates a zip file containing the ONNX protobuf model and large tensor values stored externally. This allows for converting models that exceed the 2 GB protobuf limit.
+
 #### --target
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
@@ -274,7 +280,8 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             opset=None, custom_op_handlers=None,
             custom_rewriter=None, extra_opset=None,
             shape_override=None, inputs_as_nchw=None,
-            input_names=None, output_names=None):
+            input_names=None, output_names=None,
+            const_node_values=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -289,6 +296,7 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             inputs_as_nchw: transpose inputs in list from nchw to nchw
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
+            const_node_values: an optional dict mapping node names to tensor values
         Return:
             onnx graph
     """
