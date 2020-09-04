@@ -334,7 +334,7 @@ def run_rewriters(g, funcs, continue_on_error):
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
-                     input_names=None, output_names=None, is_subgraph=False):
+                     input_names=None, output_names=None, is_subgraph=False, const_node_values=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -349,6 +349,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             inputs_as_nchw: transpose inputs in list from nchw to nchw
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
+            const_node_values: a dict returned by compress_graph_def mapping node names to tensor values
         Return:
             onnx graph
     """
@@ -377,7 +378,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if target is None:
         target = constants.DEFAULT_TARGET
 
-    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = tensorflow_to_onnx(tf_graph, shape_override)
+    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
+        tensorflow_to_onnx(tf_graph, shape_override, const_node_values)
     if not is_subgraph:
         # make tf2onnx internal subgraphs from the tensorflow subgraphs
         ordered_func = resolve_functions(tf_graph)
@@ -387,7 +389,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             fg = process_tf_graph(func, continue_on_error, False, target, opset,
                                   custom_op_handlers, custom_rewriter,
                                   extra_opset, shape_override, inputs_as_nchw,
-                                  f_inputs_names, f_output_names, is_subgraph=True)
+                                  f_inputs_names, f_output_names, is_subgraph=True,
+                                  const_node_values=const_node_values)
             fg.graph_name = func.name
             fg.func_inputs = f_inputs_names
             set_function(func.name, fg)
@@ -451,13 +454,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
     rewriters = [rewrite_constant_fold, rewrite_quantize_and_dequantize, rewrite_transpose, rewrite_flatten,
-                 rewrite_gemm, rewrite_random_uniform, rewrite_random_uniform_fold_const,
+                 rewrite_random_uniform, rewrite_random_uniform_fold_const,
                  rewrite_random_normal, rewrite_dropout, rewrite_eye,
                  rewrite_leakyrelu, rewrite_thresholded_relu, rewrite_conv2d_with_pad,
                  rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
                  rewrite_single_direction_gru, rewrite_bi_direction_gru,
                  rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond,
-                 rewrite_biasadd_with_conv2d,
+                 rewrite_biasadd_with_conv2d, rewrite_gemm
                  ]
 
     if custom_rewriter is not None:

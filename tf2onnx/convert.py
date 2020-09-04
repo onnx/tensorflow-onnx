@@ -22,6 +22,8 @@ import tensorflow as tf
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import constants, logging, utils, optimizer
 from tf2onnx import tf_loader
+from tf2onnx.graph import ExternalTensorStorage
+from tf2onnx.tf_utils import compress_graph_def
 
 # pylint: disable=unused-argument
 
@@ -53,6 +55,7 @@ def get_args():
                         help="For TF2.x saved_model, index of func signature in __call__ (--signature_def is ignored)")
     parser.add_argument("--checkpoint", help="input from checkpoint")
     parser.add_argument("--keras", help="input from keras model")
+    parser.add_argument("--large_model", help="use the large model format (for models > 2GB)", action="store_true")
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names")
     parser.add_argument("--outputs", help="model output_names")
@@ -129,7 +132,8 @@ def main():
         model_path = args.checkpoint
     if args.saved_model:
         graph_def, inputs, outputs = tf_loader.from_saved_model(
-            args.saved_model, args.inputs, args.outputs, args.tag, args.signature_def, args.concrete_function)
+            args.saved_model, args.inputs, args.outputs, args.tag,
+            args.signature_def, args.concrete_function, args.large_model)
         model_path = args.saved_model
     if args.keras:
         graph_def, inputs, outputs = tf_loader.from_keras(
@@ -141,6 +145,9 @@ def main():
         logger.info("outputs: %s", outputs)
 
     with tf.Graph().as_default() as tf_graph:
+        const_node_values = None
+        if args.large_model:
+            const_node_values = compress_graph_def(graph_def)
         tf.import_graph_def(graph_def, name='')
     with tf_loader.tf_session(graph=tf_graph):
         g = process_tf_graph(tf_graph,
@@ -152,17 +159,24 @@ def main():
                              shape_override=args.shape_override,
                              input_names=inputs,
                              output_names=outputs,
-                             inputs_as_nchw=args.inputs_as_nchw)
+                             inputs_as_nchw=args.inputs_as_nchw,
+                             const_node_values=const_node_values)
 
     onnx_graph = optimizer.optimize_graph(g)
-    model_proto = onnx_graph.make_model("converted from {}".format(model_path))
+
+    tensor_storage = ExternalTensorStorage() if args.large_model else None
+    model_proto = onnx_graph.make_model("converted from {}".format(model_path), external_tensor_storage=tensor_storage)
 
     # write onnx graph
     logger.info("")
     logger.info("Successfully converted TensorFlow model %s to ONNX", model_path)
     if args.output:
-        utils.save_protobuf(args.output, model_proto)
-        logger.info("ONNX model is saved at %s", args.output)
+        if args.large_model:
+            utils.save_onnx_zip(args.output, model_proto, tensor_storage)
+            logger.info("Zipped ONNX model is saved at %s. Unzip before opening in onnxruntime.", args.output)
+        else:
+            utils.save_protobuf(args.output, model_proto)
+            logger.info("ONNX model is saved at %s", args.output)
     else:
         logger.info("To export ONNX model to file, please run with `--output` option")
 

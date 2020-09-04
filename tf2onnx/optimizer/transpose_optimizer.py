@@ -126,7 +126,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             transpose_out = transposes[0].output[0]
             for node in transposes[1:]:
                 old_transpose_out = node.output[0]
-                graph.replace_all_inputs(None, old_transpose_out, transpose_out)  # graph.get_nodes()
+                graph.replace_all_inputs(old_transpose_out, transpose_out)  # ops=graph.get_nodes()
 
         # dangling transpose nodes can be deleted
         graph.delete_unused_nodes(graph.outputs)
@@ -209,7 +209,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             for n in input_transposes:
                 n_input = n.input[0]
                 utils.make_sure(len(n.output) == 1, "only expect single output")
-                self._g.replace_all_inputs(None, n.output[0], n_input)  # self._g.get_nodes()
+                self._g.replace_all_inputs(n.output[0], n_input)  # ops=self._g.get_nodes()
                 self._g.remove_node(n.name)
 
             utils.make_sure(len(node.output) == 1, "only expect single output")
@@ -220,7 +220,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             for n in output_transposes:
                 n_input = n.input[0]
                 utils.make_sure(len(n.output) == 1, "only expect single output")
-                self._g.replace_all_inputs(None, n.output[0], n_input)  # self._g.get_nodes()
+                self._g.replace_all_inputs(n.output[0], n_input)  # ops=self._g.get_nodes()
                 self._g.remove_node(n.name)
 
             shape = self._g.get_shape(node.output[0])
@@ -249,7 +249,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         input_index = self._get_input_index_for_trans(node, trans)
 
-        self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # self._g.get_nodes()
+        self._g.replace_all_inputs(node.output[0], trans.output[0])  # ops=self._g.get_nodes()
         self._g.replace_input(node, node.input[input_index], trans.input[0], input_index)
         self._g.replace_input(trans, trans.input[0], node.output[0], 0)
 
@@ -281,14 +281,14 @@ class TransposeOptimizer(GraphOptimizerBase):
             return False
         # move transpose into branches to let Transposes can be "handled" in each branch
         for n in out_nodes:
-            branch_trans = n.graph.make_node("Transpose", [trans.input[0]], attr=trans.attr_onnx)
+            branch_trans = n.graph.make_node("Transpose", [trans.input[0]], attr=trans.get_onnx_attrs())
             n.graph.replace_input(n, trans.output[0], branch_trans.output[0])
 
         self._g.remove_node(trans.name)
         return False
 
     def _remove_useless_tranpose(self, trans):
-        self._g.replace_all_inputs(None, trans.output[0], trans.input[0])  # self._g.get_nodes()
+        self._g.replace_all_inputs(trans.output[0], trans.input[0])  # ops=self._g.get_nodes()
         self._g.remove_node(trans.name)
 
     def _nodes_has_single_consumer_node(self, nodes):
@@ -406,9 +406,9 @@ class TransposeOptimizer(GraphOptimizerBase):
                 target_node.set_tensor_value(target_val)
 
                 conv_inputs = [t_p.input[0], t_p.input[1], node.input[1]]
-                conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.attr_onnx)
+                conv_node = self._g.make_node(t_p.type, conv_inputs, attr=t_p.get_onnx_attrs())
                 self._g.replace_input(trans, trans.input[0], utils.port_name(conv_node.name), 0)
-                self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # self._g.get_nodes()
+                self._g.replace_all_inputs(node.output[0], trans.output[0])  # ops=self._g.get_nodes()
                 self._g.remove_node(t_p.name)
                 self._g.remove_node(node.name)
                 return True
@@ -417,7 +417,7 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _transpose_handler(self, trans, node):
         if is_nchw_transpose(node):
             for g in {self._g, node.graph}:
-                g.replace_all_inputs(None, node.output[0], trans.input[0])  # g.get_nodes()
+                g.replace_all_inputs(node.output[0], trans.input[0])  # ops=g.get_nodes()
 
             shape = node.graph.get_shape(node.output[0])
             dtype = node.graph.get_dtype(node.output[0])
@@ -474,8 +474,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 result = np.multiply(transposed_val, mul_val)
                 conv.inputs[1].set_tensor_value(np.transpose(result, (3, 2, 0, 1)))
 
-                ops = self._g.get_nodes()
-                self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # ops
+                self._g.replace_all_inputs(node.output[0], trans.output[0])  # ops=self._g.get_nodes()
                 self._g.remove_node(node.name)
                 return True
 
@@ -522,8 +521,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                     return False
 
         # switch to trans(sum(x1, x2, x3, ...))
-        ops = self._g.get_nodes()
-        self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # ops
+        self._g.replace_all_inputs(node.output[0], trans.output[0])  # ops=self._g.get_nodes()
         new_input = [n.output[0] if n.is_const() else n.input[0] for n in inputs]
         self._g.replace_inputs(node, new_input)
         self._g.replace_input(trans, trans.input[0], node.output[0], 0)
@@ -547,7 +545,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         if node.output[0] in node.graph.outputs:
             return False
         for g in {self._g, node.graph}:
-            g.replace_all_inputs(None, node.output[0], trans.output[0])  # g.get_nodes()
+            g.replace_all_inputs(node.output[0], trans.output[0])  # ops=g.get_nodes()
         node.graph.remove_node(node.name)
         return True
 
@@ -587,7 +585,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         if node.get_attr("axes"):
             # switch tran and squeeze
             # 1 switch
-            self._g.replace_all_inputs(None, node.output[0], trans.output[0])  # self._g.get_nodes()
+            self._g.replace_all_inputs(node.output[0], trans.output[0])  # ops=self._g.get_nodes()
             self._g.replace_input(node, node.input[0], trans.input[0], 0)
             self._g.replace_input(trans, trans.input[0], node.output[0], 0)
             # 2 correct attr of nodes

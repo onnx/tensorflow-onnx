@@ -34,6 +34,7 @@ HWCN_TO_NCHW = [3, 2, 0, 1]
 
 _STRIDE1x1 = [1, 1, 1, 1]
 _KERNEL3x3 = [3, 3, 1, 1]
+_DILATIONS1x1 = [1, 1, 1, 1]
 
 # names for input and outputs for tests
 _TFINPUT = "input"
@@ -348,7 +349,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         if strides is None:
             strides = _STRIDE1x1
         if dilations is None:
-            dilations = [1, 1, 1, 1]
+            dilations = _DILATIONS1x1
         def func(x):
             kernel = tf.constant(w, dtype=tf.float32, name='k')
             conv = tf.nn.conv2d(x, kernel, strides=strides, padding=padding, dilations=dilations)
@@ -818,6 +819,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.gather(tf.reshape(x, [-1]), tf.constant(idx_flattened))
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("2.2")
+    def test_large_model_format(self):
+        x_val = np.array([2.0], dtype=np.float32)
+        y_const = np.arange(2000, dtype=np.float32)
+        def func(x):
+            x_ = tf.multiply(x, tf.constant(y_const))
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, large_model=True)
 
     @check_target('rs6', 'GatherNd')
     def test_gathernd(self):
@@ -2043,6 +2053,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("2.0")
+    @check_opset_min_version(13, "quantize_and_dequantize")
+    def test_qdq_per_channel_signed_input(self):
+        x_shape = [3, 3, 2]
+        x_val = np.arange(-np.prod(x_shape)/2, np.prod(x_shape)/2).astype("float32").reshape(x_shape)
+        def func(x):
+            x_ = quantize_and_dequantize(x, np.array([-1.72, -3.89]).astype(np.float32), \
+                                         np.array([5.12, 2.36]).astype(np.float32), \
+                                         signed_input=True, narrow_range=False, \
+                                         range_given=True, axis=-1)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @skip_caffe2_backend()
     @check_opset_min_version(7, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor(self):
@@ -2997,6 +3020,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
                             graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
+    # test for gemm pattern4: A*B + C [addbias] - 1D bias!
+    def test_gemm_pattern4(self):
+        max_number = 10
+        m = np.random.randint(max_number)
+        n = np.random.randint(max_number)
+        k = np.random.randint(max_number) # bias add requires 1D tensor
+        x_val1 = np.random.rand(m, n).astype("float32")
+        x_val2 = np.random.rand(n, k).astype("float32")
+        x_val3 = np.random.rand(k).astype("float32")
+        def func(a, b, c):
+            x_ = tf.nn.bias_add(tf.matmul(a, b), c)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
+                            graph_validator=lambda g: check_op_count(g, "Gemm", 1))
+
     # test for gemm pattern0: alpha*A*B + beta*C
     @check_opset_min_version(12, "Optimizer bug in ORT 1.2")
     def test_gemm_pattern0_fail_broadcast(self):
@@ -3564,6 +3602,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(
             func, [_OUTPUT], {_INPUT: y_val, _INPUT2: x_val}, rtol=1e-06)
+
+    def _conv_kernel_as_input_test(self, x_val, w_val, strides=None,
+                                   padding="VALID", dilations=None, rtol=1e-07):
+        if strides is None:
+            strides = _STRIDE1x1
+        if dilations is None:
+            dilations = _DILATIONS1x1
+
+        def func(x, kernel):
+            conv = tf.nn.conv2d(x, kernel, strides=strides, padding=padding,
+                                dilations=dilations)
+            return tf.identity(conv, name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT2: w_val}, rtol=rtol)
+
+    def test_conv2d_1_kernel_as_input(self):
+        x_val = make_xval((1, 1, 5, 5)).transpose(NCHW_TO_NHWC)
+        w_val = np.array([[2., 1., 1.],
+                          [1., 3., 1.],
+                          [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
+        self._conv_kernel_as_input_test(x_val, w_val)
 
 
 if __name__ == '__main__':

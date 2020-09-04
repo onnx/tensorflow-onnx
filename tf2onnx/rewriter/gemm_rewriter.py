@@ -55,7 +55,14 @@ def rewrite_gemm(g, ops):
             OpTypePattern('*', name='C'),
         ])
 
-    pattern_list = [pattern0, pattern1, pattern2, pattern3]
+    # pattern4: A*B + c
+    pattern4 = \
+        OpTypePattern('BiasAdd', name='add', inputs=[
+            OpTypePattern('MatMul', name='matmul'),
+            OpTypePattern('*', name='C'),
+        ])
+
+    pattern_list = [pattern0, pattern1, pattern2, pattern3, pattern4]
 
     for pattern in pattern_list:
         matcher = GraphMatcher(pattern, allow_reorder=True)
@@ -95,7 +102,7 @@ def rewrite_gemm(g, ops):
                                    dtypes=[g.get_dtype(add_node.output[0])], op_name_scope=matmul_node.name)
 
                 ops.append(gemm)
-                g.replace_all_inputs(ops, add_node.output[0], gemm.output[0])
+                g.replace_all_inputs(add_node.output[0], gemm.output[0], ops=ops)
                 to_delete = [add_node, matmul_node]
                 g.safe_remove_nodes(to_delete)
     return ops
