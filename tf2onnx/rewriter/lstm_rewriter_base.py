@@ -187,4 +187,4 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
         squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
                                         shapes=[squeeze_output_shape],
                                         dtypes=[self.g.get_dtype(output_id)])
-        self.g.replace_all_inputs(self.g.get_nodes(), gather_output_id, squeeze_node.output[0])
+        self.g.replace_all_inputs(gather_output_id, squeeze_node.output[0])  # ops=self.g.get_nodes()
