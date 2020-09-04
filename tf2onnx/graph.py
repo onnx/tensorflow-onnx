@@ -726,13 +726,6 @@ class Graph(object):
         for o in self.outputs:
             if o not in self._output_to_node_name:
                 raise ValueError("graph output %r not exist" % o)
-        for i in self.inputs:
-            if i.name.startswith('Placeholder'):
-                continue
-            if i.name.startswith('keras_learning_phase'):
-                continue
-            if i.name not in self._output_to_consumers:
-                raise ValueError("graph input %r not exist in graph." % i.name)
 
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
