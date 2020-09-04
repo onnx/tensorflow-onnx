@@ -731,7 +731,7 @@ class Graph(object):
                 continue
             if i.name.startswith('keras_learning_phase'):
                 continue
-            if i.name not in self._input_to_node_name:
+            if i.name not in self._output_to_consumers:
                 raise ValueError("graph input %r not exist in graph." % i.name)
 
         self._dtypes = remained_dtypes
