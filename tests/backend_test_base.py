@@ -26,6 +26,8 @@ from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
 from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, from_function, freeze_session
 from tf2onnx.tf_loader import tf_optimize, is_tf2
+from tf2onnx.tf_utils import compress_graph_def
+from tf2onnx.graph import ExternalTensorStorage
 
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
@@ -72,9 +74,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = m.run(output_names, inputs)
         return results
 
-    def run_backend(self, g, outputs, input_dict):
-        model_proto = g.make_model("test")
-        model_path = self.save_onnx_model(model_proto, input_dict)
+    def run_backend(self, g, outputs, input_dict, large_model=False):
+        tensor_storage = ExternalTensorStorage() if large_model else None
+        model_proto = g.make_model("test", external_tensor_storage=tensor_storage)
+        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage)
 
         if self.config.backend == "onnxruntime":
             y = self.run_onnxruntime(model_path, input_dict, outputs)
@@ -86,7 +89,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
-                      check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False):
+                      check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
+                      large_model=False):
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -121,7 +125,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             concrete_func = tf.function(func, input_signature=tuple(input_tensors))
             concrete_func = concrete_func.get_concrete_function()
             graph_def = from_function(concrete_func,
-                                      input_names=list(feed_dict.keys()), output_names=output_names_with_port)
+                                      input_names=list(feed_dict.keys()),
+                                      output_names=output_names_with_port,
+                                      large_model=large_model)
         else:
             #
             # use graph to execute the tensorflow func
@@ -151,6 +157,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         tf_reset_default_graph()
         with tf_session() as sess:
+            const_node_values = None
+            if large_model:
+                const_node_values = compress_graph_def(graph_def)
             tf.import_graph_def(graph_def, name='')
 
             if self.config.is_debug_mode:
@@ -161,9 +170,11 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             g = process_tf_graph(sess.graph, opset=self.config.opset,
                                  input_names=list(feed_dict.keys()),
                                  output_names=output_names_with_port,
-                                 target=self.config.target, **process_args)
+                                 target=self.config.target,
+                                 const_node_values=const_node_values,
+                                 **process_args)
             g = optimizer.optimize_graph(g)
-            actual = self.run_backend(g, output_names_with_port, onnx_feed_dict)
+            actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
 
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
@@ -180,10 +191,11 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         return g
 
-    def save_onnx_model(self, model_proto, feed_dict, postfix=""):
+    def save_onnx_model(self, model_proto, feed_dict, postfix="", external_tensor_storage=None):
         target_path = utils.save_onnx_model(self.test_data_directory, self._testMethodName + postfix, feed_dict,
                                             model_proto, include_test_data=self.config.is_debug_mode,
-                                            as_text=self.config.is_debug_mode)
+                                            as_text=self.config.is_debug_mode,
+                                            external_tensor_storage=external_tensor_storage)
 
         self.logger.debug("create model file: %s", target_path)
         return target_path

@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import tempfile
+import zipfile
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -161,7 +162,8 @@ def find_opset(opset):
     return opset
 
 
-def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False):
+def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False,
+                    external_tensor_storage=None):
     """Save onnx model as file. Save a pbtxt file as well if as_text is True"""
     save_path = save_path_root
     if not os.path.exists(save_path):
@@ -181,12 +183,26 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
             save_protobuf(data_full_path, t)
             i += 1
 
-    target_path = os.path.join(save_path, onnx_file_name + ".onnx")
-    save_protobuf(target_path, model_proto)
+    if external_tensor_storage is None:
+        target_path = os.path.join(save_path, onnx_file_name + ".onnx")
+        save_protobuf(target_path, model_proto)
+    else:
+        zip_path = os.path.join(save_path, onnx_file_name + ".zip")
+        save_onnx_zip(zip_path, model_proto, external_tensor_storage)
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            z.extractall(save_path)
+        target_path = os.path.join(save_path, "__MODEL_PROTO.onnx")
+
     if as_text:
         save_protobuf(target_path + ".pbtxt", model_proto, as_text=True)
+
     return target_path
 
+def save_onnx_zip(target_path, model_proto, external_tensor_storage):
+    with zipfile.ZipFile(target_path, 'w') as z:
+        z.writestr("__MODEL_PROTO.onnx", model_proto.SerializeToString())
+        for k, v in external_tensor_storage.name_to_tensor_data.items():
+            z.writestr(k, v)
 
 def make_sure(bool_val, error_msg, *args):
     if not bool_val:

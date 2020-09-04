@@ -820,6 +820,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("2.2")
+    def test_large_model_format(self):
+        x_val = np.array([2.0], dtype=np.float32)
+        y_const = np.arange(2000, dtype=np.float32)
+        def func(x):
+            x_ = tf.multiply(x, tf.constant(y_const))
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, large_model=True)
+
     @check_target('rs6', 'GatherNd')
     def test_gathernd(self):
         x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
