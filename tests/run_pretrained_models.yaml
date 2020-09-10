@@ -121,7 +121,7 @@ esrgan-tf2:
   model: fixme
   input_get: get_beach
   inputs:
-    "input:0": [1, 416, 416, 3]
+    "input_0:0": [1, 416, 416, 3]
   outputs:
     - Identity:0
 
@@ -130,7 +130,7 @@ inception_v3_slim:
   model: inception_v3_2016_08_28_frozen.pb
   input_get: get_beach
   inputs:
-    "input_0:0": [1, 299, 299, 3]
+    "input:0": [1, 299, 299, 3]
   outputs:
     - InceptionV3/Predictions/Softmax:0
   rtol: 0.02
