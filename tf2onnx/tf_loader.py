@@ -170,13 +170,12 @@ def from_graphdef(model_path, input_names, output_names):
         with tf_gfile.GFile(model_path, 'rb') as f:
             try:
                 content = f.read()
-            except UnicodeDecodeError as e:
+            except Exception as e:
                 raise OSError(
                     "Unable to load file '{}'.".format(model_path)) from e
             try:
                 graph_def.ParseFromString(content)
             except Exception as e:
-                print(content[:100])
                 raise RuntimeError(
                     "Unable to parse file '{}'.".format(model_path)) from e
             tf.import_graph_def(graph_def, name='')
