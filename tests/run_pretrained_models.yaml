@@ -117,11 +117,9 @@ benchtf-gru:
 ##
 
 esrgan-tf2:
-  # FIXME: fails because of google.protobuf.message.DecodeError: Error parsing message
-  disabled: true
   # url: https://tfhub.dev/captain-pool/esrgan-tf2/1/esrgan-tf2_1.tar.gz
   url: https://github.com/captain-pool/GSOC/releases/download/1.0.0/esrgan.tar.gz
-  model: saved_model.pb
+  model: saved_model
   input_get: get_beach
   inputs:
     "input_0:0": [1, 50, 50, 3]
