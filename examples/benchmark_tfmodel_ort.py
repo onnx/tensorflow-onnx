@@ -6,7 +6,6 @@ import time
 import numpy
 from tqdm import tqdm
 import tensorflow_hub as hub
-import tf2onnx
 import onnxruntime as ort
 
 
