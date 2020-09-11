@@ -122,10 +122,15 @@ esrgan-tf2:
   model: ersgan
   model_type: saved_model
   input_get: get_beach
+  opset_constraints:
+    "onnx":
+      "min": 10
   inputs:
     "input_0:0": [1, 50, 50, 3]
   outputs:
     - Identity:0
+  rtol: 0.02
+  atol: 0.0005
 
 inception_v3_slim:
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz
