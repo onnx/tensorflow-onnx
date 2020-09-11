@@ -248,19 +248,16 @@ class Test(object):
         elif self.model_type in ["saved_model"]:
             try:
                 res = tf_loader.from_saved_model(
-                    model_path, input_names, outputs, self.tag, self.signatures, self.concrete_function, self.large_model)
+                    model_path, input_names, outputs, self.tag, self.signatures,
+                    self.concrete_function, self.large_model)
             except OSError:
                 model_path = dir_name
                 logger.info("Load model(2) from %r", model_path)
                 res = tf_loader.from_saved_model(
-                    model_path, input_names, outputs, self.tag, self.signatures, self.concrete_function, self.large_model)
-            if len(res) == 5:
-                graph_def, input_names, outputs, concrete_func, imported = res
-            elif len(res) == 3:
-                graph_def, input_names, outputs = res
-                concrete_func, imported = None, None
-            else:
-                raise OSError("Unexpected number of results %r." % len(res))
+                    model_path, input_names, outputs, self.tag, self.signatures,
+                    self.concrete_function, self.large_model)
+            # graph_def, input_names, outputs, concrete_func, imported = res
+            graph_def, input_names, outputs = res[:3]
         elif self.model_type in ["keras"]:
             graph_def, input_names, outputs = tf_loader.from_keras(model_path, input_names, outputs)
         else:
