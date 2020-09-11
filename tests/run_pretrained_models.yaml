@@ -119,7 +119,7 @@ benchtf-gru:
 esrgan-tf2:
   # url: https://tfhub.dev/captain-pool/esrgan-tf2/1/esrgan-tf2_1.tar.gz
   url: https://github.com/captain-pool/GSOC/releases/download/1.0.0/esrgan.tar.gz
-  model: .
+  model: ersgan
   model_type: saved_model
   input_get: get_beach
   inputs:
