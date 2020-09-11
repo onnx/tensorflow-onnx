@@ -564,6 +564,7 @@ class Einsum:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         del node.attr["N"]
+        node.attr["equation"].s = node.attr["equation"].s.lower()
 
 
 @tf_op("IsFinite")
