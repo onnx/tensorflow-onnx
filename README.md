@@ -2,8 +2,8 @@
 
 | Build Type | OS | Python | Tensorflow | Onnx opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7 | 1.12-1.15, 2.1-2.2 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7 | 1.12-1.15, 2.1-2.2 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.3 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.3 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
 
 ## Supported Versions
 
@@ -20,7 +20,7 @@ If you want the graph to be generated with a specific opset, use ```--opset``` i
 
 We support all ```tf-1.x graphs```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 and up```. tf2onnx-1.5.4 was the last version that was tested all the way back to tf-1.4.
 
-There is now ```experimental support for tf-2.x```. 
+There is now ```support for tf-2.x```. 
 With the exception of LSTM unit tests, all unit tests are enabled and passing.
 Unit tests that we still need to fix are marked with ```@skip_tf2```.
 GRU/LSTM's are converting but not runnable due to type/shape inference issues at runtime (working on that one).
