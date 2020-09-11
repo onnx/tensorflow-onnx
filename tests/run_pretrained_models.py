@@ -51,8 +51,7 @@ PERFITER = 1000
 def get_beach(shape):
     """Get beach image as input."""
     resize_to = shape[1:3]
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        '..', 'tests', "beach.jpg")
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beach.jpg")
     img = PIL.Image.open(path)
     img = img.resize(resize_to, PIL.Image.ANTIALIAS)
     img_np = np.array(img).astype(np.float32)
@@ -247,7 +246,21 @@ class Test(object):
         if self.model_type in ["checkpoint"]:
             graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
-            graph_def, input_names, outputs = tf_loader.from_saved_model(model_path, input_names, outputs, self.tag)
+            try:
+                res = tf_loader.from_saved_model(
+                    model_path, input_names, outputs, self.tag, self.signatures, self.concrete_function, self.large_model)
+            except OSError:
+                model_path = dir_name
+                logger.info("Load model(2) from %r", model_path)
+                res = tf_loader.from_saved_model(
+                    model_path, input_names, outputs, self.tag, self.signatures, self.concrete_function, self.large_model)
+            if len(res) == 5:
+                graph_def, input_names, outputs, concrete_func, imported = res
+            elif len(res) == 3:
+                graph_def, input_names, outputs = res
+                concrete_func, imported = None, None
+            else:
+                raise OSError("Unexpected number of results %r." % len(res))
         elif self.model_type in ["keras"]:
             graph_def, input_names, outputs = tf_loader.from_keras(model_path, input_names, outputs)
         else:
