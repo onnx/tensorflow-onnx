@@ -51,7 +51,8 @@ PERFITER = 1000
 def get_beach(shape):
     """Get beach image as input."""
     resize_to = shape[1:3]
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beach.jpg")
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        '..', 'tests', "beach.jpg")
     img = PIL.Image.open(path)
     img = img.resize(resize_to, PIL.Image.ANTIALIAS)
     img_np = np.array(img).astype(np.float32)
