@@ -131,6 +131,7 @@ esrgan-tf2:
     - Identity:0
   rtol: 0.02
   atol: 0.0005
+  tf_min_version: 2.1
 
 inception_v3_slim:
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz
