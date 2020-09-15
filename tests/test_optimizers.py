@@ -918,8 +918,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_val = np.array([1, 2, 3], dtype=np.float32)
         tensor_1 = helper.make_tensor("tensor_1", TensorProto.FLOAT, const_val.shape, const_val)
         tensor_2 = helper.make_tensor("tensor_2", TensorProto.FLOAT, const_val.shape, const_val)
-        tensor_3 = helper.make_tensor("tensor_3", TensorProto.FLOAT, const_val.shape, const_val.tobytes(), raw=True)
-        tensor_4 = helper.make_tensor("tensor_4", TensorProto.FLOAT, const_val.shape, const_val.tobytes(), raw=True)
+        tensor_3 = helper.make_tensor("tensor_3", TensorProto.FLOAT, const_val.shape, const_val)
+        tensor_4 = helper.make_tensor("tensor_4", TensorProto.FLOAT, const_val.shape, const_val)
         node0 = helper.make_node('Constant', inputs=[], outputs=["value0"], value=tensor_1)
         node1 = helper.make_node('Constant', inputs=[], outputs=["value1"], value=tensor_2)
         node2 = helper.make_node('Constant', inputs=[], outputs=["value2"], value=tensor_3)
@@ -941,8 +941,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
     def test_duplicated_duplicated_constant_and_initializer(self):
         const_val = np.array([1, 2, 3], dtype=np.float32)
-        tensor_1 = helper.make_tensor("value0", TensorProto.FLOAT, const_val.shape, const_val)
-        tensor_2 = helper.make_tensor("value1", TensorProto.FLOAT, const_val.shape, const_val)
+        tensor_1 = helper.make_tensor("value0", TensorProto.FLOAT, const_val.shape, const_val.tobytes(), raw=True)
+        tensor_2 = helper.make_tensor("value1", TensorProto.FLOAT, const_val.shape, const_val.tobytes(), raw=True)
         tensor_3 = helper.make_tensor("value2", TensorProto.FLOAT, const_val.shape, const_val.tobytes(), raw=True)
         tensor_4 = helper.make_tensor("value3", TensorProto.FLOAT, const_val.shape, const_val.tobytes(), raw=True)
         node0 = helper.make_node('Constant', inputs=[], outputs=["value0"], value=tensor_1)
