@@ -168,7 +168,16 @@ def from_graphdef(model_path, input_names, output_names):
     with tf_session() as sess:
         graph_def = tf_graphdef()
         with tf_gfile.GFile(model_path, 'rb') as f:
-            graph_def.ParseFromString(f.read())
+            try:
+                content = f.read()
+            except Exception as e:
+                raise OSError(
+                    "Unable to load file '{}'.".format(model_path)) from e
+            try:
+                graph_def.ParseFromString(content)
+            except Exception as e:
+                raise RuntimeError(
+                    "Unable to parse file '{}'.".format(model_path)) from e
             tf.import_graph_def(graph_def, name='')
         input_names = inputs_without_resource(sess, input_names)
         frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)

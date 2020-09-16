@@ -246,7 +246,13 @@ class Test(object):
         if self.model_type in ["checkpoint"]:
             graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
-            graph_def, input_names, outputs = tf_loader.from_saved_model(model_path, input_names, outputs, self.tag)
+            try:
+                res = tf_loader.from_saved_model(model_path, input_names, outputs, self.tag)
+            except OSError:
+                model_path = dir_name
+                logger.info("Load model(2) from %r", model_path)
+                res = tf_loader.from_saved_model(model_path, input_names, outputs, self.tag)
+            graph_def, input_names, outputs = res[:3]
         elif self.model_type in ["keras"]:
             graph_def, input_names, outputs = tf_loader.from_keras(model_path, input_names, outputs)
         else:

@@ -648,7 +648,10 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _slice_handler(self, trans, node):
         axes = None
         if self._g.opset < 10:
-            axes = node.get_attr("axes").ints
+            axes_values = node.get_attr("axes")
+            if not axes_values:
+                return False
+            axes = axes_values.ints
             if axes == [0, 1, 2, 3]:
                 node.set_attr("axes", NCHW_TO_NHWC)
                 return self._switch_transpose_and_node(node, trans)
