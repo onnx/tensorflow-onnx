@@ -144,7 +144,7 @@ def compute_const_folding_using_tf(g, const_node_values):
     """Find nodes with constant inputs and compute their values using TF"""
     if const_node_values is None:
         const_node_values = {}
-    from tf2onnx.tf_loader import tf_session, tf_reset_default_graph
+    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
 
     ops = g.get_operations()
     outputs_to_values = {}
@@ -167,28 +167,34 @@ def compute_const_folding_using_tf(g, const_node_values):
             # Find ops with constant inputs and compute their values
             input_names = [i.name for i in node.inputs]
             output_names = [i.name for i in node.outputs]
-            can_fold = len(input_names) > 0 and all(inp in outputs_to_values for inp in input_names)
+            can_fold = node.type not in ['Enter']
+            can_fold = can_fold and len(input_names) > 0 and all(inp in outputs_to_values for inp in input_names)
             # We can only fold nodes with a single output
             can_fold = can_fold and len(output_names) == 1 and output_names[0] not in outputs_to_values
             # Skip if value already computed, used, and discarded
             can_fold = can_fold and output_names[0] not in unneeded_outputs
             if can_fold:
-                g = tf.Graph()
-                with g.as_default():
+                # Make a mini graph containing just the node to fold
+                g2 = tf.Graph()
+                with g2.as_default():
                     for inp in input_names:
-                        tf.compat.v1.placeholder(outputs_to_dtypes[inp], name=inp.split(':')[0])
-                mini_graph_def = g.as_graph_def()
-                mini_graph_def.node.append(node.node_def)
-                tf_reset_default_graph()
-                feed_dict = {}
-                for inp in input_names:
-                    feed_dict[inp] = outputs_to_values[inp]
-                with tf_session() as sess:
-                    tf.import_graph_def(mini_graph_def, name='')
-                    results = sess.run(output_names, feed_dict=feed_dict)
-                outputs_to_values[output_names[0]] = results[0]
-                outputs_to_dtypes[output_names[0]] = node.outputs[0].dtype
-                progress = True
+                        tf_placeholder(outputs_to_dtypes[inp], name=inp.split(':')[0])
+                    mini_graph_def = g2.as_graph_def()
+                    mini_graph_def.node.append(node.node_def)
+                g3 = tf.Graph()
+                with g3.as_default():
+                    feed_dict = {}
+                    for inp in input_names:
+                        feed_dict[inp] = outputs_to_values[inp]
+                    try:
+                        with tf_session() as sess:
+                            tf.import_graph_def(mini_graph_def, name='')
+                            results = sess.run(output_names, feed_dict=feed_dict)
+                        outputs_to_values[output_names[0]] = results[0]
+                        outputs_to_dtypes[output_names[0]] = node.outputs[0].dtype
+                        progress = True
+                    except Exception:  # pylint: disable=broad-except
+                        logger.debug("Could not fold node %s", node.name)
         unneeded_outputs.update(outputs_to_values.keys())
         for node in ops:
             # Mark values we need to keep
@@ -204,6 +210,12 @@ def compute_const_folding_using_tf(g, const_node_values):
             if node in outputs_to_values:
                 del outputs_to_values[node]
                 del outputs_to_dtypes[node]
+
+    for node in ops:
+        # We don't need the constants any more
+        if node.type in ["Const", "ConstV2"] and node.outputs[0].name in outputs_to_values:
+            del outputs_to_values[node.outputs[0].name]
+            del outputs_to_dtypes[node.outputs[0].name]
 
     logger.info("Computed %d values for constant folding", len(outputs_to_values))
     return outputs_to_values, outputs_to_dtypes
