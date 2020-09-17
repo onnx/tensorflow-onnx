@@ -5,6 +5,7 @@ the predictions from tensorflow to check there is no
 discrepencies. Inferencing time is also compared between
 *onnxruntime*, *tensorflow* and *tensorflow.lite*.
 """
+from onnxruntime import InferenceSession
 import os
 import subprocess
 import timeit
@@ -37,7 +38,7 @@ print('outputs:', output_names)
 ########################################
 # Testing the model.
 input = np.random.randn(2, 4, 4).astype(np.float32)
-expected  = model.predict(input)
+expected = model.predict(input)
 print(expected)
 
 ########################################
@@ -57,7 +58,6 @@ print(proc.stderr.decode('ascii'))
 
 ########################################
 # Runs onnxruntime.
-from onnxruntime import InferenceSession
 session = InferenceSession("simple_rnn.onnx")
 got = session.run(None, {'input_1:0': input})
 print(got[0])
@@ -79,7 +79,7 @@ converter = tf.lite.TFLiteConverter.from_saved_model("simple_rnn")
 tflite_model = converter.convert()
 with open("simple_rnn.tflite", "wb") as f:
     f.write(tflite_model)
-    
+
 # Builds an interpreter
 interpreter = tf.lite.Interpreter(model_path='simple_rnn.tflite')
 interpreter.allocate_tensors()
@@ -89,13 +89,15 @@ print("input_details", input_details)
 print("output_details", output_details)
 index = input_details[0]['index']
 
+
 def tflite_predict(input, interpreter=interpreter, index=index):
     res = []
     for i in range(input.shape[0]):
-        interpreter.set_tensor(index, input[i:i+1])
+        interpreter.set_tensor(index, input[i:i + 1])
         interpreter.invoke()
         res.append(interpreter.get_tensor(output_details[0]['index']))
     return np.vstack(res)
+
 
 print(input[0:1].shape, "----", input_details[0]['shape'])
 output_data = tflite_predict(input, interpreter, index)

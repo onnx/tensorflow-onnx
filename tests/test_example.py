@@ -29,7 +29,7 @@ class TestExample(unittest.TestCase):
         err = proc.stderr.decode('ascii')
         self.assertTrue(err is not None)
 
-    @check_tf_min_version("2.0", "use tf.keras")
+    @check_tf_min_version("2.3", "use tf.keras")
     @check_opset_min_version(12)
     @check_opset_max_version(13)
     def test_end2end_tfkeras(self):
