@@ -140,6 +140,85 @@ def compress_graph_def(graph_def):
                 tensor.tensor_content = b''
     return const_node_values
 
+def compute_const_folding_using_tf(g, const_node_values):
+    """Find nodes with constant inputs and compute their values using TF"""
+    if const_node_values is None:
+        const_node_values = {}
+    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
+
+    ops = g.get_operations()
+    outputs_to_values = {}
+    outputs_to_dtypes = {}
+
+    for node in ops:
+        # Load values of constants. Use const_node_values if possible
+        if node.type in ["Const", "ConstV2"]:
+            tensor = node.node_def.attr["value"].tensor
+            if node.name in const_node_values:
+                tensor.tensor_content = const_node_values[node.name]
+            outputs_to_values[node.outputs[0].name] = get_tf_tensor_data(tensor)
+            outputs_to_dtypes[node.outputs[0].name] = node.outputs[0].dtype
+
+    unneeded_outputs = set()
+    progress = True
+    while progress:
+        progress = False
+        for node in ops:
+            # Find ops with constant inputs and compute their values
+            input_names = [i.name for i in node.inputs]
+            output_names = [i.name for i in node.outputs]
+            can_fold = node.type not in ['Enter']
+            can_fold = can_fold and len(input_names) > 0 and all(inp in outputs_to_values for inp in input_names)
+            # We can only fold nodes with a single output
+            can_fold = can_fold and len(output_names) == 1 and output_names[0] not in outputs_to_values
+            # Skip if value already computed, used, and discarded
+            can_fold = can_fold and output_names[0] not in unneeded_outputs
+            if can_fold:
+                # Make a mini graph containing just the node to fold
+                g2 = tf.Graph()
+                with g2.as_default():
+                    for inp in input_names:
+                        tf_placeholder(outputs_to_dtypes[inp], name=inp.split(':')[0])
+                    mini_graph_def = g2.as_graph_def()
+                    mini_graph_def.node.append(node.node_def)
+                g3 = tf.Graph()
+                with g3.as_default():
+                    feed_dict = {}
+                    for inp in input_names:
+                        feed_dict[inp] = outputs_to_values[inp]
+                    try:
+                        with tf_session() as sess:
+                            tf.import_graph_def(mini_graph_def, name='')
+                            results = sess.run(output_names, feed_dict=feed_dict)
+                        outputs_to_values[output_names[0]] = results[0]
+                        outputs_to_dtypes[output_names[0]] = node.outputs[0].dtype
+                        progress = True
+                    except Exception:  # pylint: disable=broad-except
+                        logger.debug("Could not fold node %s", node.name)
+        unneeded_outputs.update(outputs_to_values.keys())
+        for node in ops:
+            # Mark values we need to keep
+            input_names = [i.name for i in node.inputs]
+            output_names = [i.name for i in node.outputs]
+            if len(output_names) == 1 and output_names[0] in outputs_to_values:
+                continue
+            for i in input_names:
+                if i in unneeded_outputs:
+                    unneeded_outputs.remove(i)
+        for node in unneeded_outputs:
+            # Remove unneeded values to prevent memory usage explosion
+            if node in outputs_to_values:
+                del outputs_to_values[node]
+                del outputs_to_dtypes[node]
+
+    for node in ops:
+        # We don't need the constants any more
+        if node.type in ["Const", "ConstV2"] and node.outputs[0].name in outputs_to_values:
+            del outputs_to_values[node.outputs[0].name]
+            del outputs_to_dtypes[node.outputs[0].name]
+
+    logger.info("Computed %d values for constant folding", len(outputs_to_values))
+    return outputs_to_values, outputs_to_dtypes
 
 def tflist_to_onnx(g, shape_override, const_node_values=None):
     """

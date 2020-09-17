@@ -23,7 +23,7 @@ from tf2onnx.graph import Graph
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.tf_loader import is_function, resolve_functions, set_function
-from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version
+from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
 
 from . import constants, logging, schemas, utils, handler
 
@@ -33,6 +33,35 @@ logger = logging.getLogger(__name__)
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
 # pylint: disable=unused-variable
 
+def fold_constants_using_tf(g, outputs_to_values, outputs_to_dtypes):
+    ops = g.get_nodes()
+    # pylint: disable=too-many-nested-blocks
+    keep_looking = True
+    while keep_looking:
+        keep_looking = False
+        for idx, op in enumerate(ops):
+            if op.output and op.output[0] in outputs_to_values:
+                logger.info("folding node using tf type=%s, name=%s" % (op.type, op.name))
+                val = outputs_to_values[op.output[0]]
+
+                new_node_name = utils.make_name(op.name)
+                new_output_name = new_node_name
+                old_output_name = op.output[0]
+                old_node_name = op.name
+                logger.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
+                ops[idx] = g.make_const(new_node_name, val)
+
+                logger.debug("replace old output [%s] with new output [%s]", old_output_name, new_output_name)
+                # need to re-write the consumers input name to use the const name
+                consumers = g.find_output_consumers(old_output_name)
+                if consumers:
+                    for consumer in consumers:
+                        g.replace_input(consumer, old_output_name, new_output_name)
+
+                # keep looking until there is nothing we can fold.
+                keep_looking = True
+
+    g.reset_nodes(ops)
 
 def rewrite_constant_fold(g, ops):
     """
@@ -378,6 +407,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if target is None:
         target = constants.DEFAULT_TARGET
 
+    outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values)
+
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
         tensorflow_to_onnx(tf_graph, shape_override, const_node_values)
     if not is_subgraph:
@@ -450,6 +481,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     if inputs_as_nchw:
         transpose_inputs(g, inputs_as_nchw)
+
+    fold_constants_using_tf(g, outputs_to_values, outputs_to_dtypes)
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
