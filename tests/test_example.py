@@ -39,6 +39,16 @@ class TestExample(unittest.TestCase):
                       "Optimizing ONNX model",
                       "Using opset <onnx, 12>"])
 
+    @check_tf_min_version("2.3", "use tf.keras")
+    @check_opset_min_version(12)
+    @check_opset_max_version(13)
+    def test_end2end_tfhub(self):
+        self.run_example(
+            "end2end_tfhub.py",
+            expected=["ONNX model is saved at efficientnetb0clas.onnx",
+                      "Optimizing ONNX model",
+                      "Using opset <onnx, 12>"])
+
 
 if __name__ == '__main__':
     unittest.main()
