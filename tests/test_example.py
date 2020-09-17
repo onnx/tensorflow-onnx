@@ -22,12 +22,14 @@ class TestExample(unittest.TestCase):
         proc = subprocess.run(('python %s' % full).split(),
                               capture_output=True, check=True)
         self.assertEqual(0, proc.returncode)
-        if expected is not None:
-            out = proc.stdout.decode('ascii')
-            for exp in expected:
-                self.assertIn(exp, out)
+        out = proc.stdout.decode('ascii')
+        if 'tensorflow_hub not installed' in out:
+            return
         err = proc.stderr.decode('ascii')
         self.assertTrue(err is not None)
+        if expected is not None:
+            for exp in expected:
+                self.assertIn(exp, out)
 
     @check_tf_min_version("2.3", "use tf.keras")
     @check_opset_min_version(12)
