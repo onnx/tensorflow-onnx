@@ -13,8 +13,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Input
-from tensorflow.python.saved_model import tag_constants
-from tensorflow.python.tools import freeze_graph
 
 ########################################
 # Creates the model.

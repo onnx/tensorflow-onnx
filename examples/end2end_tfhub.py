@@ -7,21 +7,26 @@ discrepencies. Inferencing time is also compared between
 """
 from onnxruntime import InferenceSession
 import os
+import sys
 import subprocess
 import timeit
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers, Input
-from tensorflow.python.saved_model import tag_constants
-import tensorflow_hub as tfhub
+from tensorflow.keras import Input
+try:
+    import tensorflow_hub as tfhub
+except ImportError:
+    # no tensorflow_hub
+    print("tensorflow_hub not installed.")
+    sys.exit(0)
 
 ########################################
 # Downloads the model.
 hub_layer = tfhub.KerasLayer(
     "https://tfhub.dev/google/efficientnet/b0/classification/1")
 model = keras.Sequential()
-model.add(tf.keras.Input(shape=(224, 224, 3), dtype=tf.float32))
+model.add(Input(shape=(224, 224, 3), dtype=tf.float32))
 model.add(hub_layer)
 print(model.summary())
 
