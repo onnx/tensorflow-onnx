@@ -164,7 +164,7 @@ class Test(object):
         if not os.path.exists(fpath):
             utils.get_url(url, fpath)
         model_path = os.path.join(dir_name, self.local)
-        if not os.path.exists(model_path):
+        if not os.path.exists(model_path) or self.local == ".":
             if ftype == 'tgz':
                 tar = tarfile.open(fpath)
                 tar.extractall(dir_name)
@@ -260,7 +260,7 @@ class Test(object):
         if self.url:
             _, dir_name = self.download_model()
             logger.info("Downloaded to %s", dir_name)
-            model_path = os.path.join(dir_name, self.local)
+            model_path = os.path.join(dir_name, self.local) if self.local != "." else dir_name
         else:
             model_path = self.local
 
