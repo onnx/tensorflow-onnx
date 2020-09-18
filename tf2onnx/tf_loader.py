@@ -316,18 +316,21 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
             raise ValueError(err_large_model)
         raise e
 
-    return frozen_graph, inputs, outputs
+    return frozen_graph, inputs, outputs, concrete_func, imported
 
 
 def from_saved_model(model_path, input_names, output_names, tag=None,
-                     signatures=None, concrete_function=None, large_model=False):
+                     signatures=None, concrete_function=None, large_model=False, return_concrete_func=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
     if is_tf2():
-        frozen_graph, input_names, output_names = \
+        frozen_graph, input_names, output_names, concrete_func, imported = \
             _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function, large_model)
+        if return_concrete_func:
+            tf_reset_default_graph()
+            return frozen_graph, input_names, output_names, concrete_func, imported
     else:
         with tf_session() as sess:
             frozen_graph, input_names, output_names = \
