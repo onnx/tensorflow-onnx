@@ -2822,7 +2822,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
-    @check_opset_min_version(11, "NonMaxSuppressionV4")
+    @check_opset_min_version(10, "NonMaxSuppressionV4")
     def test_non_max_suppression_v4(self):
         box_num = 10
         boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
@@ -2835,7 +2835,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
-    @check_opset_min_version(11, "NonMaxSuppressionV4")
+    @check_opset_min_version(10, "NonMaxSuppressionV4")
     def test_non_max_suppression_v4_no_padding(self):
         box_num = 10
         boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
@@ -2849,7 +2849,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
     @check_tf_min_version("1.15")
-    @check_opset_min_version(11, "NonMaxSuppressionV5")
+    @check_opset_min_version(10, "NonMaxSuppressionV5")
     def test_non_max_suppression_v5(self):
         box_num = 10
         boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
