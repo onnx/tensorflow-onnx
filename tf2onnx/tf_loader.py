@@ -290,8 +290,8 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         utils.make_sure(hasattr(imported, "__call__"), err_no_call)
         utils.make_sure(concrete_function_index < len(imported.__call__.concrete_functions),
                         err_index, concrete_function_index, len(imported.__call__.concrete_functions) - 1)
-        sig = imported.__call__.concrete_functions[concrete_function_index].structured_input_signature[0][0]
-        concrete_func = imported.__call__.get_concrete_function(sig)
+        sig = imported.__call__.concrete_functions[concrete_function_index].structured_input_signature[0]
+        concrete_func = imported.__call__.get_concrete_function(*sig)
     elif signature_def:
         utils.make_sure(signature_def[0] in valid_sigs, err_sig_nomatch, signature_def[0])
         concrete_func = imported.signatures[signature_def[0]]
