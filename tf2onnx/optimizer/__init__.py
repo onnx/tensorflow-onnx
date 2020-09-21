@@ -17,6 +17,8 @@ from .loop_optimizer import LoopOptimizer
 from .back_to_back_optimizer import BackToBackOptimizer
 from .upsample_optimizer import UpsampleOptimizer
 from .. import logging
+from tf2onnx import utils
+
 
 # optimizer sequence need to be considered carefully
 _optimizers = OrderedDict([
@@ -49,7 +51,11 @@ def optimize_graph(graph):
         for name, factory in opts.items():
             try:
                 logger.verbose("Apply %s", name)
-                current = copy.deepcopy(graph)
+                # current = copy.deepcopy(graph)
+                model = graph.make_model("debug")
+                utils.save_protobuf("debugopt.onnx", model)
+                print("doing", name)
+                current = graph
                 opt = factory()
                 graph = opt.optimize(current) or graph
                 continue_flag = continue_flag or opt.graph_been_opt

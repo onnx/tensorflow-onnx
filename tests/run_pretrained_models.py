@@ -304,6 +304,7 @@ class Test(object):
 
         if utils.is_debug_mode():
             utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
+        utils.save_protobuf("frozen_graph_def.pb", graph_def)
 
         if self.large_model:
             inputs = {}
@@ -392,7 +393,7 @@ class Test(object):
                         utils.save_protobuf(self.converted_model, model_proto)
                     logger.info("Created %s", self.converted_model)
 
-            except Exception:
+            except ZeroDivisionError:
                 logger.error("To_ONNX FAIL", exc_info=1)
                 return False
 
@@ -405,6 +406,7 @@ class Test(object):
             else:
                 raise ValueError("unknown backend")
             logger.info("Run_ONNX OK")
+            print("{},{},{}\n".format(name, self.tf_runtime * 1000 / PERFITER, self.onnx_runtime * 1000 / PERFITER))
 
             try:
                 if self.skip_tensorflow:
@@ -418,10 +420,10 @@ class Test(object):
                             np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
                     logger.info("Results: OK")
                 return True
-            except Exception:
+            except ZeroDivisionError:
                 logger.error("Results", exc_info=1)
 
-        except Exception:
+        except ZeroDivisionError:
             logger.error("Run_ONNX FAIL", exc_info=1)
 
         return False
@@ -596,7 +598,7 @@ def main():
             ret = t.run_test(test, backend=args.backend, onnx_file=args.onnx_file,
                              opset=args.opset, extra_opset=args.extra_opset, perf=args.perf,
                              fold_const=args.fold_const)
-        except Exception:
+        except ZeroDivisionError:
             logger.error("Failed to run %s", test, exc_info=1)
             ret = None
         finally:
