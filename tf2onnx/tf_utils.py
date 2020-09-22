@@ -16,8 +16,7 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.core.framework import types_pb2, tensor_pb2
-from tensorflow.python.framework import tensor_util
-
+from tensorflow.python.framework import tensor_util, dtypes
 from onnx import helper, onnx_pb, numpy_helper
 
 from tf2onnx.utils import make_sure, is_tf_const_op, port_name
@@ -51,7 +50,21 @@ TF_TO_ONNX_DTYPE = {
 
 def tf_to_onnx_tensor(tensor, name=""):
     """Convert tensorflow tensor to onnx tensor."""
-    np_data = get_tf_tensor_data(tensor)
+    try:
+        np_data = get_tf_tensor_data(tensor)
+    except ValueError as e:
+        shape = [d.size for d in tensor.tensor_shape.dim]
+        num_elements = np.prod(shape, dtype=np.int64)
+        tensor_dtype = dtypes.as_dtype(tensor.dtype)
+        dtype = tensor_dtype.as_numpy_dtype
+        if num_elements == 0:
+            np_data = np.zeros(shape, dtype=dtype)
+            logger.info("tf_to_onnx_tensor: get_tf_tensor_data failed for node %r, replace by an %r", name, np_data)
+        else:
+            raise ValueError(
+                "Issue with name='{} shape={} num_elements={} dtype={}".format(
+                    node.name, shape, num_elements, dtype)) from e
+
     if np_data.dtype == np.object:
         # assume np_data is string, numpy_helper.from_array accepts ndarray,
         # in which each item is of str while the whole dtype is of object.
@@ -124,6 +137,7 @@ def get_tf_node_attr(node, name):
 def get_tf_version():
     return LooseVersion(tf.__version__)
 
+
 def compress_graph_def(graph_def):
     """
     Remove large const values from graph. This lets us import the graph and run shape inference without TF crashing.
@@ -133,9 +147,10 @@ def compress_graph_def(graph_def):
     for node_def in node_defs:
         if node_def.op == 'Const':
             tensor = node_def.attr["value"].tensor
-            # Small constants are sometimes used to store shape information and must be maintained
+            # Small constants are sometimes used to store shape information and must be maintained.
+            # The converter may rewrite some of them.
             if len(tensor.tensor_content) > 1000:
-                make_sure(node_def.name not in const_node_values, "Two nodes in graph have same name %s", node_def.name)
+                make_sure(node_def.name not in const_node_values, "Two nodes in graph have same name %r", node_def.name)
                 const_node_values[node_def.name] = tensor.tensor_content
                 tensor.tensor_content = b''
     return const_node_values
@@ -154,9 +169,27 @@ def compute_const_folding_using_tf(g, const_node_values):
         # Load values of constants. Use const_node_values if possible
         if node.type in ["Const", "ConstV2"]:
             tensor = node.node_def.attr["value"].tensor
-            if node.name in const_node_values:
+
+            if node.name in const_node_values and len(tensor.tensor_content) == 0:
+                unfolded = True
                 tensor.tensor_content = const_node_values[node.name]
-            outputs_to_values[node.outputs[0].name] = get_tf_tensor_data(tensor)
+            else:
+                unfolded = False
+            try:
+                val = get_tf_tensor_data(tensor)
+            except ValueError as e:
+                shape = [d.size for d in tensor.tensor_shape.dim]
+                num_elements = np.prod(shape, dtype=np.int64)
+                tensor_dtype = dtypes.as_dtype(tensor.dtype)
+                dtype = tensor_dtype.as_numpy_dtype
+                if num_elements == 0:
+                    val = np.zeros(shape, dtype=dtype)
+                    logger.info("compute_const_folding_using_tf: get_tf_tensor_data failed for node %r, replace by an %r", node.name, val)
+                else:
+                    raise ValueError(
+                        "Issue with name='{} (unfolded={}) shape={} num_elements={} dtype={}".format(
+                            node.name, unfolded, shape, num_elements, dtype)) from e
+            outputs_to_values[node.outputs[0].name] = val
             outputs_to_dtypes[node.outputs[0].name] = node.outputs[0].dtype
 
     unneeded_outputs = set()
@@ -289,7 +322,7 @@ def tflist_to_onnx(g, shape_override, const_node_values=None):
                 functions[nattr.name] = input_shapes
             elif a == "value":
                 tensor = get_tf_node_attr(node, a)
-                if const_node_values and node.name in const_node_values:
+                if const_node_values and node.name in const_node_values and len(tensor.tensor_content) == 0:
                     tensor.tensor_content = const_node_values[node.name]
                 onnx_tensor = tf_to_onnx_tensor(tensor, name=port_name(node.name))
                 attr[a] = onnx_tensor
