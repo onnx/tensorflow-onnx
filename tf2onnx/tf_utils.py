@@ -16,7 +16,7 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.core.framework import types_pb2, tensor_pb2
-from tensorflow.python.framework import tensor_util, dtypes
+from tensorflow.python.framework import tensor_util, dtypes as tf_dtypes
 from onnx import helper, onnx_pb, numpy_helper
 
 from tf2onnx.utils import make_sure, is_tf_const_op, port_name
@@ -55,7 +55,7 @@ def tf_to_onnx_tensor(tensor, name=""):
     except ValueError as e:
         shape = [d.size for d in tensor.tensor_shape.dim]
         num_elements = np.prod(shape, dtype=np.int64)
-        tensor_dtype = dtypes.as_dtype(tensor.dtype)
+        tensor_dtype = tf_dtypes.as_dtype(tensor.dtype)
         dtype = tensor_dtype.as_numpy_dtype
         if num_elements == 0:
             np_data = np.zeros(shape, dtype=dtype)
@@ -180,11 +180,12 @@ def compute_const_folding_using_tf(g, const_node_values):
             except ValueError as e:
                 shape = [d.size for d in tensor.tensor_shape.dim]
                 num_elements = np.prod(shape, dtype=np.int64)
-                tensor_dtype = dtypes.as_dtype(tensor.dtype)
+                tensor_dtype = tf_dtypes.as_dtype(tensor.dtype)
                 dtype = tensor_dtype.as_numpy_dtype
                 if num_elements == 0:
                     val = np.zeros(shape, dtype=dtype)
-                    logger.info("compute_const_folding_using_tf: get_tf_tensor_data failed for node %r, replace by an %r", node.name, val)
+                    logger.info("compute_const_folding_using_tf: get_tf_tensor_data failed "
+                                "for node %r, replace by an %r", node.name, val)
                 else:
                     raise ValueError(
                         "Issue with name='{} (unfolded={}) shape={} num_elements={} dtype={}".format(
