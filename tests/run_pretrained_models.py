@@ -57,7 +57,7 @@ def get_beach(shape):
     img = img.resize(resize_to, PIL.Image.ANTIALIAS)
     img_np = np.array(img).astype(np.float32)
     img_np = np.stack([img_np] * shape[0], axis=0).reshape(shape)
-    return img_np
+    return img_np / 255
 
 
 def get_random(shape):
@@ -84,6 +84,18 @@ def get_zeros(shape):
     """Get zeros."""
     return np.zeros(shape).astype(np.float32)
 
+def get_zeros_int32(shape):
+    """Get zeros."""
+    return np.zeros(shape).astype(np.int32)
+
+def get_zeros_int64(shape):
+    """Get zeros."""
+    return np.zeros(shape).astype(np.int64)
+
+def get_wav(shape):
+    """Get sound data."""
+    return np.sin(np.linspace(-np.pi, np.pi, shape[0]), dtype=np.float32)
+
 
 _INPUT_FUNC_MAPPING = {
     "get_beach": get_beach,
@@ -92,6 +104,9 @@ _INPUT_FUNC_MAPPING = {
     "get_ramp": get_ramp,
     "get_ones": get_ones,
     "get_zeros": get_zeros,
+    "get_wav": get_wav,
+    "get_zeros_int32": get_zeros_int32,
+    "get_zeros_int64": get_zeros_int64,
 }
 
 OpsetConstraint = namedtuple("OpsetConstraint", "domain, min_version, max_version, excluded_version")
@@ -137,7 +152,10 @@ class Test(object):
     def make_input(self, v):
         """Allows each input to specify its own function while defaulting to the input_get function"""
         if isinstance(v, dict):
-            return _INPUT_FUNC_MAPPING[v["input_get"]](v["shape"])
+            if "input_get" in v:
+                return _INPUT_FUNC_MAPPING[v["input_get"]](v["shape"])
+            if "value" in v:
+                return np.array(v["value"])
         return self.input_func(v)
 
     def download_model(self):
