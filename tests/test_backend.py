@@ -24,6 +24,7 @@ from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tf_loader import is_tf2
+from tf2onnx.onnx_opset.signal import DFT_constant
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
 
@@ -3623,6 +3624,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
                           [1., 3., 1.],
                           [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
         self._conv_kernel_as_input_test(x_val, w_val)
+
+    def test_rfft_ops(self):
+
+        def DFT_slow(x, M):
+            xt = x.T
+            res = np.dot(M, xt)
+            return np.transpose(res, (0, 2, 1))
+
+        x_val = make_xval([2, 4]).astype(np.float32)
+        M_both = DFT_constant(x_val.shape[1], x_val.dtype, x_val.shape[1])
+        fft = DFT_slow(x_val, M_both)
+        fft_npy = np.fft.rfft(x_val)
+        assert_almost_equal(fft[0, :, :], np.real(fft_npy))
+        assert_almost_equal(fft[1, :, :], np.imag(fft_npy))
+
+        for op in [tf.signal.rfft]:
+            x_val = make_xval([3, 4]).astype(np.float32)
+            def func(x):
+                op_ = op(x)
+                return tf.abs(op_, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 
 if __name__ == '__main__':
