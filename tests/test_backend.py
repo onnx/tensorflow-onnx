@@ -18,6 +18,10 @@ from numpy.testing import assert_almost_equal
 import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
+try:
+    from tensorflow import signal as tf_signal
+except ImportError:
+    tf_signal = None
 from backend_test_base import Tf2OnnxBackendTestBase
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
@@ -3625,6 +3629,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                           [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
         self._conv_kernel_as_input_test(x_val, w_val)
 
+    @unittest.skipIf(tf_signal is None, reason="TF does not have submodule signal.")
     def test_rfft_ops(self):
 
         def DFT_slow(x, M):
@@ -3641,7 +3646,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         x_val = make_xval([3, 4]).astype(np.float32)
         def func(x):
-            op_ = tf.signal.rfft(x)
+            op_ = tf_signal.rfft(x)
             return tf.abs(op_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
