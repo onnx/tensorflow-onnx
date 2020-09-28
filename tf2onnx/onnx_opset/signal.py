@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring
 
-def make_dft_constant(N, dtype, fft_length):
-    n = np.arange(N)
-    k = n.reshape((N, 1)).astype(np.float64)
-    mat = np.exp(-2j * np.pi * k * n / N)
+def make_dft_constant(length, dtype, fft_length):
+    n = np.arange(length)
+    k = n.reshape((length, 1)).astype(np.float64)
+    mat = np.exp(-2j * np.pi * k * n / length)
     mat = mat[:fft_length // 2 + 1]
     both = np.empty((2,) + mat.shape, dtype=dtype)
     both[0, :, :] = np.real(mat)
