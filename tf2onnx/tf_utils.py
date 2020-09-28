@@ -236,8 +236,8 @@ def tflist_to_onnx(g, shape_override, const_node_values=None):
                     "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
                     "Toutput_types",
                     "Tcomplex", "Treal",  # For RFFT, Tcomplex is ignored because
-                                         # onnx.helper.make_node fails,
-                                         # TODO: it should be added back.
+                                          # onnx.helper.make_node fails,
+                                          # TODO: it should be added back.
                     }
 
     node_list = g.get_operations()
