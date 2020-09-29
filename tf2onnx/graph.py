@@ -28,6 +28,13 @@ logger = logging.getLogger(__name__)
 # todo(pengwa): remove protected-access later
 # pylint: disable=broad-except,protected-access
 
+class ExternalTensorStorage():
+    """Passed into graph and node methods to accumulate tensors to save externally"""
+    def __init__(self):
+        self.name_to_tensor_data = {}
+        self.name_counter = 0
+        self.external_tensor_size_threshold = 1024
+        self.node_to_modified_value_attr = {}
 
 class Node(object):
     """A Node - wrapper around onnx nodes that we use for graph manipulations."""
@@ -93,16 +100,40 @@ class Node(object):
     def attr(self):
         return self._attr
 
-    @property
-    def attr_onnx(self):
-        """Return onnx valid attributes"""
+    def get_value_attr(self, external_tensor_storage=None):
+        """Return onnx attr for value property of node.
+        Attr is modified to point to external tensor data stored in external_tensor_storage, if included.
+        """
+        a = self._attr["value"]
+        if external_tensor_storage is not None and self in external_tensor_storage.node_to_modified_value_attr:
+            return external_tensor_storage.node_to_modified_value_attr[self]
+        if external_tensor_storage is None or a.type != AttributeProto.TENSOR:
+            return a
+        if np.product(a.t.dims) > external_tensor_storage.external_tensor_size_threshold:
+            a = copy.copy(a)
+            tensor_name = self.name + "_" + str(external_tensor_storage.name_counter)
+            external_tensor_storage.name_counter += 1
+            external_tensor_storage.name_to_tensor_data[tensor_name] = a.t.raw_data
+            external_tensor_storage.node_to_modified_value_attr[self] = a
+            a.t.raw_data = b'__EXTERNAL'
+            location = a.t.external_data.add()
+            location.key = "location"
+            location.value = tensor_name
+            a.t.data_location = TensorProto.EXTERNAL
+        return a
+
+    def get_onnx_attrs(self, external_tensor_storage=None):
+        """Return onnx valid attributes.
+        Attrs point to external tensor data stored in external_tensor_storage, if included."""
         schema = get_schema(self.type, self.graph.opset, self.domain)
         if schema is None and not (self.is_const() or self.is_graph_input()):
             logger.debug("Node %s uses non-stardard onnx op <%s, %s>, skip attribute check",
                          self.name, self.domain, self.type)
         onnx_attrs = {}
         for a in self._attr.values():
-            if schema is None or schema.has_attribute(a.name):
+            if a.name == "value":
+                onnx_attrs[a.name] = self.get_value_attr(external_tensor_storage)
+            elif schema is None or schema.has_attribute(a.name):
                 onnx_attrs[a.name] = a
         return onnx_attrs
 
@@ -333,7 +364,7 @@ class Node(object):
         self.graph.contained_graphs[self.name].update({attr_name: graph})
         graph.parent_graph = self.graph
 
-    def update_proto(self):
+    def update_proto(self, external_tensor_storage=None):
         """Update protobuf from internal structure."""
         nodes = list(self._op.input)
         for node in nodes:
@@ -351,10 +382,10 @@ class Node(object):
         attr_graphs = self.get_body_graphs()
         if attr_graphs:
             for attr_name, sub_graph in attr_graphs.items():
-                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name)
+                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name, external_tensor_storage)
                 self.set_attr(attr_name, graph_proto)
 
-        attr = list(self.attr_onnx.values())
+        attr = list(self.get_onnx_attrs(external_tensor_storage).values())
         if attr:
             self._op.attribute.extend(attr)
 
@@ -425,6 +456,8 @@ class Graph(object):
         self._nodes = []
         self._nodes_by_name = {}
         self._output_to_node_name = {}
+        self._output_to_consumers = {}
+        self._input_to_graph = {}
         self.shapes = {}
         self.graph_name = graph_name or "tf2onnx"
         self._is_subgraph = is_subgraph
@@ -471,7 +504,7 @@ class Graph(object):
                         body_graph.parent_graph = self
                         new_node.set_body_graph_as_attr(attr_name, body_graph)
 
-                self.replace_all_inputs(self.get_nodes(), o, new_output_name)
+                self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
                 self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
                 self.copy_shape(new_output_name, o)
                 self.copy_dtype(new_output_name, o)
@@ -576,6 +609,9 @@ class Graph(object):
 
         onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
+        for name2 in onnx_node.input:
+            self._register_input_name(name2, onnx_node)
+
         if op_type in ["If", "Loop", "Scan"]:
             # we force the op containing inner graphs not skipped during conversion.
             skip_conversion = False
@@ -604,6 +640,7 @@ class Graph(object):
         return node
 
     def append_node(self, node):
+        "Add a node to the graph."
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
         node.graph = self
@@ -613,6 +650,8 @@ class Graph(object):
             self._output_to_node_name[name] = node.name
             self.set_dtype(name, output_dtypes[i])
             self.set_shape(name, output_shapes[i])
+        for name in node.input:
+            self._register_input_name(name, node)
 
     def remove_node(self, node_name):
         """Remove node in current graph."""
@@ -632,6 +671,12 @@ class Graph(object):
                 del self._output_shapes[op_output]
             if op_output in self._dtypes:
                 del self._dtypes[op_output]
+
+        for op_input in node.input:
+            utils.make_sure(
+                op_input in self._output_to_consumers,
+                "Input %r of node %r not found.", op_input, node_name)
+            self._unregister_input_name(op_input, node)
 
         self._nodes.remove(node)
         node.graph = None
@@ -656,9 +701,13 @@ class Graph(object):
         self.contained_graphs = remained_sub_graphs
         self._nodes_by_name = {op.name: op for op in ops}
         self._output_to_node_name = {}
+        self._output_to_consumers = {}
         for op in ops:
             for op_output in op.output:
                 self._output_to_node_name[op_output] = op.name
+            inps = op.input
+            for op_input in inps:
+                self._register_input_name(op_input, op)
 
         for n in self._order_sensitive_inputs:
             if n not in ops:
@@ -748,10 +797,10 @@ class Graph(object):
                 self.set_shape(output, shape)
                 logger.debug("Set shape of [%s] to %s", output, shape)
 
-    def update_proto(self):
+    def update_proto(self, external_tensor_storage=None):
         """Update the onnx protobuf from out internal Node structure."""
         for node in self._nodes:
-            node.update_proto()
+            node.update_proto(external_tensor_storage)
 
     def get_nodes(self):
         """Get node list."""
@@ -792,6 +841,8 @@ class Graph(object):
         self._nodes_by_name[node.name] = node
         for op_output in node.output:
             self._output_to_node_name[op_output] = node.name
+        for name in node.input:
+            self._register_input_name(name, node)
 
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
@@ -807,7 +858,7 @@ class Graph(object):
                 if k == old_output:
                     self.outputs[j] = new_output
                     break
-            self.replace_all_inputs(self.get_nodes(), old_output, new_output)
+            self.replace_all_inputs(old_output, new_output, ops=self.get_nodes())
         return new_node
 
     def add_graph_input(self, name, dtype=None, shape=None):
@@ -937,7 +988,7 @@ class Graph(object):
             all_input = list(filter(lambda a: a != '', all_input))
             for inp in sorted(all_input):
                 j = self.get_node_by_output(inp)
-                utils.make_sure(j is not None, "Cannot find node with output {}".format(inp))
+                utils.make_sure(j is not None, "Cannot find node with output %r", inp)
                 if self.parent_graph and j.name not in op_name_to_index:
                     # there might be some outer-scoped inputs for an inner Graph.
                     pass
@@ -968,7 +1019,7 @@ class Graph(object):
         ret = [x for _, x in sorted(zip(label, ops))]
         self.reset_nodes(ret)
 
-    def make_graph(self, doc, graph_name=None):
+    def make_graph(self, doc, graph_name=None, external_tensor_storage=None):
         """
         Create GraphProto for onnx from internal graph.
         Args:
@@ -978,7 +1029,7 @@ class Graph(object):
         graph_name = graph_name or self.graph_name
         self.delete_unused_nodes(self.outputs)
         self.topological_sort(self.get_nodes())
-        self.update_proto()
+        self.update_proto(external_tensor_storage)
 
         # TODO: we'd want to do something like this so that transpose optimizer is active
         # for  all (unit) tests
@@ -1021,7 +1072,7 @@ class Graph(object):
             # not to use numpy_helper.from_array to create a new tensor
             # because sometimes onnx will have a bug that only check the tensor data in specific field
             # such as at upsample it only checks the float_data field.
-            t = op.get_attr("value")
+            t = op.get_value_attr(external_tensor_storage)
             tensor = helper.get_attribute_value(t)
             tensor.name = op.output[0]
             initializers.append(tensor)
@@ -1050,14 +1101,14 @@ class Graph(object):
 
         return graph
 
-    def make_model(self, graph_doc, optimize=False, graph_name="tf2onnx", **kwargs):
+    def make_model(self, graph_doc, optimize=False, graph_name="tf2onnx", external_tensor_storage=None, **kwargs):
         """
         Create final ModelProto for onnx from internal graph.
         Args:
             optimize: optimize graph via onnx
             doc: text for doc string of the model
         """
-        graph = self.make_graph(graph_doc, graph_name)
+        graph = self.make_graph(graph_doc, graph_name, external_tensor_storage)
 
         if "producer_name" not in kwargs:
             kwargs = {"producer_name": "tf2onnx",
@@ -1133,13 +1184,12 @@ class Graph(object):
             op_cnt[n.type] += 1
             body_graphs = n.get_body_graphs()
             if body_graphs:
-                for _, b_g in body_graphs.items():
+                for b_g in body_graphs.values():
                     op_cnt += b_g.dump_node_statistics()
 
         return op_cnt
 
-    @staticmethod
-    def remove_input(node, to_be_removed, input_index=None):
+    def remove_input(self, node, to_be_removed, input_index=None):
         """Remove input from Node.
         Args:
             node: the node we expect the input on
@@ -1151,15 +1201,24 @@ class Graph(object):
         assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
         if input_index is not None:
             assert node.input[input_index] == to_be_removed
+            if node.input[input_index] in self._output_to_consumers:
+                to_ops = self._output_to_consumers[node.input[input_index]]
+                if node.name in to_ops:
+                    to_ops.remove(node.name)
             del node.input[input_index]
-            return True
+            return
 
         for i, name in enumerate(node.input):
             if name == to_be_removed:
+                utils.make_sure(
+                    node.input.count(node.input[i]) <= 1,
+                    "Node %r takes multiple times the same input %r. This case is not handled.",
+                    node.name, node.input[i])
+                self._unregister_input_name(node.input[i], node)
                 del node.input[i]
                 break
+
         # don't remove output from parent since others might depend on it
-        return True
 
     def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, **kwargs):
         """Create and insert a new node into the graph.
@@ -1207,43 +1266,93 @@ class Graph(object):
         new_output = port_name(name)
         new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
-        to_replace = [n for n in self.get_nodes() if n != new_node]
-        self.replace_all_inputs(to_replace, output_name, new_output)
+        to_replace = [self.get_node_by_name(n) for n in self._output_to_consumers[output_name]]
+        to_replace = [n for n in to_replace if n != new_node]
+        self.replace_all_inputs(output_name, new_output, ops=to_replace)
         return new_node
 
     def find_output_consumers(self, output_name):
         """Find all nodes consuming a given output."""
+        if output_name in self._output_to_consumers:
+            ops = self._output_to_consumers[output_name]
+            ops = [self.get_node_by_name(n) for n in ops]
+        else:
+            ops = []  # self.get_nodes()
         nodes = []
-        for node in self.get_nodes():
+        for node in ops:
+            if node is None:
+                continue
             if output_name in node.input:
                 nodes.append(node)
 
-            # find consumers in sub graphs
-            body_graphs = node.get_body_graphs()
-            if body_graphs:
-                for g in body_graphs.values():
-                    nodes.extend(g.find_output_consumers(output_name))
+        # find consumers in sub graphs
+        if output_name in self._input_to_graph:
+            for g in self._input_to_graph[output_name].values():
+                nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
-    @staticmethod
-    def replace_all_inputs(ops, old_input, new_input):
-        """Replace all inputs pointing to old_input with new_input."""
+    def _register_input_name(self, input_name, node, only_graph=False):
+        "Register node taking a specific input."
+        if not only_graph:
+            if input_name not in self._output_to_consumers:
+                self._output_to_consumers[input_name] = set()
+            self._output_to_consumers[input_name].add(node.name)
+        if self.parent_graph is not None:
+            if input_name not in self.parent_graph._input_to_graph:
+                self.parent_graph._input_to_graph[input_name] = {}
+            self.parent_graph._input_to_graph[input_name][id(self)] = self
+            self.parent_graph._register_input_name(input_name, node, only_graph=True)
+
+    def _unregister_input_name(self, input_name, node, only_graph=False):
+        "Unregister node taking a specific input."
+        node_name = node.name
+        if not only_graph:
+            if input_name in self._output_to_consumers[input_name]:
+                if node_name in self._output_to_consumers[input_name]:
+                    self._output_to_consumers[input_name].remove(node_name)
+        if (self.parent_graph is not None and
+                input_name in self.parent_graph._input_to_graph and
+                id(self) in self.parent_graph._input_to_graph[input_name]):
+            del self.parent_graph._input_to_graph[input_name][id(self)]
+            self.parent_graph._unregister_input_name(input_name, node, only_graph=True)
+
+    def replace_all_inputs(self, old_input, new_input, ops=None):
+        """
+        Replace all inputs pointing to old_input with new_input.
+        *ops* is used if defined, otherwise `_output_to_consumers`
+        is used to determine the impacted nodes.
+        """
         if old_input == new_input:
             return
+        if new_input not in self._output_to_consumers:
+            self._output_to_consumers[new_input] = set()
+
+        if ops is not None:
+            keep_ops = True
+        elif old_input in self._output_to_consumers:
+            ops = list(
+                filter(lambda a: a is not None,
+                       map(self.get_node_by_name, self._output_to_consumers[old_input])))
+            keep_ops = False
+        else:
+            ops = []
+            keep_ops = False
 
         for node in ops:
+            assert node is not None
             if old_input in node.input and new_input in node.output:
                 raise RuntimeError("creating a circle in the graph is not allowed: " + node.name)
+            self._register_input_name(new_input, node)
 
             for i, input_name in enumerate(node.input):
                 if input_name == old_input:
-                    node.input[i] = new_input
+                    self.replace_input(node, node.input[i], new_input, i)
 
-            # modify references in sub graphs
-            body_graphs = node.get_body_graphs()
-            if body_graphs:
-                for g in body_graphs.values():
-                    g.replace_all_inputs(g.get_nodes(), old_input, new_input)
+        # modify references in sub graphs
+        if old_input in self._input_to_graph:
+            for g in self._input_to_graph[old_input].values():
+                g.replace_all_inputs(old_input, new_input,
+                                     ops=g.get_nodes() if keep_ops else None)
 
     def replace_input(self, node, old_input, new_input, input_index=None):
         """
@@ -1263,11 +1372,31 @@ class Graph(object):
             is_replaced = True
         else:
             raise RuntimeError("Unable to replace input %r into %r for node %r." % (old_input, new_input, node.name))
+
+        to_ops = self._output_to_consumers.get(old_input, None)
+        if to_ops is not None:
+            if node.name in to_ops:
+                # A node may take twice the same entry.
+                to_ops.remove(node.name)
+
+        self._register_input_name(new_input, node)
         return is_replaced
 
     def replace_inputs(self, node, new_inputs):
         """Replace node inputs."""
         assert isinstance(node, Node) and isinstance(new_inputs, list)
+
+        for old_input in node.input:
+            to_ops = self._output_to_consumers.get(old_input, None)
+            if to_ops is not None and old_input in to_ops:
+                # To avoid issues when a node
+                # takes twice the same entry.
+                to_ops.remove(old_input)
+
+        for input_name in new_inputs:
+            assert isinstance(input_name, six.text_type)
+            self._register_input_name(input_name, node)
+
         node.input = new_inputs
         return True
 
@@ -1343,7 +1472,7 @@ class Graph(object):
         for node in related_nodes:
             attr_body_graphs = node.get_body_graphs()
             if attr_body_graphs:
-                for _, body_graph in attr_body_graphs.items():
+                for body_graph in attr_body_graphs.values():
                     body_graph.delete_unused_nodes(body_graph.outputs)
         self.reset_nodes(related_nodes)
 

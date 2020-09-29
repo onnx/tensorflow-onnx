@@ -13,7 +13,7 @@ import logging
 import sys
 
 import numpy as np
-from onnx import onnx_pb
+from onnx import onnx_pb, helper
 from onnx.onnx_pb import TensorProto
 
 from tf2onnx import constants, utils
@@ -115,7 +115,7 @@ class Identity:
             # if identity has a const as input, remove it
             input_name = node.input[0]
             output_name = node.output[0]
-            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name)
+            ctx.replace_all_inputs(output_name, input_name)  # ops=ctx.get_nodes()
             ctx.remove_node(node.name)
 
 
@@ -125,7 +125,7 @@ class IdentityN:
     def version_1(cls, ctx, node, **kwargs):
         ctx.remove_node(node.name)
         for input_name, output_name in zip(node.input, node.output):
-            ctx.replace_all_inputs(ctx.get_nodes(), output_name, input_name)
+            ctx.replace_all_inputs(output_name, input_name)  # ops=ctx.get_nodes()
 
 
 @tf_op("Reshape")
@@ -1050,7 +1050,7 @@ class Pack:
         # concat all unqueezes
         concat = ctx.make_node("Concat", inputs, op_name_scope=node.name, attr={"axis": axis},
                                shapes=shapes, dtypes=dtypes)
-        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], concat.output[0])
+        ctx.replace_all_inputs(node.output[0], concat.output[0])  # ops=ctx.get_nodes()
 
 
 @tf_op("Unpack")
@@ -1485,13 +1485,18 @@ class NonMaxSuppression:
                           outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
         elif "pad_to_max_output_size" in node.attr:  # V4
             shape_op = ctx.make_node("Shape", inputs=[squeeze_op.output[0]])
-            const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64))
             sub_op = ctx.make_node("Sub", inputs=[max_output_size, shape_op.output[0]])
-            raw_pad = ctx.make_node("Concat", inputs=[const_zero.output[0], sub_op.output[0]], attr={'axis': 0})
-            raw_pad_float = ctx.make_node("Cast", inputs=[raw_pad.output[0]], attr={"to": onnx_pb.TensorProto.FLOAT})
+            raw_pad_float = ctx.make_node("Cast", inputs=[sub_op.output[0]], attr={"to": onnx_pb.TensorProto.FLOAT})
             relu_op = ctx.make_node("Relu", inputs=[raw_pad_float.output[0]])
-            pad_val = ctx.make_node("Cast", inputs=[relu_op.output[0]], attr={"to": onnx_pb.TensorProto.INT64})
-            pad_op = ctx.make_node("Pad", inputs=[squeeze_op.output[0], pad_val.output[0]])
+            pad_amt = ctx.make_node("Cast", inputs=[relu_op.output[0]], attr={"to": onnx_pb.TensorProto.INT64})
+            if ctx.opset <= 10:  # Dynamic padding not supported before opset 11
+                zero_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[0])
+                padding = ctx.make_node("ConstantOfShape", inputs=[pad_amt.output[0]], attr={"value": zero_tensor})
+                pad_op = ctx.make_node("Concat", inputs=[squeeze_op.output[0], padding.output[0]], attr={'axis': 0})
+            else:
+                const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64))
+                pad_val = ctx.make_node("Concat", inputs=[const_zero.output[0], pad_amt.output[0]], attr={'axis': 0})
+                pad_op = ctx.make_node("Pad", inputs=[squeeze_op.output[0], pad_val.output[0]])
             ctx.make_node("Cast", inputs=pad_op.output, name="cast_A", attr={"to": onnx_pb.TensorProto.INT32},
                           outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0], op_name_scope=node.name)
             reduce_op = ctx.make_node("ReduceSum", inputs=shape_op.output, attr={"axes": [0], "keepdims": 0})

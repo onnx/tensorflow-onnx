@@ -115,6 +115,24 @@ benchtf-gru:
 ##
 ## standard image nets
 ##
+
+esrgan-tf2:
+  # url: https://tfhub.dev/captain-pool/esrgan-tf2/1/esrgan-tf2_1.tar.gz
+  url: https://github.com/captain-pool/GSOC/releases/download/1.0.0/esrgan.tar.gz
+  model: "."
+  model_type: saved_model
+  input_get: get_beach
+  opset_constraints:
+    "onnx":
+      "min": 10
+  inputs:
+    "input_0:0": [1, 50, 50, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.02
+  atol: 0.0005
+  tf_min_version: 2.1
+
 inception_v3_slim:
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz
   model: inception_v3_2016_08_28_frozen.pb

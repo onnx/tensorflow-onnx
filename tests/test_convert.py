@@ -8,7 +8,7 @@ import sys
 import unittest
 
 from tf2onnx import convert
-
+from common import check_tf_min_version
 
 def run_test_case(args):
     """ run case and clean up """
@@ -32,6 +32,18 @@ class Tf2OnnxConvertTest(unittest.TestCase):
                                        'serve',
                                        '--output',
                                        'converted_saved_model.onnx']))
+
+    @check_tf_min_version("2.2")
+    def test_convert_large_model(self):
+        """ convert saved model to onnx large model format """
+        self.assertTrue(run_test_case(['',
+                                       '--large_model',
+                                       '--saved-model',
+                                       'tests/models/regression/saved_model',
+                                       '--tag',
+                                       'serve',
+                                       '--output',
+                                       'converted_saved_model.zip']))
 
     def test_convert_graphdef(self):
         """ convert graphdef """

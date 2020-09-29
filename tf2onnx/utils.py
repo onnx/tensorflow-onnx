@@ -13,13 +13,14 @@ import os
 import re
 import shutil
 import tempfile
+import zipfile
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import numpy as np
 from google.protobuf import text_format
-from onnx import helper, onnx_pb, defs, numpy_helper, __version__
+from onnx import helper, onnx_pb, defs, numpy_helper, ModelProto, __version__
 
 from . import constants
 
@@ -39,6 +40,8 @@ ONNX_TO_NUMPY_DTYPE = {
     onnx_pb.TensorProto.INT64: np.int64,
     onnx_pb.TensorProto.UINT64: np.uint64,
     onnx_pb.TensorProto.BOOL: np.bool,
+    onnx_pb.TensorProto.COMPLEX64: np.complex64,
+    onnx_pb.TensorProto.COMPLEX128: np.complex128,
 }
 
 #
@@ -55,7 +58,9 @@ ONNX_DTYPE_NAMES = {
     onnx_pb.TensorProto.UINT16: "uint16",
     onnx_pb.TensorProto.INT64: "int64",
     onnx_pb.TensorProto.STRING: "string",
-    onnx_pb.TensorProto.BOOL: "bool"
+    onnx_pb.TensorProto.BOOL: "bool",
+    onnx_pb.TensorProto.COMPLEX64: "complex64",
+    onnx_pb.TensorProto.COMPLEX128: "complex128"
 }
 
 
@@ -161,7 +166,8 @@ def find_opset(opset):
     return opset
 
 
-def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False):
+def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False,
+                    external_tensor_storage=None):
     """Save onnx model as file. Save a pbtxt file as well if as_text is True"""
     save_path = save_path_root
     if not os.path.exists(save_path):
@@ -181,12 +187,26 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
             save_protobuf(data_full_path, t)
             i += 1
 
-    target_path = os.path.join(save_path, onnx_file_name + ".onnx")
-    save_protobuf(target_path, model_proto)
+    if external_tensor_storage is None:
+        target_path = os.path.join(save_path, onnx_file_name + ".onnx")
+        save_protobuf(target_path, model_proto)
+    else:
+        zip_path = os.path.join(save_path, onnx_file_name + ".zip")
+        save_onnx_zip(zip_path, model_proto, external_tensor_storage)
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            z.extractall(save_path)
+        target_path = os.path.join(save_path, "__MODEL_PROTO.onnx")
+
     if as_text:
         save_protobuf(target_path + ".pbtxt", model_proto, as_text=True)
+
     return target_path
 
+def save_onnx_zip(target_path, model_proto, external_tensor_storage):
+    with zipfile.ZipFile(target_path, 'w') as z:
+        z.writestr("__MODEL_PROTO.onnx", model_proto.SerializeToString())
+        for k, v in external_tensor_storage.name_to_tensor_data.items():
+            z.writestr(k, v)
 
 def make_sure(bool_val, error_msg, *args):
     if not bool_val:
@@ -253,6 +273,22 @@ def save_protobuf(path, message, as_text=False):
         with open(path, "wb") as f:
             f.write(message.SerializeToString())
 
+def model_proto_from_file(model_path):
+    model_proto = ModelProto()
+    with open(model_path, "rb") as f:
+        model_proto.ParseFromString(f.read())
+    return model_proto
+
+def model_proto_from_zip(zip_path, external_tensor_storage):
+    model_proto = ModelProto()
+    with zipfile.ZipFile(zip_path, 'r') as z:
+        for n in z.namelist():
+            f = z.open(n)
+            if n.endswith(".onnx"):
+                model_proto.ParseFromString(f.read())
+            else:
+                external_tensor_storage.name_to_tensor_data[n] = f.read()
+    return model_proto
 
 def is_list_or_tuple(obj):
     return isinstance(obj, (list, tuple))
@@ -405,9 +441,9 @@ def have_same_inference_value(g, output_1, output_2):
         if node_1.type != node_2.type:
             return False
         # check onnx attributes
-        if node_1.attr_onnx.keys() != node_2.attr_onnx.keys():
+        if node_1.get_onnx_attrs().keys() != node_2.get_onnx_attrs().keys():
             return False
-        for name in node_1.attr_onnx.keys(): # pylint: disable=consider-iterating-dictionary
+        for name in node_1.get_onnx_attrs().keys(): # pylint: disable=consider-iterating-dictionary
             if node_1.get_attr_value(name) != node_2.get_attr_value(name):
                 return False
         return True

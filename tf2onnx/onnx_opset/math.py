@@ -32,7 +32,7 @@ class RealDiv(common.BroadcastOp):
     pass
 
 
-@tf_op(["LeakyRelu", "LogSoftmax", "Softplus", "Softsign"])
+@tf_op(["LeakyRelu", "Softplus", "Softsign"])
 class DirectOpSinceOpset1:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -185,7 +185,7 @@ class ClipByValueOp:
     def version_12(cls, ctx, node, **kwargs):
         node.type = 'Clip' # clip supports all types now
 
-@tf_op("Softmax")
+@tf_op(["LogSoftmax", "Softmax"])
 class Softmax:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -564,6 +564,7 @@ class Einsum:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         del node.attr["N"]
+        node.attr["equation"].s = node.attr["equation"].s.lower()
 
 
 @tf_op("IsFinite")
@@ -695,4 +696,4 @@ class Atan2Op:
             "Add", inputs=[atan_node.output[0], pi_part.output[0]],
             op_name_scope=node.name + 'all',
             shapes=[shape], dtypes=[onnx_dtype])
-        ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], last_node.output[0])
+        ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()

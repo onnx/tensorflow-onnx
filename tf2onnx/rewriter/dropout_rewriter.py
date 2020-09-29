@@ -96,7 +96,7 @@ def rewrite_dropout(g, ops):
                 shapes=[g.get_shape(data.output[0])],
                 dtypes=[g.get_dtype(data.output[0])]
             )
-            g.replace_all_inputs(ops, outputs.output[0], new_node.output[0])
+            g.replace_all_inputs(outputs.output[0], new_node.output[0], ops=ops)
             for n in nodes_to_remove:
                 g.remove_node(n.name)
 

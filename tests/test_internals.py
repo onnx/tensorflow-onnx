@@ -139,7 +139,7 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
             op_name = utils.make_name("ReplacedOp")
             out_name = utils.port_name(op_name)
             new_node = g.make_node("Sub", inputs=input_node.input, outputs=[out_name], name=op_name)
-            g.replace_all_inputs(ops, output_node.output[0], new_node.output[0])
+            g.replace_all_inputs(output_node.output[0], new_node.output[0])  # ops=ops
             for n in set(match.get_nodes()):
                 g.remove_node(n.name)
         g.topological_sort(ops)
@@ -226,7 +226,7 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n1 = g.get_node_by_name("n1")
         self.assertTrue("my_attr" in n1.attr)
-        self.assertTrue("my_attr" not in n1.attr_onnx)
+        self.assertTrue("my_attr" not in n1.get_onnx_attrs())
 
         n1 = helper.make_node("Conv", ["X", "W"], ["Y"], name="n1", domain="my_domain", my_attr="my_attr")
         graph_proto = helper.make_graph(
@@ -240,7 +240,7 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
         n1 = g.get_node_by_name("n1")
         self.assertTrue("my_attr" in n1.attr)
-        self.assertTrue("my_attr" in n1.attr_onnx)
+        self.assertTrue("my_attr" in n1.get_onnx_attrs())
 
     def test_tensor_data(self):
         tensors = {

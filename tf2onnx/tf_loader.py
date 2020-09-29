@@ -95,8 +95,32 @@ def inputs_without_resource(sess, input_names):
         pass
     return input_names
 
+def convert_variables_to_constants_large_model(func):
+    # For large models we use internal tf methods as a hack
 
-def from_function(func, input_names, output_names):
+    if tf.__version__.startswith("2.2."):
+        try:
+            from tensorflow.python.framework.convert_to_constants import \
+                 _convert_variables_to_constants_v2_impl # pylint: disable=protected-access
+        except ImportError:
+            _not_implemented_tf_placeholder("_convert_variables_to_constants_v2_impl")()
+        frozen_graph_def, _ = \
+            _convert_variables_to_constants_v2_impl(func, lower_control_flow=False, aggressive_inlining=False)
+        return frozen_graph_def
+
+    try:
+        from tensorflow.python.framework.convert_to_constants import \
+            _FunctionConverterData, _replace_variables_by_constants # pylint: disable=protected-access
+    except ImportError:
+        _not_implemented_tf_placeholder("_replace_variables_by_constants")()
+    converter_data = _FunctionConverterData(func=func, lower_control_flow=False, aggressive_inlining=False)
+    frozen_graph_def, _ = _replace_variables_by_constants(converter_data=converter_data)
+    return frozen_graph_def
+
+def from_function(func, input_names, output_names, large_model=False):
+    if large_model:
+        return convert_variables_to_constants_large_model(func)
+
     frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
     # output_names = [i.name for i in frozen_func.outputs]
@@ -144,7 +168,16 @@ def from_graphdef(model_path, input_names, output_names):
     with tf_session() as sess:
         graph_def = tf_graphdef()
         with tf_gfile.GFile(model_path, 'rb') as f:
-            graph_def.ParseFromString(f.read())
+            try:
+                content = f.read()
+            except Exception as e:
+                raise OSError(
+                    "Unable to load file '{}'.".format(model_path)) from e
+            try:
+                graph_def.ParseFromString(content)
+            except Exception as e:
+                raise RuntimeError(
+                    "Unable to parse file '{}'.".format(model_path)) from e
             tf.import_graph_def(graph_def, name='')
         input_names = inputs_without_resource(sess, input_names)
         frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
@@ -223,7 +256,8 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
     return frozen_graph, input_names, output_names
 
 
-def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def, concrete_function_index):
+def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def,
+                         concrete_function_index, large_model):
     """Load tensorflow graph from saved_model."""
 
     wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
@@ -234,6 +268,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     err_index = "Invalid concrete_function value: %i. Valid values are [0 to %i]"
     err_no_sig = "No signatures found in model. Try --concrete_function instead."
     err_sig_nomatch = "Specified signature not in model %s"
+    err_large_model = "model exceeds maximum protobuf size of 2GB. Try running with --large_model flag."
 
     if tag is None:
         tag = ['serve']
@@ -255,8 +290,8 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         utils.make_sure(hasattr(imported, "__call__"), err_no_call)
         utils.make_sure(concrete_function_index < len(imported.__call__.concrete_functions),
                         err_index, concrete_function_index, len(imported.__call__.concrete_functions) - 1)
-        sig = imported.__call__.concrete_functions[concrete_function_index].structured_input_signature[0][0]
-        concrete_func = imported.__call__.get_concrete_function(sig)
+        sig = imported.__call__.concrete_functions[concrete_function_index].structured_input_signature[0]
+        concrete_func = imported.__call__.get_concrete_function(*sig)
     elif signature_def:
         utils.make_sure(signature_def[0] in valid_sigs, err_sig_nomatch, signature_def[0])
         concrete_func = imported.signatures[signature_def[0]]
@@ -274,18 +309,28 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     if output_names:
         outputs = list(set(output_names) & set(outputs))
 
-    frozen_graph = from_function(concrete_func, inputs, outputs)
-    return frozen_graph, inputs, outputs
+    try:
+        frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
+    except ValueError as e:
+        if "exceeds maximum protobuf size of 2GB" in str(e):
+            raise ValueError(err_large_model)
+        raise e
+
+    return frozen_graph, inputs, outputs, concrete_func, imported
 
 
-def from_saved_model(model_path, input_names, output_names, tag=None, signatures=None, concrete_function=None):
+def from_saved_model(model_path, input_names, output_names, tag=None,
+                     signatures=None, concrete_function=None, large_model=False, return_concrete_func=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
     if is_tf2():
-        frozen_graph, input_names, output_names = \
-            _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function)
+        frozen_graph, input_names, output_names, concrete_func, imported = \
+            _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function, large_model)
+        if return_concrete_func:
+            tf_reset_default_graph()
+            return frozen_graph, input_names, output_names, concrete_func, imported
     else:
         with tf_session() as sess:
             frozen_graph, input_names, output_names = \

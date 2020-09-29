@@ -23,7 +23,9 @@ def make_range(ctx, start, limit, delta, output, scope_name, shape, dtype):
 
 def _make_range_non_const(ctx, start, limit, delta, output, scope_name, shape, dtype):
     utils.make_sure(
-        dtype in [TensorProto.FLOAT, TensorProto.DOUBLE, TensorProto.INT16, TensorProto.INT32, TensorProto.INT64],
+        dtype in [TensorProto.FLOAT, TensorProto.DOUBLE, TensorProto.INT16,
+                  TensorProto.INT32, TensorProto.INT64,
+                  TensorProto.COMPLEX64, TensorProto.COMPLEX128],
         "dtype %s is not supported", dtype)
     ctx.make_node("Range", [start, limit, delta], outputs=[output], name=scope_name, shapes=[shape], dtypes=[dtype],
                   domain=constants.MICROSOFT_DOMAIN)
