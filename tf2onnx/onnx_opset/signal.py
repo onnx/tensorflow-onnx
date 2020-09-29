@@ -99,6 +99,12 @@ class RFFTOp:
                 res = np.dot(cst, x)
                 return np.transpose(res, (0, 2, 1))
         """
+        consumers = ctx.find_output_consumers(node.output[0])
+        consumer_types = set(op.type for op in consumers)
+        utils.make_sure(
+            consumer_types == {'ComplexAbs'},
+            "Current implementation of RFFT only allows ComplexAbs as consumer not %r",
+            consumer_types)
 
         onnx_dtype = ctx.get_dtype(node.input[0])
         shape = ctx.get_shape(node.input[0])
