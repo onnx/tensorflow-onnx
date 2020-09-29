@@ -3656,7 +3656,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             op_ = tf.signal.rfft(x)
             return tf.identity(op_, name=_TFOUTPUT)
         with self.assertRaises(ValueError):
-            self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
+            self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
 
 if __name__ == '__main__':
