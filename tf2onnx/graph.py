@@ -988,7 +988,7 @@ class Graph(object):
             all_input = list(filter(lambda a: a != '', all_input))
             for inp in sorted(all_input):
                 j = self.get_node_by_output(inp)
-                utils.make_sure(j is not None, "Cannot find node with output {}".format(inp))
+                utils.make_sure(j is not None, "Cannot find node with output %r", inp)
                 if self.parent_graph and j.name not in op_name_to_index:
                     # there might be some outer-scoped inputs for an inner Graph.
                     pass
