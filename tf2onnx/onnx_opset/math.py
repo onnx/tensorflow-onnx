@@ -697,3 +697,38 @@ class Atan2Op:
             op_name_scope=node.name + 'all',
             shapes=[shape], dtypes=[onnx_dtype])
         ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+
+
+@tf_op("InvertPermutation")
+class InvertPermutationOp:
+    supported_dtypes = [
+        onnx_pb.TensorProto.INT32,
+        onnx_pb.TensorProto.INT64,
+    ]
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+
+        onnx_dtype = ctx.get_dtype(node.input[0])
+        shape = ctx.get_shape(node.input[0])
+
+        shape_node = ctx.make_node(
+            "Shape", inputs=node.input, name=utils.make_name(node.name + '_shape'))
+
+        neg_node = ctx.make_node(
+            "Neg", inputs=node.input, name=utils.make_name(node.name + '_neg'))
+
+        topk_unused = utils.make_name(node.name + '_topk')
+        topk_indices = utils.make_name(node.name + '_indices')
+        outputs = [topk_unused, utils.port_name(topk_indices, 1)]
+        topk_node = ctx.make_node(
+            "TopK", inputs=[neg_node.output[0], shape_node.output[0]],
+            name=utils.make_name(node.name + '_topk'), outputs=outputs)
+
+        ctx.remove_node(node.name)
+
+        last_node = ctx.make_node(
+            "Identity", inputs=topk_node.output[1:], name=utils.make_name(node.name + '_indices'),
+            shapes=[shape], dtypes=[onnx_dtype])
+
+        ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
