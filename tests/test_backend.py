@@ -3641,10 +3641,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
         assert_almost_equal(fft[1, :, :], np.imag(fft_npy))
 
         x_val = make_xval([3, 4]).astype(np.float32)
-        def func(x):
+        def func1(x):
             op_ = tf.signal.rfft(x)
             return tf.abs(op_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+
+        def func2(x):
+            op_ = tf.signal.rfft(x)
+            return tf.cos(op_, name=_TFOUTPUT)
+        with self.assertRaises(ValueError):
+            self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
+
+        def func3(x):
+            op_ = tf.signal.rfft(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+        with self.assertRaises(ValueError):
+            self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
 
 
 if __name__ == '__main__':
