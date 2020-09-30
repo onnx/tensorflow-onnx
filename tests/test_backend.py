@@ -3659,10 +3659,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         assert_almost_equal(fft[1, :, :], np.imag(fft_npy))
 
         x_val = make_xval([3, 4]).astype(np.float32)
+        
+        def check_graph(g):
+            for node in g.get_nodes():
+                print(node.type, node.input, node.output)
+            consumers = g.find_output_consumers_recursive('input:0')
+            unique_types = set(n.type for n in consumers[1])            
+            return 'MatMul' in unique_types and 'Add' in unique_types
+
         def func1(x):
             op_ = tf.signal.rfft(x)
             return tf.abs(op_, name=_TFOUTPUT)
-        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val},
+                            graph_validator=lambda g: check_graph(g))
 
         def func2(x):
             op_ = tf.signal.rfft(x)

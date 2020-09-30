@@ -101,10 +101,20 @@ class RFFTOp:
         """
         consumers = ctx.find_output_consumers(node.output[0])
         consumer_types = set(op.type for op in consumers)
-        utils.make_sure(
-            consumer_types == {'ComplexAbs'},
-            "Current implementation of RFFT only allows ComplexAbs as consumer not %r",
-            consumer_types)
+        if consumer_types != {'ComplexAbs'} and utils.is_debug_mode():
+            next_names, nodes = ctx.find_output_consumers_recursive(
+                node.output[0], stop_if_type={'ComplexAbs', 'IRFFT'})
+            utils.make_sure(
+                consumer_types == {'ComplexAbs'},
+                "Current implementation of RFFT only allows ComplexAbs as consumer not %r.\n"
+                "List of consumers node types:\n%r\nList of linked outputs:\n%r",
+                consumer_types, list(sorted(set(n.type for n in nodes))),
+                list(sorted(next_names)))
+        else:
+            utils.make_sure(
+                consumer_types == {'ComplexAbs'},
+                "Current implementation of RFFT only allows ComplexAbs as consumer not %r",
+                consumer_types)
 
         onnx_dtype = ctx.get_dtype(node.input[0])
         shape = ctx.get_shape(node.input[0])

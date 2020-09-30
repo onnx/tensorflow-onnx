@@ -1291,6 +1291,33 @@ class Graph(object):
                 nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
+    def find_output_consumers_recursive(self, output_name, stop_if_type=None):
+        """Find all nodes consuming a given output."""
+        if stop_if_type is None:
+            stop_if_type = set()
+        done = set()
+        output_names = {output_name}
+        next_nodes = []
+
+        new_names = 1
+        while new_names > 0:
+            new_names = 0
+            added_names = set()
+            for name in output_names:
+                if name in done:
+                    continue
+                done.add(name)
+                nodes = self.find_output_consumers(name)
+                for node in nodes:
+                    if node.type in stop_if_type:
+                        continue
+                    next_nodes.append(node)
+                    for out in node.output:
+                        added_names.add(out)
+                        new_names += 1
+            output_names.update(added_names)
+        return output_names, next_nodes
+
     def _register_input_name(self, input_name, node, only_graph=False):
         "Register node taking a specific input."
         if not only_graph:
