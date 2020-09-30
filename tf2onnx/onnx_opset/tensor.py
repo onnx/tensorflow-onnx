@@ -61,7 +61,16 @@ def _wrap_concat_with_cast(ctx, node):
 class Size:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        pass
+        output_name = node.output[0]
+        dtype = ctx.get_dtype(output_name)
+        # TF size can output int32 or int64 but onnx only does int 64
+        if dtype != onnx_pb.TensorProto.INT64:
+            ctx.set_dtype(output_name, onnx_pb.TensorProto.INT64)
+            output_cast = ctx.insert_new_node_on_output("Cast", output_name, name=node.child_name(),
+                                                        to=dtype)
+            ctx.set_dtype(output_cast.output[0], dtype)
+            ctx.copy_shape(output_name, output_cast.output[0])
+
 
 
 @tf_op("Flatten")

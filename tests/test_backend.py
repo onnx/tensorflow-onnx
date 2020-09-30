@@ -3625,6 +3625,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
                           [1., 1., 4.]], dtype=np.float32).reshape(_KERNEL3x3)
         self._conv_kernel_as_input_test(x_val, w_val)
 
+    def test_equal_with_different_parameters(self):
+        input_val = np.array([5], dtype=np.int32)
+
+        def func(input_val):
+            tensor = tf.zeros(input_val)
+            input_size = tf.size(tensor)
+            constant = tf.constant(3, dtype=tf.int32)
+            return tf.math.equal(input_size, constant, name="output")
+
+        feed_dict = {"input:0": input_val}
+        input_names_with_port = ["input:0"]
+        output_names_with_port = ["output:0"]
+
+        current_opset = self.config.opset
+        self.config.opset = 12
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
+        self.config.opset = current_opset
+
     @check_tf_min_version("1.14")
     def test_rfft_ops(self):
 
@@ -3641,10 +3659,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
         assert_almost_equal(fft[1, :, :], np.imag(fft_npy))
 
         x_val = make_xval([3, 4]).astype(np.float32)
-        def func(x):
+        def func1(x):
             op_ = tf.signal.rfft(x)
             return tf.abs(op_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+
+        def func2(x):
+            op_ = tf.signal.rfft(x)
+            return tf.cos(op_, name=_TFOUTPUT)
+        with self.assertRaises(ValueError):
+            self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
+
+        def func3(x):
+            op_ = tf.signal.rfft(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+        with self.assertRaises(ValueError):
+            self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
 
 if __name__ == '__main__':

@@ -38,7 +38,7 @@ class RandomOp:
         # const we make it an attribute.
         seed = node.get_attr("seed")
         node.set_attr("seed", float(seed.f))
-        if len(node.input) > 0:
+        if len(node.input) > 0 and node.inputs[0].is_const():
             shape = node.inputs[0].get_tensor_value()
             ctx.remove_input(node, node.input[0], 0)
             node.set_attr("shape", shape)

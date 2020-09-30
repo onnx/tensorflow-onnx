@@ -331,11 +331,12 @@ class Test(object):
 
         from tf2onnx.tf_utils import compress_graph_def
         const_node_values = None
-        if self.large_model:
-            const_node_values = compress_graph_def(graph_def)
-        g = tf.import_graph_def(graph_def, name='')
-        # with tf_session(config=tf.ConfigProto(allow_soft_placement=True), graph=g) as sess:
-        with tf_session(graph=g) as sess:
+        with tf.Graph().as_default() as tf_graph:
+            if self.large_model:
+                const_node_values = compress_graph_def(graph_def)
+            tf.import_graph_def(graph_def, name='')
+
+        with tf_session(graph=tf_graph) as sess:
             # create the input data
             for k in input_names:
                 v = self.input_names[k]
