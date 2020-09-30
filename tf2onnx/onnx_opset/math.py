@@ -707,7 +707,7 @@ class InvertPermutationOp:
     ]
 
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def version_11(cls, ctx, node, **kwargs):
 
         onnx_dtype = ctx.get_dtype(node.input[0])
         shape = ctx.get_shape(node.input[0])

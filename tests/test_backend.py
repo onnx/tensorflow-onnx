@@ -3676,7 +3676,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         with self.assertRaises(ValueError):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
-    @check_opset_min_version(10, "topk")
+    @check_opset_min_version(11, "topk")
     def test_invert_permutation(self):
 
         def func(x):
