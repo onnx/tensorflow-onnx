@@ -595,11 +595,6 @@ class IsFinite:
 @tf_op("Atan2")
 class Atan2Op:
     # support more dtype
-    supported_dtypes = [
-        onnx_pb.TensorProto.FLOAT,
-        onnx_pb.TensorProto.FLOAT16,
-        onnx_pb.TensorProto.DOUBLE
-    ]
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
@@ -615,8 +610,14 @@ class Atan2Op:
                 atan_part = numpy.arctan(y / (x + (1 - sx ** 2))) * sx ** 2
                 return atan_part + pi_part
         """
+        supported_dtypes = [
+            onnx_pb.TensorProto.FLOAT,
+            onnx_pb.TensorProto.FLOAT16,
+            onnx_pb.TensorProto.DOUBLE
+        ]
 
         onnx_dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(onnx_dtype in supported_dtypes, "Unsupported input type.")
         shape = ctx.get_shape(node.input[0])
         np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
 

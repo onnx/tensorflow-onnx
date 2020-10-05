@@ -36,13 +36,6 @@ def make_dft_constant(length, dtype, fft_length):
 @tf_op("RFFT")
 class RFFTOp:
     # support more dtype
-    supported_dtypes = [
-        onnx_pb.TensorProto.FLOAT,
-        onnx_pb.TensorProto.FLOAT16,
-        onnx_pb.TensorProto.DOUBLE,
-        onnx_pb.TensorProto.COMPLEX64,
-        onnx_pb.TensorProto.COMPLEX128,
-    ]
 
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -99,6 +92,13 @@ class RFFTOp:
                 res = np.dot(cst, x)
                 return np.transpose(res, (0, 2, 1))
         """
+        supported_dtypes = [
+            onnx_pb.TensorProto.FLOAT,
+            onnx_pb.TensorProto.FLOAT16,
+            onnx_pb.TensorProto.DOUBLE,
+            onnx_pb.TensorProto.COMPLEX64,
+            onnx_pb.TensorProto.COMPLEX128,
+        ]
         consumers = ctx.find_output_consumers(node.output[0])
         consumer_types = set(op.type for op in consumers)
         utils.make_sure(
@@ -107,6 +107,7 @@ class RFFTOp:
             consumer_types)
 
         onnx_dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(onnx_dtype in supported_dtypes, "Unsupported input type.")
         shape = ctx.get_shape(node.input[0])
         np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
         shape_n = shape[-1]
@@ -164,13 +165,6 @@ class RFFTOp:
 @tf_op("ComplexAbs")
 class ComplexAbsOp:
     # support more dtype
-    supported_dtypes = [
-        onnx_pb.TensorProto.FLOAT,
-        onnx_pb.TensorProto.FLOAT16,
-        onnx_pb.TensorProto.DOUBLE,
-        onnx_pb.TensorProto.COMPLEX64,
-        onnx_pb.TensorProto.COMPLEX128,
-    ]
 
     @classmethod
     def any_version(cls, opset, ctx, node, **kwargs):
@@ -180,7 +174,15 @@ class ComplexAbsOp:
         it assumes the first dimension means real part (0)
         and imaginary part (1, :, :...).
         """
+        supported_dtypes = [
+            onnx_pb.TensorProto.FLOAT,
+            onnx_pb.TensorProto.FLOAT16,
+            onnx_pb.TensorProto.DOUBLE,
+            onnx_pb.TensorProto.COMPLEX64,
+            onnx_pb.TensorProto.COMPLEX128,
+        ]
         onnx_dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(onnx_dtype in supported_dtypes, "Unsupported input type.")
         shape = ctx.get_shape(node.input[0])
         np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
         utils.make_sure(shape[0] == 2, "ComplexAbs expected the first dimension to be 2 but shape is %r", shape)
