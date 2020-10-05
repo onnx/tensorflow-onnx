@@ -48,7 +48,10 @@ class DirectOp:
 
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
-        pass
+        if node.type == "Log":
+            # ORT doesn't implement Log on doubles
+            double_to_float = {onnx_pb.TensorProto.DOUBLE: onnx_pb.TensorProto.FLOAT}
+            node.maybe_cast_input([[onnx_pb.TensorProto.FLOAT]], double_to_float)
 
 
 @tf_op(["Acos", "Asin", "Atan", "Cos", "Sin", "Tan"])
