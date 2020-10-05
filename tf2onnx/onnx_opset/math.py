@@ -704,15 +704,14 @@ class Atan2Op:
 
 @tf_op("InvertPermutation")
 class InvertPermutationOp:
-    supported_dtypes = [
-        onnx_pb.TensorProto.INT32,
-        onnx_pb.TensorProto.INT64,
-    ]
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
 
+        supported_dtypes = [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]
         onnx_dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(onnx_dtype in supported_dtypes, "InvertPermutation only applies on INT32, INT64.")
+
         shape = ctx.get_shape(node.input[0])
 
         shape_node = ctx.make_node(
@@ -721,12 +720,9 @@ class InvertPermutationOp:
         neg_node = ctx.make_node(
             "Neg", inputs=node.input, name=utils.make_name(node.name + '_neg'))
 
-        topk_unused = utils.make_name(node.name + '_topk')
-        topk_indices = utils.make_name(node.name + '_indices')
-        outputs = [topk_unused, utils.port_name(topk_indices, 1)]
         topk_node = ctx.make_node(
             "TopK", inputs=[neg_node.output[0], shape_node.output[0]],
-            name=utils.make_name(node.name + '_topk'), outputs=outputs)
+            name=utils.make_name(node.name + '_topk'), output_count=2)
 
         ctx.remove_node(node.name)
 
