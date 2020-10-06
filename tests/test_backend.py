@@ -3676,6 +3676,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         with self.assertRaises(ValueError):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "topk")
+    def test_invert_permutation(self):
+
+        def func(x):
+            op_ = tf.math.invert_permutation(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        x_val = np.array([0, 1, 2, 3], dtype=np.int64)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+        x_val = np.array([1, 5, 2, 0, 3, 4], dtype=np.int64)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
 
 if __name__ == '__main__':
     unittest_main()
