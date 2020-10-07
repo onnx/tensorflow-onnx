@@ -1086,7 +1086,8 @@ class Unpack:
         # split node is 1 rank higher than squeeze nodes
         output_shape = ctx.get_shape(node.output[0])
         if output_shape:
-            ctx.set_shape(node.output[0], output_shape.insert(axis, 1))
+            split_shape = output_shape[:axis] + [1] + output_shape[axis:]
+            ctx.set_shape(node.output[0], split_shape)
 
 
 @tf_op("OneHot")
