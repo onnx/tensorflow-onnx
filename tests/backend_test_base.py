@@ -223,7 +223,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 if check_shape:
                     self.assertEqual(expected_val.shape, tf_lite_val.shape)
 
-            g = process_tf_lite(tflite_path, opset=self.config.opset, target=self.config.target)
+            g = process_tf_graph(None, opset=self.config.opset,
+                                 input_names=list(feed_dict.keys()),
+                                 output_names=output_names_with_port,
+                                 target=self.config.target,
+                                 const_node_values=const_node_values,
+                                 tflite_path=tflite_path,
+                                 **process_args)
             g = optimizer.optimize_graph(g)
             actual = self.run_backend(g, output_names_with_port, onnx_feed_dict)
             
