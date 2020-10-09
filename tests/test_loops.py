@@ -50,7 +50,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             x_val = np.array([0], dtype=np.int32)
         else:
             x_val = np.array(0, dtype=np.int32)
-        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06)
+        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06, test_tflite=True)
 
     def test_simple_while_loop_2(self):
         def func(i):
@@ -69,7 +69,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             x_val = np.array([3], dtype=np.int32)
         else:
             x_val = np.array(3, dtype=np.int32)
-        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06)
+        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06, test_tflite=True)
 
     def test_while_loop_with_ta_write(self):
         def func(i):
@@ -90,7 +90,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
 
         x_val = np.array(0, dtype=np.int32)
         output_names_with_port = ["output:0", "i:0"]
-        self.run_test_case(func, {_INPUT: x_val}, [], output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, {_INPUT: x_val}, [], output_names_with_port, rtol=1e-06, test_tflite=False)
 
     def test_while_loop_with_ta_read_simple(self):
         def func(i, inputs_2):

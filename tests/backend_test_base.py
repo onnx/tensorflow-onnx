@@ -208,8 +208,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             output_details = interpreter.get_output_details()
             input_name_to_index = {n['name'].split(':')[0]: n['index'] for n in input_details}
             ouput_name_to_index = {n['name'].split(':')[0]: n['index'] for n in output_details}
-            for k, v in feed_dict.items():
-                interpreter.set_tensor(input_name_to_index[k.split(':')[0]], v)
+            feed_dict_without_port = {k.split(':')[0]: v for k, v in feed_dict.items()}
+            output_names = [o.split(':')[0] for o in output_names_with_port]
+            for k, v in feed_dict_without_port.items():
+                interpreter.set_tensor(input_name_to_index[k], v)
             interpreter.invoke()
             tf_lite_output_data = [interpreter.get_tensor(output['index']) for output in output_details]
 
@@ -224,14 +226,25 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     self.assertEqual(expected_val.shape, tf_lite_val.shape)
 
             g = process_tf_graph(None, opset=self.config.opset,
-                                 input_names=list(feed_dict.keys()),
-                                 output_names=output_names_with_port,
+                                 input_names=list(feed_dict_without_port.keys()),
+                                 output_names=output_names,
                                  target=self.config.target,
                                  const_node_values=const_node_values,
                                  tflite_path=tflite_path,
                                  **process_args)
             g = optimizer.optimize_graph(g)
-            actual = self.run_backend(g, output_names_with_port, onnx_feed_dict)
+            onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
+            onnx_from_tfl_output = self.run_backend(g, output_names, onnx_feed_dict_without_port)
+
+            for tf_lite_val, onnx_val in zip(tf_lite_output_data, onnx_from_tfl_output):
+                if check_value:
+                    self.assertAllClose(tf_lite_val, onnx_val, rtol=rtol, atol=atol)
+                if check_dtype:
+                    self.assertEqual(tf_lite_val.dtype, onnx_val.dtype)
+                # why need shape checke: issue when compare [] with scalar
+                # https://github.com/numpy/numpy/issues/11071
+                if check_shape:
+                    self.assertEqual(tf_lite_val.shape, onnx_val.shape)
             
         return g
 

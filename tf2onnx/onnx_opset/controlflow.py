@@ -789,6 +789,7 @@ def parameter_binding(g, inputs, state_vars=None):
         else:
             binding[k] = inputs[i]
             i += 1
+    utils.make_sure(i == len(inputs), "Parameter count mismatch while binding controlflow")
     return binding
 
 

@@ -69,6 +69,8 @@ FUNCTION_ATTRS = [snake_to_proper_case(attr) for attr in FUNCTION_ATTRS]
 
 enum_cache = {}
 def lookup_enum(idx, enum_name):
+    if enum_name == 'TensorType':
+        return TFLITE_TO_ONNX_DTYPE[idx]
     if enum_name in enum_cache:
         return enum_cache[enum_name][idx]
     import importlib

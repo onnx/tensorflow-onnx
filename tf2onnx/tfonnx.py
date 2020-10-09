@@ -18,6 +18,7 @@ from onnx import onnx_pb
 
 import tf2onnx
 import tf2onnx.onnx_opset  # pylint: disable=unused-import
+import tf2onnx.tflite_handlers
 import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
@@ -238,7 +239,7 @@ def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, impacted_ops)
 
 
-def tensorflow_onnx_mapping(g, ops_mapping):
+def tensorflow_onnx_mapping(g, ops_mapping, is_tflite=False):
     logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
@@ -256,17 +257,19 @@ def tensorflow_onnx_mapping(g, ops_mapping):
         map_info = ops_mapping.get(op)
         if map_info is None:
             unmapped_op[op] += 1
-            logger.error("Tensorflow op [%s: %s] is not supported", node.name, op)
+            if not is_tflite:
+                logger.error("Tensorflow op [%s: %s] is not supported", node.name, op)
             continue
         mapped_op[op] += 1
 
         func, kwargs = map_info
         if kwargs:
             # if there is a onnx_op key we'll map the old type to a new type
-            onnx_op = kwargs.get("onnx_op")
-            if onnx_op:
-                kwargs["tf_op"] = op
-                node.type = onnx_op
+            converted_op = kwargs.get("tf_op" if is_tflite else "onnx_op")
+            if converted_op:
+                # sometimes the handler wants to know what the old op name was
+                kwargs["tfl_op" if is_tflite else "tf_op"] = op
+                node.type = converted_op
         body_graphs = node.get_body_graphs()
         if body_graphs:
             for attr, b_g in body_graphs.items():
@@ -285,7 +288,8 @@ def tensorflow_onnx_mapping(g, ops_mapping):
 
         try:
             func(g, node, **kwargs)
-            node.skip_conversion = True
+            if not is_tflite:
+                node.skip_conversion = True
         except Exception as ex:
             logger.error("Failed to convert node %r (fct=%r)\n%r",
                          node.name, func, node.summary, exc_info=1)
@@ -362,7 +366,14 @@ def run_rewriters(g, funcs, continue_on_error):
                 run_rewriters(b_g, funcs, attr_name)
 
 def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
-                         output_names, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt):
+                         output_names, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt, is_tflite=False):
+
+    if is_tflite:
+        tfl_ops_mapping = handler.tfl_op.create_tfl_to_tf_mapping()
+        _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True)
+        if exceptions and not continue_on_error:
+            raise exceptions[0]
+
     # create ops mapping for the desired opsets
     ops_mapping = handler.tf_op.create_mapping(g.opset, g.extra_opset)
 
@@ -520,10 +531,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = tflite_graph_to_onnx(tfl_graph, opcodes, model)
             g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_outputs, is_subgraph=is_subgraph)
             fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
-                                      f_outputs, {}, {}, op_cnt, attr_cnt)
+                                      f_outputs, {}, {}, op_cnt, attr_cnt, is_tflite=True)
             if i == 0:
                 result_g = fg
             else:
+                fg.func_inputs = f_inputs
                 set_function(graph_name, fg)
         return result_g
 
