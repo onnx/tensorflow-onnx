@@ -90,7 +90,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
                       check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
-                      large_model=False, test_tflite=True):
+                      large_model=False, test_tflite=True, skip_tfl_consistency_check=False):
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -215,15 +215,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             interpreter.invoke()
             tf_lite_output_data = [interpreter.get_tensor(output['index']) for output in output_details]
 
-            for expected_val, tf_lite_val in zip(expected, tf_lite_output_data):
-                if check_value:
-                    self.assertAllClose(expected_val, tf_lite_val, rtol=rtol, atol=atol)
-                if check_dtype:
-                    self.assertEqual(expected_val.dtype, tf_lite_val.dtype)
-                # why need shape checke: issue when compare [] with scalar
-                # https://github.com/numpy/numpy/issues/11071
-                if check_shape:
-                    self.assertEqual(expected_val.shape, tf_lite_val.shape)
+            if not skip_tfl_consistency_check:
+                for expected_val, tf_lite_val in zip(expected, tf_lite_output_data):
+                    if check_value:
+                        self.assertAllClose(expected_val, tf_lite_val, rtol=rtol, atol=atol)
+                    if check_dtype:
+                        self.assertEqual(expected_val.dtype, tf_lite_val.dtype)
+                    # why need shape checke: issue when compare [] with scalar
+                    # https://github.com/numpy/numpy/issues/11071
+                    if check_shape:
+                        self.assertEqual(expected_val.shape, tf_lite_val.shape)
 
             g = process_tf_graph(None, opset=self.config.opset,
                                  input_names=list(feed_dict_without_port.keys()),
