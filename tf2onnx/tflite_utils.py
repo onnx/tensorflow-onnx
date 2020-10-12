@@ -114,7 +114,7 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model):
         name = tensor.Name().decode()
         tensor_names[i] = name
 
-        output_shapes[name] = tensor.ShapeAsNumpy().tolist()
+        output_shapes[name] = tensor.ShapeAsNumpy().tolist()  # TODO: support None shape
         buf = model.Buffers(tensor.Buffer())
         dtypes[name] = TFLITE_TO_ONNX_DTYPE[tensor.Type()]
         if not buf.DataIsNone():
