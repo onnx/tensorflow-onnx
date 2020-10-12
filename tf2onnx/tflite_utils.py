@@ -91,7 +91,8 @@ def read_tflite_model(tflite_path):
     from tflite.Model import Model
     from tflite.BuiltinOperator import BuiltinOperator
     from tflite.BuiltinOptions import BuiltinOptions
-    buf = open(tflite_path, 'rb').read()
+    with open(tflite_path, 'rb') as f:
+        buf = f.read()
     buf = bytearray(buf)
     m = Model.GetRootAsModel(buf, 0)
     opcodes = {}
@@ -114,7 +115,12 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model):
         name = tensor.Name().decode()
         tensor_names[i] = name
 
-        output_shapes[name] = tensor.ShapeAsNumpy().tolist()  # TODO: support None shape
+        if tensor.ShapeIsNone():
+            output_shapes[name] = None
+        elif tensor.ShapeSignatureIsNone():
+            output_shapes[name] = tensor.ShapeAsNumpy().tolist()
+        else:
+            output_shapes[name] = tensor.ShapeSignatureAsNumpy().tolist()
         buf = model.Buffers(tensor.Buffer())
         dtypes[name] = TFLITE_TO_ONNX_DTYPE[tensor.Type()]
         if not buf.DataIsNone():
@@ -177,7 +183,8 @@ def main():
     from tflite.Model import Model
     from tflite.BuiltinOperator import BuiltinOperator
     from tflite.BuiltinOptions import BuiltinOptions
-    buf = open(r"model.tflite", 'rb').read()
+    with open(r"model.tflite", 'rb') as f:
+        buf = f.read()
     buf = bytearray(buf)
     m = Model.GetRootAsModel(buf, 0)
     import importlib
