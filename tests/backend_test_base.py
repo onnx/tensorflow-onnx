@@ -74,10 +74,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = m.run(output_names, inputs)
         return results
 
-    def run_backend(self, g, outputs, input_dict, large_model=False):
+    def run_backend(self, g, outputs, input_dict, large_model=False, postfix=""):
         tensor_storage = ExternalTensorStorage() if large_model else None
         model_proto = g.make_model("test", external_tensor_storage=tensor_storage)
-        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage)
+        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage, postfix=postfix)
 
         if self.config.backend == "onnxruntime":
             y = self.run_onnxruntime(model_path, input_dict, outputs)
@@ -166,13 +166,18 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 sess_inputs = [sess.graph.get_tensor_by_name(k) for k in feed_dict.keys()]
                 sess_outputs = [sess.graph.get_tensor_by_name(n) for n in output_names_with_port]
                 converter = tf.compat.v1.lite.TFLiteConverter.from_session(sess, sess_inputs, sess_outputs)
-                tflite_model = converter.convert()
-                tflite_path = os.path.join(self.test_data_directory, self._testMethodName + ".tflite")
-                dir_name = os.path.dirname(tflite_path)
-                if dir_name:
-                    os.makedirs(dir_name, exist_ok=True)
-                with open(tflite_path, 'wb') as f:
-                    f.write(tflite_model)
+                from tensorflow.lite.python.convert import ConverterError
+                try:
+                    tflite_model = converter.convert()
+                    tflite_path = os.path.join(self.test_data_directory, self._testMethodName + ".tflite")
+                    dir_name = os.path.dirname(tflite_path)
+                    if dir_name:
+                        os.makedirs(dir_name, exist_ok=True)
+                    with open(tflite_path, 'wb') as f:
+                        f.write(tflite_model)
+                except ConverterError as e:
+                    test_tflite = False
+
 
             if True or self.config.is_debug_mode:
                 model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
@@ -235,7 +240,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                  **process_args)
             g = optimizer.optimize_graph(g)
             onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
-            onnx_from_tfl_output = self.run_backend(g, output_names, onnx_feed_dict_without_port)
+            onnx_from_tfl_output = self.run_backend(g, output_names, onnx_feed_dict_without_port, postfix="_from_tflite")
 
             for tf_lite_val, onnx_val in zip(tf_lite_output_data, onnx_from_tfl_output):
                 if check_value:
@@ -246,7 +251,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 # https://github.com/numpy/numpy/issues/11071
                 if check_shape:
                     self.assertEqual(tf_lite_val.shape, onnx_val.shape)
-            
+
         return g
 
     def save_onnx_model(self, model_proto, feed_dict, postfix="", external_tensor_storage=None):
