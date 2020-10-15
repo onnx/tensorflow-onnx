@@ -142,6 +142,16 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model):
         attr = {}
         options_type_name = lookup_enum(op.BuiltinOptionsType(), 'BuiltinOptions')
         option_class = get_options_class(options_type_name)
+        if optype == 'QUANTIZE':
+            out_tensor = tflite_g.Tensors(op.Outputs(0))
+            quant = out_tensor.Quantization()
+            attr['scale'] = quant.ScaleAsNumpy().tolist()  # TODO: add some checks for min/max/axis/etc.
+            attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+        if optype == 'DEQUANTIZE':
+            in_tensor = tflite_g.Tensors(op.Inputs(0))
+            quant = in_tensor.Quantization()
+            attr['scale'] = quant.ScaleAsNumpy().tolist()  # TODO: add some checks for min/max/axis/etc.
+            attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
         if option_class is not None:
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
@@ -154,7 +164,7 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model):
                     attr_names.remove(a)
             for a in attr_names:
                 if a.endswith('AsNumpy'):
-                    value = getattr(options, a)()
+                    value = getattr(options, a)().tolist()
                     a = a[:-len('AsNumpy')]
                 else:
                     value = getattr(options, a)()
@@ -164,8 +174,8 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model):
                         value = model.Subgraphs(value).Name().decode()
                 attr_cnt[a] += 1
                 attr[proper_to_snake_case(a)] = value
-        input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength())]
-        output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength())]
+        input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength()) if op.Inputs(i) != -1]
+        output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
         onnx_node = helper.make_node("TFL_" + optype, input_names, output_names, name=output_names[0], **attr)
         onnx_nodes.append(onnx_node)
 

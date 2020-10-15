@@ -748,7 +748,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     def test_matmul1(self):
-        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x_val = np.array([1.0, 2.0, -3.0, -4.0, 5.0, 6.0], dtype=np.float32).reshape((2, 3))
         def func(x):
             x_ = tf.matmul(x, x, transpose_a=True)
             return tf.identity(x_, name=_TFOUTPUT)
@@ -828,7 +828,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = tf.multiply(x, tf.constant(y_const))
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, large_model=True)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, large_model=True, test_tflite=False)
 
     @check_target('rs6', 'GatherNd')
     def test_gathernd(self):
@@ -2042,7 +2042,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = quantize_and_dequantize(x, 1.0, 6.0, signed_input=False, range_given=True)
             return tf.identity(x_, name=_TFOUTPUT)
-        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, skip_tfl_consistency_check=True)
 
     @check_tf_min_version("1.15")
     @check_opset_min_version(10, "quantize_and_dequantize")
@@ -2050,9 +2050,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_shape = [3, 3, 2]
         x_val = np.arange(-np.prod(x_shape)/2, np.prod(x_shape)/2).astype("float32").reshape(x_shape)
         def func(x):
-            x_ = quantize_and_dequantize(x, -6.0, 6.0, signed_input=True, narrow_range=False, range_given=True)
+            x_ = quantize_and_dequantize(x, -9.0, 9.0, signed_input=True, narrow_range=False, range_given=True)
             return tf.identity(x_, name=_TFOUTPUT)
-        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, skip_tfl_consistency_check=True)
 
     @check_tf_min_version("2.0")
     @check_opset_min_version(13, "quantize_and_dequantize")
@@ -2289,7 +2289,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = reverse_v2(x, axis=[])
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, test_tflite=False)
 
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_vector_axis(self):
@@ -2298,21 +2298,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = reverse_v2(x, axis=[0, -3, 2, 3])
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, test_tflite=False)  # TFLite doesn't support multiple axes
 
         x_val_shape = [2, 3, 4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
             x_ = reverse_v2(x, axis=[-3, 1, 2])
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, test_tflite=False)
 
         x_val_shape = [5, 5, 9, 7, 8, 9]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
             x_ = reverse_v2(x, axis=[0, 1, -2, 3, 5])
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, test_tflite=False)
 
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_1D_tensor(self):
@@ -2323,7 +2323,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = reverse_v2(x, axis=[])
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, test_tflite=False)  # TFlite crashes
 
     @check_opset_min_version(8, "where")
     def test_where(self):
@@ -2965,8 +2965,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val2 = np.random.rand(n, k).astype("float32")
         x_val3 = np.random.rand(m, k).astype("float32")
         def func(a, b, c):
-            alpha = tf.constant(1.0, dtype=tf.float32)
-            beta = tf.constant(2.0, dtype=tf.float32)
+            alpha = tf.constant(1.1, dtype=tf.float32)
+            beta = tf.constant(2.3, dtype=tf.float32)
             mul1 = tf.multiply(alpha, tf.matmul(a, b))
             mul2 = tf.multiply(beta, c)
             x_ = mul1 + mul2
