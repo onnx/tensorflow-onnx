@@ -487,6 +487,9 @@ class Graph(object):
             # add identity node after each output, in case it is renamed during conversion.
             for o in self.outputs:
                 n = self.get_node_by_output_in_current_graph(o)
+                if n.is_graph_input():
+                    # Don't add identity if the node is also an input. We want to keep input names the same.
+                    continue
                 new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
                 n_shapes = n.output_shapes
                 n_dtypes = n.output_dtypes
