@@ -1,0 +1,537 @@
+albert_en_base:
+  disabled: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/albert_en_base"
+  model_type: saved_model
+  input_get: get_ramp
+  inputs:
+    "input_mask:0": [100, 100]
+    "input_type_ids:0": [100, 100]
+    "input_word_ids:0": [100, 100]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+  tag: "serve"
+  signature_def: "serving_default"
+
+albert_en_large:
+  disabled: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/albert_en_large"
+  model_type: saved_model
+  input_get: get_ramp
+  inputs:
+    "input_mask:0": [100, 100]
+    "input_type_ids:0": [100, 100]
+    "input_word_ids:0": [100, 100]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+
+bit-m-r50x1:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/bit-m-r50x1"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/bit-m-r50x1/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 100, 150, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bit-m-r101x3:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/bit-m-r101x3"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/bit-m-r101x3/model.zip"
+  model_type: saved_model
+  large_model: true
+  input_get: get_ramp
+  inputs:
+    "input_1:0": [1, 100, 150, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bit-m-r152x4:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/bit-m-r152x4"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/bit-m-r152x4/model.zip"
+  model_type: saved_model
+  large_model: true
+  input_get: get_ramp
+  inputs:
+    "input_1:0": [1, 100, 150, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bert-uncased-tf2-qa:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/bert-uncased-tf2-qa"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/bert-uncased-tf2-qa/model.zip"
+  model_type: saved_model
+  large_model: true
+  input_get: get_zeros_int32
+  inputs:
+    "input_mask:0": [2, 3]
+    "input_type_ids:0": [2, 3]
+    "input_word_ids:0": [2, 3]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+efficientnet-b0-classification:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/efficientnet-b0-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/efficientnet-b0-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 200, 150, 3]
+  outputs:
+    - logits:0
+  rtol: 0.01
+  atol: 0.0001
+  tag: ''
+  signature_def: 'default'
+
+bit-s-r101x1:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/bit-s-r101x1"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/bit-s-r101x1/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "input_1:0": [10, 20, 30, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+esrgan-tf2:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/esrgan-tf2"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/esrgan-tf2/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "input_0:0": [10, 20, 30, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+imagenet-inception_resnet_v2-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-inception_resnet_v2-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-inception_resnet_v2-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [10, 20, 30, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-mobilenet_v1_025_128-classification:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-mobilenet_v1_025_128-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-mobilenet_v1_025_128-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-mobilenet_v2_140_224-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-mobilenet_v2_140_224-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-mobilenet_v2_140_224-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-nasnet_large-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-nasnet_large-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-nasnet_large-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 331, 331, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-nasnet_mobile-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-nasnet_mobile-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-nasnet_mobile-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+  
+imagenet-pnasnet_large-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-pnasnet_large-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-pnasnet_large-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 331, 331, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-resnet_v1_101-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-resnet_v1_101-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-resnet_v1_101-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-resnet_v2_50-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-resnet_v2_50-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-resnet_v2_50-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+resnet_50-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/resnet_50-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/resnet_50-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-inception_v3-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-inception_v3-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-inception_v3-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 299, 299, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-inception_v2-classification:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-inception_v2-classification"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/imagenet-inception_v2-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 299, 299, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+nq:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nq"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nq/model.zip"
+  model_type: saved_model
+  large_model: true
+  input_get: get_zeros_int32
+  inputs:
+    "input_ids:0": [1, 512]
+    "input_mask:0": [1, 512]
+    "segment_ids:0": [1, 512]
+    "unique_ids:0": 
+      shape: [1, 1]
+      input_get: get_zeros_int64
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+  structured_outputs:
+    - answer_types
+    - tf_op_layer_end_logits
+    - tf_op_layer_start_logits
+    - unique_ids
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+# tf2nq:
+#   disabled: true
+#   skip_conversion: false
+#   model: "C:/Users/tomwi/Documents/tfhubmodels/tf2nq"
+#   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/tf2nq/model.zip"
+#   model_type: saved_model
+#   large_model: true
+#   input_get: get_zeros_int32
+#   inputs:
+#     "data_len:0": [1]
+#     "input_word_ids:0": [1, 512]
+#     "question_len:0": [1]
+#   outputs:
+#     - Identity:0
+#     - Identity_1:0
+#     - Identity_2:0
+#     - Identity_3:0
+#     - Identity_4:0
+#   rtol: 0.05
+#   atol: 0.0005
+#   tag: "serve"
+#   signature_def: "serving_default"
+
+cord-19-swivel-128d:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/cord-19-swivel-128d"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/cord-19-swivel-128d/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_ramp
+  inputs:
+    "sentences:0": [1]
+    "256:0": [1, 512]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+ssd-mobilenet-v2:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/ssd-mobilenet-v2/frozen_inference_graph.pb"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/ssd-mobilenet-v2/model.onnx"
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "image_tensor:0": [1, 224, 224, 3]
+  outputs:
+    - detection_boxes:0
+    - detection_scores:0
+    - num_detections:0
+    - detection_classes:0
+  rtol: 0.05
+  atol: 0.0005
+
+nonsemantic-speech-benchmark-trill:
+  disabled: true
+  skip_conversion: false
+  skip_tensorflow: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nonsemantic-speech-benchmark-trill"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nonsemantic-speech-benchmark-trill/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_wav
+  inputs:
+    "samples:0": [128]
+    "sample_rate:0":
+      value: 16000
+  outputs:
+    - Identity:0
+    - Identity_1:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 1 #4
+
+nonsemantic-speech-benchmark-trill-distilled:
+  disabled: true
+  skip_conversion: false
+  skip_tensorflow: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nonsemantic-speech-benchmark-trill-distilled"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nonsemantic-speech-benchmark-trill-distilled/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_wav
+  inputs:
+    "samples:0": [128]
+    "sample_rate:0":
+      value: 16000
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 1
+
+keras-test-model:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/OneDrive - Microsoft/ONNX/tensorflow-onnx/kerastestmodel"
+  converted_model: "C:/Users/tomwi/OneDrive - Microsoft/ONNX/tensorflow-onnx/kerasres.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 140, 140, 3]
+  outputs:
+    - logits:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 4
+
+prado:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Downloads/pradoexp"
+  converted_model: "C:/Users/tomwi/Downloads/pradoexp/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "Input:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+universal-sentence-encoder:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/universal-sentence-encoder"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/universal-sentence-encoder/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 299, 299, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+simple-test:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Downloads/simple_test/simple_test/model.pb"
+  converted_model: "C:/Users/tomwi/Downloads/simple_test/simple_test/testonnx.onnx"
+  model_type: frozen
+  input_get: get_beach
+  inputs:
+    "Placeholder_1:0": [1, 256,256,3]
+  outputs:
+    #- decoded/Sigmoid:0
+    - batch_normalization/FusedBatchNorm:0
+  rtol: 0.05
+  atol: 0.0005
+
+bert_en_cased_L-12_H-768_A-12:
+  disabled: true
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/bert_en_cased_L-12_H-768_A-12"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/bert_en_cased_L-12_H-768_A-12/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_zeros_int32
+  inputs:
+    "input_mask:0": [2, 3]
+    "input_type_ids:0": [2, 3]
+    "input_word_ids:0": [2, 3]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+from_github_issue:
+  disabled: false
+  skip_conversion: true
+  model: "C:/Users/tomwi/Downloads/saved_model (1).pb"
+  converted_model: "C:/Users/tomwi/Downloads/model.onnx"
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input/input_data:0": [1,416,416,3]
+    "input/lwir_input_data:0": [1,416,416,3]
+  outputs:
+    - pred_sbbox/concat_2:0
+    - pred_mbbox/concat_2:0
+    - pred_lbbox/concat_2:0
+  rtol: 0.05
+  atol: 0.0005
