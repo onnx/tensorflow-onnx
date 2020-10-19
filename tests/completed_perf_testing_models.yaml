@@ -2584,3 +2584,134 @@ resnet_50-feature_vector:
   rtol: 0.05
   atol: 0.0005
   concrete_function: 0
+
+albert_base:
+  disabled: true
+  model: "/tmp/albert_base"
+  model_type: saved_model
+  input_get: get_random
+  inputs:
+    "input_mask:0": np.ones([1, 384], dtype=np.int32)
+    "segment_ids:0": np.ones([1, 384], dtype=np.int32)
+    "input_ids:0": np.ones([1, 384], dtype=np.int32)
+  outputs:
+    - bert/pooler/dense/Tanh:0
+    - bert/encoder/transformer/group_0_11/layer_11/inner_group_0/LayerNorm_1/batchnorm/add_1:0
+  tag: ""
+  signature_def: "tokens"
+  rtol: 0.5
+
+albert_lite:
+  disabled: true
+  model: "/tmp/albert-lite"
+  model_type: saved_model
+  input_get: get_random
+  inputs:
+    "input_mask:0": np.ones([1, 384], dtype=np.int32)
+    "segment_ids:0": np.ones([1, 384], dtype=np.int32)
+    "input_ids:0": np.ones([1, 384], dtype=np.int32)
+  outputs:
+    - bert/pooler/dense/Tanh:0
+    - bert/encoder/transformer/group_0_11/layer_11/inner_group_0/LayerNorm_1/batchnorm/add_1:0
+  tag: ""
+  signature_def: "tokens"
+  rtol: 0.5
+
+albert_large:
+  disabled: true
+  model: "/tmp/albert_large"
+  model_type: saved_model
+  input_get: get_random
+  inputs:
+    "input_mask:0": np.ones([1, 384], dtype=np.int32)
+    "segment_ids:0": np.ones([1, 384], dtype=np.int32)
+    "input_ids:0": np.ones([1, 384], dtype=np.int32)
+  outputs:
+    - bert/pooler/dense/Tanh:0
+    - bert/encoder/transformer/group_0_11/layer_11/inner_group_0/LayerNorm_1/batchnorm/add_1:0
+  tag: ""
+  signature_def: "tokens"
+  rtol: 0.5
+
+albert_xlarge:
+  disabled: true
+  model: "/tmp/albert_xlarge"
+  model_type: saved_model
+  input_get: get_random
+  inputs:
+    "input_mask:0": np.ones([1, 384], dtype=np.int32)
+    "segment_ids:0": np.ones([1, 384], dtype=np.int32)
+    "input_ids:0": np.ones([1, 384], dtype=np.int32)
+  outputs:
+    - bert/pooler/dense/Tanh:0
+    - bert/encoder/transformer/group_0_11/layer_11/inner_group_0/LayerNorm_1/batchnorm/add_1:0
+  tag: ""
+  signature_def: "tokens"
+  large_model: true
+  check_only_shape: true
+  structured_outputs:
+    - pooled_output
+    - sequence_output
+  rtol: 0.5
+
+albert_xxlarge:
+  disabled: true
+  model: "/tmp/albert_xxlarge"
+  model_type: saved_model
+  input_get: get_random
+  inputs:
+    "input_mask:0": np.ones([1, 384], dtype=np.int32)
+    "segment_ids:0": np.ones([1, 384], dtype=np.int32)
+    "input_ids:0": np.ones([1, 384], dtype=np.int32)
+  outputs:
+    - bert/pooler/dense/Tanh:0
+    - bert/encoder/transformer/group_0_11/layer_11/inner_group_0/LayerNorm_1/batchnorm/add_1:0
+  tag: ""
+  signature_def: "tokens"
+  large_model: true
+  check_only_shape: true
+  structured_outputs:
+    - pooled_output
+    - sequence_output
+  rtol: 0.5
+
+efficientnet-edgetpu-L:
+  disabled: true
+  url: https://storage.googleapis.com/cloud-tpu-checkpoints/efficientnet/efficientnet-edgetpu-L.tar.gz
+  model: efficientnet-edgetpu-L/saved_model
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 300, 300, 3]
+  outputs:
+    - Softmax:0
+  
+efficientnet-lite4:
+  disabled: true
+  model: /data/NN/mlperf/efficientnet/efficientnet-lite4
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 224, 224, 3]
+  outputs:
+    - Softmax:0
+
+efficientnet-qobvel-b0:
+  disabled: true
+  model: /data/NN/mlperf/efficientnet/qobvel-b0
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+
+efficientnet-qobvel-b1:
+  disabled: true
+  model: /data/NN/mlperf/efficientnet/qobvel-b1
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 240, 240, 3]
+  outputs:
+    - Identity:0
