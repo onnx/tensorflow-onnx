@@ -111,7 +111,9 @@ class Node(object):
             return a
         if np.product(a.t.dims) > external_tensor_storage.external_tensor_size_threshold:
             a = copy.copy(a)
-            tensor_name = self.name + "_" + str(external_tensor_storage.name_counter)
+            tensor_name = self.name.strip() + "_" + str(external_tensor_storage.name_counter)
+            for c in '~"#%&*:<>?/\\{|}':
+                tensor_name = tensor_name.replace(c, '_')
             external_tensor_storage.name_counter += 1
             external_tensor_storage.name_to_tensor_data[tensor_name] = a.t.raw_data
             external_tensor_storage.node_to_modified_value_attr[self] = a
