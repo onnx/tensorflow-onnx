@@ -432,7 +432,7 @@ class IfOp:
 
         # replace the original node
         if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+                                shapes=output_shapes, dtypes=output_dtypes, outputs=node.output, skip_conversion=True)
 
         for branch in ["then_branch", "else_branch"]:
             func_name = node.get_attr_str(branch)

@@ -528,15 +528,26 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         result_g = None
         for i in reversed(range(len(tflite_graphs))):
             tfl_graph = tflite_graphs[i]
-            onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = tflite_graph_to_onnx(tfl_graph, opcodes, model)
+            prefix = '' if i == 0 else tfl_graph.Name().decode() + '_'
+            onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = tflite_graph_to_onnx(tfl_graph, opcodes, model, prefix)
             g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_outputs, is_subgraph=is_subgraph)
             fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
                                       f_outputs, {}, {}, op_cnt, attr_cnt, is_tflite=True)
+            fg.graph_name = graph_name
             if i == 0:
                 result_g = fg
             else:
                 fg.func_inputs = f_inputs
                 set_function(graph_name, fg)
+
+        graph_dicts = list(result_g.contained_graphs.values())
+        while graph_dicts:
+            d = graph_dicts.pop()
+            for _, g in d.items():
+                graph_dicts.extend(list(g.contained_graphs.values()))
+                model_proto = g.make_model("test")
+                utils.save_protobuf("C:/Users/tomwi/Downloads/tflite/" + g.graph_name + ".onnx", model_proto)
+    
         return result_g
 
     else:
@@ -580,9 +591,17 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             raise ValueError("Inputs/Outputs Not Found")
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names, is_subgraph=is_subgraph)
-
-    return process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
+    res = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
                                 output_names, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt)
+    if not is_subgraph:
+        graph_dicts = list(res.contained_graphs.values())
+        while graph_dicts:
+            d = graph_dicts.pop()
+            for _, g in d.items():
+                graph_dicts.extend(list(g.contained_graphs.values()))
+                model_proto = g.make_model("test")
+                utils.save_protobuf("C:/Users/tomwi/Downloads/tf2/" + g.graph_name + ".onnx", model_proto)
+    return res
     
 
 

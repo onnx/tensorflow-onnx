@@ -1864,7 +1864,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x, y):
             x_ = x[y:, :y]
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, test_tflite=False)
 
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
@@ -1875,7 +1875,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x, y):
             x_ = x[y:2]
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, test_tflite=False)
 
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
@@ -1886,14 +1886,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x, y):
             x_ = x[y]
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, test_tflite=False)
 
         x_val = np.arange(3 * 2 * 3).astype("float32").reshape((3, 2, 3))
         y_val = np.array(-1, dtype=np.int32)
         def func(x, y):
             x_ = x[y]
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, test_tflite=False)
 
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
@@ -1940,7 +1940,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         z_val = np.array(-1).astype(np.int32)
         def func(x, y, z):
             return tf.concat([x[:, :, :10], x[:, :, y::z]], axis=0, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val}, test_tflite=False)
 
     @check_opset_min_version(10, "Slice")
     def test_new_axis_mask(self):

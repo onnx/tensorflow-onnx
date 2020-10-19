@@ -102,7 +102,7 @@ def read_tflite_model(tflite_path):
     tflite_graphs = [m.Subgraphs(i) for i in range(m.SubgraphsLength())]
     return tflite_graphs, opcodes, m
 
-def tflite_graph_to_onnx(tflite_g, opcodes, model):
+def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
     op_cnt = collections.Counter()
     attr_cnt = collections.Counter()
     onnx_nodes = []
@@ -110,9 +110,13 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model):
     dtypes = {}
     tensor_names = {}
 
+    input_indices = {tflite_g.Inputs(i) for i in range(tflite_g.InputsLength())}
+
     for i in range(tflite_g.TensorsLength()):
         tensor = tflite_g.Tensors(i)
         name = tensor.Name().decode()
+        if i in input_indices:
+            name = input_prefix + name
         tensor_names[i] = name
 
         if tensor.ShapeIsNone():
@@ -134,6 +138,9 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model):
             onnx_node = helper.make_node("Const", [], outputs=[name], name=name, value=onnx_tensor)
             onnx_nodes.append(onnx_node)
             op_cnt["Const"] += 1
+
+    #for i in range(tflite_g.InputsLength()):
+    #    tensor_names[tflite_g.Inputs(i)] = input_prefix + tensor_names[tflite_g.Inputs(i)]
 
     for i in range(tflite_g.OperatorsLength()):
         op = tflite_g.Operators(i)
@@ -179,8 +186,8 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model):
         onnx_node = helper.make_node("TFL_" + optype, input_names, output_names, name=output_names[0], **attr)
         onnx_nodes.append(onnx_node)
 
-    inputs = [tflite_g.Tensors(tflite_g.Inputs(i)).Name().decode() for i in range(tflite_g.InputsLength())]
-    outputs = [tflite_g.Tensors(tflite_g.Outputs(i)).Name().decode() for i in range(tflite_g.OutputsLength())]
+    inputs = [tensor_names[tflite_g.Inputs(i)] for i in range(tflite_g.InputsLength())]
+    outputs = [tensor_names[tflite_g.Outputs(i)] for i in range(tflite_g.OutputsLength())]
 
     for inp in inputs:
         onnx_node = helper.make_node("Placeholder", [], outputs=[inp], name=inp)
