@@ -312,7 +312,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     try:
         frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
     except ValueError as e:
-        if "exceeds maximum protobuf size of 2GB" in str(e):
+        if any(msg in str(e) for msg in ["exceeds maximum protobuf size of 2GB", "string too long"]):
             raise ValueError(err_large_model)
         raise e
 
