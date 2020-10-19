@@ -382,7 +382,8 @@ class Node(object):
         attr_graphs = self.get_body_graphs()
         if attr_graphs:
             for attr_name, sub_graph in attr_graphs.items():
-                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name, external_tensor_storage)
+                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name,
+                                                   external_tensor_storage=external_tensor_storage)
                 self.set_attr(attr_name, graph_proto)
 
         attr = list(self.get_onnx_attrs(external_tensor_storage).values())
