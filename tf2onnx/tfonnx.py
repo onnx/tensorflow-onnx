@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # pylint: disable=unused-variable
 
 def fold_constants_using_tf(g, outputs_to_values, outputs_to_dtypes):
-    ops = g.get_nodes()
+    ops = list(g.get_nodes())
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
     while keep_looking:
@@ -83,6 +83,7 @@ def rewrite_constant_fold(g, ops):
         "Sqrt": np.sqrt,
         "Sub": np.subtract,
     }
+    ops = list(ops)
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
