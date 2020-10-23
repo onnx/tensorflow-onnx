@@ -140,6 +140,32 @@ def compress_graph_def(graph_def):
                 tensor.tensor_content = b''
     return const_node_values
 
+def get_index_from_strided_slice_of_shape(node, outputs_to_values):
+    """Returns the  index of the dimension that the strided slice is reading from the shape node or None"""
+    attr_vals = {
+        'shrink_axis_mask': 1,
+        'ellipsis_mask': 0,
+        'begin_mask': 0,
+        'new_axis_mask': 0,
+        'end_mask': 0
+    }
+    for a in node.node_def.attr:
+        if a in attr_vals:
+            i = get_tf_node_attr(node, a)
+            if i != attr_vals[a]:
+                return None
+    i1 = outputs_to_values.get(node.inputs[1].name)
+    i2 = outputs_to_values.get(node.inputs[2].name)
+    i3 = outputs_to_values.get(node.inputs[3].name)
+    if i1 is None or i2 is None or i3 is None:
+        return None
+    if i1.shape != (1,) or i2.shape != (1,) or i3.shape != (1,):
+        return None
+    i1, i2, i3 = i1[0], i2[0], i3[0]
+    if i1 + 1 != i2 or i3 != 1:
+        return None
+    return i1
+
 def compute_const_folding_using_tf(g, const_node_values):
     """Find nodes with constant inputs and compute their values using TF"""
     if const_node_values is None:
@@ -149,6 +175,8 @@ def compute_const_folding_using_tf(g, const_node_values):
     ops = g.get_operations()
     outputs_to_values = {}
     outputs_to_dtypes = {}
+    outputs_to_shapes = {}
+    shape_node_outputs = {}
 
     for node in ops:
         # Load values of constants. Use const_node_values if possible
@@ -158,6 +186,14 @@ def compute_const_folding_using_tf(g, const_node_values):
                 tensor.tensor_content = const_node_values[node.name]
             outputs_to_values[node.outputs[0].name] = get_tf_tensor_data(tensor)
             outputs_to_dtypes[node.outputs[0].name] = node.outputs[0].dtype
+        for out in node.outputs:
+            outputs_to_shapes[out.name] = get_tf_tensor_shape(out)
+
+    for node in ops:
+        if node.type == "Shape":
+            shape = outputs_to_shapes.get(node.inputs[0].name)
+            if shape is not None:
+                shape_node_outputs[node.outputs[0].name] = shape
 
     unneeded_outputs = set()
     progress = True
@@ -167,6 +203,14 @@ def compute_const_folding_using_tf(g, const_node_values):
             # Find ops with constant inputs and compute their values
             input_names = [i.name for i in node.inputs]
             output_names = [i.name for i in node.outputs]
+            if node.type == 'StridedSlice' and input_names[0] in shape_node_outputs \
+                                           and output_names[0] not in outputs_to_values:
+                shape = shape_node_outputs[input_names[0]]
+                i = get_index_from_strided_slice_of_shape(node, outputs_to_values)
+                if i is not None and 0 <= i < len(shape) and shape[i] is not None:
+                    outputs_to_values[output_names[0]] = np.array(shape[i])
+                    outputs_to_dtypes[node.outputs[0].name] = node.outputs[0].dtype
+                    progress = True
             can_fold = node.type not in ['Enter']
             can_fold = can_fold and len(input_names) > 0 and all(inp in outputs_to_values for inp in input_names)
             # We can only fold nodes with a single output
