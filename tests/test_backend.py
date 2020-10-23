@@ -1213,6 +1213,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1})
 
+    def test_slice_from_shape_const_fold(self):
+        x_val = np.array([4, 3], dtype=np.int64)
+        x_shape = np.array([-1, 3], dtype=np.int64)
+        def func(x):
+            z = tf.zeros(x)
+            x = tf.reshape(z, tf.constant(x_shape))
+            s = tf.shape(x)
+            t1 = tf.constant([1], dtype=tf.int32)
+            t2 = tf.constant([2], dtype=tf.int32)
+            y = tf.strided_slice(s, t1, t2, shrink_axis_mask=1)
+            return tf.identity(y, name=_TFOUTPUT)
+        def graph_validator(g):
+            # After constant folding just an input and const output node remain
+            return len(g.get_nodes()) == 2
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, graph_validator=graph_validator)
+
     def test_slice(self):
         x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)
         def func(x):

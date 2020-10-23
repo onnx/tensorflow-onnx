@@ -20,7 +20,7 @@ from tensorflow.python.framework import tensor_util
 
 from onnx import helper, onnx_pb, numpy_helper
 
-from tf2onnx.utils import make_sure, is_tf_const_op, port_name
+from tf2onnx.utils import make_sure, is_tf_const_op, port_name, map_onnx_to_numpy_type
 from . import logging
 
 logger = logging.getLogger(__name__)
@@ -166,10 +166,11 @@ def get_index_from_strided_slice_of_shape(node, outputs_to_values):
         return None
     return i1
 
-def compute_const_folding_using_tf(g, const_node_values):
+def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     """Find nodes with constant inputs and compute their values using TF"""
     if const_node_values is None:
         const_node_values = {}
+    graph_outputs = set(graph_outputs)
     from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
 
     ops = g.get_operations()
@@ -208,7 +209,8 @@ def compute_const_folding_using_tf(g, const_node_values):
                 shape = shape_node_outputs[input_names[0]]
                 i = get_index_from_strided_slice_of_shape(node, outputs_to_values)
                 if i is not None and 0 <= i < len(shape) and shape[i] is not None:
-                    outputs_to_values[output_names[0]] = np.array(shape[i])
+                    np_dtype = map_onnx_to_numpy_type(map_tf_dtype(node.outputs[0].dtype))
+                    outputs_to_values[output_names[0]] = np.array(shape[i], dtype=np_dtype)
                     outputs_to_dtypes[node.outputs[0].name] = node.outputs[0].dtype
                     progress = True
             can_fold = node.type not in ['Enter']
@@ -216,7 +218,7 @@ def compute_const_folding_using_tf(g, const_node_values):
             # We can only fold nodes with a single output
             can_fold = can_fold and len(output_names) == 1 and output_names[0] not in outputs_to_values
             # Skip if value already computed, used, and discarded
-            can_fold = can_fold and output_names[0] not in unneeded_outputs
+            can_fold = can_fold and output_names[0] not in unneeded_outputs and output_names[0] not in graph_outputs
             if can_fold:
                 # Make a mini graph containing just the node to fold
                 g2 = tf.Graph()
