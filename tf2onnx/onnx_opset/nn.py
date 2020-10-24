@@ -900,6 +900,8 @@ class Resize:
             concat_shape.output[0]
         ]
         transformation_mode = "asymmetric"
+        if "align_corners" in node.attr and node.attr["align_corners"].i:
+            transformation_mode = "align_corners"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
             transformation_mode = "half_pixel"
         resize = ctx.make_node("Resize", resize_inputs,
