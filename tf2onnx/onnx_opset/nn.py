@@ -903,7 +903,10 @@ class Resize:
         if "align_corners" in node.attr and node.attr["align_corners"].i:
             transformation_mode = "align_corners"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
-            transformation_mode = "half_pixel"
+            if node.type == "ResizeNearestNeighbor":
+                transformation_mode = "tf_half_pixel_for_nn"
+            else:
+                transformation_mode = "half_pixel"
         resize = ctx.make_node("Resize", resize_inputs,
                                attr={"mode": mode, "nearest_mode": "floor",
                                      "coordinate_transformation_mode": transformation_mode})
