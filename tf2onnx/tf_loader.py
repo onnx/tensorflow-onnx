@@ -121,7 +121,10 @@ def from_function(func, input_names, output_names, large_model=False):
     if large_model:
         return convert_variables_to_constants_large_model(func)
 
-    frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
+    if get_tf_version() < LooseVersion("2.2"):
+        frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
+    else:
+        frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
     # output_names = [i.name for i in frozen_func.outputs]
     tf_reset_default_graph()
