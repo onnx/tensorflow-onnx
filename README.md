@@ -145,8 +145,10 @@ python -m tf2onnx.convert
     [--target TARGET]
     [--custom-ops list-of-custom-ops]
     [--fold_const]
+    [--large_model]
     [--continue_on_error]
     [--verbose]
+    [--output_frozen_graph]
 ```
 
 ### Parameters
@@ -199,13 +201,17 @@ Only valid with parameter `--saved_model`. If a model contains a list of concret
 
 Only valid with parameter `--saved_model`. When set, creates a zip file containing the ONNX protobuf model and large tensor values stored externally. This allows for converting models that exceed the 2 GB protobuf limit.
 
+#### --output_frozen_graph
+
+Saves the frozen tensorflow graph to file.
+
 #### --target
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
 
 #### --fold_const
 
-When set, TensorFlow fold_constants transformation is applied before conversion. This benefits features including Transpose optimization (e.g. Transpose operations introduced during tf-graph-to-onnx-graph conversion will be removed), and RNN unit conversion (for example LSTM). Older TensorFlow version might run into issues with this option depending on the model.
+Deprecated. Constant folding is always enabled.
 
 ### <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
 
