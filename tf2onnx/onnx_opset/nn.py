@@ -366,6 +366,27 @@ class ConvOp:
         # No change.
         cls.version_1(ctx, node, **kwargs)
 
+def get_shape_from_const_or_concat(ctx, node):
+    if node.is_const():
+        return node.get_tensor_value()
+    if node.type == 'Concat':
+        # Sometimes the shape is formed by concating a bunch of consts together
+        res = []
+        if any(ctx.get_shape(inp) != [1] for inp in node.input):
+            return None
+        for i, inp in enumerate(node.inputs):
+            # The concat is converted from a Pack. Conversion adds an unsqueeze to the inputs.
+            if node.inputs[i].type == 'Unsqueeze' and node.inputs[i].inputs[0].is_scalar():
+                res.append(node.inputs[i].inputs[0].get_tensor_value())
+            else:
+                if i == 0:
+                    # For the batch dimension we don't care if it is unknown
+                    res.append(-1)
+                else:
+                    return None
+        return res
+    return None
+
 @tf_op(["Conv2DBackpropInput", "Conv3DBackpropInputV2"])
 class ConvTranspose:
     @classmethod
@@ -386,8 +407,9 @@ class ConvTranspose:
         output_shape_orig = node.output_shapes
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
-        if node.inputs[0].is_const():
-            output_shape = ctx.get_shape(node.output[0])
+        output_shape = get_shape_from_const_or_concat(ctx, node.inputs[0])
+        if output_shape is not None:
+            #output_shape = ctx.get_shape(node.output[0])
             if is_channels_last(node):
                 new_output_shape = [output_shape[1], output_shape[2]]
                 input_dims = [input_shape[1], input_shape[2]]
@@ -407,6 +429,7 @@ class ConvTranspose:
 
             node.set_attr("output_shape", new_output_shape)
         else:
+            # FIXME: This case fails in edge cases where strides > 1
             input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
             output_shape = ctx.make_node("Shape", [node.output[0]])
             output_h = GraphBuilder(ctx).make_slice(

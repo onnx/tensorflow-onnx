@@ -3282,6 +3282,31 @@ class BackendTests(Tf2OnnxBackendTestBase):
         out_backprop_val = np.random.randint(low=0, high=256, size=[1, 5, 5, 5]).astype(np.float32)
         self._run_test_case(func, [_OUTPUT], {_INPUT: filters_val, _INPUT1: out_backprop_val})
 
+    @check_tf_min_version("1.15", "tf.repeat needs tf 1.15")
+    @check_opset_min_version(10, "Conv2DBackpropInput")
+    def test_Conv2DBackpropInput_shape_implied(self):
+        batch_dim_val = np.array(1, dtype=np.int32)
+        def func(filter_val, out_backprop_val, batch_dim):
+            out_backprop_val = tf.repeat(out_backprop_val, batch_dim, axis=0)
+            s = tf.shape(out_backprop_val)
+            t1 = tf.constant([0], dtype=tf.int32)
+            t2 = tf.constant([1], dtype=tf.int32)
+            batch_dim = tf.strided_slice(s, t1, t2, shrink_axis_mask=1)
+            # Sometimes the size given is a stack of constants with unknown batch dim
+            input_sizes_val = tf.stack([batch_dim, 10, 10, 3])
+            return conv2d_backprop_input(input_sizes=input_sizes_val, filter=filter_val,
+                                         out_backprop=out_backprop_val, strides=[1, 2, 2, 1],
+                                         padding='SAME', name=_TFOUTPUT)
+        filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
+        out_backprop_val = np.random.randint(low=0, high=256, size=[1, 5, 5, 5]).astype(np.float32)
+        def graph_validator(g):
+            for n in g.get_nodes():
+                if n.type == 'ConvTranspose':
+                    return "output_shape" in n.attr
+            return False
+        self._run_test_case(func, [_OUTPUT], {_INPUT: filters_val, _INPUT1: out_backprop_val, _INPUT2: batch_dim_val},
+                            graph_validator=graph_validator)
+
     @check_opset_min_version(10, "Conv2DBackpropInput")
     def test_Conv2DBackpropInput_const_valid(self):
         input_sizes_val_ = np.array([1, 12, 12, 3], dtype=np.int32)

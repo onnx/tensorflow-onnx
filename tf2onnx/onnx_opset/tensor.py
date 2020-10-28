@@ -1054,7 +1054,8 @@ class Pack:
         # insert Unsqueeze on each input
         for i, n in enumerate(node.inputs):
             dtype = ctx.get_dtype(node.input[i])
-            shape = ctx.get_shape(node.input[i])
+            shape = ctx.get_shape(node.input[i]).copy()
+            shape.insert(axis, 1)
             new_node = ctx.make_node("Unsqueeze", [node.input[i]], op_name_scope=node.name, attr={"axes": [axis]},
                                      shapes=[shape], dtypes=[dtype])
             output_name = new_node.output[0]
