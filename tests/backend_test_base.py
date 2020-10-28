@@ -30,6 +30,14 @@ from tf2onnx.tf_utils import compress_graph_def
 from tf2onnx.graph import ExternalTensorStorage
 
 
+if is_tf2():
+    tf_set_random_seed = tf.compat.v1.set_random_seed
+    tf_tables_initializer = tf.compat.v1.tables_initializer
+else:
+    tf_set_random_seed = tf.set_random_seed
+    tf_tables_initializer = tf.tables_initializer
+
+
 class Tf2OnnxBackendTestBase(unittest.TestCase):
     def setUp(self):
         self.config = get_test_config()
@@ -133,14 +141,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # use graph to execute the tensorflow func
             #
             with tf_session() as sess:
-                tf.set_random_seed(1)
+                tf_set_random_seed(1)
                 input_list = []
                 for k, v in clean_feed_dict.items():
                     input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
                 func(*input_list)
                 variables_lib.global_variables_initializer().run()
-                if not is_tf2():
-                    tf.tables_initializer().run()
+                tf_tables_initializer().run()
                 output_dict = []
                 for out_name in output_names_with_port:
                     output_dict.append(sess.graph.get_tensor_by_name(out_name))
