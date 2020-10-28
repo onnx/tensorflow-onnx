@@ -429,7 +429,18 @@ class ConvTranspose:
 
             node.set_attr("output_shape", new_output_shape)
         else:
-            # FIXME: This case fails in edge cases where strides > 1
+            utils.make_sure(ctx.opset >= 10, "Opset 10 needed for Conv Backprop Input with non-constant shape")
+            strides = parse_dims_attr(node, node.get_attr('strides').ints, spatial)
+            use_strides_workaround = any(d > 1 for d in strides)
+            if use_strides_workaround and ctx.opset < 12:
+                # When strides > 1, ONNX and TF have an implementation difference in ConvTranspose. ONNX outputs a
+                # slightly smaller tensor which must be padded with a row of 0s. Pad with dynamic shape requires
+                # opset >= 11 and Max of int64 needs opset >= 12.  Depending on the output_shape, this row of 0s might
+                # be shaved off, in which case TF and ONNX agree.  When output_shape is dynamic it is impossible to
+                # know at conversion time whether this is the case and the workaround is needed.
+                logger.warning("Conv Backprop Input with strides > 1 and non-constant shape has known bug. "
+                               "Workaround requires opset 12.")
+                use_strides_workaround = False
             input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
             output_shape = ctx.make_node("Shape", [node.output[0]])
             output_h = GraphBuilder(ctx).make_slice(
@@ -442,9 +453,17 @@ class ConvTranspose:
                 {"data": input_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
             diff_h = ctx.make_node("Sub", [output_h, expect_h])
             diff_w = ctx.make_node("Sub", [output_w, expect_w])
+            nonneg_diff_h = diff_h
+            nonneg_diff_w = diff_w
+
+            if use_strides_workaround:
+                const_zero = ctx.make_const(utils.make_name(node.name + "_const_zero"), np.array([0], dtype=np.int64))
+                nonneg_diff_h = ctx.make_node("Max", [diff_h.output[0], const_zero.output[0]])
+                nonneg_diff_w = ctx.make_node("Max", [diff_w.output[0], const_zero.output[0]])
+
             const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
-            start_h = ctx.make_node("Div", [diff_h.output[0], const_two.output[0]])
-            start_w = ctx.make_node("Div", [diff_w.output[0], const_two.output[0]])
+            start_h = ctx.make_node("Div", [nonneg_diff_h.output[0], const_two.output[0]])
+            start_w = ctx.make_node("Div", [nonneg_diff_w.output[0], const_two.output[0]])
             end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
             end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
             if spatial == 3:
@@ -453,7 +472,10 @@ class ConvTranspose:
                 expect_d = GraphBuilder(ctx).make_slice(
                     {"data": input_shape.output[0], "ends": [4], "starts": [3], "axes": [0]})
                 diff_d = ctx.make_node("Sub", [output_d, expect_d])
-                start_d = ctx.make_node("Div", [diff_d.output[0], const_two.output[0]])
+                nonneg_diff_d = diff_d
+                if use_strides_workaround:
+                    nonneg_diff_d = ctx.make_node("Max", [diff_d.output[0], const_zero.output[0]])
+                start_d = ctx.make_node("Div", [nonneg_diff_d.output[0], const_two.output[0]])
                 end_d = ctx.make_node("Add", [start_d.output[0], expect_d])
 
                 starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0], start_d.output[0]],
@@ -471,10 +493,35 @@ class ConvTranspose:
                                        [node.output[0], starts.output[0], ends.output[0], slice_axes.output[0]],
                                        shapes=output_shape_orig)
 
+            final_node = slice_node
+
+            if use_strides_workaround:
+                cz = const_zero.output[0]
+
+                neg_diff_h = ctx.make_node("Neg", [diff_h.output[0]])
+                shrink_h_by = ctx.make_node("Max", [neg_diff_h.output[0], const_zero.output[0]])
+                shb = shrink_h_by.output[0]
+
+                neg_diff_w = ctx.make_node("Neg", [diff_w.output[0]])
+                shrink_w_by = ctx.make_node("Max", [neg_diff_w.output[0], const_zero.output[0]])
+                swb = shrink_w_by.output[0]
+
+                if spatial == 3:
+                    neg_diff_d = ctx.make_node("Neg", [diff_d.output[0]])
+                    shrink_d_by = ctx.make_node("Max", [neg_diff_d.output[0], const_zero.output[0]])
+                    sdb = shrink_d_by.output[0]
+                    pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, cz, shb, swb, sdb, cz], attr={"axis": 0})
+                    padded_node = ctx.make_node("Pad", [slice_node.output[0], pads.output[0]])
+                else:
+                    pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, shb, swb, cz], attr={"axis": 0})
+                    padded_node = ctx.make_node("Pad", [slice_node.output[0], pads.output[0]])
+
+                final_node = padded_node
+
             downstream_nodes = ctx.find_output_consumers(node.output[0])
             downstream_nodes.remove(output_shape)
             downstream_nodes.remove(slice_node)
-            ctx.replace_all_inputs(node.output[0], slice_node.output[0], ops=downstream_nodes)
+            ctx.replace_all_inputs(node.output[0], final_node.output[0], ops=downstream_nodes)
 
         conv_dims_attr(node, "strides", spatial=spatial)
         conv_dims_attr(node, "dilations", spatial=spatial)

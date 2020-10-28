@@ -3349,6 +3349,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         out_backprop_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 5]).astype(np.float32)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
 
+    @check_opset_min_version(12, "Conv2DBackpropInput with strided workaround")
+    def test_Conv2DBackpropInput_strided_same(self):
+        def func(input_sizes, filters, out_backprop):
+            return conv2d_backprop_input(input_sizes, filters, out_backprop, strides=[1, 5, 10, 1], padding='SAME',
+                                         name=_TFOUTPUT)
+        input_sizes_val = np.array([1, 10, 10, 3], dtype=np.int32)
+        filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 5]).astype(np.float32)
+        out_backprop_val = np.random.randint(low=0, high=256, size=[1, 2, 1, 5]).astype(np.float32)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_sizes_val, _INPUT1: filters_val, _INPUT2: out_backprop_val})
+
     @check_opset_min_version(10, "Conv3DBackpropInputV2")
     def test_Conv3DBackpropInputV2_const(self):
         output_shape_val_ = np.array([1, 10, 10, 10, 3], dtype=np.int32)
@@ -3412,6 +3422,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
         filters_val = np.random.randint(low=0, high=256, size=[3, 3, 3, 3, 5]).astype(np.float32)
         value_val = np.random.randint(low=0, high=256, size=[1, 10, 10, 10, 5]).astype(np.float32)
         output_shape_val = np.array([1, 12, 12, 12, 3], dtype=np.int32)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: value_val, _INPUT1: filters_val, _INPUT2: output_shape_val},
+                            rtol=1e-6)
+
+    @check_opset_min_version(12, "Conv3DBackpropInputV2 with strided workaround")
+    def test_Conv3DBackpropInputV2_strided_same(self):
+        def func(value, filters, output_shape):
+            return conv3d_transpose(value, filters, output_shape, strides=[1, 10, 4, 3, 1],
+                                    padding='SAME', data_format="NDHWC", name=_TFOUTPUT)
+        filters_val = np.random.randint(low=1, high=256, size=[1, 1, 1, 1, 1]).astype(np.float32)
+        value_val = np.random.randint(low=1, high=256, size=[1, 3, 2, 5, 1]).astype(np.float32)
+        output_shape_val = np.array([1, 30, 8, 15, 1], dtype=np.int32)
         self._run_test_case(func, [_OUTPUT], {_INPUT: value_val, _INPUT1: filters_val, _INPUT2: output_shape_val},
                             rtol=1e-6)
 
