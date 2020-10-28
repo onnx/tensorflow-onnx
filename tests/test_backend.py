@@ -3391,7 +3391,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             rtol=1e-6)
 
     @check_opset_min_version(8, "CategoryMapper")
-    @skip_tf2()
     def test_hashtable_lookup(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
@@ -3404,7 +3403,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             lookup_results = hash_table.lookup(query_holder)
             ret = tf.add(lookup_results, 0, name=_TFOUTPUT)
             return ret
-        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, constant_fold=False)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, constant_fold=False, as_session=True)
         os.remove(filnm)
 
     @check_opset_min_version(11)
