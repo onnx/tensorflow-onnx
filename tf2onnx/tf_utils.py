@@ -266,6 +266,21 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     logger.info("Computed %d values for constant folding", len(outputs_to_values))
     return outputs_to_values, outputs_to_dtypes
 
+def get_hash_table_info(graph_def):
+    """Return lists of the shared_names, key_dtypes, and value_dtypes of all hash tables declared in the graph_def"""
+    names = []
+    key_dtypes = []
+    val_dtypes = []
+    for n in graph_def.node:
+        if n.op == "HashTableV2":
+            if all(k in n.attr for k in ['shared_name', 'key_dtype', 'value_dtype']):
+                name = n.attr['shared_name'].s
+                if name != b'':
+                    names.append(name)
+                    key_dtypes.append(n.attr['key_dtype'].type)
+                    val_dtypes.append(n.attr['value_dtype'].type)
+    return names, key_dtypes, val_dtypes
+
 def tflist_to_onnx(g, shape_override, const_node_values=None):
     """
     Convert the tf-node list into an onnx graph with minimal rewrites so
@@ -280,7 +295,7 @@ def tflist_to_onnx(g, shape_override, const_node_values=None):
                     "T_threshold", "element_dtype", "shape_type", "_lower_using_switch_merge",
                     "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
                     "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
-                    "Toutput_types", "dense_shapes", "Tdense",
+                    "Toutput_types", "dense_shapes", "Tdense", "Tidx", "Tsegmentids",
                     "Tcomplex", "Treal",  # For RFFT, Tcomplex is ignored because
                                           # onnx.helper.make_node fails,
                                           # TODO: it should be added back.

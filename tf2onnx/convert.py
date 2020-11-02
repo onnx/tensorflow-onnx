@@ -119,6 +119,7 @@ def main():
 
     extra_opset = args.extra_opset or []
     custom_ops = {}
+    initialized_tables = None
     if args.custom_ops:
         # default custom ops for tensorflow-onnx are in the "tf" namespace
         custom_ops = {op: (default_custom_op_handler, []) for op in args.custom_ops.split(",")}
@@ -132,9 +133,9 @@ def main():
         graph_def, inputs, outputs = tf_loader.from_checkpoint(args.checkpoint, args.inputs, args.outputs)
         model_path = args.checkpoint
     if args.saved_model:
-        graph_def, inputs, outputs = tf_loader.from_saved_model(
+        graph_def, inputs, outputs, initialized_tables = tf_loader.from_saved_model(
             args.saved_model, args.inputs, args.outputs, args.tag,
-            args.signature_def, args.concrete_function, args.large_model)
+            args.signature_def, args.concrete_function, args.large_model, return_initialized_tables=True)
         model_path = args.saved_model
     if args.keras:
         graph_def, inputs, outputs = tf_loader.from_keras(
@@ -163,7 +164,8 @@ def main():
                              input_names=inputs,
                              output_names=outputs,
                              inputs_as_nchw=args.inputs_as_nchw,
-                             const_node_values=const_node_values)
+                             const_node_values=const_node_values,
+                             initialized_tables=initialized_tables)
 
     onnx_graph = optimizer.optimize_graph(g)
 
