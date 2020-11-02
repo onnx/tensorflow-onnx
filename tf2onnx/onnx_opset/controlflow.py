@@ -18,7 +18,6 @@ from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
-from tf2onnx.utils import make_sure
 from tf2onnx.tf_loader import find_function
 
 
@@ -278,6 +277,7 @@ class Select:
         # T output = Select(bool condition, T x, T y)
         # Select_res = Add(Multiply(Cast(bool condition, float32), T x,),
         #                  Multiply(Cast(Not(bool condition), float32), T y)).
+        # TODO: Fix case where condition is 1-dimensional
         utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
         positive_cast = ctx.make_node("Cast", [node.input[0]], name=utils.make_name(node.name),
                                       attr={"to": TensorProto.FLOAT})
@@ -302,11 +302,13 @@ class Select:
 
         true_data_type = ctx.get_dtype(node.input[1])
         true_data_shape = ctx.get_shape(node.input[1])
-        make_sure(true_data_type is not None, "select true data dtype cannot be None")
-        make_sure(true_data_shape is not None, "select true data shape cannot be None")
-
         condition_shape = ctx.get_shape(node.input[0])
-        utils.make_sure(condition_shape is not None, "Shape of {} is None".format(node.input[0]))
+
+        if true_data_type is None or true_data_shape is None or condition_shape is None:
+            # Fallback if shape is unknown
+            cls.version_7(ctx, node, **kwargs)
+            return
+
         rank = len(condition_shape)
 
         utils.make_sure(rank >= 0, "rank should be >= 0")
@@ -361,13 +363,16 @@ class Select:
         # T1 output = Where(bool condition, T1 x, T1 y)
         # NOTE: condition can be 1-dimension in tensorflow, while in onnx,
         # it should be broadcastable with other two inputs
-        node.type = "Where"
+
         cond_shape = ctx.get_shape(node.input[0])
-        make_sure(cond_shape is not None, "shape of {} is None".format(node.input[0]))
         input_shape = ctx.get_shape(node.input[1])
         if input_shape is None:
             input_shape = ctx.get_shape(node.input[2])
-        make_sure(input_shape is not None, "input shape of {} is None".format(node.name))
+        if cond_shape is None or input_shape is None:
+            # Fallback if shape is unknown
+            cls.version_7(ctx, node, **kwargs)
+            return
+        node.type = "Where"
         input_rank = len(input_shape)
         # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
         if len(cond_shape) == 1 and input_rank > 1:
