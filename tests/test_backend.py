@@ -3258,6 +3258,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
             #self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "Compress")
+    def test_dynamic_partition_both_vector(self):
+        data_val = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float32)
+        part_val = np.array([0, 0, 1, 1, 0, 2, 1, 0], dtype=np.int32)
+        def func(data, partitions):
+            p1, p2, p3 = tf.dynamic_partition(data, partitions, num_partitions=3)
+            p1_ = tf.identity(p1, name=_TFOUTPUT)
+            p2_ = tf.identity(p2, name=_TFOUTPUT1)
+            p3_ = tf.identity(p3, name=_TFOUTPUT2)
+            return p1_, p2_, p3_
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: data_val, _INPUT1: part_val})
+
+    @check_opset_min_version(9, "Compress")
+    def test_dynamic_partition_data_tensor(self):
+        data_val = np.array([[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]], dtype=np.float32)
+        part_val = np.array([0, 2, 1, 0, 1], dtype=np.int32)
+        def func(data, partitions):
+            p1, p2, p3 = tf.dynamic_partition(data, partitions, num_partitions=3)
+            p1_ = tf.identity(p1, name=_TFOUTPUT)
+            p2_ = tf.identity(p2, name=_TFOUTPUT1)
+            p3_ = tf.identity(p3, name=_TFOUTPUT2)
+            return p1_, p2_, p3_
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: data_val, _INPUT1: part_val})
+
     @check_opset_min_version(10, "Conv2DBackpropInput")
     def test_Conv2DBackpropInput_const(self):
         input_sizes_val_ = np.array([1, 10, 10, 3], dtype=np.int32)
