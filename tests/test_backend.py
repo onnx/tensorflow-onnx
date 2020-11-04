@@ -3282,6 +3282,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return p1_, p2_, p3_
         self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: data_val, _INPUT1: part_val})
 
+    @check_opset_min_version(11, "ScatterElements")
+    def test_dynamic_stitch_both_vector(self):
+        data_val = np.array([[5, 1, 3], [7, 2, 4]], dtype=np.float32)
+        indices_val = np.array([[0, 1, 4], [2, 3, 5]], dtype=np.int32)
+        def func(indices, data):
+            x = tf.dynamic_stitch(tf.unstack(indices), tf.unstack(data))
+            x_ = tf.identity(x, name=_TFOUTPUT)
+            return x_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: indices_val, _INPUT1: data_val})
+
     @check_opset_min_version(10, "Conv2DBackpropInput")
     def test_Conv2DBackpropInput_const(self):
         input_sizes_val_ = np.array([1, 10, 10, 3], dtype=np.int32)

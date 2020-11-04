@@ -1818,6 +1818,45 @@ class DynamicPartition:
         ctx.remove_node(node.name)
 
 
+@tf_op(["DynamicStitch", "ParallelDynamicStitch"])
+class DynamicStitch:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        num_partitions = len(node.input) // 2
+        index_inputs = node.input[:num_partitions]
+        data_inputs = node.input[num_partitions:]
+        index_shapes = [ctx.get_shape(inp) for inp in index_inputs]
+        data_shapes = [ctx.get_shape(inp) for inp in data_inputs]
+        utils.make_sure(all(s is not None and len(s) == 1 for s in index_shapes),
+                        "DynamicPartition only implemented for index tensors of rank 1")
+        utils.make_sure(all(s is not None and len(s) == 1 for s in data_shapes),
+                        "DynamicPartition only implemented for data tensors of rank 1")
+        dtype = ctx.get_dtype(node.output[0])
+        concat_indices = ctx.make_node("Concat", index_inputs, attr={'axis': 0})
+        concat_indices_int64 = ctx.make_node("Cast", [concat_indices.output[0]], attr={"to": TensorProto.INT64})
+
+        concat_data = ctx.make_node("Concat", data_inputs, attr={'axis': 0})
+
+        data_shape = ctx.make_node("Shape", [concat_data.output[0]])
+        expanded_indices = ctx.make_node("Expand", [concat_indices_int64.output[0], data_shape.output[0]])
+
+        max_index = ctx.make_node("ReduceMax", [concat_indices_int64.output[0]], attr={'axes': [0], 'keepdims': 1})
+        const_one = ctx.make_const(utils.make_name('const_one'), np.array([1], np.int64))
+        target_length = ctx.make_node("Add", [max_index.output[0], const_one.output[0]])
+
+        zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
+        zeros_of_shape = ctx.make_node("ConstantOfShape", [target_length.output[0]], attr={"value": zero_tensor})
+
+        name = node.name
+        outputs = node.output
+        ctx.remove_node(node.name)
+        ctx.make_node("ScatterElements",
+                      [zeros_of_shape.output[0], expanded_indices.output[0], concat_data.output[0]],
+                      name=name,
+                      outputs=outputs,
+                      attr={'axis': 0})
+
+
 @tf_op("MatrixDiagPart")
 class MatrixDiagPart:
     @classmethod
