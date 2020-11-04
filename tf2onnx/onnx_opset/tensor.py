@@ -1790,6 +1790,34 @@ class Unique:
             # FIXME: the indices in onnx are not the same as in tensorflow.
 
 
+@tf_op("DynamicPartition")
+class DynamicPartition:
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        # For desired behavior, see diagram: https://www.tensorflow.org/api_docs/python/tf/raw_ops/DynamicPartition
+        data_inp = node.input[0]
+        partition_inp = node.input[1]
+        partition_shape = ctx.get_shape(partition_inp)
+        num_partitions = node.get_attr_value('num_partitions')
+        utils.make_sure(partition_shape is not None, "DynamicPartition requires known rank")
+        utils.make_sure(len(partition_shape) == 1, "DynamicPartition only implemented for partitions of rank 1")
+        # Put partitions into OneHot format
+        range_val = np.arange(num_partitions, dtype=np.int32).reshape([num_partitions, 1])
+        range_const = ctx.make_const(utils.make_name('range_const'), range_val)
+        equal_node = ctx.make_node("Equal", [partition_inp, range_const.output[0]])
+        # Cast bool to int since ORT doesn't implement Split on bool.
+        equal_int32 = ctx.make_node("Cast", [equal_node.output[0]], attr={"to": TensorProto.INT32})
+        split_node = ctx.make_node("Split", [equal_int32.output[0]], output_count=num_partitions, attr={'axis': 0})
+        for i in range(num_partitions):
+            cond_bools = ctx.make_node("Cast", [split_node.output[i]], attr={"to": TensorProto.BOOL})
+            squeeze_node = ctx.make_node("Squeeze", [cond_bools.output[0]], attr={'axes': [0]})
+            compress_node = ctx.make_node("Compress", [data_inp, squeeze_node.output[0]], attr={'axis': 0})
+            ctx.replace_all_inputs(node.output[i], compress_node.output[0])
+            ctx.copy_dtype(node.output[i], compress_node.output[0])
+            ctx.copy_shape(node.output[i], compress_node.output[0])
+        ctx.remove_node(node.name)
+
+
 @tf_op("MatrixDiagPart")
 class MatrixDiagPart:
     @classmethod
