@@ -140,6 +140,7 @@ class SegmentSum():
         segment_inp = node.input[1]
         data_shape = ctx.get_shape(data_inp)
         utils.make_sure(data_shape is not None, "Segment ops require input rank to be known")
+        data_rank = len(data_shape)
         data_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(data_inp))
         seg_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(segment_inp))
         max_segment = ctx.make_node("ReduceMax", [segment_inp], attr={'axes': [0], 'keepdims': 0})
@@ -147,7 +148,12 @@ class SegmentSum():
         num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]])
         onehot_values = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1], dtype=data_np_dtype))
         one_hot_node = ctx.make_node("OneHot", [segment_inp, num_segments.output[0], onehot_values.output[0]], attr={'axis': 0})
-        mul_node = ctx.make_node("Mul", [data_inp, one_hot_node.output[0]])
+        one_hot_unsqueeze = one_hot_node
+        if data_rank > 1:
+            new_dims = list(range(2, 2 + data_rank - 1))
+            one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_node.output[0]], attr={'axes': new_dims})
+
+        mul_node = ctx.make_node("Mul", [data_inp, one_hot_unsqueeze.output[0]])
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
