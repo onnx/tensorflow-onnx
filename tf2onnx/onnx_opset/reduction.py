@@ -130,3 +130,27 @@ class AddN():
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
         node.type = "Sum"
+
+
+@tf_op("SegmentSum")
+class SegmentSum():
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        data_inp = node.input[0]
+        segment_inp = node.input[1]
+        data_shape = ctx.get_shape(data_inp)
+        utils.make_sure(data_shape is not None, "Segment ops require input rank to be known")
+        data_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(data_inp))
+        seg_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(segment_inp))
+        max_segment = ctx.make_node("ReduceMax", [segment_inp], attr={'axes': [0], 'keepdims': 0})
+        one_const = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=seg_np_dtype))
+        num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]])
+        onehot_values = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1], dtype=data_np_dtype))
+        one_hot_node = ctx.make_node("OneHot", [segment_inp, num_segments.output[0], onehot_values.output[0]], attr={'axis': 0})
+        mul_node = ctx.make_node("Mul", [data_inp, one_hot_node.output[0]])
+
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        sum_node = ctx.make_node("ReduceSum", [mul_node.output[0]], attr={'axes': [1], 'keepdims': 0},
+                                 name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
