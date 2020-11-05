@@ -130,3 +130,61 @@ class AddN():
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
         node.type = "Sum"
+
+
+@tf_op(["SegmentSum", "SegmentProd", "SegmentMax", "SegmentMin"])
+class SegmentSum():
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        data_inp = node.input[0]
+        segment_inp = node.input[1]
+        data_shape = ctx.get_shape(data_inp)
+        utils.make_sure(data_shape is not None, "Segment ops require input rank to be known")
+        data_rank = len(data_shape)
+        data_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(data_inp))
+        seg_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(segment_inp))
+        data_is_float = np.dtype(data_np_dtype).kind == 'f'
+        data_is_int = np.dtype(data_np_dtype).kind == 'i'
+        utils.make_sure(data_is_float or data_is_int, "dtype for Segment ops must be float or int")
+
+        if node.type == "SegmentSum":
+            onnx_op = "ReduceSum"
+            identity_value = np.array(0, dtype=data_np_dtype)
+        elif node.type == "SegmentProd":
+            onnx_op = "ReduceProd"
+            identity_value = np.array(1, dtype=data_np_dtype)
+        elif node.type == "SegmentMax":
+            onnx_op = "ReduceMax"
+            if data_is_float:
+                identity_value = np.array('-inf', dtype=data_np_dtype)
+            else:
+                identity_value = np.iinfo(data_np_dtype).min
+        elif node.type == "SegmentMin":
+            onnx_op = "ReduceMin"
+            if data_is_float:
+                identity_value = np.array('inf', dtype=data_np_dtype)
+            else:
+                identity_value = np.iinfo(data_np_dtype).max
+
+        max_segment = ctx.make_node("ReduceMax", [segment_inp], attr={'axes': [0], 'keepdims': 0})
+        one_const = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=seg_np_dtype))
+        identity_const = ctx.make_const(utils.make_name("const_identity"), identity_value)
+        num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]])
+        # ORT doesn't support bool for OneHot so we use float32 and cast to bool
+        onehot_values = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1], dtype=np.float32))
+        one_hot_node = ctx.make_node("OneHot", [segment_inp, num_segments.output[0], onehot_values.output[0]],
+                                     attr={'axis': 0})
+        one_hot_bool = ctx.make_node("Cast", [one_hot_node.output[0]], attr={"to": onnx_pb.TensorProto.BOOL})
+        one_hot_unsqueeze = one_hot_bool
+
+        if data_rank > 1:
+            new_dims = list(range(2, 2 + data_rank - 1))
+            one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_bool.output[0]], attr={'axes': new_dims})
+
+        mul_node = ctx.make_node("Where", [one_hot_unsqueeze.output[0], data_inp, identity_const.output[0]])
+
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node(onnx_op, [mul_node.output[0]], attr={'axes': [1], 'keepdims': 0},
+                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
