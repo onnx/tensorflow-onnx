@@ -501,14 +501,15 @@ class Graph(object):
 
                 new_outputs = [output if output != o else new_output_name for output in n.output]
                 # domain should be passed to new node
-                new_node = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
-                                          skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
-                                          domain=n.domain)
-
+                branches = {}
                 if body_graphs:
                     for attr_name, body_graph in body_graphs.items():
                         body_graph.parent_graph = self
-                        new_node.set_body_graph_as_attr(attr_name, body_graph)
+                        branches[attr_name] = body_graph
+
+                _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
+                                   skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
+                                   domain=n.domain, branches=branches)
 
                 self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
                 self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
@@ -578,7 +579,7 @@ class Graph(object):
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
                   op_name_scope=None, name=None, shapes=None, dtypes=None, domain=constants.ONNX_DOMAIN,
-                  infer_shape_dtype=True):
+                  infer_shape_dtype=True, branches=None):
         """Make a new onnx node in the graph"""
         if attr is None:
             attr = {}
@@ -586,7 +587,8 @@ class Graph(object):
             shapes = []
         if dtypes is None:
             dtypes = []
-
+        if branches is None:
+            branches = {}
         if name is None:
             name = utils.make_name(op_type)
 
@@ -625,6 +627,9 @@ class Graph(object):
         node = Node(onnx_node, self, skip_conversion=skip_conversion)
         if onnx_attrs:
             _ = [node.set_attr_onnx(a) for a in onnx_attrs]
+
+        for branch, body in branches.items():
+            node.set_body_graph_as_attr(branch, body)
 
         if shapes:
             utils.make_sure(len(shapes) == output_count,
