@@ -89,13 +89,14 @@ class CustomRnnRewriter(LoopRewriterBase):
             for input_tensor_info in scan_props.scan_inputs:
                 scan_body_g.add_graph_input(input_tensor_info.id, input_tensor_info.dtype, input_tensor_info.shape)
 
+            branches = {"body": scan_body_g}
             scan_node = self._create_scan_node(context, scan_props,
-                                               state_inputs_initial_values + scan_inputs_initial_values)
+                                               state_inputs_initial_values + scan_inputs_initial_values,
+                                               branches=branches)
             if not scan_node:
                 logger.error("failed to create scan node during rewrite")
                 return REWRITER_RESULT.FAIL
 
-            scan_node.set_body_graph_as_attr("body", scan_body_g)
             self._connect_scan_with_output(context, scan_node)
 
             return REWRITER_RESULT.OK
@@ -105,7 +106,7 @@ class CustomRnnRewriter(LoopRewriterBase):
             logger.error("custom rnn rewrite failed, due to exception: %s, details:%s", ex, tb)
             return REWRITER_RESULT.FAIL
 
-    def _create_scan_node(self, context, scan_props, init_values):
+    def _create_scan_node(self, context, scan_props, init_values, branches=None):
         logger.debug("create scan node")
         # reuse original output connection id (e.g. Exit_XXX), so we don't need set shape.
         loop_outputs_shapes = []
@@ -132,13 +133,13 @@ class CustomRnnRewriter(LoopRewriterBase):
                                          attr={"num_scan_inputs": len(scan_props.scan_inputs)},
                                          output_count=len(scan_props.state_outputs + scan_props.scan_outputs),
                                          shapes=loop_outputs_shapes, dtypes=loop_outputs_dtypes,
-                                         skip_conversion=False)
+                                         skip_conversion=False, branches=branches)
         else:
             scan_node = self.g.make_node("Scan", init_values, op_name_scope="custom_rnn_scan",
                                          attr={"num_scan_inputs": len(scan_props.scan_inputs)},
                                          output_count=len(scan_props.state_outputs + scan_props.scan_outputs),
                                          shapes=loop_outputs_shapes, dtypes=loop_outputs_dtypes,
-                                         skip_conversion=False)
+                                         skip_conversion=False, branches=branches)
 
         return scan_node
 

@@ -88,11 +88,11 @@ class LoopRewriter(LoopRewriterBase):
                 loop_body_g.replace_all_inputs(input_ta.consumer.id, data_node.output[0])  # ops=loop_body_g.get_nodes()
 
             ## create Loop node
-            loop_node = self._create_loop_node(context, loop_props, init_cond_output)
+            branches = {"body": loop_body_g}
+            loop_node = self._create_loop_node(context, loop_props, init_cond_output, branches=branches)
             if not loop_node:
                 logger.error("failed to create loop node during rewrite")
                 return REWRITER_RESULT.FAIL
-            loop_node.set_body_graph_as_attr("body", loop_body_g)
 
             logger.debug("rewrite successfully")
             return REWRITER_RESULT.OK
@@ -141,7 +141,7 @@ class LoopRewriter(LoopRewriterBase):
         self.g.set_shape(init_cond_output, cond_graph.outputs[0].shape)
         return init_cond_output
 
-    def _create_loop_node(self, context, loop_props, init_cond_output):
+    def _create_loop_node(self, context, loop_props, init_cond_output, branches=None):
         loop_outputs = []
         loop_output_shapes = []
         loop_output_dtypes = []
@@ -164,6 +164,6 @@ class LoopRewriter(LoopRewriterBase):
                                      loop_props.state_inputs_initial_values,  # ONNX Loop support state inputs only
                                      outputs=loop_outputs, op_name_scope="generic_loop",
                                      shapes=loop_output_shapes, dtypes=loop_output_dtypes,
-                                     skip_conversion=False)
+                                     skip_conversion=False, branches=branches)
 
         return loop_node
