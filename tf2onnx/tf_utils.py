@@ -321,10 +321,13 @@ def tflist_to_onnx(g, shape_override, const_node_values=None):
                 dtype = get_tf_node_attr(node, a)
                 if dtype and not isinstance(dtype, list):
                     dtypes[node.name] = map_tf_dtype(dtype)
-            elif a in {"output_type", "output_dtype", "out_type", "Tidx", "out_idx"}:
+            elif a in {"output_type", "output_dtype", "out_type", "Tidx", "out_idx", "out_type", "internal_type",
+                       "Tsegmentids"}:
                 # Tidx is used by Range
                 # out_idx is used by ListDiff
                 attr[a] = map_tf_dtype(get_tf_node_attr(node, a))
+            elif a == "sparse_types":
+                attr[a] = [map_tf_dtype(d) for d in get_tf_node_attr(node, a)]
             elif a == "shape":
                 shape = get_tf_shape_attr(node)
                 if shape is not None:
