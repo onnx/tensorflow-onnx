@@ -7,13 +7,13 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import numpy as np
 import unittest
+import numpy as np
 from onnx import helper, TensorProto, OperatorSetIdProto
-from tf2onnx import utils, constants
-from tf2onnx.graph import GraphUtil
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version
+from tf2onnx import utils, constants
+from tf2onnx.graph import GraphUtil
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test

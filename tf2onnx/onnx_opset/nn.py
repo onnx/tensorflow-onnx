@@ -1108,8 +1108,8 @@ class MatrixBandPart:
         col_init = one_line.output[0]
 
         branches = {"body": g}
-        loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0],
-                                  col_init], output_count=2, branches=branches)
+        loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init],
+                                  output_count=2, branches=branches)
         # convert generated mask matrix from bool to right shape and data type
         squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})
         cast1 = ctx.make_node(op_type="Cast", inputs=squeeze.output, attr={"to": onnx_pb.TensorProto.FLOAT})

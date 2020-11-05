@@ -412,8 +412,8 @@ class StatelessIfOp:
             wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
             branches[branch] = g
 
-        if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
+        _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+                          shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
 
 
 @tf_op(["If"])
@@ -440,8 +440,8 @@ class IfOp:
             wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
             branches[branch] = g
 
-        if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
+        _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+                          shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
 
 
 @tf_op(["TensorListSetItem"])

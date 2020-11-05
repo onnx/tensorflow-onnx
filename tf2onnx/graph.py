@@ -507,9 +507,9 @@ class Graph(object):
                         body_graph.parent_graph = self
                         branches[attr_name] = body_graph
 
-                new_node = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
-                                          skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
-                                          domain=n.domain, branches=branches)
+                _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
+                                   skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
+                                   domain=n.domain, branches=branches)
 
                 self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
                 self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")

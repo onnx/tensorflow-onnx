@@ -230,8 +230,8 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
                 body_graph.parent_graph = g
                 branches[attr_name] = body_graph
 
-        new_node = g.make_node(op.type, op.input, outputs=op.output, attr=op.attr, name=op.name,
-                               skip_conversion=op.skip_conversion, infer_shape_dtype=False, branches=branches)
+        _ = g.make_node(op.type, op.input, outputs=op.output, attr=op.attr, name=op.name,
+                        skip_conversion=op.skip_conversion, infer_shape_dtype=False, branches=branches)
 
     for i in all_outputs:
         if i not in g._output_shapes:
