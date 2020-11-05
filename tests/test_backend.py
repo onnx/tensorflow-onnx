@@ -1307,6 +1307,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "OneHot")
     def test_segment_sum_data_vector(self):
         segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
         data_val = np.array([5, 1, 7, 2, 3, 4, 1, 3], dtype=np.float32)
@@ -1315,13 +1316,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
-    def test_segment_sum_data_tensor(self):
-        segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
-        data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
-        def func(data, segments):
-            x_ = tf.math.segment_sum(data, segments)
-            return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
+    @check_opset_min_version(9, "OneHot")
+    def test_segment_ops_data_tensor(self):
+        for tf_op in [tf.math.segment_sum, tf.math.segment_prod, tf.math.segment_min, tf.math.segment_max]:
+            segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
+            data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
+            def func(data, segments):
+                x_ = tf_op(data, segments)
+                return tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
     @check_onnxruntime_incompatibility("Sqrt")
     def test_sqrt(self):
