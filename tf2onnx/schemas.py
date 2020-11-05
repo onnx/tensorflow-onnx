@@ -156,7 +156,7 @@ def infer_onnx_shape_dtype(node, opset_version, input_shapes, input_dtypes, init
     try:
         inferred_model = shape_inference.infer_shapes(model_proto)
     except Exception:  # pylint: disable=broad-except
-        logger.warning(
+        logger.info(
             "ONNX Failed to infer shapes and dtypes for [%s, type: %s]",
             node.name, node.type, exc_info=1
         )

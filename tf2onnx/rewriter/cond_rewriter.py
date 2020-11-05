@@ -138,16 +138,6 @@ class CondRewriter:
 
     def _create_if_node(self, cond_context):
         output_shapes, output_dtypes = self._get_output_shape_dtype(cond_context)
-        if_node = self.g.make_node(
-            "If",
-            [cond_context.pred_input],
-            op_name_scope=cond_context.cond_scope,
-            outputs=[m.output[0] for m in cond_context.merges],
-            shapes=output_shapes,
-            dtypes=output_dtypes,
-            skip_conversion=False
-        )
-        logger.debug("set graph for if branches")
         true_graph = utils.construct_graph_from_nodes(
             self.g,
             list(cond_context.true_branch_context.nodes),
@@ -162,8 +152,17 @@ class CondRewriter:
             output_shapes,
             output_dtypes
         )
-        if_node.set_body_graph_as_attr("then_branch", true_graph)
-        if_node.set_body_graph_as_attr("else_branch", false_graph)
+        branches = {"then_branch": true_graph, "else_branch": false_graph}
+        if_node = self.g.make_node(
+            "If",
+            [cond_context.pred_input],
+            op_name_scope=cond_context.cond_scope,
+            outputs=[m.output[0] for m in cond_context.merges],
+            shapes=output_shapes,
+            dtypes=output_dtypes,
+            skip_conversion=False,
+            branches=branches
+        )
         return if_node
 
     def _cut_off_connection(self, cond_context):

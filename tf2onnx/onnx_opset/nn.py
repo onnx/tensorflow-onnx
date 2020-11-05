@@ -917,9 +917,9 @@ class CropAndResize:
         trip_node = ctx.make_node("Size", [box_ind.output[0]])
         cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
         ctx.remove_node(node.name)
+        branches = {"body": g}
         inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]], name=node.name,
-                                   outputs=node.output)
-        inner_loop.set_body_graph_as_attr("body", g)
+                                   outputs=node.output, branches=branches)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
@@ -1107,8 +1107,9 @@ class MatrixBandPart:
         cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(np.bool))
         col_init = one_line.output[0]
 
-        loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init], output_count=2)
-        loop_node.set_body_graph_as_attr("body", g)
+        branches = {"body": g}
+        loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0],
+                                  col_init], output_count=2, branches=branches)
         # convert generated mask matrix from bool to right shape and data type
         squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})
         cast1 = ctx.make_node(op_type="Cast", inputs=squeeze.output, attr={"to": onnx_pb.TensorProto.FLOAT})
