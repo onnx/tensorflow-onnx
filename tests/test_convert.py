@@ -10,13 +10,18 @@ import unittest
 from tf2onnx import convert
 from common import check_tf_min_version
 
-def run_test_case(args):
+def run_test_case(args, paths_to_check=None):
     """ run case and clean up """
+    if paths_to_check is None:
+        paths_to_check = [args[-1]]
     sys.argv = args
     convert.main()
-    ret = os.path.exists(args[-1])
-    if ret:
-        os.remove(args[-1])
+    ret = True
+    for p in paths_to_check:
+        if os.path.exists(p):
+            os.remove(p)
+        else:
+            ret = False
     return ret
 
 
@@ -32,6 +37,20 @@ class Tf2OnnxConvertTest(unittest.TestCase):
                                        'serve',
                                        '--output',
                                        'converted_saved_model.onnx']))
+
+    def test_convert_output_frozen_graph(self):
+        """ convert saved model """
+        self.assertTrue(run_test_case(['',
+                                       '--saved-model',
+                                       'tests/models/regression/saved_model',
+                                       '--tag',
+                                       'serve',
+                                       '--output',
+                                       'converted_saved_model.onnx',
+                                       '--output_frozen_graph',
+                                       'frozen_graph.pb'
+                                      ],
+                                      paths_to_check=['converted_saved_model.onnx', 'frozen_graph.pb']))
 
     @check_tf_min_version("2.2")
     def test_convert_large_model(self):

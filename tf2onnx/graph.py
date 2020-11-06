@@ -111,7 +111,9 @@ class Node(object):
             return a
         if np.product(a.t.dims) > external_tensor_storage.external_tensor_size_threshold:
             a = copy.copy(a)
-            tensor_name = self.name + "_" + str(external_tensor_storage.name_counter)
+            tensor_name = self.name.strip() + "_" + str(external_tensor_storage.name_counter)
+            for c in '~"#%&*:<>?/\\{|}':
+                tensor_name = tensor_name.replace(c, '_')
             external_tensor_storage.name_counter += 1
             external_tensor_storage.name_to_tensor_data[tensor_name] = a.t.raw_data
             external_tensor_storage.node_to_modified_value_attr[self] = a
@@ -382,7 +384,8 @@ class Node(object):
         attr_graphs = self.get_body_graphs()
         if attr_graphs:
             for attr_name, sub_graph in attr_graphs.items():
-                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name, external_tensor_storage)
+                graph_proto = sub_graph.make_graph("graph for " + self.name + " " + attr_name,
+                                                   external_tensor_storage=external_tensor_storage)
                 self.set_attr(attr_name, graph_proto)
 
         attr = list(self.get_onnx_attrs(external_tensor_storage).values())
@@ -487,6 +490,9 @@ class Graph(object):
             # add identity node after each output, in case it is renamed during conversion.
             for o in self.outputs:
                 n = self.get_node_by_output_in_current_graph(o)
+                if n.is_graph_input():
+                    # Don't add identity if the node is also an input. We want to keep input names the same.
+                    continue
                 new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
                 n_shapes = n.output_shapes
                 n_dtypes = n.output_dtypes
@@ -495,14 +501,15 @@ class Graph(object):
 
                 new_outputs = [output if output != o else new_output_name for output in n.output]
                 # domain should be passed to new node
-                new_node = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
-                                          skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
-                                          domain=n.domain)
-
+                branches = {}
                 if body_graphs:
                     for attr_name, body_graph in body_graphs.items():
                         body_graph.parent_graph = self
-                        new_node.set_body_graph_as_attr(attr_name, body_graph)
+                        branches[attr_name] = body_graph
+
+                _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
+                                   skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
+                                   domain=n.domain, branches=branches)
 
                 self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
                 self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
@@ -572,7 +579,7 @@ class Graph(object):
 
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
                   op_name_scope=None, name=None, shapes=None, dtypes=None, domain=constants.ONNX_DOMAIN,
-                  infer_shape_dtype=True):
+                  infer_shape_dtype=True, branches=None):
         """Make a new onnx node in the graph"""
         if attr is None:
             attr = {}
@@ -580,7 +587,8 @@ class Graph(object):
             shapes = []
         if dtypes is None:
             dtypes = []
-
+        if branches is None:
+            branches = {}
         if name is None:
             name = utils.make_name(op_type)
 
@@ -619,6 +627,9 @@ class Graph(object):
         node = Node(onnx_node, self, skip_conversion=skip_conversion)
         if onnx_attrs:
             _ = [node.set_attr_onnx(a) for a in onnx_attrs]
+
+        for branch, body in branches.items():
+            node.set_body_graph_as_attr(branch, body)
 
         if shapes:
             utils.make_sure(len(shapes) == output_count,

@@ -68,7 +68,8 @@ def get_args():
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
     parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
     parser.add_argument("--debug", help="debug mode", action="store_true")
-    parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
+    parser.add_argument("--output_frozen_graph", help="output frozen tf graph to file")
+    parser.add_argument("--fold_const", help="Deprecated. Constant folding is always enabled.",
                         action="store_true")
     # experimental
     parser.add_argument("--inputs-as-nchw", help="transpose inputs as from nhwc to nchw")
@@ -148,6 +149,8 @@ def main():
         const_node_values = None
         if args.large_model:
             const_node_values = compress_graph_def(graph_def)
+        if args.output_frozen_graph:
+            utils.save_protobuf(args.output_frozen_graph, graph_def)
         tf.import_graph_def(graph_def, name='')
     with tf_loader.tf_session(graph=tf_graph):
         g = process_tf_graph(tf_graph,

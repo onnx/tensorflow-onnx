@@ -18,7 +18,6 @@ from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
-from tf2onnx.utils import make_sure
 from tf2onnx.tf_loader import find_function
 
 
@@ -34,7 +33,7 @@ def get_inputs_for_current_iteration(g, input_id, iter_index):
 
 
 def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_shape, trip_count_input_ids,
-                           rank, loop_name):
+                           rank):
     g = parent_g.create_new_graph_with_same_config()
     g.parent_graph = parent_g
     iter_name = utils.make_name("i")
@@ -112,9 +111,9 @@ def create_if_op(g, input_ids, output_data_type, output_shape):
     out_name = utils.port_name(op_name)
 
     # output a scalar
-    if_node = g.make_node("If", [input_ids[0]], outputs=[out_name], name=op_name, skip_conversion=True)
-    if_node.set_body_graph_as_attr("then_branch", true_graph)
-    if_node.set_body_graph_as_attr("else_branch", false_graph)
+    branches = {"then_branch": true_graph, "else_branch": false_graph}
+    if_node = g.make_node("If", [input_ids[0]], outputs=[out_name], name=op_name,
+                          skip_conversion=True, branches=branches)
     return if_node, out_name
 
 
@@ -152,12 +151,11 @@ def create_loop_op(g, gather_input_ids, output_type, output_shape, trip_count_in
                    cond_var_name,  # termination condition
                    fake_val_name  # initial value of loop-carried dependencies
                    ]
+    loop_body = create_loop_body_graph(g, gather_input_ids, output_type, output_shape, trip_count_input_ids, rank)
     # define an extra scan output
+    branches = {"body": loop_body}
     loop_node = g.make_node("Loop", loop_inputs, output_count=2, op_name_scope="select_loop",
-                            skip_conversion=False)
-    loop_body = create_loop_body_graph(g, gather_input_ids, output_type, output_shape, trip_count_input_ids,
-                                       rank, loop_node.name)
-    loop_node.set_body_graph_as_attr("body", loop_body)
+                            skip_conversion=False, branches=branches)
     return loop_node
 
 
@@ -223,8 +221,9 @@ def make_range_non_const(ctx, start, limit, delta, output, scope_name, shape, dt
 
     # loop
     loop_inputs = [trip_count_node.output[0], cond_name, start]
-    loop_node = ctx.make_node("Loop", loop_inputs, output_count=2, op_name_scope=base_name, name="loop")
-    loop_node.set_body_graph_as_attr("body", g)
+    branches = {"body": g}
+    loop_node = ctx.make_node("Loop", loop_inputs,
+                              output_count=2, op_name_scope=base_name, name="loop", branches=branches)
 
     ctx.make_node("Identity", [loop_node.output[1]], name=base_name, shapes=[shape], dtypes=[dtype], outputs=[output])
 
@@ -278,6 +277,7 @@ class Select:
         # T output = Select(bool condition, T x, T y)
         # Select_res = Add(Multiply(Cast(bool condition, float32), T x,),
         #                  Multiply(Cast(Not(bool condition), float32), T y)).
+        # TODO: Fix case where condition is 1-dimensional
         utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
         positive_cast = ctx.make_node("Cast", [node.input[0]], name=utils.make_name(node.name),
                                       attr={"to": TensorProto.FLOAT})
@@ -302,11 +302,13 @@ class Select:
 
         true_data_type = ctx.get_dtype(node.input[1])
         true_data_shape = ctx.get_shape(node.input[1])
-        make_sure(true_data_type is not None, "select true data dtype cannot be None")
-        make_sure(true_data_shape is not None, "select true data shape cannot be None")
-
         condition_shape = ctx.get_shape(node.input[0])
-        utils.make_sure(condition_shape is not None, "Shape of {} is None".format(node.input[0]))
+
+        if true_data_type is None or true_data_shape is None or condition_shape is None:
+            # Fallback if shape is unknown
+            cls.version_7(ctx, node, **kwargs)
+            return
+
         rank = len(condition_shape)
 
         utils.make_sure(rank >= 0, "rank should be >= 0")
@@ -361,13 +363,16 @@ class Select:
         # T1 output = Where(bool condition, T1 x, T1 y)
         # NOTE: condition can be 1-dimension in tensorflow, while in onnx,
         # it should be broadcastable with other two inputs
-        node.type = "Where"
+
         cond_shape = ctx.get_shape(node.input[0])
-        make_sure(cond_shape is not None, "shape of {} is None".format(node.input[0]))
         input_shape = ctx.get_shape(node.input[1])
         if input_shape is None:
             input_shape = ctx.get_shape(node.input[2])
-        make_sure(input_shape is not None, "input shape of {} is None".format(node.name))
+        if cond_shape is None or input_shape is None:
+            # Fallback if shape is unknown
+            cls.version_7(ctx, node, **kwargs)
+            return
+        node.type = "Where"
         input_rank = len(input_shape)
         # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
         if len(cond_shape) == 1 and input_rank > 1:
@@ -404,15 +409,16 @@ class StatelessIfOp:
         ctx.remove_node(node.name)
 
         # replace the original node
-        if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
-
+        branches = {}
         for branch in ["then_branch", "else_branch"]:
             func_name = node.get_attr_str(branch)
             g = find_function(func_name)
             g.parent_graph = ctx
             wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
-            if_node.set_body_graph_as_attr(branch, g)
+            branches[branch] = g
+
+        _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+                          shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
 
 
 @tf_op(["If"])
@@ -431,15 +437,16 @@ class IfOp:
         ctx.remove_node(node.name)
 
         # replace the original node
-        if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
-
+        branches = {}
         for branch in ["then_branch", "else_branch"]:
             func_name = node.get_attr_str(branch)
             g = find_function(func_name)
             g.parent_graph = ctx
             wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
-            if_node.set_body_graph_as_attr(branch, g)
+            branches[branch] = g
+
+        _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+                          shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
 
 
 @tf_op(["TensorListSetItem"])
@@ -610,9 +617,11 @@ class While:
         output_dtypes = output_dtypes[2:]
         output_names = output_names[2:]
 
+        branches = {"body": body}
         loop_node = ctx.make_node("Loop", [maximum_iterations_name, cond_outputs[0]] + loop_vars,
                                   output_count=len(output_shapes), name=node.name + "_loop",
-                                  shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+                                  shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True,
+                                  branches=branches)
 
         output_map = dict(zip(output_names, loop_node.output))
 
@@ -628,7 +637,6 @@ class While:
         for i, n in enumerate(body.inputs):
             if body.get_dtype(n.output[0]) == onnx_pb.TensorProto.UNDEFINED:
                 body.set_dtype(n.output[0], ctx.get_dtype(loop_node.input[i]))
-        loop_node.set_body_graph_as_attr("body", body)
 
 
 def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
@@ -801,13 +809,14 @@ def prefix_graph(g, scope):
         attr = node.attr
         if node.is_graph_input():
             continue
-        new_node = g.make_node(node.type, node.input, name=node.name, output_count=len(node.output),
-                               shapes=output_shapes, dtypes=output_dtypes, attr=attr,
-                               op_name_scope=scope, skip_conversion=True)
+        branches = {}
         attr_graphs = node.get_body_graphs()
         if attr_graphs:
             for k, v in attr_graphs.items():
-                new_node.set_body_graph_as_attr(k, v)
+                branches[k] = v
+        new_node = g.make_node(node.type, node.input, name=node.name, output_count=len(node.output),
+                               shapes=output_shapes, dtypes=output_dtypes, attr=attr,
+                               op_name_scope=scope, skip_conversion=True, branches=branches)
         for old_output, new_output in zip(node.output, new_node.output):
             for i, oname in enumerate(g.outputs):
                 if old_output == oname:

@@ -366,6 +366,27 @@ class ConvOp:
         # No change.
         cls.version_1(ctx, node, **kwargs)
 
+def get_shape_from_const_or_concat(ctx, node):
+    if node.is_const():
+        return node.get_tensor_value()
+    if node.type == 'Concat':
+        # Sometimes the shape is formed by concating a bunch of consts together
+        res = []
+        if any(ctx.get_shape(inp) != [1] for inp in node.input):
+            return None
+        for i, inp in enumerate(node.inputs):
+            # The concat is converted from a Pack. Conversion adds an unsqueeze to the inputs.
+            if node.inputs[i].type == 'Unsqueeze' and node.inputs[i].inputs[0].is_scalar():
+                res.append(node.inputs[i].inputs[0].get_tensor_value())
+            else:
+                if i == 0:
+                    # For the batch dimension we don't care if it is unknown
+                    res.append(-1)
+                else:
+                    return None
+        return res
+    return None
+
 @tf_op(["Conv2DBackpropInput", "Conv3DBackpropInputV2"])
 class ConvTranspose:
     @classmethod
@@ -386,8 +407,9 @@ class ConvTranspose:
         output_shape_orig = node.output_shapes
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
-        if node.inputs[0].is_const():
-            output_shape = ctx.get_shape(node.output[0])
+        output_shape = get_shape_from_const_or_concat(ctx, node.inputs[0])
+        if output_shape is not None:
+            #output_shape = ctx.get_shape(node.output[0])
             if is_channels_last(node):
                 new_output_shape = [output_shape[1], output_shape[2]]
                 input_dims = [input_shape[1], input_shape[2]]
@@ -407,6 +429,18 @@ class ConvTranspose:
 
             node.set_attr("output_shape", new_output_shape)
         else:
+            utils.make_sure(ctx.opset >= 10, "Opset 10 needed for Conv Backprop Input with non-constant shape")
+            strides = parse_dims_attr(node, node.get_attr('strides').ints, spatial)
+            use_strides_workaround = any(d > 1 for d in strides)
+            if use_strides_workaround and ctx.opset < 12:
+                # When strides > 1, ONNX and TF have an implementation difference in ConvTranspose. ONNX outputs a
+                # slightly smaller tensor which must be padded with a row of 0s. Pad with dynamic shape requires
+                # opset >= 11 and Max of int64 needs opset >= 12.  Depending on the output_shape, this row of 0s might
+                # be shaved off, in which case TF and ONNX agree.  When output_shape is dynamic it is impossible to
+                # know at conversion time whether this is the case and the workaround is needed.
+                logger.warning("Conv Backprop Input with strides > 1 and non-constant shape has known bug. "
+                               "Workaround requires opset 12.")
+                use_strides_workaround = False
             input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
             output_shape = ctx.make_node("Shape", [node.output[0]])
             output_h = GraphBuilder(ctx).make_slice(
@@ -419,9 +453,17 @@ class ConvTranspose:
                 {"data": input_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
             diff_h = ctx.make_node("Sub", [output_h, expect_h])
             diff_w = ctx.make_node("Sub", [output_w, expect_w])
+            nonneg_diff_h = diff_h
+            nonneg_diff_w = diff_w
+
+            if use_strides_workaround:
+                const_zero = ctx.make_const(utils.make_name(node.name + "_const_zero"), np.array([0], dtype=np.int64))
+                nonneg_diff_h = ctx.make_node("Max", [diff_h.output[0], const_zero.output[0]])
+                nonneg_diff_w = ctx.make_node("Max", [diff_w.output[0], const_zero.output[0]])
+
             const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
-            start_h = ctx.make_node("Div", [diff_h.output[0], const_two.output[0]])
-            start_w = ctx.make_node("Div", [diff_w.output[0], const_two.output[0]])
+            start_h = ctx.make_node("Div", [nonneg_diff_h.output[0], const_two.output[0]])
+            start_w = ctx.make_node("Div", [nonneg_diff_w.output[0], const_two.output[0]])
             end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
             end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
             if spatial == 3:
@@ -430,7 +472,10 @@ class ConvTranspose:
                 expect_d = GraphBuilder(ctx).make_slice(
                     {"data": input_shape.output[0], "ends": [4], "starts": [3], "axes": [0]})
                 diff_d = ctx.make_node("Sub", [output_d, expect_d])
-                start_d = ctx.make_node("Div", [diff_d.output[0], const_two.output[0]])
+                nonneg_diff_d = diff_d
+                if use_strides_workaround:
+                    nonneg_diff_d = ctx.make_node("Max", [diff_d.output[0], const_zero.output[0]])
+                start_d = ctx.make_node("Div", [nonneg_diff_d.output[0], const_two.output[0]])
                 end_d = ctx.make_node("Add", [start_d.output[0], expect_d])
 
                 starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0], start_d.output[0]],
@@ -448,10 +493,35 @@ class ConvTranspose:
                                        [node.output[0], starts.output[0], ends.output[0], slice_axes.output[0]],
                                        shapes=output_shape_orig)
 
+            final_node = slice_node
+
+            if use_strides_workaround:
+                cz = const_zero.output[0]
+
+                neg_diff_h = ctx.make_node("Neg", [diff_h.output[0]])
+                shrink_h_by = ctx.make_node("Max", [neg_diff_h.output[0], const_zero.output[0]])
+                shb = shrink_h_by.output[0]
+
+                neg_diff_w = ctx.make_node("Neg", [diff_w.output[0]])
+                shrink_w_by = ctx.make_node("Max", [neg_diff_w.output[0], const_zero.output[0]])
+                swb = shrink_w_by.output[0]
+
+                if spatial == 3:
+                    neg_diff_d = ctx.make_node("Neg", [diff_d.output[0]])
+                    shrink_d_by = ctx.make_node("Max", [neg_diff_d.output[0], const_zero.output[0]])
+                    sdb = shrink_d_by.output[0]
+                    pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, cz, shb, swb, sdb, cz], attr={"axis": 0})
+                    padded_node = ctx.make_node("Pad", [slice_node.output[0], pads.output[0]])
+                else:
+                    pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, shb, swb, cz], attr={"axis": 0})
+                    padded_node = ctx.make_node("Pad", [slice_node.output[0], pads.output[0]])
+
+                final_node = padded_node
+
             downstream_nodes = ctx.find_output_consumers(node.output[0])
             downstream_nodes.remove(output_shape)
             downstream_nodes.remove(slice_node)
-            ctx.replace_all_inputs(node.output[0], slice_node.output[0], ops=downstream_nodes)
+            ctx.replace_all_inputs(node.output[0], final_node.output[0], ops=downstream_nodes)
 
         conv_dims_attr(node, "strides", spatial=spatial)
         conv_dims_attr(node, "dilations", spatial=spatial)
@@ -847,9 +917,9 @@ class CropAndResize:
         trip_node = ctx.make_node("Size", [box_ind.output[0]])
         cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
         ctx.remove_node(node.name)
+        branches = {"body": g}
         inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]], name=node.name,
-                                   outputs=node.output)
-        inner_loop.set_body_graph_as_attr("body", g)
+                                   outputs=node.output, branches=branches)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
@@ -900,8 +970,13 @@ class Resize:
             concat_shape.output[0]
         ]
         transformation_mode = "asymmetric"
+        if "align_corners" in node.attr and node.attr["align_corners"].i:
+            transformation_mode = "align_corners"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
-            transformation_mode = "half_pixel"
+            if node.type == "ResizeNearestNeighbor":
+                transformation_mode = "tf_half_pixel_for_nn"
+            else:
+                transformation_mode = "half_pixel"
         resize = ctx.make_node("Resize", resize_inputs,
                                attr={"mode": mode, "nearest_mode": "floor",
                                      "coordinate_transformation_mode": transformation_mode})
@@ -1032,8 +1107,9 @@ class MatrixBandPart:
         cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(np.bool))
         col_init = one_line.output[0]
 
-        loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init], output_count=2)
-        loop_node.set_body_graph_as_attr("body", g)
+        branches = {"body": g}
+        loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init],
+                                  output_count=2, branches=branches)
         # convert generated mask matrix from bool to right shape and data type
         squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})
         cast1 = ctx.make_node(op_type="Cast", inputs=squeeze.output, attr={"to": onnx_pb.TensorProto.FLOAT})

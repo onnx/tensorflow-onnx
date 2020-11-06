@@ -7,12 +7,13 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import unittest
 import numpy as np
 from onnx import TensorProto
-from tf2onnx import utils
-from tf2onnx.graph import Graph
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
+from tf2onnx import utils
+from tf2onnx.graph import Graph
 
 # pylint: disable=missing-docstring
 
@@ -292,11 +293,12 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
         subgraph.add_graph_output(input_iden.output[0])
 
         seq_len_node = graph.make_const("seq_len", np.array(seq_len, dtype=np.int64))
+        branches = {"body": subgraph}
         scan = graph.make_node(
             "Scan", [seq_len_node.output[0], INPUT1, INPUT2],
-            output_count=2, attr={"num_scan_inputs": 1}
+            output_count=2, attr={"num_scan_inputs": 1},
+            branches=branches
         )
-        scan.set_body_graph_as_attr("body", subgraph)
 
         # explicitly infer shape for scan node
         graph.update_node_shape_dtype(scan)
@@ -327,8 +329,9 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
         subgraph.add_graph_output(loop_state_iden.output[0])
         subgraph.add_graph_output(input_iden.output[0])
 
-        scan = graph.make_node("Scan", [INPUT1, INPUT2], output_count=2, attr={"num_scan_inputs": 1})
-        scan.set_body_graph_as_attr("body", subgraph)
+        branches = {"body": subgraph}
+        scan = graph.make_node("Scan", [INPUT1, INPUT2], output_count=2,
+                               attr={"num_scan_inputs": 1}, branches=branches)
 
         # explicitly infer shape for scan node
         graph.update_node_shape_dtype(scan)
@@ -337,6 +340,7 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
         graph.add_graph_output(scan.output[1])
         self._run_test_case(graph, self._generate_random_inputs(inputs, shapes, dtypes))
 
+    @unittest.skip("need to change test case for onnx-1.8")
     def test_if(self):
         inputs = [INPUT1, INPUT2, INPUT3]
         shapes = [[2, 3, 4], [2, 3, 4], [2, 3, 4]]
@@ -354,13 +358,10 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
         else_subgraph.add_graph_output(sub.output[0])
 
         cond = graph.make_const("cond", np.array(True, dtype=np.bool))
-        if_node = graph.make_node("If", [cond.output[0]])
-        if_node.set_body_graph_as_attr("then_branch", then_subgraph)
-        if_node.set_body_graph_as_attr("else_branch", else_subgraph)
+        branches = {"then_branch": then_subgraph, "else_branch": else_subgraph}
+        if_node = graph.make_node("If", [cond.output[0]], branches=branches)
 
-        # explicitly infer shape for if node
         graph.update_node_shape_dtype(if_node)
-
         graph.add_graph_output(if_node.output[0])
         self._run_test_case(graph, self._generate_random_inputs(inputs, shapes, dtypes))
 
@@ -385,9 +386,9 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
 
         max_iter = graph.make_const("max_iter", np.array([10], dtype=np.int64))
         cond_const = graph.make_const("cond_const", np.array([True], dtype=np.bool))
+        branches = {"body": subgraph}
         loop = graph.make_node("Loop", [max_iter.output[0], cond_const.output[0], INPUT1],
-                               output_count=2)
-        loop.set_body_graph_as_attr("body", subgraph)
+                               output_count=2, branches=branches)
 
         graph.update_node_shape_dtype(loop)
 

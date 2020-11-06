@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # pylint: disable=unused-variable
 
 def fold_constants_using_tf(g, outputs_to_values, outputs_to_dtypes):
-    ops = g.get_nodes()
+    ops = list(g.get_nodes())
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
     while keep_looking:
@@ -83,6 +83,7 @@ def rewrite_constant_fold(g, ops):
         "Sqrt": np.sqrt,
         "Sub": np.subtract,
     }
+    ops = list(ops)
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
@@ -408,7 +409,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if target is None:
         target = constants.DEFAULT_TARGET
 
-    outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values)
+    outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
         tensorflow_to_onnx(tf_graph, shape_override, const_node_values)

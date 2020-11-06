@@ -16,7 +16,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         python_versions: ['3.7']
-        tf_versions: ['1.14.0','1.15.2','2.1.0','2.2.0']
+        tf_versions: ['1.14.0','1.15.2','2.2.0','2.3.0']
         onnx_opsets: ['']
         job:
           steps:
@@ -44,3 +44,4 @@ stages:
         report_coverage: 'True'
 
   - template: 'templates/combine_test_coverage.yml'
+
