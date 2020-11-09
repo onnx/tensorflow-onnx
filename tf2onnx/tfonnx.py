@@ -238,11 +238,13 @@ def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, impacted_ops)
 
 
-def tensorflow_onnx_mapping(g, ops_mapping):
+def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None):
     logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
     exceptions = []
+    if initialized_tables is None:
+        initialized_tables = {}
 
     ops = list(g.get_nodes())
     for node in ops:
@@ -284,7 +286,7 @@ def tensorflow_onnx_mapping(g, ops_mapping):
                 logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
 
         try:
-            func(g, node, **kwargs)
+            func(g, node, **kwargs, initialized_tables=initialized_tables)
             node.skip_conversion = True
         except Exception as ex:
             logger.error("Failed to convert node %r (fct=%r)\n%r",
@@ -365,7 +367,8 @@ def run_rewriters(g, funcs, continue_on_error):
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
-                     input_names=None, output_names=None, is_subgraph=False, const_node_values=None):
+                     input_names=None, output_names=None, is_subgraph=False, const_node_values=None,
+                     initialized_tables=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -381,6 +384,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
             const_node_values: a dict returned by compress_graph_def mapping node names to tensor values
+            initialized_tables: mapping from table shared_names to tuple of keys and values of table
         Return:
             onnx graph
     """
@@ -522,7 +526,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     g.delete_unused_nodes(output_names)
     topological_sort(g, continue_on_error)
 
-    mapped_op, unmapped_op, exceptions = tensorflow_onnx_mapping(g, ops_mapping)
+    mapped_op, unmapped_op, exceptions = tensorflow_onnx_mapping(g, ops_mapping, initialized_tables)
     if unmapped_op:
         logger.error("Unsupported ops: %s", unmapped_op)
     if exceptions and not continue_on_error:

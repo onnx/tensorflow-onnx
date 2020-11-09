@@ -12,9 +12,10 @@ import logging
 from distutils.version import LooseVersion
 
 import tensorflow as tf
+from tensorflow.python.ops import lookup_ops
 
 from tf2onnx import utils
-from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx
+from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx, get_hash_table_info
 
 logger = logging.getLogger(__name__)
 
@@ -319,28 +320,45 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
             raise ValueError(err_large_model)
         raise e
 
-    return frozen_graph, inputs, outputs, concrete_func, imported
+    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
+    initialized_tables = {}
+    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
+        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+        try:
+            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+            initialized_tables[n] = (k.numpy(), v.numpy())
+        except Exception:  # pylint: disable=broad-except
+            logger.warning("Could not initialize table with shared_name = %r", n)
 
+    return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables
 
 def from_saved_model(model_path, input_names, output_names, tag=None,
-                     signatures=None, concrete_function=None, large_model=False, return_concrete_func=False):
+                     signatures=None, concrete_function=None, large_model=False,
+                     return_concrete_func=False, return_initialized_tables=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
     if is_tf2():
-        frozen_graph, input_names, output_names, concrete_func, imported = \
+        frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables = \
             _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function, large_model)
+        result = [frozen_graph, input_names, output_names]
         if return_concrete_func:
-            tf_reset_default_graph()
-            return frozen_graph, input_names, output_names, concrete_func, imported
+            result += [concrete_func, imported]
+        if return_initialized_tables:
+            result += [initialized_tables]
     else:
         with tf_session() as sess:
             frozen_graph, input_names, output_names = \
                 _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
+            result = [frozen_graph, input_names, output_names]
+            if return_concrete_func:
+                result += [None, None]
+            if return_initialized_tables:
+                result += [{}]
 
     tf_reset_default_graph()
-    return frozen_graph, input_names, output_names
+    return result
 
 
 def from_keras(model_path, input_names, output_names):
