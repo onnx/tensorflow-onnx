@@ -1843,9 +1843,9 @@ class DynamicStitch:
         index_shapes = [ctx.get_shape(inp) for inp in index_inputs]
         data_shapes = [ctx.get_shape(inp) for inp in data_inputs]
         utils.make_sure(all(s is not None and len(s) == 1 for s in index_shapes),
-                        "DynamicPartition only implemented for index tensors of rank 1")
-        utils.make_sure(all(s is not None and len(s) == 1 for s in data_shapes),
-                        "DynamicPartition only implemented for data tensors of rank 1")
+                        "DynamicStitch only implemented for index tensors of rank 1")
+        utils.make_sure(all(s is not None for s in data_shapes), "DynamicStitch requires data tensors of known rank")
+        data_rank = len(data_shapes[0])
         dtype = ctx.get_dtype(node.output[0])
         concat_indices = ctx.make_node("Concat", index_inputs, attr={'axis': 0})
         concat_indices_int64 = ctx.make_node("Cast", [concat_indices.output[0]], attr={"to": TensorProto.INT64})
@@ -1853,14 +1853,12 @@ class DynamicStitch:
         concat_data = ctx.make_node("Concat", data_inputs, attr={'axis': 0})
 
         data_shape = ctx.make_node("Shape", [concat_data.output[0]])
-        expanded_indices = ctx.make_node("Expand", [concat_indices_int64.output[0], data_shape.output[0]])
-
-        max_index = ctx.make_node("ReduceMax", [concat_indices_int64.output[0]], attr={'axes': [0], 'keepdims': 1})
-        const_one = ctx.make_const(utils.make_name('const_one'), np.array([1], np.int64))
-        target_length = ctx.make_node("Add", [max_index.output[0], const_one.output[0]])
+        unsqueeze_axes = list(range(1, data_rank))
+        unsqueezed_indices = ctx.make_node("Unsqueeze", [concat_indices_int64.output[0]], attr={'axes': unsqueeze_axes})
+        expanded_indices = ctx.make_node("Expand", [unsqueezed_indices.output[0], data_shape.output[0]])
 
         zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
-        zeros_of_shape = ctx.make_node("ConstantOfShape", [target_length.output[0]], attr={"value": zero_tensor})
+        zeros_of_shape = ctx.make_node("ConstantOfShape", [data_shape.output[0]], attr={"value": zero_tensor})
 
         name = node.name
         outputs = node.output
