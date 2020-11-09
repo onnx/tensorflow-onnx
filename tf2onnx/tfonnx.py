@@ -377,7 +377,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             custom_rewriter: list of custom graph rewriters
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
-            inputs_as_nchw: transpose inputs in list from nchw to nchw
+            inputs_as_nchw: transpose inputs in list from nchw to nhwc
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
             const_node_values: a dict returned by compress_graph_def mapping node names to tensor values
