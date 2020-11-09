@@ -1853,8 +1853,11 @@ class DynamicStitch:
         concat_data = ctx.make_node("Concat", data_inputs, attr={'axis': 0})
 
         data_shape = ctx.make_node("Shape", [concat_data.output[0]])
-        unsqueeze_axes = list(range(1, data_rank))
-        unsqueezed_indices = ctx.make_node("Unsqueeze", [concat_indices_int64.output[0]], attr={'axes': unsqueeze_axes})
+        unsqueezed_indices = concat_indices_int64
+        if data_rank > 1:
+            unsqueeze_axes = list(range(1, data_rank))
+            unsqueezed_indices = ctx.make_node("Unsqueeze", [concat_indices_int64.output[0]],
+                                               attr={'axes': unsqueeze_axes})
         expanded_indices = ctx.make_node("Expand", [unsqueezed_indices.output[0], data_shape.output[0]])
 
         zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])

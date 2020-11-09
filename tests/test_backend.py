@@ -1316,8 +1316,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
-    @check_opset_min_version(9, "OneHot")
-    @unittest.skip("this test is failing for some opsets, disabled until fixed")
+    @check_opset_min_version(11, "Pad")
     def test_segment_sum_unknown_rank(self):
         segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
         data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
