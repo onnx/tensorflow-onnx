@@ -1328,8 +1328,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             data = tf.reshape(data, data_shape_)
             x_ = tf.math.segment_sum(data, segments)
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val, _INPUT2: data_shape_val,
-                            _INPUT3: shape_pad_val})
+        self._run_test_case(func, [_OUTPUT],
+                            {_INPUT: data_val, _INPUT1: segs_val, _INPUT2: data_shape_val, _INPUT3: shape_pad_val})
 
     @check_opset_min_version(9, "OneHot")
     def test_segment_ops_data_tensor(self):
