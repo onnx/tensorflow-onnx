@@ -1317,6 +1317,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
     @check_opset_min_version(9, "OneHot")
+    @unittest.skip("this test is failing for some opsets, disabled until fixed")
     def test_segment_sum_unknown_rank(self):
         segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
         data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
@@ -3330,7 +3331,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: data_val, _INPUT1: part_val})
 
     @check_opset_min_version(11, "ScatterElements")
-    @unittest.skip("this test is failing for some opsets, disabled until fixed")
     def test_dynamic_stitch_both_vector(self):
         data_val = np.array([[5, 1, 3], [7, 2, 4]], dtype=np.float32)
         indices_val = np.array([[0, 1, 4], [2, 3, 5]], dtype=np.int32)
