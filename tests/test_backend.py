@@ -1317,6 +1317,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
     @check_opset_min_version(9, "OneHot")
+    def test_segment_sum_unknown_rank(self):
+        segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
+        data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
+        data_shape_val = np.array([8, 2, 3, 1], dtype=np.int64)
+        shape_pad_val = np.zeros((1, 2), dtype=np.int64)
+        def func(data, segments, data_shape, shape_pad):
+            # Some hackery to make the rank unknown
+            data_shape_ = tf.pad(data_shape, shape_pad, constant_values=0)
+            data = tf.reshape(data, data_shape_)
+            x_ = tf.math.segment_sum(data, segments)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val, _INPUT2: data_shape_val,
+                            _INPUT3: shape_pad_val})
+
+    @check_opset_min_version(9, "OneHot")
     def test_segment_ops_data_tensor(self):
         for tf_op in [tf.math.segment_sum, tf.math.segment_prod, tf.math.segment_min, tf.math.segment_max]:
             segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)

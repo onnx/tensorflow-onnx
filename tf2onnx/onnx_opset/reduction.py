@@ -139,8 +139,7 @@ class SegmentSum():
         data_inp = node.input[0]
         segment_inp = node.input[1]
         data_shape = ctx.get_shape(data_inp)
-        utils.make_sure(data_shape is not None, "Segment ops require input rank to be known")
-        data_rank = len(data_shape)
+        data_rank = len(data_shape) if data_shape is not None else None
         data_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(data_inp))
         seg_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(segment_inp))
         data_is_float = np.dtype(data_np_dtype).kind == 'f'
@@ -177,7 +176,21 @@ class SegmentSum():
         one_hot_bool = ctx.make_node("Cast", [one_hot_node.output[0]], attr={"to": onnx_pb.TensorProto.BOOL})
         one_hot_unsqueeze = one_hot_bool
 
-        if data_rank > 1:
+        if data_rank is None:
+            # Unsqueeze requires known rank, but we can use Reshape if rank is unknown
+            shape_node = ctx.make_node("Shape", [data_inp])
+            rank_node = ctx.make_node("Shape", [shape_node.output[0]])
+            one_const_int64 = ctx.make_const(utils.make_name("const_one"), np.array([1], dtype=np.int64))
+            num_unsqueeze_dims = ctx.make_node("Sub", [rank_node.output[0], one_const_int64.output[0]])
+
+            one_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1])
+            unsqueeze_dims = ctx.make_node("ConstantOfShape", inputs=[num_unsqueeze_dims.output[0]],
+                                           attr={"value": one_tensor})
+            double_zero_const = ctx.make_const(utils.make_name("double_zero"), np.array([0, 0], dtype=np.int64))
+            expanded_shape = ctx.make_node("Concat", [double_zero_const.output[0], unsqueeze_dims.output[0]],
+                                           attr={'axis': 0})
+            one_hot_unsqueeze = ctx.make_node("Reshape", [one_hot_bool.output[0], expanded_shape.output[0]])
+        elif data_rank > 1:
             new_dims = list(range(2, 2 + data_rank - 1))
             one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_bool.output[0]], attr={'axes': new_dims})
 
