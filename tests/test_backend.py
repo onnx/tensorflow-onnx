@@ -3277,6 +3277,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
             #self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "ScatterND")
+    def test_sparse_to_dense(self):
+        i_val = np.array([[0, 0, 0], [0, 0, 2], [0, 1, 3], [1, 2, 2], [1, 2, 3]], dtype=np.int64)
+        v_val = np.array([1.5, 1.6, 1.7, 1.8, 1.9], dtype=np.float32)
+        ds_val = np.array([2, 3, 4], dtype=np.int64)
+        d_val = np.array(2.5, dtype=np.float32)
+        def func(indices, values, dense_shape, default):
+            st = tf.SparseTensor(indices, values, dense_shape)
+            dense = tf.sparse.to_dense(st, default, validate_indices=True)
+            x_ = tf.identity(dense, name=_TFOUTPUT)
+            return x_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: i_val, _INPUT1: v_val, _INPUT2: ds_val, _INPUT3: d_val})
+
     @check_opset_min_version(9, "Compress")
     def test_dynamic_partition_both_vector(self):
         data_val = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float32)

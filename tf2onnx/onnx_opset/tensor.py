@@ -1789,6 +1789,22 @@ class Unique:
             # FIXME: the indices in onnx are not the same as in tensorflow.
 
 
+@tf_op("SparseToDense")
+class SparseToDense:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        sparse_indices, out_shape, sparse_vals, default_val = node.input
+        idx_shape = ctx.get_shape(sparse_indices)
+        val_shape = ctx.get_shape(sparse_vals)
+        val_is_scalar = val_shape is not None and val_shape[0] == 1
+        idx_is_scalar = idx_shape is not None and idx_shape[0] == 1
+        utils.make_sure(not val_is_scalar or idx_is_scalar, "SparseToDense not implemented yet for scalar values")
+
+        expand_node = ctx.make_node("Expand", [default_val, out_shape])
+        node.type = "ScatterND"
+        ctx.replace_inputs(node, [expand_node.output[0], sparse_indices, sparse_vals])
+
+
 @tf_op("DynamicPartition")
 class DynamicPartition:
     @classmethod
