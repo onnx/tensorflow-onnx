@@ -1778,15 +1778,21 @@ class Unique:
     def version_11(cls, ctx, node, **kwargs):
         # opset 11 supports explicitly
         dtypes = node.output_dtypes
-        if len(node.output) > 1:
+        node_name = node.name
+        node_inputs = node.input
+        node_outputs = node.output
+        ctx.remove_node(node_name)
+        new_node = ctx.make_node("Unique", node_inputs, name=node_name, output_count=3, attr={'sorted': 0})
+        ctx.replace_all_inputs(node_outputs[0], new_node.output[0])
+        ctx.replace_all_inputs(node_outputs[1], new_node.output[2])
+        if len(node_outputs) > 1:
             # cast to int64 if needed
-            if dtypes[1] != onnx_pb.TensorProto.UINT64:
-                cast_node = ctx.insert_new_node_on_output("Cast", node.output[1],
+            if dtypes[1] != onnx_pb.TensorProto.INT64:
+                cast_node = ctx.insert_new_node_on_output("Cast", new_node.output[2],
                                                           name=utils.make_name(node.name) + "_cast",
                                                           to=dtypes[1])
                 ctx.set_dtype(cast_node.output[0], dtypes[1])
-                ctx.copy_shape(node.output[1], cast_node.output[0])
-            # FIXME: the indices in onnx are not the same as in tensorflow.
+                ctx.copy_shape(new_node.output[2], cast_node.output[0])
 
 
 @tf_op("SparseToDense")

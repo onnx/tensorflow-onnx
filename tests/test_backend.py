@@ -3283,14 +3283,32 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "Unique")
     def test_unique(self):
-        x_val = np.array([1, 1, 2, 4, 4, 4, 7, 8, 8], dtype=np.float32)
+        x_val = np.array([1, 2, 8, 1, 2, 2, 7, 7, 7, 1], dtype=np.float32)
         def func(x):
             x1_, _ = tf.unique(x)
             y1 = tf.identity(x1_, name=_TFOUTPUT)
             return y1
-            # FIXME: indices in onnx are not the same as in tensorflow so don't check for now
-            #self._run_test_case([_OUTPUT, _OUTPUT1], {_INPUT: x_val})
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Unique")
+    def test_unique_indices_int64(self):
+        x_val = np.array([2, 3, 3, 6, 4, 1, 1], dtype=np.float32)
+        def func(x):
+            x1_, x2_ = tf.unique(x, out_idx=tf.int64)
+            y1 = tf.identity(x1_, name=_TFOUTPUT)
+            y2 = tf.identity(x2_, name=_TFOUTPUT1)
+            return y1, y2
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Unique")
+    def test_unique_indices_int32(self):
+        x_val = np.array([2, 3, 3, 6, 4, 1, 1], dtype=np.float32)
+        def func(x):
+            x1_, x2_ = tf.unique(x, out_idx=tf.int32)
+            y1 = tf.identity(x1_, name=_TFOUTPUT)
+            y2 = tf.identity(x2_, name=_TFOUTPUT1)
+            return y1, y2
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
     @check_opset_min_version(11, "ScatterND")
     def test_sparse_to_dense(self):
