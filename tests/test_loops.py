@@ -216,7 +216,6 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "output_ta:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
-    @skip_tf2()
     def test_map_fn_1(self):
         x_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
 
@@ -234,7 +233,6 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output_0:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
 
-    @skip_tf2()
     def test_map_fn_2(self):
         x_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
         y_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
