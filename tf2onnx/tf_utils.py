@@ -56,10 +56,11 @@ def tf_to_onnx_tensor(tensor, name=""):
         # assume np_data is string, numpy_helper.from_array accepts ndarray,
         # in which each item is of str while the whole dtype is of object.
         try:
-            if len(np_data.shape) > 0:
-                np_data = np_data.astype(np.str).astype(np.object)
-            else:
-                np_data = np.array(str(np_data)).astype(np.object)
+            # Faster but fails on Unicode
+            np_data = np_data.astype(np.str).astype(np.object)
+        except UnicodeDecodeError:
+            decode = np.vectorize(lambda x: x.decode('UTF-8'))
+            np_data = decode(np_data).astype(np.object)
         except:  # pylint: disable=bare-except
             raise RuntimeError("Not support type: {}".format(type(np_data.flat[0])))
     return numpy_helper.from_array(np_data, name=name)

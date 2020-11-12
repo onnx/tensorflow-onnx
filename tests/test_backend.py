@@ -3244,6 +3244,31 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
+    @check_tf_min_version("1.15", "tensor_scatter_nd_update for strings needs tf 1.15")
+    @check_opset_min_version(11, "ScatterND")
+    def test_tensor_scatter_update_str(self):
+        x_val = np.array(['A', '♠♣♥♦', 'B', 'C'], dtype=np.str).reshape((4))
+        y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
+        z_val = np.array(['☺', '11'], dtype=np.str).reshape((2))
+
+        def func(x, y, z):
+            x_ = tf.tensor_scatter_nd_update(x, y, z)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_tf_min_version("1.15", "tensor_scatter_nd_update for strings needs tf 1.15")
+    @check_opset_min_version(11, "ScatterND")
+    def test_tensor_scatter_update_str_const(self):
+        x_val = np.array(['A', '♠♣♥♦', 'B', 'C'], dtype=np.str).reshape((4))
+        y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
+        z_val = np.array(['☺', '11'], dtype=np.str).reshape((2))
+
+        def func(x, y):
+            z = tf.constant(z_val)
+            x_ = tf.tensor_scatter_nd_update(x, y, z)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
     @check_tf_min_version("1.14", "tensor_scatter_nd_update needs tf 1.14")
     @check_opset_min_version(11, "ScatterND")
     def test_tensor_scatter_update_cast_indices(self):

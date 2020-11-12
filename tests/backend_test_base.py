@@ -195,7 +195,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
-                self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
+                if expected_val.dtype == np.object:
+                    decode = np.vectorize(lambda x: x.decode('UTF-8'))
+                    expected_val_str = decode(expected_val)
+                    self.assertAllEqual(expected_val_str, actual_val)
+                else:
+                    self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
             if check_dtype:
                 self.assertEqual(expected_val.dtype, actual_val.dtype)
             # why need shape checke: issue when compare [] with scalar
