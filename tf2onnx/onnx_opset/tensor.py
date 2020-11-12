@@ -1805,6 +1805,61 @@ class SparseToDense:
         ctx.replace_inputs(node, [expand_node.output[0], sparse_indices, sparse_vals])
 
 
+@tf_op("SparseFillEmptyRows")
+class SparseFillEmptyRows:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        sparse_indices, sparse_vals, dense_shape, default_val = node.input
+        utils.make_sure(len(ctx.find_output_consumers(node.output[3])) == 0,
+                        "reverse_index_map output of SparseFillEmptyRows not implemented")
+        axis_0_indices = GraphBuilder(ctx).make_slice({"data": sparse_indices, "ends": [1], "starts": [0], "axes": [1]})
+        unique_indices = ctx.make_node("Unique", [axis_0_indices], op_name_scope=node.name).output[0]
+        axis_0_len = GraphBuilder(ctx).make_slice({"data": dense_shape, "ends": [1], "starts": [0], "axes": [0]})
+
+        true_tensor = helper.make_tensor("value", TensorProto.BOOL, dims=[1], vals=[True])
+        true_of_shape = ctx.make_node("ConstantOfShape", inputs=[axis_0_len], attr={"value": true_tensor},
+                                      op_name_scope=node.name).output[0]
+        unique_shape = ctx.make_node("Shape", [unique_indices], op_name_scope=node.name).output[0]
+        false_tensor = helper.make_tensor("value", TensorProto.BOOL, dims=[1], vals=[False])
+        false_of_shape = ctx.make_node("ConstantOfShape", inputs=[unique_shape], attr={"value": false_tensor},
+                                       op_name_scope=node.name).output[0]
+
+        indicators = ctx.make_node("ScatterElements", [true_of_shape, unique_indices, false_of_shape],
+                                   op_name_scope=node.name).output[0]
+        zero_const = ctx.make_const(utils.make_name("zero_const"), np.array(0, dtype=np.int64)).output[0]
+        one_const = ctx.make_const(utils.make_name("one_const"), np.array(1, dtype=np.int64)).output[0]
+        scalar_len = ctx.make_node("Squeeze", [axis_0_len], attr={"axes": [0]}, op_name_scope=node.name).output[0]
+        idx_range = ctx.make_node("Range", [zero_const, scalar_len, one_const], op_name_scope=node.name).output[0]
+        new_indices = ctx.make_node("Compress", [idx_range, indicators], op_name_scope=node.name).output[0]
+        new_indices_unsqueeze = ctx.make_node("Unsqueeze", [new_indices], attr={"axes": [1]},
+                                              op_name_scope=node.name).output[0]
+
+        num_empty_rows = ctx.make_node("Shape", [new_indices], op_name_scope=node.name).output[0]
+        new_values = ctx.make_node("Expand", [default_val, num_empty_rows], op_name_scope=node.name).output[0]
+        indices_shape = ctx.make_node("Shape", [sparse_indices], op_name_scope=node.name).output[0]
+        idx_shape = GraphBuilder(ctx).make_slice({"data": indices_shape, "ends": [2], "starts": [1], "axes": [0]})
+        idx_shape_min_1 = ctx.make_node("Sub", [idx_shape, one_const], op_name_scope=node.name).output[0]
+
+        triple_0 = ctx.make_const(utils.make_name("triple_0"), np.array([0, 0, 0], dtype=np.int64)).output[0]
+        new_indices_pads = ctx.make_node("Concat", [triple_0, idx_shape_min_1], attr={"axis": 0},
+                                         op_name_scope=node.name).output[0]
+        new_indices_2d = ctx.make_node("Pad", [new_indices_unsqueeze, new_indices_pads],
+                                       op_name_scope=node.name).output[0]
+
+        combined_indices = ctx.make_node("Concat", [sparse_indices, new_indices_2d], attr={"axis": 0},
+                                         op_name_scope=node.name).output[0]
+        combined_vals = ctx.make_node("Concat", [sparse_vals, new_values], attr={"axis": 0},
+                                      op_name_scope=node.name).output[0]
+
+        # The indices will not be sorted (violates a TF requirement), but conversions for subsequent ops
+        # (like SparseToDense) don't care and will work fine.  Add a TopK to sort in the future if needed.
+        ctx.replace_all_inputs(node.output[0], combined_indices)
+        ctx.replace_all_inputs(node.output[1], combined_vals)
+        ctx.replace_all_inputs(node.output[2], indicators)
+
+        ctx.remove_node(node.name)
+
+
 @tf_op("DynamicPartition")
 class DynamicPartition:
     @classmethod
