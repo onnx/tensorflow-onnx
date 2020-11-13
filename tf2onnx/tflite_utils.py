@@ -193,7 +193,7 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
         onnx_node = helper.make_node("Placeholder", [], outputs=[inp], name=inp)
         onnx_nodes.append(onnx_node)
 
-    graph_name = tflite_g.Name().decode()
+    graph_name = (tflite_g.Name() or b'tflite graph').decode()
     return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, inputs, outputs, graph_name
 
 def main():

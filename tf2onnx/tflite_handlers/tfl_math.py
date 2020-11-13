@@ -95,7 +95,9 @@ class TflGather:
 class TflReshape:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        utils.make_sure('new_shape' not in node.attr, "new_shape attr not yet supported for reshape (use input)")
+        if 'new_shape' in node.attr:
+            del node.attr['new_shape']
+        #utils.make_sure('new_shape' not in node.attr, "new_shape attr not yet supported for reshape (use input)")
 
 @tfl_op(["TFL_SLICE"], tf_op="Slice")
 class TflSlice:
