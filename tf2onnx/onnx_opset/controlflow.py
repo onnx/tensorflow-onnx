@@ -368,14 +368,12 @@ class Select:
         input_shape = ctx.get_shape(node.input[1])
         if input_shape is None:
             input_shape = ctx.get_shape(node.input[2])
-        if cond_shape is None or input_shape is None:
-            # Fallback if shape is unknown
-            cls.version_7(ctx, node, **kwargs)
-            return
         node.type = "Where"
-        input_rank = len(input_shape)
+        input_rank = len(input_shape) if input_shape is not None else None
+        cond_rank = len(cond_shape) if cond_shape is not None else None
         # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
-        if len(cond_shape) == 1 and input_rank > 1:
+        if cond_rank == 1 and input_rank != 1:
+            utils.make_sure(input_rank is not None, "input_rank unknown and cond_rank == 1")
             broadcast_shape = [cond_shape[0]] + [1] * (input_rank - 1)
             shape_const = ctx.make_const(utils.make_name(node.name), np.array(broadcast_shape, dtype=np.int64))
             reshape = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
