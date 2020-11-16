@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 """ tf2onnx mapping functions for onnx ml domain. """
 import logging
+import numpy as np
 from onnx import TensorProto
 from tf2onnx import constants
 from tf2onnx.handler import tf_op
@@ -50,6 +51,28 @@ class LookupTableFind:
                       name=node_name, inputs=node_inputs[1: 2], outputs=node_outputs,
                       attr={'cats_int64s': cats_int64s, 'cats_strings': cats_strings, 'default_int64': default_val},
                       shapes=[shape], dtypes=[dtype])
+        customer_nodes = ctx.find_output_consumers(table_node.output[0])
+        if len(customer_nodes) == 0:
+            ctx.remove_node(table_node.name)
+
+
+@tf_op("LookupTableSizeV2")
+class LookupTableSize:
+    @classmethod
+    def version_1(cls, ctx, node, initialized_tables, **kwargs):
+        table_node = node.inputs[0]
+        shared_name = table_node.get_attr_value("shared_name")
+
+        utils.make_sure(shared_name in initialized_tables, "Initialized table %s for node %s not found.",
+                        shared_name, node.name)
+        keys, _ = initialized_tables[shared_name]
+
+        node_name = node.name
+        node_outputs = node.output
+        ctx.remove_node(node.name)
+        size_const = ctx.make_const(node_name, np.array(len(keys), dtype=np.int64))
+        ctx.replace_all_inputs(node_outputs[0], size_const.output[0])
+
         customer_nodes = ctx.find_output_consumers(table_node.output[0])
         if len(customer_nodes) == 0:
             ctx.remove_node(table_node.name)

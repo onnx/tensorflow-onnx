@@ -3587,6 +3587,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: query}, constant_fold=False, as_session=True)
         os.remove(filnm)
 
+    def test_hashtable_size(self):
+        filnm = "vocab.tmp"
+        words = ["apple", "pear", "banana", "cherry", "grape"]
+        query = np.array(['cherry'], dtype=np.object)
+        with open(filnm, "w") as f:
+            for word in words:
+                f.write(word + "\n")
+        def func(query_holder):
+            hash_table = lookup_ops.index_table_from_file(filnm)
+            lookup_size = hash_table.size()
+            ret = tf.add(lookup_size, 0, name=_TFOUTPUT)
+            return ret
+        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, as_session=True)
+        os.remove(filnm)
+
     @check_opset_min_version(11)
     def test_matrix_diag_part(self):
         input_vals = [
