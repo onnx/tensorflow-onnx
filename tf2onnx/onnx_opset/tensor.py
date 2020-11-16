@@ -349,6 +349,52 @@ class Slice:
         cls.version_1(ctx, node, **kwargs)
 
 
+@tf_op("Roll")
+class Roll:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        utils.make_sure(node.inputs[2].is_const(), "Can only convert Roll is axis is const")
+        axes = node.inputs[2].get_tensor_value()
+        if not isinstance(axes, list):
+            axes = [axes]
+        shifts_dtype = ctx.get_dtype(node.input[1])
+        if shifts_dtype != TensorProto.INT64:
+            shifts_casted = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64).output[0]
+        else:
+            shifts_casted = node.input[1]
+
+        if len(axes) == 1:
+            unsqueeze_node = ctx.make_node("Unsqueeze", [shifts_casted], attr={'axes': [0]}, op_name_scope=node.name)
+            shifts_split = [unsqueeze_node.output[0]]
+        else:
+            shifts_split = ctx.make_node("Split", [shifts_casted], attr={'axis': 0},
+                                         output_count=len(axes), op_name_scope=node.name).output
+
+        zero_const = ctx.make_const(utils.make_name("zeros_const"), np.array([0], np.int64)).output[0]
+        shape_node = ctx.make_node("Shape", [node.input[0]], op_name_scope=node.name)
+
+        data = node.input[0]
+
+        for axis, shift in zip(axes, shifts_split):
+            len_along_axis = GraphBuilder(ctx).make_slice(
+                {"data": shape_node.output[0], "ends": [axis + 1], "starts": [axis]})
+            remaining_len = ctx.make_node("Sub", [len_along_axis, shift], op_name_scope=node.name).output[0]
+            axes_const = ctx.make_const(utils.make_name("axes_const"), np.array([axis], np.int64)).output[0]
+            slice_one = ctx.make_node("Slice", [data, zero_const, remaining_len, axes_const], op_name_scope=node.name)
+            slice_two = ctx.make_node("Slice", [data, remaining_len, len_along_axis, axes_const],
+                                      op_name_scope=node.name)
+            concat_node = ctx.make_node("Concat", [slice_two.output[0], slice_one.output[0]],
+                                        attr={'axis': axis}, op_name_scope=node.name)
+            data = concat_node.output[0]
+
+        ctx.replace_all_inputs(node.output[0], data)
+        ctx.remove_node(node.name)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.version_10(ctx, node, **kwargs)
+
+
 @tf_op("Gather")
 class Gather:
     @classmethod

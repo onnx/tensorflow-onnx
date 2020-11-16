@@ -296,7 +296,7 @@ def tflist_to_onnx(g, shape_override, const_node_values=None):
                     "T_threshold", "element_dtype", "shape_type", "_lower_using_switch_merge",
                     "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
                     "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
-                    "Toutput_types", "dense_shapes", "Tdense", "Tidx", "Tsegmentids",
+                    "Toutput_types", "dense_shapes", "Tdense", "Tidx", "Tsegmentids", "Tshift",
                     "Tcomplex", "Treal",  # For RFFT, Tcomplex is ignored because
                                           # onnx.helper.make_node fails,
                                           # TODO: it should be added back.

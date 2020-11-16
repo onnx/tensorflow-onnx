@@ -821,6 +821,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "Slice")
+    def test_roll_axis_scalar(self):
+        x_val = np.arange(4 * 3 * 5 * 2, dtype=np.float32).reshape((4, 3, 5, 2))
+        shift_val = np.array(4, dtype=np.int64)
+        axes_val = np.array(2, dtype=np.int32)
+        def func(x, shift):
+            x_ = tf.roll(x, shift, axes_val)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: shift_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_roll_axis_vector(self):
+        x_val = np.arange(4 * 3 * 5 * 2, dtype=np.float32).reshape((4, 3, 5, 2))
+        shift_val = np.array([2, 3, 4], dtype=np.int32)
+        axes_val = np.array([1, 2, 1], dtype=np.int32)
+        def func(x, shift):
+            x_ = tf.roll(x, shift, axes_val)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: shift_val})
+
     @check_tf_min_version("2.2")
     def test_large_model_format(self):
         x_val = np.array([2.0], dtype=np.float32)
