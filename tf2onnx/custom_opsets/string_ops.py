@@ -2,15 +2,15 @@
 # Licensed under the MIT license.
 """ tf2onnx mapping functions for string ops using contrib ops domain. """
 import logging
-from onnx import TensorProto
+import numpy as np
+
 from tf2onnx import constants
 from tf2onnx.handler import tf_op
 from tf2onnx import utils
-import numpy as np
-from onnx import helper
-from onnx.onnx_pb import TensorProto
 
 logger = logging.getLogger(__name__)
+
+# pylint: disable=unused-argument,missing-docstring
 
 @tf_op(["StringSplit", "StringSplitV2"], domain=constants.CONTRIB_OPS_DOMAIN)
 class StringOps:
@@ -46,8 +46,8 @@ class StaticRegexReplace:
         node.type = "StringRegexReplace"
         pattern = node.get_attr_str("pattern")
         rewrite = node.get_attr_str("rewrite")
-        utils.make_sure(node.get_attr_value("replace_global") == 0,
-                        "Can only convert StaticRegexReplace if replace_global is False")
+        utils.make_sure(node.get_attr_value("replace_global") != 0,
+                        "Can not convert StaticRegexReplace if replace_global is False")
         pattern_node = ctx.make_const(utils.make_name("pattern"), np.array([pattern], np.object))
         rewrite_node = ctx.make_const(utils.make_name("rewrite"), np.array([rewrite], np.object))
         del node.attr["pattern"]
