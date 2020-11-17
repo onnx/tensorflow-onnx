@@ -4,3 +4,4 @@
 
 from . import ms
 from . import onnx_ml
+from . import string_ops

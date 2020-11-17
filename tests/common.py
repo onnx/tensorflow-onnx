@@ -169,6 +169,17 @@ def skip_tf2(message=""):
     return unittest.skipIf(tf_loader.is_tf2(), reason)
 
 
+def requires_custom_ops(message=""):
+    """ Skip until custom ops framework is on PyPI. """
+    reason = _append_message("test needs custom ops framework", message)
+    try:
+        import ortcustomops  #pylint: disable=import-outside-toplevel,unused-import
+        can_import = True
+    except ModuleNotFoundError:
+        can_import = False
+    return unittest.skipIf(not can_import, reason)
+
+
 def check_tf_max_version(max_accepted_version, message=""):
     """ Skip if tf_version > max_required_version """
     config = get_test_config()
