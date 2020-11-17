@@ -132,12 +132,20 @@ class AddN():
         node.type = "Sum"
 
 
-@tf_op(["SegmentSum", "SegmentProd", "SegmentMax", "SegmentMin"])
+@tf_op(["SegmentSum", "SegmentProd", "SegmentMax", "SegmentMin", "SegmentMean",
+        "SparseSegmentSum", "SparseSegmentMean", "SparseSegmentSqrtN"])
 class SegmentSum():
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
-        data_inp = node.input[0]
-        segment_inp = node.input[1]
+        if node.type.startswith("Sparse"):
+            data_inp, indices_inp, segment_inp = node.input
+            gather_node = ctx.make_node("Gather", [data_inp, indices_inp], attr={'axis': 0})
+            data_inp = gather_node.output[0]
+            node.type = node.type.replace("Sparse", "")
+        else:
+            data_inp, segment_inp = node.input
+
+        # Data has shape [n, a, b, ..., c]
         data_shape = ctx.get_shape(data_inp)
         data_rank = len(data_shape) if data_shape is not None else None
         data_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(data_inp))
@@ -146,7 +154,7 @@ class SegmentSum():
         data_is_int = np.dtype(data_np_dtype).kind == 'i'
         utils.make_sure(data_is_float or data_is_int, "dtype for Segment ops must be float or int")
 
-        if node.type == "SegmentSum":
+        if node.type in ["SegmentSum", "SegmentMean", "SegmentSqrtN"]:
             onnx_op = "ReduceSum"
             identity_value = np.array(0, dtype=data_np_dtype)
         elif node.type == "SegmentProd":
@@ -171,11 +179,21 @@ class SegmentSum():
         num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]])
         # ORT doesn't support bool for OneHot so we use float32 and cast to bool
         onehot_values = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1], dtype=np.float32))
+        # one_hot_node has shape [s, n] (s is # segments)
         one_hot_node = ctx.make_node("OneHot", [segment_inp, num_segments.output[0], onehot_values.output[0]],
                                      attr={'axis': 0})
+        if node.type == "SegmentMean":
+            scaling_node = ctx.make_node("ReduceSum", [one_hot_node.output[0]], attr={'axes': [1], 'keepdims': 0})
+        elif node.type == "SegmentSqrtN":
+            seg_cnts_node = ctx.make_node("ReduceSum", [one_hot_node.output[0]], attr={'axes': [1], 'keepdims': 0})
+            scaling_node = ctx.make_node("Sqrt", [seg_cnts_node.output[0]])
+        else:
+            scaling_node = None
+
         one_hot_bool = ctx.make_node("Cast", [one_hot_node.output[0]], attr={"to": onnx_pb.TensorProto.BOOL})
         one_hot_unsqueeze = one_hot_bool
 
+        # Make one_hot_unsqueeze have shape [s, n, 1, 1, ..., 1]
         if data_rank is None:
             # Unsqueeze requires known rank, but we can use Reshape if rank is unknown
             shape_node = ctx.make_node("Shape", [data_inp])
@@ -186,18 +204,33 @@ class SegmentSum():
             one_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1])
             unsqueeze_dims = ctx.make_node("ConstantOfShape", inputs=[num_unsqueeze_dims.output[0]],
                                            attr={"value": one_tensor})
+            # Zero indicates a dimension should be unchanged
             double_zero_const = ctx.make_const(utils.make_name("double_zero"), np.array([0, 0], dtype=np.int64))
             expanded_shape = ctx.make_node("Concat", [double_zero_const.output[0], unsqueeze_dims.output[0]],
                                            attr={'axis': 0})
             one_hot_unsqueeze = ctx.make_node("Reshape", [one_hot_bool.output[0], expanded_shape.output[0]])
+            if scaling_node is not None:
+                zero_const = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64))
+                expanded_shape = ctx.make_node("Concat", [zero_const.output[0], unsqueeze_dims.output[0]],
+                                               attr={'axis': 0})
+                scaling_unsqueeze = ctx.make_node("Reshape", [scaling_node.output[0], expanded_shape.output[0]])
         elif data_rank > 1:
             new_dims = list(range(2, 2 + data_rank - 1))
             one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_bool.output[0]], attr={'axes': new_dims})
+            if scaling_node is not None:
+                new_dims = list(range(1, 1 + data_rank - 1))
+                scaling_unsqueeze = ctx.make_node("Unsqueeze", [scaling_node.output[0]], attr={'axes': new_dims})
 
-        mul_node = ctx.make_node("Where", [one_hot_unsqueeze.output[0], data_inp, identity_const.output[0]])
+        # Shape of data:       [n, a, b, ..., c]
+        # Shape of one_hot: [s, n, 1, 1, ..., 1]
+        # Broadcast left-pads shape with 1s, so result is shape: [s, n, a, b, ..., c]
+        where_node = ctx.make_node("Where", [one_hot_unsqueeze.output[0], data_inp, identity_const.output[0]])
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node(onnx_op, [mul_node.output[0]], attr={'axes': [1], 'keepdims': 0},
+        # After reduction over axis 1, shape is: [s, a, b, ..., c]
+        ctx.make_node(onnx_op, [where_node.output[0]], attr={'axes': [1], 'keepdims': 0},
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        if scaling_node is not None:
+            ctx.insert_new_node_on_output("Div", node.output[0], inputs=[node.output[0], scaling_unsqueeze.output[0]])

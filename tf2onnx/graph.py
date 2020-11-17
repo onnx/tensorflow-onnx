@@ -1258,7 +1258,7 @@ class Graph(object):
                 break
         return new_node
 
-    def insert_new_node_on_output(self, op_type, output_name, name, domain=None, **kwargs):
+    def insert_new_node_on_output(self, op_type, output_name, name=None, inputs=None, domain=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             op_type: type for new operation
@@ -1274,8 +1274,13 @@ class Graph(object):
         utils.make_sure(isinstance(op_type, six.text_type), "op_type's type is not expected: %s",
                         type(op_type))
 
+        if inputs is None:
+            inputs = [output_name]
+        if name is None:
+            name = utils.make_name(op_type)
+
         new_output = port_name(name)
-        new_node = self.make_node(op_type, [output_name], attr=kwargs, outputs=[new_output], name=name, domain=domain)
+        new_node = self.make_node(op_type, inputs, attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
         to_replace = [self.get_node_by_name(n) for n in self._output_to_consumers[output_name]]
         to_replace = [n for n in to_replace if n != new_node]

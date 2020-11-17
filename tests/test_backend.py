@@ -1341,6 +1341,51 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
+    @check_opset_min_version(11, "Pad")
+    def test_segment_mean_unknown_rank(self):
+        segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
+        data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
+        data_shape_val = np.array([8, 2, 3, 1], dtype=np.int64)
+        shape_pad_val = np.zeros((1, 2), dtype=np.int64)
+        def func(data, segments, data_shape, shape_pad):
+            # Some hackery to make the rank unknown
+            data_shape_ = tf.pad(data_shape, shape_pad, constant_values=0)
+            data = tf.reshape(data, data_shape_)
+            x_ = tf.math.segment_mean(data, segments)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT],
+                            {_INPUT: data_val, _INPUT1: segs_val, _INPUT2: data_shape_val, _INPUT3: shape_pad_val})
+
+    @check_opset_min_version(9, "OneHot")
+    def test_sparse_segment_sum(self):
+        data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
+        indices_val = np.array([2, 0, 1, 3, 5, 4, 3, 5, 5], dtype=np.int32)
+        segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3, 3], dtype=np.int32)
+        def func(data, indices, segments):
+            x_ = tf.sparse.segment_sum(data, indices, segments)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
+
+    @check_opset_min_version(9, "OneHot")
+    def test_sparse_segment_mean(self):
+        data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
+        indices_val = np.array([2, 0, 1, 3, 5, 4, 3, 5, 5], dtype=np.int32)
+        segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3, 3], dtype=np.int32)
+        def func(data, indices, segments):
+            x_ = tf.sparse.segment_mean(data, indices, segments)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
+
+    @check_opset_min_version(9, "OneHot")
+    def test_sparse_segment_sqrtn(self):
+        data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
+        indices_val = np.array([2, 0, 1, 3, 5, 4, 3, 5, 5], dtype=np.int32)
+        segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3, 3], dtype=np.int32)
+        def func(data, indices, segments):
+            x_ = tf.sparse.segment_sqrt_n(data, indices, segments)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
+
     @check_onnxruntime_incompatibility("Sqrt")
     def test_sqrt(self):
         x_val = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32).reshape((2, 2))
