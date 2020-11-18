@@ -15,7 +15,7 @@ import tensorflow as tf
 from tensorflow.python.ops import lookup_ops
 
 from tf2onnx import utils
-from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx, get_hash_table_info
+from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx, get_hash_table_info, replace_placeholders_with_tables
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +260,29 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
     return frozen_graph, input_names, output_names
 
 
+def _remove_non_variable_resources_from_captures(concrete_func):
+    """
+    Removes all non-variable resources (such as tables) from a function's captured inputs to prevent tf from
+    raising a 'cannot convert dtype resource to numpy' error while freezing the graph.
+    """
+    # pylint: disable=protected-access
+    resource_id_to_placeholder = {}
+    if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
+        variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
+        for k, v in list(concrete_func.graph._captures.items()):
+            val_tensor, name_tensor = v
+            if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
+                resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
+                del concrete_func.graph._captures[k]
+                for i in reversed(range(len(concrete_func._captured_inputs))):
+                    if concrete_func._captured_inputs[i] is val_tensor:
+                        concrete_func._captured_inputs.pop(i)
+    else:
+        logger.warning(
+            "Could not search for non-variable resources. Concrete function internal representation may have changed.")
+    return resource_id_to_placeholder
+
+
 def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def,
                          concrete_function_index, large_model):
     """Load tensorflow graph from saved_model."""
@@ -313,6 +336,9 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     if output_names:
         outputs = list(set(output_names) & set(outputs))
 
+    # Avoid errors due to bug in TF freezing
+    removed_resource_to_placeholder = _remove_non_variable_resources_from_captures(concrete_func)
+
     try:
         frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
     except ValueError as e:
@@ -321,6 +347,20 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         raise e
 
     table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
+    placeholder_to_table_info = {}
+    if hasattr(imported, '_table') and hasattr(imported._table, '_create_resource'): # pylint: disable=protected-access
+        # Add tables from saved_model table initializers
+        # pylint: disable=protected-access
+        initializer = imported._table._create_resource.concrete_functions[0].function_def
+        new_names, new_k_dtypes, new_v_dtypes = get_hash_table_info(initializer.node_def)
+        table_names.extend(new_names)
+        key_dtypes.extend(new_k_dtypes)
+        value_dtypes.extend(new_v_dtypes)
+        table_handle = id(imported._table.resource_handle)
+        if table_handle in removed_resource_to_placeholder and len(new_names) == 1:
+            table_info = (new_names[0], new_k_dtypes[0], new_v_dtypes[0])
+            placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
+
     initialized_tables = {}
     for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
         h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
@@ -329,6 +369,8 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
             initialized_tables[n] = (k.numpy(), v.numpy())
         except Exception:  # pylint: disable=broad-except
             logger.warning("Could not initialize table with shared_name = %r", n)
+
+    replace_placeholders_with_tables(frozen_graph, placeholder_to_table_info)
 
     return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables
 
