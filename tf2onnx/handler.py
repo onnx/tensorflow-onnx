@@ -21,6 +21,7 @@ class tf_op:
 
     _OPSETS = collections.OrderedDict()
     _MAPPING = None
+    _DOMAIN_MAPPING = None
 
     def __init__(self, name, domain=constants.ONNX_DOMAIN, **kwargs):
         """Called decorator from decorator.
@@ -82,26 +83,33 @@ class tf_op:
             for extra_opset in extra_opsets:
                 mapping[extra_opset.domain] = extra_opset.version
         ops_mapping = {}
+        domain_to_ops_mapping = collections.defaultdict(dict)
         for domain, opsets in tf_op.get_opsets().items():
             for target_opset, op_map in enumerate(opsets):
                 m = mapping.get(domain)
                 if m:
                     if target_opset <= m and op_map:
+                        domain_to_ops_mapping[domain].update(ops_mapping)
                         ops_mapping.update(op_map)
 
         tf_op._MAPPING = ops_mapping
+        tf_op._DOMAIN_MAPPING = domain_to_ops_mapping
         return ops_mapping
 
     @staticmethod
-    def find_effective_op(name):
+    def find_effective_op(name, domain=None):
         """Find the effective version of an op create_mapping.
            This is used if we need to compose ops from other ops where we'd need to find the
            op that is doing to be used in the final graph, for example there is a custom op
            that overrides a onnx op ...
 
         :param name: The operator name.
+        :param domain: The domain to use (optional).
         """
-        map_info = tf_op._MAPPING.get(name)
+        if domain is None:
+            map_info = tf_op._MAPPING.get(name)
+        else:
+            map_info = tf_op._DOMAIN_MAPPING[domain].get(name)
         if map_info is None:
             return None
         return map_info

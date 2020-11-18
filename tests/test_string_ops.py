@@ -71,6 +71,45 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
             return x_
         self._run_test_case(func, [_OUTPUT], {_INPUT: text_val})
 
+    @requires_custom_ops("StringEqual")
+    def test_string_equal(self):
+        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
+        text_val2 = np.array([["a", "Test 2 4 6", "♠♣"], ["Hello", "test test", "♥ ♦"]], dtype=np.str)
+        def func(text1, text2):
+            x = tf.equal(text1, text2)
+            x_ = tf.identity(x, name=_TFOUTPUT)
+            return x_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: text_val1, _INPUT1: text_val2})
+
+    @requires_custom_ops("StringNotEqual")
+    def test_string_not_equal(self):
+        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
+        text_val2 = np.array([["a", "Test 2 4 6", "♠♣"], ["Hello", "test test", "♥ ♦"]], dtype=np.str)
+        def func(text1, text2):
+            x = tf.not_equal(text1, text2)
+            x_ = tf.identity(x, name=_TFOUTPUT)
+            return x_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: text_val1, _INPUT1: text_val2})
+
+    # Make sure that fallback works for non-string equality
+    @requires_custom_ops()
+    def test_equal(self):
+        x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
+        x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
+        def func(x1, x2):
+            mi = tf.equal(x1, x2)
+            return tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
+    @requires_custom_ops()
+    def test_not_equal(self):
+        x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
+        x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
+        def func(x1, x2):
+            mi = tf.not_equal(x1, x2)
+            return tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
     def _run_test_case(self, func, output_names_with_port, feed_dict, **kwargs):
         extra_opset = [utils.make_opsetid(constants.CONTRIB_OPS_DOMAIN, 1)]
         process_args = {"extra_opset": extra_opset}
