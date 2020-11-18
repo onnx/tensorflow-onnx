@@ -15,7 +15,7 @@ from distutils.version import LooseVersion
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.core.framework import types_pb2, tensor_pb2
+from tensorflow.core.framework import types_pb2, tensor_pb2, graph_pb2
 from tensorflow.python.framework import tensor_util
 
 from onnx import helper, onnx_pb, numpy_helper
@@ -267,12 +267,19 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     logger.info("Computed %d values for constant folding", len(outputs_to_values))
     return outputs_to_values, outputs_to_dtypes
 
-def get_hash_table_info(graph_def):
-    """Return lists of the shared_names, key_dtypes, and value_dtypes of all hash tables declared in the graph_def"""
+def get_hash_table_info(nodes_or_graph_def):
+    """
+    Return lists of the shared_names, key_dtypes, and value_dtypes of all hash tables declared in the graph_def
+    or list of nodes
+    """
+    if isinstance(nodes_or_graph_def, graph_pb2.GraphDef):
+        nodes = nodes_or_graph_def.node
+    else:
+        nodes = nodes_or_graph_def
     names = []
     key_dtypes = []
     val_dtypes = []
-    for n in graph_def.node:
+    for n in nodes:
         if n.op == "HashTableV2":
             if all(k in n.attr for k in ['shared_name', 'key_dtype', 'value_dtype']):
                 name = n.attr['shared_name'].s
@@ -281,6 +288,21 @@ def get_hash_table_info(graph_def):
                     key_dtypes.append(n.attr['key_dtype'].type)
                     val_dtypes.append(n.attr['value_dtype'].type)
     return names, key_dtypes, val_dtypes
+
+def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
+    """
+    Given a graph_def and a map from placeholder names to a tuple of table names, key dtypes, and value dtypes,
+    Replaces placeholder ops in the graph_def with HashTableV2 ops
+    """
+    for n in graph_def.node:
+        if n.op == "Placeholder" and n.name in placeholder_to_table_info:
+            name, key_dtype, val_dtype = placeholder_to_table_info[n.name]
+            for a in list(n.attr):
+                del n.attr[a]
+            n.op = "HashTableV2"
+            n.attr['shared_name'].s = name
+            n.attr['key_dtype'].type = key_dtype
+            n.attr['value_dtype'].type = val_dtype
 
 def tflist_to_onnx(g, shape_override, const_node_values=None):
     """
