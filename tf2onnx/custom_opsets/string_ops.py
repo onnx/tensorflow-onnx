@@ -3,8 +3,9 @@
 """ tf2onnx mapping functions for string ops using contrib ops domain. """
 import logging
 import numpy as np
+from onnx.onnx_pb import TensorProto
 
-from tf2onnx import constants
+from tf2onnx import constants, handler
 from tf2onnx.handler import tf_op
 from tf2onnx import utils
 
@@ -79,3 +80,23 @@ class StringJoin:
             unsqueezes.append(unsqueeze_node.output[0])
         stack_node = ctx.make_node("Concat", unsqueezes, attr={'axis': 0})
         ctx.replace_inputs(node, [stack_node.output[0], separator_node.output[0], axis_node.output[0]])
+
+@tf_op(["Equal", "NotEqual"], domain=constants.CONTRIB_OPS_DOMAIN)
+class StringEqual:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        dtype = ctx.get_dtype(node.input[0])
+        if dtype != TensorProto.STRING:
+            # Fallback to normal domain conversion
+            func, _ = handler.tf_op.find_effective_op(node.type, constants.ONNX_DOMAIN)
+            func(ctx, node, **kwargs)
+            return
+
+        need_not = node.type == "NotEqual"
+        node.type = "StringEqual"
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        if need_not:
+            output_name = node.output[0]
+            not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
+            ctx.copy_shape(output_name, not_node.output[0])
+            ctx.copy_dtype(output_name, not_node.output[0])
