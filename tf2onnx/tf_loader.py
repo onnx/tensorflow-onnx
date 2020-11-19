@@ -267,7 +267,11 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     """
     # pylint: disable=protected-access
     resource_id_to_placeholder = {}
+    graph_captures_copy = None
+    func_captures_copy = None
     if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
+        graph_captures_copy = concrete_func.graph._captures.copy()
+        func_captures_copy = concrete_func._captured_inputs.copy()
         variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
         for k, v in list(concrete_func.graph._captures.items()):
             val_tensor, name_tensor = v
@@ -280,7 +284,15 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     else:
         logger.warning(
             "Could not search for non-variable resources. Concrete function internal representation may have changed.")
-    return resource_id_to_placeholder
+    return resource_id_to_placeholder, graph_captures_copy, func_captures_copy
+
+
+def _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy):
+    """Undoes effect of _remove_non_variable_resources_from_captures on concrete_func"""
+    # pylint: disable=protected-access
+    if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
+        concrete_func.graph._captures = graph_captures_copy
+        concrete_func._captured_inputs = func_captures_copy
 
 
 def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def,
@@ -337,7 +349,8 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         outputs = list(set(output_names) & set(outputs))
 
     # Avoid errors due to bug in TF freezing
-    removed_resource_to_placeholder = _remove_non_variable_resources_from_captures(concrete_func)
+    removed_resource_to_placeholder, graph_captures_copy, func_captures_copy = \
+        _remove_non_variable_resources_from_captures(concrete_func)
 
     try:
         frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
@@ -345,6 +358,9 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         if any(msg in str(e) for msg in ["exceeds maximum protobuf size of 2GB", "string too long"]):
             raise ValueError(err_large_model)
         raise e
+
+    # We might be returning the concrete_func so let's put it back in working order
+    _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy)
 
     table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
     placeholder_to_table_info = {}

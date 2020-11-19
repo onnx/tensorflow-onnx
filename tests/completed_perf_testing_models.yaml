@@ -2715,3 +2715,507 @@ efficientnet-qobvel-b1:
     "input_1:0": [1, 240, 240, 3]
   outputs:
     - Identity:0
+
+nnlm-de-dim128:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-de-dim128"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-de-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-de-dim128-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-de-dim128-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-de-dim128-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-de-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-de-dim50"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-de-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-de-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-de-dim50-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-de-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-en-dim128:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-en-dim128"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-en-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-en-dim128-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-en-dim128-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-en-dim128-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-en-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-en-dim50"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-en-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-en-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-en-dim50-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-en-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-es-dim128:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-es-dim128"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-es-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-es-dim128-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-es-dim128-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-es-dim128-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-es-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-es-dim50"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-es-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-es-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-es-dim50-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-es-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-id-dim128:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-id-dim128"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-id-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-id-dim128-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-id-dim128-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-id-dim128-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-id-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-id-dim50"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-id-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-id-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-id-dim50-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-id-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ja-dim128:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ja-dim128"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ja-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ja-dim128-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ja-dim128-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ja-dim128-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ja-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ja-dim50"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ja-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ja-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ja-dim50-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ja-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ko-dim128:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ko-dim128"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ko-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ko-dim128-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ko-dim128-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ko-dim128-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ko-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ko-dim50"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ko-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ko-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ko-dim50-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-ko-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-zh-dim128:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-zh-dim128"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-zh-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-zh-dim128-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-zh-dim128-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-zh-dim128-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-zh-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-zh-dim50"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-zh-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-zh-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-zh-dim50-with-normalization"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/nnlm-zh-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
