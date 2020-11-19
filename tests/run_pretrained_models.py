@@ -364,7 +364,10 @@ class Test(object):
             tf_func = tf.function(concrete_func)
             logger.info("Running TF")
             tf_results_d = tf_func(**inputs)
-            if self.structured_outputs is None:
+            # If there is only a single output a dict might not be returned
+            if isinstance(tf_results_d, tf.Tensor):
+                tf_results = [tf_results_d]
+            elif self.structured_outputs is None:
                 tf_results = list(tf_results_d.values())
             else:
                 tf_results = [tf_results_d[output] for output in self.structured_outputs]
