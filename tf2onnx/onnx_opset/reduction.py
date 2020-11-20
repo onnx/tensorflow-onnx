@@ -133,23 +133,36 @@ class AddN():
 
 
 @tf_op(["SegmentSum", "SegmentProd", "SegmentMax", "SegmentMin", "SegmentMean",
-        "SparseSegmentSum", "SparseSegmentMean", "SparseSegmentSqrtN"])
+        "SparseSegmentSum", "SparseSegmentMean", "SparseSegmentSqrtN",
+        "SparseSegmentSumWithNumSegments", "SparseSegmentMeanWithNumSegments", "SparseSegmentSqrtNWithNumSegments",
+        "UnsortedSegmentSum", "UnsortedSegmentProd", "UnsortedSegmentMax", "UnsortedSegmentMin"])
 class SegmentSum():
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
+        node_inputs = node.input
+        num_segments_specified = False
+        if node.type.endswith("WithNumSegments") or node.type.startswith("Unsorted"):
+            num_segments_specified = True
+            num_segments = node_inputs.pop()
+            node.type = node.type.replace("WithNumSegments", "")
+            node.type = node.type.replace("Unsorted", "")
         if node.type.startswith("Sparse"):
-            data_inp, indices_inp, segment_inp = node.input
+            data_inp, indices_inp, segment_inp = node_inputs
             gather_node = ctx.make_node("Gather", [data_inp, indices_inp], attr={'axis': 0})
             data_inp = gather_node.output[0]
             node.type = node.type.replace("Sparse", "")
         else:
-            data_inp, segment_inp = node.input
+            data_inp, segment_inp = node_inputs
 
         # Data has shape [n, a, b, ..., c]
         data_shape = ctx.get_shape(data_inp)
         data_rank = len(data_shape) if data_shape is not None else None
         data_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(data_inp))
         seg_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(segment_inp))
+
+        if num_segments_specified and ctx.get_dtype(segment_inp) != ctx.get_dtype(num_segments):
+            num_segments = ctx.make_node("Cast", [num_segments], attr={"to": ctx.get_dtype(segment_inp)}).output[0]
+
         data_is_float = np.dtype(data_np_dtype).kind == 'f'
         data_is_int = np.dtype(data_np_dtype).kind == 'i'
         utils.make_sure(data_is_float or data_is_int, "dtype for Segment ops must be float or int")
@@ -173,14 +186,15 @@ class SegmentSum():
             else:
                 identity_value = np.iinfo(data_np_dtype).max
 
-        max_segment = ctx.make_node("ReduceMax", [segment_inp], attr={'axes': [0], 'keepdims': 0})
-        one_const = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=seg_np_dtype))
+        if not num_segments_specified:
+            max_segment = ctx.make_node("ReduceMax", [segment_inp], attr={'axes': [0], 'keepdims': 0})
+            one_const = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=seg_np_dtype))
+            num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]]).output[0]
         identity_const = ctx.make_const(utils.make_name("const_identity"), identity_value)
-        num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]])
         # ORT doesn't support bool for OneHot so we use float32 and cast to bool
         onehot_values = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1], dtype=np.float32))
         # one_hot_node has shape [s, n] (s is # segments)
-        one_hot_node = ctx.make_node("OneHot", [segment_inp, num_segments.output[0], onehot_values.output[0]],
+        one_hot_node = ctx.make_node("OneHot", [segment_inp, num_segments, onehot_values.output[0]],
                                      attr={'axis': 0})
         if node.type == "SegmentMean":
             scaling_node = ctx.make_node("ReduceSum", [one_hot_node.output[0]], attr={'axes': [1], 'keepdims': 0})
@@ -189,6 +203,11 @@ class SegmentSum():
             scaling_node = ctx.make_node("Sqrt", [seg_cnts_node.output[0]])
         else:
             scaling_node = None
+
+        if scaling_node and num_segments_specified:
+            # If empty segments are possible, we must avoid division by zero
+            const_one_float = ctx.make_const(utils.make_name("const_one_float"), np.array(1, dtype=np.float32))
+            scaling_node = ctx.make_node("Max", [scaling_node.output[0], const_one_float.output[0]])
 
         one_hot_bool = ctx.make_node("Cast", [one_hot_node.output[0]], attr={"to": onnx_pb.TensorProto.BOOL})
         one_hot_unsqueeze = one_hot_bool
