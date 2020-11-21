@@ -275,87 +275,40 @@ class Select:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         # T output = Select(bool condition, T x, T y)
-        # Select_res = Add(Multiply(Cast(bool condition, float32), T x,),
-        #                  Multiply(Cast(Not(bool condition), float32), T y)).
+        # Select_res = Add(Multiply(Cast(bool condition, T), T x,),
+        #                  Multiply(Cast(Not(bool condition), T), T y)).
         # TODO: Fix case where condition is 1-dimensional
         utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
+        dtype = ctx.get_dtype(node.output[0])
+        utils.make_sure(dtype != TensorProto.STRING, "Select with dtype string requires opset 9")
+
+        cond_shape = ctx.get_shape(node.input[0])
+        input_shape = ctx.get_shape(node.input[1])
+        if input_shape is None:
+            input_shape = ctx.get_shape(node.input[2])
+        input_rank = len(input_shape) if input_shape is not None else None
+        cond_rank = len(cond_shape) if cond_shape is not None else None
+        # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
+        if node.type == "Select" and cond_rank == 1 and input_rank != 1:
+            utils.make_sure(input_rank is not None, "input_rank unknown and cond_rank == 1")
+            broadcast_shape = [cond_shape[0]] + [1] * (input_rank - 1)
+            shape_const = ctx.make_const(utils.make_name(node.name), np.array(broadcast_shape, dtype=np.int64))
+            reshape = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
+            ctx.replace_input(node, node.input[0], reshape.output[0], 0)
+
         positive_cast = ctx.make_node("Cast", [node.input[0]], name=utils.make_name(node.name),
-                                      attr={"to": TensorProto.FLOAT})
+                                      attr={"to": dtype})
         negative = ctx.make_node("Not", [node.input[0]], name=utils.make_name(node.name))
         negative_cast = ctx.make_node("Cast", [negative.output[0]], name=utils.make_name(node.name),
-                                      attr={"to": TensorProto.FLOAT})
+                                      attr={"to": dtype})
         multiply_1 = ctx.make_node("Mul", [positive_cast.output[0], node.input[1]], name=utils.make_name(node.name))
         multiply_2 = ctx.make_node("Mul", [node.input[2], negative_cast.output[0]], name=utils.make_name(node.name))
         add_name = node.name
         add_out = node.output
-        dtype = ctx.get_dtype(node.output[0])
         shape = ctx.get_shape(node.output[0])
         ctx.remove_node(node.name)
         ctx.make_node("Add", [multiply_1.output[0], multiply_2.output[0]], outputs=add_out, name=add_name,
                       dtypes=[dtype], shapes=[shape])
-
-    @classmethod
-    def version_8(cls, ctx, node, **kwargs):
-        # T output = Select(bool condition, T x, T y)
-        # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
-        utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
-
-        true_data_type = ctx.get_dtype(node.input[1])
-        true_data_shape = ctx.get_shape(node.input[1])
-        condition_shape = ctx.get_shape(node.input[0])
-
-        if true_data_type is None or true_data_shape is None or condition_shape is None:
-            # Fallback if shape is unknown
-            cls.version_7(ctx, node, **kwargs)
-            return
-
-        rank = len(condition_shape)
-
-        utils.make_sure(rank >= 0, "rank should be >= 0")
-        val_output_id = None
-        if rank > 0:
-            # create nodes getting shape of condition
-            shape_node_output_shape = [rank]
-            shape_node = ctx.make_node("Shape", [node.input[0]], op_name_scope=node.name,
-                                       shapes=[shape_node_output_shape], dtypes=[TensorProto.INT64])
-
-            # todo(pengwa), move those leveraging rewrite_incomplete_type_support_onnxruntime after shape inferencing
-            # bug is fixed.
-            # workaround: onnxruntime does not support Split-2, add cases before and after.
-            target_dtype = TensorProto.FLOAT
-            shape_f_node = ctx.make_node("Cast", [shape_node.output[0]], attr={"to": target_dtype},
-                                         shapes=[shape_node_output_shape], dtypes=[target_dtype],
-                                         op_name_scope=node.name)
-
-            split_attr = [1 for i in range(rank)]
-            output_shapes = [[1] for i in range(rank)]
-            output_dtypes = [target_dtype for i in range(rank)]
-            split_node = ctx.make_node("Split", [shape_f_node.output[0]], output_count=rank,
-                                       attr={"split": split_attr}, shapes=output_shapes,
-                                       dtypes=output_dtypes, op_name_scope=node.name)
-
-            trip_cnts = []
-            for i in range(rank):
-                output_id = split_node.output[i]
-                output_shape = ctx.get_shape(output_id)
-                target_dtype = TensorProto.INT64
-                shape_i_node = ctx.make_node("Cast", [output_id], attr={"to": target_dtype},
-                                             shapes=[output_shape], dtypes=[target_dtype],
-                                             op_name_scope=node.name)
-                trip_cnts.append(shape_i_node.output[0])
-            # workaround ends
-
-            loop_node = create_loop_op(ctx, node.input, true_data_type, true_data_shape, trip_cnts, rank)
-
-            val_output_id = loop_node.output[1]
-        elif rank == 0:
-            _, val_output_id = create_if_op(ctx, node.input, true_data_type, true_data_shape)
-
-        ctx.copy_shape(node.output[0], val_output_id)
-        ctx.set_dtype(node.output[0], true_data_type)
-        ctx.remove_node(node.name)
-        ctx.make_node("Identity", [val_output_id], outputs=node.output,
-                      shapes=[ctx.get_shape(val_output_id)], dtypes=[true_data_type])
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
@@ -363,21 +316,25 @@ class Select:
         # T1 output = Where(bool condition, T1 x, T1 y)
         # NOTE: condition can be 1-dimension in tensorflow, while in onnx,
         # it should be broadcastable with other two inputs
+        if ctx.get_dtype(node.output[0]) != TensorProto.STRING:
+            # Due to bad ORT implementation, Mul/Add ops are faster than Where op
+            cls.version_7(ctx, node, **kwargs)
+            return
 
         cond_shape = ctx.get_shape(node.input[0])
         input_shape = ctx.get_shape(node.input[1])
         if input_shape is None:
             input_shape = ctx.get_shape(node.input[2])
-        node.type = "Where"
         input_rank = len(input_shape) if input_shape is not None else None
         cond_rank = len(cond_shape) if cond_shape is not None else None
         # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
-        if cond_rank == 1 and input_rank != 1:
+        if node.type == "Select" and cond_rank == 1 and input_rank != 1:
             utils.make_sure(input_rank is not None, "input_rank unknown and cond_rank == 1")
             broadcast_shape = [cond_shape[0]] + [1] * (input_rank - 1)
             shape_const = ctx.make_const(utils.make_name(node.name), np.array(broadcast_shape, dtype=np.int64))
             reshape = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
             ctx.replace_input(node, node.input[0], reshape.output[0], 0)
+        node.type = "Where"
 
 
 @tf_op("Where")
