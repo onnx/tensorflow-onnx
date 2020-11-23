@@ -2528,6 +2528,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "Where for strings needs opset 9")
+    def test_where_string(self):
+        x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.float32)
+        true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
+                               dtype=np.str)
+        false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
+                                dtype=np.str)
+        def func(x):
+            picks = tf.where(x > -1, true_result, false_result)
+            return tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(7, "GreaterEqual")
     #@check_target("rs6", "onnxruntime Where type limitation")
     def test_where_int32(self):
