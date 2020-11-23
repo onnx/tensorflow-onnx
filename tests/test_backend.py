@@ -893,6 +893,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(7, "tile")
+    def test_tile_const(self):
+        # Should be folded
+        x_val = np.array([[0, 1], [2, 3]], dtype=np.float32)
+        def func():
+            multiple = tf.constant([1000, 2])
+            x_ = tf.tile(tf.constant(x_val), multiple)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {}, graph_validator=lambda g: check_op_count(g, "Tile", 0, disabled=False))
+
+    @check_opset_min_version(7, "tile")
+    def test_tile_large_const(self):
+        # Should not be folded since it is so large
+        x_val = np.array([[0, 1], [2, 3]], dtype=np.float32)
+        def func():
+            multiple = tf.constant([1000000, 2])
+            x_ = tf.tile(tf.constant(x_val), multiple)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {}, graph_validator=lambda g: check_op_count(g, "Tile", 1, disabled=False))
+
     @check_onnxruntime_incompatibility("Neg")
     def test_neg(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
