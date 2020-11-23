@@ -336,10 +336,9 @@ def group_nodes_by_type(graph):
     return res
 
 
-def check_op_count(graph, op_type, expected_count):
-    # return len(group_nodes_by_type(graph)[op_type]) == expected_count
+def check_op_count(graph, op_type, expected_count, disabled=True):
     # FIXME: after switching to grappler some of the op counts are off. Fix later.
-    return True
+    return disabled or len(group_nodes_by_type(graph)[op_type]) == expected_count
 
 
 def check_lstm_count(graph, expected_count):

@@ -180,6 +180,12 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     outputs_to_shapes = {}
     shape_node_outputs = {}
 
+    def is_small_shape(x):
+        return np.product(x) <= 1000
+
+    def is_huge_shape(x):
+        return np.product(x) >= 1000000
+
     for node in ops:
         # Load values of constants. Use const_node_values if possible
         if node.type in ["Const", "ConstV2"]:
@@ -231,15 +237,22 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
                 g3 = tf.Graph()
                 with g3.as_default():
                     feed_dict = {}
+                    inp_shapes = []
                     for inp in input_names:
-                        feed_dict[inp] = outputs_to_values[inp]
+                        inp_np = outputs_to_values[inp]
+                        feed_dict[inp] = inp_np
+                        inp_shapes.append(inp_np.shape)
                     try:
                         with tf_session() as sess:
                             tf.import_graph_def(mini_graph_def, name='')
                             results = sess.run(output_names, feed_dict=feed_dict)
-                        outputs_to_values[output_names[0]] = results[0]
-                        outputs_to_dtypes[output_names[0]] = node.outputs[0].dtype
-                        progress = True
+                        if is_huge_shape(results[0].shape) and all(is_small_shape(inp) for inp in inp_shapes):
+                            logger.debug("Skipping folding of node %s since result shape %s is much larger "
+                                         "than input shapes %s", node.name, results[0].shape, inp_shapes)
+                        else:
+                            outputs_to_values[output_names[0]] = results[0]
+                            outputs_to_dtypes[output_names[0]] = node.outputs[0].dtype
+                            progress = True
                     except Exception:  # pylint: disable=broad-except
                         logger.debug("Could not fold node %s", node.name)
         unneeded_outputs.update(outputs_to_values.keys())
