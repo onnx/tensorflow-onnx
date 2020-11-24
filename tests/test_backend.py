@@ -3512,6 +3512,43 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return dense_, indicator_
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: i_val, _INPUT1: v_val, _INPUT2: ds_val, _INPUT3: d_val})
 
+    @check_opset_min_version(11, "CumSum")
+    def test_sparse_reshape(self):
+        indices_val = np.array([[1, 0, 0], [1, 0, 2], [1, 1, 3], [3, 2, 2], [3, 2, 3]], dtype=np.int64)
+        values_val = np.array([1.5, 1.6, 1.7, 1.8, 1.9], dtype=np.int64)
+        dense_shape_val = np.array([5, 3, 4], dtype=np.int64)
+        new_shape_val = np.array([2, -1, 1, 3], dtype=np.int64)
+        def func(indices, values, dense_shape, new_shape):
+            st = tf.SparseTensor(indices, values, dense_shape)
+            st_ = tf.sparse.reshape(st, new_shape)
+            indices_ = st_.indices
+            dense_shape_ = st_.dense_shape
+            indices_ = tf.identity(indices_, name=_TFOUTPUT)
+            dense_shape_ = tf.identity(dense_shape_, name=_TFOUTPUT1)
+            return indices_, dense_shape_
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: indices_val, _INPUT1: values_val,
+                                                        _INPUT2: dense_shape_val, _INPUT3: new_shape_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_sparse_reshape_unknown_rank(self):
+        indices_val = np.array([[1, 0, 0], [1, 0, 2], [1, 1, 3], [3, 2, 2], [3, 2, 3]], dtype=np.int64)
+        values_val = np.array([1.5, 1.6, 1.7, 1.8, 1.9], dtype=np.int64)
+        dense_shape_val = np.array([5, 3, 4], dtype=np.int64)
+        new_shape_val = np.array([2, 10, 1, 3], dtype=np.int64)
+        shape_pad_val = np.zeros((1, 2), dtype=np.int64)
+        def func(indices, dense_shape, new_shape, shape_pad):
+            st = tf.SparseTensor(indices, values_val, dense_shape)
+            # Some hackery to make the rank unknown
+            new_shape_ = tf.pad(new_shape, shape_pad, constant_values=0)
+            st_ = tf.sparse.reshape(st, new_shape_)
+            indices_ = st_.indices
+            dense_shape_ = st_.dense_shape
+            indices_ = tf.identity(indices_, name=_TFOUTPUT)
+            dense_shape_ = tf.identity(dense_shape_, name=_TFOUTPUT1)
+            return indices_, dense_shape_
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: indices_val, _INPUT1: dense_shape_val,
+                                                        _INPUT2: new_shape_val, _INPUT3: shape_pad_val})
+
     @check_opset_min_version(9, "Compress")
     def test_dynamic_partition_both_vector(self):
         data_val = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float32)
