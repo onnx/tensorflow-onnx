@@ -16,6 +16,7 @@ from onnx import onnx_pb, helper
 
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +158,8 @@ class SegmentSum():
         # Data has shape [n, a, b, ..., c]
         data_shape = ctx.get_shape(data_inp)
         data_rank = len(data_shape) if data_shape is not None else None
-        data_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(data_inp))
+        data_dtype = ctx.get_dtype(data_inp)
+        data_np_dtype = utils.map_onnx_to_numpy_type(data_dtype)
         seg_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(segment_inp))
 
         if num_segments_specified and ctx.get_dtype(segment_inp) != ctx.get_dtype(num_segments):
@@ -190,7 +192,6 @@ class SegmentSum():
             max_segment = ctx.make_node("ReduceMax", [segment_inp], attr={'axes': [0], 'keepdims': 0})
             one_const = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=seg_np_dtype))
             num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]]).output[0]
-        identity_const = ctx.make_const(utils.make_name("const_identity"), identity_value)
         # ORT doesn't support bool for OneHot so we use float32 and cast to bool
         onehot_values = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1], dtype=np.float32))
         # one_hot_node has shape [s, n] (s is # segments)
@@ -209,6 +210,42 @@ class SegmentSum():
             const_one_float = ctx.make_const(utils.make_name("const_one_float"), np.array(1, dtype=np.float32))
             scaling_node = ctx.make_node("Max", [scaling_node.output[0], const_one_float.output[0]])
 
+
+        if onnx_op == "ReduceSum":
+            # If the op is a summation, we can use MatMul instead of Where, which is faster
+
+            # Data shape is [n, a, b, ..., c]
+            data_shape_node = ctx.make_node("Shape", [data_inp])
+            new_shape = ctx.make_const(utils.make_name("reshape_const"), np.array([0, -1], dtype=np.int64))
+            # Reshape the data from [n, a, b, ..., c] to [n, P]
+            data_reshape = ctx.make_node("Reshape", [data_inp, new_shape.output[0]])
+
+            one_hot_cast = one_hot_node
+            if data_dtype != onnx_pb.TensorProto.FLOAT:
+                one_hot_cast = ctx.make_node("Cast", [one_hot_node.output[0]], attr={'to': data_dtype})
+
+            # Shapes [s, n] * [n, P] => [s, P]
+            product = ctx.make_node("MatMul", [one_hot_cast.output[0], data_reshape.output[0]], op_name_scope=node.name)
+            if scaling_node is not None:
+                scaling_node_unsqueeze = ctx.make_node("Unsqueeze", [scaling_node.output[0]], attr={'axes': [1]})
+                product = ctx.make_node("Div", [product.output[0], scaling_node_unsqueeze.output[0]])
+
+            # Create new shape [0, a, b, ..., c]
+            max_int64 = int(utils.get_max_value(np.int64))
+            new_shape_slice = GraphBuilder(ctx).make_slice(
+                {"data": data_shape_node.output[0], "ends": [max_int64], "starts": [1], "axes": [0]})
+            zero_const = ctx.make_const(utils.make_name("zero_const"), np.array([0], dtype=np.int64))
+            new_shape = ctx.make_node("Concat", [zero_const.output[0], new_shape_slice], attr={'axis': 0})
+
+            shapes = node.output_shapes
+            dtypes = node.output_dtypes
+            ctx.remove_node(node.name)
+            # Reshape result from [s, P] to [s, a, b, ..., c]
+            ctx.make_node("Reshape", [product.output[0], new_shape.output[0]],
+                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+            return
+
+        identity_const = ctx.make_const(utils.make_name("const_identity"), identity_value)
         one_hot_bool = ctx.make_node("Cast", [one_hot_node.output[0]], attr={"to": onnx_pb.TensorProto.BOOL})
         one_hot_unsqueeze = one_hot_bool
 
@@ -228,17 +265,9 @@ class SegmentSum():
             expanded_shape = ctx.make_node("Concat", [double_zero_const.output[0], unsqueeze_dims.output[0]],
                                            attr={'axis': 0})
             one_hot_unsqueeze = ctx.make_node("Reshape", [one_hot_bool.output[0], expanded_shape.output[0]])
-            if scaling_node is not None:
-                zero_const = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64))
-                expanded_shape = ctx.make_node("Concat", [zero_const.output[0], unsqueeze_dims.output[0]],
-                                               attr={'axis': 0})
-                scaling_unsqueeze = ctx.make_node("Reshape", [scaling_node.output[0], expanded_shape.output[0]])
         elif data_rank > 1:
             new_dims = list(range(2, 2 + data_rank - 1))
             one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_bool.output[0]], attr={'axes': new_dims})
-            if scaling_node is not None:
-                new_dims = list(range(1, 1 + data_rank - 1))
-                scaling_unsqueeze = ctx.make_node("Unsqueeze", [scaling_node.output[0]], attr={'axes': new_dims})
 
         # Shape of data:       [n, a, b, ..., c]
         # Shape of one_hot: [s, n, 1, 1, ..., 1]
@@ -251,5 +280,3 @@ class SegmentSum():
         # After reduction over axis 1, shape is: [s, a, b, ..., c]
         ctx.make_node(onnx_op, [where_node.output[0]], attr={'axes': [1], 'keepdims': 0},
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
-        if scaling_node is not None:
-            ctx.insert_new_node_on_output("Div", node.output[0], inputs=[node.output[0], scaling_unsqueeze.output[0]])

@@ -59,8 +59,12 @@ class TransposeOptimizer(GraphOptimizerBase):
                                      and n.inputs[1].is_const())]
         for reshape_op in constable_reshape_ops:
             target_t = reshape_op.inputs[0].get_tensor_value(as_list=False)
-            target_shape = reshape_op.inputs[1].get_tensor_value(as_list=False)
-            new_data = np.reshape(target_t, tuple(target_shape))
+            target_shape = reshape_op.inputs[1].get_tensor_value(as_list=True)
+            for i, dim in enumerate(target_shape):
+                if dim == 0:
+                    # In ORT a dim of 0 means the shape stays the same.
+                    target_shape[i] = target_t.shape[i]
+            new_data = np.reshape(target_t, target_shape)
             const_name = reshape_op.output[0]
             self._g.remove_node(reshape_op.name)
             self._g.make_const(const_name, new_data)
