@@ -1908,7 +1908,6 @@ class SparseReshape:
         ctx.remove_node(node.name)
 
 
-
 @tf_op("SparseFillEmptyRows")
 class SparseFillEmptyRows:
     @classmethod
