@@ -1857,6 +1857,58 @@ class SparseToDense:
         ctx.replace_inputs(node, [expand_node.output[0], sparse_indices, sparse_vals])
 
 
+@tf_op("SparseReshape")
+class SparseReshape:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        indices_inp, shape_inp, new_shape_inp = node.input
+
+        product_curr_dims = ctx.make_node("ReduceProd", [shape_inp], attr={'axes': [0], 'keepdims': 1}).output[0]
+        product_new_dims = ctx.make_node("ReduceProd", [new_shape_inp], attr={'axes': [0], 'keepdims': 1}).output[0]
+        neg_missing_dims = ctx.make_node("Div", [product_curr_dims, product_new_dims]).output[0]
+        pos_missing_dims = ctx.make_node("Neg", [neg_missing_dims]).output[0]
+        zero_const = ctx.make_const(utils.make_name("cosnt_zero"), np.array(0, dtype=np.int64)).output[0]
+        one_const = ctx.make_const(utils.make_name("cosnt_one"), np.array(1, dtype=np.int64)).output[0]
+        unknown_dim_loc = ctx.make_node("Less", [new_shape_inp, zero_const]).output[0]
+
+        new_shape = ctx.make_node("Where", [unknown_dim_loc, pos_missing_dims, new_shape_inp]).output[0]
+
+        zero_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
+        def cum_prod_of_vector(vector):
+            shape = ctx.get_shape(vector)
+            rank = shape[0] if shape is not None else -1
+            if rank != -1:
+                lower_tri = np.tri(rank, rank, dtype=np.bool)
+                lower_triangular_bool = ctx.make_const(utils.make_name("lower_tri_const"), lower_tri).output[0]
+            else:
+                rank = ctx.make_node("Shape", [vector]).output[0]
+                rank_sq = ctx.make_node("Concat", [rank, rank], attr={'axis': 0}).output[0]
+                square_of_rank = ctx.make_node("ConstantOfShape", [rank_sq], attr={'value': zero_tensor}).output[0]
+                identity_matrix = ctx.make_node("EyeLike", [square_of_rank]).output[0]
+                lower_triangular = ctx.make_node("CumSum", [identity_matrix, zero_const]).output[0]
+                lower_triangular_bool = ctx.make_node("Cast", [lower_triangular],
+                                                      attr={'to': TensorProto.BOOL}).output[0]
+            terms = ctx.make_node("Where", [lower_triangular_bool, one_const, vector]).output[0]
+            return ctx.make_node("ReduceProd", [terms], attr={'axes': [1], 'keepdims': 0}).output[0]
+
+        cum_prod_curr_shape = cum_prod_of_vector(shape_inp)
+        cum_prod_new_shape = cum_prod_of_vector(new_shape)
+        cum_prod_new_concat = ctx.make_node("Concat", [product_curr_dims, cum_prod_new_shape],
+                                            attr={'axis': 0}).output[0]
+        pads = ctx.make_const(utils.make_name("pad_const"), np.array([0, -1], dtype=np.int64)).output[0]
+        cum_prod_new_inc = ctx.make_node("Pad", [cum_prod_new_concat, pads]).output[0]
+
+        flat_indices = ctx.make_node("MatMul", [indices_inp, cum_prod_curr_shape]).output[0]
+        indices_unsqueeze = ctx.make_node("Unsqueeze", [flat_indices], attr={'axes': [1]}).output[0]
+        mod_indices = ctx.make_node("Mod", [indices_unsqueeze, cum_prod_new_inc], op_name_scope=node.name).output[0]
+        new_indices = ctx.make_node("Div", [mod_indices, cum_prod_new_shape], op_name_scope=node.name).output[0]
+
+        ctx.replace_all_inputs(node.output[0], new_indices)
+        ctx.replace_all_inputs(node.output[1], new_shape)
+        ctx.remove_node(node.name)
+
+
+
 @tf_op("SparseFillEmptyRows")
 class SparseFillEmptyRows:
     @classmethod
