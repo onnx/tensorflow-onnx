@@ -3475,6 +3475,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return y1, y2
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "Unique")
+    def test_bincount(self):
+        x_val = np.array([5, 2, 3, 1, 3, 2, 7, 5, 9, 10], dtype=np.int32)
+        def func(x):
+            x_ = tf.math.bincount(x)
+            y_ = tf.identity(x_, name=_TFOUTPUT)
+            return y_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(11, "ScatterND")
     def test_sparse_to_dense(self):
         i_val = np.array([[0, 0, 0], [0, 0, 2], [0, 1, 3], [1, 2, 2], [1, 2, 3]], dtype=np.int64)

@@ -1841,6 +1841,45 @@ class Unique:
                 ctx.copy_shape(new_node.output[2], cast_node.output[0])
 
 
+@tf_op("Bincount")
+class Bincount:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # arr, size are int32
+        arr_inp, size_inp, weights_inp = node.input
+
+        arr_int64 = ctx.make_node("Cast", [arr_inp], attr={'to': TensorProto.INT64}).output[0]
+        size_int64 = ctx.make_node("Cast", [size_inp], attr={'to': TensorProto.INT64}).output[0]
+
+        weights_shape = ctx.get_shape(weights_inp)
+        res_dtype = ctx.get_dtype(weights_inp)
+        weights_is_zero = weights_shape is not None and 0 in weights_shape
+        utils.make_sure(weights_is_zero, "Non-empty weights not yet supported for bincount")
+
+        values, _, _, counts = ctx.make_node("Unique", [arr_int64], attr={'sorted': 1}, output_count=4,
+                                             op_name_scope=node.name).output
+        neg_one_const = ctx.make_const(utils.make_name("neg_one_const"), np.array(-1, np.int64)).output[0]
+        non_neg_val_locs = ctx.make_node("Greater", [values, neg_one_const]).output[0]
+        small_val_locs = ctx.make_node("Less", [values, size_int64]).output[0]
+        valid_val_locs = ctx.make_node("And", [non_neg_val_locs, small_val_locs]).output[0]
+
+        valid_values = ctx.make_node("Compress", [values, valid_val_locs], attr={'axis': 0}).output[0]
+        valid_counts = ctx.make_node("Compress", [counts, valid_val_locs], attr={'axis': 0}).output[0]
+
+        output_shape = ctx.make_node("Unsqueeze", [size_int64], attr={'axes': [0]}).output[0]
+
+        false_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
+        zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': false_tensor}).output[0]
+
+        result = ctx.make_node("ScatterElements", [zeros, valid_values, valid_counts], attr={'axis': 0}).output[0]
+        result_cast = result
+        if res_dtype != TensorProto.INT64:
+            result_cast = ctx.make_node("Cast", [result], attr={'to': res_dtype}).output[0]
+
+        ctx.replace_all_inputs(node.output[0], result_cast)
+        ctx.remove_node(node.name)
+
+
 @tf_op("SparseToDense")
 class SparseToDense:
     @classmethod
