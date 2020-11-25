@@ -114,7 +114,12 @@ class ConstFoldOptimizer(GraphOptimizerBase):
     @_register_func("Reshape")
     def _fold_reshape(node, graph):
         const_val_data = node.inputs[0].get_tensor_value(as_list=False)
-        const_val_shape = node.inputs[1].get_tensor_value(as_list=False)
+        const_val_shape = node.inputs[1].get_tensor_value(as_list=True)
+        data_shape = const_val_data.shape
+        for i, dim in enumerate(const_val_shape):
+            if dim == 0:
+                # In ORT a dim of 0 means the shape stays the same.
+                const_val_shape[i] = data_shape[i]
         const_val_after_trans = const_val_data.reshape(const_val_shape)
         return [const_val_after_trans]
 
