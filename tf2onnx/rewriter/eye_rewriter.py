@@ -109,8 +109,29 @@ def rewrite_eye(g, ops):
                 OpTypePattern("Const", name="fill_value"),
             ]), "*"
         ])
+    pattern7 = \
+        OpTypePattern("MatrixDiag", name="output_eye_matrix", inputs=[
+            OpTypePattern("Fill", inputs=[
+                OpTypePattern("Reshape", inputs=[
+                    OpTypePattern("Minimum|Cast", name="min_or_cast"),
+                    "*",
+                ]),
+                OpTypePattern("Const", name="fill_value"),
+            ])
+        ])
+    pattern8 = \
+        OpTypePattern("MatrixSetDiag", name="output_eye_matrix", inputs=[
+            OpTypePattern("Fill"),
+            OpTypePattern("Fill", inputs=[
+                OpTypePattern("Reshape", inputs=[
+                    OpTypePattern("Minimum|Cast", name="min_or_cast"),
+                    "*",
+                ]),
+                OpTypePattern("Const", name="fill_value"),
+            ])
+        ])
 
-    for pattern in [pattern1, pattern2, pattern3, pattern4, pattern5, pattern6]:
+    for pattern in [pattern1, pattern2, pattern3, pattern4, pattern5, pattern6, pattern7, pattern8]:
         matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(ops))
         for match_result in match_results:
@@ -142,6 +163,6 @@ def rewrite_eye(g, ops):
             zero_matrix = g.make_node("ConstantOfShape", matrix_shape_int64.output)
 
             g.make_node("EyeLike", zero_matrix.output, attr={"dtype": output_dtypes[0]},
-                        name=old_output.name, shapes=output_shapes, dtypes=output_dtypes)
+                        name=old_output.name, shapes=output_shapes, dtypes=output_dtypes, outputs=[old_output.output[0]])
 
     return g.get_nodes()

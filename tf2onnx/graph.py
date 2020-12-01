@@ -1167,7 +1167,7 @@ class Graph(object):
         """Dump graph with shapes (helpful for debugging)."""
         for node in self.get_nodes():
             input_names = ["{}{}".format(n, self.get_shape(n)) for n in node.input]
-            logger.debug("%s %s %s %s",
+            logger.error("%s %s %s %s",
                          node.type,
                          self.get_shape(node.output[0]),
                          node.name,
@@ -1231,7 +1231,7 @@ class Graph(object):
 
         # don't remove output from parent since others might depend on it
 
-    def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, **kwargs):
+    def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, input_index=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             node: we want to replace the input for this node
@@ -1252,10 +1252,13 @@ class Graph(object):
             input_name = [input_name]
 
         new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
-        for i, n in enumerate(node.input):
-            if n == input_name[0]:
-                self.replace_input(node, node.input[i], new_output, i)
-                break
+        if input_index is None:
+            for i, n in enumerate(node.input):
+                if n == input_name[0]:
+                    self.replace_input(node, node.input[i], new_output, i)
+                    break
+        else:
+            self.replace_input(node, node.input[input_index], new_output, input_index)
         return new_node
 
     def insert_new_node_on_output(self, op_type, output_name, name=None, inputs=None, domain=None, **kwargs):

@@ -83,10 +83,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = m.run(output_names, inputs)
         return results
 
-    def run_backend(self, g, outputs, input_dict, large_model=False):
+    def run_backend(self, g, outputs, input_dict, large_model=False, postfix=""):
         tensor_storage = ExternalTensorStorage() if large_model else None
         model_proto = g.make_model("test", external_tensor_storage=tensor_storage)
-        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage)
+        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage, postfix=postfix)
 
         if self.config.backend == "onnxruntime":
             y = self.run_onnxruntime(model_path, input_dict, outputs)
@@ -99,7 +99,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
                       check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
-                      large_model=False):
+                      large_model=False, test_tflite=True, skip_tfl_consistency_check=False):
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -178,7 +178,27 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 const_node_values = compress_graph_def(graph_def)
             tf.import_graph_def(graph_def, name='')
 
-            if self.config.is_debug_mode:
+            if not feed_dict:
+                test_tflite = False  # Can't make TFlite model with no inputs
+
+            if test_tflite:
+                sess_inputs = [sess.graph.get_tensor_by_name(k) for k in feed_dict.keys()]
+                sess_outputs = [sess.graph.get_tensor_by_name(n) for n in output_names_with_port]
+                converter = tf.compat.v1.lite.TFLiteConverter.from_session(sess, sess_inputs, sess_outputs)
+                from tensorflow.lite.python.convert import ConverterError
+                try:
+                    tflite_model = converter.convert()
+                    tflite_path = os.path.join(self.test_data_directory, self._testMethodName + ".tflite")
+                    dir_name = os.path.dirname(tflite_path)
+                    if dir_name:
+                        os.makedirs(dir_name, exist_ok=True)
+                    with open(tflite_path, 'wb') as f:
+                        f.write(tflite_model)
+                except ConverterError as e:
+                    test_tflite = False
+
+
+            if True or self.config.is_debug_mode:
                 model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
                 utils.save_protobuf(model_path, graph_def)
                 self.logger.debug("created file  %s", model_path)
@@ -210,6 +230,65 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         if graph_validator:
             self.assertTrue(graph_validator(g))
+
+        if test_tflite:
+            try:
+                # tflite is a hot mess so sometimes is converts from tf but produces an invalid model
+                interpreter = tf.lite.Interpreter(tflite_path)
+                interpreter.allocate_tensors()
+                input_details = interpreter.get_input_details()
+                output_details = interpreter.get_output_details()
+                input_name_to_index = {n['name'].split(':')[0]: n['index'] for n in input_details}
+                ouput_name_to_index = {n['name'].split(':')[0]: n['index'] for n in output_details}
+                feed_dict_without_port = {k.split(':')[0]: v for k, v in feed_dict.items()}
+                # The output names might be different in the tflite but the order is the same
+                output_names = [t[1] for t in sorted((v, k) for k, v in ouput_name_to_index.items())]
+                for k, v in feed_dict_without_port.items():
+                    interpreter.set_tensor(input_name_to_index[k], v)
+                interpreter.invoke()
+                tf_lite_output_data = [interpreter.get_tensor(output['index']) for output in output_details]
+            except RuntimeError as e:
+                test_tflite = False
+        if test_tflite:
+            if not skip_tfl_consistency_check:
+                for expected_val, tf_lite_val in zip(expected, tf_lite_output_data):
+                    if check_value:
+                        self.assertAllClose(expected_val, tf_lite_val, rtol=rtol, atol=atol)
+                    if check_dtype:
+                        self.assertEqual(expected_val.dtype, tf_lite_val.dtype)
+                    # why need shape checke: issue when compare [] with scalar
+                    # https://github.com/numpy/numpy/issues/11071
+                    if check_shape:
+                        self.assertEqual(expected_val.shape, tf_lite_val.shape)
+
+            tfl_process_args = process_args.copy()
+            if 'inputs_as_nchw' in tfl_process_args:
+                inp_with_port = tfl_process_args['inputs_as_nchw']
+                tfl_process_args['inputs_as_nchw'] = [i.split(':')[0] for i in inp_with_port]
+
+            g = process_tf_graph(None, opset=self.config.opset,
+                                 input_names=list(feed_dict_without_port.keys()),
+                                 output_names=output_names,
+                                 target=self.config.target,
+                                 const_node_values=const_node_values,
+                                 tflite_path=tflite_path,
+                                 **tfl_process_args)
+            g = optimizer.optimize_graph(g)
+            onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
+            onnx_from_tfl_output = self.run_backend(g, output_names, onnx_feed_dict_without_port, postfix="_from_tflite")
+
+            for tf_lite_val, onnx_val in zip(tf_lite_output_data, onnx_from_tfl_output):
+                if check_value:
+                    self.assertAllClose(tf_lite_val, onnx_val, rtol=rtol, atol=atol)
+                if check_dtype:
+                    self.assertEqual(tf_lite_val.dtype, onnx_val.dtype)
+                # why need shape checke: issue when compare [] with scalar
+                # https://github.com/numpy/numpy/issues/11071
+                if check_shape:
+                    self.assertEqual(tf_lite_val.shape, onnx_val.shape)
+
+            if graph_validator:
+                self.assertTrue(graph_validator(g))
 
         return g
 

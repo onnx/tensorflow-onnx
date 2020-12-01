@@ -50,7 +50,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             x_val = np.array([0], dtype=np.int32)
         else:
             x_val = np.array(0, dtype=np.int32)
-        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06)
+        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06, test_tflite=True)
 
     def test_simple_while_loop_2(self):
         def func(i):
@@ -69,7 +69,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             x_val = np.array([3], dtype=np.int32)
         else:
             x_val = np.array(3, dtype=np.int32)
-        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06)
+        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06, test_tflite=True)
 
     def test_while_loop_with_ta_write(self):
         def func(i):
@@ -90,7 +90,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
 
         x_val = np.array(0, dtype=np.int32)
         output_names_with_port = ["output:0", "i:0"]
-        self.run_test_case(func, {_INPUT: x_val}, [], output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, {_INPUT: x_val}, [], output_names_with_port, rtol=1e-06, test_tflite=False)
 
     def test_while_loop_with_ta_read_simple(self):
         def func(i, inputs_2):
@@ -109,7 +109,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
                      "input_2:0": np.array([1., 2., 3., 4., 5., 6., 7., 8., 9., 10.], dtype=np.float32)}
         output_names_with_port = ["i:0", "x:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06, test_tflite=True)
 
     def test_while_loop_with_ta_read(self):
         def func(i, input_2, input_3):
@@ -137,7 +137,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32),
                      "input_3:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
         output_names_with_port = ["i:0", "x:0", "y:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06, test_tflite=True, skip_tfl_consistency_check=True)
 
     def test_while_loop_with_ta_read_reference_outer_input_directly(self):
         def func(i, inputs_1, inputs_3):
@@ -162,7 +162,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32),
                      "input_3:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
         output_names_with_port = ["i:0", "x:0", "y:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06, test_tflite=True, skip_tfl_consistency_check=True)
 
     def test_while_loop_with_ta_read_and_write(self):
         def func(i, inputs):
@@ -186,7 +186,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
         output_names_with_port = ["i:0", "output_ta:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06, test_tflite=False)
 
     @check_onnxruntime_min_version(
         "0.5.0",
@@ -214,7 +214,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
                      "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
         output_names_with_port = ["i:0", "output_ta:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06, test_tflite=False)
 
     def test_map_fn_1(self):
         x_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
@@ -231,7 +231,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_0:0": x_val}
         input_names_with_port = ["input_0:0"]
         output_names_with_port = ["output_0:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5, test_tflite=True)
 
     def test_map_fn_2(self):
         x_val = 100 * np.random.random_sample([2, 10]).astype(np.float32)
@@ -249,7 +249,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_0:0": x_val, "input_1:0": y_val}
         input_names_with_port = ["input_0:0", "input_1:0"]
         output_names_with_port = ["output_0:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5, test_tflite=True)
 
     @check_tf_min_version("1.9")
     @check_tf_max_version("1.15")
@@ -266,7 +266,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         input_names_with_port = ["input_1:0"]
         feed_dict = {"input_1:0": np.array([0], dtype=np.int32)}
         output_names_with_port = ["output:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06, test_tflite=True)
 
 
 if __name__ == '__main__':

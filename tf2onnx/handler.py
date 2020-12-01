@@ -32,23 +32,15 @@ class tf_op:
         """
         if not isinstance(name, list):
             name = [name]
-        self.name = name
+        self.names = name
         self.domain = domain
         self.kwargs = kwargs
 
     def __call__(self, func):
-        opset = tf_op._OPSETS.get(self.domain)
-        if not opset:
-            opset = []
-            tf_op._OPSETS[self.domain] = opset
         for k, v in inspect.getmembers(func, inspect.ismethod):
             if k.startswith("version_"):
                 version = int(k.replace("version_", ""))
-                while version >= len(opset):
-                    opset.append({})
-                opset_dict = opset[version]
-                for name in self.name:
-                    opset_dict[name] = (v, self.kwargs)
+                tf_op.register_handler(v, version, self.names, self.domain, self.kwargs)
         return func
 
     def register_compat_handler(self, func, version):
@@ -58,14 +50,19 @@ class tf_op:
         :param version: The domain the operator belongs to, defaults to onnx.
         :param version: The version of the handler.
         """
-        opset = tf_op._OPSETS.get(self.domain)
+        tf_op.register_handler(func, version, self.names, self.domain, self.kwargs)
+
+    @staticmethod
+    def register_handler(func, version, names, domain, kwargs):
+        opset = tf_op._OPSETS.get(domain)
         if not opset:
             opset = []
-            tf_op._OPSETS[self.domain] = opset
-            while version >= len(opset):
-                opset.append({})
-            opset_dict = opset[version]
-            opset_dict[self.name[0]] = (func, self.kwargs)
+            tf_op._OPSETS[domain] = opset
+        while version >= len(opset):
+            opset.append({})
+        opset_dict = opset[version]
+        for name in names:
+            opset_dict[name] = (func, kwargs)
 
     @staticmethod
     def get_opsets():
@@ -113,3 +110,21 @@ class tf_op:
         if map_info is None:
             return None
         return map_info
+
+class tfl_op:
+    def __init__(self, name, domain=constants.ONNX_DOMAIN, **kwargs):
+        if not isinstance(name, list):
+            name = [name]
+        self.names = name
+        self.domain = domain
+        self.kwargs = kwargs
+
+    def __call__(self, func):
+        tf_op(self.names, self.domain, **self.kwargs)(func)
+        if hasattr(func, 'to_tf'):
+            tf_op.register_handler(func.to_tf, 0, self.names, 'com.google.tensorflow', self.kwargs)
+        return func
+
+    @staticmethod
+    def create_tfl_to_tf_mapping():
+        return tf_op.get_opsets()['com.google.tensorflow'][0]

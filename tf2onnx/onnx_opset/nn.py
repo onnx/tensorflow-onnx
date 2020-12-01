@@ -565,6 +565,10 @@ class DepthwiseConv2d:
         if len(kernel_shape) != 4:
             raise ValueError("only Conv2D is supported")
         k_h, k_w, k_input_channels, k_channel_multiplier = kernel_shape
+        if "depth_multiplier" in node.attr:
+            depth_multiplier = node.get_attr_int("depth_multiplier")
+            k_input_channels //= depth_multiplier
+            k_channel_multiplier *= depth_multiplier
         if k_input_channels < 1:
             raise ValueError("input channel must be positive")
         k_output_channels = k_input_channels * k_channel_multiplier
