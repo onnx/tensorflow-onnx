@@ -562,7 +562,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         if not is_func:
             tf_graph = infer_shape(tf_graph, shape_override)
 
-        outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values)
+        outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
 
         onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
             tensorflow_to_onnx(tf_graph, shape_override, const_node_values)
