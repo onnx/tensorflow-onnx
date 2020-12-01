@@ -26,7 +26,7 @@ TFLITE_TO_TF_DTYPE = {
     TFLiteTensorType.FLOAT32: types_pb2.DT_FLOAT,
     TFLiteTensorType.FLOAT16: types_pb2.DT_HALF,
     TFLiteTensorType.INT32: types_pb2.DT_INT32,
-    TFLiteTensorType.UINT8: types_pb2.DT_INT8,
+    TFLiteTensorType.UINT8: types_pb2.DT_UINT8,
     TFLiteTensorType.INT64: types_pb2.DT_INT64,
     TFLiteTensorType.STRING: types_pb2.DT_STRING,
     TFLiteTensorType.BOOL: types_pb2.DT_BOOL,
@@ -109,6 +109,8 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
     output_shapes = {}
     dtypes = {}
     tensor_names = {}
+    name_to_tensor = {}
+    tensor_to_dequant = {}
 
     input_indices = {tflite_g.Inputs(i) for i in range(tflite_g.InputsLength())}
 
@@ -118,6 +120,7 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
         if i in input_indices:
             name = input_prefix + name
         tensor_names[i] = name
+        name_to_tensor[name] = tensor
 
         if tensor.ShapeIsNone():
             output_shapes[name] = None
@@ -139,8 +142,37 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
             onnx_nodes.append(onnx_node)
             op_cnt["Const"] += 1
 
-    #for i in range(tflite_g.InputsLength()):
-    #    tensor_names[tflite_g.Inputs(i)] = input_prefix + tensor_names[tflite_g.Inputs(i)]
+    def get_dequant(tensor_name):
+        quant = name_to_tensor[tensor_name].Quantization()
+        if quant is None or quant.ScaleIsNone() or quant.ZeroPointIsNone():
+            return tensor_name
+        if tensor_name in tensor_to_dequant:
+            return tensor_to_dequant[tensor_name]
+        dequant_name = tensor_name + "_dequant"
+        attr = {}
+        attr['scale'] = quant.ScaleAsNumpy().tolist()
+        attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+        onnx_node = helper.make_node("TFL_DEQUANTIZE", [tensor_name], [dequant_name], name=dequant_name, **attr)
+        onnx_nodes.append(onnx_node)
+        tensor_to_dequant[tensor_name] = dequant_name
+        output_shapes[dequant_name] = output_shapes[tensor_name].copy()
+        dtypes[dequant_name] = onnx_pb.TensorProto.FLOAT
+        return dequant_name
+
+    def get_prequant(tensor_name):
+        quant = name_to_tensor[tensor_name].Quantization()
+        if quant is None or quant.ScaleIsNone() or quant.ZeroPointIsNone():
+            return tensor_name
+        prequant_name = tensor_name + "_prequant"
+        quantize_name = tensor_name + "_quantize"
+        attr = {}
+        attr['scale'] = quant.ScaleAsNumpy().tolist()
+        attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+        onnx_node = helper.make_node("TFL_QUANTIZE", [prequant_name], [tensor_name], name=quantize_name, **attr)
+        onnx_nodes.append(onnx_node)
+        output_shapes[prequant_name] = output_shapes[tensor_name].copy()
+        dtypes[prequant_name] = onnx_pb.TensorProto.FLOAT
+        return prequant_name
 
     for i in range(tflite_g.OperatorsLength()):
         op = tflite_g.Operators(i)
@@ -152,13 +184,17 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
         if optype == 'QUANTIZE':
             out_tensor = tflite_g.Tensors(op.Outputs(0))
             quant = out_tensor.Quantization()
-            attr['scale'] = quant.ScaleAsNumpy().tolist()  # TODO: add some checks for min/max/axis/etc.
-            attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
-        if optype == 'DEQUANTIZE':
+            if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
+                attr['scale'] = quant.ScaleAsNumpy().tolist()  # TODO: add some checks for min/max/axis/etc.
+                attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+        elif optype == 'DEQUANTIZE':
             in_tensor = tflite_g.Tensors(op.Inputs(0))
             quant = in_tensor.Quantization()
-            attr['scale'] = quant.ScaleAsNumpy().tolist()  # TODO: add some checks for min/max/axis/etc.
-            attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+            if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
+                attr['scale'] = quant.ScaleAsNumpy().tolist()  # TODO: add some checks for min/max/axis/etc.
+                attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+        else:
+            pass
         if option_class is not None:
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
@@ -182,12 +218,14 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
                 attr_cnt[a] += 1
                 attr[proper_to_snake_case(a)] = value
         input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength()) if op.Inputs(i) != -1]
+        input_names = [get_dequant(inp) for inp in input_names]
         output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
+        output_names = [get_prequant(out) for out in output_names]
         onnx_node = helper.make_node("TFL_" + optype, input_names, output_names, name=output_names[0], **attr)
         onnx_nodes.append(onnx_node)
 
     inputs = [tensor_names[tflite_g.Inputs(i)] for i in range(tflite_g.InputsLength())]
-    outputs = [tensor_names[tflite_g.Outputs(i)] for i in range(tflite_g.OutputsLength())]
+    outputs = [tensor_names[581]]
 
     for inp in inputs:
         onnx_node = helper.make_node("Placeholder", [], outputs=[inp], name=inp)
