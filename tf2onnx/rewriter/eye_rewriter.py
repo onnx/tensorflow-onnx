@@ -6,6 +6,7 @@ tf2onnx.rewriter.eye_rewriter - supports tf.eye
 """
 
 from onnx import onnx_pb
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring, unused-variable
@@ -134,8 +135,11 @@ def rewrite_eye(g, ops):
             g.remove_node(old_output.name)
 
             # onnx op "EyeLike" need a 2D tensor, so generate it
-            num_rows = g.make_node("Unsqueeze", num_rows.output, attr={"axes": [0]})
-            num_columns = g.make_node("Unsqueeze", num_columns.output, attr={"axes": [0]})
+
+            num_rows = GraphBuilder(g).make_unsqueeze(
+                {"axes": [0], "data": num_rows.output[0]}, return_node=True)
+            num_columns = GraphBuilder(g).make_unsqueeze(
+                {"axes": [0], "data": num_columns.output[0]}, return_node=True)
             matrix_shape = g.make_node("Concat", [num_rows.output[0], num_columns.output[0]], attr={"axis": 0})
             # cast nodes added for "ConstantOfShape" in ONNX only accepts int64 data.
             matrix_shape_int64 = g.make_node("Cast", matrix_shape.output, attr={"to": onnx_pb.TensorProto.INT64})

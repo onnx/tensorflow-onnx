@@ -55,8 +55,7 @@ class GraphBuilder(object):
             inputs = [data, starts, ends, axes, steps]
 
         # pro-process inputs and attr
-        if kwargs:
-            logger.warning("kwargs contains un-used key")
+        utils.make_sure(not kwargs, "kwargs contains un-used key")
 
         new_attr = {}
         for key, val in attr.items():
@@ -107,8 +106,7 @@ class GraphBuilder(object):
             attr = {"keepdims": keepdims, "noop_with_empty_axes": noop_with_empty_axes}
             inputs = [data, axes]
 
-        if kwargs:
-            logger.warning("kwargs contains un-used key")
+        utils.make_sure(not kwargs, "kwargs contains un-used key")
 
         new_attr = {}
         for key, val in attr.items():
@@ -137,8 +135,7 @@ class GraphBuilder(object):
             attr = {}
             inputs = [data, axes]
 
-        if kwargs:
-            logger.warning("kwargs contains un-used key")
+        utils.make_sure(not kwargs, "kwargs contains un-used key")
 
         new_attr = {}
         for key, val in attr.items():
@@ -178,8 +175,7 @@ class GraphBuilder(object):
             attr = {}
             inputs = [data, axes]
 
-        if kwargs:
-            logger.warning("kwargs contains un-used key")
+        utils.make_sure(not kwargs, "kwargs contains un-used key")
 
         new_attr = {}
         for key, val in attr.items():

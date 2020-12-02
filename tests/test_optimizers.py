@@ -11,7 +11,7 @@ import unittest
 import numpy as np
 from onnx import helper, TensorProto, OperatorSetIdProto
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version
+from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version, get_test_config
 from tf2onnx import utils, constants
 from tf2onnx.graph import GraphUtil
 
@@ -471,12 +471,23 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             node1 = helper.make_node("Gather", [external_inputs[0], "loop_iter_num"], ["Y0"])
             node2 = helper.make_node("Transpose", ["Y0"], ["Z0"], perm=[0, 2, 3, 1])
             # graph output
-            node3 = helper.make_node("Squeeze", ["Z0"], ["scan_output"], axes=[0])
+            if get_test_config().opset <= 12:
+                node3 = helper.make_node("Squeeze", ["Z0"], ["scan_output"], axes=[0])
+                const_node = None
+            else:
+                const_tensor = helper.make_tensor(name='const', data_type=TensorProto.INT64, dims=[1],
+                                                  vals=np.array([0], dtype=np.int64))
+                const_node = helper.make_node("Constant", [], ["axes_const"], value=const_tensor, name="const")
+                node3 = helper.make_node("Squeeze", ["Z0", "axes_const"], ["scan_output"])
             node4 = helper.make_node("Identity", ["loop_condition"], ["loop_cond_output"])
             node5 = helper.make_node("Identity", ["loop_condition"], ["loop_carried_output"])
 
+            nodes = [node1, node2, node3, node4, node5]
+            if const_node is not None:
+                nodes.append(const_node)
+
             graph = helper.make_graph(
-                [node1, node2, node3, node4, node5],
+                nodes,
                 "loop_subgraph",
                 [helper.make_tensor_value_info("loop_iter_num", TensorProto.INT64, (1,)),  # iteration_num
                  helper.make_tensor_value_info("loop_condition", TensorProto.BOOL, ()),  # condition
@@ -973,9 +984,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
     def test_duplicated_duplicated_attributes(self):
         # same attr or not
-        node0 = helper.make_node('ReduceSum', inputs=["X"], outputs=["value0"], axes=[0], keepdims=0)
-        node1 = helper.make_node('ReduceSum', inputs=["X"], outputs=["value1"], axes=[0], keepdims=0)
-        node2 = helper.make_node('ReduceSum', inputs=["X"], outputs=["value2"], axes=[1], keepdims=0)
+        node0 = helper.make_node('ReduceMin', inputs=["X"], outputs=["value0"], axes=[0], keepdims=0)
+        node1 = helper.make_node('ReduceMin', inputs=["X"], outputs=["value1"], axes=[0], keepdims=0)
+        node2 = helper.make_node('ReduceMin', inputs=["X"], outputs=["value2"], axes=[1], keepdims=0)
         node3 = helper.make_node('Add', inputs=["value0", "value1"], outputs=["value3"])
         node4 = helper.make_node("Mul", ["value2", "value3"], ["OUT"])
 
@@ -988,7 +999,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
         self.run_merge_duplicated_nodes_compare(["OUT"], {"X": np.random.randn(5, 5).astype(np.float32)}, model_proto,
-                                                op_type="ReduceSum", remaining_op_num=2)
+                                                op_type="ReduceMin", remaining_op_num=2)
 
     def _check_initializer_num(self, graph_proto, num):
         return num == len(graph_proto.initializer)
