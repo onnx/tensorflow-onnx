@@ -353,7 +353,7 @@ class ConvOp:
         if len(input_shape) == spatial + 1:
             gb = GraphBuilder(ctx)
             usq_node = gb.make_unsqueeze({"axes": [0], 'data': node.input[0]}, return_node=True)
-            ctx.insert_node_on_output(usq_node, node.input[0])
+            ctx.replace_inputs(node, [usq_node.output[0]] + node.input[1:])
 
         # Set padding.
         add_padding(

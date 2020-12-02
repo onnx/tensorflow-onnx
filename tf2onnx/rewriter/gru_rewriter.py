@@ -211,7 +211,8 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
             const_node = self.g.make_const(initial_name, new_val)
             context.onnx_input_ids["initial_state"] = const_node.output[0]
             return
-        squeeze_node = self.g.make_node("Unsqueeze", [initializer_input_id], attr={"axes": [0]})
+        squeeze_node = GraphBuilder(self.g).make_unsqueeze(
+            {'data': initializer_input_id, 'axes': [0]}, return_node=True)
         to_replace = [n for n in self.g.get_nodes() if n != squeeze_node]
         self.g.replace_all_inputs(initializer_input_id, squeeze_node.output[0], ops=to_replace)
         context.onnx_input_ids["initial_state"] = squeeze_node.output[0]
