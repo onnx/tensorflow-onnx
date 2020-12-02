@@ -1256,8 +1256,8 @@ class OneHot:
         depth = GraphBuilder(ctx).make_unsqueeze({'data': node.input[1], 'axes': [0]})
         on_value = node.input[2]
         off_value = node.input[3]
-        on_value = ctx.make_node("Unsqueeze", [on_value], attr={"axes": [0]}).output[0]
-        off_value = ctx.make_node("Unsqueeze", [off_value], attr={"axes": [0]}).output[0]
+        on_value = GraphBuilder(ctx).make_unsqueeze({'data': on_value, 'axes': [0]})
+        off_value = GraphBuilder(ctx).make_unsqueeze({'data': off_value, 'axes': [0]})
         off_on_value = ctx.make_node("Concat", [off_value, on_value], attr={"axis": 0}).output[0]
 
         indices = node.input[0]
@@ -2385,7 +2385,8 @@ class MatrixDiagPartV2V3:
         pad_length_2 = body_graph.make_node('Concat', [zeo, pad_length.output[0]], attr={'axis': 0})
         padded_range = body_graph.make_node('Pad', [sliced_range.output[0], pad_length_2.output[0]])
         # opset == 11, no need to change unsqueeze
-        unsqueezed_range = body_graph.make_node('Unsqueeze', [padded_range.output[0]], attr={'axes': [1]})
+        unsqueezed_range = GraphBuilder(body_graph).make_unsqueeze(
+            {'data': padded_range.output[0], 'axes': [1]}, return_node=True)
         half_shape_x = body_graph.make_node('Slice',
                                             [new_shape.output[0], zeo, minus_two])
         shape_range = body_graph.make_node('Shape', [unsqueezed_range.output[0]])
@@ -2393,7 +2394,8 @@ class MatrixDiagPartV2V3:
         expanded_range = body_graph.make_node('Expand', [unsqueezed_range.output[0], full_shape.output[0]])
         gathered_input = body_graph.make_node('GatherElements', [processed_input.output[0], expanded_range.output[0]],
                                               attr={'axis': -1})
-        squeezed_input = body_graph.make_node('Squeeze', [gathered_input.output[0]], attr={'axes': [-1]})
+        squeezed_input = GraphBuilder(body_graph).make_squeeze(
+            {'data': gathered_input.output[0], 'axes': [-1]}, return_node=True)
         left_width = body_graph.make_node('Sub', [new_width.output[0], abs_k.output[0]])
         dims = body_graph.make_node('Concat', [left_width.output[0], new_depth.output[0]], attr={'axis': 0})
         valid_dim = body_graph.make_node('ReduceMin', [dims.output[0]])
@@ -2505,8 +2507,8 @@ class MatrixDiagPartV2V3:
                                                raw_output_shape + [-1])
         squeeze_sliced_graph = ctx.create_new_graph_with_same_config()
         squeeze_sliced_graph.parent_graph = ctx
-        squeeze_sliced = squeeze_sliced_graph.make_node('Squeeze', [final_output_right_sliced.output[0]],
-                                                        attr={'axes': [-2]})
+        squeeze_sliced = GraphBuilder(squeeze_sliced_graph).make_squeeze(
+            {'data': final_output_right_sliced.output[0], 'axes': [-2]}, return_node=True)
         squeeze_sliced_graph.add_graph_output(squeeze_sliced.output[0], ctx.get_dtype(node.input[0]), raw_output_shape)
         shapes = node.output_shapes
         dtypes = node.output_dtypes
@@ -2680,14 +2682,14 @@ class MatrixDiagPartV2V3:
 @tf_op(["MatrixDiag", "MatrixDiagV2", "MatrixDiagV3"])
 class MatrixDiag:
     @classmethod
-    def any_version(cls, opset, ctx, node, **kwargs):
+    def version_12(cls, ctx, node, **kwargs):
         # Assemble MatrixDiagV3 by ReverseSequence
         argc = len(node.input)
 
-        if opset >= 13:
-            squeeze_axes0 = ctx.make_const(utils.make_name("const_axes"), np.array([0], dtype=np.int64))
-            squeeze_axes_1 = ctx.make_const(utils.make_name("const_axes"), np.array([-1], dtype=np.int64))
-            squeeze_axes_2 = ctx.make_const(utils.make_name("const_axes"), np.array([-2], dtype=np.int64))
+        if ctx.opset >= 13:
+            squeeze_axes0 = ctx.make_const(utils.make_name("const_axes"), np.array([0], dtype=np.int64)).output[0]
+            squeeze_axes_1 = ctx.make_const(utils.make_name("const_axes"), np.array([-1], dtype=np.int64)).output[0]
+            squeeze_axes_2 = ctx.make_const(utils.make_name("const_axes"), np.array([-2], dtype=np.int64)).output[0]
 
         minus_two, minus_one, zeo, one, two = \
             [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1], [2]])]
@@ -2712,7 +2714,7 @@ class MatrixDiag:
             diag = node.input[0]
             shape = ctx.get_shape(diag)
             if len(shape) == 1:
-                if opset < 13:
+                if ctx.opset < 13:
                     diag = mknode("Unsqueeze", [diag], attr={"axes": [0]})
                 else:
                     diag = mknode("Unsqueeze", [diag, squeeze_axes0])
@@ -2737,7 +2739,7 @@ class MatrixDiag:
             def ex_diag():
                 g = ctx.create_new_graph_with_same_config()
                 g.parent_graph = ctx
-                if opset < 13:
+                if ctx.opset < 13:
                     ex = mknode2(g, "Unsqueeze", [diag], attr={"axes": [-2]})
                 else:
                     ex = mknode2(g, "Unsqueeze", [diag, squeeze_axes_2])
@@ -2755,7 +2757,7 @@ class MatrixDiag:
         def squeeze_13(name):
             return ctx.make_node("Squeeze", [name, squeeze_axes_1]).output[0]
 
-        squeeze = squeeze_12 if opset < 13 else squeeze_13
+        squeeze = squeeze_12 if ctx.opset < 13 else squeeze_13
 
         # gather inputs
         diag, k, k_min, k_max, k_max_nxt = processdiag()
@@ -3019,13 +3021,9 @@ class MatrixDiag:
                       outputs=node.output, shapes=shapes, dtypes=dtypes)
 
     @classmethod
-    def version_12(cls, ctx, node, **kwargs):
-        cls.any_version(12, ctx, node, **kwargs)
-
-    @classmethod
     def version_13(cls, ctx, node, **kwargs):
         # Parameters moved to inputs for operator Squeeze, Unsqueeze.
-        cls.any_version(13, ctx, node, **kwargs)
+        cls.version_12(ctx, node, **kwargs)
 
 
 @tf_op("MatrixSetDiagV3")
