@@ -1135,6 +1135,9 @@ class Graph(object):
             kwargs["opset_imports"] = opsets
         model_proto = helper.make_model(graph, **kwargs)
 
+        utils.make_sure(self.opset in constants.OPSET_TO_IR_VERSION,
+                        "Opset %s is not supported yet. Please use a lower opset" % self.opset)
+
         # set the IR version based on opset
         try:
             model_proto.ir_version = constants.OPSET_TO_IR_VERSION.get(self.opset, model_proto.ir_version)
