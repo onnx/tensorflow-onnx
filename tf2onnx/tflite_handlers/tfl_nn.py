@@ -1,6 +1,7 @@
 
 from tf2onnx.handler import tfl_op
 from tf2onnx import constants, utils
+from tf2onnx.tflite_handlers.tfl_math import separate_fused_activation_function
 import numpy as np
 
 @tfl_op(["TFL_TRANSPOSE_CONV"], tf_op="Conv2DBackpropInput")
@@ -21,8 +22,7 @@ class TflTransposeConv:
 class TflConv2D:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        fused_activation_function = node.attr['fused_activation_function'].s
-        utils.make_sure(fused_activation_function == b'NONE', "fused_activation_function not yet supported")
+        separate_fused_activation_function(ctx, node)
         # No need to change 'padding' attribute
         stride_h = node.get_attr_int("stride_h") # TODO: Permute this?
         stride_w = node.get_attr_int("stride_w")
@@ -43,8 +43,7 @@ class TflConv2D:
 class TflAveragePool:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        fused_activation_function = node.attr['fused_activation_function'].s
-        utils.make_sure(fused_activation_function == b'NONE', "fused_activation_function not yet supported")
+        separate_fused_activation_function(ctx, node)
         # No need to change 'padding' attribute
         stride_h = node.get_attr_int("stride_h") # TODO: Permute this?
         stride_w = node.get_attr_int("stride_w")
@@ -62,9 +61,8 @@ class TflAveragePool:
 class TflDepthwiseConv2D:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        fused_activation_function = node.attr['fused_activation_function'].s
+        separate_fused_activation_function(ctx, node)
         depth_multiplier = node.get_attr_int('depth_multiplier') # TODO: use this?
-        utils.make_sure(fused_activation_function == b'NONE', "fused_activation_function not yet supported")
         # No need to change 'padding' attribute
         stride_h = node.get_attr_int("stride_h") # TODO: Permute this?
         stride_w = node.get_attr_int("stride_w")

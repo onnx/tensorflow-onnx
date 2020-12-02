@@ -6,6 +6,8 @@
    for example, input of transpose node is const then we can do transpose statically instead of at runtime
 """
 
+import numpy as np
+
 from .. import utils
 from .optimizer_base import GraphOptimizerBase
 
@@ -70,7 +72,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
                 const_outputs = process_func(node, graph)
                 self._replace_node_with_const(node, graph, const_outputs)
                 return True
-            self.logger.debug("need to add function to fold op %s whose op_type is %s", node.name, node.type)
+            self.logger.error("need to add function to fold op %s whose op_type is %s", node.name, node.type)
         return False
 
     @staticmethod
@@ -146,3 +148,16 @@ class ConstFoldOptimizer(GraphOptimizerBase):
 
         const_val_after_unsqueeze = const_val.reshape(shape_out)
         return [const_val_after_unsqueeze]
+
+    @staticmethod
+    @_register_func("DequantizeLinear")
+    def _fold_dequantize_linear(node, graph):
+        x_val = node.inputs[0].get_tensor_value(as_list=False).astype(np.float32)
+        scale_val = node.inputs[1].get_tensor_value(as_list=False).astype(np.float32)
+        zero_point_val = node.inputs[2].get_tensor_value(as_list=False).astype(np.float32)
+        assert scale_val.shape == tuple()
+        assert zero_point_val.shape == tuple()
+        
+        new_val = (x_val - zero_point_val) * scale_val
+        new_val = new_val.astype(np.float32)
+        return [new_val]

@@ -3,33 +3,44 @@ from tf2onnx.handler import tfl_op
 from tf2onnx import constants, utils
 import numpy as np
 
+def separate_fused_activation_function(ctx, node):
+    activation_fn = node.attr['fused_activation_function'].s
+    del node.attr['fused_activation_function']
+    if activation_fn == b'RELU':
+        ctx.insert_new_node_on_output("Relu", node.output[0])
+    elif activation_fn == b'RELU6':
+        new_node = ctx.insert_new_node_on_output("Relu6", node.output[0])
+        new_node.skip_conversion = False
+    elif activation_fn == b'TANH':
+        ctx.insert_new_node_on_output("Tanh", node.output[0])
+    else:
+        # SIGN_BIT and RELU_N1_TO_1 not supported yet
+        utils.make_sure(activation_fn == b'NONE', "Unsupported fused activation function %s on node %s",
+                        activation_fn, node.name)
+
 @tfl_op(["TFL_ADD"], tf_op="Add")
 class TflAdd:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        fused_activation_function = node.attr['fused_activation_function'].s
-        utils.make_sure(fused_activation_function == b'NONE', "fused_activation_function not yet supported")
+        separate_fused_activation_function(ctx, node)
 
 @tfl_op(["TFL_SUB"], tf_op="Sub")
 class TflSub:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        fused_activation_function = node.attr['fused_activation_function'].s
-        utils.make_sure(fused_activation_function == b'NONE', "fused_activation_function not yet supported")
+        separate_fused_activation_function(ctx, node)
 
 @tfl_op(["TFL_MUL"], tf_op="Mul")
 class TflMul:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        fused_activation_function = node.attr['fused_activation_function'].s
-        utils.make_sure(fused_activation_function == b'NONE', "fused_activation_function not yet supported")
+        separate_fused_activation_function(ctx, node)
 
 @tfl_op(["TFL_DIV"], tf_op="Div")
 class TflDiv:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        fused_activation_function = node.attr['fused_activation_function'].s
-        utils.make_sure(fused_activation_function == b'NONE', "fused_activation_function not yet supported")
+        separate_fused_activation_function(ctx, node)
 
 @tfl_op(["TFL_CONCATENATION"], onnx_op="Concat")
 class TflConcatenation:
@@ -168,14 +179,16 @@ class TflQuantizeOp:
     def version_10(cls, ctx, node, **kwargs):
         scale = node.get_attr_value('scale')
         zero_point = node.get_attr_value('zero_point')
+        axis = node.get_attr_value('quantized_dimension')
         np_q_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.output[0]))
-        utils.make_sure(len(scale) == 1, "Quantize only supports scalar vals")
-        utils.make_sure(len(zero_point) == 1, "Quantize only supports scalar vals")
+        if len(scale) > 1 or len(zero_point) > 1:
+            node.set_attr("axis", axis)
         scale_node = ctx.make_const(utils.make_name("scale"), np.array(scale[0], dtype=np.float32))
         zero_point_node = ctx.make_const(utils.make_name("zero_point"), np.array(zero_point[0], dtype=np_q_type))
         ctx.replace_inputs(node, [node.input[0], scale_node.output[0], zero_point_node.output[0]])
         del node.attr["scale"]
         del node.attr["zero_point"]
+        del node.attr["quantized_dimension"]
 
 @tfl_op(["TFL_DEQUANTIZE"], onnx_op="DequantizeLinear")
 class TflDequantizeOp:
@@ -183,21 +196,22 @@ class TflDequantizeOp:
     def version_10(cls, ctx, node, **kwargs):
         scale = node.get_attr_value('scale')
         zero_point = node.get_attr_value('zero_point')
+        axis = node.get_attr_value('quantized_dimension')
         np_q_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0]))
-        utils.make_sure(len(scale) == 1, "Quantize only supports scalar vals")
-        utils.make_sure(len(zero_point) == 1, "Quantize only supports scalar vals")
+        if len(scale) > 1 or len(zero_point) > 1:
+            node.set_attr("axis", axis)
         scale_node = ctx.make_const(utils.make_name("scale"), np.array(scale[0], dtype=np.float32))
         zero_point_node = ctx.make_const(utils.make_name("zero_point"), np.array(zero_point[0], dtype=np_q_type))
         ctx.replace_inputs(node, [node.input[0], scale_node.output[0], zero_point_node.output[0]])
         del node.attr["scale"]
         del node.attr["zero_point"]
+        del node.attr["quantized_dimension"]
 
 @tfl_op(["TFL_FULLY_CONNECTED"])
 class TflFullyConnectedOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        fused_activation_function = node.attr['fused_activation_function'].s
-        utils.make_sure(fused_activation_function == b'NONE', "fused_activation_function not yet supported")
+        separate_fused_activation_function(ctx, node)
         utils.make_sure(node.attr['weights_format'].s == b'DEFAULT', "Only default weights format supported for fully connected op")
         utils.make_sure(len(node.input) == 2, "Only supports 2 inputs for TFL_FULLY_CONNECTED")  # FIXME
         if len(node.input) == 2:
@@ -228,7 +242,7 @@ class TFlTopKV2Op:
 class TFlSoftmaxOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        beta = node.get_attr_float("beta")
+        beta = node.get_attr_value("beta")
         beta_node = ctx.make_const(utils.make_name("beta"), np.array(beta, dtype=np.float32))
         mul_node = ctx.insert_new_node_on_output("Mul", node.output[0], name=utils.make_name(node.name))
         ctx.replace_inputs(mul_node, [node.output[0], beta_node.output[0]])

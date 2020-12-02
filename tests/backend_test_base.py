@@ -185,6 +185,17 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 sess_inputs = [sess.graph.get_tensor_by_name(k) for k in feed_dict.keys()]
                 sess_outputs = [sess.graph.get_tensor_by_name(n) for n in output_names_with_port]
                 converter = tf.compat.v1.lite.TFLiteConverter.from_session(sess, sess_inputs, sess_outputs)
+                converter.optimizations = [tf.lite.Optimize.DEFAULT]
+                #converter.inference_input_type = tf.int8  # or tf.uint8
+                #converter.inference_output_type = tf.int8  # or tf.uint8
+                # converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+                # def representative_dataset_gen():
+                #     yield [np.array([[4, 3, 1, 0],
+                #           [2, 1, 0, 1],
+                #           [1, 2, 4, 1],
+                #           [3, 1, 0, 2]], dtype=np.float32).reshape([1, 4, 4, 1])]
+                # converter.representative_dataset = representative_dataset_gen
+
                 from tensorflow.lite.python.convert import ConverterError
                 try:
                     tflite_model = converter.convert()
@@ -232,6 +243,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             self.assertTrue(graph_validator(g))
 
         if test_tflite:
+            #feed_dict['input:0'] = np.array([10, 20, 100, 200], dtype=np.int8).reshape((2, 2))
             try:
                 # tflite is a hot mess so sometimes is converts from tf but produces an invalid model
                 interpreter = tf.lite.Interpreter(tflite_path)

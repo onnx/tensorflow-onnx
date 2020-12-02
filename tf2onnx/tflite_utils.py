@@ -133,6 +133,8 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
         if not buf.DataIsNone():
             t = tensor_pb2.TensorProto()
             t.tensor_content = buf.DataAsNumpy().tobytes()
+            if output_shapes[name] is None:
+                output_shapes[name] = []
             for d in output_shapes[name]:
                 t.tensor_shape.dim.add().size = d
             t.dtype = TFLITE_TO_TF_DTYPE[tensor.Type()]
@@ -152,6 +154,7 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
         attr = {}
         attr['scale'] = quant.ScaleAsNumpy().tolist()
         attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+        attr['quantized_dimension'] = quant.QuantizedDimension()
         onnx_node = helper.make_node("TFL_DEQUANTIZE", [tensor_name], [dequant_name], name=dequant_name, **attr)
         onnx_nodes.append(onnx_node)
         tensor_to_dequant[tensor_name] = dequant_name
@@ -168,6 +171,7 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
         attr = {}
         attr['scale'] = quant.ScaleAsNumpy().tolist()
         attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+        attr['quantized_dimension'] = quant.QuantizedDimension()
         onnx_node = helper.make_node("TFL_QUANTIZE", [prequant_name], [tensor_name], name=quantize_name, **attr)
         onnx_nodes.append(onnx_node)
         output_shapes[prequant_name] = output_shapes[tensor_name].copy()
@@ -181,18 +185,24 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
         attr = {}
         options_type_name = lookup_enum(op.BuiltinOptionsType(), 'BuiltinOptions')
         option_class = get_options_class(options_type_name)
+        wants_dequantized_input = True
+        has_prequantized_output = True
         if optype == 'QUANTIZE':
             out_tensor = tflite_g.Tensors(op.Outputs(0))
             quant = out_tensor.Quantization()
+            has_prequantized_output = False
             if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
                 attr['scale'] = quant.ScaleAsNumpy().tolist()  # TODO: add some checks for min/max/axis/etc.
                 attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+                attr['quantized_dimension'] = quant.QuantizedDimension()
         elif optype == 'DEQUANTIZE':
             in_tensor = tflite_g.Tensors(op.Inputs(0))
             quant = in_tensor.Quantization()
+            wants_dequantized_input = False
             if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
                 attr['scale'] = quant.ScaleAsNumpy().tolist()  # TODO: add some checks for min/max/axis/etc.
                 attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
+                attr['quantized_dimension'] = quant.QuantizedDimension()
         else:
             pass
         if option_class is not None:
@@ -218,14 +228,17 @@ def tflite_graph_to_onnx(tflite_g, opcodes, model, input_prefix=''):
                 attr_cnt[a] += 1
                 attr[proper_to_snake_case(a)] = value
         input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength()) if op.Inputs(i) != -1]
-        input_names = [get_dequant(inp) for inp in input_names]
+        if wants_dequantized_input:
+            input_names = [get_dequant(inp) for inp in input_names]
         output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
-        output_names = [get_prequant(out) for out in output_names]
+        if has_prequantized_output:
+            output_names = [get_prequant(out) for out in output_names]
         onnx_node = helper.make_node("TFL_" + optype, input_names, output_names, name=output_names[0], **attr)
         onnx_nodes.append(onnx_node)
 
     inputs = [tensor_names[tflite_g.Inputs(i)] for i in range(tflite_g.InputsLength())]
-    outputs = [tensor_names[581]]
+    outputs = [tensor_names[tflite_g.Outputs(i)] for i in range(tflite_g.OutputsLength())]
+    #outputs = [tensor_names[581]]
 
     for inp in inputs:
         onnx_node = helper.make_node("Placeholder", [], outputs=[inp], name=inp)

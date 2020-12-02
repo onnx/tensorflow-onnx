@@ -44,10 +44,12 @@ def optimize_graph(graph):
     before = graph.dump_node_statistics()
     opts = _get_optimizers()
     continue_flag = True
+    #continue_flag = False
     while continue_flag:
         continue_flag = False
         for name, factory in opts.items():
             try:
+                print(name)
                 logger.verbose("Apply %s", name)
                 current = copy.deepcopy(graph)
                 opt = factory()

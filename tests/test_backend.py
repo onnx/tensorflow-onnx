@@ -744,6 +744,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         def func(x):
             x_ = tf.matmul(x, x)
+            x_ = tf.nn.relu6(x_)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -3309,6 +3310,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         def func(x):
             x_ = tf.add(x, x)
+            x_ = tf.multiply(x_, 2.345)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
