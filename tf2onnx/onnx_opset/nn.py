@@ -1141,10 +1141,11 @@ def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
     log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=logit.output)
     # implement tf.multiply(-1, tf.reduce_sum(tf.multiply(label, log_softmax), axis=1))
     mul1 = ctx.make_node(op_type="Mul", inputs=[label.output[0], log_softmax.output[0]])
-    reduce_sum = ctx.make_node(op_type="ReduceSum", inputs=[mul1.output[0]], attr={"axes": [-1]})
+    reduce_sum_output = GraphBuilder(ctx).make_reduce_sum(
+        {"data": mul1.output[0], "axes": [-1], "keepdims": 1, "noop_with_empty_axes": 1})
     const_negative_one = ctx.make_const(name=utils.make_name("const_negative_one"),
                                         np_val=np.array(-1).astype(utils.ONNX_TO_NUMPY_DTYPE[logit_dtype]))
-    mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum.output[0]])
+    mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum_output])
     shapes = tf_ori_node.output_shapes
     dtypes = tf_ori_node.output_dtypes
     ctx.remove_node(tf_ori_node.name)
@@ -1223,9 +1224,11 @@ def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_nod
     # logit_exp=exp(logit) >> sum = tf.reduce_sum(logit_exp, axis = -1), masked_sum = reduce_sum(mul(logit_exp, mul))
     # >> -log(masked_sum/sum)
     logit_exp = ctx.make_node(op_type="Exp", inputs=[logit]).output[0]
-    logit_exp_sum = ctx.make_node(op_type="ReduceSum", inputs=[logit_exp], attr={"axes": [-1], "keepdims": 0}).output[0]
+    logit_exp_sum = GraphBuilder(ctx).make_reduce_sum(
+        {"data": logit_exp, "axes": [-1], "keepdims": 0, "noop_with_empty_axes": 1})
     masked = ctx.make_node(op_type="Mul", inputs=[label, logit_exp]).output[0]
-    masked_sum = ctx.make_node(op_type="ReduceSum", inputs=[masked], attr={"axes": [-1], "keepdims": 0}).output[0]
+    masked_sum = GraphBuilder(ctx).make_reduce_sum(
+        {"data": masked, "axes": [-1], "keepdims": 0, "noop_with_empty_axes": 1})
     probability = ctx.make_node(op_type="Div", inputs=[masked_sum, logit_exp_sum]).output[0]
     log_prob = ctx.make_node(op_type="Log", inputs=[probability]).output[0]
     const_negative_one = ctx.make_const(name=utils.make_name("const_negative_one"),
@@ -1266,10 +1269,11 @@ class SparseSoftmaxCrossEntropyWithLogits:
         log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=[logit_name])
         # implement tf.multiply(np.float32(-1.0), tf.reduce_sum(tf.multiply(one_hot, log_softmax), axis=1))
         mul1 = ctx.make_node(op_type="Mul", inputs=[onehot.output[0], log_softmax.output[0]])
-        reduce_sum = ctx.make_node(op_type="ReduceSum", inputs=[mul1.output[0]], attr={"axes": [1]})
+        reduce_sum_output = GraphBuilder(ctx).make_reduce_sum(
+            {"data": mul1.output[0], "axes": [1], "keepdims": 1, "noop_with_empty_axes": 1})
         const_name = utils.make_name("const_negative_one")
         const_negative_one = ctx.make_const(name=const_name, np_val=np.array(-1).astype(dtype))
-        mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum.output[0]])
+        mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum_output])
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
