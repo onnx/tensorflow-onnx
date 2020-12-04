@@ -26,10 +26,15 @@ class ProfileTests(Tf2OnnxBackendTestBase):
         proc = subprocess.Popen(
             ["python", filename], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
-            outs = proc.communicate(timeout=15)[0]
+            outs, err = proc.communicate(timeout=15)
         except subprocess.TimeoutExpired:
             proc.kill()
             return
+        print("!!!!!!!!!!!!!!!")
+        print(outs)
+        print("!!!!!!!!!!!!!!!")
+        print(err)
+        print("!!!!!!!!!!!!!!!")
         assert b"Profile complete." in outs or outs == b''
 
 

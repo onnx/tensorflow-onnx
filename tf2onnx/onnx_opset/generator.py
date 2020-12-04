@@ -38,11 +38,11 @@ class RandomOp:
         # const we make it an attribute.
         seed = node.get_attr("seed")
         node.set_attr("seed", float(seed.f))
-        if len(node.input) > 0 and node.inputs[0].is_const():
-            shape = node.inputs[0].get_tensor_value()
-            ctx.remove_input(node, node.input[0], 0)
-            node.set_attr("shape", shape)
-            ctx.set_shape(node.output[0], shape)
+        utils.make_sure(node.inputs[0].is_const(), "RandomUniform with non-const shape requires opset >= 9.")
+        shape = node.inputs[0].get_tensor_value()
+        ctx.remove_input(node, node.input[0], 0)
+        node.set_attr("shape", shape)
+        ctx.set_shape(node.output[0], shape)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
