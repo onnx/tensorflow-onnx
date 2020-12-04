@@ -201,6 +201,11 @@ class Softmax:
     def version_11(cls, ctx, node, **kwargs):
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Default axis is now -1.
+        pass
+
 
 @tf_op("Square")
 class Square:

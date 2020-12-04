@@ -625,6 +625,10 @@ class Split:
         # no change
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Default axis is not -1 but doesn't matter since we always set it.
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("SplitV")
 class SplitV:
@@ -651,6 +655,26 @@ class SplitV:
     @classmethod
     def version_2(cls, ctx, node, **kwargs):
         cls.version_1(ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Split now supports dynamic split lengths
+        if node.inputs[1].is_const():
+            # Call version 1 to deal with -1 cases
+            cls.version_1(ctx, node, **kwargs)
+            # Convert attr to input
+            split_val = node.get_attr_value("split")
+            split_const = ctx.make_const(utils.make_name("split"), np.array(split_val, np.int64))
+            ctx.replace_inputs(node, [node.input[0], split_const.output[0]])
+            del node.attr["split"]
+        else:
+            # Technically incorrect if any of the splits are -1
+            node.type = "Split"
+            split_dims = node.inputs[2].get_tensor_value()
+            ctx.remove_input(node, node.input[2], 2)
+            node.set_attr("axis", split_dims)
+            if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+                ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
 
 
 @tf_op("ExpandDims")

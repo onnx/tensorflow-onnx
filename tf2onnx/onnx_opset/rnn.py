@@ -94,10 +94,9 @@ class LSTMBlockCell:
             raise RuntimeError("shape of W of LSTMBlockCell {} should be times of 4".format(node.name))
         merged_output_node = ctx.make_node("Add", [xh_w_node.output[0], b])
         w_last_dim = int(w_shape[1] / 4)
-        split = [w_last_dim] * 4
         split_output_node = ctx.make_node(
             "Split", [merged_output_node.output[0]],
-            attr={"axis": 1, "split": split},
+            attr={"axis": 1},
             output_count=4
         )
         i, ci, f, o = split_output_node.output
