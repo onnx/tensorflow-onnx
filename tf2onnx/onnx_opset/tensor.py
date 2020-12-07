@@ -446,7 +446,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
 
     index_i = g.make_node("Gather", [index.output[0], trip_name], attr={"axis": 0})
     gather = g.make_node("Gather", [cur_name, index_i.output[0]], attr={"axis": 0})
-    g.make_node("Squeeze", [gather.output[0]], attr={"axes": [0]}, outputs=[result_name])
+    g.make_squeeze(gather.output[0], axes=[0], outputs=[result_name])
     g.make_node("Identity", [cond_name], outputs=[cond_out_name])
 
     g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
@@ -498,7 +498,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     g.parent_graph = ctx
 
     index = g.make_node("Gather", [flatten_indices.output[0], trip_name], attr={"axis": 0})
-    index_squeeze = g.make_node("Squeeze", [index.output[0]], attr={"axes": [0]})
+    index_squeeze = g.make_squeeze(index.output[0], axes=[0])
     # inner loop to gather result
     inner_loop = _make_gathernd_inner_loop(g, params, index_squeeze, t_params)
     g.make_node("Identity", [cond_name], outputs=[cond_out_name])
@@ -1314,7 +1314,7 @@ class BatchToSpace:
                 kwargs = {**inputs_map}
                 ctx.remove_node(node.name)
                 slice1 = GraphBuilder(ctx).make_slice(kwargs)
-                ctx.make_node("Squeeze", [slice1], {"axes": [3]},
+                ctx.make_squeeze(slice1, axes=[3],
                               outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
             else:
                 kwargs = {**inputs_map, "outputs": node.output}
@@ -1384,8 +1384,8 @@ class BatchToSpace:
             crop_transposed = mknode('Transpose', [crop.output[0]])
             crop_starts = mknode('Slice', [crop_transposed.output[0], slice_starts_const1, slice_starts_const2])
             crop_ends = mknode('Slice', [crop_transposed.output[0], slice_ends_const1, slice_ends_const2])
-            crop_starts_squeeze = mknode('Squeeze', [crop_starts.output[0]], {'axes': [0]})
-            crop_ends_squeeze = mknode('Squeeze', [crop_ends.output[0]], {'axes': [0]})
+            crop_starts_squeeze = ctx.make_squeeze(crop_starts.output[0], axes=[0])
+            crop_ends_squeeze = ctx.make_squeeze(crop_ends.output[0], axes=[0])
             end_range = mknode('Sub', [target_spatial.output[0], crop_ends_squeeze.output[0]])
             orig_shape = node.output_shapes
             orig_dtypes = node.output_dtypes
@@ -1541,7 +1541,7 @@ class NonMaxSuppression:
         new_nonmaxsurppress = ctx.make_node(node.type, node.input[: 5]).output[0]
         slice_op = GraphBuilder(ctx).make_slice({"data": new_nonmaxsurppress,
                                                  "axes": [1], "ends": [3], "starts": [2]})
-        squeeze_op = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
+        squeeze_op = ctx.make_squeeze(slice_op, axes=[1])
         if len(node.input) > 5:  # v5, called by ..._with_scores(), pad_to_max_output_size always False
             ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                           outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
@@ -1970,7 +1970,7 @@ class SparseFillEmptyRows:
                                    op_name_scope=node.name).output[0]
         zero_const = ctx.make_const(utils.make_name("zero_const"), np.array(0, dtype=np.int64)).output[0]
         one_const = ctx.make_const(utils.make_name("one_const"), np.array(1, dtype=np.int64)).output[0]
-        scalar_len = ctx.make_node("Squeeze", [axis_0_len], attr={"axes": [0]}, op_name_scope=node.name).output[0]
+        scalar_len = ctx.make_squeeze(axis_0_len, axes=[0], op_name_scope=node.name).output[0]
         idx_range = ctx.make_node("Range", [zero_const, scalar_len, one_const], op_name_scope=node.name).output[0]
         new_indices = ctx.make_node("Compress", [idx_range, indicators], op_name_scope=node.name).output[0]
         new_indices_unsqueeze = ctx.make_node("Unsqueeze", [new_indices], attr={"axes": [1]},
@@ -2022,7 +2022,7 @@ class DynamicPartition:
         split_node = ctx.make_node("Split", [equal_int32.output[0]], output_count=num_partitions, attr={'axis': 0})
         for i in range(num_partitions):
             cond_bools = ctx.make_node("Cast", [split_node.output[i]], attr={"to": TensorProto.BOOL})
-            squeeze_node = ctx.make_node("Squeeze", [cond_bools.output[0]], attr={'axes': [0]})
+            squeeze_node = ctx.make_squeeze(cond_bools.output[0], axes=[0])
             compress_node = ctx.make_node("Compress", [data_inp, squeeze_node.output[0]], attr={'axis': 0})
             ctx.replace_all_inputs(node.output[i], compress_node.output[0])
             ctx.copy_dtype(node.output[i], compress_node.output[0])
@@ -2097,7 +2097,7 @@ class MatrixDiagPart:
                                                           minus_one])
         sliced_input_shape_new = ctx.make_node('Concat', [sliced_input_shape_half.output[0], one],
                                                attr={'axis': -1})
-        min_matrice_dim_ = ctx.make_node('Squeeze', [min_matrice_dim.output[0]], {'axes': [0]})
+        min_matrice_dim_ = ctx.make_squeeze(min_matrice_dim.output[0], axes=[0])
         matrice_range = ctx.make_node('Range', [zeo_, min_matrice_dim_.output[0], one_])
         unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0]], attr={"axes": [-1]})
         expanded_range = ctx.make_node('Expand', [unsqueezed_matrice_range.output[0], sliced_input_shape_new.output[0]])
@@ -2106,8 +2106,9 @@ class MatrixDiagPart:
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
-                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        ctx.make_squeeze(gathered_result.output[0], axes=[-1],
+                         name=node.name, outputs=node.output, shapes=shapes,
+                         dtypes=dtypes)
 
 
 @tf_op(["MatrixDiagPartV2", "MatrixDiagPartV3"])
@@ -2206,7 +2207,7 @@ class MatrixDiagPartV2V3:
         expanded_range = body_graph.make_node('Expand', [unsqueezed_range.output[0], full_shape.output[0]])
         gathered_input = body_graph.make_node('GatherElements', [processed_input.output[0], expanded_range.output[0]],
                                               attr={'axis': -1})
-        squeezed_input = body_graph.make_node('Squeeze', [gathered_input.output[0]], attr={'axes': [-1]})
+        squeezed_input = body_graph.make_squeeze(gathered_input.output[0], axes=[-1])
         left_width = body_graph.make_node('Sub', [new_width.output[0], abs_k.output[0]])
         dims = body_graph.make_node('Concat', [left_width.output[0], new_depth.output[0]], attr={'axis': 0})
         valid_dim = body_graph.make_node('ReduceMin', [dims.output[0]])
@@ -2318,8 +2319,8 @@ class MatrixDiagPartV2V3:
                                                raw_output_shape + [-1])
         squeeze_sliced_graph = ctx.create_new_graph_with_same_config()
         squeeze_sliced_graph.parent_graph = ctx
-        squeeze_sliced = squeeze_sliced_graph.make_node('Squeeze', [final_output_right_sliced.output[0]],
-                                                        attr={'axes': [-2]})
+        squeeze_sliced = squeeze_sliced_graph.make_squeeze(final_output_right_sliced.output[0],
+                                                           axes=[-2])
         squeeze_sliced_graph.add_graph_output(squeeze_sliced.output[0], ctx.get_dtype(node.input[0]), raw_output_shape)
         shapes = node.output_shapes
         dtypes = node.output_dtypes
@@ -2377,8 +2378,8 @@ class MatrixDiagPartV2V3:
         input1 = normalize()
         k0 = ctx.make_node('ReduceMin', [input1.output[0]]).output[0]
         k1 = ctx.make_node('ReduceMax', [input1.output[0]]).output[0]
-        k0_scalar = ctx.make_node('Squeeze', [k0]).output[0]
-        k1_scalar = ctx.make_node('Squeeze', [k1]).output[0]
+        k0_scalar = ctx.make_squeeze(k0).output[0]
+        k1_scalar = ctx.make_squeeze(k1).output[0]
         m_padded = ctx.make_node('Pad', [m, const_pad_vals, node.input[2]])
 
         # starting indexes for super diagonals
@@ -2413,7 +2414,7 @@ class MatrixDiagPartV2V3:
         diagsize = ctx.make_node('Concat', [xsize.output[0], ysize.output[0]], attr={'axis': 0})
         maxsize = ctx.make_node('ReduceMax', [diagsize.output[0]], attr={'keep_dims': 0})
         maxsize_0 = ctx.make_node('Reshape', [maxsize.output[0], const_neg_one])
-        maxsize_scalar = ctx.make_node('Squeeze', [maxsize.output[0]])
+        maxsize_scalar = ctx.make_squeeze(maxsize.output[0])
 
         diagdistances_0 = ctx.make_node('Range', [const_zero_scalar, maxsize_scalar.output[0], const_one_scalar])
         diagdistances = ctx.make_node('Mul', [diagdistances_0.output[0], stride])
@@ -2543,7 +2544,7 @@ class MatrixDiag:
             return expand_diag.output[0], k, k_min, k_max, k_max_nxt
 
         def squeeze(name):
-            return ctx.make_node("Squeeze", [name], attr={"axis": -1}).output[0]
+            return ctx.make_squeeze(name, axes=[-1]).output[0]
 
         # gather inputs
         diag, k, k_min, k_max, k_max_nxt = processdiag()

@@ -916,7 +916,7 @@ class CropAndResize:
                                 attr={"mode": mode, "extrapolation_value": extrapolation_value,
                                       "coordinate_transformation_mode": "tf_crop_and_resize"})
         recovered_x = g.make_node("Transpose", [resized_x.output[0]], attr={'perm': constants.NCHW_TO_NHWC})
-        squeeze_x = g.make_node("Squeeze", inputs=[recovered_x.output[0]], attr={"axes": [0]})
+        squeeze_x = g.make_squeeze(recovered_x.output[0], axes=[0])
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
@@ -1117,7 +1117,7 @@ class MatrixBandPart:
         loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init],
                                   output_count=2, branches=branches)
         # convert generated mask matrix from bool to right shape and data type
-        squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})
+        squeeze = ctx.make_squeeze(loop_node.output[1], axes=[squeeze_axis])
         cast1 = ctx.make_node(op_type="Cast", inputs=squeeze.output, attr={"to": onnx_pb.TensorProto.FLOAT})
         if axis == 1:
             mask_matrix = ctx.make_node(op_type="Transpose", inputs=cast1.output)
@@ -1149,8 +1149,9 @@ def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
     shapes = tf_ori_node.output_shapes
     dtypes = tf_ori_node.output_dtypes
     ctx.remove_node(tf_ori_node.name)
-    ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], attr={"axes": [1]},
-                  outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
+    ctx.make_squeeze(mul2.output[0], axes=[1],
+                  outputs=[tf_ori_node.output[0]], shapes=[shapes[0]],
+                  dtypes=[dtypes[0]])
 
 
 def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs):
@@ -1193,9 +1194,8 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
     shapes = node.output_shapes
     dtypes = node.output_dtypes
     ctx.remove_node(node.name)
-    ctx.make_node(op_type="Squeeze",
-                  inputs=[mul2.output[0]], outputs=[node.output[0]],
-                  attr={"axes": [1]}, shapes=[shapes[0]], dtypes=[dtypes[0]])
+    ctx.make_squeeze(mul2.output[0], outputs=[node.output[0]],
+                     axes=[1], shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 @tf_op("SoftmaxCrossEntropyWithLogits")
@@ -1278,8 +1278,8 @@ class SparseSoftmaxCrossEntropyWithLogits:
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], outputs=[node.output[0]], attr={"axes": [1]},
-                      shapes=[shapes[0]], dtypes=[dtypes[0]])
+        ctx.make_squeeze(mul2.output[0], outputs=[node.output[0]], axes=[1],
+                         shapes=[shapes[0]], dtypes=[dtypes[0]])
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):

@@ -161,8 +161,13 @@ class BackToBackOptimizer(GraphOptimizerBase):
         if node2.type != 'Unsqueeze':
             return []
 
-        axis1 = node.get_attr('axes').ints
-        axis2 = node2.get_attr('axes').ints
+        if ctx._opset < 13:
+            axis1 = node.get_attr('axes').ints
+            axis2 = node2.get_attr('axes').ints
+        else:
+            axis1 = node.inputs[0]
+            axis2 = node2.inputs[0]
+            raise NotImplementedError("Still needs to retrieve the constants.")
 
         # if squeeze followed by unsqueeze is on diff axes, skip
         if axis1 != axis2:

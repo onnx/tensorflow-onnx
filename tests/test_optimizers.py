@@ -21,6 +21,9 @@ from tf2onnx.graph import GraphUtil
 class OptimizerTests(Tf2OnnxBackendTestBase):
     """Run original model proto and modified model proto with onnxruntime, compare the results."""
 
+    def _make_squeeze(self, inputs, outputs, axes):
+        return helper.make_node('Squeeze', inputs, outputs, axes=axes, name='squeeze')
+
     def run_and_compare(self, output_names_with_port, onnx_feed_dict, origin_proto, op_type,
                         remaining_op_num, debug=False, rtol=1e-07):
         utils.make_sure(op_type is not None, "op_type should be specified")
@@ -321,7 +324,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
     def test_transpose_with_squeeze1(self):
         # squeeze the first dim
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
-        node2 = helper.make_node("Squeeze", ["Y"], ["Z"], name="squeeze", axes=[0])
+        node2 = self._make_squeeze(["Y"], ["Z"], axes=[0])
 
         graph = helper.make_graph(
             [node1, node2],
@@ -338,7 +341,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
     def test_transpose_with_squeeze2(self):
         # squeeze the second dim
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
-        node2 = helper.make_node("Squeeze", ["Y"], ["Z"], name="squeeze", axes=[1])
+        node2 = self._make_squeeze(["Y"], ["Z"], axes=[1])
 
         graph = helper.make_graph(
             [node1, node2],
@@ -355,7 +358,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
     def test_transpose_with_squeeze3(self):
         # squeeze the last dim
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
-        node2 = helper.make_node("Squeeze", ["Y"], ["Z"], name="squeeze", axes=[3])
+        node2 = self._make_squeeze(["Y"], ["Z"], axes=[3])
 
         graph = helper.make_graph(
             [node1, node2],
@@ -371,7 +374,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
     def test_transpose_with_squeeze4(self):
         # squeeze the two dims
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
-        node2 = helper.make_node("Squeeze", ["Y"], ["Z"], name="squeeze", axes=[1, 3])
+        node2 = self._make_squeeze(["Y"], ["Z"], axes=[1, 3])
 
         graph = helper.make_graph(
             [node1, node2],
@@ -393,7 +396,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             node1 = helper.make_node("Gather", [external_inputs[0], "loop_iter_num"], ["Y0"])
             node2 = helper.make_node("Transpose", ["Y0"], ["Z0"], perm=[0, 2, 3, 1])
             # graph output
-            node3 = helper.make_node("Squeeze", ["Z0"], ["scan_output"], axes=[0])
+            node3 = self._make_squeeze(["Z0"], ["scan_output"], axes=[0])
             node4 = helper.make_node("Identity", ["loop_condition"], ["loop_cond_output"])
             node5 = helper.make_node("Identity", ["loop_condition"], ["loop_carried_output"])
 

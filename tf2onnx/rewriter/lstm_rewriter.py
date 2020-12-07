@@ -371,7 +371,7 @@ class LSTMRewriter(LSTMRewriterBase):
             output_id = rnn_nodes[i].output[0]
             rnn_output_shape = self.g.get_shape(output_id)
             squeeze_output_shape = [rnn_output_shape[0], rnn_output_shape[2], rnn_output_shape[3]]
-            squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
+            squeeze_node = self.g.make_squeeze(output_id, axes=[1],
                                             shapes=[squeeze_output_shape],
                                             dtypes=[self.g.get_dtype(output_id)])
             if i + 1 < self.num_lstm_layers:
@@ -385,7 +385,7 @@ class LSTMRewriter(LSTMRewriterBase):
         exit_output = context.state_variables["ht" + str(i)].exit_output
         output_id = context.rnn_node[i].output[1]
         lstm_yh_shape = self.g.get_shape(output_id)
-        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
+        squeeze_node = self.g.make_squeeze(output_id, axes=[0],
                                         shapes=[[lstm_yh_shape[1], lstm_yh_shape[2]]],
                                         dtypes=[self.g.get_dtype(output_id)])
 
@@ -397,7 +397,7 @@ class LSTMRewriter(LSTMRewriterBase):
         exit_output = context.state_variables["ct" + str(i)].exit_output
         output_id = context.rnn_node[i].output[2]
         lstm_yc_shape = self.g.get_shape(output_id)
-        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
+        squeeze_node = self.g.make_squeeze(output_id, axes=[0],
                                         shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
                                         dtypes=[self.g.get_dtype(output_id)])
 
@@ -415,7 +415,7 @@ class LSTMRewriter(LSTMRewriterBase):
                                   dtypes=[self.g.get_dtype(lstm_node.output[2])])
 
         squeeze_output_shape = [concat_output_shape[1], concat_output_shape[2]]
-        squeeze_node = self.g.make_node("Squeeze", [concat.output[0]], attr={"axes": [0]},
+        squeeze_node = self.g.make_squeeze(concat.output[0], axes=[0],
                                         shapes=[squeeze_output_shape],
                                         dtypes=[self.g.get_dtype(concat.output[0])])
 

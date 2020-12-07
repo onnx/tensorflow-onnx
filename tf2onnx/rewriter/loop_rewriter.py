@@ -84,7 +84,7 @@ class LoopRewriter(LoopRewriterBase):
                 # Loop does not have scan inputs, so we use Gather to get data for each iteration.
                 index_node = loop_body_g.make_node("Unsqueeze", [input_ta.index_input_id], attr={"axes": [0]})
                 gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, index_node.output[0]])
-                data_node = loop_body_g.make_node("Squeeze", [gather_node.output[0]], attr={"axes": [0]})
+                data_node = loop_body_g.make_squeeze(gather_node.output[0], axes=[0])
                 loop_body_g.replace_all_inputs(input_ta.consumer.id, data_node.output[0])  # ops=loop_body_g.get_nodes()
 
             ## create Loop node

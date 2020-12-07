@@ -570,6 +570,29 @@ class Graph(object):
         self.set_dtype(name, utils.map_numpy_to_onnx_dtype(np_val.dtype))
         return node
 
+    def make_squeeze(self, name, input, axes=None, outputs=None, dtypes=None, shapes=None,
+                     op_name_scope=None):
+        """Make a new node squeeze. The behabiour is different depending on the opset.
+        Args:
+            name: node name
+            input: input node name
+            axes: axes or None (optional)
+            output: output node name (optional)
+        Returns:
+            output of *make_node*
+        """
+        if outputs is not None:
+            utils.make_sure(isinstance(outputs, list), "outputs must be a list")                
+            utils.make_sure(len(outputs) == 1, "Squeeze must have one output.")
+        if self._opset >= 13:
+            i_axes = self.make_const(utils.make_name(name + "_axes"), np.array(axes).astype(np.int64))
+            node = self.make_node("Squeeze", [input, i_axes], outputs=outputs, name=name,
+                                  dtypes=dtypes, shapes=shapes, op_name_scope=op_name_scope)
+        else:
+            node = self.make_node("Squeeze", [input], outputs=outputs, name=name, attr={"axes": list(axes)},
+                                  dtypes=dtypes, shapes=shapes, op_name_scope=op_name_scope)
+        return node
+
     def copy_const(self, node, name=None):
         """Copy a const node, using name if specified"""
         # TODO: support attr copy starting at opset 12
