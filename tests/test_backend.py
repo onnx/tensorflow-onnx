@@ -1044,11 +1044,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
     def test_sequeeze_no_axis_specified(self):
-        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2, 1))
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 1, 2, 1, 1))
         def func(x):
             x_ = tf.squeeze(x)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    def test_sequeeze_no_axis(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
+        def func(x):
+            x_ = tf.squeeze(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Pad")
+    def test_sequeeze_no_axis_specified_unknown_rank(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+        y_val = np.array([2, 1, 2, 1, 1], dtype=np.int64)
+        z_val = np.zeros((1, 2), dtype=np.int64)
+        def func(x, y, z):
+            y_ = tf.pad(y, z)
+            x_ = tf.reshape(x, y_)
+            x_ = tf.squeeze(x_)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
     def test_sequeeze_positive_axis(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2, 1))
@@ -1070,6 +1089,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.squeeze(x, [0, -1])
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Squeeze")
+    def test_sequeeze_mixed_axis_unknown_rank(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+        y_val = np.array([2, 1, 2, 1, 1], dtype=np.int64)
+        z_val = np.zeros((1, 2), dtype=np.int64)
+        def func(x, y, z):
+            y_ = tf.pad(y, z)
+            x_ = tf.reshape(x, y_)
+            x_ = tf.squeeze(x_, [1, -1])
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
     def test_transpose(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32).reshape((2, 3))

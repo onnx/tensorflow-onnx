@@ -183,28 +183,25 @@ class Squeeze:
     def version_1(cls, ctx, node, **kwargs):
         # T output = Squeeze(T input, @list(int) squeeze_dims)
         # T squeezed = Squeeze(T data, @AttrType.INTS axes), axes are list of positive integers.
-        axis = node.get_attr("axis")
-        if not axis:
-            axis = node.get_attr("squeeze_dims")
-            if axis:
-                del node.attr["squeeze_dims"]
+        axes = node.get_attr_value("squeeze_dims")
+        if axes is None:
+            axes = []
         else:
-            del node.attr["axis"]
+            del node.attr["squeeze_dims"]
 
-        if axis and axis.ints:
-            axis = axis.ints
-            neg_axis = any([val < 0 for val in axis])
-            if neg_axis:
+        # TF uses empty axes to indicate that all 1 dims should be squeezed
+        if len(axes) > 0:
+            neg_axis = any([val < 0 for val in axes])
+            if neg_axis and ctx.opset < 11:
                 shape = ctx.get_shape(node.input[0])
-                utils.make_sure(shape is not None, "squeeze input shape cannot be None")
+                utils.make_sure(shape is not None, "squeeze with negative axes and unknown rank requires opset >= 11")
                 shape_len = len(shape)
-                axis = [a + shape_len if a < 0 else a for a in axis]
-        else:
-            shape = ctx.get_shape(node.input[0])
-            utils.make_sure(shape is not None, "squeeze input shape cannot be None")
-            axis = [i for i, j in enumerate(shape) if j == 1]
-            if not axis: axis = [0]
-        node.set_attr("axes", axis)
+                axes = [a + shape_len if a < 0 else a for a in axes]
+            if ctx.opset < 13:
+                node.set_attr("axes", axes)
+            else:
+                axes_const = ctx.make_const(utils.make_name("axes_const"), np.array(axes, dtype=np.int64))
+                ctx.replace_inputs(node, [node.input[0], axes_const.output[0]])
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
