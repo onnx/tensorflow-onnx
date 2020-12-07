@@ -570,14 +570,17 @@ class Graph(object):
         self.set_dtype(name, utils.map_numpy_to_onnx_dtype(np_val.dtype))
         return node
 
-    def make_squeeze(self, name, input, axes=None, outputs=None, dtypes=None, shapes=None,
-                     op_name_scope=None):
+    def make_squeeze(self, input, axes=None, name=None, outputs=None,
+                     dtypes=None, shapes=None, op_name_scope=None):
         """Make a new node squeeze. The behabiour is different depending on the opset.
         Args:
-            name: node name
             input: input node name
             axes: axes or None (optional)
-            output: output node name (optional)
+            outputs: output node names (optional)
+            name: node name (optional)
+            dtypes: see *make_node*
+            shapes: see *make_node*
+            op_name_scope: see *make_node*
         Returns:
             output of *make_node*
         """

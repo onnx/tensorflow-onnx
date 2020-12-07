@@ -211,7 +211,7 @@ class ComplexAbsOp:
             "Add", inputs=[real_part2.output[0], imag_part2.output[0]],
             name=utils.make_name('ComplexAbs_' + node.name))
 
-        squeezed = ctx.make_queeze(
+        squeezed = ctx.make_squeeze(
             add.output[0], axes=[0],
             name=utils.make_name('ComplexAbs' + node.name))
 
