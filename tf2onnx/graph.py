@@ -446,6 +446,11 @@ class Node(object):
 class Graph(object):
     """"Class that provides graph manipulation and matching."""
 
+    # List of operators which have a different signature
+    # accross opsets and that require to use a method
+    # ``"make_" + op_type.lower()``.
+    _operators_makers = {'squeeze'}
+
     def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=None, extra_opset=None,
                  output_names=None, is_subgraph=False, graph_name=None):
         """Create Graph.
@@ -590,10 +595,12 @@ class Graph(object):
         if self._opset >= 13:
             i_axes = self.make_const(utils.make_name(name + "_axes"), np.array(axes).astype(np.int64))
             node = self.make_node("Squeeze", [input, i_axes], outputs=outputs, name=name,
-                                  dtypes=dtypes, shapes=shapes, op_name_scope=op_name_scope)
+                                  dtypes=dtypes, shapes=shapes, op_name_scope=op_name_scope,
+                                  _from_maker=True)
         else:
             node = self.make_node("Squeeze", [input], outputs=outputs, name=name, attr={"axes": list(axes)},
-                                  dtypes=dtypes, shapes=shapes, op_name_scope=op_name_scope)
+                                  dtypes=dtypes, shapes=shapes, op_name_scope=op_name_scope,
+                                  _from_maker=True)
         return node
 
     def copy_const(self, node, name=None):
@@ -603,10 +610,22 @@ class Graph(object):
             name = utils.make_name(node.name)
         return self.make_const(name, node.get_tensor_value(as_list=False))
 
+    def make_node_makers(self, op_type, *args, attr=None, **kwargs):
+        "Checks first if an operator has a maker (a method `make_ + op_type.lower()` attached to it."
+        if op_type in Graph._operators_makers:
+            meth = "make_" + op_type.lower()
+            if attr is not None:
+                kwargs.update(attr)
+            return getattr(self, meth)(*args, **kwargs)
+        return self.make_node(op_type, *args, attr=attr, **kwargs)
+
     def make_node(self, op_type, inputs, attr=None, output_count=1, outputs=None, skip_conversion=True,
                   op_name_scope=None, name=None, shapes=None, dtypes=None, domain=constants.ONNX_DOMAIN,
-                  infer_shape_dtype=True, branches=None):
+                  infer_shape_dtype=True, branches=None, _from_maker=False):
         """Make a new onnx node in the graph"""
+        utils.make_sure(op_type not in Graph._operators_makers or _from_maker,
+                        "An operator has different signature accross opsets, method 'make_%s' "
+                        "must be used instead of 'make_node'.", op_type)
         if attr is None:
             attr = {}
         if shapes is None:
@@ -1277,7 +1296,7 @@ class Graph(object):
         if not isinstance(input_name, list):
             input_name = [input_name]
 
-        new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
+        new_node = self.make_node_makers(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
         for i, n in enumerate(node.input):
             if n == input_name[0]:
                 self.replace_input(node, node.input[i], new_output, i)
@@ -1306,7 +1325,7 @@ class Graph(object):
             name = utils.make_name(op_type)
 
         new_output = port_name(name)
-        new_node = self.make_node(op_type, inputs, attr=kwargs, outputs=[new_output], name=name, domain=domain)
+        new_node = self.make_node_makers(op_type, inputs, attr=kwargs, outputs=[new_output], name=name, domain=domain)
 
         to_replace = [self.get_node_by_name(n) for n in self._output_to_consumers[output_name]]
         to_replace = [n for n in to_replace if n != new_node]

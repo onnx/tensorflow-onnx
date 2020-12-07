@@ -8,7 +8,7 @@
 from __future__ import unicode_literals
 
 import numpy as np
-from tf2onnx.utils import ONNX_DTYPE_NAMES  # lgtm[py/unsafe-cyclic-import]
+from ..utils import ONNX_DTYPE_NAMES  # lgtm[py/unsafe-cyclic-import]
 from .optimizer_base import GraphOptimizerBase  # lgtm[py/unsafe-cyclic-import]
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
@@ -165,9 +165,8 @@ class BackToBackOptimizer(GraphOptimizerBase):
             axis1 = node.get_attr('axes').ints
             axis2 = node2.get_attr('axes').ints
         else:
-            axis1 = node.inputs[0]
-            axis2 = node2.inputs[0]
-            raise NotImplementedError("Still needs to retrieve the constants.")
+            axis1 = node.inputs[1].get_tensor_value(as_list=True)
+            axis2 = node2.inputs[1].get_tensor_value(as_list=True)
 
         # if squeeze followed by unsqueeze is on diff axes, skip
         if axis1 != axis2:
