@@ -1315,7 +1315,7 @@ class BatchToSpace:
                 ctx.remove_node(node.name)
                 slice1 = GraphBuilder(ctx).make_slice(kwargs)
                 ctx.make_squeeze(slice1, axes=[3],
-                              outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
+                                 outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
             else:
                 kwargs = {**inputs_map, "outputs": node.output}
                 ctx.remove_node(node.name)

@@ -372,8 +372,8 @@ class LSTMRewriter(LSTMRewriterBase):
             rnn_output_shape = self.g.get_shape(output_id)
             squeeze_output_shape = [rnn_output_shape[0], rnn_output_shape[2], rnn_output_shape[3]]
             squeeze_node = self.g.make_squeeze(output_id, axes=[1],
-                                            shapes=[squeeze_output_shape],
-                                            dtypes=[self.g.get_dtype(output_id)])
+                                               shapes=[squeeze_output_shape],
+                                               dtypes=[self.g.get_dtype(output_id)])
             if i + 1 < self.num_lstm_layers:
                 logger.debug("setting input for layer: %s", i + 1)
                 context.onnx_input_ids[i + 1]["X"] = squeeze_node.output[0]
@@ -386,8 +386,8 @@ class LSTMRewriter(LSTMRewriterBase):
         output_id = context.rnn_node[i].output[1]
         lstm_yh_shape = self.g.get_shape(output_id)
         squeeze_node = self.g.make_squeeze(output_id, axes=[0],
-                                        shapes=[[lstm_yh_shape[1], lstm_yh_shape[2]]],
-                                        dtypes=[self.g.get_dtype(output_id)])
+                                           shapes=[[lstm_yh_shape[1], lstm_yh_shape[2]]],
+                                           dtypes=[self.g.get_dtype(output_id)])
 
         self.g.replace_all_inputs(exit_output.id, squeeze_node.output[0])  # ops=self.g.get_nodes()
 
@@ -398,8 +398,8 @@ class LSTMRewriter(LSTMRewriterBase):
         output_id = context.rnn_node[i].output[2]
         lstm_yc_shape = self.g.get_shape(output_id)
         squeeze_node = self.g.make_squeeze(output_id, axes=[0],
-                                        shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
-                                        dtypes=[self.g.get_dtype(output_id)])
+                                           shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
+                                           dtypes=[self.g.get_dtype(output_id)])
 
         self.g.replace_all_inputs(exit_output.id, squeeze_node.output[0])  # ops=self.g.get_nodes()
 
@@ -416,7 +416,7 @@ class LSTMRewriter(LSTMRewriterBase):
 
         squeeze_output_shape = [concat_output_shape[1], concat_output_shape[2]]
         squeeze_node = self.g.make_squeeze(concat.output[0], axes=[0],
-                                        shapes=[squeeze_output_shape],
-                                        dtypes=[self.g.get_dtype(concat.output[0])])
+                                           shapes=[squeeze_output_shape],
+                                           dtypes=[self.g.get_dtype(concat.output[0])])
 
         self.g.replace_all_inputs(exit_output.id, squeeze_node.output[0])  # ops=self.g.get_nodes()

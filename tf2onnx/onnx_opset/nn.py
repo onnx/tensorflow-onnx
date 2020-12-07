@@ -1150,8 +1150,8 @@ def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
     dtypes = tf_ori_node.output_dtypes
     ctx.remove_node(tf_ori_node.name)
     ctx.make_squeeze(mul2.output[0], axes=[1],
-                  outputs=[tf_ori_node.output[0]], shapes=[shapes[0]],
-                  dtypes=[dtypes[0]])
+                     outputs=[tf_ori_node.output[0]], shapes=[shapes[0]],
+                     dtypes=[dtypes[0]])
 
 
 def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs):

@@ -593,12 +593,17 @@ class Graph(object):
             utils.make_sure(isinstance(outputs, list), "outputs must be a list")                
             utils.make_sure(len(outputs) == 1, "Squeeze must have one output.")
         if self._opset >= 13:
-            i_axes = self.make_const(utils.make_name(name + "_axes"), np.array(axes).astype(np.int64))
-            node = self.make_node("Squeeze", [input, i_axes], outputs=outputs, name=name,
+            if axes:
+                i_axes = self.make_const(utils.make_name(name + "_axes"), np.array(axes).astype(np.int64))
+                inputs = [input, i_axes]
+            else:
+                inputs = [input]
+            node = self.make_node("Squeeze", inputs, outputs=outputs, name=name,
                                   dtypes=dtypes, shapes=shapes, op_name_scope=op_name_scope,
                                   _from_maker=True)
         else:
-            node = self.make_node("Squeeze", [input], outputs=outputs, name=name, attr={"axes": list(axes)},
+            attr = {"axes": list(axes)} if axes else None
+            node = self.make_node("Squeeze", [input], outputs=outputs, name=name, attr=attr,
                                   dtypes=dtypes, shapes=shapes, op_name_scope=op_name_scope,
                                   _from_maker=True)
         return node
