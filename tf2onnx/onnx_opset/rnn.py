@@ -173,7 +173,7 @@ class LSTMBlockCell:
 @tf_op("CudnnRNN")
 class CudnnRNN:
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def version_10(cls, ctx, node, **kwargs):        
         x = node.input[0]
         x_shape = ctx.get_shape(x)
         h = node.input[1]
@@ -230,6 +230,9 @@ class CudnnRNN:
         ctx.make_node('Split', [r], outputs=rs)
         ctx.make_node('Split', [b], outputs=bs)
         ctx.make_node('Split', [h], outputs=hs)
+
+        builder = GraphBuilder(ctx)
+
         xnf = xnb = x
         for i in range(num_layers):
             suffix = '_' + str(i * num_dirs)
@@ -238,7 +241,7 @@ class CudnnRNN:
                           outputs=[name('Y' + suffix), name('YH' + suffix)],
                           attr={'direction': 'forward', 'hidden_size': num_units})
             xnf = name(x + suffix)
-            ctx.make_node('Squeeze', [name('Y' + suffix)], outputs=[xnf], attr={'axes': [1]})
+            builder.make_squeeze({'inputs': [name('Y' + suffix)], 'outputs':[xnf], 'axes': [1]})
             if num_dirs == 2:
                 suffix = '_' + str(i * 2 + 1)
                 ctx.make_node('GRU',
@@ -246,10 +249,15 @@ class CudnnRNN:
                               outputs=[name('Y' + suffix), name('YH' + suffix)],
                               attr={'direction': 'reverse', 'hidden_size': num_units})
                 xnb = name(x + suffix)
-                ctx.make_node('Squeeze', [name('Y' + suffix)], outputs=[xnb], attr={'axes': [1]})
+                builder.make_squeeze({'inputs': [name('Y' + suffix)], 'outputs': [xnb], 'axes': [1]})
         ctx.remove_node(node.name)
         if num_dirs == 2:
             ctx.make_node('Concat', [xnf, xnb], outputs=[node.output[0]], attr={'axis': -1})
         else:
             ctx.make_node('Identity', [xnf], outputs=[node.output[0]])
         ctx.make_node('Concat', yhs, outputs=[node.output[1]], attr={'axis': 0})
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Squeeze changed in Opset 13.
+        cls.version_10(ctx, node, **kwargs)

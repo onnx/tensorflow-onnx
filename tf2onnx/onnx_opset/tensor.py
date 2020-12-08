@@ -208,6 +208,11 @@ class Squeeze:
         # Opset 11 supports negative axis, but core logic is same
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Opset 13: parameters moved to inputs
+        cls.version_1(ctx, node, **kwargs)
+
 
 @tf_op("Transpose")
 class Transpose:
@@ -443,7 +448,8 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
 
     index_i = g.make_node("Gather", [index.output[0], trip_name], attr={"axis": 0})
     gather = g.make_node("Gather", [cur_name, index_i.output[0]], attr={"axis": 0})
-    g.make_node("Squeeze", [gather.output[0]], attr={"axes": [0]}, outputs=[result_name])
+    GraphBuilder(g).make_squeeze(
+        {'data': [gather.output[0]], "axes": [0], 'outputs': [result_name]})
     g.make_node("Identity", [cond_name], outputs=[cond_out_name])
 
     g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
@@ -495,7 +501,8 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
     g.parent_graph = ctx
 
     index = g.make_node("Gather", [flatten_indices.output[0], trip_name], attr={"axis": 0})
-    index_squeeze = g.make_node("Squeeze", [index.output[0]], attr={"axes": [0]})
+    index_squeeze = GraphBuilder(g).make_squeeze(
+        {'data': index.output[0], "axes": [0]}, return_node=True)
     # inner loop to gather result
     inner_loop = _make_gathernd_inner_loop(g, params, index_squeeze, t_params)
     g.make_node("Identity", [cond_name], outputs=[cond_out_name])
@@ -780,13 +787,16 @@ class StridedSlice:
         attr = {"starts": new_begin, "ends": new_end, "axes": axes}
         inputs_map = {"data": node.input[0], **attr}
         kwargs = {**inputs_map, "outputs": node.output}
-        node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
-        node = ctx.get_node_by_output(node)
+        node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes, return_node=True)
         nodes = [node]
         if needs_squeeze:
-            name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
-            squeeze_node.set_attr("axes", needs_squeeze)
+            # insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None, domain=None, **kwargs)
+            # ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+            name = utils.make_name('Squeeze')
+            squeeze_node0 = GraphBuilder(ctx).make_squeeze(
+                {"axes": needs_squeeze, 'name': name, 'data': node.output[0]},
+                return_node=True)
+            squeeze_node = ctx.insert_new_node_on_output(squeeze_node0)
             nodes.append(squeeze_node)
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
