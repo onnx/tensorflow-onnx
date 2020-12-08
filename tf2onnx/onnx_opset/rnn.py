@@ -173,7 +173,7 @@ class LSTMBlockCell:
 @tf_op("CudnnRNN")
 class CudnnRNN:
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):        
+    def version_10(cls, ctx, node, **kwargs):
         x = node.input[0]
         x_shape = ctx.get_shape(x)
         h = node.input[1]
@@ -241,7 +241,7 @@ class CudnnRNN:
                           outputs=[name('Y' + suffix), name('YH' + suffix)],
                           attr={'direction': 'forward', 'hidden_size': num_units})
             xnf = name(x + suffix)
-            builder.make_squeeze({'inputs': [name('Y' + suffix)], 'outputs':[xnf], 'axes': [1]})
+            builder.make_squeeze({'inputs': [name('Y' + suffix)], 'outputs': [xnf], 'axes': [1]})
             if num_dirs == 2:
                 suffix = '_' + str(i * 2 + 1)
                 ctx.make_node('GRU',
