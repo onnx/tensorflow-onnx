@@ -647,63 +647,39 @@ class SplitV:
 class ExpandDims:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        # T output = ExpandDims(T input, Tdim dim, @type Tdim)
-        # T reshaped = Reshape-1(T data, @ints consumed_inputs, @int64 shape)
-        # T expanded = Unsqueeze-1(T data, @ints axes)
         shape = ctx.get_shape(node.output[0])
-        if shape is not None and shape.count(-1) < 2:
-            # tensorflow already infers the output shape so we can just take it
-            shape = ctx.get_shape(node.output[0])
-            node.type = "Reshape"
-            ctx.remove_input(node, node.input[1], 1)
-            node.set_attr("shape", shape)
-            return
-
-        # if there is more than one -1 in the shape, Reshape won't support.
         dim_node = node.inputs[1]
-        if dim_node.is_const():
-            node.type = "Unsqueeze"
-            dim = dim_node.get_tensor_value()
-            if dim < 0:
-                input_rank = len(ctx.get_shape(node.input[0]))
-                dim = dim + input_rank + 1
-            node.set_attr("axes", [dim])
-            ctx.remove_input(node, node.input[1], 1)
-            return
-        raise ValueError("non-const dim is not supported")
+
+        utils.make_sure(dim_node.is_const(), "ExpandDims with non-const axes requires opset 13")
+        node.type = "Unsqueeze"
+        # tf.expanddims() wants a scalar per doc but quietly accepts any single-element tensor
+        axis = dim_node.get_tensor_value(as_list=False).flatten()[0]
+
+        if axis < 0 and ctx.opset < 11:
+            utils.make_sure(shape is not None, "ExpandDims with negative axes and unknown rank requires opset >= 11")
+            out_rank = len(shape)
+            axis += out_rank
+        node.set_attr("axes", [axis])
+        ctx.remove_input(node, node.input[1], 1)
 
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
-        # T output = ExpandDims(T input, Tdim dim, @type Tdim), dim is 0-D scalar.
-        # T reshaped = Reshape-5(T data, int64 shape)
-        # T expanded = Unsqueeze-1(T data, @ints axes)
-        dim_node = node.inputs[1]
-        if dim_node.is_const():
-            node.type = "Unsqueeze"
-            dim = dim_node.get_tensor_value()
-            if isinstance(dim, list):
-                dim = dim[0]
-            if dim < 0:
-                input_rank = len(ctx.get_shape(node.input[0]))
-                dim = dim + input_rank + 1
-            node.set_attr("axes", [dim])
-            ctx.remove_input(node, node.input[1], 1)
-            return
-        raise ValueError("non-const dim is not supported")
+        cls.version_1(ctx, node, **kwargs)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        dim_node = node.inputs[1]
-        if dim_node.is_const():
-            node.type = "Unsqueeze"
-            dim = dim_node.get_tensor_value()
-            if isinstance(dim, list):
-                # tf.expanddims() wants a scalar per doc but quietly accepts a list too.
-                dim = dim[0]
-            node.set_attr("axes", [dim])
-            ctx.remove_input(node, node.input[1], 1)
-            return
-        raise ValueError("non-const dim is not supported")
+        cls.version_1(ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
+        if ctx.get_shape(node.input[1]) != [1]:
+            const_newshape = ctx.make_const(utils.make_name("reshape_const"), np.array([1], dtype=np.int64))
+            reshape_node = ctx.make_node("Reshape", [node.input[1], const_newshape.output[0]])
+            ctx.replace_inputs(node, [node.input[0], reshape_node.output[0]])
+        node.type = "Unsqueeze"
+
 
 @tf_op("StridedSlice")
 class StridedSlice:
