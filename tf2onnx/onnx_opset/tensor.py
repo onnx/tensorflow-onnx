@@ -354,7 +354,7 @@ class Slice:
 @tf_op("Roll")
 class Roll:
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         utils.make_sure(node.inputs[2].is_const(), "Can only convert Roll is axis is const")
         axes = node.inputs[2].get_tensor_value()
         if not isinstance(axes, list):
@@ -366,7 +366,11 @@ class Roll:
             shifts_casted = node.input[1]
 
         if len(axes) == 1:
-            unsqueeze_node = ctx.make_node("Unsqueeze", [shifts_casted], attr={'axes': [0]}, op_name_scope=node.name)
+            if opset < 13:
+                unsqueeze_node = ctx.make_node("Unsqueeze", [shifts_casted], attr={'axes': [0]}, op_name_scope=node.name)
+            else:
+                axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+                unsqueeze_node = ctx.make_node("Unsqueeze", [shifts_casted, axes], op_name_scope=node.name)
             shifts_split = [unsqueeze_node.output[0]]
         else:
             shifts_split = ctx.make_node("Split", [shifts_casted], attr={'axis': 0},
@@ -393,8 +397,17 @@ class Roll:
         ctx.remove_node(node.name)
 
     @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls.any_version(ctx, 10, node, **kwargs)
+
+    @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        cls.version_10(ctx, node, **kwargs)
+        cls.any_version(ctx, 11, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(ctx, 13, node, **kwargs)
 
 
 @tf_op("Gather")
@@ -672,6 +685,7 @@ class ExpandDims:
 
     @classmethod
     def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
         if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
         if ctx.get_shape(node.input[1]) != [1]:
@@ -769,11 +783,9 @@ class StridedSlice:
         if needs_squeeze:
             # insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None, domain=None, **kwargs)
             # ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
-            name = utils.make_name('Squeeze')
-            squeeze_node0 = GraphBuilder(ctx).make_squeeze(
-                {"axes": needs_squeeze, 'name': name, 'data': node.output[0]},
-                return_node=True)
-            squeeze_node = ctx.insert_node_on_output(squeeze_node0)
+            name = utils.make_name(node.name)
+            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
+            squeeze_node.set_attr("axes", needs_squeeze)
             nodes.append(squeeze_node)
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
@@ -802,7 +814,7 @@ class StridedSlice:
                 nodes.append(cast_node)
 
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def any_version_after10(cls, opset, ctx, node, **kwargs):
         # T output = Slice(T input, Index begin, Index end, Index strides
         #                 @int begin_mask, @int end_mask, @int ellipsis_mask
         #                 @int shrink_axis_mask, @int new_axis_mask)
@@ -846,7 +858,11 @@ class StridedSlice:
                     unqueeze_at.append(bit)
                     begin_mask |= 1 << bit
                     end_mask |= 1 << bit
-            input_x = ctx.make_node("Unsqueeze", [input_x.output[0]], {"axes": unqueeze_at})
+            if opset < 13:
+                input_x = ctx.make_node("Unsqueeze", [input_x.output[0]], {"axes": unqueeze_at})
+            else:
+                axes = GraphBuilder(ctx).convert_to_input(unqueeze_at, "const_axes", is_optional=True, dtype=np.int64)
+                input_x = ctx.make_node("Unsqueeze", [input_x.output[0], axes])
 
         param_shape = ctx.get_shape(node.input[1]) or \
                       ctx.get_shape(node.input[2]) or \
@@ -995,6 +1011,15 @@ class StridedSlice:
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
             ctx.copy_shape(node.output[0], squeeze_node.output[0])
 
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls.any_version_after10(10, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version_after10(13, ctx, node, **kwargs)
+
 
 @tf_op("Cast")
 class Cast:
@@ -1041,13 +1066,17 @@ class TopKV2:
                       shapes=[shapes[1]], dtypes=[onnx_pb.TensorProto.INT32])
 
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def any_version_after10(cls, opset, ctx, node, **kwargs):
         # onnx only supports input K as a 1D tesor with dtype int64
         # while in tf, K is a 0D tensor with dtype int32
         dtypes = node.output_dtypes
         k_0d = node.input[1]
         cast = ctx.make_node("Cast", [k_0d], attr={"to": onnx_pb.TensorProto.INT64})
-        k_1d = ctx.make_node("Unsqueeze", cast.output, attr={"axes": [0]})
+        if opset < 13:
+            k_1d = ctx.make_node("Unsqueeze", cast.output, attr={"axes": [0]})
+        else:
+            axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+            k_1d = ctx.make_node("Unsqueeze", list(cast.output) + [axes])
         ctx.replace_input(node, k_0d, k_1d.output[0], 1)
         # cast the index output to int32
         cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
@@ -1055,10 +1084,19 @@ class TopKV2:
         ctx.copy_shape(node.output[1], cast_out.output[0])
 
     @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls.any_version_after10(10, ctx, node, **kwargs)
+
+    @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # opset 11 supports negative axis, and new attrs 'largest' and 'sorted'
         # the core logic doesn't change, using defaults for new attrs
-        cls.version_10(ctx, node, **kwargs)
+        cls.any_version_after10(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version_after10(13, ctx, node, **kwargs)
 
 
 @tf_op("Tile")
@@ -1072,11 +1110,14 @@ class Tile:
 @tf_op("Pack")
 class Pack:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def any_version(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx pack op
         axis = node.get_attr("axis").i
         if axis < 0:
             axis += len(ctx.get_shape(node.input[0])) + 1
+
+        if opset >= 13:
+            node_axes = GraphBuilder(ctx).convert_to_input([axis], "const_axes", is_optional=True, dtype=np.int64)
 
         inputs = []
         dtype = None
@@ -1085,8 +1126,12 @@ class Pack:
             dtype = ctx.get_dtype(node.input[i])
             shape = ctx.get_shape(node.input[i]).copy()
             shape.insert(axis, 1)
-            new_node = ctx.make_node("Unsqueeze", [node.input[i]], op_name_scope=node.name, attr={"axes": [axis]},
-                                     shapes=[shape], dtypes=[dtype])
+            if opset < 13:
+                new_node = ctx.make_node("Unsqueeze", [node.input[i]], op_name_scope=node.name, attr={"axes": [axis]},
+                                         shapes=[shape], dtypes=[dtype])
+            else:
+                new_node = ctx.make_node("Unsqueeze", [node.input[i], node_axes], op_name_scope=node.name,
+                                         shapes=[shape], dtypes=[dtype])
             output_name = new_node.output[0]
             ctx.replace_input(node, node.input[i], output_name, i)
             inputs.append(output_name)
@@ -1098,6 +1143,15 @@ class Pack:
         concat = ctx.make_node("Concat", inputs, op_name_scope=node.name, attr={"axis": axis},
                                shapes=shapes, dtypes=dtypes)
         ctx.replace_all_inputs(node.output[0], concat.output[0])  # ops=ctx.get_nodes()
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        cls.any_version(1, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
 
 
 @tf_op("Unpack")
@@ -1179,7 +1233,12 @@ class OneHot:
             return
 
         depth = node.input[1]
-        depth = ctx.make_node("Unsqueeze", [depth], attr={"axes": [0]}).output[0]
+
+        if opset < 13:
+            depth = ctx.make_node("Unsqueeze", [depth], attr={"axes": [0]}).output[0]
+        else:
+            node_axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+            depth = ctx.make_node("Unsqueeze", [depth, axes]).output[0]
 
         on_value = node.input[2]
         off_value = node.input[3]
@@ -1212,9 +1271,18 @@ class OneHot:
             ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
 
     @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        cls.any_version_after9(9, ctx, node, **kwargs)
+        
+    @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # Opset 11 supports negative axis, but core logic is same
-        cls.version_9(ctx, node, **kwargs)
+        cls.any_version_after9(11, ctx, node, **kwargs)
+        
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version_after9(13, ctx, node, **kwargs)
 
 
 @tf_op("Shape")
@@ -1242,7 +1310,7 @@ class IsNan:
 @tf_op("BatchToSpaceND", onnx_op="DepthToSpace")
 class BatchToSpace:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         # block_shape impacts Transpose 'perm' attribute values.
         # must be available at compile time
         utils.make_sure(node.inputs[1].is_const(), 'only support constant block_shape value.')
@@ -1307,6 +1375,11 @@ class BatchToSpace:
         else:
             def mknode(optype, inputs, attrs=None):
                 nodename = utils.make_name(node.name + '_' + optype.lower())
+                if opset < 13 or optype != 'Squeeze':
+                    return ctx.make_node(optype, inputs, attrs, name=nodename)
+                inputs.append(attrs['axes'])
+                attrs = attrs.copy()
+                attrs.pop('axes')
                 return ctx.make_node(optype, inputs, attrs, name=nodename)
 
             # support non 3D/4D tensors and dynamic crop vals
@@ -1376,6 +1449,15 @@ class BatchToSpace:
             ctx.remove_node(node.name)
             ctx.make_node('Slice', [x3.output[0], crop_starts_squeeze.output[0], end_range.output[0], axes_const],
                           name=node.name, outputs=node.output, shapes=orig_shape, dtypes=orig_dtypes)
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        cls.any_version(1, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)        
 
 
 @tf_op("SpaceToBatchND", onnx_op="SpaceToDepth")
@@ -1504,7 +1586,7 @@ class IsInf:
        onnx_op="NonMaxSuppression")
 class NonMaxSuppression:
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         # int32 = NonMaxSuppressionV2(T boxes, T scores, int32 max_output_size, T iou_threshold, T score_threshold)
         # int64 = NonMaxSuppression(T boxes, T scores, int64 max_output_size, T iou_threshold, T score_threshold),
         # T means float32 here, the last 3 params are optional
@@ -1512,8 +1594,14 @@ class NonMaxSuppression:
         # tf scores is 1D ([boxes_num])while onnx is 2D ([num_batches, num_classes, boxes_num])
         # onnx output is [num_selected_boxes, 3], the meaning of last dim is [batch_index, class_index, box_index]
         # while tf's output is [num_selected_boxes]
-        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
-        input_score = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
+        if opset < 13:
+            ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
+            input_score = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
+        else:
+            unsqu = GraphBuilder(ctx).make_unsqueeze(
+                {"axes": [0, 1], 'name': name, 'data': node.input[1]},
+                return_node=True)
+            input_score = ctx.insert_node_on_output(unsqu, node.input[1])
         ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnx_pb.TensorProto.INT64)
         # replace original node with nonmaxsurppress + slice + squeeze + cast
         dtypes = [[ctx.get_dtype(output)] for output in node.output]
@@ -1525,7 +1613,11 @@ class NonMaxSuppression:
         new_nonmaxsurppress = ctx.make_node(node.type, node.input[: 5]).output[0]
         slice_op = GraphBuilder(ctx).make_slice({"data": new_nonmaxsurppress,
                                                  "axes": [1], "ends": [3], "starts": [2]})
-        squeeze_op = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
+        if opset < 13:
+            squeeze_op = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
+        else:
+            axes = GraphBuilder(ctx).convert_to_input([1], "const_axes", is_optional=True, dtype=np.int64)
+            squeeze_op = ctx.make_node("Squeeze", [slice_op, axes])
         if len(node.input) > 5:  # v5, called by ..._with_scores(), pad_to_max_output_size always False
             ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
                           outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
@@ -1555,9 +1647,18 @@ class NonMaxSuppression:
                           name=node.name, outputs=node.output, dtypes=dtypes[0], shapes=shapes[0])
 
     @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls.any_version(10, ctx, node, **kwargs)
+
+    @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # no change
-        cls.version_10(ctx, node, **kwargs)
+        cls.any_version(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
 
 
 @tf_op("ReverseSequence")
@@ -1828,7 +1929,7 @@ class Unique:
 @tf_op("Bincount")
 class Bincount:
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         # arr, size are int32
         arr_inp, size_inp, weights_inp = node.input
 
@@ -1850,7 +1951,11 @@ class Bincount:
         valid_values = ctx.make_node("Compress", [values, valid_val_locs], attr={'axis': 0}).output[0]
         valid_counts = ctx.make_node("Compress", [counts, valid_val_locs], attr={'axis': 0}).output[0]
 
-        output_shape = ctx.make_node("Unsqueeze", [size_int64], attr={'axes': [0]}).output[0]
+        if opset < 13:
+            output_shape = ctx.make_node("Unsqueeze", [size_int64], attr={'axes': [0]}).output[0]
+        else:
+            gb = GraphBuilder(ctx)
+            output_shape = gb.make_unsqueeze(attr={'data': [size_int64], 'axes': [0]}).output[0]
 
         false_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
         zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': false_tensor}).output[0]
@@ -1862,6 +1967,15 @@ class Bincount:
 
         ctx.replace_all_inputs(node.output[0], result_cast)
         ctx.remove_node(node.name)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.any_version(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
 
 
 @tf_op("SparseToDense")
@@ -1883,7 +1997,7 @@ class SparseToDense:
 @tf_op("SparseReshape")
 class SparseReshape:
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         indices_inp, shape_inp, new_shape_inp = node.input
 
         product_curr_dims = ctx.make_node("ReduceProd", [shape_inp], attr={'axes': [0], 'keepdims': 1}).output[0]
@@ -1922,7 +2036,11 @@ class SparseReshape:
         cum_prod_new_inc = ctx.make_node("Pad", [cum_prod_new_concat, pads]).output[0]
 
         flat_indices = ctx.make_node("MatMul", [indices_inp, cum_prod_curr_shape]).output[0]
-        indices_unsqueeze = ctx.make_node("Unsqueeze", [flat_indices], attr={'axes': [1]}).output[0]
+        if opset < 13:
+            indices_unsqueeze = ctx.make_node("Unsqueeze", [flat_indices], attr={'axes': [1]}).output[0]
+        else:
+            axes = GraphBuilder(ctx).convert_to_input([1], "const_axes", is_optional=True, dtype=np.int64)
+            indices_unsqueeze = ctx.make_node("Unsqueeze", [flat_indices, axes])
         mod_indices = ctx.make_node("Mod", [indices_unsqueeze, cum_prod_new_inc], op_name_scope=node.name).output[0]
         new_indices = ctx.make_node("Div", [mod_indices, cum_prod_new_shape], op_name_scope=node.name).output[0]
 
@@ -1930,11 +2048,20 @@ class SparseReshape:
         ctx.replace_all_inputs(node.output[1], new_shape)
         ctx.remove_node(node.name)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.any_version(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
+
 
 @tf_op("SparseFillEmptyRows")
 class SparseFillEmptyRows:
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         sparse_indices, sparse_vals, dense_shape, default_val = node.input
         utils.make_sure(len(ctx.find_output_consumers(node.output[3])) == 0,
                         "reverse_index_map output of SparseFillEmptyRows not implemented")
@@ -1954,11 +2081,20 @@ class SparseFillEmptyRows:
                                    op_name_scope=node.name).output[0]
         zero_const = ctx.make_const(utils.make_name("zero_const"), np.array(0, dtype=np.int64)).output[0]
         one_const = ctx.make_const(utils.make_name("one_const"), np.array(1, dtype=np.int64)).output[0]
-        scalar_len = ctx.make_node("Squeeze", [axis_0_len], attr={"axes": [0]}, op_name_scope=node.name).output[0]
+        if opset < 13:
+            scalar_len = ctx.make_node("Squeeze", [axis_0_len], attr={"axes": [0]}, op_name_scope=node.name).output[0]
+        else:
+            axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+            scalar_len = ctx.make_node("Squeeze", [axis_0_len, axes], op_name_scope=node.name).output[0]
         idx_range = ctx.make_node("Range", [zero_const, scalar_len, one_const], op_name_scope=node.name).output[0]
         new_indices = ctx.make_node("Compress", [idx_range, indicators], op_name_scope=node.name).output[0]
-        new_indices_unsqueeze = ctx.make_node("Unsqueeze", [new_indices], attr={"axes": [1]},
-                                              op_name_scope=node.name).output[0]
+        if opset < 13:        
+            new_indices_unsqueeze = ctx.make_node("Unsqueeze", [new_indices], attr={"axes": [1]},
+                                                  op_name_scope=node.name).output[0]
+        else:
+            axes = GraphBuilder(ctx).convert_to_input([1], "const_axes", is_optional=True, dtype=np.int64)
+            new_indices_unsqueeze = ctx.make_node("Unsqueeze", [new_indices, axes],
+                                                  op_name_scope=node.name).output[0]
 
         num_empty_rows = ctx.make_node("Shape", [new_indices], op_name_scope=node.name).output[0]
         new_values = ctx.make_node("Expand", [default_val, num_empty_rows], op_name_scope=node.name).output[0]
@@ -1985,11 +2121,20 @@ class SparseFillEmptyRows:
 
         ctx.remove_node(node.name)
 
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.any_version(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
+
 
 @tf_op("DynamicPartition")
 class DynamicPartition:
     @classmethod
-    def version_9(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         # For desired behavior, see diagram: https://www.tensorflow.org/api_docs/python/tf/raw_ops/DynamicPartition
         data_inp = node.input[0]
         partition_inp = node.input[1]
@@ -2006,18 +2151,31 @@ class DynamicPartition:
         split_node = ctx.make_node("Split", [equal_int32.output[0]], output_count=num_partitions, attr={'axis': 0})
         for i in range(num_partitions):
             cond_bools = ctx.make_node("Cast", [split_node.output[i]], attr={"to": TensorProto.BOOL})
-            squeeze_node = ctx.make_node("Squeeze", [cond_bools.output[0]], attr={'axes': [0]})
+            if opset < 13:
+                squeeze_node = ctx.make_node("Squeeze", [cond_bools.output[0]], attr={'axes': [0]})
+            else:
+                axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+                squeeze_node = ctx.make_node("Squeeze", [cond_bools.output[0], axes])
             compress_node = ctx.make_node("Compress", [data_inp, squeeze_node.output[0]], attr={'axis': 0})
             ctx.replace_all_inputs(node.output[i], compress_node.output[0])
             ctx.copy_dtype(node.output[i], compress_node.output[0])
             ctx.copy_shape(node.output[i], compress_node.output[0])
         ctx.remove_node(node.name)
 
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        cls.any_version(9, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
+
 
 @tf_op(["DynamicStitch", "ParallelDynamicStitch"])
 class DynamicStitch:
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         num_partitions = len(node.input) // 2
         index_inputs = node.input[:num_partitions]
         data_inputs = node.input[num_partitions:]
@@ -2037,8 +2195,12 @@ class DynamicStitch:
         unsqueezed_indices = concat_indices_int64
         if data_rank > 1:
             unsqueeze_axes = list(range(1, data_rank))
-            unsqueezed_indices = ctx.make_node("Unsqueeze", [concat_indices_int64.output[0]],
-                                               attr={'axes': unsqueeze_axes})
+            if opset < 13:
+                unsqueezed_indices = ctx.make_node("Unsqueeze", [concat_indices_int64.output[0]],
+                                                   attr={'axes': unsqueeze_axes})
+            else:
+                axes = GraphBuilder(ctx).convert_to_input(unsqueeze_axes, "const_axes", is_optional=True, dtype=np.int64)
+                unsqueezed_indices = ctx.make_node("Unsqueeze", [concat_indices_int64.output[0], axes])
         expanded_indices = ctx.make_node("Expand", [unsqueezed_indices.output[0], data_shape.output[0]])
 
         zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
@@ -2053,11 +2215,20 @@ class DynamicStitch:
                       outputs=outputs,
                       attr={'axis': 0})
 
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        cls.any_version(10, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
+
 
 @tf_op("MatrixDiagPart")
 class MatrixDiagPart:
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         # MatrixDiagPart by slice and gather
         minus_two_one, minus_two, minus_one, zeo, zeo_zeo, one, two, two_one = \
             [n.output[0] for n in ctx.make_consts([[-2, -1], [-2], [-1], [0], [0, 0], [1], [2], [2, 1]])]
@@ -2081,17 +2252,39 @@ class MatrixDiagPart:
                                                           minus_one])
         sliced_input_shape_new = ctx.make_node('Concat', [sliced_input_shape_half.output[0], one],
                                                attr={'axis': -1})
-        min_matrice_dim_ = ctx.make_node('Squeeze', [min_matrice_dim.output[0]], {'axes': [0]})
+        if opset < 13:
+            min_matrice_dim_ = ctx.make_node('Squeeze', [min_matrice_dim.output[0]], {'axes': [0]})
+        else:
+            axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+            min_matrice_dim_ = ctx.make_node('Squeeze', [min_matrice_dim.output[0], axes])
         matrice_range = ctx.make_node('Range', [zeo_, min_matrice_dim_.output[0], one_])
-        unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0]], attr={"axes": [-1]})
+        if opset < 13:
+            unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0]], attr={"axes": [-1]})
+        else:
+            axes = GraphBuilder(ctx).convert_to_input([-1], "const_axes", is_optional=True, dtype=np.int64)
+            unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0], axes])
         expanded_range = ctx.make_node('Expand', [unsqueezed_matrice_range.output[0], sliced_input_shape_new.output[0]])
         gathered_result = ctx.make_node('GatherElements', [sliced_input.output[0], expanded_range.output[0]],
                                         attr={'axis': -1})
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
-                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        if opset < 13:
+            ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
+                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        else:
+            axes = GraphBuilder(ctx).convert_to_input([-1], "const_axes", is_optional=True, dtype=np.int64)
+            ctx.make_node('Squeeze', [gathered_result.output[0], axes],
+                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.any_version(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
 
 
 @tf_op(["MatrixDiagPartV2", "MatrixDiagPartV3"])
@@ -2182,6 +2375,7 @@ class MatrixDiagPartV2V3:
         pad_length = body_graph.make_node('Sub', [new_depth.output[0], sliced_shape.output[0]])
         pad_length_2 = body_graph.make_node('Concat', [zeo, pad_length.output[0]], attr={'axis': 0})
         padded_range = body_graph.make_node('Pad', [sliced_range.output[0], pad_length_2.output[0]])
+        # opset == 11, no need to change unsqueeze
         unsqueezed_range = body_graph.make_node('Unsqueeze', [padded_range.output[0]], attr={'axes': [1]})
         half_shape_x = body_graph.make_node('Slice',
                                             [new_shape.output[0], zeo, minus_two])
@@ -2313,7 +2507,7 @@ class MatrixDiagPartV2V3:
                                    dtypes=dtypes, branches=branches)
 
     @classmethod
-    def version_12(cls, ctx, node, **kwargs):
+    def any_version_after12(cls, opset, ctx, node, **kwargs):
 
         # assemble MatrixDiagPart V2&V3
         m = node.input[0]
@@ -2464,13 +2658,27 @@ class MatrixDiagPartV2V3:
             if consumer.type == 'Identity':
                 ctx.set_shape(consumer.output[0], shapes)
 
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        cls.any_version_after12(12, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version_after12(13, ctx, node, **kwargs)
+
 
 @tf_op(["MatrixDiag", "MatrixDiagV2", "MatrixDiagV3"])
 class MatrixDiag:
     @classmethod
-    def version_12(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         # Assemble MatrixDiagV3 by ReverseSequence
         argc = len(node.input)
+        
+        if opset >= 13:
+            squeeze_axes0 = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+            squeeze_axes_1 = GraphBuilder(ctx).convert_to_input([-1], "const_axes", is_optional=True, dtype=np.int64)
+            squeeze_axes_2 = GraphBuilder(ctx).convert_to_input([-2], "const_axes", is_optional=True, dtype=np.int64)
 
         minus_two, minus_one, zeo, one, two = \
             [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1], [2]])]
@@ -2495,7 +2703,10 @@ class MatrixDiag:
             diag = node.input[0]
             shape = ctx.get_shape(diag)
             if len(shape) == 1:
-                diag = mknode("Unsqueeze", [diag], attr={"axes": [0]})
+                if opset < 13:
+                    diag = mknode("Unsqueeze", [diag], attr={"axes": [0]})
+                else:
+                    diag = mknode("Unsqueeze", [diag, squeeze_axes0])
                 shape = [1] + shape
                 ctx.set_shape(diag, shape)
 
@@ -2517,7 +2728,10 @@ class MatrixDiag:
             def ex_diag():
                 g = ctx.create_new_graph_with_same_config()
                 g.parent_graph = ctx
-                ex = mknode2(g, "Unsqueeze", [diag], attr={"axes": [-2]})
+                if opset < 13:
+                    ex = mknode2(g, "Unsqueeze", [diag], attr={"axes": [-2]})
+                else:
+                    ex = mknode2(g, "Unsqueeze", [diag, squeeze_axes_2])
                 rank = len(ctx.get_shape(diag)) + 1
                 g.add_graph_output(ex, ctx.get_dtype(node.input[0]), [-1] * rank)
                 return g
@@ -2526,8 +2740,13 @@ class MatrixDiag:
             expand_diag = ctx.make_node("If", [equal], branches=branches)
             return expand_diag.output[0], k, k_min, k_max, k_max_nxt
 
-        def squeeze(name):
+        def squeeze_12(name):
             return ctx.make_node("Squeeze", [name], attr={"axis": -1}).output[0]
+
+        def squeeze_13(name):
+            return ctx.make_node("Squeeze", [name, squeeze_axes_1]).output[0]
+
+        squeeze = squeeze_12 if opset < 13 else squeeze_13
 
         # gather inputs
         diag, k, k_min, k_max, k_max_nxt = processdiag()
@@ -2789,6 +3008,15 @@ class MatrixDiag:
         ctx.remove_node(node.name)
         ctx.make_node("Identity", [padded], name=node.name,
                       outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        cls.any_version(12, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Parameters moved to inputs for operator Squeeze, Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
 
 
 @tf_op("MatrixSetDiagV3")
