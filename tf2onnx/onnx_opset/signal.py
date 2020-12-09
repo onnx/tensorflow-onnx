@@ -211,14 +211,14 @@ class ComplexAbsOp:
             "Add", inputs=[real_part2.output[0], imag_part2.output[0]],
             name=utils.make_name('ComplexAbs_' + node.name))
 
-        if opset == 1:
+        if opset < 13:
             squeezed = ctx.make_node(
                 "Squeeze", inputs=add.output[:1], attr=dict(axes=[0]),
                 name=utils.make_name('ComplexAbs' + node.name))
         else:
             squeezed = ctx.make_node(
                 "Squeeze", inputs=[add.output[0], ind0],
-                name=utils.make_name('ComplexAbsSqr' + node.name))
+                name=utils.make_name('ComplexAbs' + node.name))
 
         last_node = ctx.make_node(
             "Sqrt", inputs=squeezed.output[:1],
@@ -233,4 +233,4 @@ class ComplexAbsOp:
 
     @classmethod
     def version_13(cls, ctx, node, **kwargs):
-        cls.any_version(11, ctx, node, **kwargs)
+        cls.any_version(13, ctx, node, **kwargs)

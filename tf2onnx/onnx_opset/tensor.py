@@ -797,7 +797,7 @@ class StridedSlice:
             squeeze_node0 = GraphBuilder(ctx).make_squeeze(
                 {"axes": needs_squeeze, 'name': name, 'data': node.output[0]},
                 return_node=True)
-            squeeze_node = ctx.insert_new_node_on_output(squeeze_node0)
+            squeeze_node = ctx.insert_node_on_output(squeeze_node0)
             nodes.append(squeeze_node)
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)

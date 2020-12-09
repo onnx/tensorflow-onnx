@@ -19,6 +19,7 @@ from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 from tf2onnx.tf_loader import find_function
+from tf2onnx.graph_builder import GraphBuilder
 
 
 logger = logging.getLogger(__name__)
@@ -286,8 +287,22 @@ class TensorListGetItem:
         ctx.ta_reads.append(node.input[0])
         node.type = "Gather"
         ctx.replace_inputs(node, [node.input[0], node.input[1]])
-        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])
+        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])        
         ctx.insert_new_node_on_output("Squeeze", node.output[0], name=node.child_name(), axes=[0])
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        ctx.ta_reads.append(node.input[0])
+        node.type = "Gather"
+        ctx.replace_inputs(node, [node.input[0], node.input[1]])
+        
+        g = GraphBuilder(ctx)
+
+        usq_node = g.make_unsqueeze({"axes": [0], 'name': node.child_name(), 'data': node.input[1]}, return_node=True)
+        ctx.insert_node_on_output(usq_node)
+
+        sq_node = g.make_squeeze({"axes": [0], 'name': node.child_name(), 'data': node.output[0]}, return_node=True)
+        ctx.insert_node_on_output(sq_node)
 
 
 @tf_op(["TensorListLength"])
