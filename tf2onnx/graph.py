@@ -1269,7 +1269,7 @@ class Graph(object):
         new_output = node.output[0]
 
         to_replace = [self.get_node_by_name(n) for n in self._output_to_consumers[output_name]]
-        to_replace = [n for n in to_replace if n != new_node]
+        to_replace = [n for n in to_replace if n != node]
         self.replace_all_inputs(output_name, new_output, ops=to_replace)
         return node
 
