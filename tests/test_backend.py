@@ -3121,7 +3121,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             res1, res2, res3 = tf.raw_ops.NonMaxSuppressionV5(boxes=boxes, scores=scores, score_threshold=0.1,
                                                               max_output_size=int(box_num / 2), iou_threshold=0.5,
                                                               soft_nms_sigma=0)
-            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1), tf.identity(res3, name=_TFOUTPUT2)
+            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1), \
+                   tf.identity(res3, name=_TFOUTPUT2)
 
         self._run_test_case(func1, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: boxes_val, _INPUT1: scores_val})
 
@@ -3129,7 +3130,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             res1, res2, res3 = tf.raw_ops.NonMaxSuppressionV5(boxes=boxes, scores=scores, score_threshold=0.1,
                                                               max_output_size=2 * box_num, iou_threshold=0.5,
                                                               soft_nms_sigma=0, pad_to_max_output_size=True)
-            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1), tf.identity(res3, name=_TFOUTPUT2)
+            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1), \
+                   tf.identity(res3, name=_TFOUTPUT2)
 
         self._run_test_case(func2, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: boxes_val, _INPUT1: scores_val})
 

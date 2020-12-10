@@ -1527,7 +1527,7 @@ class NonMaxSuppression:
 
         # NonMaxSuppressionV2, NonMaxSuppressionV3 return selected_indices
         # NonMaxSuppressionV4 returns selected_indices, valid_outputs
-        # NonMaxSuppressionV5 returns selected_indices, selected_scores, valid_outputs 
+        # NonMaxSuppressionV5 returns selected_indices, selected_scores, valid_outputs
 
         needs_padding = "pad_to_max_output_size" in node.attr and node.attr["pad_to_max_output_size"].i == 1
         ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
@@ -1583,10 +1583,12 @@ class NonMaxSuppression:
                     zero_tensor = helper.make_tensor("value", dtypes[1], dims=[1], vals=[0])
                     padding = ctx.make_node("ConstantOfShape", inputs=[pad_amt.output[0]], attr={"value": zero_tensor})
                     pad_op = ctx.make_node("Concat", inputs=[gather_op.output[0], padding.output[0]],
-                                           outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1], attr={'axis': 0})
+                                           outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1],
+                                           attr={'axis': 0})
                 else:
                     const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64))
-                    pad_val = ctx.make_node("Concat", inputs=[const_zero.output[0], pad_amt.output[0]], attr={'axis': 0})
+                    pad_val = ctx.make_node("Concat", inputs=[const_zero.output[0], pad_amt.output[0]],
+                                            attr={'axis': 0})
                     pad_op = ctx.make_node("Pad", inputs=[gather_op.output[0], pad_val.output[0]],
                                            outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
             else:
