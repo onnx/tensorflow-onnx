@@ -1513,8 +1513,7 @@ class IsInf:
             raise ValueError("dtype " + str(node_dtype) + " is not supported in onnx for now")
 
 
-@tf_op(["NonMaxSuppressionV2", "NonMaxSuppressionV3", "NonMaxSuppressionV4", "NonMaxSuppressionV5"],
-       onnx_op="NonMaxSuppression")
+@tf_op(["NonMaxSuppressionV2", "NonMaxSuppressionV3", "NonMaxSuppressionV4", "NonMaxSuppressionV5"])
 class NonMaxSuppression:
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
@@ -1525,6 +1524,12 @@ class NonMaxSuppression:
         # tf scores is 1D ([boxes_num])while onnx is 2D ([num_batches, num_classes, boxes_num])
         # onnx output is [num_selected_boxes, 3], the meaning of last dim is [batch_index, class_index, box_index]
         # while tf's output is [num_selected_boxes]
+
+        # NonMaxSuppressionV2, NonMaxSuppressionV3 return selected_indices
+        # NonMaxSuppressionV4 returns selected_indices, valid_outputs
+        # NonMaxSuppressionV5 returns selected_indices, selected_scores, valid_outputs 
+
+        needs_padding = "pad_to_max_output_size" in node.attr and node.attr["pad_to_max_output_size"].i == 1
         ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
         input_score = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
         ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnx_pb.TensorProto.INT64)
@@ -1535,37 +1540,63 @@ class NonMaxSuppression:
         utils.make_sure(len(node.inputs) <= 5 or int(node.inputs[5].get_tensor_value(False)) == 0,
                         "soft_nms_sigma must be 0")
         ctx.remove_node(node.name)
-        new_nonmaxsurppress = ctx.make_node(node.type, node.input[: 5]).output[0]
+        new_nonmaxsurppress = ctx.make_node("NonMaxSuppression", node.input[: 5]).output[0]
         slice_op = GraphBuilder(ctx).make_slice({"data": new_nonmaxsurppress,
                                                  "axes": [1], "ends": [3], "starts": [2]})
-        squeeze_op = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
-        if len(node.input) > 5:  # v5, called by ..._with_scores(), pad_to_max_output_size always False
-            ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
-                          outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
-            ctx.make_node("Gather", inputs=[input_score.input[0], squeeze_op.output[0]],
-                          outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
-        elif "pad_to_max_output_size" in node.attr:  # V4
-            shape_op = ctx.make_node("Shape", inputs=[squeeze_op.output[0]])
+        nms_output = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
+        original_nms_output = nms_output
+        if node.type in ["NonMaxSuppressionV4", "NonMaxSuppressionV5"]:
+            # add valid_outputs count
+            output_idx = 2 if node.type in ["NonMaxSuppressionV5"] else 1
+            shape_op = ctx.make_node("Shape", inputs=[nms_output.output[0]])
+            reduce_op = ctx.make_node("ReduceSum", inputs=shape_op.output, attr={"axes": [0], "keepdims": 0})
+            ctx.make_node("Cast", inputs=[reduce_op.output[0]], attr={"to": onnx_pb.TensorProto.INT32},
+                          outputs=[node.output[output_idx]], dtypes=dtypes[output_idx], shapes=shapes[output_idx],
+                          op_name_scope=node.name)
+
+        pad_amt = None
+        if needs_padding:
+            # pad_amt might be shared between selected_indices, selected_scores
             sub_op = ctx.make_node("Sub", inputs=[max_output_size, shape_op.output[0]])
             raw_pad_float = ctx.make_node("Cast", inputs=[sub_op.output[0]], attr={"to": onnx_pb.TensorProto.FLOAT})
             relu_op = ctx.make_node("Relu", inputs=[raw_pad_float.output[0]])
             pad_amt = ctx.make_node("Cast", inputs=[relu_op.output[0]], attr={"to": onnx_pb.TensorProto.INT64})
+            #
+            # pad selected_indices
+            #
             if ctx.opset <= 10:  # Dynamic padding not supported before opset 11
                 zero_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[0])
                 padding = ctx.make_node("ConstantOfShape", inputs=[pad_amt.output[0]], attr={"value": zero_tensor})
-                pad_op = ctx.make_node("Concat", inputs=[squeeze_op.output[0], padding.output[0]], attr={'axis': 0})
+                pad_op = ctx.make_node("Concat", inputs=[nms_output.output[0], padding.output[0]], attr={'axis': 0})
             else:
                 const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64))
                 pad_val = ctx.make_node("Concat", inputs=[const_zero.output[0], pad_amt.output[0]], attr={'axis': 0})
-                pad_op = ctx.make_node("Pad", inputs=[squeeze_op.output[0], pad_val.output[0]])
-            ctx.make_node("Cast", inputs=pad_op.output, name="cast_A", attr={"to": onnx_pb.TensorProto.INT32},
-                          outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0], op_name_scope=node.name)
-            reduce_op = ctx.make_node("ReduceSum", inputs=shape_op.output, attr={"axes": [0], "keepdims": 0})
-            ctx.make_node("Cast", inputs=[reduce_op.output[0]], name="cast_B", attr={"to": onnx_pb.TensorProto.INT32},
-                          outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1], op_name_scope=node.name)
-        else:
-            ctx.make_node("Cast", inputs=squeeze_op.output, attr={"to": onnx_pb.TensorProto.INT32},
-                          name=node.name, outputs=node.output, dtypes=dtypes[0], shapes=shapes[0])
+                pad_op = ctx.make_node("Pad", inputs=[nms_output.output[0], pad_val.output[0]])
+            nms_output = pad_op
+
+        if node.type in ["NonMaxSuppressionV5"]:
+            if needs_padding:
+                # add selected_scores with padding
+                gather_op = ctx.make_node("Gather", inputs=[input_score.input[0], original_nms_output.output[0]],
+                                          dtypes=dtypes[1], shapes=shapes[1])
+                if ctx.opset <= 10:  # Dynamic padding not supported before opset 11
+                    zero_tensor = helper.make_tensor("value", dtypes[1], dims=[1], vals=[0])
+                    padding = ctx.make_node("ConstantOfShape", inputs=[pad_amt.output[0]], attr={"value": zero_tensor})
+                    pad_op = ctx.make_node("Concat", inputs=[gather_op.output[0], padding.output[0]],
+                                           outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1], attr={'axis': 0})
+                else:
+                    const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64))
+                    pad_val = ctx.make_node("Concat", inputs=[const_zero.output[0], pad_amt.output[0]], attr={'axis': 0})
+                    pad_op = ctx.make_node("Pad", inputs=[gather_op.output[0], pad_val.output[0]],
+                                           outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
+            else:
+                # add selected_scores without padding
+                ctx.make_node("Gather", inputs=[input_score.input[0], nms_output.output[0]],
+                            outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
+
+        # cast selected_indices back to int32
+        ctx.make_node("Cast", inputs=nms_output.output, attr={"to": onnx_pb.TensorProto.INT32},
+                        outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
