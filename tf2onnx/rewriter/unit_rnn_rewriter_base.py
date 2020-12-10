@@ -14,6 +14,7 @@ from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_pattern, \
     get_rnn_scope_name, parse_rnn_loop, seq_len_pattern0, seq_len_pattern1
 from tf2onnx.utils import is_tf_select_op, is_tf_tensor_array_write_op
 from tf2onnx.graph_matcher import GraphMatcher
+from tf2onnx.graph_builder import GraphBuilder
 
 
 logger = logging.getLogger(__name__)
