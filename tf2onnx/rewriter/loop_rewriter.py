@@ -18,6 +18,7 @@ import numpy as np
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 

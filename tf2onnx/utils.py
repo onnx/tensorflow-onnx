@@ -14,6 +14,7 @@ import re
 import shutil
 import tempfile
 import zipfile
+import logging
 
 import requests
 from requests.adapters import HTTPAdapter

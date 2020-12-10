@@ -513,8 +513,8 @@ def tf_reload_graph(tf_graph):
     # invoke c api if tf version is below 1.8
     if get_tf_version() < LooseVersion("1.8"):
         logger.debug(
-            "On TF < 1.8, graph is constructed by python API, " \
-            "which doesn't invoke shape inference, please set " \
+            "On TF < 1.8, graph is constructed by python API, "
+            "which doesn't invoke shape inference, please set "
             "TF_C_API_GRAPH_CONSTRUCTION=1 to enable it"
         )
 

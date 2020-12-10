@@ -241,7 +241,7 @@ def _merge_shapes_for_tf(shape1, shape2):
         d = d1
         if d1 is None:
             d = d2
-        elif not d2 is None:
+        elif d2 is not None:
             # None means unknown in tensorflow
             d = None
         merged.append(d)

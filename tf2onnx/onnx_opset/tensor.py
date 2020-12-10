@@ -1029,7 +1029,7 @@ class Cast:
         # DstT y = Cast(SrcT x, @type SrcT, @type DstT)
         # T2 output = Cast(T1 input, @STRING to)
         dst = node.get_attr("to")
-        dst = tf2onnx.utils.ONNX_DTYPE_NAMES[dst]
+        dst = utils.ONNX_DTYPE_NAMES[dst]
         node.set_attr("to", dst)
 
     @classmethod
@@ -2012,6 +2012,7 @@ class SparseReshape:
         new_shape = ctx.make_node("Where", [unknown_dim_loc, pos_missing_dims, new_shape_inp]).output[0]
 
         zero_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
+
         def cum_prod_of_vector(vector):
             shape = ctx.get_shape(vector)
             rank = shape[0] if shape is not None else -1

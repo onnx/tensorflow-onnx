@@ -622,7 +622,7 @@ def inline_subgraph(parent, g, scope, binding):
         parent.set_dtype(name, g.get_dtype(name))
         parent.set_shape(name, g.get_shape(name))
 
-    return  g.outputs
+    return g.outputs
 
 
 def parameter_binding(g, inputs, state_vars=None):
