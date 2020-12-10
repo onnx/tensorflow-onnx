@@ -1594,11 +1594,11 @@ class NonMaxSuppression:
             else:
                 # add selected_scores without padding
                 ctx.make_node("Gather", inputs=[input_score.input[0], nms_output.output[0]],
-                            outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
+                              outputs=[node.output[1]], dtypes=dtypes[1], shapes=shapes[1])
 
         # cast selected_indices back to int32
         ctx.make_node("Cast", inputs=nms_output.output, attr={"to": onnx_pb.TensorProto.INT32},
-                        outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
+                      outputs=[node.output[0]], dtypes=dtypes[0], shapes=shapes[0])
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
