@@ -199,7 +199,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_expand_dims_with_list(self):
         x_val = make_xval([3, 4])
         def func(x):
-            op = tf.expand_dims(x, [0])
+            op = tf.expand_dims(x, [[0]])
             return tf.identity(op, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -213,6 +213,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_expand_dims_more_unknown_rank(self):
         for i in [-1, 0, 1, -2]:
             self._test_expand_dims_more_unknown_rank(i)
+
+    @check_opset_min_version(13, "Unsqueeze")
+    def test_expand_dims_nonconst_dims(self):
+        x_val = make_xval([3, 4])
+        y_val = np.array([-1], dtype=np.int32)
+        def func(x, y):
+            op = tf.expand_dims(x, y)
+            return tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(9, "ConstantOfShape")
     def test_eye_non_const1(self):
