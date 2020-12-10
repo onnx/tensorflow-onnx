@@ -73,7 +73,7 @@ class StaticRegexReplace:
 @tf_op("StringJoin", domain=constants.CONTRIB_OPS_DOMAIN)
 class StringJoin:
     @classmethod
-    def any_verion(cls, opset, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         node.domain = constants.CONTRIB_OPS_DOMAIN
         separator = node.get_attr_value("separator")
         if separator is None:

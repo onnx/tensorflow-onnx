@@ -1212,14 +1212,14 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
         indices_name = indices_cast.output[0]
     indices_size = ctx.make_node("Size", [indices_name])
     gb = GraphBuilder(ctx)
-    indices_unsqueeze = gb.make_unsqueeze({'data': [indices_name], "axes": [1]})
+    indices_unsqueeze = gb.make_unsqueeze({'data': indices_name, "axes": [1]})
     zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, dtype=np.int64))
     one_const = ctx.make_const(utils.make_name("one"), np.array(1, dtype=np.int64))
     id_name = utils.make_name("sparse_softmax_id")
     id_output = utils.port_name(id_name)
     controlflow.make_range(ctx, zero_const.output[0], indices_size.output[0], one_const.output[0],
                            id_output, id_name, shape=[-1], dtype=TensorProto.INT64)
-    id_unsqueeze = gb.make_unsqueeze({'data': [id_output], "axes": [1]})
+    id_unsqueeze = gb.make_unsqueeze({'data': id_output, "axes": [1]})
     indices_with_id = ctx.make_node("Concat",
                                     [id_unsqueeze.output[0], indices_unsqueeze.output[0]],
                                     attr={"axis": 1})
@@ -1236,7 +1236,7 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
     dtypes = node.output_dtypes
     ctx.remove_node(node.name)
     gb = GraphBuilder(ctx)
-    gb.make_squeeze({'data': [mul2.output[0]], 'outputs': [node.output[0]], "axes": [1]},
+    gb.make_squeeze({'data': mul2.output[0], 'outputs': [node.output[0]], "axes": [1]},
                     shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 

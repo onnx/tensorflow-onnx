@@ -463,7 +463,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
     index_i = g.make_node("Gather", [index.output[0], trip_name], attr={"axis": 0})
     gather = g.make_node("Gather", [cur_name, index_i.output[0]], attr={"axis": 0})
     GraphBuilder(g).make_squeeze(
-        {'data': [gather.output[0]], "axes": [0], 'outputs': [result_name]})
+        {'data': gather.output[0], "axes": [0], 'outputs': [result_name]})
     g.make_node("Identity", [cond_name], outputs=[cond_out_name])
 
     g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
@@ -1956,7 +1956,7 @@ class Bincount:
             output_shape = ctx.make_node("Unsqueeze", [size_int64], attr={'axes': [0]}).output[0]
         else:
             gb = GraphBuilder(ctx)
-            output_shape = gb.make_unsqueeze({'data': [size_int64], 'axes': [0]}).output[0]
+            output_shape = gb.make_unsqueeze({'data': size_int64, 'axes': [0]}).output[0]
 
         false_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
         zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': false_tensor}).output[0]

@@ -242,7 +242,7 @@ class CudnnRNN:
                           outputs=[name('Y' + suffix), name('YH' + suffix)],
                           attr={'direction': 'forward', 'hidden_size': num_units})
             xnf = name(x + suffix)
-            builder.make_squeeze({'inputs': [name('Y' + suffix)], 'outputs': [xnf], 'axes': [1]})
+            builder.make_squeeze({'data': name('Y' + suffix), 'outputs': [xnf], 'axes': [1]})
             if num_dirs == 2:
                 suffix = '_' + str(i * 2 + 1)
                 ctx.make_node('GRU',
@@ -250,7 +250,7 @@ class CudnnRNN:
                               outputs=[name('Y' + suffix), name('YH' + suffix)],
                               attr={'direction': 'reverse', 'hidden_size': num_units})
                 xnb = name(x + suffix)
-                builder.make_squeeze({'inputs': [name('Y' + suffix)], 'outputs': [xnb], 'axes': [1]})
+                builder.make_squeeze({'data': name('Y' + suffix), 'outputs': [xnb], 'axes': [1]})
         ctx.remove_node(node.name)
         if num_dirs == 2:
             ctx.make_node('Concat', [xnf, xnb], outputs=[node.output[0]], attr={'axis': -1})
