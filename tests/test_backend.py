@@ -199,7 +199,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_expand_dims_with_list(self):
         x_val = make_xval([3, 4])
         def func(x):
-            op = tf.expand_dims(x, [[0]])
+            op = tf.expand_dims(x, [0])
             return tf.identity(op, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -213,15 +213,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_expand_dims_more_unknown_rank(self):
         for i in [-1, 0, 1, -2]:
             self._test_expand_dims_more_unknown_rank(i)
-
-    @check_opset_min_version(13, "Unsqueeze")
-    def test_expand_dims_nonconst_dims(self):
-        x_val = make_xval([3, 4])
-        y_val = np.array([-1], dtype=np.int32)
-        def func(x, y):
-            op = tf.expand_dims(x, y)
-            return tf.identity(op, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(9, "ConstantOfShape")
     def test_eye_non_const1(self):
@@ -3065,6 +3056,85 @@ class BackendTests(Tf2OnnxBackendTestBase):
                     return tf.identity(x_, name=_TFOUTPUT)
                 self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("2.3")
+    @check_opset_min_version(10, "NonMaxSuppression")
+    def test_non_max_suppression_v2(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+
+        def func(boxes, scores):
+            res1 = tf.raw_ops.NonMaxSuppressionV2(boxes=boxes, scores=scores,
+                                                  max_output_size=int(box_num / 2), iou_threshold=0.5)
+            res2 = tf.raw_ops.NonMaxSuppressionV2(boxes=boxes, scores=scores,
+                                                  max_output_size=0, iou_threshold=0.5)
+            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1)
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+    @check_tf_min_version("2.3")
+    @check_opset_min_version(10, "NonMaxSuppression")
+    def test_non_max_suppression_v3(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+
+        def func(boxes, scores):
+            res1 = tf.raw_ops.NonMaxSuppressionV3(boxes=boxes, scores=scores, score_threshold=0.1,
+                                                  max_output_size=int(box_num / 2), iou_threshold=0.5)
+            res2 = tf.raw_ops.NonMaxSuppressionV3(boxes=boxes, scores=scores, score_threshold=0.1,
+                                                  max_output_size=0, iou_threshold=0.5)
+            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1)
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+    @check_tf_min_version("2.3")
+    @check_opset_min_version(10, "NonMaxSuppression")
+    def test_non_max_suppression_v4(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+
+        def func1(boxes, scores):
+            res1, res2 = tf.raw_ops.NonMaxSuppressionV4(boxes=boxes, scores=scores, score_threshold=0.1,
+                                                        max_output_size=int(box_num / 2), iou_threshold=0.5)
+            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1)
+
+        self._run_test_case(func1, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+        def func2(boxes, scores):
+            res1, res2 = tf.raw_ops.NonMaxSuppressionV4(boxes=boxes, scores=scores, score_threshold=0.1,
+                                                        max_output_size=2 * box_num, iou_threshold=0.5,
+                                                        pad_to_max_output_size=True)
+            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1)
+
+        self._run_test_case(func2, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+    @check_tf_min_version("2.3")
+    @check_opset_min_version(10, "NonMaxSuppression")
+    def test_non_max_suppression_v5(self):
+        box_num = 10
+        boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
+        scores_val = np.random.random_sample([box_num]).astype(np.float32)
+
+        def func1(boxes, scores):
+            res1, res2, res3 = tf.raw_ops.NonMaxSuppressionV5(boxes=boxes, scores=scores, score_threshold=0.1,
+                                                              max_output_size=int(box_num / 2), iou_threshold=0.5,
+                                                              soft_nms_sigma=0)
+            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1), \
+                   tf.identity(res3, name=_TFOUTPUT2)
+
+        self._run_test_case(func1, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+        def func2(boxes, scores):
+            res1, res2, res3 = tf.raw_ops.NonMaxSuppressionV5(boxes=boxes, scores=scores, score_threshold=0.1,
+                                                              max_output_size=2 * box_num, iou_threshold=0.5,
+                                                              soft_nms_sigma=0, pad_to_max_output_size=True)
+            return tf.identity(res1, name=_TFOUTPUT), tf.identity(res2, name=_TFOUTPUT1), \
+                   tf.identity(res3, name=_TFOUTPUT2)
+
+        self._run_test_case(func2, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: boxes_val, _INPUT1: scores_val})
+
     @check_opset_min_version(10, "NonMaxSuppression")
     def test_non_max_suppression(self):
         box_num = 10
@@ -3078,7 +3148,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
-    @check_opset_min_version(10, "NonMaxSuppressionV4")
+    @check_opset_min_version(10, "NonMaxSuppression")
     def test_non_max_suppression_v4(self):
         box_num = 10
         boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
@@ -3091,7 +3161,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
-    @check_opset_min_version(10, "NonMaxSuppressionV4")
+    @check_opset_min_version(10, "NonMaxSuppression")
     def test_non_max_suppression_v4_no_padding(self):
         box_num = 10
         boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
@@ -3105,7 +3175,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
     @check_tf_min_version("1.15")
-    @check_opset_min_version(10, "NonMaxSuppressionV5")
+    @check_opset_min_version(10, "NonMaxSuppression")
     def test_non_max_suppression_v5(self):
         box_num = 10
         boxes_val = np.random.random_sample([box_num, 4]).astype(np.float32)
