@@ -287,7 +287,7 @@ class TensorListGetItem:
         ctx.ta_reads.append(node.input[0])
         node.type = "Gather"
         ctx.replace_inputs(node, [node.input[0], node.input[1]])
-        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])        
+        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])
         ctx.insert_new_node_on_output("Squeeze", node.output[0], name=node.child_name(), axes=[0])
 
     @classmethod

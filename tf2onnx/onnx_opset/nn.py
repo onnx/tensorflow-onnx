@@ -1190,7 +1190,7 @@ def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
     shapes = tf_ori_node.output_shapes
     dtypes = tf_ori_node.output_dtypes
     ctx.remove_node(tf_ori_node.name)
-    GraphBuilder(ctx).make_squeeze(attr={'axes': [1], 'data': mul2.output[0], 'outputs': [tf_ori_node.output[0]]},
+    GraphBuilder(ctx).make_squeeze({'axes': [1], 'data': mul2.output[0], 'outputs': [tf_ori_node.output[0]]},
                                    shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
@@ -1211,8 +1211,8 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
         indices_cast = ctx.make_node("Cast", [indices_name], attr={"to": TensorProto.INT64})
         indices_name = indices_cast.output[0]
     indices_size = ctx.make_node("Size", [indices_name])
-    gb = GraphBuilder(ctx)    
-    indices_unsqueeze = gb.make_unsqueeze(attr={'data': [indices_name], "axes": [1]})
+    gb = GraphBuilder(ctx)
+    indices_unsqueeze = gb.make_unsqueeze({'data': [indices_name], "axes": [1]})
     zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, dtype=np.int64))
     one_const = ctx.make_const(utils.make_name("one"), np.array(1, dtype=np.int64))
     id_name = utils.make_name("sparse_softmax_id")
@@ -1236,8 +1236,8 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
     dtypes = node.output_dtypes
     ctx.remove_node(node.name)
     gb = GraphBuilder(ctx)
-    gb.make_squeeze(attr={'data': [mul2.output[0]], 'outputs': [node.output[0]],
-                          "axes": [1]}, shapes=[shapes[0]], dtypes=[dtypes[0]])
+    gb.make_squeeze({'data': [mul2.output[0]], 'outputs': [node.output[0]], "axes": [1]},
+                    shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 @tf_op("SoftmaxCrossEntropyWithLogits")

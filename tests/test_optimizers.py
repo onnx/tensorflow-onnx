@@ -344,7 +344,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
 
         graph = helper.make_graph(
-            [node1, node2],
+            [node1, node2, axes],
             "transpose_with_squeeze",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
             [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (4, 5, 3))],
@@ -381,7 +381,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
 
         graph = helper.make_graph(
-            [node1, node2],
+            [node1, node2, axes],
             "transpose_with_squeeze",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 4, 1, 5))],
             [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 5, 4))],
@@ -417,7 +417,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
 
         graph = helper.make_graph(
-            [node1, node2],
+            [node1, node2, axes],
             "transpose_with_squeeze",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 1, 4, 5))],
             [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 4, 5))],
@@ -452,7 +452,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
 
         graph = helper.make_graph(
-            [node1, node2],
+            [node1, node2, axes],
             "transpose_with_squeeze",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 1, 1, 5))],
             [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 5))],
@@ -1199,7 +1199,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node3 = helper.make_node("Add", ["value1", "X"], ["res"])
 
         graph = helper.make_graph(
-            [node1, node2, node3],
+            [node1, node2, node3, axes],
             "test_const_fold_unsqueeze_with_const",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1,))],
             [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 6, 1, 1, 6))],

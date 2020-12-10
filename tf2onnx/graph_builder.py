@@ -159,7 +159,7 @@ class GraphBuilder(object):
             return node
         return node.output[0]
 
-    def make_unsqueeze(self, kwargs, name=None, shapes=None, dtypes=None):
+    def make_unsqueeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False):
         """
         Unsqueeze changes its schema at opset 13: it treats axes as a dynamic input
         kwargs: key could be ["data", "axes"].
@@ -193,8 +193,11 @@ class GraphBuilder(object):
         while inputs[-1] == utils.ONNX_EMPTY_INPUT:
             inputs = inputs[:-1]
 
-        return self.graph.make_node(op_type="Unsqueeze", inputs=inputs, attr=attr, name=name,
-                                    outputs=outputs, shapes=shapes, dtypes=dtypes).output[0]
+        node = self.graph.make_node(op_type="Unsqueeze", inputs=inputs, attr=attr, name=name,
+                                    outputs=outputs, shapes=shapes, dtypes=dtypes)
+        if return_node:
+            return node
+        return node.output[0]
 
     def convert_to_input(self, tensor, const_name, is_optional=False, dtype=None):
         """in ONNX, input shold come from node, so it must be a string"""
