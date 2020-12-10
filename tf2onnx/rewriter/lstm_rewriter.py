@@ -305,7 +305,7 @@ class LSTMRewriter(LSTMRewriterBase):
         attr = {"axes": [1], "starts": [0], "ends": [hidden_size]}
         inputs_map = {"data": input_id, **attr}
         slice_node1 = GraphBuilder(self.g).make_slice(inputs_map)
-        unsqueeze_node_1 = gb.make_unsqueeze(attr={'data': [slice_node1], "axes": [0]})
+        unsqueeze_node_1 = gb.make_unsqueeze({'data': [slice_node1], "axes": [0]})
 
         attr = {"axes": [1], "starts": [hidden_size], "ends": [hidden_size * 2]}
         inputs_map = {"data": input_id, **attr}

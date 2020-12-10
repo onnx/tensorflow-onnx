@@ -947,7 +947,7 @@ class CropAndResize:
                                    outputs=node.output, branches=branches)
 
     @classmethod
-    def version_11(cls, opset, ctx, node, **kwargs):
+    def version_11(cls, ctx, node, **kwargs):
         cls.any_version_after11(11, ctx, node, **kwargs)
 
     @classmethod

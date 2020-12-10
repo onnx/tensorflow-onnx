@@ -444,11 +444,11 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 1, 1, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
-    @check_opset_min_version(12, "Squeeze/Unsqueeze changed in opset 13")
+    @check_opset_min_version(13, "Squeeze/Unsqueeze changed in opset 13")
     def test_transpose_with_squeeze4_13(self):
         # squeeze the two dims
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
-        axes = self._make_onnx_const(np.array([1], dtype=np.int64), "axes")
+        axes = self._make_onnx_const(np.array([1, 3], dtype=np.int64), "axes")
         node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
 
         graph = helper.make_graph(

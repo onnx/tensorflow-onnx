@@ -399,16 +399,16 @@ class Roll:
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
-        cls.any_version(ctx, 10, node, **kwargs)
+        cls.any_version(10, ctx, node, **kwargs)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        cls.any_version(ctx, 11, node, **kwargs)
+        cls.any_version(11, ctx, node, **kwargs)
 
     @classmethod
     def version_13(cls, ctx, node, **kwargs):
         # Parameters moved to inputs for operator Squeeze, Unsqueeze.
-        cls.any_version(ctx, 13, node, **kwargs)
+        cls.any_version(13, ctx, node, **kwargs)
 
 
 @tf_op("Gather")
@@ -1221,7 +1221,7 @@ class OneHot:
             ctx.copy_shape(node.output[0], transpose_node.output[0])
 
     @classmethod
-    def any_version_after9(cls, ctx, node, **kwargs):
+    def any_version_after9(cls, opset, ctx, node, **kwargs):
         # T output = OneHot(uint8/int32/int64 input, T depth, T on-value, T off-value, @int axis, @dtype)
         # tf requires that dtype is same as on-value's and off-value's dtype
         # in ONNX, op's schema is (input, depth, value, @int axis), meaning of "value" is [off-value, on-value]
