@@ -8,6 +8,7 @@ from onnx.onnx_pb import TensorProto
 from tf2onnx import constants, handler
 from tf2onnx.handler import tf_op
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class StaticRegexReplace:
 @tf_op("StringJoin", domain=constants.CONTRIB_OPS_DOMAIN)
 class StringJoin:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def any_verion(cls, opset, ctx, node, **kwargs):
         node.domain = constants.CONTRIB_OPS_DOMAIN
         separator = node.get_attr_value("separator")
         if separator is None:
@@ -98,6 +99,15 @@ class StringJoin:
             unsqueezes.append(unsqueeze_node.output[0])
         stack_node = ctx.make_node("Concat", unsqueezes, attr={'axis': 0})
         ctx.replace_inputs(node, [stack_node.output[0], separator_node.output[0], axis_node.output[0]])
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        cls.any_version(1, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cls.any_version(13, ctx, node, **kwargs)
+
 
 @tf_op(["Equal", "NotEqual"], domain=constants.CONTRIB_OPS_DOMAIN)
 class StringEqual:

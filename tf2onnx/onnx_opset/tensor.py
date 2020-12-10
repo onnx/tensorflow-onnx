@@ -1239,7 +1239,7 @@ class OneHot:
             depth = ctx.make_node("Unsqueeze", [depth], attr={"axes": [0]}).output[0]
         else:
             node_axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            depth = ctx.make_node("Unsqueeze", [depth, axes]).output[0]
+            depth = ctx.make_node("Unsqueeze", [depth, node_axes]).output[0]
 
         on_value = node.input[2]
         off_value = node.input[3]
@@ -1600,7 +1600,7 @@ class NonMaxSuppression:
             input_score = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
         else:
             unsqu = GraphBuilder(ctx).make_unsqueeze(
-                {"axes": [0, 1], 'name': name, 'data': node.input[1]},
+                {"axes": [0, 1], 'data': node.input[1]},
                 return_node=True)
             input_score = ctx.insert_node_on_output(unsqu, node.input[1])
         ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnx_pb.TensorProto.INT64)
@@ -1769,8 +1769,8 @@ class ReverseV2:
         axes_node = node.inputs[1]
         axes = axes_node.get_tensor_value(as_list=False)
         # Current support is for when axis is a 1D tensor.
-        utils.make_sure(len(axes.shape) == 1 \
-                        , "Currently no support for reverseV2 tensor axis")
+        utils.make_sure(len(axes.shape) == 1,
+                        "Currently no support for reverseV2 tensor axis")
 
         axes = axes.tolist()
         len_axes = len(axes)

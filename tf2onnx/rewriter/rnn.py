@@ -43,7 +43,7 @@ def rewrite_bi_direction_gru(g, ops):
 
 
 def rewrite_custom_rnn_cell(g, ops):
-    return  CustomRnnRewriter(g).run()
+    return CustomRnnRewriter(g).run()
 
 
 def rewrite_generic_loop(g, ops):

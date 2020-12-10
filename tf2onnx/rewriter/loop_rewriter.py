@@ -128,7 +128,7 @@ class LoopRewriter(LoopRewriterBase):
             body_graphs = node.graph.contained_graphs.pop(node.name, None)
             if body_graphs:
                 for attr_name, body_graph in body_graphs.items():
-                    body_graph.parent_graph = g
+                    body_graph.parent_graph = self.g
                     new_node.set_body_graph_as_attr(attr_name, body_graph)
             copied_nodes.append(new_node)
 
