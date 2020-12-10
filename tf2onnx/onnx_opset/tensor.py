@@ -1956,7 +1956,7 @@ class Bincount:
             output_shape = ctx.make_node("Unsqueeze", [size_int64], attr={'axes': [0]}).output[0]
         else:
             gb = GraphBuilder(ctx)
-            output_shape = gb.make_unsqueeze({'data': size_int64, 'axes': [0]}).output[0]
+            output_shape = gb.make_unsqueeze({'data': size_int64, 'axes': [0]})
 
         false_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
         zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': false_tensor}).output[0]

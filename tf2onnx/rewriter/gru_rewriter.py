@@ -254,5 +254,6 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         gru_state_shape = self.g.get_shape(output_id)
         output_shape = [gru_state_shape[1], gru_state_shape[2]]
         squeeze_node = GraphBuilder(self.g).make_squeeze(
-            {'data': output_id, "axes": [0]}, shapes=[output_shape], dtypes=[self.g.get_dtype(output_id)])
+            {'data': output_id, "axes": [0]}, shapes=[output_shape],
+            dtypes=[self.g.get_dtype(output_id)], return_node=True)
         self.g.replace_all_inputs(exit_output_id, squeeze_node.output[0])  # ops=self.g.get_nodes()

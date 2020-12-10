@@ -84,9 +84,9 @@ class LoopRewriter(LoopRewriterBase):
             for input_ta in loop_props.tensor_array_inputs:
                 # Loop does not have scan inputs, so we use Gather to get data for each iteration.
                 gb = GraphBuilder(loop_body_g)
-                index_node = gb.make_unsqueeze({'data': input_ta.index_input_id, "axes": [0]})
+                index_node = gb.make_unsqueeze({'data': input_ta.index_input_id, "axes": [0]}, return_node=True)
                 gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, index_node.output[0]])
-                data_node = gb.make_squeeze({'data': gather_node.output[0], "axes": [0]})
+                data_node = gb.make_squeeze({'data': gather_node.output[0], "axes": [0]}, return_node=True)
                 loop_body_g.replace_all_inputs(input_ta.consumer.id, data_node.output[0])  # ops=loop_body_g.get_nodes()
 
             ## create Loop node
