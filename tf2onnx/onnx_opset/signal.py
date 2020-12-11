@@ -16,6 +16,7 @@ from onnx import onnx_pb
 from onnx.numpy_helper import to_array
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -211,14 +212,8 @@ class ComplexAbsOp:
             "Add", inputs=[real_part2.output[0], imag_part2.output[0]],
             name=utils.make_name('ComplexAbs_' + node.name))
 
-        if opset < 13:
-            squeezed = ctx.make_node(
-                "Squeeze", inputs=add.output[:1], attr=dict(axes=[0]),
-                name=utils.make_name('ComplexAbs' + node.name))
-        else:
-            squeezed = ctx.make_node(
-                "Squeeze", inputs=[add.output[0], ind0],
-                name=utils.make_name('ComplexAbs' + node.name))
+        squeezed = GraphBuilder(ctx).make_squeeze(
+            {'data': add.output[0], 'axes': [0]}, name=utils.make_name('ComplexAbs' + node.name))
 
         last_node = ctx.make_node(
             "Sqrt", inputs=squeezed.output[:1],
