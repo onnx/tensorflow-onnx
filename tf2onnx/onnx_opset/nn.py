@@ -931,11 +931,7 @@ class CropAndResize:
                                 attr={"mode": mode, "extrapolation_value": extrapolation_value,
                                       "coordinate_transformation_mode": "tf_crop_and_resize"})
         recovered_x = g.make_node("Transpose", [resized_x.output[0]], attr={'perm': constants.NCHW_TO_NHWC})
-        if opset < 13:
-            squeeze_x = g.make_node("Squeeze", inputs=[recovered_x.output[0]], attr={"axes": [0]})
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            squeeze_x = g.make_node("Squeeze", inputs=[recovered_x.output[0], axes])
+        squeeze_x = GraphBuilder(ctx).make_squeeze({'data': recovered_x.output[0], 'axes': [0]}, return_node=True)
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
@@ -1145,11 +1141,8 @@ class MatrixBandPart:
         loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init],
                                   output_count=2, branches=branches)
         # convert generated mask matrix from bool to right shape and data type
-        if opset < 13:
-            squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([squeeze_axis], "const_axes", is_optional=True, dtype=np.int64)
-            squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1], axes])
+        squeeze = GraphBuilder(ctx).make_squeeze(
+            {'data': loop_node.output[1], 'axes': [squeeze_axis]}, return_node=True)
         cast1 = ctx.make_node(op_type="Cast", inputs=squeeze.output, attr={"to": onnx_pb.TensorProto.FLOAT})
         if axis == 1:
             mask_matrix = ctx.make_node(op_type="Transpose", inputs=cast1.output)

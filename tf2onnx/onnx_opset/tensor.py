@@ -859,7 +859,8 @@ class StridedSlice:
                     unqueeze_at.append(bit)
                     begin_mask |= 1 << bit
                     end_mask |= 1 << bit
-            input_x = gb.make_unsqueeze({'data': input_x.output[0], 'axes': unqueeze_at}, return_node=True)
+            input_x = GraphBulder(ctx).make_unsqueeze(
+                {'data': input_x.output[0], 'axes': unqueeze_at}, return_node=True)
 
         param_shape = ctx.get_shape(node.input[1]) or \
                       ctx.get_shape(node.input[2]) or \
@@ -1601,8 +1602,8 @@ class NonMaxSuppression:
             input_score = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
         else:
             gb = GraphBuilder(ctx)
-            axes0 = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            axes01 = GraphBuilder(ctx).convert_to_input([0, 1], "const_axes", is_optional=True, dtype=np.int64)
+            axes0 = gb.convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+            axes01 = gb.convert_to_input([0, 1], "const_axes", is_optional=True, dtype=np.int64)
             input_score0 = ctx.make_node(op_type="Unsqueeze", inputs=[node.input[0], axes0], return_node=True)
             input_score1 = ctx.make_node(op_type="Unsqueeze", inputs=[node.input[1], axes01], return_node=True)
             ctx.replace_input(node, node.input[0], input_score0[0], 0)
@@ -1878,7 +1879,7 @@ class ReverseV2:
 
                     inputs = [new_node.output[0]]
 
-                const_one_name = utils.make_name(f'const_one')
+                const_one_name = utils.make_name('const_one')
                 const_one = ctx.make_const(name=const_one_name, np_val=np.array([1], dtype=np.int64))
                 const_axis_name = utils.make_name(f'const_{axis}')
                 const_axis = ctx.make_const(name=const_axis_name, np_val=np.array([axis], dtype=np.int64))

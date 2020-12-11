@@ -27,7 +27,7 @@ class StringOps:
         for a in list(node.attr.keys()):
             del node.attr[a]
         unsqueeze_node = GraphBuilder(ctx).make_squeeze(
-            {'data': node.input[1], axes: [0]}, return_node=True)
+            {'data': node.input[1], 'axes': [0]}, return_node=True)
 
         skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], np.bool))
         ctx.replace_inputs(node, [node.input[0], unsqueeze_node.output[0], skip_empty_const.output[0]])
@@ -84,8 +84,6 @@ class StringJoin:
         if 0 < len(inps_with_shapes) < len(node.input):
             shape_node = ctx.make_node("Shape", [inps_with_shapes[0]])
         unsqueezes = []
-        if opset >= 13:
-            axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
         for inp in node.input:
             if ctx.get_shape(inp) == [] and shape_node is not None:
                 expand_node = ctx.make_node("Expand", [inp, shape_node.output[0]])
