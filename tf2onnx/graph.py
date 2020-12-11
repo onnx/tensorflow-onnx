@@ -1278,7 +1278,7 @@ class Graph(object):
         It then calls insert_node_on_output.
 
         Args:
-            op_type: type for new operation or an existing node
+            op_type: type for new operation
             output_name: the names of the outputs above us
             name: the name of the new op
             kwargs: attributes of the new node

@@ -1576,18 +1576,13 @@ class NonMaxSuppression:
         # NonMaxSuppressionV4 returns selected_indices, valid_outputs
         # NonMaxSuppressionV5 returns selected_indices, selected_scores, valid_outputs
 
-        if opset < 13:
-            needs_padding = "pad_to_max_output_size" in node.attr and node.attr["pad_to_max_output_size"].i == 1
-            ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
-            input_score = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
-        else:
-            axes0 = ctx.make_const(utils.make_name("const_axes"), np.array([0], dtype=np.int64))
-            axes01 = ctx.make_const(utils.make_name("const_axes01"), np.array([0, 1], dtype=np.int64))
-            input_score0 = ctx.make_node(op_type="Unsqueeze", inputs=[node.input[0], axes0], return_node=True)
-            input_score1 = ctx.make_node(op_type="Unsqueeze", inputs=[node.input[1], axes01], return_node=True)
-            ctx.replace_input(node, node.input[0], input_score0[0], 0)
-            ctx.replace_input(node, node.input[1], input_score1[0], 1)
-            input_score = input_score1
+        needs_padding = "pad_to_max_output_size" in node.attr and node.attr["pad_to_max_output_size"].i == 1
+        gb = GraphBuilder(ctx)
+        input_score0 = gb.make_unsqueeze({'data': node.input[0], 'axes': [0]}, return_node=True)
+        input_score1 = gb.make_unsqueeze({'data': node.input[1], 'axes': [0, 1]}, return_node=True)
+        ctx.replace_input(node, node.input[0], input_score0.output[0], 0)
+        ctx.replace_input(node, node.input[1], input_score1.output[0], 1)
+        input_score = input_score1
 
         ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnx_pb.TensorProto.INT64)
         # replace original node with nonmaxsurppress + slice + squeeze + cast

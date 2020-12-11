@@ -351,12 +351,9 @@ class ConvOp:
         # prefix with batch dim of [1] to satisfy rank requirements
         input_shape = ctx.get_shape(node.input[0])
         if len(input_shape) == spatial + 1:
-            if opset < 13:
-                ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
-            else:
-                gb = GraphBuilder(ctx)
-                usq_node = gb.make_unsqueeze({"axes": [0], 'data': node.input[0]}, return_node=True)
-                ctx.insert_node_on_output(usq_node, node.input[0])
+            gb = GraphBuilder(ctx)
+            usq_node = gb.make_unsqueeze({"axes": [0], 'data': node.input[0]}, return_node=True)
+            ctx.insert_node_on_output(usq_node, node.input[0])
 
         # Set padding.
         add_padding(

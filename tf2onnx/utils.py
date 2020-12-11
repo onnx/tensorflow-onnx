@@ -26,6 +26,9 @@ from onnx import helper, onnx_pb, defs, numpy_helper, ModelProto, __version__
 from . import constants
 
 
+logger = logging.getLogger(__file__)
+
+
 #
 # mapping dtypes from onnx to numpy
 #
@@ -436,7 +439,6 @@ def have_same_inference_value(g, output_1, output_2):
             return True
         # check body graph
         if node_1.get_body_graphs() or node_2.get_body_graphs():
-            logger = logging.getLogger(__file__)
             logger.warning("Comparing two nodes containing body graph isn't supported.")
             return False
         # check domain
