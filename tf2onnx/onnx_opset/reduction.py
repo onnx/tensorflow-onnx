@@ -244,11 +244,7 @@ class SegmentSum():
             # Shapes [s, n] * [n, P] => [s, P]
             product = ctx.make_node("MatMul", [one_hot_cast.output[0], data_reshape.output[0]], op_name_scope=node.name)
             if scaling_node_output is not None:
-                if opset < 13:
-                    scaling_node_unsqueeze = ctx.make_node("Unsqueeze", [scaling_node_output], attr={'axes': [1]})
-                else:
-                    axes = GraphBuilder(ctx).convert_to_input([1], "const_axes", is_optional=True, dtype=np.int64)
-                    scaling_node_unsqueeze = ctx.make_node("Unsqueeze", [scaling_node_output, axes])
+                scaling_node_unsqueeze = GraphBuiler(ctx).make_unsqueeze({'data': scaling_node_output, 'axes': [1]}, return_node=True)
                 product = ctx.make_node("Div", [product.output[0], scaling_node_unsqueeze.output[0]])
 
             # Create new shape [0, a, b, ..., c]
@@ -288,11 +284,7 @@ class SegmentSum():
             one_hot_unsqueeze = ctx.make_node("Reshape", [one_hot_bool.output[0], expanded_shape.output[0]])
         elif data_rank > 1:
             new_dims = list(range(2, 2 + data_rank - 1))
-            if opset < 13:
-                one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_bool.output[0]], attr={'axes': new_dims})
-            else:
-                axes = GraphBuilder(ctx).convert_to_input(new_dims, "const_axes", is_optional=True, dtype=np.int64)
-                one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_bool.output[0], axes])
+            one_hot_unsqueeze = GraphBuilder(ctx).make_unsqueeze({'data': one_hot_bool.output[0], 'axes': new_dims})
 
         # Shape of data:       [n, a, b, ..., c]
         # Shape of one_hot: [s, n, 1, 1, ..., 1]

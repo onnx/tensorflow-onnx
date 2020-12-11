@@ -859,11 +859,7 @@ class StridedSlice:
                     unqueeze_at.append(bit)
                     begin_mask |= 1 << bit
                     end_mask |= 1 << bit
-            if opset < 13:
-                input_x = ctx.make_node("Unsqueeze", [input_x.output[0]], {"axes": unqueeze_at})
-            else:
-                axes = GraphBuilder(ctx).convert_to_input(unqueeze_at, "const_axes", is_optional=True, dtype=np.int64)
-                input_x = ctx.make_node("Unsqueeze", [input_x.output[0], axes])
+            input_x = gb.make_unsqueeze({'data': input_x.output[0], 'axes': unqueeze_at}, return_node=True)
 
         param_shape = ctx.get_shape(node.input[1]) or \
                       ctx.get_shape(node.input[2]) or \
@@ -1604,7 +1600,15 @@ class NonMaxSuppression:
             ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
             input_score = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
         else:
-            ...
+            gb = GraphBuilder(ctx)
+            axes0 = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
+            axes01 = GraphBuilder(ctx).convert_to_input([0, 1], "const_axes", is_optional=True, dtype=np.int64)
+            input_score0 = ctx.make_node(op_type="Unsqueeze", inputs=[node.input[0], axes0], return_node=True)
+            input_score1 = ctx.make_node(op_type="Unsqueeze", inputs=[node.input[1], axes01], return_node=True)
+            ctx.replace_input(node, node.input[0], input_score0[0], 0)
+            ctx.replace_input(node, node.input[1], input_score1[0], 1)
+            input_score = input_score1
+
         ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnx_pb.TensorProto.INT64)
         # replace original node with nonmaxsurppress + slice + squeeze + cast
         dtypes = [[ctx.get_dtype(output)] for output in node.output]
