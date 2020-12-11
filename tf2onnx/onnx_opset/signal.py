@@ -213,7 +213,7 @@ class ComplexAbsOp:
             name=utils.make_name('ComplexAbs_' + node.name))
 
         squeezed = GraphBuilder(ctx).make_squeeze(
-            {'data': add.output[0], 'axes': [0]}, name=utils.make_name('ComplexAbs' + node.name))
+            {'data': add.output[0], 'axes': [0]}, name=utils.make_name('ComplexAbs' + node.name), return_node=True)
 
         last_node = ctx.make_node(
             "Sqrt", inputs=squeezed.output[:1],
