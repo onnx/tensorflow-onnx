@@ -119,7 +119,7 @@ class GraphBuilder(object):
         return self.graph.make_node(op_type="ReduceSum", inputs=inputs, attr=attr, name=name,
                                     outputs=outputs, shapes=shapes, dtypes=dtypes).output[0]
 
-    def make_squeeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False, op_name_scope=Nonez):
+    def make_squeeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False, op_name_scope=None):
         """
         Squeeze changes its schema at opset 13: it treats axes as a dynamic input
         kwargs: key could be ["data", "axes"].
