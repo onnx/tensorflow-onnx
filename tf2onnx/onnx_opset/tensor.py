@@ -1625,7 +1625,7 @@ class NonMaxSuppression:
         else:
             axes = GraphBuilder(ctx).convert_to_input([1], "const_axes", is_optional=True, dtype=np.int64)
             squeeze_op = ctx.make_node("Squeeze", [slice_op, axes])
-        
+
         original_nms_output = nms_output
         if node.type in ["NonMaxSuppressionV4", "NonMaxSuppressionV5"]:
             # add valid_outputs count

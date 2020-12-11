@@ -244,7 +244,8 @@ class SegmentSum():
             # Shapes [s, n] * [n, P] => [s, P]
             product = ctx.make_node("MatMul", [one_hot_cast.output[0], data_reshape.output[0]], op_name_scope=node.name)
             if scaling_node_output is not None:
-                scaling_node_unsqueeze = GraphBuiler(ctx).make_unsqueeze({'data': scaling_node_output, 'axes': [1]}, return_node=True)
+                scaling_node_unsqueeze = GraphBuiler(ctx).make_unsqueeze(
+                    {'data': scaling_node_output, 'axes': [1]}, return_node=True)
                 product = ctx.make_node("Div", [product.output[0], scaling_node_unsqueeze.output[0]])
 
             # Create new shape [0, a, b, ..., c]
