@@ -49,7 +49,12 @@ try:
     # pylint: disable=protected-access
     from tensorflow.python.saved_model.load import _RestoredResource as TfRestoredResourceType
 except ImportError:
-    TfRestoredResourceType = None
+    TfRestoredResourceType = tuple()  # isinstance(x, tuple()) is always false
+
+try:
+    from tensorflow.python.training.tracking.tracking import AutoTrackable as TfAutoTrackableType
+except ImportError:
+    TfAutoTrackableType = tuple()
 
 if is_tf2():
     convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
@@ -266,6 +271,25 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
     return frozen_graph, input_names, output_names
 
 
+def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
+                                        removed_resource_to_placeholder, placeholder_to_table_info):
+    # pylint: disable=protected-access
+    for r in trackable.__dict__.values():
+        if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource') and hasattr(r, 'resource_handle'):
+            initializer = r._create_resource.concrete_functions[0].function_def
+            new_names, new_k_dtypes, new_v_dtypes = get_hash_table_info(initializer.node_def)
+            table_names.extend(new_names)
+            key_dtypes.extend(new_k_dtypes)
+            value_dtypes.extend(new_v_dtypes)
+            table_handle = id(r.resource_handle)
+            if table_handle in removed_resource_to_placeholder and len(new_names) == 1:
+                table_info = (new_names[0], new_k_dtypes[0], new_v_dtypes[0])
+                placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
+        if isinstance(r, TfAutoTrackableType):
+            _get_hash_table_info_from_trackable(r, table_names, key_dtypes, value_dtypes,
+                                                removed_resource_to_placeholder, placeholder_to_table_info)
+
+
 def _remove_non_variable_resources_from_captures(concrete_func):
     """
     Removes all non-variable resources (such as tables) from a function's captured inputs to prevent tf from
@@ -370,19 +394,8 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
 
     table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
     placeholder_to_table_info = {}
-    for r in imported.__dict__.values():
-        if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource') and hasattr(r, 'resource_handle'):
-            # Add tables from saved_model table initializers
-            # pylint: disable=protected-access
-            initializer = r._create_resource.concrete_functions[0].function_def
-            new_names, new_k_dtypes, new_v_dtypes = get_hash_table_info(initializer.node_def)
-            table_names.extend(new_names)
-            key_dtypes.extend(new_k_dtypes)
-            value_dtypes.extend(new_v_dtypes)
-            table_handle = id(r.resource_handle)
-            if table_handle in removed_resource_to_placeholder and len(new_names) == 1:
-                table_info = (new_names[0], new_k_dtypes[0], new_v_dtypes[0])
-                placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
+    _get_hash_table_info_from_trackable(imported, table_names, key_dtypes, value_dtypes,
+                                        removed_resource_to_placeholder, placeholder_to_table_info)
 
     initialized_tables = {}
     for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
@@ -392,6 +405,10 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
             initialized_tables[n] = (k.numpy(), v.numpy())
         except Exception:  # pylint: disable=broad-except
             logger.warning("Could not initialize table with shared_name = %r", n)
+
+    for placeholder in removed_resource_to_placeholder.values():
+        if placeholder not in placeholder_to_table_info:
+            logger.error("Could not find table resource to replace placeholder %s", placeholder)
 
     replace_placeholders_with_tables(frozen_graph, placeholder_to_table_info)
 
