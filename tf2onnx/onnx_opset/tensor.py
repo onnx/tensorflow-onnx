@@ -1581,9 +1581,8 @@ class NonMaxSuppression:
             ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
             input_score = ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], axes=[0, 1])
         else:
-            gb = GraphBuilder(ctx)
-            axes0 = gb.convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            axes01 = gb.convert_to_input([0, 1], "const_axes", is_optional=True, dtype=np.int64)
+            axes0 = ctx.make_const(utils.make_name("const_axes"), np.array([0], dtype=np.int64))
+            axes01 = ctx.make_const(utils.make_name("const_axes01"), np.array([0, 1], dtype=np.int64))
             input_score0 = ctx.make_node(op_type="Unsqueeze", inputs=[node.input[0], axes0], return_node=True)
             input_score1 = ctx.make_node(op_type="Unsqueeze", inputs=[node.input[1], axes01], return_node=True)
             ctx.replace_input(node, node.input[0], input_score0[0], 0)
@@ -2253,8 +2252,8 @@ class MatrixDiagPart:
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         gb.make_squeeze(
-            {'data': gathered_result.output[0], "axes": [-1]}, return_node=True,
-            name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+            {'data': gathered_result.output[0], "axes": [-1], 'outputs': node.output}, return_node=True,
+            name=node.name, shapes=shapes, dtypes=dtypes)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -2655,9 +2654,9 @@ class MatrixDiag:
         argc = len(node.input)
 
         if opset >= 13:
-            squeeze_axes0 = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            squeeze_axes_1 = GraphBuilder(ctx).convert_to_input([-1], "const_axes", is_optional=True, dtype=np.int64)
-            squeeze_axes_2 = GraphBuilder(ctx).convert_to_input([-2], "const_axes", is_optional=True, dtype=np.int64)
+            squeeze_axes0 = ctx.make_const(utils.make_name("const_axes"), np.array([0], dtype=np.int64))
+            squeeze_axes_1 = ctx.make_const(utils.make_name("const_axes"), np.array([-1], dtype=np.int64))
+            squeeze_axes_2 = ctx.make_const(utils.make_name("const_axes"), np.array([-2], dtype=np.int64))
 
         minus_two, minus_one, zeo, one, two = \
             [n.output[0] for n in ctx.make_consts([[-2], [-1], [0], [1], [2]])]
