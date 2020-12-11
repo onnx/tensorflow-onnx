@@ -366,12 +366,8 @@ class Roll:
             shifts_casted = node.input[1]
 
         if len(axes) == 1:
-            if opset < 13:
-                unsqueeze_node = ctx.make_node(
-                    "Unsqueeze", [shifts_casted], attr={'axes': [0]}, op_name_scope=node.name)
-            else:
-                axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-                unsqueeze_node = ctx.make_node("Unsqueeze", [shifts_casted, axes], op_name_scope=node.name)
+            unsqueeze_node = GraphBuilder(ctx).make_unsqueeze(
+                {'data': shifts_casted, "axes": [0]}, op_name_scope=node.name, return_node=True)
             shifts_split = [unsqueeze_node.output[0]]
         else:
             shifts_split = ctx.make_node("Split", [shifts_casted], attr={'axis': 0},
@@ -859,7 +855,7 @@ class StridedSlice:
                     unqueeze_at.append(bit)
                     begin_mask |= 1 << bit
                     end_mask |= 1 << bit
-            input_x = GraphBulder(ctx).make_unsqueeze(
+            input_x = GraphBuilder(ctx).make_unsqueeze(
                 {'data': input_x.output[0], 'axes': unqueeze_at}, return_node=True)
 
         param_shape = ctx.get_shape(node.input[1]) or \
@@ -1070,11 +1066,7 @@ class TopKV2:
         dtypes = node.output_dtypes
         k_0d = node.input[1]
         cast = ctx.make_node("Cast", [k_0d], attr={"to": onnx_pb.TensorProto.INT64})
-        if opset < 13:
-            k_1d = ctx.make_node("Unsqueeze", cast.output, attr={"axes": [0]})
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            k_1d = ctx.make_node("Unsqueeze", list(cast.output) + [axes])
+        k_1d = GraphBuilder(ctx).make_unsqueeze({'data': cast.output, "axes": [0]}, return_node=True)
         ctx.replace_input(node, k_0d, k_1d.output[0], 1)
         # cast the index output to int32
         cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
@@ -1114,22 +1106,17 @@ class Pack:
         if axis < 0:
             axis += len(ctx.get_shape(node.input[0])) + 1
 
-        if opset >= 13:
-            node_axes = GraphBuilder(ctx).convert_to_input([axis], "const_axes", is_optional=True, dtype=np.int64)
-
         inputs = []
         dtype = None
+        gb = GraphBuilder(ctx)
         # insert Unsqueeze on each input
         for i, n in enumerate(node.inputs):
             dtype = ctx.get_dtype(node.input[i])
             shape = ctx.get_shape(node.input[i]).copy()
             shape.insert(axis, 1)
-            if opset < 13:
-                new_node = ctx.make_node("Unsqueeze", [node.input[i]], op_name_scope=node.name, attr={"axes": [axis]},
-                                         shapes=[shape], dtypes=[dtype])
-            else:
-                new_node = ctx.make_node("Unsqueeze", [node.input[i], node_axes], op_name_scope=node.name,
-                                         shapes=[shape], dtypes=[dtype])
+            new_node = gb.make_unsqueeze(
+                {'data': node.input[i], 'axes': [axis]},
+                op_name_scope=node.name, shapes=[shape], dtypes=[dtype], return_node=True)
             output_name = new_node.output[0]
             ctx.replace_input(node, node.input[i], output_name, i)
             inputs.append(output_name)
@@ -1230,14 +1217,7 @@ class OneHot:
             cls.version_1(ctx, node, **kwargs)
             return
 
-        depth = node.input[1]
-
-        if opset < 13:
-            depth = ctx.make_node("Unsqueeze", [depth], attr={"axes": [0]}).output[0]
-        else:
-            node_axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            depth = ctx.make_node("Unsqueeze", [depth, node_axes]).output[0]
-
+        depth = GraphBuilder(ctx).make_unsqueeze({'data': node.input[1], 'axes': [0]})
         on_value = node.input[2]
         off_value = node.input[3]
         on_value = ctx.make_node("Unsqueeze", [on_value], attr={"axes": [0]}).output[0]
@@ -1621,12 +1601,7 @@ class NonMaxSuppression:
         new_nonmaxsurppress = ctx.make_node("NonMaxSuppression", node.input[: 5]).output[0]
         slice_op = GraphBuilder(ctx).make_slice({"data": new_nonmaxsurppress,
                                                  "axes": [1], "ends": [3], "starts": [2]})
-        if opset < 13:
-            nms_output = ctx.make_node("Squeeze", [slice_op], attr={"axes": [1]})
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([1], "const_axes", is_optional=True, dtype=np.int64)
-            squeeze_op = ctx.make_node("Squeeze", [slice_op, axes])
-
+        nms_output = GraphBuilder(ctx).make_squeeze({'data': slice_op, "axes": [1]}, return_node=True)
         original_nms_output = nms_output
         if node.type in ["NonMaxSuppressionV4", "NonMaxSuppressionV5"]:
             # add valid_outputs count
@@ -1988,11 +1963,7 @@ class Bincount:
         valid_values = ctx.make_node("Compress", [values, valid_val_locs], attr={'axis': 0}).output[0]
         valid_counts = ctx.make_node("Compress", [counts, valid_val_locs], attr={'axis': 0}).output[0]
 
-        if opset < 13:
-            output_shape = ctx.make_node("Unsqueeze", [size_int64], attr={'axes': [0]}).output[0]
-        else:
-            gb = GraphBuilder(ctx)
-            output_shape = gb.make_unsqueeze({'data': size_int64, 'axes': [0]})
+        output_shape = GraphBuilder(ctx).make_unsqueeze({'data': size_int64, "axes": [0]})
 
         false_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
         zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': false_tensor}).output[0]
@@ -2074,11 +2045,7 @@ class SparseReshape:
         cum_prod_new_inc = ctx.make_node("Pad", [cum_prod_new_concat, pads]).output[0]
 
         flat_indices = ctx.make_node("MatMul", [indices_inp, cum_prod_curr_shape]).output[0]
-        if opset < 13:
-            indices_unsqueeze = ctx.make_node("Unsqueeze", [flat_indices], attr={'axes': [1]}).output[0]
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([1], "const_axes", is_optional=True, dtype=np.int64)
-            indices_unsqueeze = ctx.make_node("Unsqueeze", [flat_indices, axes])
+        indices_unsqueeze = GraphBuilder(ctx).make_unsqueeze({'data': flat_indices, "axes": [1]})
         mod_indices = ctx.make_node("Mod", [indices_unsqueeze, cum_prod_new_inc], op_name_scope=node.name).output[0]
         new_indices = ctx.make_node("Div", [mod_indices, cum_prod_new_shape], op_name_scope=node.name).output[0]
 
@@ -2119,21 +2086,12 @@ class SparseFillEmptyRows:
                                    op_name_scope=node.name).output[0]
         zero_const = ctx.make_const(utils.make_name("zero_const"), np.array(0, dtype=np.int64)).output[0]
         one_const = ctx.make_const(utils.make_name("one_const"), np.array(1, dtype=np.int64)).output[0]
-        if opset < 13:
-            scalar_len = ctx.make_node("Squeeze", [axis_0_len], attr={"axes": [0]}, op_name_scope=node.name).output[0]
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            scalar_len = ctx.make_node("Squeeze", [axis_0_len, axes], op_name_scope=node.name).output[0]
+
+        scalar_len = GraphBuilder(ctx).make_squeeze({'data': axis_0_len, "axes": [0]}, op_name_scope=node.name)
         idx_range = ctx.make_node("Range", [zero_const, scalar_len, one_const], op_name_scope=node.name).output[0]
         new_indices = ctx.make_node("Compress", [idx_range, indicators], op_name_scope=node.name).output[0]
-        if opset < 13:
-            new_indices_unsqueeze = ctx.make_node("Unsqueeze", [new_indices], attr={"axes": [1]},
-                                                  op_name_scope=node.name).output[0]
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([1], "const_axes", is_optional=True, dtype=np.int64)
-            new_indices_unsqueeze = ctx.make_node("Unsqueeze", [new_indices, axes],
-                                                  op_name_scope=node.name).output[0]
-
+        new_indices_unsqueeze = GraphBuilder(ctx).make_unsqueeze(
+            {'data': new_indices, 'axes': [1]}, op_name_scope=node.name)
         num_empty_rows = ctx.make_node("Shape", [new_indices], op_name_scope=node.name).output[0]
         new_values = ctx.make_node("Expand", [default_val, num_empty_rows], op_name_scope=node.name).output[0]
         indices_shape = ctx.make_node("Shape", [sparse_indices], op_name_scope=node.name).output[0]
@@ -2189,11 +2147,7 @@ class DynamicPartition:
         split_node = ctx.make_node("Split", [equal_int32.output[0]], output_count=num_partitions, attr={'axis': 0})
         for i in range(num_partitions):
             cond_bools = ctx.make_node("Cast", [split_node.output[i]], attr={"to": TensorProto.BOOL})
-            if opset < 13:
-                squeeze_node = ctx.make_node("Squeeze", [cond_bools.output[0]], attr={'axes': [0]})
-            else:
-                axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-                squeeze_node = ctx.make_node("Squeeze", [cond_bools.output[0], axes])
+            squeeze_node = GraphBuilder(ctx).make_squeeze({'data': cond_bools.output[0], "axes": [0]}, return_node=True)
             compress_node = ctx.make_node("Compress", [data_inp, squeeze_node.output[0]], attr={'axis': 0})
             ctx.replace_all_inputs(node.output[i], compress_node.output[0])
             ctx.copy_dtype(node.output[i], compress_node.output[0])
@@ -2233,13 +2187,8 @@ class DynamicStitch:
         unsqueezed_indices = concat_indices_int64
         if data_rank > 1:
             unsqueeze_axes = list(range(1, data_rank))
-            if opset < 13:
-                unsqueezed_indices = ctx.make_node("Unsqueeze", [concat_indices_int64.output[0]],
-                                                   attr={'axes': unsqueeze_axes})
-            else:
-                axes = GraphBuilder(ctx).convert_to_input(
-                    unsqueeze_axes, "const_axes", is_optional=True, dtype=np.int64)
-                unsqueezed_indices = ctx.make_node("Unsqueeze", [concat_indices_int64.output[0], axes])
+            unsqueezed_indices = GraphBuilder(ctx).make_unsqueeze(
+                {'data': concat_indices_int64.output[0], "axes": unsqueeze_axes}, return_node=True)
         expanded_indices = ctx.make_node("Expand", [unsqueezed_indices.output[0], data_shape.output[0]])
 
         zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
@@ -2291,30 +2240,21 @@ class MatrixDiagPart:
                                                           minus_one])
         sliced_input_shape_new = ctx.make_node('Concat', [sliced_input_shape_half.output[0], one],
                                                attr={'axis': -1})
-        if opset < 13:
-            min_matrice_dim_ = ctx.make_node('Squeeze', [min_matrice_dim.output[0]], {'axes': [0]})
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([0], "const_axes", is_optional=True, dtype=np.int64)
-            min_matrice_dim_ = ctx.make_node('Squeeze', [min_matrice_dim.output[0], axes])
+        gb = GraphBuilder(ctx)
+        min_matrice_dim_ = gb.make_squeeze(
+            {'data': min_matrice_dim.output[0], "axes": [0]}, return_node=True)
         matrice_range = ctx.make_node('Range', [zeo_, min_matrice_dim_.output[0], one_])
-        if opset < 13:
-            unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0]], attr={"axes": [-1]})
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([-1], "const_axes", is_optional=True, dtype=np.int64)
-            unsqueezed_matrice_range = ctx.make_node('Unsqueeze', [matrice_range.output[0], axes])
+        unsqueezed_matrice_range = gb.make_unsqueeze(
+            {'data': matrice_range.output[0], "axes": [-1]}, return_node=True)
         expanded_range = ctx.make_node('Expand', [unsqueezed_matrice_range.output[0], sliced_input_shape_new.output[0]])
         gathered_result = ctx.make_node('GatherElements', [sliced_input.output[0], expanded_range.output[0]],
                                         attr={'axis': -1})
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        if opset < 13:
-            ctx.make_node('Squeeze', [gathered_result.output[0]], attr={"axes": [-1]},
-                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
-        else:
-            axes = GraphBuilder(ctx).convert_to_input([-1], "const_axes", is_optional=True, dtype=np.int64)
-            ctx.make_node('Squeeze', [gathered_result.output[0], axes],
-                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+        gb.make_squeeze(
+            {'data': gathered_result.output[0], "axes": [-1]}, return_node=True,
+            name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):

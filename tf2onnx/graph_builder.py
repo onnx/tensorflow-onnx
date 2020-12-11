@@ -119,7 +119,7 @@ class GraphBuilder(object):
         return self.graph.make_node(op_type="ReduceSum", inputs=inputs, attr=attr, name=name,
                                     outputs=outputs, shapes=shapes, dtypes=dtypes).output[0]
 
-    def make_squeeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False):
+    def make_squeeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False, op_name_scope=None):
         """
         Squeeze changes its schema at opset 13: it treats axes as a dynamic input
         kwargs: key could be ["data", "axes"].
@@ -154,12 +154,13 @@ class GraphBuilder(object):
             inputs = inputs[:-1]
 
         node = self.graph.make_node(op_type="Squeeze", inputs=inputs, attr=attr, name=name,
-                                    outputs=outputs, shapes=shapes, dtypes=dtypes)
+                                    outputs=outputs, shapes=shapes, dtypes=dtypes,
+                                    op_name_scope=op_name_scope)
         if return_node:
             return node
         return node.output[0]
 
-    def make_unsqueeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False):
+    def make_unsqueeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False, op_name_scope=None):
         """
         Unsqueeze changes its schema at opset 13: it treats axes as a dynamic input
         kwargs: key could be ["data", "axes"].
@@ -194,7 +195,8 @@ class GraphBuilder(object):
             inputs = inputs[:-1]
 
         node = self.graph.make_node(op_type="Unsqueeze", inputs=inputs, attr=attr, name=name,
-                                    outputs=outputs, shapes=shapes, dtypes=dtypes)
+                                    outputs=outputs, shapes=shapes, dtypes=dtypes,
+                                    op_name_scope=op_name_scope)
         if return_node:
             return node
         return node.output[0]
