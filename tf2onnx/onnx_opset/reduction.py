@@ -285,7 +285,8 @@ class SegmentSum():
             one_hot_unsqueeze = ctx.make_node("Reshape", [one_hot_bool.output[0], expanded_shape.output[0]])
         elif data_rank > 1:
             new_dims = list(range(2, 2 + data_rank - 1))
-            one_hot_unsqueeze = GraphBuilder(ctx).make_unsqueeze({'data': one_hot_bool.output[0], 'axes': new_dims})
+            one_hot_unsqueeze = GraphBuilder(ctx).make_unsqueeze(
+                {'data': one_hot_bool.output[0], 'axes': new_dims}, return_node=True)
 
         # Shape of data:       [n, a, b, ..., c]
         # Shape of one_hot: [s, n, 1, 1, ..., 1]

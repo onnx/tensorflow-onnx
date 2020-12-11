@@ -931,7 +931,7 @@ class CropAndResize:
                                 attr={"mode": mode, "extrapolation_value": extrapolation_value,
                                       "coordinate_transformation_mode": "tf_crop_and_resize"})
         recovered_x = g.make_node("Transpose", [resized_x.output[0]], attr={'perm': constants.NCHW_TO_NHWC})
-        squeeze_x = GraphBuilder(ctx).make_squeeze({'data': recovered_x.output[0], 'axes': [0]}, return_node=True)
+        squeeze_x = GraphBuilder(g).make_squeeze({'data': recovered_x.output[0], 'axes': [0]}, return_node=True)
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
