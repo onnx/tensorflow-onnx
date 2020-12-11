@@ -11,7 +11,7 @@ from __future__ import unicode_literals
 import logging
 from distutils.version import LooseVersion
 from collections import defaultdict
-
+import numpy as np
 from tf2onnx import utils
 from tf2onnx.tf_utils import get_tf_tensor_shape, get_tf_const_value, get_tf_shape_attr, get_tf_version
 from tf2onnx.tf_loader import tf_reload_graph
@@ -241,7 +241,7 @@ def _merge_shapes_for_tf(shape1, shape2):
         d = d1
         if d1 is None:
             d = d2
-        elif not d2 is None:
+        elif d2 is not None:
             # None means unknown in tensorflow
             d = None
         merged.append(d)

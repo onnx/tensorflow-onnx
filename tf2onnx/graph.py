@@ -1258,8 +1258,25 @@ class Graph(object):
                 break
         return new_node
 
-    def insert_new_node_on_output(self, op_type, output_name, name=None, inputs=None, domain=None, **kwargs):
+    def insert_node_on_output(self, node, output_name=None):
+        """
+        The inserted node takes the *output_name* as input and produces a
+        new output. The function goes through every node taking *output_name*
+        and replaces it by the new output name.
+        """
+        if output_name is None:
+            output_name = node.input[0]
+        new_output = node.output[0]
+
+        to_replace = [self.get_node_by_name(n) for n in self._output_to_consumers[output_name]]
+        to_replace = [n for n in to_replace if n != node]
+        self.replace_all_inputs(output_name, new_output, ops=to_replace)
+        return node
+
+    def insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None, domain=None, **kwargs):
         """Create and insert a new node into the graph.
+        It then calls insert_node_on_output.
+
         Args:
             op_type: type for new operation
             output_name: the names of the outputs above us
@@ -1273,6 +1290,7 @@ class Graph(object):
                         type(output_name))
         utils.make_sure(isinstance(op_type, six.text_type), "op_type's type is not expected: %s",
                         type(op_type))
+        utils.make_sure(output_name is not None, "output_name cannot be None for op_type=%r.", op_type)
 
         if inputs is None:
             inputs = [output_name]
@@ -1281,11 +1299,7 @@ class Graph(object):
 
         new_output = port_name(name)
         new_node = self.make_node(op_type, inputs, attr=kwargs, outputs=[new_output], name=name, domain=domain)
-
-        to_replace = [self.get_node_by_name(n) for n in self._output_to_consumers[output_name]]
-        to_replace = [n for n in to_replace if n != new_node]
-        self.replace_all_inputs(output_name, new_output, ops=to_replace)
-        return new_node
+        return self.insert_node_on_output(new_node, output_name)
 
     def find_output_consumers(self, output_name):
         """Find all nodes consuming a given output."""

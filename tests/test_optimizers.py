@@ -318,6 +318,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["Z"], {"X": np.random.randn(2, 3, 4, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=1)
 
+    @check_opset_max_version(12, "Squeeze/Unsqueeze changed in opset 13")
     def test_transpose_with_squeeze1(self):
         # squeeze the first dim
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
@@ -335,6 +336,26 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                                      model_proto, remaining_transpose_num=1)
         self.check_transpose_perm(model_after_opt, [1, 2, 0])
 
+    @check_opset_min_version(13, "Squeeze/Unsqueeze changed in opset 13")
+    def test_transpose_with_squeeze1_13(self):
+        # squeeze the first dim
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        axes = self._make_onnx_const(np.array([0], dtype=np.int64), "axes")
+        node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
+
+        graph = helper.make_graph(
+            [node1, node2, axes],
+            "transpose_with_squeeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1, 3, 4, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (4, 5, 3))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        model_after_opt = self.run_transpose_compare(["Z"], {"X": np.random.randn(1, 3, 4, 5).astype(np.float32)},
+                                                     model_proto, remaining_transpose_num=1)
+        self.check_transpose_perm(model_after_opt, [1, 2, 0])
+
+    @check_opset_max_version(12, "Squeeze/Unsqueeze changed in opset 13")
     def test_transpose_with_squeeze2(self):
         # squeeze the second dim
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
@@ -352,6 +373,26 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                                      model_proto, remaining_transpose_num=1)
         self.check_transpose_perm(model_after_opt, [0, 2, 1])
 
+    @check_opset_min_version(13, "Squeeze/Unsqueeze changed in opset 13")
+    def test_transpose_with_squeeze2_13(self):
+        # squeeze the second dim
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        axes = self._make_onnx_const(np.array([1], dtype=np.int64), "axes")
+        node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
+
+        graph = helper.make_graph(
+            [node1, node2, axes],
+            "transpose_with_squeeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 4, 1, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 5, 4))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        model_after_opt = self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 4, 1, 5).astype(np.float32)},
+                                                     model_proto, remaining_transpose_num=1)
+        self.check_transpose_perm(model_after_opt, [0, 2, 1])
+
+    @check_opset_max_version(12, "Squeeze/Unsqueeze changed in opset 13")
     def test_transpose_with_squeeze3(self):
         # squeeze the last dim
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
@@ -368,6 +409,25 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 1, 4, 5).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
+    @check_opset_min_version(13, "Squeeze/Unsqueeze changed in opset 13")
+    def test_transpose_with_squeeze3_13(self):
+        # squeeze the last dim
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        axes = self._make_onnx_const(np.array([3], dtype=np.int64), "axes")
+        node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
+
+        graph = helper.make_graph(
+            [node1, node2, axes],
+            "transpose_with_squeeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 1, 4, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 4, 5))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 1, 4, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @check_opset_max_version(12, "Squeeze/Unsqueeze changed in opset 13")
     def test_transpose_with_squeeze4(self):
         # squeeze the two dims
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
@@ -375,6 +435,24 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         graph = helper.make_graph(
             [node1, node2],
+            "transpose_with_squeeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 1, 1, 5))],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 5))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z"], {"X": np.random.randn(3, 1, 1, 5).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @check_opset_min_version(13, "Squeeze/Unsqueeze changed in opset 13")
+    def test_transpose_with_squeeze4_13(self):
+        # squeeze the two dims
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans")
+        axes = self._make_onnx_const(np.array([1, 3], dtype=np.int64), "axes")
+        node2 = helper.make_node("Squeeze", ["Y", "axes"], ["Z"], name="squeeze")
+
+        graph = helper.make_graph(
+            [node1, node2, axes],
             "transpose_with_squeeze",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (3, 1, 1, 5))],
             [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (3, 5))],
@@ -1090,6 +1168,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["res"], {},
                                    model_proto, remaining_transpose_num=0)
 
+    @check_opset_max_version(12, "Squeeze/Unsqueeze changed in opset 13")
     def test_const_fold_unsqueeze_with_const(self):
         shape = (6, 6)
         const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
@@ -1100,6 +1179,27 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         graph = helper.make_graph(
             [node1, node2, node3],
+            "test_const_fold_unsqueeze_with_const",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1,))],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 6, 1, 1, 6))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(1).astype(np.float32)}, model_proto,
+                             "Unsqueeze", 0)
+
+    @check_opset_min_version(13, "Squeeze/Unsqueeze changed in opset 13")
+    def test_const_fold_unsqueeze_with_const_13(self):
+        shape = (6, 6)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        axes = self._make_onnx_const(np.array([0, 2, 3], dtype=np.int64), "axes")
+        node2 = helper.make_node("Unsqueeze", ["const", "axes"], ["value1"])
+        node3 = helper.make_node("Add", ["value1", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3, axes],
             "test_const_fold_unsqueeze_with_const",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (1,))],
             [helper.make_tensor_value_info("res", TensorProto.FLOAT, (1, 6, 1, 1, 6))],

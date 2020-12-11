@@ -438,7 +438,7 @@ def find_bidirectional_rnns(g, ops, rnn_type):
         for fw_n in fw_rnn:
             for bw_n in bw_rnn:
                 if belong_to_birnn(g, fw_n, bw_n, rnn_type) and \
-                        not fw_n in matched_rnn and not bw_n in matched_rnn:
+                        fw_n not in matched_rnn and bw_n not in matched_rnn:
                     logger.debug("found birnn comprising %s and %s", fw_n.name, bw_n.name)
                     bi_rnns.append((fw_n, bw_n))
                     matched_rnn.extend([fw_n, bw_n])

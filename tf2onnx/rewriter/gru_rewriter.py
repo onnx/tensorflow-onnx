@@ -12,6 +12,7 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.rnn_utils import RNNUnitType, get_weights_from_const_node
 
 from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
@@ -252,7 +253,7 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         output_id = context.rnn_node.output[1]
         gru_state_shape = self.g.get_shape(output_id)
         output_shape = [gru_state_shape[1], gru_state_shape[2]]
-        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
-                                        shapes=[output_shape], dtypes=[self.g.get_dtype(output_id)])
-
+        squeeze_node = GraphBuilder(self.g).make_squeeze(
+            {'data': output_id, "axes": [0]}, shapes=[output_shape],
+            dtypes=[self.g.get_dtype(output_id)], return_node=True)
         self.g.replace_all_inputs(exit_output_id, squeeze_node.output[0])  # ops=self.g.get_nodes()

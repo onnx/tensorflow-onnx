@@ -327,7 +327,7 @@ def build_dynamic_target_size(ctx, transposed_intput, target_hw):
 @tf_op(["Conv1D", "Conv2D", "Conv3D"])
 class ConvOp:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         # ONNX specification:
         #
         # T output = Conv2D(T input, T filter, @list(int) strides, @bool use_cudnn_on_gpu,
@@ -351,7 +351,9 @@ class ConvOp:
         # prefix with batch dim of [1] to satisfy rank requirements
         input_shape = ctx.get_shape(node.input[0])
         if len(input_shape) == spatial + 1:
-            ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[0], axes=[0])
+            gb = GraphBuilder(ctx)
+            usq_node = gb.make_unsqueeze({"axes": [0], 'data': node.input[0]}, return_node=True)
+            ctx.insert_node_on_output(usq_node, node.input[0])
 
         # Set padding.
         add_padding(
@@ -362,9 +364,19 @@ class ConvOp:
         conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
 
     @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        cls.any_version(1, ctx, node, **kwargs)
+
+    @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # No change.
-        cls.version_1(ctx, node, **kwargs)
+        cls.any_version(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Signature change for operator Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
+
 
 def get_shape_from_const_or_concat(ctx, node):
     if node.is_const():
@@ -870,7 +882,7 @@ class CropAndResize:
                       name=name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def any_version_after11(cls, opset, ctx, node, **kwargs):
         # create loop of resize to cater to tensorflow CropAndResize, one box one iteration
         mode = "nearest" if node.get_attr("method") is not None and node.get_attr(
             "method").s == b"nearest" else "linear"
@@ -916,7 +928,7 @@ class CropAndResize:
                                 attr={"mode": mode, "extrapolation_value": extrapolation_value,
                                       "coordinate_transformation_mode": "tf_crop_and_resize"})
         recovered_x = g.make_node("Transpose", [resized_x.output[0]], attr={'perm': constants.NCHW_TO_NHWC})
-        squeeze_x = g.make_node("Squeeze", inputs=[recovered_x.output[0]], attr={"axes": [0]})
+        squeeze_x = GraphBuilder(g).make_squeeze({'data': recovered_x.output[0], 'axes': [0]}, return_node=True)
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
@@ -926,6 +938,15 @@ class CropAndResize:
         branches = {"body": g}
         inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]], name=node.name,
                                    outputs=node.output, branches=branches)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.any_version_after11(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Signature of operator Squeeze changed.
+        cls.any_version_after11(13, ctx, node, **kwargs)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
@@ -1055,7 +1076,7 @@ class Resize:
 @tf_op("MatrixBandPart")
 class MatrixBandPart:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def any_version_after7(cls, opset, ctx, node, **kwargs):
         # T output = MatrixBandPart(T input, int num_lower, int num_upper)
         # data-flow: first generate mask matrix and then use element-wise mul op
         input_rank = len(ctx.get_shape(node.input[0]))
@@ -1117,7 +1138,8 @@ class MatrixBandPart:
         loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init],
                                   output_count=2, branches=branches)
         # convert generated mask matrix from bool to right shape and data type
-        squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})
+        squeeze = GraphBuilder(ctx).make_squeeze(
+            {'data': loop_node.output[1], 'axes': [squeeze_axis]}, return_node=True)
         cast1 = ctx.make_node(op_type="Cast", inputs=squeeze.output, attr={"to": onnx_pb.TensorProto.FLOAT})
         if axis == 1:
             mask_matrix = ctx.make_node(op_type="Transpose", inputs=cast1.output)
@@ -1131,6 +1153,15 @@ class MatrixBandPart:
         ctx.make_node(op_type="Mul", inputs=[cast2.output[0], node.input[0]],
                       name=node.name, outputs=node.output, shapes=shapes,
                       dtypes=dtypes)
+
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        cls.any_version_after7(7, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Signature of operator Squeeze changed.
+        cls.any_version_after7(13, ctx, node, **kwargs)
 
 
 def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
@@ -1149,8 +1180,8 @@ def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
     shapes = tf_ori_node.output_shapes
     dtypes = tf_ori_node.output_dtypes
     ctx.remove_node(tf_ori_node.name)
-    ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], attr={"axes": [1]},
-                  outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
+    GraphBuilder(ctx).make_squeeze({'axes': [1], 'data': mul2.output[0], 'outputs': [tf_ori_node.output[0]]},
+                                   shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs):
@@ -1170,14 +1201,15 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
         indices_cast = ctx.make_node("Cast", [indices_name], attr={"to": TensorProto.INT64})
         indices_name = indices_cast.output[0]
     indices_size = ctx.make_node("Size", [indices_name])
-    indices_unsqueeze = ctx.make_node("Unsqueeze", [indices_name], attr={"axes": [1]})
+    gb = GraphBuilder(ctx)
+    indices_unsqueeze = gb.make_unsqueeze({'data': indices_name, "axes": [1]}, return_node=True)
     zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, dtype=np.int64))
     one_const = ctx.make_const(utils.make_name("one"), np.array(1, dtype=np.int64))
     id_name = utils.make_name("sparse_softmax_id")
     id_output = utils.port_name(id_name)
     controlflow.make_range(ctx, zero_const.output[0], indices_size.output[0], one_const.output[0],
                            id_output, id_name, shape=[-1], dtype=TensorProto.INT64)
-    id_unsqueeze = ctx.make_node("Unsqueeze", [id_output], attr={"axes": [1]})
+    id_unsqueeze = gb.make_unsqueeze({'data': id_output, "axes": [1]}, return_node=True)
     indices_with_id = ctx.make_node("Concat",
                                     [id_unsqueeze.output[0], indices_unsqueeze.output[0]],
                                     attr={"axis": 1})
@@ -1193,9 +1225,9 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
     shapes = node.output_shapes
     dtypes = node.output_dtypes
     ctx.remove_node(node.name)
-    ctx.make_node(op_type="Squeeze",
-                  inputs=[mul2.output[0]], outputs=[node.output[0]],
-                  attr={"axes": [1]}, shapes=[shapes[0]], dtypes=[dtypes[0]])
+    gb = GraphBuilder(ctx)
+    gb.make_squeeze({'data': mul2.output[0], 'outputs': [node.output[0]], "axes": [1]},
+                    shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 @tf_op("SoftmaxCrossEntropyWithLogits")

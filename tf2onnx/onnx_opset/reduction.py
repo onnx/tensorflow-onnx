@@ -154,7 +154,7 @@ class AddN():
         "UnsortedSegmentSum", "UnsortedSegmentProd", "UnsortedSegmentMax", "UnsortedSegmentMin"])
 class SegmentSum():
     @classmethod
-    def version_9(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         node_inputs = node.input
         num_segments_specified = False
         if node.type.endswith("WithNumSegments") or node.type.startswith("Unsorted"):
@@ -244,7 +244,8 @@ class SegmentSum():
             # Shapes [s, n] * [n, P] => [s, P]
             product = ctx.make_node("MatMul", [one_hot_cast.output[0], data_reshape.output[0]], op_name_scope=node.name)
             if scaling_node_output is not None:
-                scaling_node_unsqueeze = ctx.make_node("Unsqueeze", [scaling_node_output], attr={'axes': [1]})
+                scaling_node_unsqueeze = GraphBuilder(ctx).make_unsqueeze(
+                    {'data': scaling_node_output, 'axes': [1]}, return_node=True)
                 product = ctx.make_node("Div", [product.output[0], scaling_node_unsqueeze.output[0]])
 
             # Create new shape [0, a, b, ..., c]
@@ -284,7 +285,8 @@ class SegmentSum():
             one_hot_unsqueeze = ctx.make_node("Reshape", [one_hot_bool.output[0], expanded_shape.output[0]])
         elif data_rank > 1:
             new_dims = list(range(2, 2 + data_rank - 1))
-            one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_bool.output[0]], attr={'axes': new_dims})
+            one_hot_unsqueeze = GraphBuilder(ctx).make_unsqueeze(
+                {'data': one_hot_bool.output[0], 'axes': new_dims}, return_node=True)
 
         # Shape of data:       [n, a, b, ..., c]
         # Shape of one_hot: [s, n, 1, 1, ..., 1]
@@ -297,3 +299,11 @@ class SegmentSum():
         # After reduction over axis 1, shape is: [s, a, b, ..., c]
         ctx.make_node(onnx_op, [where_node.output[0]], attr={'axes': [1], 'keepdims': 0},
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        cls.any_version(9, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cls.any_version(13, ctx, node, **kwargs)
