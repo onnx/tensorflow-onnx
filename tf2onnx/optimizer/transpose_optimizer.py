@@ -571,6 +571,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _squeeze_handler(self, trans, node):
         def _calculate_new_attr(ori_perm, ori_squeeze_axes):
+            ori_squeeze_axes = [i if i >= 0 else i + 4 for i in ori_squeeze_axes]
             new_squeeze_axes = sorted([ori_perm[i] for i in ori_squeeze_axes])
             # calculate output shape after trans and squeeze
             input_shape = "abcd"

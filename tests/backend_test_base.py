@@ -190,7 +190,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                  const_node_values=const_node_values,
                                  initialized_tables=initialized_tables,
                                  **process_args)
-            g = optimizer.optimize_graph(g)
+            g = optimizer.optimize_graph(g, catch_errors=False)
             actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
 
         for expected_val, actual_val in zip(expected, actual):
