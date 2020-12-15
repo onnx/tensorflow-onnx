@@ -1023,7 +1023,10 @@ class TopKV2:
                                       outputs=[topk_output1, utils.port_name(new_topk_name, 1)],
                                       name=new_topk_name, attr={"k": k},
                                       shapes=shapes, dtypes=[dtypes[0], onnx_pb.TensorProto.INT64])
-
+        if dtypes[0] != onnx_pb.TensorProto.FLOAT:
+            # opset-1 only supports float dtypes
+            ctx.insert_new_node_on_output("Cast", new_topk_node.input[0], to=onnx_pb.TensorProto.FLOAT)
+            ctx.insert_new_node_on_output("Cast", new_topk_node.output[0], to=dtypes[0])
         new_cast_name = utils.make_name(topk_node_name)
         ctx.make_node("Cast", [new_topk_node.output[1]], outputs=[topk_output2],
                       name=new_cast_name, attr={"to": onnx_pb.TensorProto.INT32},
@@ -1038,6 +1041,11 @@ class TopKV2:
         cast = ctx.make_node("Cast", [k_0d], attr={"to": onnx_pb.TensorProto.INT64})
         k_1d = ctx.make_node("Unsqueeze", cast.output, attr={"axes": [0]})
         ctx.replace_input(node, k_0d, k_1d.output[0], 1)
+        # cast X if needed
+        if dtypes[0] != onnx_pb.TensorProto.FLOAT:
+            # opset-10 supports types other than float but onnxruntime does not
+            ctx.insert_new_node_on_output("Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
+            ctx.insert_new_node_on_output("Cast", node.output[0], to=dtypes[0])
         # cast the index output to int32
         cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
         ctx.set_dtype(cast_out.output[0], dtypes[1])
