@@ -64,7 +64,8 @@ def create_qdq_nodes(g, match_results):
             zero_point = zero_point[0]
             attrs = {}
         else:
-            utils.make_sure(axis, "Axis must be specified for per channel quantization")
+            utils.make_sure(axis and axis != -1, "Axis must be specified for per channel quantization")
+            utils.make_sure(g.opset >= 13, "Opset >= 13 is required for per channel quantization")
             attrs = {'axis': axis}
 
         # Split it into QuantizeLinear and DequantizeLinear and remove the QDQ node reference
