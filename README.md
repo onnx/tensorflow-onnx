@@ -205,6 +205,13 @@ Only valid with parameter `--saved_model`. When set, creates a zip file containi
 
 Saves the frozen tensorflow graph to file.
 
+#### --custom-ops
+
+If a model contains ops not recognized by onnx runtime, you can tag these ops with a custom op domain so that the
+runtime can still open the model. The format is a comma-separated map of tf op names to domains in the format
+OpName:domain. If only an op name is provided (no colon), the default domain of `ai.onnx.converters.tensorflow`
+will be used.
+
 #### --target
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
