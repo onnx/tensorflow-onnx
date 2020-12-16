@@ -188,6 +188,40 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "output_ta:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    def test_while_loop_with_multi_scan_outputs(self):
+        def func(i, inputs1, inputs2):
+            inputs1_ = tf.identity(inputs1)
+            inputs2_ = tf.identity(inputs2)
+            input_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs1_)
+            input_ta2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True).unstack(inputs2_)
+            output_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+            output_ta2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+            c = lambda i, *_: tf.logical_and(tf.less(i, 10), i >= 0)
+
+            def b(i, out_ta, out_ta2):
+                new_i = tf.add(i, 1)
+                x = input_ta.read(i)
+                y = input_ta2.read(i)
+                z = x + 3 + y
+                p = x * y * 2
+                out_ta_new = out_ta.write(i, z)
+                out_ta_new2 = out_ta2.write(i, p)
+                return new_i, out_ta_new, out_ta_new2
+
+            i_final, out_final, out_final2 = tf.while_loop(c, b, [i, output_ta, output_ta2])
+            i_final_ = tf.identity(i_final, name="i")
+            out_final_ = tf.identity(out_final.stack(), name="output_ta")
+            out_final2_ = tf.identity(out_final2.stack(), name="output_ta2")
+            return i_final_, out_final_, out_final2_
+
+        input_names_with_port = ["input_1:0", "input_2:0", "input_3:0"]
+        feed_dict = {"input_1:0": np.array(0, dtype=np.int32),
+                     "input_2:0": np.array([2.0, 16.0, 5.0, 1.6, 5.0, 6.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32),
+                     "input_3:0": np.array([1.0, 2.0, 3.0, 4.0, 5.0, 16.0, 7.0, 8.0, 9.0, 10.], dtype=np.float32)}
+        output_names_with_port = ["i:0", "output_ta:0", "output_ta2:0"]
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+
     @check_onnxruntime_min_version(
         "0.5.0",
         "disable this case due to onnxruntime loop issue: https://github.com/microsoft/onnxruntime/issues/1272"
