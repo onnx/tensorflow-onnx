@@ -130,10 +130,13 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         numpy expand_dims only supports to unsqueeze one dim one time, so reshape is used to simplify the logic
         """
         const_val = node.inputs[0].get_tensor_value(as_list=False)
-        axes = list(node.get_attr("axes").ints)
-        utils.make_sure(all(axis >= 0 for axis in axes), "onnx spec says it only supports positive axis")
+        if graph.opset >= 13:
+            axes = node.inputs[1].get_tensor_value(as_list=True)
+        else:
+            axes = list(node.get_attr("axes").ints)
         shape_in = const_val.shape
         dims_out = len(shape_in) + len(axes)
+        axes = [i if i >= 0 else i + dims_out for i in axes]
         # calculate the shape of output accroding to onnx Unsqueeze's spec
         # https://github.com/onnx/onnx/blob/master/docs/Operators.md#Unsqueeze
         shape_in = iter(shape_in)

@@ -298,10 +298,10 @@ class TensorListGetItem:
 
         g = GraphBuilder(ctx)
 
-        usq_node = g.make_unsqueeze({"axes": [0], 'name': node.child_name(), 'data': node.input[1]}, return_node=True)
+        usq_node = g.make_unsqueeze({"axes": [0], 'data': node.input[1]}, name=node.child_name(), return_node=True)
         ctx.insert_node_on_output(usq_node)
 
-        sq_node = g.make_squeeze({"axes": [0], 'name': node.child_name(), 'data': node.output[0]}, return_node=True)
+        sq_node = g.make_squeeze({"axes": [0], 'data': node.output[0]}, name=node.child_name(), return_node=True)
         ctx.insert_node_on_output(sq_node)
 
 

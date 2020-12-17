@@ -805,8 +805,10 @@ class StridedSlice:
             # insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None, domain=None, **kwargs)
             # ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
             name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
-            squeeze_node.set_attr("axes", needs_squeeze)
+            squeeze_node = GraphBuilder(ctx).make_squeeze(
+                {"axes": needs_squeeze, 'data': node.output[0]}, name=name, return_node=True)
+            ctx.insert_node_on_output(squeeze_node)
+
             nodes.append(squeeze_node)
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
@@ -1023,8 +1025,9 @@ class StridedSlice:
         node = GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes)
         node = ctx.get_node_by_output(node)
         if needs_squeeze:
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", node.output[0], node.child_name())
-            squeeze_node.set_attr("axes", needs_squeeze)
+            squeeze_node = GraphBuilder(ctx).make_squeeze(
+                {"axes": needs_squeeze, "data": node.output[0]}, name=node.child_name(), return_node=True)
+            ctx.insert_node_on_output(squeeze_node, node.output[0])
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
             ctx.copy_shape(node.output[0], squeeze_node.output[0])
@@ -1348,7 +1351,8 @@ class BatchToSpace:
             # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
             if len(input_shape) == 3:
                 # insert automatically an Unsqueeze op if the input is 3d
-                unsqz1 = ctx.make_node("Unsqueeze", input_tensor.output, {"axes": [3]})
+                unsqz1 = GraphBuilder(ctx).make_unsqueeze(
+                    {"axes": [3], "data": input_tensor.output[0]}, return_node=True)
                 trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
             else:
                 trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
@@ -1377,8 +1381,8 @@ class BatchToSpace:
                 kwargs = {**inputs_map}
                 ctx.remove_node(node.name)
                 slice1 = GraphBuilder(ctx).make_slice(kwargs)
-                ctx.make_node("Squeeze", [slice1], {"axes": [3]},
-                              outputs=node.output, name=node.name, dtypes=dtypes, shapes=shapes)
+                GraphBuilder(ctx).make_squeeze(
+                    {"axes": [3], "data": slice1, "outputs": node.output}, name=node.name, dtypes=dtypes, shapes=shapes)
             else:
                 kwargs = {**inputs_map, "outputs": node.output}
                 ctx.remove_node(node.name)
@@ -1386,12 +1390,11 @@ class BatchToSpace:
         else:
             def mknode(optype, inputs, attrs=None):
                 nodename = utils.make_name(node.name + '_' + optype.lower())
-                if opset < 13 or optype != 'Squeeze':
-                    return ctx.make_node(optype, inputs, attrs, name=nodename)
-                inputs.append(attrs['axes'])
-                attrs = attrs.copy()
-                attrs.pop('axes')
+                if opset >= 13 and optype == 'Squeeze':
+                    return GraphBuilder(ctx).make_squeeze(
+                        {"axes": attrs['axes'], "data": inputs[0]}, name=nodename, return_node=True)
                 return ctx.make_node(optype, inputs, attrs, name=nodename)
+
 
             # support non 3D/4D tensors and dynamic crop vals
             # dynamic slice starts at opset 10
