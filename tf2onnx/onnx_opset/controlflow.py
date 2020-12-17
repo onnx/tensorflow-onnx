@@ -421,7 +421,7 @@ class While:
             del output_names[idx]
             del body.outputs[idx]
 
-        removed_scan_outputs = {}
+        scan_output_names = []
         # remove tensor array that are passed in to the loop
         for idx, n in reversed(to_remove):
             ctx.remove_node(n.name)
@@ -430,18 +430,14 @@ class While:
             del body.func_inputs[idx]
             del cond_graph.func_inputs[idx]
             del tf_while_inputs[idx]
-            # save the index of the scan output
-            removed_scan_outputs[body.outputs[idx]] = idx
+            scan_output_names.append(body.outputs[idx])
             del body.outputs[idx]
-            # FIXME: Output shapes may be in wrong order if there are multiple scan outputs
             output_shapes.append(output_shapes[idx])
             output_dtypes.append(output_dtypes[idx])
             output_names.append(output_names[idx])
             del output_shapes[idx]
             del output_dtypes[idx]
             del output_names[idx]
-
-        utils.make_sure(len(removed_scan_outputs) <= 1, "converter only supports while loops with a single scan output")
 
         ctx.remove_node(node.name)
 
@@ -467,7 +463,7 @@ class While:
             ctx.replace_all_inputs(k, v)  # ops=ctx.get_nodes()
 
         wire_while_body(ctx, body, loop_node.inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
-                        output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, removed_scan_outputs)
+                        output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, scan_output_names)
 
         # if there was a tensorflow variant type, bind in a real type here
         # FIXME: I don't think this is needed anymore
@@ -477,7 +473,7 @@ class While:
 
 
 def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
-                    output_dtypes, scope, parent, cond_graph, tf_while_inputs, removed_scan_outputs):
+                    output_dtypes, scope, parent, cond_graph, tf_while_inputs, scan_output_names):
     """Wire subgraph graph into main."""
     remove_parents = []
     to_remove = []
@@ -521,9 +517,10 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
             g.replace_inputs(node, [node.input[2]])
             scan_outputs.append(node.output[0])
 
-    if len(scan_outputs) != len(removed_scan_outputs):
+    if len(scan_outputs) != len(scan_output_names):
         raise ValueError("While loop couldn't find scan output index for nodes")
 
+    names_to_scan_outputs = {}
     for output in scan_outputs:
         last_output = output
         consumers = g.find_output_consumers(last_output)
@@ -533,10 +530,12 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
                 raise ValueError("While loop couldn't find scan output index for node " + node.name)
             last_output = node.output[0]
             consumers = g.find_output_consumers(last_output)
-        if last_output not in removed_scan_outputs:
+        if last_output not in scan_output_names:
             raise ValueError("While loop couldn't find scan output index for node " + node.name)
-        # TODO: store index to ensure scan outputs are in correct order for multiple outputs
-        # initial_output_index = removed_scan_outputs[last_output]
+        names_to_scan_outputs[last_output] = output
+
+    # Reorder scan outputs
+    scan_outputs = [names_to_scan_outputs[name] for name in scan_output_names]
 
     # remove all nodes feeding to TensorListSetItem's reserved tensor
     while remove_parents:
