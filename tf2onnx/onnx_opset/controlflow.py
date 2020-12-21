@@ -19,7 +19,6 @@ from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 from tf2onnx.tf_loader import find_function
-from tf2onnx.graph_builder import GraphBuilder
 
 
 logger = logging.getLogger(__name__)
@@ -286,12 +285,7 @@ class TensorListGetItem:
     def version_7(cls, ctx, node, **kwargs):
         ctx.ta_reads.append(node.input[0])
         node.type = "Gather"
-        g = GraphBuilder(ctx)
-
-        usq_node = g.make_unsqueeze({"axes": [0], 'data': node.input[1]}, name=node.child_name(), return_node=True)
-        ctx.replace_inputs(node, [node.input[0], usq_node.output[0]])
-        sq_node = g.make_squeeze({"axes": [0], 'data': node.output[0]}, name=node.child_name(), return_node=True)
-        ctx.insert_node_on_output(sq_node)
+        ctx.replace_inputs(node, [node.input[0], node.input[1]])
 
     @classmethod
     def version_13(cls, ctx, node, **kwargs):
