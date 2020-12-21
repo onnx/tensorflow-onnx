@@ -1192,7 +1192,8 @@ class Unpack:
         # for each output we need to squeeze axis
         for n in node.output:
             op_name = utils.make_name(node.name)
-            squeeze_node = ctx.insert_new_node_on_output("Squeeze", n, name=op_name, axes=[axis])
+            squeeze_node = GraphBuilder(ctx).make_squeeze({'data': n, 'axes': [axis]}, name=op_name, return_node=True)
+            ctx.insert_node_on_output(squeeze_node, n)
             ctx.copy_shape(n, squeeze_node.output[0])
             ctx.copy_dtype(n, squeeze_node.output[0])
 
@@ -1637,8 +1638,9 @@ class NonMaxSuppression:
             # add valid_outputs count
             output_idx = 2 if node.type in ["NonMaxSuppressionV5"] else 1
             shape_op = ctx.make_node("Shape", inputs=[nms_output.output[0]])
-            reduce_op = ctx.make_node("ReduceSum", inputs=shape_op.output, attr={"axes": [0], "keepdims": 0})
-            ctx.make_node("Cast", inputs=[reduce_op.output[0]], attr={"to": onnx_pb.TensorProto.INT32},
+            reduce_op = GraphBuilder(ctx).make_reduce_sum(
+                {"data": shape_op.output[0], "axes": [0], "keepdims": 0, "noop_with_empty_axes": 1})
+            ctx.make_node("Cast", inputs=[reduce_op], attr={"to": onnx_pb.TensorProto.INT32},
                           outputs=[node.output[output_idx]], dtypes=dtypes[output_idx], shapes=shapes[output_idx],
                           op_name_scope=node.name)
 

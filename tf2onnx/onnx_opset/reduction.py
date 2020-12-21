@@ -63,6 +63,11 @@ class ReduceOpBase:
             node.set_attr("noop_with_empty_axes", 1)
             if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
                 ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
+            input_shape = ctx.get_shape(node.input[1])
+            input_rank = len(input_shape) if input_shape is not None else None
+            if input_rank != 1:
+                new_shape = ctx.make_const(utils.make_name("reshape_const"), np.array([-1], np.int64))
+                ctx.insert_new_node_on_input(node, "Reshape", [node.input[1], new_shape.output[0]])
         else:
             cls.version_11(ctx, node, **kwargs)
 
