@@ -185,7 +185,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 sess_inputs = [sess.graph.get_tensor_by_name(k) for k in feed_dict.keys()]
                 sess_outputs = [sess.graph.get_tensor_by_name(n) for n in output_names_with_port]
                 converter = tf.compat.v1.lite.TFLiteConverter.from_session(sess, sess_inputs, sess_outputs)
-                converter.optimizations = [tf.lite.Optimize.DEFAULT]
+                #converter.optimizations = [tf.lite.Optimize.DEFAULT]
                 #converter.inference_input_type = tf.int8  # or tf.uint8
                 #converter.inference_output_type = tf.int8  # or tf.uint8
                 # converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
