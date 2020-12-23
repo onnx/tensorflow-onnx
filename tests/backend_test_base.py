@@ -259,7 +259,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     interpreter.set_tensor(input_name_to_index[k], v)
                 interpreter.invoke()
                 tf_lite_output_data = [interpreter.get_tensor(output['index']) for output in output_details]
-            except RuntimeError as e:
+            except (RuntimeError, ValueError) as e:
                 test_tflite = False
         if test_tflite:
             if not skip_tfl_consistency_check:
