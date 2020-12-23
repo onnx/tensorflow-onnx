@@ -161,11 +161,20 @@ class BackToBackOptimizer(GraphOptimizerBase):
         if node2.type != 'Unsqueeze':
             return []
 
-        axis1 = node.get_attr('axes').ints
-        axis2 = node2.get_attr('axes').ints
+        axes_match = False
+        if g.opset <= 12 and node.get_attr('axes').ints == node2.get_attr('axes').ints:
+            axes_match = True
+
+        # In opset 13, axes is an input. Optional for squeeze op.
+        if g.opset >= 13 and len(node.input) == 2:
+            if node.input[1] == node2.input[1]:
+                axes_match = True
+            elif node.inputs[1].is_const() and node2.inputs[1].is_const() and \
+                node.inputs[1].get_tensor_value(as_list=True) == node2.inputs[1].get_tensor_value(as_list=True):
+                axes_match = True
 
         # if squeeze followed by unsqueeze is on diff axes, skip
-        if axis1 != axis2:
+        if not axes_match:
             return []
 
         # if unsqueeze output is graph output, skip

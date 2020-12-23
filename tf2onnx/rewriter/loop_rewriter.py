@@ -18,6 +18,7 @@ import numpy as np
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +83,10 @@ class LoopRewriter(LoopRewriterBase):
 
             for input_ta in loop_props.tensor_array_inputs:
                 # Loop does not have scan inputs, so we use Gather to get data for each iteration.
-                index_node = loop_body_g.make_node("Unsqueeze", [input_ta.index_input_id], attr={"axes": [0]})
+                gb = GraphBuilder(loop_body_g)
+                index_node = gb.make_unsqueeze({'data': input_ta.index_input_id, "axes": [0]}, return_node=True)
                 gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, index_node.output[0]])
-                data_node = loop_body_g.make_node("Squeeze", [gather_node.output[0]], attr={"axes": [0]})
+                data_node = gb.make_squeeze({'data': gather_node.output[0], "axes": [0]}, return_node=True)
                 loop_body_g.replace_all_inputs(input_ta.consumer.id, data_node.output[0])  # ops=loop_body_g.get_nodes()
 
             ## create Loop node
@@ -127,7 +129,7 @@ class LoopRewriter(LoopRewriterBase):
             body_graphs = node.graph.contained_graphs.pop(node.name, None)
             if body_graphs:
                 for attr_name, body_graph in body_graphs.items():
-                    body_graph.parent_graph = g
+                    body_graph.parent_graph = self.g
                     new_node.set_body_graph_as_attr(attr_name, body_graph)
             copied_nodes.append(new_node)
 

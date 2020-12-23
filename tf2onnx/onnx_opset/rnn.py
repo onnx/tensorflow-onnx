@@ -13,6 +13,7 @@ import logging
 import numpy as np
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +94,9 @@ class LSTMBlockCell:
             raise RuntimeError("shape of W of LSTMBlockCell {} should be times of 4".format(node.name))
         merged_output_node = ctx.make_node("Add", [xh_w_node.output[0], b])
         w_last_dim = int(w_shape[1] / 4)
-        split = [w_last_dim] * 4
         split_output_node = ctx.make_node(
             "Split", [merged_output_node.output[0]],
-            attr={"axis": 1, "split": split},
+            attr={"axis": 1},
             output_count=4
         )
         i, ci, f, o = split_output_node.output
@@ -230,6 +230,9 @@ class CudnnRNN:
         ctx.make_node('Split', [r], outputs=rs)
         ctx.make_node('Split', [b], outputs=bs)
         ctx.make_node('Split', [h], outputs=hs)
+
+        builder = GraphBuilder(ctx)
+
         xnf = xnb = x
         for i in range(num_layers):
             suffix = '_' + str(i * num_dirs)
@@ -238,7 +241,7 @@ class CudnnRNN:
                           outputs=[name('Y' + suffix), name('YH' + suffix)],
                           attr={'direction': 'forward', 'hidden_size': num_units})
             xnf = name(x + suffix)
-            ctx.make_node('Squeeze', [name('Y' + suffix)], outputs=[xnf], attr={'axes': [1]})
+            builder.make_squeeze({'data': name('Y' + suffix), 'outputs': [xnf], 'axes': [1]})
             if num_dirs == 2:
                 suffix = '_' + str(i * 2 + 1)
                 ctx.make_node('GRU',
@@ -246,10 +249,15 @@ class CudnnRNN:
                               outputs=[name('Y' + suffix), name('YH' + suffix)],
                               attr={'direction': 'reverse', 'hidden_size': num_units})
                 xnb = name(x + suffix)
-                ctx.make_node('Squeeze', [name('Y' + suffix)], outputs=[xnb], attr={'axes': [1]})
+                builder.make_squeeze({'data': name('Y' + suffix), 'outputs': [xnb], 'axes': [1]})
         ctx.remove_node(node.name)
         if num_dirs == 2:
             ctx.make_node('Concat', [xnf, xnb], outputs=[node.output[0]], attr={'axis': -1})
         else:
             ctx.make_node('Identity', [xnf], outputs=[node.output[0]])
         ctx.make_node('Concat', yhs, outputs=[node.output[1]], attr={'axis': 0})
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Squeeze changed in Opset 13.
+        cls.version_10(ctx, node, **kwargs)

@@ -571,6 +571,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _squeeze_handler(self, trans, node):
         def _calculate_new_attr(ori_perm, ori_squeeze_axes):
+            ori_squeeze_axes = [i if i >= 0 else i + 4 for i in ori_squeeze_axes]
             new_squeeze_axes = sorted([ori_perm[i] for i in ori_squeeze_axes])
             # calculate output shape after trans and squeeze
             input_shape = "abcd"
@@ -586,18 +587,30 @@ class TransposeOptimizer(GraphOptimizerBase):
         if not self._nodes_has_single_consumer_node([trans]):
             return False
 
+        axes = None
+        # in opset 13, axes is an input not attr
         if node.get_attr("axes"):
+            axes = node.get_attr("axes").ints
+        if len(node.input) > 1 and node.inputs[1].is_const():
+            axes = node.inputs[1].get_tensor_value(as_list=True)
+
+        if axes is not None:
             # switch tran and squeeze
             # 1 switch
             self._g.replace_all_inputs(node.output[0], trans.output[0])  # ops=self._g.get_nodes()
             self._g.replace_input(node, node.input[0], trans.input[0], 0)
             self._g.replace_input(trans, trans.input[0], node.output[0], 0)
             # 2 correct attr of nodes
-            squeeze_axes = sorted(list(node.get_attr("axes").ints))
+            squeeze_axes = sorted(axes)
             trans_perm = list(trans.get_attr("perm").ints)
             new_perm, new_squeeze_axes = _calculate_new_attr(ori_perm=trans_perm, ori_squeeze_axes=squeeze_axes)
             trans.set_attr("perm", new_perm)
-            node.set_attr("axes", new_squeeze_axes)
+            if self._g.opset <= 12:
+                node.set_attr("axes", new_squeeze_axes)
+            else:
+                new_axes_np = np.array(new_squeeze_axes, dtype=np.int64)
+                new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
+                self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
             # 3 set shape
             squeeze_shape = self._g.get_shape(node.output[0])
             self._g.set_shape(trans.output[0], squeeze_shape)

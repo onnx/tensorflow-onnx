@@ -3311,3 +3311,51 @@ universal-sentence-encoder-large:
   atol: 0.0005
   tag: "serve"
   signature_def: "serving_default"
+
+universal-sentence-encoder-qa:
+  disabled: true
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/universal-sentence-encoder-qa"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/universal-sentence-encoder-qa/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "input:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "default"
+
+covid-twitter-bert:
+  disabled: false
+  skip_conversion: true
+  model: "C:/Users/tomwi/Documents/tfhubmodels/covid-twitter-bert"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/covid-twitter-bert/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_mask:0": 
+      shape: [1, 512]
+      input_get: get_ones_int32
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+  outputs:
+    - Identity:0
+    - Identity_1:0
+  structured_outputs:
+    - transformer_encoder
+    - transformer_encoder_1
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"

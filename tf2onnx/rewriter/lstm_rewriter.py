@@ -298,18 +298,19 @@ class LSTMRewriter(LSTMRewriterBase):
         context.onnx_input_ids[i]["initial_c"] = init_c_id
 
     def _process_non_tuple_ch_init_nodes(self, context, i):
+        gb = GraphBuilder(self.g)
         input_id = context.state_variables["ct_ht" + str(i)].enter_input_id
         hidden_size = context.hidden_size[i]
 
         attr = {"axes": [1], "starts": [0], "ends": [hidden_size]}
         inputs_map = {"data": input_id, **attr}
         slice_node1 = GraphBuilder(self.g).make_slice(inputs_map)
-        unsqueeze_node_1 = self.g.make_node("Unsqueeze", [slice_node1], attr={"axes": [0]})
+        unsqueeze_node_1 = gb.make_unsqueeze({'data': slice_node1, "axes": [0]}, return_node=True)
 
         attr = {"axes": [1], "starts": [hidden_size], "ends": [hidden_size * 2]}
         inputs_map = {"data": input_id, **attr}
         slice_node2 = GraphBuilder(self.g).make_slice(inputs_map)
-        unsqueeze_node_2 = self.g.make_node("Unsqueeze", [slice_node2], attr={"axes": [0]})
+        unsqueeze_node_2 = gb.make_unsqueeze({'data': slice_node2, "axes": [0]}, return_node=True)
 
         return unsqueeze_node_1.output[0], unsqueeze_node_2.output[0]
 
@@ -328,7 +329,9 @@ class LSTMRewriter(LSTMRewriterBase):
             new_val = np.expand_dims(val, axis=0)
             const_node = self.g.make_const(initial_name, new_val)
             return const_node.output[0]
-        squeeze_node = self.g.make_node("Unsqueeze", [initializer_input_id], attr={"axes": [0]})
+
+        gb = GraphBuilder(self.g)
+        squeeze_node = gb.make_unsqueeze({'data': initializer_input_id, "axes": [0]}, return_node=True)
         to_replace = [n for n in self.g.get_nodes() if n != squeeze_node]
         self.g.replace_all_inputs(initializer_input_id, squeeze_node.output[0], ops=to_replace)
         return squeeze_node.output[0]
@@ -361,6 +364,7 @@ class LSTMRewriter(LSTMRewriterBase):
         return lstm_node
 
     def create_rnn_node(self, context):
+        gb = GraphBuilder(self.g)
         rnn_nodes = list()
         outputs = context.loop_properties.scan_outputs_exits
         logger.debug("number of rnn node outputs: %s", len(outputs))
@@ -371,9 +375,10 @@ class LSTMRewriter(LSTMRewriterBase):
             output_id = rnn_nodes[i].output[0]
             rnn_output_shape = self.g.get_shape(output_id)
             squeeze_output_shape = [rnn_output_shape[0], rnn_output_shape[2], rnn_output_shape[3]]
-            squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
-                                            shapes=[squeeze_output_shape],
-                                            dtypes=[self.g.get_dtype(output_id)])
+            squeeze_node = gb.make_squeeze({"data": output_id, "axes": [1]},
+                                           shapes=[squeeze_output_shape],
+                                           dtypes=[self.g.get_dtype(output_id)],
+                                           return_node=True)
             if i + 1 < self.num_lstm_layers:
                 logger.debug("setting input for layer: %s", i + 1)
                 context.onnx_input_ids[i + 1]["X"] = squeeze_node.output[0]
@@ -382,30 +387,35 @@ class LSTMRewriter(LSTMRewriterBase):
     def _connect_lstm_yh_to_graph(self, context, i):
         # in tf, y_h output shape is: [batch, hidden]
         # in onnx, output shape is: [number_directions, batch, hidden]
+        gb = GraphBuilder(self.g)
         exit_output = context.state_variables["ht" + str(i)].exit_output
         output_id = context.rnn_node[i].output[1]
         lstm_yh_shape = self.g.get_shape(output_id)
-        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
-                                        shapes=[[lstm_yh_shape[1], lstm_yh_shape[2]]],
-                                        dtypes=[self.g.get_dtype(output_id)])
+        squeeze_node = gb.make_squeeze({"data": output_id, "axes": [0]},
+                                       shapes=[[lstm_yh_shape[1], lstm_yh_shape[2]]],
+                                       dtypes=[self.g.get_dtype(output_id)],
+                                       return_node=True)
 
         self.g.replace_all_inputs(exit_output.id, squeeze_node.output[0])  # ops=self.g.get_nodes()
 
     def _connect_lstm_yc_to_graph(self, context, i):
         # in tf, y_c output shape is: [batch, hidden]
         # in onnx, output shape is: [number_directions, batch, hidden]
+        gb = GraphBuilder(self.g)
         exit_output = context.state_variables["ct" + str(i)].exit_output
         output_id = context.rnn_node[i].output[2]
         lstm_yc_shape = self.g.get_shape(output_id)
-        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
-                                        shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
-                                        dtypes=[self.g.get_dtype(output_id)])
+        squeeze_node = gb.make_squeeze({"data": output_id, "axes": [0]},
+                                       shapes=[[lstm_yc_shape[1], lstm_yc_shape[2]]],
+                                       dtypes=[self.g.get_dtype(output_id)],
+                                       return_node=True)
 
         self.g.replace_all_inputs(exit_output.id, squeeze_node.output[0])  # ops=self.g.get_nodes()
 
     def _connect_lstm_ych_to_graph(self, context, i):
         # in tf, concat of y_c and y_h output shape is: [batch, hidden *2]
         # in onnx, y_c/y_h output shape is: [number_directions, batch, hidden]
+        gb = GraphBuilder(self.g)
         exit_output = context.state_variables["ct_ht" + str(i)].exit_output
         lstm_node = context.rnn_node[i]
         yc_shape = self.g.get_shape(lstm_node.output[2])
@@ -415,8 +425,9 @@ class LSTMRewriter(LSTMRewriterBase):
                                   dtypes=[self.g.get_dtype(lstm_node.output[2])])
 
         squeeze_output_shape = [concat_output_shape[1], concat_output_shape[2]]
-        squeeze_node = self.g.make_node("Squeeze", [concat.output[0]], attr={"axes": [0]},
-                                        shapes=[squeeze_output_shape],
-                                        dtypes=[self.g.get_dtype(concat.output[0])])
+        squeeze_node = gb.make_squeeze({'data': concat.output[0], "axes": [0]},
+                                       shapes=[squeeze_output_shape],
+                                       dtypes=[self.g.get_dtype(concat.output[0])],
+                                       return_node=True)
 
         self.g.replace_all_inputs(exit_output.id, squeeze_node.output[0])  # ops=self.g.get_nodes()

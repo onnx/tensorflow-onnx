@@ -36,8 +36,8 @@ def _get_optimizers():
     return _optimizers
 
 
-def optimize_graph(graph):
-    """ Optimize graph, return optimized graph. No throw. """
+def optimize_graph(graph, catch_errors=True):
+    """ Optimize graph, return optimized graph. No throw if catch_errors is true"""
     logger = logging.getLogger(__name__)
     logger.info("Optimizing ONNX model")
 
@@ -48,17 +48,20 @@ def optimize_graph(graph):
     while continue_flag:
         continue_flag = False
         for name, factory in opts.items():
-            try:
-                print(name)
-                logger.verbose("Apply %s", name)
-                current = copy.deepcopy(graph)
+            logger.verbose("Apply %s", name)
+            if catch_errors:
+                try:
+                    current = copy.deepcopy(graph)
+                    opt = factory()
+                    graph = opt.optimize(current) or graph
+                    continue_flag = continue_flag or opt.graph_been_opt
+                except Exception:  # pylint: disable=broad-except
+                    # if current optimizer fails, continue with other optimizers
+                    logger.warning("Failed to apply %s", name, exc_info=1)
+            else:
                 opt = factory()
-                graph = opt.optimize(current) or graph
+                graph = opt.optimize(graph)
                 continue_flag = continue_flag or opt.graph_been_opt
-
-            except Exception:  # pylint: disable=broad-except
-                # if current optimizer fails, continue with other optimizers
-                logger.warning("Failed to apply %s", name, exc_info=1)
 
     try:
         graph.topological_sort(graph.get_nodes())

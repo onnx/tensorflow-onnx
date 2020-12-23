@@ -287,8 +287,10 @@ class TensorListGetItem:
         ctx.ta_reads.append(node.input[0])
         node.type = "Gather"
         ctx.replace_inputs(node, [node.input[0], node.input[1]])
-        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])
-        ctx.insert_new_node_on_output("Squeeze", node.output[0], name=node.child_name(), axes=[0])
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cls.version_7(ctx, node, **kwargs)
 
 
 @tf_op(["TensorListLength"])
@@ -348,20 +350,29 @@ class While:
         # may be removed from output_names below
         output_names = node.output.copy()
 
-        # Make maximum_iterations int64 and replace -1(tf) with maxsize(onnx). If the const node has no other consumers,
-        # modify it in place. Otherwise, make a new const node and leave the original unchanged.
+        # Make maximum_iterations int64 and replace -1(tf) with maxsize(onnx). If the const node has no other
+        # consumers, modify it in place. Otherwise, make a new const node and leave the original unchanged.
+        # if maximum_iterations is not const,should add an cast node(cast to int64)
         maximum_iterations_name = node.input[1]
-        maximum_iterations = node.inputs[1].get_tensor_value()
-        if maximum_iterations == -1:
-            maximum_iterations = np.iinfo(np.int64).max
-        consumers = ctx.find_output_consumers(maximum_iterations_name)
-        external_consumers = [c for c in consumers if c != node and c.type != 'TensorListReserve']
-        if len(external_consumers) == 0:
-            ctx.remove_node(node.inputs[1].name)
+        if node.inputs[1].is_const():
+            maximum_iterations = node.inputs[1].get_tensor_value()
+            if maximum_iterations == -1:
+                maximum_iterations = np.iinfo(np.int64).max
+            consumers = ctx.find_output_consumers(maximum_iterations_name)
+            external_consumers = [c for c in consumers if c != node and c.type != 'TensorListReserve']
+            if len(external_consumers) == 0:
+                ctx.remove_node(node.inputs[1].name)
+            else:
+                maximum_iterations_name = utils.make_name(node.inputs[1].name)
+            ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
+            ctx.replace_input(node, node.input[1], maximum_iterations_name, 1)
+            maximum_iterations_int64 = maximum_iterations_name
         else:
-            maximum_iterations_name = utils.make_name(node.inputs[1].name)
-        ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
-        ctx.replace_input(node, node.input[1], maximum_iterations_name, 1)
+            cast_inputs = [maximum_iterations_name]
+            attr = {"to": onnx_pb.TensorProto.INT64}
+            cast_name = node.name + "_cast"
+            cast_node = ctx.make_node("Cast", cast_inputs, attr, name=cast_name)
+            maximum_iterations_int64 = cast_node.output[0]
 
         cond_name = node.get_attr_str("cond")
         cond_graph = find_function(cond_name)
@@ -407,7 +418,7 @@ class While:
             del output_names[idx]
             del body.outputs[idx]
 
-        removed_scan_outputs = {}
+        scan_output_names = []
         # remove tensor array that are passed in to the loop
         for idx, n in reversed(to_remove):
             ctx.remove_node(n.name)
@@ -416,18 +427,14 @@ class While:
             del body.func_inputs[idx]
             del cond_graph.func_inputs[idx]
             del tf_while_inputs[idx]
-            # save the index of the scan output
-            removed_scan_outputs[body.outputs[idx]] = idx
+            scan_output_names.append(body.outputs[idx])
             del body.outputs[idx]
-            # FIXME: Output shapes may be in wrong order if there are multiple scan outputs
             output_shapes.append(output_shapes[idx])
             output_dtypes.append(output_dtypes[idx])
             output_names.append(output_names[idx])
             del output_shapes[idx]
             del output_dtypes[idx]
             del output_names[idx]
-
-        utils.make_sure(len(removed_scan_outputs) <= 1, "converter only supports while loops with a single scan output")
 
         ctx.remove_node(node.name)
 
@@ -441,7 +448,7 @@ class While:
         output_names = output_names[2:]
 
         branches = {"body": body}
-        loop_node = ctx.make_node("Loop", [maximum_iterations_name, cond_outputs[0]] + loop_vars,
+        loop_node = ctx.make_node("Loop", [maximum_iterations_int64, cond_outputs[0]] + loop_vars,
                                   output_count=len(output_shapes), name=node.name + "_loop",
                                   shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True,
                                   branches=branches)
@@ -453,7 +460,7 @@ class While:
             ctx.replace_all_inputs(k, v)  # ops=ctx.get_nodes()
 
         wire_while_body(ctx, body, loop_node.inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
-                        output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, removed_scan_outputs)
+                        output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, scan_output_names)
 
         # if there was a tensorflow variant type, bind in a real type here
         # FIXME: I don't think this is needed anymore
@@ -463,7 +470,7 @@ class While:
 
 
 def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
-                    output_dtypes, scope, parent, cond_graph, tf_while_inputs, removed_scan_outputs):
+                    output_dtypes, scope, parent, cond_graph, tf_while_inputs, scan_output_names):
     """Wire subgraph graph into main."""
     remove_parents = []
     to_remove = []
@@ -507,9 +514,10 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
             g.replace_inputs(node, [node.input[2]])
             scan_outputs.append(node.output[0])
 
-    if len(scan_outputs) != len(removed_scan_outputs):
+    if len(scan_outputs) != len(scan_output_names):
         raise ValueError("While loop couldn't find scan output index for nodes")
 
+    names_to_scan_outputs = {}
     for output in scan_outputs:
         last_output = output
         consumers = g.find_output_consumers(last_output)
@@ -519,10 +527,12 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
                 raise ValueError("While loop couldn't find scan output index for node " + node.name)
             last_output = node.output[0]
             consumers = g.find_output_consumers(last_output)
-        if last_output not in removed_scan_outputs:
+        if last_output not in scan_output_names:
             raise ValueError("While loop couldn't find scan output index for node " + node.name)
-        # TODO: store index to ensure scan outputs are in correct order for multiple outputs
-        # initial_output_index = removed_scan_outputs[last_output]
+        names_to_scan_outputs[last_output] = output
+
+    # Reorder scan outputs
+    scan_outputs = [names_to_scan_outputs[name] for name in scan_output_names]
 
     # remove all nodes feeding to TensorListSetItem's reserved tensor
     while remove_parents:
@@ -608,7 +618,7 @@ def inline_subgraph(parent, g, scope, binding):
         parent.set_dtype(name, g.get_dtype(name))
         parent.set_shape(name, g.get_shape(name))
 
-    return  g.outputs
+    return g.outputs
 
 
 def parameter_binding(g, inputs, state_vars=None):

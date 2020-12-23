@@ -14,6 +14,7 @@ import re
 import shutil
 import tempfile
 import zipfile
+import logging
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -23,6 +24,9 @@ from google.protobuf import text_format
 from onnx import helper, onnx_pb, defs, numpy_helper, ModelProto, __version__
 
 from . import constants
+
+
+logger = logging.getLogger(__file__)
 
 
 #

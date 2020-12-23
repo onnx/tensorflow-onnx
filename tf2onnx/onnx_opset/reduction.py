@@ -45,16 +45,31 @@ class ReduceOpBase:
 
         node.set_attr("axes", axes)
         ctx.remove_input(node, node.input[1], 1)
-        keep_dims = node.get_attr("keep_dims")
-        if keep_dims:
-            del node.attr['keep_dims']
-            node.set_attr("keepdims", keep_dims.i)
+        keep_dims = node.get_attr_value("keep_dims", 0)
+        node.set_attr("keepdims", keep_dims)
+        del node.attr['keep_dims']
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # Opset 11 supports negative axis, but core logic is same
         cls.version_1(ctx, node, **kwargs)
 
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        if node.type == "ReduceSum":
+            keep_dims = node.get_attr_value("keep_dims", 0)
+            node.set_attr("keepdims", keep_dims)
+            del node.attr['keep_dims']
+            node.set_attr("noop_with_empty_axes", 1)
+            if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
+                ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
+            input_shape = ctx.get_shape(node.input[1])
+            input_rank = len(input_shape) if input_shape is not None else None
+            if input_rank != 1:
+                new_shape = ctx.make_const(utils.make_name("reshape_const"), np.array([-1], np.int64))
+                ctx.insert_new_node_on_input(node, "Reshape", [node.input[1], new_shape.output[0]])
+        else:
+            cls.version_11(ctx, node, **kwargs)
 
 @tf_op(["ArgMax", "ArgMin"])
 class ArgMax:
@@ -114,15 +129,20 @@ class AllAny:
         cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.FLOAT})
         keepdims = helper.get_attribute_value(node.get_attr("keep_dims"))
         op_type = "ReduceMin" if node.type == "All" else "ReduceSum"
-        reduce_node = ctx.make_node(op_type=op_type, inputs=cast.output,
-                                    attr={"axes": reduce_dim, "keepdims": keepdims})
+
+        if op_type == "ReduceSum":
+            reduce_node_output = GraphBuilder(ctx).make_reduce_sum(
+                {"data": cast.output[0], "axes": reduce_dim, "keepdims": keepdims, "noop_with_empty_axes": 1})
+        else:
+            reduce_node_output = ctx.make_node(op_type=op_type, inputs=cast.output,
+                                               attr={"axes": reduce_dim, "keepdims": keepdims}).output[0]
 
         zero_node = ctx.make_const(utils.make_name("zero_reduce"), np.array(0, dtype=np.float32))
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
-        ctx.make_node(op_type="Greater", inputs=[reduce_node.output[0], zero_node.output[0]],
+        ctx.make_node(op_type="Greater", inputs=[reduce_node_output, zero_node.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 
@@ -139,7 +159,7 @@ class AddN():
         "UnsortedSegmentSum", "UnsortedSegmentProd", "UnsortedSegmentMax", "UnsortedSegmentMin"])
 class SegmentSum():
     @classmethod
-    def version_9(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         node_inputs = node.input
         num_segments_specified = False
         if node.type.endswith("WithNumSegments") or node.type.startswith("Unsorted"):
@@ -198,17 +218,19 @@ class SegmentSum():
         one_hot_node = ctx.make_node("OneHot", [segment_inp, num_segments, onehot_values.output[0]],
                                      attr={'axis': 0})
         if node.type == "SegmentMean":
-            scaling_node = ctx.make_node("ReduceSum", [one_hot_node.output[0]], attr={'axes': [1], 'keepdims': 0})
+            scaling_node_output = GraphBuilder(ctx).make_reduce_sum(
+                {"data": one_hot_node.output[0], "axes": [1], "keepdims": 0, "noop_with_empty_axes": 1})
         elif node.type == "SegmentSqrtN":
-            seg_cnts_node = ctx.make_node("ReduceSum", [one_hot_node.output[0]], attr={'axes': [1], 'keepdims': 0})
-            scaling_node = ctx.make_node("Sqrt", [seg_cnts_node.output[0]])
+            seg_cnts_node_output = GraphBuilder(ctx).make_reduce_sum(
+                {"data": one_hot_node.output[0], "axes": [1], "keepdims": 0, "noop_with_empty_axes": 1})
+            scaling_node_output = ctx.make_node("Sqrt", [seg_cnts_node_output]).output[0]
         else:
-            scaling_node = None
+            scaling_node_output = None
 
-        if scaling_node and num_segments_specified:
+        if scaling_node_output is not None and num_segments_specified:
             # If empty segments are possible, we must avoid division by zero
             const_one_float = ctx.make_const(utils.make_name("const_one_float"), np.array(1, dtype=np.float32))
-            scaling_node = ctx.make_node("Max", [scaling_node.output[0], const_one_float.output[0]])
+            scaling_node_output = ctx.make_node("Max", [scaling_node_output, const_one_float.output[0]]).output[0]
 
 
         if onnx_op == "ReduceSum":
@@ -226,8 +248,9 @@ class SegmentSum():
 
             # Shapes [s, n] * [n, P] => [s, P]
             product = ctx.make_node("MatMul", [one_hot_cast.output[0], data_reshape.output[0]], op_name_scope=node.name)
-            if scaling_node is not None:
-                scaling_node_unsqueeze = ctx.make_node("Unsqueeze", [scaling_node.output[0]], attr={'axes': [1]})
+            if scaling_node_output is not None:
+                scaling_node_unsqueeze = GraphBuilder(ctx).make_unsqueeze(
+                    {'data': scaling_node_output, 'axes': [1]}, return_node=True)
                 product = ctx.make_node("Div", [product.output[0], scaling_node_unsqueeze.output[0]])
 
             # Create new shape [0, a, b, ..., c]
@@ -267,7 +290,8 @@ class SegmentSum():
             one_hot_unsqueeze = ctx.make_node("Reshape", [one_hot_bool.output[0], expanded_shape.output[0]])
         elif data_rank > 1:
             new_dims = list(range(2, 2 + data_rank - 1))
-            one_hot_unsqueeze = ctx.make_node("Unsqueeze", [one_hot_bool.output[0]], attr={'axes': new_dims})
+            one_hot_unsqueeze = GraphBuilder(ctx).make_unsqueeze(
+                {'data': one_hot_bool.output[0], 'axes': new_dims}, return_node=True)
 
         # Shape of data:       [n, a, b, ..., c]
         # Shape of one_hot: [s, n, 1, 1, ..., 1]
@@ -280,3 +304,11 @@ class SegmentSum():
         # After reduction over axis 1, shape is: [s, a, b, ..., c]
         ctx.make_node(onnx_op, [where_node.output[0]], attr={'axes': [1], 'keepdims': 0},
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        cls.any_version(9, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cls.any_version(13, ctx, node, **kwargs)

@@ -13,6 +13,7 @@ from __future__ import print_function
 import logging
 
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase
 from tf2onnx.rewriter.rnn_utils import get_pattern
 from tf2onnx.graph_matcher import GraphMatcher
@@ -173,6 +174,7 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
             logger.debug("no one consume output")
             return
 
+        gb = GraphBuilder(self.g)
         gather_output_id = outputs[0].id
         logger.debug("found output for rnn: %s", gather_output_id)
 
@@ -184,7 +186,8 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
         output_id = rnn_node.output[0]
         rnn_output_shape = self.g.get_shape(output_id)
         squeeze_output_shape = [rnn_output_shape[0], rnn_output_shape[2], rnn_output_shape[3]]
-        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [1]},
-                                        shapes=[squeeze_output_shape],
-                                        dtypes=[self.g.get_dtype(output_id)])
+        squeeze_node = gb.make_squeeze({'data': output_id, "axes": [1]},
+                                       shapes=[squeeze_output_shape],
+                                       dtypes=[self.g.get_dtype(output_id)],
+                                       return_node=True)
         self.g.replace_all_inputs(gather_output_id, squeeze_node.output[0])  # ops=self.g.get_nodes()

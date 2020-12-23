@@ -8,6 +8,7 @@ from onnx.onnx_pb import TensorProto
 from tf2onnx import constants, handler
 from tf2onnx.handler import tf_op
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 @tf_op(["StringSplit", "StringSplitV2"], domain=constants.CONTRIB_OPS_DOMAIN)
 class StringOps:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         if node.type == "StringSplit":
             skip_empty = node.get_attr_value('skip_empty', True)
         else:
@@ -25,9 +26,20 @@ class StringOps:
         node.domain = constants.CONTRIB_OPS_DOMAIN
         for a in list(node.attr.keys()):
             del node.attr[a]
-        unsqueeze_node = ctx.make_node("Unsqueeze", [node.input[1]], attr={'axes': [0]})
+        unsqueeze_node = GraphBuilder(ctx).make_squeeze(
+            {'data': node.input[1], 'axes': [0]}, return_node=True)
+
         skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], np.bool))
         ctx.replace_inputs(node, [node.input[0], unsqueeze_node.output[0], skip_empty_const.output[0]])
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        cls.any_version(1, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cls.any_version(13, ctx, node, **kwargs)
+
 
 @tf_op("StringToHashBucketFast", domain=constants.CONTRIB_OPS_DOMAIN)
 class StringToHashBucketFast:
@@ -59,7 +71,7 @@ class StaticRegexReplace:
 @tf_op("StringJoin", domain=constants.CONTRIB_OPS_DOMAIN)
 class StringJoin:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
         node.domain = constants.CONTRIB_OPS_DOMAIN
         separator = node.get_attr_value("separator")
         if separator is None:
@@ -76,10 +88,19 @@ class StringJoin:
             if ctx.get_shape(inp) == [] and shape_node is not None:
                 expand_node = ctx.make_node("Expand", [inp, shape_node.output[0]])
                 inp = expand_node.output[0]
-            unsqueeze_node = ctx.make_node("Unsqueeze", [inp], attr={'axes': [0]})
+                unsqueeze_node = GraphBuilder(ctx).make_squeeze({'data': inp, 'axes': [0]})
             unsqueezes.append(unsqueeze_node.output[0])
         stack_node = ctx.make_node("Concat", unsqueezes, attr={'axis': 0})
         ctx.replace_inputs(node, [stack_node.output[0], separator_node.output[0], axis_node.output[0]])
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        cls.any_version(1, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cls.any_version(13, ctx, node, **kwargs)
+
 
 @tf_op(["Equal", "NotEqual"], domain=constants.CONTRIB_OPS_DOMAIN)
 class StringEqual:
