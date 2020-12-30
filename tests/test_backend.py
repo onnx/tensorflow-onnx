@@ -2222,6 +2222,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
 
     @check_opset_min_version(7, "batchnorm")
+    def test_fused_batchnorm_training(self):
+        x_shape = [1, 28, 28, 2]
+        x_dtype = np.float32
+        scale_dtype = np.float32
+        scale_shape = [2]
+        # only nhwc is support on cpu for tensorflow
+        data_format = "NHWC"
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        def func(x):
+            scale = tf.constant(scale_val, name='scale')
+            offset = tf.constant(offset_val, name='offset')
+            epsilon = 0.001
+            y, _, _ = fused_batch_norm(
+                x, scale, offset, mean=None, variance=None,
+                epsilon=epsilon, data_format=data_format, is_training=True)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
+
+    @check_opset_min_version(7, "batchnorm")
     @check_tf_min_version("1.13")
     def test_batchnorm(self):
         x_shape = [1, 128, 128, 2]
