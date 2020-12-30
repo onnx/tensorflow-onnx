@@ -12,6 +12,7 @@ import logging
 from distutils.version import LooseVersion
 
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.ops import lookup_ops
 
 from tf2onnx import utils
@@ -311,6 +312,12 @@ def _remove_non_variable_resources_from_captures(concrete_func):
                 for i in reversed(range(len(concrete_func._captured_inputs))):
                     if concrete_func._captured_inputs[i] is val_tensor:
                         concrete_func._captured_inputs.pop(i)
+            elif val_tensor.dtype != tf.resource:
+                npval = val_tensor.numpy()
+                if not hasattr(npval, 'dtype'):
+                    # Hack around a TF bug until PR is merged: https://github.com/tensorflow/tensorflow/pull/45610
+                    arr = np.array(npval)
+                    val_tensor.numpy = lambda arr=arr: arr
     else:
         logger.warning(
             "Could not search for non-variable resources. Concrete function internal representation may have changed.")
