@@ -105,4 +105,8 @@ class BuiltinOptions(object):
     DensifyOptions = 99
     SegmentSumOptions = 100
     BatchMatMulOptions = 101
+    CumsumOptions = 102
+    CallOnceOptions = 103
+    BroadcastToOptions = 104
+    Rfft2dOptions = 105
 

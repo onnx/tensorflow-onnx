@@ -130,4 +130,9 @@ class BuiltinOperator(object):
     DENSIFY = 124
     SEGMENT_SUM = 125
     BATCH_MATMUL = 126
+    PLACEHOLDER_FOR_GREATER_OP_CODES = 127
+    CUMSUM = 128
+    CALL_ONCE = 129
+    BROADCAST_TO = 130
+    RFFT2D = 131
 
