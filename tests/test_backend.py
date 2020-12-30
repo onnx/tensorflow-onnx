@@ -1308,7 +1308,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def graph_validator(g):
             # After constant folding just an input and const output node remain
             return len(g.get_nodes()) == 2
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, graph_validator=graph_validator)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, graph_validator=graph_validator, test_tflite=False)
 
     def test_slice(self):
         x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)

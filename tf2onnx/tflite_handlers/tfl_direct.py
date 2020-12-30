@@ -72,6 +72,7 @@ MIRROR_PAD
 RESIZE_BILINEAR
 REVERSE_SEQUENCE
 SPARSE_TO_DENSE
+CUMSUM
 """
 guess_list = guess_list.strip().split("\n")
 from tf2onnx.tflite_utils import snake_to_proper_case

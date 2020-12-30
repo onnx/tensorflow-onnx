@@ -20,6 +20,7 @@ TFLITE_TO_ONNX_DTYPE = {
     TFLiteTensorType.INT8: onnx_pb.TensorProto.INT8,
     TFLiteTensorType.FLOAT64: onnx_pb.TensorProto.DOUBLE,
     TFLiteTensorType.COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
+    TFLiteTensorType.UINT64: onnx_pb.TensorProto.UINT64,
 }
 
 TFLITE_TO_TF_DTYPE = {
@@ -35,6 +36,7 @@ TFLITE_TO_TF_DTYPE = {
     TFLiteTensorType.INT8: types_pb2.DT_INT8,
     TFLiteTensorType.FLOAT64: types_pb2.DT_DOUBLE,
     TFLiteTensorType.COMPLEX128: types_pb2.DT_COMPLEX128,
+    TFLiteTensorType.UINT64: types_pb2.DT_UINT64,
 }
 
 def snake_to_proper_case(name):

@@ -254,7 +254,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 ouput_name_to_index = {n['name'].split(':')[0]: n['index'] for n in output_details}
                 feed_dict_without_port = {k.split(':')[0]: v for k, v in feed_dict.items()}
                 # The output names might be different in the tflite but the order is the same
-                output_names = [t[1] for t in sorted((v, k) for k, v in ouput_name_to_index.items())]
+                output_names = [n['name'] for n in output_details]
                 for k, v in feed_dict_without_port.items():
                     interpreter.set_tensor(input_name_to_index[k], v)
                 interpreter.invoke()
