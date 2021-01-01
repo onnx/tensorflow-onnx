@@ -951,6 +951,13 @@ class Graph(object):
             return shape
         return shape
 
+    def get_rank(self, name):
+        """Returns len(get_shape(name)) or None if shape is None"""
+        shape = self.get_shape(name)
+        if shape is None:
+            return None
+        return len(shape)
+
     def set_shape(self, name, val):
         """Set new shape of node."""
         if isinstance(val, np.ndarray):
