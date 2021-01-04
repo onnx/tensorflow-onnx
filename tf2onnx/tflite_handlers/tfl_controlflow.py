@@ -32,7 +32,7 @@ class TflWhile:
         output_dtypes = output_dtypes
         output_names = output_names
 
-        max_iterations = ctx.make_const("max_iterations", np.array(np.iinfo(np.int64).max))
+        max_iterations = ctx.make_const(utils.make_name("max_iterations"), np.array(np.iinfo(np.int64).max))
 
         loop_node = ctx.make_node("Loop", [max_iterations.output[0], cond_outputs[0]] + tfl_while_inputs,
                                   output_count=len(output_shapes), name=node.name + "_loop",

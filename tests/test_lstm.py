@@ -327,7 +327,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=0.01)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=0.01, skip_tfl_consistency_check=True)
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
     def test_multiple_dynamic_lstm_state_is_tuple(self):

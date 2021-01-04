@@ -1,7 +1,10 @@
 
+import logging
+import numpy as np
 from tf2onnx.handler import tfl_op
 from tf2onnx import constants, utils
-import numpy as np
+
+logger = logging.getLogger(__name__)
 
 def separate_fused_activation_function(ctx, node):
     activation_fn = node.attr['fused_activation_function'].s
@@ -199,13 +202,31 @@ class TflDequantizeOp:
         axis = node.get_attr_value('quantized_dimension')
         np_q_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0]))
         if len(scale) > 1 or len(zero_point) > 1:
+            utils.make_sure(ctx.opset >= 13, "Opset 13 is required for per-axis quantization")
             node.set_attr("axis", axis)
-        scale_node = ctx.make_const(utils.make_name("scale"), np.array(scale[0], dtype=np.float32))
-        zero_point_node = ctx.make_const(utils.make_name("zero_point"), np.array(zero_point[0], dtype=np_q_type))
+            scale_node = ctx.make_const(utils.make_name("scale"), np.array(scale, dtype=np.float32))
+            zero_point_node = ctx.make_const(utils.make_name("zero_point"), np.array(zero_point, dtype=np_q_type))
+        else:
+            scale_node = ctx.make_const(utils.make_name("scale"), np.array(scale[0], dtype=np.float32))
+            zero_point_node = ctx.make_const(utils.make_name("zero_point"), np.array(zero_point[0], dtype=np_q_type))
         ctx.replace_inputs(node, [node.input[0], scale_node.output[0], zero_point_node.output[0]])
         del node.attr["scale"]
         del node.attr["zero_point"]
         del node.attr["quantized_dimension"]
+
+def dynamic_quantize_inputs(ctx, node):
+    if ctx.opset < 11:
+        logger.warning("Opset 11 is required for asymmetric_quantize_inputs of node %s", node.name)
+        return
+    for i in range(len(node.input)):
+        # Don't quantize inputs that are already quantized
+        if node.inputs[i].type in ["DequantizeLinear", "TFL_DEQUANTIZE"]:
+            continue
+        dyn_quant = ctx.make_node("DynamicQuantizeLinear", [node.input[i]], output_count=3, op_name_scope=node.name)
+        dyn_quant.skip_conversion = True
+        dequant = ctx.make_node("DequantizeLinear", dyn_quant.output, op_name_scope=node.name)
+        dequant.skip_conversion = True
+        ctx.replace_input(node, node.input[i], dequant.output[0], input_index=i)
 
 @tfl_op(["TFL_FULLY_CONNECTED"])
 class TflFullyConnectedOp:
@@ -213,15 +234,26 @@ class TflFullyConnectedOp:
     def to_tf(cls, ctx, node, **kwargs):
         separate_fused_activation_function(ctx, node)
         utils.make_sure(node.attr['weights_format'].s == b'DEFAULT', "Only default weights format supported for fully connected op")
-        utils.make_sure(len(node.input) == 2, "Only supports 2 inputs for TFL_FULLY_CONNECTED")  # FIXME
-        if len(node.input) == 2:
-            transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1], name=None, input_index=1, perm=[1, 0])
-            transpose_node.skip_conversion = True
-            node.set_attr("transpose_a", 0)
-            node.set_attr("transpose_b", 0)
-            node.type = "MatMul"
-        else:
-            assert False
+        utils.make_sure(node.attr['keep_num_dims'].i == 0, "Only keep_num_dims=False supported for fully connected op")
+        if node.attr['asymmetric_quantize_inputs'].i == 1:
+            dynamic_quantize_inputs(ctx, node)
+
+        transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1], name=None, input_index=1, perm=[1, 0])
+        transpose_node.skip_conversion = True
+        node.set_attr("transpose_a", 0)
+        node.set_attr("transpose_b", 0)
+        node.type = "MatMul"
+
+        if len(node.input) == 3:
+            # FIXME: Add a test for this
+            bias_inp = node.input[2]
+            ctx.replace_inputs(node, node.input[:2])
+            add_node = ctx.insert_new_node_on_output("Add", node.output[0], inputs=[node.output[0], bias_inp])
+            add_node.skip_conversion = True
+
+        del node.attr["weights_format"]
+        del node.attr["keep_num_dims"]
+        del node.attr["asymmetric_quantize_inputs"]
 
 # DONE
 
