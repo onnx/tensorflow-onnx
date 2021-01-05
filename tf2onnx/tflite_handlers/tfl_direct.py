@@ -50,6 +50,7 @@ from tf2onnx.handler import tfl_op
 @tfl_op("TFL_SLICE", tf_op="Slice")
 @tfl_op("TFL_SQUEEZE", tf_op="Squeeze")
 @tfl_op("TFL_TILE", tf_op="Tile")
+@tfl_op("TFL_EXPAND_DIMS", tf_op="ExpandDims")
 @tfl_op("TFL_TRANSPOSE", tf_op="Transpose")
 @tfl_op("TFL_UNPACK", tf_op="Unpack")
 @tfl_op("TFL_ADD_N", tf_op="AddN")
