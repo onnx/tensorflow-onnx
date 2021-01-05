@@ -99,8 +99,11 @@ def read_tflite_model(tflite_path):
     m = Model.GetRootAsModel(buf, 0)
     opcodes = {}
     for i in range(m.OperatorCodesLength()):
-        code = m.OperatorCodes(i)
-        opcodes[i] = lookup_enum(code.BuiltinCode(), 'BuiltinOperator')
+        op_code = m.OperatorCodes(i)
+        code = lookup_enum(op_code.DeprecatedBuiltinCode(), 'BuiltinOperator')
+        if code == 'PLACEHOLDER_FOR_GREATER_OP_CODES':
+            code = lookup_enum(op_code.BuiltinCode(), 'BuiltinOperator')
+        opcodes[i] = code
     tflite_graphs = [m.Subgraphs(i) for i in range(m.SubgraphsLength())]
     return tflite_graphs, opcodes, m
 
