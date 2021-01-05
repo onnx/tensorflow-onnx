@@ -7,6 +7,8 @@ from tf2onnx import constants, utils
 logger = logging.getLogger(__name__)
 
 def separate_fused_activation_function(ctx, node):
+    if 'fused_activation_function' not in node.attr:
+        return
     activation_fn = node.attr['fused_activation_function'].s
     del node.attr['fused_activation_function']
     if activation_fn == b'RELU':
