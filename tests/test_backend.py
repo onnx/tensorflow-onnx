@@ -2311,7 +2311,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                          signed_input=True, narrow_range=False, \
                                          range_given=True, axis=-1)
             return tf.identity(x_, name=_TFOUTPUT)
-        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, test_tflite=False)
 
     @skip_caffe2_backend()
     @check_opset_min_version(7, "resize_nearest_neighbor")
