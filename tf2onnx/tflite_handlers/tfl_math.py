@@ -168,7 +168,7 @@ class TflPadV2Op:
 class TflNonMaxSuppressionV4Op:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        node.set_attr("pad_to_max_output_size", 0)
+        node.set_attr("pad_to_max_output_size", 1)
 
 @tfl_op(["TFL_RANGE"], tf_op="Range")
 class TflRangeOp:
