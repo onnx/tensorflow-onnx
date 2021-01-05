@@ -3740,6 +3740,48 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: indices_val, _INPUT1: dense_shape_val,
                                                         _INPUT2: new_shape_val, _INPUT3: shape_pad_val})
 
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "Range")
+    def test_ragged_range_float(self):
+        starts_val = np.array([0, 0, 1, 10, 0.5, 0.5], dtype=np.float32)
+        limits_val = np.array([-5, -2, 7, 100, 1, 1], dtype=np.float32)
+        deltas_val = np.array([-1, 1, 2, 20, 1, 1.1], dtype=np.float32)
+        def func(starts, limits, deltas):
+            x = tf.ragged.range(starts, limits, deltas)
+            rt_nested_splits = tf.identity(x.row_splits, name=_TFOUTPUT)
+            rt_dense_values = tf.identity(x.flat_values, name=_TFOUTPUT1)
+            return rt_nested_splits, rt_dense_values
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: starts_val, _INPUT1: limits_val,
+                                                        _INPUT2: deltas_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "Range")
+    def test_ragged_range_int(self):
+        starts_val = np.array([0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.int32)
+        limits_val = np.array([-6, -5, -4, -1, 0, 1, 4, 5, 6, 2, -2], dtype=np.int32)
+        deltas_val = np.array([-5, -5, -5, -5, 5, 5, 5, 5, 5, 1, -1], dtype=np.int32)
+        def func(starts, limits, deltas):
+            x = tf.ragged.range(starts, limits, deltas)
+            rt_nested_splits = tf.identity(x.row_splits, name=_TFOUTPUT)
+            rt_dense_values = tf.identity(x.flat_values, name=_TFOUTPUT1)
+            return rt_nested_splits, rt_dense_values
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: starts_val, _INPUT1: limits_val,
+                                                        _INPUT2: deltas_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "Range")
+    def test_ragged_range_scalar(self):
+        starts_val = np.array(0, dtype=np.int32)
+        limits_val = np.array([5, -1, -1, 2, 7, 100, 4, 5, 6], dtype=np.int32)
+        deltas_val = np.array(1, dtype=np.int32)
+        def func(starts, limits, deltas):
+            x = tf.ragged.range(starts, limits, deltas)
+            rt_nested_splits = tf.identity(x.row_splits, name=_TFOUTPUT)
+            rt_dense_values = tf.identity(x.flat_values, name=_TFOUTPUT1)
+            return rt_nested_splits, rt_dense_values
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: starts_val, _INPUT1: limits_val,
+                                                        _INPUT2: deltas_val})
+
     @check_opset_min_version(9, "Compress")
     def test_dynamic_partition_both_vector(self):
         data_val = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float32)
