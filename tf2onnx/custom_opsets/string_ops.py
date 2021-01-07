@@ -26,8 +26,7 @@ class StringOps:
         node.domain = constants.CONTRIB_OPS_DOMAIN
         for a in list(node.attr.keys()):
             del node.attr[a]
-        unsqueeze_node = GraphBuilder(ctx).make_squeeze(
-            {'data': node.input[1], 'axes': [0]}, return_node=True)
+        unsqueeze_node = GraphBuilder(ctx).make_unsqueeze({'data': node.input[1], 'axes': [0]}, return_node=True)
 
         skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], np.bool))
         ctx.replace_inputs(node, [node.input[0], unsqueeze_node.output[0], skip_empty_const.output[0]])
@@ -88,8 +87,8 @@ class StringJoin:
             if ctx.get_shape(inp) == [] and shape_node is not None:
                 expand_node = ctx.make_node("Expand", [inp, shape_node.output[0]])
                 inp = expand_node.output[0]
-                unsqueeze_node = GraphBuilder(ctx).make_squeeze({'data': inp, 'axes': [0]})
-            unsqueezes.append(unsqueeze_node.output[0])
+            unsqueeze_node = GraphBuilder(ctx).make_unsqueeze({'data': inp, 'axes': [0]})
+            unsqueezes.append(unsqueeze_node)
         stack_node = ctx.make_node("Concat", unsqueezes, attr={'axis': 0})
         ctx.replace_inputs(node, [stack_node.output[0], separator_node.output[0], axis_node.output[0]])
 
