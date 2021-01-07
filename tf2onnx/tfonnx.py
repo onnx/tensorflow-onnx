@@ -25,7 +25,6 @@ from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.tf_loader import is_function, resolve_functions, set_function
 from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
-from tf2onnx.tflite_utils import read_tflite_model, tflite_graph_to_onnx
 
 from . import constants, logging, schemas, utils, handler
 
@@ -294,8 +293,12 @@ def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None, is_tflite=F
             if not is_tflite:
                 node.skip_conversion = True
         except Exception as ex:
+            try:
+                summary = node.summary
+            except Exception:
+                summary = ""
             logger.error("Failed to convert node %r (fct=%r)\n%r",
-                         node.name, func, node.summary, exc_info=1)
+                         node.name, func, summary, exc_info=1)
             exceptions.append(ex)
 
     return mapped_op, unmapped_op, exceptions
@@ -373,6 +376,8 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
                          is_tflite=False):
 
     if is_tflite:
+        from tf2onnx.tflite_rewriters.slice_concat_to_scatter_rewriter import rewrite_slice_concat_to_scatter
+        run_rewriters(g, [rewrite_slice_concat_to_scatter], continue_on_error)
         tfl_ops_mapping = handler.tfl_op.create_tfl_to_tf_mapping()
         _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True)
         if exceptions and not continue_on_error:
@@ -530,6 +535,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         target = constants.DEFAULT_TARGET
 
     if tflite_path is not None:
+        from tf2onnx.tflite_utils import read_tflite_model, tflite_graph_to_onnx
         tflite_graphs, opcodes, model = read_tflite_model(tflite_path)
         result_g = None
         for i in reversed(range(len(tflite_graphs))):

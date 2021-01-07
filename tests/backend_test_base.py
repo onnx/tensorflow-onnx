@@ -222,7 +222,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                  initialized_tables=initialized_tables,
                                  **process_args)
             g = optimizer.optimize_graph(g, catch_errors=False)
+            import time
+            logging.error("TESTING!!!!!")
+            t = time.time()
             actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
+            print(time.time() - t)
+            logging.error("DONE!!!!!")
 
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
@@ -287,7 +292,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                  **tfl_process_args)
             g = optimizer.optimize_graph(g)
             onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
+            import time
+            logging.error("TESTING!!!!!")
+            t = time.time()
             onnx_from_tfl_output = self.run_backend(g, output_names, onnx_feed_dict_without_port, postfix="_from_tflite")
+            print(time.time() - t)
+            logging.error("DONE!!!!!")
+
 
             for tf_lite_val, onnx_val in zip(tf_lite_output_data, onnx_from_tfl_output):
                 if check_value:
