@@ -535,13 +535,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         target = constants.DEFAULT_TARGET
 
     if tflite_path is not None:
-        from tf2onnx.tflite_utils import read_tflite_model, tflite_graph_to_onnx
+        from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph
         tflite_graphs, opcodes, model = read_tflite_model(tflite_path)
         result_g = None
         for i in reversed(range(len(tflite_graphs))):
             tfl_graph = tflite_graphs[i]
             prefix = '' if i == 0 else tfl_graph.Name().decode() + '_'
-            onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = tflite_graph_to_onnx(tfl_graph, opcodes, model, prefix)
+            onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = parse_tflite_graph(tfl_graph, opcodes, model, prefix)
             g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_outputs, is_subgraph=is_subgraph)
             fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
                                       f_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True)
