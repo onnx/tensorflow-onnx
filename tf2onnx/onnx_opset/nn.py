@@ -1282,7 +1282,9 @@ def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_nod
     # "-log(q_i)" where i is the selected index specified by label, q_i = logic_i/sum, the detail process is as follows:
     # logit_exp=exp(logit) >> sum = tf.reduce_sum(logit_exp, axis = -1), masked_sum = reduce_sum(mul(logit_exp, mul))
     # >> -log(masked_sum/sum)
-    logit_exp = ctx.make_node(op_type="Exp", inputs=[logit]).output[0]
+    logit_max = ctx.make_node(op_type="ReduceMax", inputs=[logit], attr={"axes": [-1], "keepdims": 1}).output[0]
+    logit_norm = ctx.make_node(op_type="Sub", inputs=[logit, logit_max]).output[0]
+    logit_exp = ctx.make_node(op_type="Exp", inputs=[logit_norm]).output[0]
     logit_exp_sum = GraphBuilder(ctx).make_reduce_sum(
         {"data": logit_exp, "axes": [-1], "keepdims": 0, "noop_with_empty_axes": 1})
     masked = ctx.make_node(op_type="Mul", inputs=[label, logit_exp]).output[0]
