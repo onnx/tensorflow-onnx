@@ -23,7 +23,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.tf_loader import is_tf2
+from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default
 from tf2onnx.onnx_opset.signal import make_dft_constant
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
@@ -711,24 +711,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-    #@unittest.skip("doesn't work with the new ut func interface, fix later")
-    #def test_placeholder_with_default_use_default(self):
-    #    x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
-    #    def func():
-    #        x = tf.constant(x_val, name="x")
-    #        y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
-    #    return tf.identity(y, name=_TFOUTPUT)
-    #    self._run_test_case(func, [_OUTPUT], {})
+    def test_placeholder_with_default_use_default(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf.constant(x_val, name="x")
+            y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {}, as_session=True, premade_placeholders=True)
 
-    #@unittest.skip("doesn't work with the new ut func interface, fix later")
-    #def test_placeholder_with_default_use_feed(self):
-    #    x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
-    #    def func():
-    #        x = tf.constant(x_val, name="x")
-    #        y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
-    #        return tf.identity(y, name=_TFOUTPUT)
-    #    x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
-    #    self._run_test_case(func, [_OUTPUT], {_INPUT: x_feed_val})
+    def test_placeholder_with_default_use_feed(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf.constant(x_val, name="x")
+            y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+            return tf.identity(y, name=_TFOUTPUT)
+        x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_feed_val}, as_session=True, premade_placeholders=True)
 
     @check_onnxruntime_incompatibility("Add")
     def test_add_bcast(self):

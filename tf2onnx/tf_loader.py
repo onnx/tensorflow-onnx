@@ -73,6 +73,7 @@ if is_tf2():
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.io.gfile
     tf_placeholder = tf.compat.v1.placeholder
+    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
     extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 elif LooseVersion(tf.__version__) >= "1.13":
     # 1.13 introduced the compat namespace
@@ -83,6 +84,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.compat.v1.placeholder
+    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
     extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 else:
     # older than 1.13
@@ -93,6 +95,7 @@ else:
     tf_import_meta_graph = tf.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.placeholder
+    tf_placeholder_with_default = tf.placeholder_with_default
     extract_sub_graph = tf.graph_util.extract_sub_graph
 
 
