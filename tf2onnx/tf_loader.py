@@ -279,13 +279,16 @@ def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, valu
                                         removed_resource_to_placeholder, placeholder_to_table_info):
     # pylint: disable=protected-access
     for r in trackable.__dict__.values():
-        if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource') and hasattr(r, 'resource_handle'):
+        if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource'):
+            try:
+                table_handle = id(r.resource_handle)
+            except Exception:  # pylint: disable=broad-except
+                continue
             initializer = r._create_resource.concrete_functions[0].function_def
             new_names, new_k_dtypes, new_v_dtypes = get_hash_table_info(initializer.node_def)
             table_names.extend(new_names)
             key_dtypes.extend(new_k_dtypes)
             value_dtypes.extend(new_v_dtypes)
-            table_handle = id(r.resource_handle)
             if table_handle in removed_resource_to_placeholder and len(new_names) == 1:
                 table_info = (new_names[0], new_k_dtypes[0], new_v_dtypes[0])
                 placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
