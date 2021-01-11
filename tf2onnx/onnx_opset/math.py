@@ -32,7 +32,7 @@ class RealDiv(common.BroadcastOp):
     pass
 
 
-@tf_op(["LeakyRelu", "LogSoftmax", "Softplus", "Softsign"])
+@tf_op(["LeakyRelu", "Softplus", "Softsign"])
 class DirectOpSinceOpset1:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -48,7 +48,10 @@ class DirectOp:
 
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
-        pass
+        if node.type == "Log":
+            # ORT doesn't implement Log on doubles
+            double_to_float = {onnx_pb.TensorProto.DOUBLE: onnx_pb.TensorProto.FLOAT}
+            node.maybe_cast_input([[onnx_pb.TensorProto.FLOAT]], double_to_float)
 
 
 @tf_op(["Acos", "Asin", "Atan", "Cos", "Sin", "Tan"])
@@ -123,7 +126,7 @@ def make_min_or_max_op(ctx, op_type, inputs, outputs,
             # use add as 'broadcast' op
             add_node = ctx.make_node("Add", [input_node.output[0], sub_node.output[0]],
                                      op_name_scope=input_node.name)
-            node.input[i] = add_node.output[0]
+            ctx.replace_input(node, node.input[i], add_node.output[0], i)
     return final_node
 
 
@@ -183,9 +186,9 @@ class ClipByValueOp:
 
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
-        node.name = 'Clip' # clip supports all types now
+        node.type = 'Clip' # clip supports all types now
 
-@tf_op("Softmax")
+@tf_op(["LogSoftmax", "Softmax"])
 class Softmax:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -197,6 +200,11 @@ class Softmax:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         cls.version_1(ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Default axis is now -1.
+        pass
 
 
 @tf_op("Square")
@@ -293,7 +301,7 @@ class Pow:
             # workaround a bug in caffe2 pre Feb2018, pow(a, b) becomes np.exp(np.log(a) * b)
             node.type = "Log"
             b = node.input[1]
-            ctx.remove_input(node, node.input[1])
+            ctx.remove_input(node, node.input[1], 1)
             op_name = utils.make_name(node.name)
             mul_op = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
             mul_op.input.append(b)
@@ -545,9 +553,9 @@ class BitShift:
                              shapes=shapes, dtypes=dtypes, domain=constants.ONNX_DOMAIN, attr={'direction': direction})
 
         if node.maybe_cast_input([supported, supported], type_map):
-            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                                           name=utils.make_name(node.name) + "_castback")
-            cast_back_node.set_attr("to", dtypes[0])
+            cast_back_node = ctx.insert_new_node_on_output(
+                "Cast", node.output[0], name=utils.make_name(node.name) + "_castback",
+                to=dtypes[0])
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
@@ -564,6 +572,7 @@ class Einsum:
     @classmethod
     def version_12(cls, ctx, node, **kwargs):
         del node.attr["N"]
+        node.attr["equation"].s = node.attr["equation"].s.lower()
 
 
 @tf_op("IsFinite")
@@ -586,3 +595,145 @@ class IsFinite:
                                 shapes=shapes, dtypes=dtypes)
         _ = ctx.make_node("Not", inputs=or_node.output, name=node.name,
                           shapes=shapes, dtypes=dtypes)
+
+
+@tf_op("Atan2")
+class Atan2Op:
+    # support more dtype
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        """
+        Obtained with a linear regression.
+
+        ::
+
+            def atan2(y, x):
+                sx = numpy.sign(x)
+                sy = numpy.sign(y)
+                pi_part = (sy + sx * (sy ** 2 - 1)) * (sx - 1) * (-numpy.pi/2)
+                atan_part = numpy.arctan(y / (x + (1 - sx ** 2))) * sx ** 2
+                return atan_part + pi_part
+        """
+        supported_dtypes = [
+            onnx_pb.TensorProto.FLOAT,
+            onnx_pb.TensorProto.FLOAT16,
+            onnx_pb.TensorProto.DOUBLE
+        ]
+
+        onnx_dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(onnx_dtype in supported_dtypes, "Unsupported input type.")
+        shape = ctx.get_shape(node.input[0])
+        np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
+
+        # sign part
+
+        sign_x_node = ctx.make_node(
+            "Sign", inputs=node.input[1:],
+            name=utils.make_name(node.name + 'signx'))
+        sign_y_node = ctx.make_node(
+            "Sign", inputs=node.input[:1],
+            name=utils.make_name(node.name + 'signy'))
+
+        sx_node = ctx.make_node(
+            "Cast", sign_x_node.output[:1], attr={"to": onnx_dtype},
+            name=utils.make_name(node.name + 'csignx'))
+        sy_node = ctx.make_node(
+            "Cast", sign_y_node.output[:1], attr={"to": onnx_dtype},
+            name=utils.make_name(node.name + 'csigny'))
+
+        # cst
+
+        one_node = ctx.make_const(
+            utils.make_name("{}_one".format(node.name)),
+            np.array([1], dtype=np_dtype))
+
+        pib2_node = ctx.make_const(
+            utils.make_name("{}_pi".format(node.name)),
+            np.array(- np.pi / 2, dtype=np_dtype))
+
+        # pi_part = (sy + sx * (sy ** 2 - 1)) * (sx - 1) * (-numpy.pi/2)
+
+        sxm1_node = ctx.make_node(
+            "Sub", [sx_node.output[0], one_node.output[0]],
+            name=utils.make_name(node.name + 'sxm1'))
+        sy2_node = ctx.make_node(
+            "Mul", [sy_node.output[0], sy_node.output[0]],
+            name=utils.make_name(node.name + 'sy2'))
+        sy2m1_node = ctx.make_node(
+            "Sub", [sy2_node.output[0], one_node.output[0]],
+            name=utils.make_name(node.name + 'sy2m1'))
+        sxsy2m1_node = ctx.make_node(
+            "Mul", [sx_node.output[0], sy2m1_node.output[0]],
+            name=utils.make_name(node.name + 'sxsy2m1'))
+        sysxsy2m1_node = ctx.make_node(
+            "Add", [sy_node.output[0], sxsy2m1_node.output[0]],
+            name=utils.make_name(node.name + 'sysxsy2m1'))
+        m1_node = ctx.make_node(
+            "Mul", [sysxsy2m1_node.output[0], sxm1_node.output[0]],
+            name=utils.make_name(node.name + 'm1'))
+        pi_part = ctx.make_node(
+            "Mul", [m1_node.output[0], pib2_node.output[0]],
+            name=utils.make_name(node.name + 'pip'))
+
+        # atan
+
+        sx2_node = ctx.make_node(
+            "Mul", [sx_node.output[0], sx_node.output[0]],
+            name=utils.make_name(node.name + 'sx2'))
+        sx2m1_node = ctx.make_node(
+            "Sub", [sx2_node.output[0], one_node.output[0]],
+            name=utils.make_name(node.name + 'sx2m1'))
+        xsx2m1_node = ctx.make_node(
+            "Add", [node.input[1], sx2m1_node.output[0]],
+            name=utils.make_name(node.name + 'xsx2m1'))
+        div_node = ctx.make_node(
+            "Div", inputs=[node.input[0], xsx2m1_node.output[0]],
+            name=utils.make_name(node.name + 'div'))
+        atan0_node = ctx.make_node(
+            "Atan", inputs=[div_node.output[0]],
+            name=utils.make_name(node.name + 'atan0'))
+        atan_node = ctx.make_node(
+            "Mul", inputs=[sx2_node.output[0], atan0_node.output[0]],
+            name=utils.make_name(node.name + 'atan'))
+
+        # final
+
+        ctx.remove_node(node.name)
+
+        last_node = ctx.make_node(
+            "Add", inputs=[atan_node.output[0], pi_part.output[0]],
+            op_name_scope=node.name + 'all',
+            shapes=[shape], dtypes=[onnx_dtype])
+        ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+
+
+@tf_op("InvertPermutation")
+class InvertPermutationOp:
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+
+        supported_dtypes = [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]
+        onnx_dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(onnx_dtype in supported_dtypes, "InvertPermutation only applies on INT32, INT64.")
+
+        shape = ctx.get_shape(node.input[0])
+
+        shape_node = ctx.make_node(
+            "Shape", inputs=node.input, name=utils.make_name(node.name + '_shape'))
+
+        neg_node = ctx.make_node(
+            "Neg", inputs=node.input, name=utils.make_name(node.name + '_neg'))
+
+        topk_node = ctx.make_node(
+            "TopK", inputs=[neg_node.output[0], shape_node.output[0]],
+            name=utils.make_name(node.name + '_topk'), output_count=2)
+
+        ctx.remove_node(node.name)
+
+        last_node = ctx.make_node(
+            "Identity", inputs=topk_node.output[1:], name=utils.make_name(node.name + '_indices'),
+            shapes=[shape], dtypes=[onnx_dtype])
+
+        ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()

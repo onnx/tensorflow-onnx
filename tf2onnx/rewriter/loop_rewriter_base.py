@@ -275,7 +275,7 @@ class LoopRewriterBase(object):
 
         for enter_node in enter_nodes:
             # connect Enter's output to Enter's input
-            self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0])
+            self.g.replace_all_inputs(enter_node.output[0], enter_node.input[0], ops=ops)
 
         return GraphInfo(ops, inputs, outputs)
 
@@ -287,7 +287,7 @@ class LoopRewriterBase(object):
 
         for enter_node in enter_nodes:
             # connect Enter's output to Enter's input
-            self.g.replace_all_inputs(ops, enter_node.output[0], enter_node.input[0])
+            self.g.replace_all_inputs(enter_node.output[0], enter_node.input[0], ops=ops)
 
         dependent_vars = []
         for merge_node in merge_nodes:
@@ -298,12 +298,12 @@ class LoopRewriterBase(object):
             # replace condition graph's inputs to be cell graph's outputs, because we want condition graph
             # to consumer cell graph outputs.
             non_switch_consumers = [n for n in self.g.find_output_consumers(merge_node.output[0]) if n.type != "Switch"]
-            self.g.replace_all_inputs(non_switch_consumers, merge_node.output[0],
-                                      loop_var.next_iteration_input.id)
+            self.g.replace_all_inputs(merge_node.output[0], loop_var.next_iteration_input.id,
+                                      ops=non_switch_consumers)
             dependent_vars.append(loop_var)
 
         # cut off connection between condition graph and LoopCond node.
-        self.g.replace_all_inputs([context.loop_cond], context.loop_cond.output[0], INVALID_INPUT_ID)
+        self.g.replace_all_inputs(context.loop_cond.output[0], INVALID_INPUT_ID, ops=[context.loop_cond])
 
         graph_info = GraphInfo(ops, [], outputs)
         graph_info.dependent_vars = dependent_vars
@@ -319,11 +319,11 @@ class LoopRewriterBase(object):
             if val.is_tensor_array:
                 # connect NextIteration to an invalid node, to cut off an ending node of the cell.
                 ta_write_nodes = [n for n in self.g.get_nodes() if is_tf_tensor_array_write_op(n)]
-                self.g.replace_all_inputs(ta_write_nodes, val.next_iteration_input.id, INVALID_INPUT_ID)
+                self.g.replace_all_inputs(val.next_iteration_input.id, INVALID_INPUT_ID, ops=ta_write_nodes)
             else:
                 # connect NextIteration to an invalid node, to cut off an ending node of the cell.
                 next_iter_nodes = [n for n in self.g.get_nodes() if n.type == "NextIteration"]
-                self.g.replace_all_inputs(next_iter_nodes, val.next_iteration_input.id, INVALID_INPUT_ID)
+                self.g.replace_all_inputs(val.next_iteration_input.id, INVALID_INPUT_ID, ops=next_iter_nodes)
 
         for scan_input in context.loop_properties.scan_inputs:
             # remove the node to cut off connection between scan_input and the cell.
@@ -352,8 +352,15 @@ class LoopRewriterBase(object):
                 # using grappler there is not necessarily an identity behind switch
                 switch_true_identity_output = switch_node.output[1]
         else:
-            raise ValueError("switch_true " + switch_node.name + " has unexpected count of consumers:",
-                             [n.name for n in switch_consumers])
+            # insert identity if there are 2 or more consumers. This can happen on tf-1.15.
+            switch_true_identity_output = self.g.make_node("Identity", [switch_node.output[1]],
+                                                           shapes=[switch_node.output_shapes[1]],
+                                                           dtypes=[switch_node.output_dtypes[1]])
+            switch_true_identity_output = switch_true_identity_output.output[0]
+            for n in switch_consumers:
+                for i, nn in enumerate(n.input):
+                    if nn == switch_node.output[1]:
+                        n.input[i] = switch_true_identity_output
 
         target_node_input_id = None
         enter_node = [n for n in merge_node.inputs if n.type == 'Enter'][0]

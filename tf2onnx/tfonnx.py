@@ -23,7 +23,7 @@ from tf2onnx.graph import Graph
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.tf_loader import is_function, resolve_functions, set_function
-from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version
+from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
 
 from . import constants, logging, schemas, utils, handler
 
@@ -33,6 +33,35 @@ logger = logging.getLogger(__name__)
 # pylint: disable=useless-return,broad-except,logging-not-lazy,unused-argument,missing-docstring
 # pylint: disable=unused-variable
 
+def fold_constants_using_tf(g, outputs_to_values, outputs_to_dtypes):
+    ops = list(g.get_nodes())
+    # pylint: disable=too-many-nested-blocks
+    keep_looking = True
+    while keep_looking:
+        keep_looking = False
+        for idx, op in enumerate(ops):
+            if op.output and op.output[0] in outputs_to_values:
+                logger.info("folding node using tf type=%s, name=%s" % (op.type, op.name))
+                val = outputs_to_values[op.output[0]]
+
+                new_node_name = utils.make_name(op.name)
+                new_output_name = new_node_name
+                old_output_name = op.output[0]
+                old_node_name = op.name
+                logger.debug("create const node [%s] replacing [%s]", new_node_name, old_node_name)
+                ops[idx] = g.make_const(new_node_name, val)
+
+                logger.debug("replace old output [%s] with new output [%s]", old_output_name, new_output_name)
+                # need to re-write the consumers input name to use the const name
+                consumers = g.find_output_consumers(old_output_name)
+                if consumers:
+                    for consumer in consumers:
+                        g.replace_input(consumer, old_output_name, new_output_name)
+
+                # keep looking until there is nothing we can fold.
+                keep_looking = True
+
+    g.reset_nodes(ops)
 
 def rewrite_constant_fold(g, ops):
     """
@@ -54,6 +83,7 @@ def rewrite_constant_fold(g, ops):
         "Sqrt": np.sqrt,
         "Sub": np.subtract,
     }
+    ops = list(ops)
 
     # pylint: disable=too-many-nested-blocks
     keep_looking = True
@@ -160,8 +190,8 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                         input_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
                         g.set_dtype(input_name, onnx_pb.TensorProto.FLOAT)
                     else:
-                        cast_node = g.insert_new_node_on_input(op, "Cast", input_name)
-                        cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
+                        cast_node = g.insert_new_node_on_input(op, "Cast", input_name,
+                                                               to=onnx_pb.TensorProto.FLOAT)
                         g.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
                         g.copy_shape(input_name, cast_node.output[0])
                         cast_inserted.append(cast_node)
@@ -171,8 +201,8 @@ def rewrite_incomplete_type_support(g, ops, impacted_ops):
                     name = utils.make_name(op.name)
                     logger.debug("insert cast back for node %s on output %s [dtype=%s]", op.name, output_name,
                                  output_dtype)
-                    output_cast = g.insert_new_node_on_output("Cast", output_name, name=name)
-                    output_cast.set_attr("to", output_dtype)
+                    output_cast = g.insert_new_node_on_output("Cast", output_name, name=name,
+                                                              to=output_dtype)
                     g.set_dtype(output_cast.output[0], output_dtype)
                     g.copy_shape(output_name, output_cast.output[0])
                     cast_inserted.append(output_cast)
@@ -208,11 +238,13 @@ def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, impacted_ops)
 
 
-def tensorflow_onnx_mapping(g, ops_mapping):
+def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None):
     logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
     exceptions = []
+    if initialized_tables is None:
+        initialized_tables = {}
 
     ops = list(g.get_nodes())
     for node in ops:
@@ -235,6 +267,7 @@ def tensorflow_onnx_mapping(g, ops_mapping):
             # if there is a onnx_op key we'll map the old type to a new type
             onnx_op = kwargs.get("onnx_op")
             if onnx_op:
+                kwargs["tf_op"] = op
                 node.type = onnx_op
         body_graphs = node.get_body_graphs()
         if body_graphs:
@@ -253,10 +286,11 @@ def tensorflow_onnx_mapping(g, ops_mapping):
                 logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
 
         try:
-            func(g, node, **kwargs)
+            func(g, node, **kwargs, initialized_tables=initialized_tables)
             node.skip_conversion = True
         except Exception as ex:
-            logger.error("Failed to convert node %s\n%s", node.name, node.summary, exc_info=1)
+            logger.error("Failed to convert node %r (fct=%r)\n%r",
+                         node.name, func, node.summary, exc_info=1)
             exceptions.append(ex)
 
     return mapped_op, unmapped_op, exceptions
@@ -333,7 +367,8 @@ def run_rewriters(g, funcs, continue_on_error):
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
-                     input_names=None, output_names=None, is_subgraph=False):
+                     input_names=None, output_names=None, is_subgraph=False, const_node_values=None,
+                     initialized_tables=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -345,9 +380,11 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             custom_rewriter: list of custom graph rewriters
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
-            inputs_as_nchw: transpose inputs in list from nchw to nchw
+            inputs_as_nchw: transpose inputs in list from nchw to nhwc
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
+            const_node_values: a dict returned by compress_graph_def mapping node names to tensor values
+            initialized_tables: mapping from table shared_names to tuple of keys and values of table
         Return:
             onnx graph
     """
@@ -376,7 +413,10 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if target is None:
         target = constants.DEFAULT_TARGET
 
-    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = tensorflow_to_onnx(tf_graph, shape_override)
+    outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
+
+    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
+        tensorflow_to_onnx(tf_graph, shape_override, const_node_values)
     if not is_subgraph:
         # make tf2onnx internal subgraphs from the tensorflow subgraphs
         ordered_func = resolve_functions(tf_graph)
@@ -386,7 +426,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             fg = process_tf_graph(func, continue_on_error, False, target, opset,
                                   custom_op_handlers, custom_rewriter,
                                   extra_opset, shape_override, inputs_as_nchw,
-                                  f_inputs_names, f_output_names, is_subgraph=True)
+                                  f_inputs_names, f_output_names, is_subgraph=True,
+                                  const_node_values=const_node_values)
             fg.graph_name = func.name
             fg.func_inputs = f_inputs_names
             set_function(func.name, fg)
@@ -447,17 +488,34 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if inputs_as_nchw:
         transpose_inputs(g, inputs_as_nchw)
 
+    fold_constants_using_tf(g, outputs_to_values, outputs_to_dtypes)
+
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
-    rewriters = [rewrite_constant_fold, rewrite_quantize_and_dequantize, rewrite_transpose, rewrite_flatten,
-                 rewrite_gemm, rewrite_random_uniform, rewrite_random_uniform_fold_const,
-                 rewrite_random_normal, rewrite_dropout, rewrite_eye,
-                 rewrite_leakyrelu, rewrite_thresholded_relu, rewrite_conv2d_with_pad,
-                 rewrite_single_direction_lstm, rewrite_bi_direction_lstm,
-                 rewrite_single_direction_gru, rewrite_bi_direction_gru,
-                 rewrite_custom_rnn_cell, rewrite_generic_loop, rewrite_cond,
-                 rewrite_biasadd_with_conv2d,
-                 ]
+    rewriters = [
+        # single directional
+        rewrite_constant_fold,
+        rewrite_quantize_and_dequantize,
+        rewrite_transpose,
+        rewrite_flatten,
+        rewrite_random_uniform,
+        rewrite_random_uniform_fold_const,
+        rewrite_random_normal,
+        rewrite_dropout,
+        rewrite_eye,
+        rewrite_leakyrelu,
+        rewrite_thresholded_relu,
+        rewrite_conv2d_with_pad,
+        rewrite_single_direction_lstm,
+        # bi-directional
+        rewrite_bi_direction_lstm,
+        rewrite_single_direction_gru,
+        rewrite_bi_direction_gru,
+        rewrite_custom_rnn_cell,
+        rewrite_generic_loop, rewrite_cond,
+        rewrite_biasadd_with_conv2d,
+        rewrite_gemm,
+    ]
 
     if custom_rewriter is not None:
         rewriters.extend(custom_rewriter)
@@ -468,7 +526,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     g.delete_unused_nodes(output_names)
     topological_sort(g, continue_on_error)
 
-    mapped_op, unmapped_op, exceptions = tensorflow_onnx_mapping(g, ops_mapping)
+    mapped_op, unmapped_op, exceptions = tensorflow_onnx_mapping(g, ops_mapping, initialized_tables)
     if unmapped_op:
         logger.error("Unsupported ops: %s", unmapped_op)
     if exceptions and not continue_on_error:

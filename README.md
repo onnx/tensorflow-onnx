@@ -2,8 +2,8 @@
 
 | Build Type | OS | Python | Tensorflow | Onnx opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7 | 1.12-1.15, 2.1-2.2 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7 | 1.12-1.15, 2.1-2.2 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.4 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.3 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
 
 ## Supported Versions
 
@@ -11,20 +11,15 @@
 
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support ONNX opset-6 to opset-12. By default we use opset-8 for the resulting ONNX graph since most runtimes will support opset-8.
+We support ONNX opset-6 to opset-12. By default we use opset-9 for the resulting ONNX graph since most runtimes will support opset-9.
 Support for future opsets add added as they are released.
 
-If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 11```.
+If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 12```.
 
 ### TensorFlow
 
 We support all ```tf-1.x graphs```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 and up```. tf2onnx-1.5.4 was the last version that was tested all the way back to tf-1.4.
 
-There is now ```experimental support for tf-2.x```. 
-With the exception of LSTM unit tests, all unit tests are enabled and passing.
-Unit tests that we still need to fix are marked with ```@skip_tf2```.
-GRU/LSTM's are converting but not runnable due to type/shape inference issues at runtime (working on that one).
-All unit tests are running in eager mode. After execution we take the python function, make it a graph and convert it to ONNX.
 When running under tf-2.x tf2onnx will use the tensorflow V2 controlflow.
 
 You can install tf2onnx on top of tf-1.x or tf-2.x.
@@ -139,11 +134,16 @@ python -m tf2onnx.convert
     [--outputs GRAPH_OUTPUS]
     [--inputs-as-nchw inputs_provided_as_nchw]
     [--opset OPSET]
+    [--tag TAG]
+    [--signature_def SIGNATURE_DEF]
+    [--concrete_function CONCRETE_FUNCTION]
     [--target TARGET]
     [--custom-ops list-of-custom-ops]
     [--fold_const]
+    [--large_model]
     [--continue_on_error]
     [--verbose]
+    [--output_frozen_graph]
 ```
 
 ### Parameters
@@ -176,13 +176,44 @@ By default we preserve the image format of inputs (`nchw` or `nhwc`) as given in
 
 By default we use the opset 8 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
 
+#### --tag
+
+Only valid with parameter `--saved_model`. Specifies the tag in the saved_model to be used. Typical value is 'serve'.
+
+#### --signature_def
+
+Only valid with parameter `--saved_model`. Specifies which signature to use within the specified --tag value. Typical value is 'serving_default'.
+
+#### --concrete_function
+
+(This is experimental, valid only for TF2.x models)
+
+Only valid with parameter `--saved_model`. If a model contains a list of concrete functions, under the function name `__call__` (as can be viewed using the command `saved_model_cli show --all`), this parameter is a 0-based integer specifying which function in that list should be converted. This parameter takes priority over `--signature_def`, which will be ignored.
+
+#### --large_model
+
+(This is experimental, valid only for TF2.x models)
+
+Only valid with parameter `--saved_model`. When set, creates a zip file containing the ONNX protobuf model and large tensor values stored externally. This allows for converting models that exceed the 2 GB protobuf limit.
+
+#### --output_frozen_graph
+
+Saves the frozen tensorflow graph to file.
+
+#### --custom-ops
+
+If a model contains ops not recognized by onnx runtime, you can tag these ops with a custom op domain so that the
+runtime can still open the model. The format is a comma-separated map of tf op names to domains in the format
+OpName:domain. If only an op name is provided (no colon), the default domain of `ai.onnx.converters.tensorflow`
+will be used.
+
 #### --target
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
 
 #### --fold_const
 
-When set, TensorFlow fold_constants transformation is applied before conversion. This benefits features including Transpose optimization (e.g. Transpose operations introduced during tf-graph-to-onnx-graph conversion will be removed), and RNN unit conversion (for example LSTM). Older TensorFlow version might run into issues with this option depending on the model.
+Deprecated. Constant folding is always enabled.
 
 ### <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
 
@@ -257,7 +288,8 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             opset=None, custom_op_handlers=None,
             custom_rewriter=None, extra_opset=None,
             shape_override=None, inputs_as_nchw=None,
-            input_names=None, output_names=None):
+            input_names=None, output_names=None,
+            const_node_values=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -272,11 +304,12 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             inputs_as_nchw: transpose inputs in list from nchw to nchw
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
+            const_node_values: an optional dict mapping node names to tensor values
         Return:
             onnx graph
     """
 ```
-For example in [examples/call_coverter_via_python.py]():
+For example in [examples/call_converter_via_python.py]():
 ```
 import tensorflow as tf
 import tf2onnx

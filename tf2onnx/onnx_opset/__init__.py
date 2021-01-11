@@ -2,4 +2,18 @@
 # Licensed under the MIT license.
 """tf2onnx.onnx_opset module"""
 
-from . import common, controlflow, generator, logical, math, misc, nn, reduction, rnn, tensor, traditionalml
+from . import (
+    common,
+    controlflow,
+    generator,
+    logical,
+    math,
+    misc,
+    nn,
+    quantize,
+    reduction,
+    rnn,
+    signal,
+    tensor,
+    traditionalml
+)

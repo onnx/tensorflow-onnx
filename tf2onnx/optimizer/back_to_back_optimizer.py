@@ -83,7 +83,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
             type2 = pnode.get_attr('to').i
             if type1 == type2:
                 for node2 in consumer_nodes:
-                    node2.input[0] = node.input[0]
+                    g.replace_input(node2, node2.input[0], node.input[0], 0)
                     q2.append(node2.output[0])
                 g.remove_node(node.name)
                 return q2
@@ -118,7 +118,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
 
         if can_reduce:
             for node2 in consumer_nodes:
-                node2.input[0] = node.input[0]
+                g.replace_input(node2, node2.input[0], node.input[0], 0)
             g.remove_node(node.name)
         return q2
 
@@ -129,7 +129,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
         t1 = list(node.get_attr('perm').ints)
         q2 = []
         for node2 in consumer_nodes:
-            node2.input[0] = node.input[0]
+            g.replace_input(node2, node2.input[0], node.input[0], 0)
             t2 = list(node2.get_attr('perm').ints)
             new_perm = [t1[i] for i in t2]
             # check if node2 can be removed. otherwise only update
@@ -138,7 +138,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
                 shape = g.get_shape(node2.output[0])
                 dtype = g.get_dtype(node2.output[0])
                 node2_consumers = g.find_output_consumers(node2.output[0])
-                g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0])
+                g.replace_all_inputs(node2.output[0], node.input[0], ops=node2_consumers)
                 g.remove_node(node2.name)
                 if set(node2.output) & set(g.outputs):
                     g.make_node("Identity", [node.input[0]],
@@ -161,11 +161,20 @@ class BackToBackOptimizer(GraphOptimizerBase):
         if node2.type != 'Unsqueeze':
             return []
 
-        axis1 = node.get_attr('axes').ints
-        axis2 = node2.get_attr('axes').ints
+        axes_match = False
+        if g.opset <= 12 and node.get_attr('axes').ints == node2.get_attr('axes').ints:
+            axes_match = True
+
+        # In opset 13, axes is an input. Optional for squeeze op.
+        if g.opset >= 13 and len(node.input) == 2:
+            if node.input[1] == node2.input[1]:
+                axes_match = True
+            elif node.inputs[1].is_const() and node2.inputs[1].is_const() and \
+                node.inputs[1].get_tensor_value(as_list=True) == node2.inputs[1].get_tensor_value(as_list=True):
+                axes_match = True
 
         # if squeeze followed by unsqueeze is on diff axes, skip
-        if axis1 != axis2:
+        if not axes_match:
             return []
 
         # if unsqueeze output is graph output, skip
@@ -173,7 +182,7 @@ class BackToBackOptimizer(GraphOptimizerBase):
             return []
 
         node2_consumers = g.find_output_consumers(node2.output[0])
-        g.replace_all_inputs(node2_consumers, node2.output[0], node.input[0])
+        g.replace_all_inputs(node2.output[0], node.input[0], ops=node2_consumers)
         g.remove_node(node.name)
         g.remove_node(node2.name)
         return []
@@ -201,12 +210,13 @@ class BackToBackOptimizer(GraphOptimizerBase):
         if len(weights.shape) != 4:
             return []
 
-        bias = 0
         # optional bias value
         if len(node.inputs) > 2:
             if not node.inputs[2].is_const():
                 return []
             bias = node.inputs[2].get_tensor_value(as_list=False)
+        else:
+            bias = np.array(0, dtype=weights.dtype)
 
         # scale, offset, mean, var be const, otherwise skip
         if False in [node2.inputs[i].is_const() for i in [1, 2, 3, 4]]:
@@ -228,15 +238,16 @@ class BackToBackOptimizer(GraphOptimizerBase):
         weights_new = weights * scale_new
         weights_new = weights_new.transpose(3, 2, 0, 1)
         bias_new = (bias - mean) * scale_new + offset
-        bias_new_const = g.make_const(node.name + '_bias_fused_bn', bias_new)
-        weights_new_const = g.make_const(node.name + '_weights_fused_bn', weights_new)
-        node.input = [node.input[0], weights_new_const.output[0], bias_new_const.output[0]]
+        bias_new_const = g.make_const(node.name + '_bias_fused_bn', bias_new.astype(bias.dtype))
+        weights_new_const = g.make_const(node.name + '_weights_fused_bn', weights_new.astype(weights.dtype))
+        g.replace_inputs(node, [node.input[0], weights_new_const.output[0], bias_new_const.output[0]])
 
         # fuse conv and bn, delete bn
         node2_output = node2.output[:1]
         node2_shape = g.get_shape(node2.output[0])
         node2_dtype = g.get_dtype(node2.output[0])
         g.remove_node(node2.name)
+        # the setter makes a copy
         node.output = node2_output
         g.set_shape(node2_output[0], node2_shape)
         g.set_dtype(node2_output[0], node2_dtype)

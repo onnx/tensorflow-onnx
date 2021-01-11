@@ -12,6 +12,7 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.rewriter.rnn_utils import RNNUnitType, get_weights_from_const_node
 
 from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase
@@ -210,9 +211,10 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
             const_node = self.g.make_const(initial_name, new_val)
             context.onnx_input_ids["initial_state"] = const_node.output[0]
             return
-        squeeze_node = self.g.make_node("Unsqueeze", [initializer_input_id], attr={"axes": [0]})
+        squeeze_node = GraphBuilder(self.g).make_unsqueeze(
+            {'data': initializer_input_id, 'axes': [0]}, return_node=True)
         to_replace = [n for n in self.g.get_nodes() if n != squeeze_node]
-        self.g.replace_all_inputs(to_replace, initializer_input_id, squeeze_node.output[0])
+        self.g.replace_all_inputs(initializer_input_id, squeeze_node.output[0], ops=to_replace)
         context.onnx_input_ids["initial_state"] = squeeze_node.output[0]
 
     def create_rnn_node(self, context):
@@ -252,7 +254,7 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         output_id = context.rnn_node.output[1]
         gru_state_shape = self.g.get_shape(output_id)
         output_shape = [gru_state_shape[1], gru_state_shape[2]]
-        squeeze_node = self.g.make_node("Squeeze", [output_id], attr={"axes": [0]},
-                                        shapes=[output_shape], dtypes=[self.g.get_dtype(output_id)])
-
-        self.g.replace_all_inputs(self.g.get_nodes(), exit_output_id, squeeze_node.output[0])
+        squeeze_node = GraphBuilder(self.g).make_squeeze(
+            {'data': output_id, "axes": [0]}, shapes=[output_shape],
+            dtypes=[self.g.get_dtype(output_id)], return_node=True)
+        self.g.replace_all_inputs(exit_output_id, squeeze_node.output[0])  # ops=self.g.get_nodes()

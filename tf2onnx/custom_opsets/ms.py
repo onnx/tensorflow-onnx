@@ -23,7 +23,9 @@ def make_range(ctx, start, limit, delta, output, scope_name, shape, dtype):
 
 def _make_range_non_const(ctx, start, limit, delta, output, scope_name, shape, dtype):
     utils.make_sure(
-        dtype in [TensorProto.FLOAT, TensorProto.DOUBLE, TensorProto.INT16, TensorProto.INT32, TensorProto.INT64],
+        dtype in [TensorProto.FLOAT, TensorProto.DOUBLE, TensorProto.INT16,
+                  TensorProto.INT32, TensorProto.INT64,
+                  TensorProto.COMPLEX64, TensorProto.COMPLEX128],
         "dtype %s is not supported", dtype)
     ctx.make_node("Range", [start, limit, delta], outputs=[output], name=scope_name, shapes=[shape], dtypes=[dtype],
                   domain=constants.MICROSOFT_DOMAIN)
@@ -85,8 +87,8 @@ class ConvTransposeWithDynamicPads:
         # set node's attrs, Note: output_padding, group are left default.
         conv_dims_attr(node, "dilations")
         # set node's inputs from (output_shape, filter, input_tensor) to (input_tensor, filter, pads, Bias)
-        node.input[0] = node.input[2]
-        node.input[2] = pads.output[0]
+        ctx.replace_input(node, node.input[0], node.input[2], 0)
+        ctx.replace_input(node, node.input[2], pads.output[0], 2)
         conv_convert_inputs(ctx, node, with_kernel=True)
         node.attr.pop("data_format")
         node.attr.pop("padding")

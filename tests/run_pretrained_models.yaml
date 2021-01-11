@@ -21,6 +21,7 @@ regression-checkpoint:
 regression-saved-model:
   model: models/regression/saved_model
   model_type: saved_model
+  tag: serve
   input_get: get_ramp
   inputs:
     "X:0": [1]
@@ -114,6 +115,24 @@ benchtf-gru:
 ##
 ## standard image nets
 ##
+
+esrgan-tf2:
+  # url: https://tfhub.dev/captain-pool/esrgan-tf2/1/esrgan-tf2_1.tar.gz
+  url: https://github.com/captain-pool/GSOC/releases/download/1.0.0/esrgan.tar.gz
+  model: "."
+  model_type: saved_model
+  input_get: get_beach
+  opset_constraints:
+    "onnx":
+      "min": 10
+  inputs:
+    "input_0:0": [1, 50, 50, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.02
+  atol: 0.0005
+  tf_min_version: 2.1
+
 inception_v3_slim:
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz
   model: inception_v3_2016_08_28_frozen.pb
@@ -239,9 +258,10 @@ vgg-16:
 
 resnet50_v2_nchw: # NOTE: Tensorflow 1.9.0 fails
   skip_tensorflow: true # tensorflow fails: Default MaxPoolingOp only supports NHWC on device type CPU
-  model_type: saved_model
   url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NCHW.tar.gz
   model: resnet_v2_fp32_savedmodel_NCHW/1538687196
+  model_type: saved_model
+  tag: serve
   input_get: get_beach
   inputs:
     "input_tensor:0": [64, 224, 224, 3]
@@ -250,9 +270,10 @@ resnet50_v2_nchw: # NOTE: Tensorflow 1.9.0 fails
     - softmax_tensor:0
 
 resnet50_v2_nhwc:
-  model_type: saved_model
   url: http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NHWC.tar.gz
   model: resnet_v2_fp32_savedmodel_NHWC/1538687283
+  model_type: saved_model
+  tag: serve
   input_get: get_beach
   inputs:
     "input_tensor:0": [64, 224, 224, 3]

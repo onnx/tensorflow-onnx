@@ -38,9 +38,9 @@ class RandomOp:
         # const we make it an attribute.
         seed = node.get_attr("seed")
         node.set_attr("seed", float(seed.f))
-        if len(node.input) > 0:
+        if len(node.input) > 0 and node.inputs[0].is_const():
             shape = node.inputs[0].get_tensor_value()
-            ctx.remove_input(node, node.input[0])
+            ctx.remove_input(node, node.input[0], 0)
             node.set_attr("shape", shape)
             ctx.set_shape(node.output[0], shape)
 
@@ -53,7 +53,7 @@ class RandomOp:
             node.set_attr("seed", float(seed.f))
             cast_node = ctx.make_node("Cast", node.input, attr={'to': onnx_pb.TensorProto.INT64})
             const_node = ctx.make_node("ConstantOfShape", cast_node.output)
-            node.input = const_node.output
+            ctx.replace_inputs(node, const_node.output.copy())
             node.type = node.type + 'Like'
 
 
@@ -103,8 +103,8 @@ class Fill:
         ctx.set_shape(tile_shape_int64.output[0], fill_shape)
 
         tmp = node.input[0]
-        node.input[0] = node.input[1]
-        node.input[1] = tmp
+        ctx.replace_input(node, node.input[0], node.input[1], 0)
+        ctx.replace_input(node, node.input[1], tmp, 1)
         node.type = "Tile"
         ctx.set_dtype(node.output[0], new_dtype)
 
@@ -128,13 +128,13 @@ class Fill:
         value = np.array([node.inputs[1].get_tensor_value()]).astype(utils.map_onnx_to_numpy_type(dtype))
         value_proto = numpy_helper.from_array(value)
         node.set_attr("value", value_proto)
-        del node.input[1]
+        ctx.remove_input(node, node.input[1], 1)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # cls.version_7(ctx, node, **kwargs)
         node.type = "Expand"
-        node.input = [node.input[1], node.input[0]]
+        ctx.replace_inputs(node, [node.input[1], node.input[0]])
         # cast shape to int64 if needed
         if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
@@ -156,7 +156,7 @@ class Multinomial:
             output_dtype = onnx_pb.TensorProto.INT32
         node.set_attr("dtype", output_dtype)
         node.set_attr("sample_size", sample_size)
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[1], 1)
 
 
 @tf_op("ZerosLike")
@@ -186,7 +186,8 @@ class Iterator:
 class IteratorGetNext:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
-        output_names = node.output
+        output_names = node.output.copy()  # to make sure remove_node
+                                           # does not alter the list
         type_0 = ctx.get_dtype(output_names[0])
         type_1 = ctx.get_dtype(output_names[1])
         shape_0 = ctx.get_shape(output_names[0])
@@ -196,11 +197,12 @@ class IteratorGetNext:
         ctx.add_graph_input(output_names[1], type_1, shape_1)
 
 
-@tf_op("QueueDequeueManyV2")
+@tf_op(["QueueDequeueManyV2", "QueueDequeueUpToV2"])
 class QueueDequeueManyV2:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
-        outputs = node.output
+        outputs = node.output.copy()  # copy to make remove_node
+                                      # does not alter the list
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)

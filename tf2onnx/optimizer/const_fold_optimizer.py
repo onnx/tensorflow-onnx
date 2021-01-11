@@ -90,7 +90,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
             const_node = graph.make_const(utils.make_name("const_fold_opt"), val)
             graph.set_dtype(const_node.output[0], utils.map_numpy_to_onnx_dtype(val.dtype))
             graph.set_shape(const_node.output[0], val.shape)
-            graph.replace_all_inputs(graph.get_nodes(), old_input, const_node.output[0])
+            graph.replace_all_inputs(old_input, const_node.output[0])  # ops=graph.get_nodes()
         graph.remove_node(node.name)
 
     @staticmethod
@@ -111,16 +111,32 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         return [const_val_after_trans]
 
     @staticmethod
+    @_register_func("Reshape")
+    def _fold_reshape(node, graph):
+        const_val_data = node.inputs[0].get_tensor_value(as_list=False)
+        const_val_shape = node.inputs[1].get_tensor_value(as_list=True)
+        data_shape = const_val_data.shape
+        for i, dim in enumerate(const_val_shape):
+            if dim == 0:
+                # In ORT a dim of 0 means the shape stays the same.
+                const_val_shape[i] = data_shape[i]
+        const_val_after_trans = const_val_data.reshape(const_val_shape)
+        return [const_val_after_trans]
+
+    @staticmethod
     @_register_func("Unsqueeze")
     def _fold_unsqueeze(node, graph):
         """
         numpy expand_dims only supports to unsqueeze one dim one time, so reshape is used to simplify the logic
         """
         const_val = node.inputs[0].get_tensor_value(as_list=False)
-        axes = list(node.get_attr("axes").ints)
-        utils.make_sure(all(axis >= 0 for axis in axes), "onnx spec says it only supports positive axis")
+        if graph.opset >= 13:
+            axes = node.inputs[1].get_tensor_value(as_list=True)
+        else:
+            axes = list(node.get_attr("axes").ints)
         shape_in = const_val.shape
         dims_out = len(shape_in) + len(axes)
+        axes = [i if i >= 0 else i + dims_out for i in axes]
         # calculate the shape of output accroding to onnx Unsqueeze's spec
         # https://github.com/onnx/onnx/blob/master/docs/Operators.md#Unsqueeze
         shape_in = iter(shape_in)

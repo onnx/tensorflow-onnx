@@ -13,9 +13,10 @@ TF2ONNX_PACKAGE_NAME = __name__.split('.')[0]
 ONNX_DOMAIN = ""
 AI_ONNX_ML_DOMAIN = "ai.onnx.ml"
 MICROSOFT_DOMAIN = "com.microsoft"
+CONTRIB_OPS_DOMAIN = "ai.onnx.contrib"
 
 # Default opset version for onnx domain
-PREFERRED_OPSET = 8
+PREFERRED_OPSET = 9
 
 # Default opset for custom ops
 TENSORFLOW_OPSET = helper.make_opsetid("ai.onnx.converters.tensorflow", 1)
@@ -41,5 +42,5 @@ ENV_TF2ONNX_DEBUG_MODE = "TF2ONNX_DEBUG_MODE"
 # Mapping opset to IR version.
 # Note: opset 7 and opset 8 came out with IR3 but we need IR4 because of PlaceholderWithDefault
 OPSET_TO_IR_VERSION = {
-    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7
+    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7
 }

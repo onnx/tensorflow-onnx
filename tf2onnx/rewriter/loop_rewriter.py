@@ -18,6 +18,7 @@ import numpy as np
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -82,17 +83,18 @@ class LoopRewriter(LoopRewriterBase):
 
             for input_ta in loop_props.tensor_array_inputs:
                 # Loop does not have scan inputs, so we use Gather to get data for each iteration.
-                index_node = loop_body_g.make_node("Unsqueeze", [input_ta.index_input_id], attr={"axes": [0]})
+                gb = GraphBuilder(loop_body_g)
+                index_node = gb.make_unsqueeze({'data': input_ta.index_input_id, "axes": [0]}, return_node=True)
                 gather_node = loop_body_g.make_node("Gather", [input_ta.data_input_id, index_node.output[0]])
-                data_node = loop_body_g.make_node("Squeeze", [gather_node.output[0]], attr={"axes": [0]})
-                loop_body_g.replace_all_inputs(loop_body_g.get_nodes(), input_ta.consumer.id, data_node.output[0])
+                data_node = gb.make_squeeze({'data': gather_node.output[0], "axes": [0]}, return_node=True)
+                loop_body_g.replace_all_inputs(input_ta.consumer.id, data_node.output[0])  # ops=loop_body_g.get_nodes()
 
             ## create Loop node
-            loop_node = self._create_loop_node(context, loop_props, init_cond_output)
+            branches = {"body": loop_body_g}
+            loop_node = self._create_loop_node(context, loop_props, init_cond_output, branches=branches)
             if not loop_node:
                 logger.error("failed to create loop node during rewrite")
                 return REWRITER_RESULT.FAIL
-            loop_node.set_body_graph_as_attr("body", loop_body_g)
 
             logger.debug("rewrite successfully")
             return REWRITER_RESULT.OK
@@ -127,23 +129,21 @@ class LoopRewriter(LoopRewriterBase):
             body_graphs = node.graph.contained_graphs.pop(node.name, None)
             if body_graphs:
                 for attr_name, body_graph in body_graphs.items():
-                    body_graph.parent_graph = g
+                    body_graph.parent_graph = self.g
                     new_node.set_body_graph_as_attr(attr_name, body_graph)
             copied_nodes.append(new_node)
 
         # replace all inputs of condition graph by initializer (enter_input)
         for loop_var in cond_graph.dependent_vars:
             self.g.replace_all_inputs(
-                copied_nodes,
                 loop_var.next_iteration_input.id,
-                loop_var.enter_input_id
-            )
+                loop_var.enter_input_id, ops=copied_nodes)
         init_cond_output = "{}/{}".format(name_scope, cond_graph.outputs[0].id)
         self.g.set_dtype(init_cond_output, cond_graph.outputs[0].dtype)
         self.g.set_shape(init_cond_output, cond_graph.outputs[0].shape)
         return init_cond_output
 
-    def _create_loop_node(self, context, loop_props, init_cond_output):
+    def _create_loop_node(self, context, loop_props, init_cond_output, branches=None):
         loop_outputs = []
         loop_output_shapes = []
         loop_output_dtypes = []
@@ -166,6 +166,6 @@ class LoopRewriter(LoopRewriterBase):
                                      loop_props.state_inputs_initial_values,  # ONNX Loop support state inputs only
                                      outputs=loop_outputs, op_name_scope="generic_loop",
                                      shapes=loop_output_shapes, dtypes=loop_output_dtypes,
-                                     skip_conversion=False)
+                                     skip_conversion=False, branches=branches)
 
         return loop_node

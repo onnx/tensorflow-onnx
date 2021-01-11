@@ -12,9 +12,11 @@ import logging
 from distutils.version import LooseVersion
 
 import tensorflow as tf
+import numpy as np
+from tensorflow.python.ops import lookup_ops
 
 from tf2onnx import utils
-from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx
+from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx, get_hash_table_info, replace_placeholders_with_tables
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,17 @@ try:
 except ImportError:
     function_def_to_graph = _not_implemented_tf_placeholder('function_def_to_graph')
 
+try:
+    # pylint: disable=protected-access
+    from tensorflow.python.saved_model.load import _RestoredResource as TfRestoredResourceType
+except ImportError:
+    TfRestoredResourceType = tuple()  # isinstance(x, tuple()) is always false
+
+try:
+    from tensorflow.python.training.tracking.tracking import AutoTrackable as TfAutoTrackableType
+except ImportError:
+    TfAutoTrackableType = tuple()
+
 if is_tf2():
     convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
     from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
@@ -60,6 +73,7 @@ if is_tf2():
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.io.gfile
     tf_placeholder = tf.compat.v1.placeholder
+    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
     extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 elif LooseVersion(tf.__version__) >= "1.13":
     # 1.13 introduced the compat namespace
@@ -70,6 +84,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.compat.v1.placeholder
+    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
     extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 else:
     # older than 1.13
@@ -80,6 +95,7 @@ else:
     tf_import_meta_graph = tf.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.placeholder
+    tf_placeholder_with_default = tf.placeholder_with_default
     extract_sub_graph = tf.graph_util.extract_sub_graph
 
 
@@ -95,9 +111,36 @@ def inputs_without_resource(sess, input_names):
         pass
     return input_names
 
+def convert_variables_to_constants_large_model(func):
+    # For large models we use internal tf methods as a hack
 
-def from_function(func, input_names, output_names):
-    frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
+    if tf.__version__.startswith("2.2."):
+        try:
+            from tensorflow.python.framework.convert_to_constants import \
+                 _convert_variables_to_constants_v2_impl # pylint: disable=protected-access
+        except ImportError:
+            _not_implemented_tf_placeholder("_convert_variables_to_constants_v2_impl")()
+        frozen_graph_def, _ = \
+            _convert_variables_to_constants_v2_impl(func, lower_control_flow=False, aggressive_inlining=True)
+        return frozen_graph_def
+
+    try:
+        from tensorflow.python.framework.convert_to_constants import \
+            _FunctionConverterData, _replace_variables_by_constants # pylint: disable=protected-access
+    except ImportError:
+        _not_implemented_tf_placeholder("_replace_variables_by_constants")()
+    converter_data = _FunctionConverterData(func=func, lower_control_flow=False, aggressive_inlining=True)
+    frozen_graph_def, _ = _replace_variables_by_constants(converter_data=converter_data)
+    return frozen_graph_def
+
+def from_function(func, input_names, output_names, large_model=False):
+    if large_model:
+        return convert_variables_to_constants_large_model(func)
+
+    if get_tf_version() < LooseVersion("2.2"):
+        frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
+    else:
+        frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
     # output_names = [i.name for i in frozen_func.outputs]
     tf_reset_default_graph()
@@ -144,7 +187,16 @@ def from_graphdef(model_path, input_names, output_names):
     with tf_session() as sess:
         graph_def = tf_graphdef()
         with tf_gfile.GFile(model_path, 'rb') as f:
-            graph_def.ParseFromString(f.read())
+            try:
+                content = f.read()
+            except Exception as e:
+                raise OSError(
+                    "Unable to load file '{}'.".format(model_path)) from e
+            try:
+                graph_def.ParseFromString(content)
+            except Exception as e:
+                raise RuntimeError(
+                    "Unable to parse file '{}'.".format(model_path)) from e
             tf.import_graph_def(graph_def, name='')
         input_names = inputs_without_resource(sess, input_names)
         frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
@@ -178,10 +230,24 @@ def from_checkpoint(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures):
+def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures):
     """Load tensorflow graph from saved_model."""
 
-    imported = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
+    wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
+    wrn_empty_tag = "'--tag' value is empty string. Using tag =[[]]"
+
+    if tag is None:
+        tag = [tf.saved_model.tag_constants.SERVING]
+        logger.warning(wrn_no_tag)
+
+    if tag == '':
+        tag = [[]]
+        logger.warning(wrn_empty_tag)
+
+    if not isinstance(tag, list):
+        tag = [tag]
+
+    imported = tf.saved_model.loader.load(sess, tag, model_path)
     for k in imported.signature_def.keys():
         if k.startswith("_"):
             # consider signatures starting with '_' private
@@ -209,46 +275,185 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, signatures
     return frozen_graph, input_names, output_names
 
 
-def _from_saved_model_v2(model_path, input_names, output_names, signatures):
+def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
+                                        removed_resource_to_placeholder, placeholder_to_table_info):
+    # pylint: disable=protected-access
+    for r in trackable.__dict__.values():
+        if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource'):
+            try:
+                table_handle = id(r.resource_handle)
+            except Exception:  # pylint: disable=broad-except
+                continue
+            initializer = r._create_resource.concrete_functions[0].function_def
+            new_names, new_k_dtypes, new_v_dtypes = get_hash_table_info(initializer.node_def)
+            table_names.extend(new_names)
+            key_dtypes.extend(new_k_dtypes)
+            value_dtypes.extend(new_v_dtypes)
+            if table_handle in removed_resource_to_placeholder and len(new_names) == 1:
+                table_info = (new_names[0], new_k_dtypes[0], new_v_dtypes[0])
+                placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
+        if isinstance(r, TfAutoTrackableType):
+            _get_hash_table_info_from_trackable(r, table_names, key_dtypes, value_dtypes,
+                                                removed_resource_to_placeholder, placeholder_to_table_info)
+
+
+def _remove_non_variable_resources_from_captures(concrete_func):
+    """
+    Removes all non-variable resources (such as tables) from a function's captured inputs to prevent tf from
+    raising a 'cannot convert dtype resource to numpy' error while freezing the graph.
+    """
+    # pylint: disable=protected-access
+    resource_id_to_placeholder = {}
+    graph_captures_copy = None
+    func_captures_copy = None
+    if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
+        graph_captures_copy = concrete_func.graph._captures.copy()
+        func_captures_copy = concrete_func._captured_inputs.copy()
+        variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
+        for k, v in list(concrete_func.graph._captures.items()):
+            val_tensor, name_tensor = v
+            if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
+                resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
+                del concrete_func.graph._captures[k]
+                for i in reversed(range(len(concrete_func._captured_inputs))):
+                    if concrete_func._captured_inputs[i] is val_tensor:
+                        concrete_func._captured_inputs.pop(i)
+            elif val_tensor.dtype != tf.resource:
+                npval = val_tensor.numpy()
+                if not hasattr(npval, 'dtype'):
+                    # Hack around a TF bug until PR is merged: https://github.com/tensorflow/tensorflow/pull/45610
+                    arr = np.array(npval)
+                    val_tensor.numpy = lambda arr=arr: arr
+    else:
+        logger.warning(
+            "Could not search for non-variable resources. Concrete function internal representation may have changed.")
+    return resource_id_to_placeholder, graph_captures_copy, func_captures_copy
+
+
+def _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy):
+    """Undoes effect of _remove_non_variable_resources_from_captures on concrete_func"""
+    # pylint: disable=protected-access
+    if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
+        concrete_func.graph._captures = graph_captures_copy
+        concrete_func._captured_inputs = func_captures_copy
+
+
+def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def,
+                         concrete_function_index, large_model):
     """Load tensorflow graph from saved_model."""
-    imported = tf.saved_model.load(model_path)  # pylint: disable=no-value-for-parameter
 
-    # f = meta_graph_def.signatures[tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY]
-    for k in imported.signatures.keys():
-        if k.startswith("_"):
-            # consider signatures starting with '_' private
-            continue
-        signatures.append(k)
-    for k in signatures:
-        concrete_func = imported.signatures[k]
-        input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                       if input_tensor.dtype != tf.dtypes.resource]
-        output_names = [output_tensor.name for output_tensor in concrete_func.outputs
-                        if output_tensor.dtype != tf.dtypes.resource]
+    wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
+    wrn_empty_tag = "'--tag' value is empty string. Using tag =[[]]"
+    wrn_sig_1 = "'--signature_def' not specified, using first signature: %s"
+    err_many_sig = "Cannot load multiple signature defs in TF2.x: %s"
+    err_no_call = "Model doesn't contain usable concrete functions under  __call__. Try --signature-def instead."
+    err_index = "Invalid concrete_function value: %i. Valid values are [0 to %i]"
+    err_no_sig = "No signatures found in model. Try --concrete_function instead."
+    err_sig_nomatch = "Specified signature not in model %s"
+    err_large_model = "model exceeds maximum protobuf size of 2GB. Try running with --large_model flag."
 
-    frozen_graph = from_function(concrete_func, input_names, output_names)
-    return frozen_graph, input_names, output_names
+    if tag is None:
+        tag = ['serve']
+        logger.warning(wrn_no_tag)
 
+    if tag == '':
+        tag = [[]]
+        logger.warning(wrn_empty_tag)
 
-def from_saved_model(model_path, input_names, output_names, signatures=None):
+    utils.make_sure(len(signature_def) < 2, err_many_sig, str(signature_def))
+    imported = tf.saved_model.load(model_path, tags=tag)  # pylint: disable=no-value-for-parameter
+
+    all_sigs = imported.signatures.keys()
+    valid_sigs = [s for s in all_sigs if not s.startswith("_")]
+    logger.info("Signatures found in model: %s", "[" + ",".join(valid_sigs) + "].")
+
+    concrete_func = None
+    if concrete_function_index is not None:
+        utils.make_sure(hasattr(imported, "__call__"), err_no_call)
+        utils.make_sure(concrete_function_index < len(imported.__call__.concrete_functions),
+                        err_index, concrete_function_index, len(imported.__call__.concrete_functions) - 1)
+        sig = imported.__call__.concrete_functions[concrete_function_index].structured_input_signature[0]
+        concrete_func = imported.__call__.get_concrete_function(*sig)
+    elif signature_def:
+        utils.make_sure(signature_def[0] in valid_sigs, err_sig_nomatch, signature_def[0])
+        concrete_func = imported.signatures[signature_def[0]]
+    else:
+        utils.make_sure(len(valid_sigs) > 0, err_no_sig)
+        logger.warning(wrn_sig_1, valid_sigs[0])
+        concrete_func = imported.signatures[valid_sigs[0]]
+
+    inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
+    outputs = [tensor.name for tensor in concrete_func.outputs if tensor.dtype != tf.dtypes.resource]
+
+    # filter by user specified inputs/outputs
+    if input_names:
+        inputs = list(set(input_names) & set(inputs))
+    if output_names:
+        outputs = list(set(output_names) & set(outputs))
+
+    # Avoid errors due to bug in TF freezing
+    removed_resource_to_placeholder, graph_captures_copy, func_captures_copy = \
+        _remove_non_variable_resources_from_captures(concrete_func)
+
+    try:
+        frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
+    except ValueError as e:
+        if any(msg in str(e) for msg in ["exceeds maximum protobuf size of 2GB", "string too long"]):
+            raise ValueError(err_large_model)
+        raise e
+
+    # We might be returning the concrete_func so let's put it back in working order
+    _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy)
+
+    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
+    placeholder_to_table_info = {}
+    _get_hash_table_info_from_trackable(imported, table_names, key_dtypes, value_dtypes,
+                                        removed_resource_to_placeholder, placeholder_to_table_info)
+
+    initialized_tables = {}
+    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
+        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+        try:
+            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+            initialized_tables[n] = (k.numpy(), v.numpy())
+        except Exception:  # pylint: disable=broad-except
+            logger.warning("Could not initialize table with shared_name = %r", n)
+
+    for placeholder in removed_resource_to_placeholder.values():
+        if placeholder not in placeholder_to_table_info:
+            logger.error("Could not find table resource to replace placeholder %s", placeholder)
+
+    replace_placeholders_with_tables(frozen_graph, placeholder_to_table_info)
+
+    return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables
+
+def from_saved_model(model_path, input_names, output_names, tag=None,
+                     signatures=None, concrete_function=None, large_model=False,
+                     return_concrete_func=False, return_initialized_tables=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
     if is_tf2():
-        frozen_graph, input_names, output_names = \
-            _from_saved_model_v2(model_path, input_names, output_names, signatures)
+        frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables = \
+            _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function, large_model)
+        result = [frozen_graph, input_names, output_names]
+        if return_concrete_func:
+            result += [concrete_func, imported]
+        if return_initialized_tables:
+            result += [initialized_tables]
     else:
         with tf_session() as sess:
             frozen_graph, input_names, output_names = \
-                _from_saved_model_v1(sess, model_path, input_names, output_names, signatures)
-
-    if len(signatures) > 1:
-        logger.warning("found multiple signatures %s in saved_model, pass --signature_def in command line",
-                       signatures)
+                _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
+            result = [frozen_graph, input_names, output_names]
+            if return_concrete_func:
+                result += [None, None]
+            if return_initialized_tables:
+                result += [{}]
 
     tf_reset_default_graph()
-    return frozen_graph, input_names, output_names
+    return result
 
 
 def from_keras(model_path, input_names, output_names):
@@ -323,24 +528,19 @@ def tf_optimize(input_names, output_names, graph_def, fold_constant=True):
                    [utils.node_name(i) for i in output_names]
     graph_def = extract_sub_graph(graph_def, needed_names)
 
-    if fold_constant:
-        want_grappler = is_tf2() or LooseVersion(tf.__version__) >= "1.15"
-        if want_grappler:
-            graph_def = tf_optimize_grappler(input_names, output_names, graph_def, fold_constant)
-        else:
-            # the older transform path
-            from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name
-            transforms = []
-            if fold_constant:
-                transforms.extend([
-                    "fold_constants(ignore_errors=true)",
-                    "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
-                ])
-            transforms.extend([
-                "fold_batch_norms",
-                "fold_old_batch_norms",
-            ])
-            graph_def = TransformGraph(graph_def, input_names, output_names, transforms)
+    want_grappler = is_tf2() or LooseVersion(tf.__version__) >= "1.15"
+    if want_grappler:
+        graph_def = tf_optimize_grappler(input_names, output_names, graph_def, fold_constant)
+    else:
+        # the older transform path
+        from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name
+        transforms = [
+            "fold_constants(ignore_errors=true)",
+            "remove_attribute(attribute_name=_class)",  # remove node colocation attributes
+            "fold_batch_norms",
+            "fold_old_batch_norms",
+        ]
+        graph_def = TransformGraph(graph_def, input_names, output_names, transforms)
 
     return graph_def
 
@@ -350,8 +550,8 @@ def tf_reload_graph(tf_graph):
     # invoke c api if tf version is below 1.8
     if get_tf_version() < LooseVersion("1.8"):
         logger.debug(
-            "On TF < 1.8, graph is constructed by python API, " \
-            "which doesn't invoke shape inference, please set " \
+            "On TF < 1.8, graph is constructed by python API, "
+            "which doesn't invoke shape inference, please set "
             "TF_C_API_GRAPH_CONSTRUCTION=1 to enable it"
         )
 
@@ -365,6 +565,7 @@ def is_function(g):
     if is_tf2():
         return 'tensorflow.python.framework.func_graph.FuncGraph' in str(type(g))
     return False
+
 
 _FUNCTIONS = {}
 

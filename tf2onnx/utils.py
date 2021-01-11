@@ -13,15 +13,20 @@ import os
 import re
 import shutil
 import tempfile
+import zipfile
+import logging
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import numpy as np
 from google.protobuf import text_format
-from onnx import helper, onnx_pb, defs, numpy_helper, __version__
+from onnx import helper, onnx_pb, defs, numpy_helper, ModelProto, __version__
 
 from . import constants
+
+
+logger = logging.getLogger(__file__)
 
 
 #
@@ -39,6 +44,9 @@ ONNX_TO_NUMPY_DTYPE = {
     onnx_pb.TensorProto.INT64: np.int64,
     onnx_pb.TensorProto.UINT64: np.uint64,
     onnx_pb.TensorProto.BOOL: np.bool,
+    onnx_pb.TensorProto.COMPLEX64: np.complex64,
+    onnx_pb.TensorProto.COMPLEX128: np.complex128,
+    onnx_pb.TensorProto.STRING: np.object,
 }
 
 #
@@ -55,7 +63,9 @@ ONNX_DTYPE_NAMES = {
     onnx_pb.TensorProto.UINT16: "uint16",
     onnx_pb.TensorProto.INT64: "int64",
     onnx_pb.TensorProto.STRING: "string",
-    onnx_pb.TensorProto.BOOL: "bool"
+    onnx_pb.TensorProto.BOOL: "bool",
+    onnx_pb.TensorProto.COMPLEX64: "complex64",
+    onnx_pb.TensorProto.COMPLEX128: "complex128"
 }
 
 
@@ -107,7 +117,7 @@ def map_numpy_to_onnx_dtype(np_dtype):
     for onnx_dtype, numpy_dtype in ONNX_TO_NUMPY_DTYPE.items():
         if numpy_dtype == np_dtype:
             return onnx_dtype
-    raise ValueError("unsupported dtype " + np_dtype + " for mapping")
+    raise ValueError("unsupported numpy dtype '%s' for mapping to onnx" % np_dtype)
 
 
 def map_onnx_to_numpy_type(onnx_type):
@@ -161,7 +171,8 @@ def find_opset(opset):
     return opset
 
 
-def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False):
+def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False,
+                    external_tensor_storage=None):
     """Save onnx model as file. Save a pbtxt file as well if as_text is True"""
     save_path = save_path_root
     if not os.path.exists(save_path):
@@ -181,12 +192,26 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
             save_protobuf(data_full_path, t)
             i += 1
 
-    target_path = os.path.join(save_path, onnx_file_name + ".onnx")
-    save_protobuf(target_path, model_proto)
+    if external_tensor_storage is None:
+        target_path = os.path.join(save_path, onnx_file_name + ".onnx")
+        save_protobuf(target_path, model_proto)
+    else:
+        zip_path = os.path.join(save_path, onnx_file_name + ".zip")
+        save_onnx_zip(zip_path, model_proto, external_tensor_storage)
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            z.extractall(save_path)
+        target_path = os.path.join(save_path, "__MODEL_PROTO.onnx")
+
     if as_text:
         save_protobuf(target_path + ".pbtxt", model_proto, as_text=True)
+
     return target_path
 
+def save_onnx_zip(target_path, model_proto, external_tensor_storage):
+    with zipfile.ZipFile(target_path, 'w') as z:
+        z.writestr("__MODEL_PROTO.onnx", model_proto.SerializeToString())
+        for k, v in external_tensor_storage.name_to_tensor_data.items():
+            z.writestr(k, v)
 
 def make_sure(bool_val, error_msg, *args):
     if not bool_val:
@@ -203,13 +228,15 @@ def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):
     for op in nodes:
         all_outputs |= set(op.output)
 
-        new_node = g.make_node(op.type, op.input, outputs=op.output, attr=op.attr, name=op.name,
-                               skip_conversion=op.skip_conversion, infer_shape_dtype=False)
+        branches = {}
         body_graphs = op.graph.contained_graphs.pop(op.name, None)
         if body_graphs:
             for attr_name, body_graph in body_graphs.items():
                 body_graph.parent_graph = g
-                new_node.set_body_graph_as_attr(attr_name, body_graph)
+                branches[attr_name] = body_graph
+
+        _ = g.make_node(op.type, op.input, outputs=op.output, attr=op.attr, name=op.name,
+                        skip_conversion=op.skip_conversion, infer_shape_dtype=False, branches=branches)
 
     for i in all_outputs:
         if i not in g._output_shapes:
@@ -253,6 +280,22 @@ def save_protobuf(path, message, as_text=False):
         with open(path, "wb") as f:
             f.write(message.SerializeToString())
 
+def model_proto_from_file(model_path):
+    model_proto = ModelProto()
+    with open(model_path, "rb") as f:
+        model_proto.ParseFromString(f.read())
+    return model_proto
+
+def model_proto_from_zip(zip_path, external_tensor_storage):
+    model_proto = ModelProto()
+    with zipfile.ZipFile(zip_path, 'r') as z:
+        for n in z.namelist():
+            f = z.open(n)
+            if n.endswith(".onnx"):
+                model_proto.ParseFromString(f.read())
+            else:
+                external_tensor_storage.name_to_tensor_data[n] = f.read()
+    return model_proto
 
 def is_list_or_tuple(obj):
     return isinstance(obj, (list, tuple))
@@ -405,9 +448,9 @@ def have_same_inference_value(g, output_1, output_2):
         if node_1.type != node_2.type:
             return False
         # check onnx attributes
-        if node_1.attr_onnx.keys() != node_2.attr_onnx.keys():
+        if node_1.get_onnx_attrs().keys() != node_2.get_onnx_attrs().keys():
             return False
-        for name in node_1.attr_onnx.keys(): # pylint: disable=consider-iterating-dictionary
+        for name in node_1.get_onnx_attrs().keys(): # pylint: disable=consider-iterating-dictionary
             if node_1.get_attr_value(name) != node_2.get_attr_value(name):
                 return False
         return True

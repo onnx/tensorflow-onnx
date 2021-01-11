@@ -11,7 +11,6 @@ from __future__ import unicode_literals
 
 import copy
 import logging
-import sys
 
 import numpy as np
 
@@ -19,7 +18,6 @@ from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
-from tf2onnx.utils import make_sure
 from tf2onnx.tf_loader import find_function
 
 
@@ -27,140 +25,6 @@ logger = logging.getLogger(__name__)
 
 
 # pylint: disable=unused-argument,missing-docstring
-
-def get_inputs_for_current_iteration(g, input_id, iter_index):
-    cond_gather_node = g.make_node("Gather", [input_id, iter_index])
-    cur_cond_val_scalar_node = g.make_node("Squeeze", [cond_gather_node.output[0]], attr={"axes": [0]})
-    return cur_cond_val_scalar_node.output[0]
-
-
-def create_loop_body_graph(parent_g, gather_input_ids, output_data_type, output_shape, trip_count_input_ids,
-                           rank, loop_name):
-    g = parent_g.create_new_graph_with_same_config()
-    g.parent_graph = parent_g
-    iter_name = utils.make_name("i")
-    cond_name = utils.make_name("cond")
-    fake_var_name = utils.make_name("fake_var")
-
-    g.add_graph_input(iter_name, TensorProto.INT64, (1,))  # iteration_num
-    g.add_graph_input(cond_name, TensorProto.BOOL, ())  # condition
-    g.add_graph_input(fake_var_name, TensorProto.FLOAT, ())  # loop-carried dependency
-
-    # get the i'th value of condition
-    cond_input_id = gather_input_ids[0]
-    cond_input_id_for_current_iter = get_inputs_for_current_iteration(g, cond_input_id, iter_name)
-
-    # get the i'th value of true values
-    true_input_id = gather_input_ids[1]
-    true_input_id_for_current_iter = get_inputs_for_current_iteration(g, true_input_id, iter_name)
-
-    # get the i'th value of false values
-    false_input_id = gather_input_ids[2]
-    false_input_id_for_current_iter = get_inputs_for_current_iteration(g, false_input_id, iter_name)
-
-    input_ids_for_current_iter = [cond_input_id_for_current_iter, true_input_id_for_current_iter,
-                                  false_input_id_for_current_iter]
-    output_id = None
-    rank -= 1
-    if rank >= 1:
-        loop_1 = create_loop_op(g, input_ids_for_current_iter, output_data_type, output_shape[1:],
-                                trip_count_input_ids, rank)
-        output_id = loop_1.output[1]
-    elif rank == 0:
-        _, if_node_output_id = create_if_op(g, input_ids_for_current_iter, output_data_type, output_shape[1:])
-        output_id = if_node_output_id
-
-    output_identity_name = utils.make_name("loop_output")
-    loop_output_id = utils.port_name(output_identity_name)
-    g.make_node(
-        'Identity',
-        [output_id],
-        outputs=[loop_output_id],
-        name=output_identity_name
-    )
-
-    cond_identity_name = utils.make_name("cond_output")
-    cond_output_id = utils.port_name(cond_identity_name)
-    g.make_node(
-        'Identity',
-        [cond_name],
-        outputs=[cond_output_id],
-        name=cond_identity_name
-    )
-
-    fake_var_identity_name = utils.make_name("fake_var_output")
-    fake_var_output_id = utils.port_name(fake_var_identity_name)
-    g.make_node(
-        'Identity',
-        [fake_var_name],
-        outputs=[fake_var_output_id],
-        name=fake_var_identity_name
-    )
-
-    g.add_graph_output(cond_output_id, TensorProto.BOOL, ())
-    g.add_graph_output(fake_var_output_id, TensorProto.FLOAT, ())
-
-    # use None for all dims, just keep original rank. Because it is observed, dims might be changed in loop.
-    g.add_graph_output(loop_output_id, output_data_type, utils.create_vague_shape_like(output_shape[1:]))
-
-    return g
-
-
-def create_if_op(g, input_ids, output_data_type, output_shape):
-    op_name = utils.make_name("If")
-    true_graph = create_body_graph_for_if_branch(g, output_data_type, output_shape, input_ids[1], op_name)
-    false_graph = create_body_graph_for_if_branch(g, output_data_type, output_shape, input_ids[2], op_name)
-    out_name = utils.port_name(op_name)
-
-    # output a scalar
-    if_node = g.make_node("If", [input_ids[0]], outputs=[out_name], name=op_name, skip_conversion=True)
-    if_node.set_body_graph_as_attr("then_branch", true_graph)
-    if_node.set_body_graph_as_attr("else_branch", false_graph)
-    return if_node, out_name
-
-
-def create_body_graph_for_if_branch(parent_g, data_type, output_shape, chosen_cur_cond_val_out_name, op_name):
-    g = parent_g.create_new_graph_with_same_config()
-    g.parent_graph = parent_g
-    name = utils.make_name("Identity")
-    g.make_node(
-        'Identity',
-        inputs=[chosen_cur_cond_val_out_name],
-        outputs=['y'],
-        name=name
-    )
-    g.add_graph_output("y", data_type, utils.create_vague_shape_like(output_shape))
-    return g
-
-
-# gather_input_ids is 1-D tensor, containing 3 elements:
-# 0: condition data to gather on
-# 1: true result to gather on
-# 2: false result to gather on
-def create_loop_op(g, gather_input_ids, output_type, output_shape, trip_count_input_ids, rank):
-    cond_var_name = utils.make_name("cond_var")
-    g.make_const(cond_var_name, np.array(True, dtype=np.bool))
-
-    # Loop requires at least a variable, add a useless fake variable.
-    fake_val_name = utils.make_name("fake_var")
-    g.make_const(fake_val_name, np.array(0.0, dtype=np.float32))
-
-    if rank < 1:
-        raise ValueError("rank is < 1")
-    trip_count_input_id = trip_count_input_ids[-1 * rank]
-
-    loop_inputs = [trip_count_input_id,  # trip count
-                   cond_var_name,  # termination condition
-                   fake_val_name  # initial value of loop-carried dependencies
-                   ]
-    # define an extra scan output
-    loop_node = g.make_node("Loop", loop_inputs, output_count=2, op_name_scope="select_loop",
-                            skip_conversion=False)
-    loop_body = create_loop_body_graph(g, gather_input_ids, output_type, output_shape, trip_count_input_ids,
-                                       rank, loop_node.name)
-    loop_node.set_body_graph_as_attr("body", loop_body)
-    return loop_node
-
 
 def make_range_const(ctx, start, limit, delta, output, scope_name, shape, dtype):
     """make Range subgraph if all inputs are const."""
@@ -224,8 +88,9 @@ def make_range_non_const(ctx, start, limit, delta, output, scope_name, shape, dt
 
     # loop
     loop_inputs = [trip_count_node.output[0], cond_name, start]
-    loop_node = ctx.make_node("Loop", loop_inputs, output_count=2, op_name_scope=base_name, name="loop")
-    loop_node.set_body_graph_as_attr("body", g)
+    branches = {"body": g}
+    loop_node = ctx.make_node("Loop", loop_inputs,
+                              output_count=2, op_name_scope=base_name, name="loop", branches=branches)
 
     ctx.make_node("Identity", [loop_node.output[1]], name=base_name, shapes=[shape], dtypes=[dtype], outputs=[output])
 
@@ -277,84 +142,40 @@ class Select:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         # T output = Select(bool condition, T x, T y)
-        # Select_res = Add(Multiply(Cast(bool condition, float32), T x,),
-        #                  Multiply(Cast(Not(bool condition), float32), T y)).
+        # Select_res = Add(Multiply(Cast(bool condition, T), T x,),
+        #                  Multiply(Cast(Not(bool condition), T), T y)).
+        # TODO: Fix case where condition is 1-dimensional
         utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
+        dtype = ctx.get_dtype(node.output[0])
+        utils.make_sure(dtype != TensorProto.STRING, "Select with dtype string requires opset 9")
+
+        cond_shape = ctx.get_shape(node.input[0])
+        input_shape = ctx.get_shape(node.input[1])
+        if input_shape is None:
+            input_shape = ctx.get_shape(node.input[2])
+        input_rank = len(input_shape) if input_shape is not None else None
+        cond_rank = len(cond_shape) if cond_shape is not None else None
+        # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
+        if node.type == "Select" and cond_rank == 1 and input_rank != 1:
+            utils.make_sure(input_rank is not None, "input_rank unknown and cond_rank == 1")
+            broadcast_shape = [cond_shape[0]] + [1] * (input_rank - 1)
+            shape_const = ctx.make_const(utils.make_name(node.name), np.array(broadcast_shape, dtype=np.int64))
+            reshape = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
+            ctx.replace_input(node, node.input[0], reshape.output[0], 0)
+
         positive_cast = ctx.make_node("Cast", [node.input[0]], name=utils.make_name(node.name),
-                                      attr={"to": TensorProto.FLOAT})
+                                      attr={"to": dtype})
         negative = ctx.make_node("Not", [node.input[0]], name=utils.make_name(node.name))
         negative_cast = ctx.make_node("Cast", [negative.output[0]], name=utils.make_name(node.name),
-                                      attr={"to": TensorProto.FLOAT})
+                                      attr={"to": dtype})
         multiply_1 = ctx.make_node("Mul", [positive_cast.output[0], node.input[1]], name=utils.make_name(node.name))
         multiply_2 = ctx.make_node("Mul", [node.input[2], negative_cast.output[0]], name=utils.make_name(node.name))
         add_name = node.name
         add_out = node.output
-        dtype = ctx.get_dtype(node.output[0])
         shape = ctx.get_shape(node.output[0])
         ctx.remove_node(node.name)
         ctx.make_node("Add", [multiply_1.output[0], multiply_2.output[0]], outputs=add_out, name=add_name,
                       dtypes=[dtype], shapes=[shape])
-
-    @classmethod
-    def version_8(cls, ctx, node, **kwargs):
-        # T output = Select(bool condition, T x, T y)
-        # V v_final_and_scan_outputs = Loop(int64 M, B cond, V v_initial)
-        utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
-
-        true_data_type = ctx.get_dtype(node.input[1])
-        true_data_shape = ctx.get_shape(node.input[1])
-        make_sure(true_data_type is not None, "select true data dtype cannot be None")
-        make_sure(true_data_shape is not None, "select true data shape cannot be None")
-
-        condition_shape = ctx.get_shape(node.input[0])
-        utils.make_sure(condition_shape is not None, "Shape of {} is None".format(node.input[0]))
-        rank = len(condition_shape)
-
-        utils.make_sure(rank >= 0, "rank should be >= 0")
-        val_output_id = None
-        if rank > 0:
-            # create nodes getting shape of condition
-            shape_node_output_shape = [rank]
-            shape_node = ctx.make_node("Shape", [node.input[0]], op_name_scope=node.name,
-                                       shapes=[shape_node_output_shape], dtypes=[TensorProto.INT64])
-
-            # todo(pengwa), move those leveraging rewrite_incomplete_type_support_onnxruntime after shape inferencing
-            # bug is fixed.
-            # workaround: onnxruntime does not support Split-2, add cases before and after.
-            target_dtype = TensorProto.FLOAT
-            shape_f_node = ctx.make_node("Cast", [shape_node.output[0]], attr={"to": target_dtype},
-                                         shapes=[shape_node_output_shape], dtypes=[target_dtype],
-                                         op_name_scope=node.name)
-
-            split_attr = [1 for i in range(rank)]
-            output_shapes = [[1] for i in range(rank)]
-            output_dtypes = [target_dtype for i in range(rank)]
-            split_node = ctx.make_node("Split", [shape_f_node.output[0]], output_count=rank,
-                                       attr={"split": split_attr}, shapes=output_shapes,
-                                       dtypes=output_dtypes, op_name_scope=node.name)
-
-            trip_cnts = []
-            for i in range(rank):
-                output_id = split_node.output[i]
-                output_shape = ctx.get_shape(output_id)
-                target_dtype = TensorProto.INT64
-                shape_i_node = ctx.make_node("Cast", [output_id], attr={"to": target_dtype},
-                                             shapes=[output_shape], dtypes=[target_dtype],
-                                             op_name_scope=node.name)
-                trip_cnts.append(shape_i_node.output[0])
-            # workaround ends
-
-            loop_node = create_loop_op(ctx, node.input, true_data_type, true_data_shape, trip_cnts, rank)
-
-            val_output_id = loop_node.output[1]
-        elif rank == 0:
-            _, val_output_id = create_if_op(ctx, node.input, true_data_type, true_data_shape)
-
-        ctx.copy_shape(node.output[0], val_output_id)
-        ctx.set_dtype(node.output[0], true_data_type)
-        ctx.remove_node(node.name)
-        ctx.make_node("Identity", [val_output_id], outputs=node.output,
-                      shapes=[ctx.get_shape(val_output_id)], dtypes=[true_data_type])
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
@@ -362,20 +183,25 @@ class Select:
         # T1 output = Where(bool condition, T1 x, T1 y)
         # NOTE: condition can be 1-dimension in tensorflow, while in onnx,
         # it should be broadcastable with other two inputs
-        node.type = "Where"
+        if ctx.get_dtype(node.output[0]) != TensorProto.STRING:
+            # Due to bad ORT implementation, Mul/Add ops are faster than Where op
+            cls.version_7(ctx, node, **kwargs)
+            return
+
         cond_shape = ctx.get_shape(node.input[0])
-        make_sure(cond_shape is not None, "shape of {} is None".format(node.input[0]))
         input_shape = ctx.get_shape(node.input[1])
         if input_shape is None:
             input_shape = ctx.get_shape(node.input[2])
-        make_sure(input_shape is not None, "input shape of {} is None".format(node.name))
-        input_rank = len(input_shape)
+        input_rank = len(input_shape) if input_shape is not None else None
+        cond_rank = len(cond_shape) if cond_shape is not None else None
         # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
-        if len(cond_shape) == 1 and input_rank > 1:
+        if node.type == "Select" and cond_rank == 1 and input_rank != 1:
+            utils.make_sure(input_rank is not None, "input_rank unknown and cond_rank == 1")
             broadcast_shape = [cond_shape[0]] + [1] * (input_rank - 1)
             shape_const = ctx.make_const(utils.make_name(node.name), np.array(broadcast_shape, dtype=np.int64))
             reshape = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
-            ctx.replace_input(node, node.input[0], reshape.output[0])
+            ctx.replace_input(node, node.input[0], reshape.output[0], 0)
+        node.type = "Where"
 
 
 @tf_op("Where")
@@ -405,15 +231,16 @@ class StatelessIfOp:
         ctx.remove_node(node.name)
 
         # replace the original node
-        if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
-
+        branches = {}
         for branch in ["then_branch", "else_branch"]:
             func_name = node.get_attr_str(branch)
             g = find_function(func_name)
             g.parent_graph = ctx
             wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
-            if_node.set_body_graph_as_attr(branch, g)
+            branches[branch] = g
+
+        _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+                          shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
 
 
 @tf_op(["If"])
@@ -432,15 +259,16 @@ class IfOp:
         ctx.remove_node(node.name)
 
         # replace the original node
-        if_node = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-                                shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
-
+        branches = {}
         for branch in ["then_branch", "else_branch"]:
             func_name = node.get_attr_str(branch)
             g = find_function(func_name)
             g.parent_graph = ctx
             wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
-            if_node.set_body_graph_as_attr(branch, g)
+            branches[branch] = g
+
+        _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+                          shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
 
 
 @tf_op(["TensorListSetItem"])
@@ -457,9 +285,11 @@ class TensorListGetItem:
     def version_7(cls, ctx, node, **kwargs):
         ctx.ta_reads.append(node.input[0])
         node.type = "Gather"
-        node.input = [node.input[0], node.input[1]]
-        ctx.insert_new_node_on_input(node, "Unsqueeze", node.input[1], name=node.child_name(), axes=[0])
-        ctx.insert_new_node_on_output("Squeeze", node.output[0], name=node.child_name(), axes=[0])
+        ctx.replace_inputs(node, [node.input[0], node.input[1]])
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cls.version_7(ctx, node, **kwargs)
 
 
 @tf_op(["TensorListLength"])
@@ -493,7 +323,7 @@ class TensorListStack:
     def version_7(cls, ctx, node, **kwargs):
         if node.inputs[0].is_while():
             ctx.remove_node(node.name)
-            ctx.replace_all_inputs(ctx.get_nodes(), node.output[0], node.input[0])
+            ctx.replace_all_inputs(node.output[0], node.input[0])  # ops=ctx.get_nodes()
 
 
 @tf_op(["While", "StatelessWhile"])
@@ -515,14 +345,33 @@ class While:
 
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
+        # node.output must be copied as some element
+        # may be removed from output_names below
+        output_names = node.output.copy()
 
-        # make maximum_iterations int64 and replace -1(tf) with maxsize(onnx)
+        # Make maximum_iterations int64 and replace -1(tf) with maxsize(onnx). If the const node has no other
+        # consumers, modify it in place. Otherwise, make a new const node and leave the original unchanged.
+        # if maximum_iterations is not const,should add an cast node(cast to int64)
         maximum_iterations_name = node.input[1]
-        maximum_iterations = node.inputs[1].get_tensor_value()
-        ctx.remove_node(node.inputs[1].name)
-        if maximum_iterations == -1:
-            maximum_iterations = sys.maxsize
-        ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
+        if node.inputs[1].is_const():
+            maximum_iterations = node.inputs[1].get_tensor_value()
+            if maximum_iterations == -1:
+                maximum_iterations = np.iinfo(np.int64).max
+            consumers = ctx.find_output_consumers(maximum_iterations_name)
+            external_consumers = [c for c in consumers if c != node and c.type != 'TensorListReserve']
+            if len(external_consumers) == 0:
+                ctx.remove_node(node.inputs[1].name)
+            else:
+                maximum_iterations_name = utils.make_name(node.inputs[1].name)
+            ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
+            ctx.replace_input(node, node.input[1], maximum_iterations_name, 1)
+            maximum_iterations_int64 = maximum_iterations_name
+        else:
+            cast_inputs = [maximum_iterations_name]
+            attr = {"to": onnx_pb.TensorProto.INT64}
+            cast_name = node.name + "_cast"
+            cast_node = ctx.make_node("Cast", cast_inputs, attr, name=cast_name)
+            maximum_iterations_int64 = cast_node.output[0]
 
         cond_name = node.get_attr_str("cond")
         cond_graph = find_function(cond_name)
@@ -533,14 +382,16 @@ class While:
         body.parent_graph = ctx
 
         loop_vars = [] # passed into the loop
-        state_vars = {} # comes from outer context
+        body_input_to_state_var = {} # Map from body input name to state var name
+        cond_input_to_state_var = {}
         to_remove = []
         input_idx_to_remove = []
         # remove TensorListReserve
         for idx, name in enumerate(tf_while_inputs):
             if idx == 1:
                 # onnx does not know maximum_iterations in the body so move this to a state var
-                state_vars[body.func_inputs[idx]] = maximum_iterations_name
+                body_input_to_state_var[body.func_inputs[idx]] = maximum_iterations_name
+                cond_input_to_state_var[cond_graph.func_inputs[idx]] = maximum_iterations_name
                 continue
             if idx < 2:
                 # skip  [0,1] loop_counter, max_iterations
@@ -548,14 +399,13 @@ class While:
             n = node.inputs[idx]
             if n.type in ["TensorListReserve", "TensorListResize"]:
                 # there is no equivalent step in onnx and we should remove it.
-                # But we make this an identity to keep the loop_vars the same on input and output
-                # of the body but there should be no access to this argument in the body.
                 to_remove.append((idx, n))
                 continue
 
             # tensor arrays we read from can't be loop_vars and we fetch them from the outer context instead
             if body.func_inputs[idx] in body.ta_reads:
-                state_vars[body.func_inputs[idx]] = name
+                body_input_to_state_var[body.func_inputs[idx]] = name
+                cond_input_to_state_var[cond_graph.func_inputs[idx]] = name
                 input_idx_to_remove.append(idx)
             else:
                 loop_vars.append(name)
@@ -564,16 +414,26 @@ class While:
         for idx in reversed(input_idx_to_remove):
             del output_shapes[idx]
             del output_dtypes[idx]
+            del output_names[idx]
             del body.outputs[idx]
 
+        scan_output_names = []
         # remove tensor array that are passed in to the loop
         for idx, n in reversed(to_remove):
             ctx.remove_node(n.name)
             # make the node output bad
-            ctx.replace_all_inputs(ctx.get_nodes(), n.output[0], "@@ALLOC")
+            ctx.replace_all_inputs(n.output[0], "@@ALLOC")  # ops=ctx.get_nodes()
             del body.func_inputs[idx]
             del cond_graph.func_inputs[idx]
             del tf_while_inputs[idx]
+            scan_output_names.append(body.outputs[idx])
+            del body.outputs[idx]
+            output_shapes.append(output_shapes[idx])
+            output_dtypes.append(output_dtypes[idx])
+            output_names.append(output_names[idx])
+            del output_shapes[idx]
+            del output_dtypes[idx]
+            del output_names[idx]
 
         ctx.remove_node(node.name)
 
@@ -582,50 +442,54 @@ class While:
         cond_binding = parameter_binding(cond_graph, tf_while_inputs)
         cond_outputs = inline_subgraph(ctx, cond_graph, cond_name, cond_binding)
         # onnx Loop op outputs only loop_vars so we need shift output dtypes/shapes and consumers
-        output_map = {node.output[i+2]: node.output[i] for i in range(len(node.output) - 2)}
         output_shapes = output_shapes[2:]
         output_dtypes = output_dtypes[2:]
+        output_names = output_names[2:]
 
-        loop_node = ctx.make_node("Loop", [maximum_iterations_name, cond_outputs[0]] + loop_vars,
-                                  output_count=len(output_shapes), name=node.name,
-                                  shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
+        branches = {"body": body}
+        loop_node = ctx.make_node("Loop", [maximum_iterations_int64, cond_outputs[0]] + loop_vars,
+                                  output_count=len(output_shapes), name=node.name + "_loop",
+                                  shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True,
+                                  branches=branches)
+
+        output_map = dict(zip(output_names, loop_node.output))
+
         # shift output consumers
         for k, v in output_map.items():
-            ctx.replace_all_inputs(ctx.get_nodes(), k, v)
+            ctx.replace_all_inputs(k, v)  # ops=ctx.get_nodes()
 
-        wire_while_body(ctx, body, loop_node.inputs, state_vars, output_shapes, output_dtypes, body_name,
-                        node.name, cond_graph, tf_while_inputs)
+        wire_while_body(ctx, body, loop_node.inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
+                        output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, scan_output_names)
 
         # if there was a tensorflow variant type, bind in a real type here
+        # FIXME: I don't think this is needed anymore
         for i, n in enumerate(body.inputs):
             if body.get_dtype(n.output[0]) == onnx_pb.TensorProto.UNDEFINED:
                 body.set_dtype(n.output[0], ctx.get_dtype(loop_node.input[i]))
-        loop_node.set_body_graph_as_attr("body", body)
-        # dump_graph(body)
-        # dump_graph(ctx)
 
 
-def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, output_dtypes, scope, parent,
-                    cond_graph, tf_while_inputs):
+def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
+                    output_dtypes, scope, parent, cond_graph, tf_while_inputs, scan_output_names):
     """Wire subgraph graph into main."""
     remove_parents = []
     to_remove = []
 
     # tensorflow function inputs that are state_vars come from outer context and
-    # we need to remove them from the inputs by makeing the placeholder an identity
+    # we need to remove them from the inputs by making the placeholder an identity
     for n in g.inputs:
-        if n.output[0] in state_vars:
+        if n.output[0] in body_input_to_state_var:
             n.type = "Identity"
-            n.input = [state_vars[n.output[0]]]
+            g.replace_inputs(n, [body_input_to_state_var[n.output[0]]])
 
     # onnx will pass in cond as argument
     cond_node = g.make_node("Placeholder", [], name=utils.make_name("cond"),
                             output_count=1, dtypes=[onnx_pb.TensorProto.BOOL], shapes=[[]])
 
     # in onnx the body inputs are: index, cond, [loop_vars]
-    func_inputs = [i for i in g.func_inputs[2:] if i not in state_vars]
+    func_inputs = [i for i in g.func_inputs[2:] if i not in body_input_to_state_var]
     func_inputs = [g.func_inputs[0], cond_node.output[0]] + func_inputs
     g.set_dtype(func_inputs[0], onnx_pb.TensorProto.INT64)
+    g.func_inputs = func_inputs
     # tell graph lib to keep inputs in order
     g._order_sensitive_inputs = \
         [g.get_node_by_output(name) for name in func_inputs]  # pylint: disable=protected-access
@@ -639,13 +503,35 @@ def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, ou
             remove_parents.append(node.output[0])
 
     # this is a tensor array write - make it an identity
+    scan_outputs = []
     for node in g.get_nodes():
         if node.type == "TensorListSetItem":
             remove_parents.append(node.input[0])
             node.type = "Identity"
             g.set_shape(node.output[0], g.get_shape(node.input[2]))
             g.set_dtype(node.output[0], g.get_dtype(node.input[2]))
-            node.input = [node.input[2]]
+            g.replace_inputs(node, [node.input[2]])
+            scan_outputs.append(node.output[0])
+
+    if len(scan_outputs) != len(scan_output_names):
+        raise ValueError("While loop couldn't find scan output index for nodes")
+
+    names_to_scan_outputs = {}
+    for output in scan_outputs:
+        last_output = output
+        consumers = g.find_output_consumers(last_output)
+        while consumers:
+            node = consumers[0]
+            if node.type != "Identity":
+                raise ValueError("While loop couldn't find scan output index for node " + node.name)
+            last_output = node.output[0]
+            consumers = g.find_output_consumers(last_output)
+        if last_output not in scan_output_names:
+            raise ValueError("While loop couldn't find scan output index for node " + node.name)
+        names_to_scan_outputs[last_output] = output
+
+    # Reorder scan outputs
+    scan_outputs = [names_to_scan_outputs[name] for name in scan_output_names]
 
     # remove all nodes feeding to TensorListSetItem's reserved tensor
     while remove_parents:
@@ -661,11 +547,10 @@ def wire_while_body(parent_g, g, loop_node_inputs, state_vars, output_shapes, ou
     for node in to_remove:
         g.remove_node(node.name)
 
-    # we need to bind the the loop_var output, else we'd do 1 too much
-    cond_binding = parameter_binding(cond_graph, func_inputs[:2] + g.outputs[2:])
+    cond_binding = parameter_binding(cond_graph, func_inputs[:1] + g.outputs[2:], cond_input_to_state_var)
     cond_outputs = inline_subgraph(g, cond_graph, "cond__", cond_binding)
 
-    g.outputs = [cond_outputs[0]] + g.outputs[2:]
+    g.outputs = [cond_outputs[0]] + g.outputs[2:] + scan_outputs
 
     # FIXME: onnx does not have a variant type so we try to fish for the dtype in a prior TensorListSetItem.
     for o in g.outputs:
@@ -684,7 +569,7 @@ def wire_if_branch(parent_g, g, inputs, output_shapes, output_dtypes, scope, par
     for node in g.inputs:
         parent_name = binding.get(node.output[0])
         if parent_name and parent_name != "@@ALLOC":
-            node.input = [parent_name]
+            g.replace_inputs(node, [parent_name])
             node.type = "Identity"
         else:
             to_remove.append(node)
@@ -708,7 +593,7 @@ def inline_subgraph(parent, g, scope, binding):
     for node in g.inputs:
         parent_name = binding.get(node.output[0])
         if parent_name and parent_name != "@@ALLOC":
-            node.input = [parent_name]
+            g.replace_inputs(node, [parent_name])
             node.type = "Identity"
         else:
             to_remove.append(node)
@@ -732,15 +617,18 @@ def inline_subgraph(parent, g, scope, binding):
         parent.set_dtype(name, g.get_dtype(name))
         parent.set_shape(name, g.get_shape(name))
 
-    return  g.outputs
+    return g.outputs
 
 
 def parameter_binding(g, inputs, state_vars=None):
     binding = {}
-    for k, v in zip(g.func_inputs, inputs):
-        if state_vars:
-            v = state_vars.get(v, v)
-        binding[k] = v
+    i = 0
+    for k in g.func_inputs:
+        if state_vars and k in state_vars:
+            binding[k] = state_vars[k]
+        else:
+            binding[k] = inputs[i]
+            i += 1
     return binding
 
 
@@ -753,19 +641,20 @@ def prefix_graph(g, scope):
         attr = node.attr
         if node.is_graph_input():
             continue
-        new_node = g.make_node(node.type, node.input, name=node.name, output_count=len(node.output),
-                               shapes=output_shapes, dtypes=output_dtypes, attr=attr,
-                               op_name_scope=scope, skip_conversion=True)
+        branches = {}
         attr_graphs = node.get_body_graphs()
         if attr_graphs:
             for k, v in attr_graphs.items():
-                new_node.set_body_graph_as_attr(k, v)
+                branches[k] = v
+        new_node = g.make_node(node.type, node.input, name=node.name, output_count=len(node.output),
+                               shapes=output_shapes, dtypes=output_dtypes, attr=attr,
+                               op_name_scope=scope, skip_conversion=True, branches=branches)
         for old_output, new_output in zip(node.output, new_node.output):
             for i, oname in enumerate(g.outputs):
                 if old_output == oname:
                     g.outputs[i] = new_output
                     break
-            g.replace_all_inputs(ops, old_output, new_output)
+            g.replace_all_inputs(old_output, new_output, ops=ops)
         to_remove.append(node)
     for node in to_remove:
         g.remove_node(node.name)

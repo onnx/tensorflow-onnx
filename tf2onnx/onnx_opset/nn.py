@@ -31,19 +31,52 @@ def spatial_map(shape, perm):
     return new_shape
 
 
+def is_channels_last(node):
+    """Returns whether node is channels last, so (N, ..., C)."""
+
+    return not node.data_format.startswith("NC")
+
+
+def make_shape_channels_first(shape):
+    """Makes a (N, ..., C) shape into (N, C, ...)."""
+
+    return shape[:1] + shape[-1:] + shape[1:-1]
+
+
+def make_shape_channels_last(shape):
+    """Makes a (N, C, ...) shape into (N, ..., C)."""
+
+    return shape[:1] + shape[1:-1] + shape[1:2]
+
+
+def get_channels_first_permutation(spatial):
+    """Returns a permutation to make a (N, ..., C) array into (N, C, ...)."""
+
+    return [0, spatial + 1] + list(range(1, spatial + 1))
+
+
+def get_channels_last_permutation(spatial):
+    """Returns a permutation to make a (N, C, ...) array into (N, ..., C)."""
+
+    return [0] + list(range(2, spatial + 2)) + [1]
+
+
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
-                        input_indices=None, output_indices=None):
+                        input_indices=None, output_indices=None, spatial=2):
     """Convert input and kernel from tensorflow to onnx. This maybe require to
         to insert transpose ops for input, kernel and output unless they are constants
         and we can transpose the constant.
         We transpose inputs if they are in NHWC. We always transpose the kernel from
         HWNC to NCHW. Outputs are transposed if the format is NHWC.
         Some convolutions like depthwise_conv2d require a reshape of the kernel.
-        Args:
-            ctx: the parent graph
-            node: node of the convolution op
-            with_kernel: transpose the kernel
-            new_kernel_shape: reshape the kernel
+
+    Args:
+        ctx: The parent graph.
+        node: Node of the convolution op.
+        with_kernel: Transpose the kernel.
+        new_kernel_shape: Pass to reshape the kernel.
+        input_indices: Indices that define the inputs.
+        output_indices: Indices that define the outputs.
     """
 
     if input_indices is None:
@@ -51,144 +84,221 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     if output_indices is None:
         output_indices = [0]
 
-    if node.is_nhwc():
-        # transpose input if needed, no need to record shapes on input
+    # Transpose inputs if needed.
+    if is_channels_last(node):
+        # Ge channels first permutation.
+        permutation = get_channels_first_permutation(spatial)
+
+        # Transpose input if needed, no need to record shapes on input
         for idx in input_indices:
-            parent = node.inputs[idx]
-            if node.inputs[idx].is_const() and len(ctx.find_output_consumers(node.input[1])) == 1:
-                # if input is a constant, transpose that one if we are the only consumer
-                val = parent.get_tensor_value(as_list=False)
-                parent.set_tensor_value(val.transpose(constants.NHWC_TO_NCHW))
+            # If input is a constant, transpose that one if we are the only consumer.
+            input_node = node.inputs[idx]
+            input_name = node.input[idx]
+
+            if input_node.is_const() and len(ctx.find_output_consumers(input_name)) == 1:
+                # Transpose constant to make it channels first.
+                val = input_node.get_tensor_value(as_list=False)
+                val = np.transpose(val, permutation)
+
+                input_node.set_tensor_value(val)
             else:
-                # if input comes from a op, insert transpose op
-                input_name = node.input[idx]
+                # Insert transpose op.
                 transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
-                transpose.set_attr("perm", constants.NHWC_TO_NCHW)
+                transpose.set_attr("perm", permutation)
                 transpose.skip_conversion = True
+
                 shape = ctx.get_shape(input_name)
                 if shape is not None:
-                    new_shape = spatial_map(shape, constants.NHWC_TO_NCHW)
+                    new_shape = make_shape_channels_first(shape)
+
                     ctx.set_shape(transpose.output[0], new_shape)
 
-    # kernel must to be transposed
+    # Transpose kernel if needed.
     if with_kernel:
-        # some onnx conv ops require the reshape the kernel (ie. depthwise_conv2d)
+        # Some ONNX convolution ops require to reshape the kernel (ie. depthwise_conv2d).
         if new_kernel_shape:
-            if ctx.opset < 5:
-                # old reshape takes new shape as attribute
-                input_name = node.input[1]
-                reshape = ctx.insert_new_node_on_input(node, "Reshape", input_name)
-                reshape.set_attr("shape", new_kernel_shape)
-                reshape.skip_conversion = True
+            if node.inputs[1].is_const():
+                input_node = node.inputs[1]
+                val = input_node.get_tensor_value(as_list=False)
+                val = np.reshape(val, new_kernel_shape)
+                input_node.set_tensor_value(val)
             else:
-                # new reshape takes new shape as input[1]
-                shape_name = utils.make_name(node.name)
-                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
-                input_name = node.input[1]
-                reshape = ctx.make_node("Reshape", [input_name, shape_name])
-                ctx.replace_input(node, input_name, reshape.output[0])
-                reshape.skip_conversion = True
-            ctx.set_shape(reshape.output[0], new_kernel_shape)
+                kernel_name = node.input[1]
+                if ctx.opset < 5:
+                    # Old reshape takes new shape as attribute.
+                    reshape = ctx.insert_new_node_on_input(node, "Reshape", kernel_name)
+                    reshape.set_attr("shape", new_kernel_shape)
+                    reshape.skip_conversion = True
+                else:
+                    # New reshape takes new shape as input[1].
+                    shape_name = utils.make_name(node.name)
+                    ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
 
-        parent = node.inputs[1]
+                    reshape = ctx.make_node("Reshape", [kernel_name, shape_name])
+                    ctx.replace_input(node, kernel_name, reshape.output[0], 1)
+
+                    reshape.skip_conversion = True
+                ctx.set_shape(reshape.output[0], new_kernel_shape)
+
+        # Get kernel (may have be changed to a reshape above).
+        kernel_node = node.inputs[1]
+        kernel_name = node.input[1]
+
+        # Transpose kernel from (..., C_in, C_out) to (C_out, C_in, ...)
+        permutation = [spatial + 1, spatial] + list(range(spatial))
+
+        # If kernel is a constant, transpose that one if we are the only consumer.
         need_transpose = True
-        if node.inputs[1].is_const():
-            # kernel is const - transpose the const if we are the only consumer of const
-            consumers = ctx.find_output_consumers(node.input[1])
-            if len(consumers) == 1:
-                val = parent.get_tensor_value(as_list=False)
-                val = val.transpose(constants.HWCN_TO_NCHW)
-                parent.set_tensor_value(val)
-                need_transpose = False
+        if kernel_node.is_const() and len(ctx.find_output_consumers(kernel_name)) == 1:
+            val = kernel_node.get_tensor_value(as_list=False)
+            val = np.transpose(val, permutation)
+
+            kernel_node.set_tensor_value(val)
+            need_transpose = False
 
         if need_transpose:
-            input_name = node.input[1]
-            transpose = ctx.insert_new_node_on_input(node, "Transpose", input_name)
-            transpose.set_attr("perm", constants.HWCN_TO_NCHW)
+            transpose = ctx.insert_new_node_on_input(node, "Transpose", kernel_name)
+            transpose.set_attr("perm", permutation)
             transpose.skip_conversion = True
-            new_shape = spatial_map(ctx.get_shape(input_name), constants.HWCN_TO_NCHW)
+
+            new_shape = spatial_map(ctx.get_shape(kernel_name), permutation)
             ctx.set_shape(transpose.output[0], new_shape)
 
-    # transpose outputs if needed
-    if node.is_nhwc():
+    # Transpose outputs back if needed.
+    if is_channels_last(node):
         for idx in output_indices:
+            # Make output channels last again by transposing.
             output_name = node.output[idx]
             output_shape = ctx.get_shape(node.output[idx])
+
+            permutation = get_channels_last_permutation(spatial)
+
             op_name = utils.make_name(node.name)
             transpose = ctx.insert_new_node_on_output("Transpose", output_name, name=op_name)
-            transpose.set_attr("perm", constants.NCHW_TO_NHWC)
+
+            transpose.set_attr("perm", permutation)
             transpose.skip_conversion = True
-            # set TF NHWC shape to transpose node output
+
+            # Set tensorflow channels last shape as the transpose node shape.
             ctx.set_shape(transpose.output[0], output_shape)
-            # Transpose TF NHWC shape back to NCHW shape for current ONNX conv node output
-            ctx.set_shape(output_name, spatial_map(output_shape, constants.NHWC_TO_NCHW))
+
+            # Make the current ONNX convolution output shape channels first.
+            ctx.set_shape(output_name, make_shape_channels_first(output_shape))
+
+        # NOTE: Not strictly correct as it can also be NCW or NCDHW for example.
+        # NOTE: Generally speaking it's channels first.
         node.data_format = "NCHW"
 
 
 def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
     padding = node.get_attr("padding")
-    if padding:
-        if dilations is None:
-            dilations = [1] * spatial * 2
-        padding = padding.s.decode("utf-8")
-        if padding == 'SAME':
-            pads = [0] * spatial * 2
-            input_shape = ctx.get_shape(node.input[0])
-            output_shape = ctx.get_shape(node.output[0])
-            # check if the input shape is valid
-            if len(input_shape) != len(pads):
-                logger.error("node %s input needs to be rank %d, is %d", node.name, len(pads), len(input_shape))
-            # transpose shape to nchw
-            if node.is_nhwc():
-                input_shape = spatial_map(input_shape, constants.NHWC_TO_NCHW)
-                output_shape = spatial_map(output_shape, constants.NHWC_TO_NCHW)
-            # calculate pads
-            if any(input_shape[i + 2] == -1 or output_shape[i + 2] == -1 for i in range(spatial)):
-                logger.debug(
-                    "node %s has unknown dim for pads calculation, fallback to auto_pad: "
-                    "input_shape=%s, output_shape=%s",
-                    node.name, input_shape, output_shape)
-                node.set_attr("auto_pad", "SAME_UPPER")
-            else:
-                for i in range(spatial):
-                    pad = (output_shape[i + 2] - 1) * strides[i] + dilations[i] * kernel_shape[i] - input_shape[i + 2]
-                    pad = max(pad, 0)
-                    pads[i] = pad // 2
-                    pads[i + spatial] = pad - pad // 2
-                node.set_attr("pads", pads)
+    if not padding:
+        return
 
-        elif padding == 'VALID':
-            pass
-        else:
-            raise ValueError("invalid padding value: " + padding)
+    if dilations is None:
+        dilations = [1] * spatial
 
+    padding = padding.s.decode("utf-8")
+    if padding == "SAME":
+        # Initialize with all zeros.
+        # Paddings are in (x_begin, y_begin, ..., x_end, y_end, ...) order.
+        pads = [0] * (spatial * 2)
 
-def conv_dims_attr(node, name, new_name=None):
+        # Get shapes and check whether valid.
+        input_shape = ctx.get_shape(node.input[0])
+        output_shape = ctx.get_shape(node.output[0])
+
+        if len(input_shape) != spatial + 2:
+            raise ValueError(
+                "node {} output needs to be rank {}, is {}".format(
+                    node.name, spatial + 2, len(input_shape)
+                )
+            )
+
+        if len(output_shape) != spatial + 2:
+            raise ValueError(
+                "node {} output needs to be rank {}, is {}".format(
+                    node.name, spatial + 2, len(output_shape)
+                )
+            )
+
+        # Transpose to channels first if not so.
+        if is_channels_last(node):
+            input_shape = make_shape_channels_first(input_shape)
+            output_shape = make_shape_channels_first(output_shape)
+
+        # Check for unknown input/output dimensions. Fall back to auto padding if so.
+        if any(input_shape[i + 2] == -1 or output_shape[i + 2] == -1 for i in range(spatial)):
+            logger.debug(
+                "node %s has unknown dim for pads calculation, fallback to auto_pad: "
+                "input_shape=%s, output_shape=%s",
+                node.name,
+                input_shape,
+                output_shape,
+            )
+
+            node.set_attr("auto_pad", "SAME_UPPER")
+            return
+
+        # Calculate paddings.
+        for i in range(spatial):
+            pad = (
+                (output_shape[i + 2] - 1) * strides[i]
+                + dilations[i] * (kernel_shape[i] - 1) + 1
+                - input_shape[i + 2]
+            )
+            pad = max(pad, 0)
+
+            pads[i] = pad // 2
+            pads[i + spatial] = pad - pad // 2
+
+        node.set_attr("pads", pads)
+    elif padding == "VALID":
+        pass
+    else:
+        raise ValueError("invalid padding value: {}".format(padding))
+
+def parse_dims_attr(node, dims, spatial):
+    if is_channels_last(node):
+        # We have (N, ..., C) or (...).
+        if len(dims) != spatial:
+            dims = dims[1:-1]
+    else:
+        # We have (N, C, ...).
+        dims = dims[2:]
+    return dims
+
+def conv_dims_attr(node, name, new_name=None, spatial=2):
+    # Fetch attribute.
     if new_name is None:
         new_name = name
+
     dims = node.get_attr(name)
     if not dims:
         return None
+
+    # Get spatial part.
     dims = dims.ints
-    if node.is_nhwc():
-        if len(dims) == 2:
-            h, w = dims
-            c = n = 1
-        else:
-            n, h, w, c = dims
-    else:
-        n, c, h, w = dims
-    dims = [h, w]
+    dims = parse_dims_attr(node, dims, spatial)
+
+    # Set new value and return it.
     node.set_attr(new_name, dims)
+
     return dims
 
 
 def conv_kernel_shape(ctx, node, input_idx, spatial=2):
+    # Kernel shape is (..., C_in, C_out).
     kernel_shape = ctx.get_shape(node.input[input_idx])
-    if len(kernel_shape) != 2 * spatial:
-        raise ValueError("kernel rank must be 2* spatial")
-    kernel_shape = kernel_shape[0:spatial]
+    if len(kernel_shape) != spatial + 2:
+        raise ValueError("kernel rank must be spatial+2")
+
+    # Get spatial part.
+    kernel_shape = kernel_shape[:spatial]
+
+    # Set new value and return it.
     node.set_attr("kernel_shape", kernel_shape)
+
     return kernel_shape
 
 
@@ -217,25 +327,79 @@ def build_dynamic_target_size(ctx, transposed_intput, target_hw):
 @tf_op(["Conv1D", "Conv2D", "Conv3D"])
 class ConvOp:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def any_version(cls, opset, ctx, node, **kwargs):
+        # ONNX specification:
+        #
         # T output = Conv2D(T input, T filter, @list(int) strides, @bool use_cudnn_on_gpu,
         #                       @string padding, @string data_format)
+        #
         # T Y = Conv(T X, T W, T B, @AttrType.STRING auto_pad, @AttrType.INTS dilations, @AttrType.INT group,
         #                       @AttrType.INTS kernel_shape, @AttrType.INTS pads, @AttrType.INTS strides)
+        #
+
+        # Determine number of spatial dimensions.
+        spatial = int(node.type[-2])
+
+        # Make it a convolution node.
         node.type = "Conv"
-        kernel_shape = conv_kernel_shape(ctx, node, 1, spatial=2)
-        strides = conv_dims_attr(node, "strides")
-        dilations = conv_dims_attr(node, "dilations")
-        add_padding(ctx, node, kernel_shape, strides, dilations=dilations, spatial=2)
-        conv_convert_inputs(ctx, node, with_kernel=True)
+
+        # Determine kernel spatial shape, strides and dilations.
+        kernel_shape = conv_kernel_shape(ctx, node, 1, spatial=spatial)
+        strides = conv_dims_attr(node, "strides", spatial=spatial)
+        dilations = conv_dims_attr(node, "dilations", spatial=spatial)
+
+        # prefix with batch dim of [1] to satisfy rank requirements
+        input_shape = ctx.get_shape(node.input[0])
+        if len(input_shape) == spatial + 1:
+            gb = GraphBuilder(ctx)
+            usq_node = gb.make_unsqueeze({"axes": [0], 'data': node.input[0]}, return_node=True)
+            ctx.replace_inputs(node, [usq_node.output[0]] + node.input[1:])
+
+        # Set padding.
+        add_padding(
+            ctx, node, kernel_shape, strides, dilations=dilations, spatial=spatial
+        )
+
+        # Convert input and filters.
+        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        cls.any_version(1, ctx, node, **kwargs)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        # no change
-        cls.version_1(ctx, node, **kwargs)
+        # No change.
+        cls.any_version(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Signature change for operator Unsqueeze.
+        cls.any_version(13, ctx, node, **kwargs)
 
 
-@tf_op("Conv2DBackpropInput")
+def get_shape_from_const_or_concat(ctx, node):
+    if node.is_const():
+        return node.get_tensor_value()
+    if node.type == 'Concat':
+        # Sometimes the shape is formed by concating a bunch of consts together
+        res = []
+        if any(ctx.get_shape(inp) != [1] for inp in node.input):
+            return None
+        for i, inp in enumerate(node.inputs):
+            # The concat is converted from a Pack. Conversion adds an unsqueeze to the inputs.
+            if node.inputs[i].type == 'Unsqueeze' and node.inputs[i].inputs[0].is_scalar():
+                res.append(node.inputs[i].inputs[0].get_tensor_value())
+            else:
+                if i == 0:
+                    # For the batch dimension we don't care if it is unknown
+                    res.append(-1)
+                else:
+                    return None
+        return res
+    return None
+
+@tf_op(["Conv2DBackpropInput", "Conv3DBackpropInputV2"])
 class ConvTranspose:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -244,26 +408,51 @@ class ConvTranspose:
         # T Y = ConvTranspose(T X, T W, T B, @STRING auto_pad, @INTS dilations,
         #    @INT group, @INTS kernel_shape, @INTS output_shape, @INTS pads, @INTS strides)
 
+        if node.type == "Conv3DBackpropInputV2":
+            spatial = 3
+        else:
+            spatial = 2
         node.type = "ConvTranspose"
         # Note: inputs are reversed from what one would expect.
-        conv_kernel_shape(ctx, node, 1)
+        conv_kernel_shape(ctx, node, 1, spatial=spatial)
         input_shape = ctx.get_shape(node.input[2])
         output_shape_orig = node.output_shapes
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
-        if node.inputs[0].is_const():
-            output_shape = ctx.get_shape(node.output[0])
-            if node.is_nhwc():
+        output_shape = get_shape_from_const_or_concat(ctx, node.inputs[0])
+        if output_shape is not None:
+            #output_shape = ctx.get_shape(node.output[0])
+            if is_channels_last(node):
                 new_output_shape = [output_shape[1], output_shape[2]]
-                input_hw = [input_shape[1], input_shape[2]]
+                input_dims = [input_shape[1], input_shape[2]]
+                if spatial == 3:
+                    new_output_shape.append(output_shape[3])
+                    input_dims.append(input_shape[3])
             else:
                 new_output_shape = [output_shape[2], output_shape[3]]
-                input_hw = [input_shape[2], input_shape[3]]
-            utils.make_sure(new_output_shape.count(-1) <= 0, "output h and w need to be known")
-            utils.make_sure(new_output_shape[0] >= input_hw[0] and new_output_shape[1] >= input_hw[1],
-                            "output h and w cannot be smaller than input h and w.")
+                input_dims = [input_shape[2], input_shape[3]]
+                if spatial == 3:
+                    new_output_shape.append(output_shape[4])
+                    input_dims.append(input_shape[4])
+
+            utils.make_sure(new_output_shape.count(-1) <= 0, "output dims need to be known")
+            utils.make_sure(all(new_output_shape[i] >= input_dims[i] for i in range(spatial)),
+                            "output dims cannot be smaller than input dims.")
+
             node.set_attr("output_shape", new_output_shape)
         else:
+            utils.make_sure(ctx.opset >= 10, "Opset 10 needed for Conv Backprop Input with non-constant shape")
+            strides = parse_dims_attr(node, node.get_attr('strides').ints, spatial)
+            use_strides_workaround = any(d > 1 for d in strides)
+            if use_strides_workaround and ctx.opset < 12:
+                # When strides > 1, ONNX and TF have an implementation difference in ConvTranspose. ONNX outputs a
+                # slightly smaller tensor which must be padded with a row of 0s. Pad with dynamic shape requires
+                # opset >= 11 and Max of int64 needs opset >= 12.  Depending on the output_shape, this row of 0s might
+                # be shaved off, in which case TF and ONNX agree.  When output_shape is dynamic it is impossible to
+                # know at conversion time whether this is the case and the workaround is needed.
+                logger.warning("Conv Backprop Input with strides > 1 and non-constant shape has known bug. "
+                               "Workaround requires opset 12.")
+                use_strides_workaround = False
             input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
             output_shape = ctx.make_node("Shape", [node.output[0]])
             output_h = GraphBuilder(ctx).make_slice(
@@ -276,34 +465,87 @@ class ConvTranspose:
                 {"data": input_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
             diff_h = ctx.make_node("Sub", [output_h, expect_h])
             diff_w = ctx.make_node("Sub", [output_w, expect_w])
+            nonneg_diff_h = diff_h
+            nonneg_diff_w = diff_w
+
+            if use_strides_workaround:
+                const_zero = ctx.make_const(utils.make_name(node.name + "_const_zero"), np.array([0], dtype=np.int64))
+                nonneg_diff_h = ctx.make_node("Max", [diff_h.output[0], const_zero.output[0]])
+                nonneg_diff_w = ctx.make_node("Max", [diff_w.output[0], const_zero.output[0]])
+
             const_two = ctx.make_const(utils.make_name(node.name + "_const_two"), np.array([2], dtype=np.int64))
-            start_h = ctx.make_node("Div", [diff_h.output[0], const_two.output[0]])
-            start_w = ctx.make_node("Div", [diff_w.output[0], const_two.output[0]])
+            start_h = ctx.make_node("Div", [nonneg_diff_h.output[0], const_two.output[0]])
+            start_w = ctx.make_node("Div", [nonneg_diff_w.output[0], const_two.output[0]])
             end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
             end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
-            starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
-            ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0})
-            const_one_two = ctx.make_const(utils.make_name(node.name + "_const_one_two"),
-                                           np.array([1, 2], dtype=np.int64))
+            if spatial == 3:
+                output_d = GraphBuilder(ctx).make_slice(
+                    {"data": output_shape.output[0], "ends": [4], "starts": [3], "axes": [0]})
+                expect_d = GraphBuilder(ctx).make_slice(
+                    {"data": input_shape.output[0], "ends": [4], "starts": [3], "axes": [0]})
+                diff_d = ctx.make_node("Sub", [output_d, expect_d])
+                nonneg_diff_d = diff_d
+                if use_strides_workaround:
+                    nonneg_diff_d = ctx.make_node("Max", [diff_d.output[0], const_zero.output[0]])
+                start_d = ctx.make_node("Div", [nonneg_diff_d.output[0], const_two.output[0]])
+                end_d = ctx.make_node("Add", [start_d.output[0], expect_d])
+
+                starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0], start_d.output[0]],
+                                       attr={"axis": 0})
+                ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0], end_d.output[0]], attr={"axis": 0})
+                slice_axes = ctx.make_const(utils.make_name(node.name + "_const_slice_axes"),
+                                            np.array([1, 2, 3], dtype=np.int64))
+            else:
+                starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
+                ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0})
+                slice_axes = ctx.make_const(utils.make_name(node.name + "_const_slice_axes"),
+                                            np.array([1, 2], dtype=np.int64))
+
             slice_node = ctx.make_node("Slice",
-                                       [node.output[0], starts.output[0], ends.output[0], const_one_two.output[0]],
+                                       [node.output[0], starts.output[0], ends.output[0], slice_axes.output[0]],
                                        shapes=output_shape_orig)
+
+            final_node = slice_node
+
+            if use_strides_workaround:
+                cz = const_zero.output[0]
+
+                neg_diff_h = ctx.make_node("Neg", [diff_h.output[0]])
+                shrink_h_by = ctx.make_node("Max", [neg_diff_h.output[0], const_zero.output[0]])
+                shb = shrink_h_by.output[0]
+
+                neg_diff_w = ctx.make_node("Neg", [diff_w.output[0]])
+                shrink_w_by = ctx.make_node("Max", [neg_diff_w.output[0], const_zero.output[0]])
+                swb = shrink_w_by.output[0]
+
+                if spatial == 3:
+                    neg_diff_d = ctx.make_node("Neg", [diff_d.output[0]])
+                    shrink_d_by = ctx.make_node("Max", [neg_diff_d.output[0], const_zero.output[0]])
+                    sdb = shrink_d_by.output[0]
+                    pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, cz, shb, swb, sdb, cz], attr={"axis": 0})
+                    padded_node = ctx.make_node("Pad", [slice_node.output[0], pads.output[0]])
+                else:
+                    pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, shb, swb, cz], attr={"axis": 0})
+                    padded_node = ctx.make_node("Pad", [slice_node.output[0], pads.output[0]])
+
+                final_node = padded_node
+
             downstream_nodes = ctx.find_output_consumers(node.output[0])
             downstream_nodes.remove(output_shape)
             downstream_nodes.remove(slice_node)
-            ctx.replace_all_inputs(downstream_nodes, node.output[0], slice_node.output[0])
+            ctx.replace_all_inputs(node.output[0], final_node.output[0], ops=downstream_nodes)
 
-        conv_dims_attr(node, "strides")
-        conv_dims_attr(node, "dilations")
+        conv_dims_attr(node, "strides", spatial=spatial)
+        conv_dims_attr(node, "dilations", spatial=spatial)
 
         # remove output_shapes input
-        ctx.remove_input(node, node.input[0])
+        ctx.remove_input(node, node.input[0], 0)
         # swap data and kernel
         t = node.input[0]
-        node.input[0] = node.input[1]
-        node.input[1] = t
+        ctx.replace_input(node, node.input[0], node.input[1], 0)
+        ctx.replace_input(node, node.input[1], t, 1)
 
-        conv_convert_inputs(ctx, node, with_kernel=True)
+        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -350,7 +592,7 @@ class DepthwiseConv2d:
 
 
 @tf_op(["AvgPool", "AvgPool3D"], onnx_op="AveragePool")
-@tf_op(["MaxPool", "MaxPoolV2"], onnx_op="MaxPool")
+@tf_op(["MaxPool", "MaxPoolV2", "MaxPool3D"], onnx_op="MaxPool")
 class PoolOp:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -372,26 +614,28 @@ class PoolOp:
         #               @AttrType.INTS strides)
         # above seems wrong - input[1] is ksize, input[2] is strides
         # stride and ksize in tf is not always NHWC, so watch out when converting into onnx's NCHW
+        if kwargs["tf_op"] in ["AvgPool3D", "MaxPool3D"]:
+            spatial = 3
+        else:
+            spatial = 2
+
         if len(node.input) < 3:
             kernel_shape_tf = node.get_attr("ksize").ints
             strides_tf = node.get_attr("strides").ints
         else:
             kernel_shape_tf = node.inputs[1].get_tensor_value()
             strides_tf = node.inputs[2].get_tensor_value()
-            ctx.remove_input(node, node.input[2])
-            ctx.remove_input(node, node.input[1])
+            ctx.remove_input(node, node.input[2], 2)
+            ctx.remove_input(node, node.input[1], 1)
 
-        if node.is_nhwc():
-            kernel_shape_hw = kernel_shape_tf[1:3]
-            strides_hw = strides_tf[1:3]
-        else:
-            kernel_shape_hw = kernel_shape_tf[2:4]
-            strides_hw = strides_tf[2:4]
+        kernel_shape_hw = parse_dims_attr(node, kernel_shape_tf, spatial)
+        strides_hw = parse_dims_attr(node, strides_tf, spatial)
+
         node.set_attr("kernel_shape", kernel_shape_hw)
         node.set_attr("strides", strides_hw)
-        conv_dims_attr(node, "dilations")
-        add_padding(ctx, node, kernel_shape_hw, strides_hw)
-        conv_convert_inputs(ctx, node, with_kernel=False)
+        dilations = conv_dims_attr(node, "dilations", spatial=spatial)
+        add_padding(ctx, node, kernel_shape_hw, strides_hw, dilations=dilations, spatial=spatial)
+        conv_convert_inputs(ctx, node, with_kernel=False, spatial=spatial)
 
 
 @tf_op(["MaxPoolWithArgmax"], onnx_op="MaxPool")
@@ -447,7 +691,7 @@ class BiasAdd:
                 ctx.make_const(shape_name, np.array(new_broadcast_shape, dtype=np.int64))
                 op_name = node.input[1]
                 reshape_node = ctx.make_node("Reshape", [op_name, shape_name])
-                ctx.replace_input(node, op_name, reshape_node.output[0])
+                ctx.replace_input(node, op_name, reshape_node.output[0], 1)
                 ctx.set_shape(reshape_node.output[0], new_broadcast_shape)
 
 
@@ -471,22 +715,21 @@ class Pad:
         if mode in [None, "constant"] and len(node.input) == 3:
             const_val = node.inputs[2].get_tensor_value()
             node.set_attr("value", const_val)
-            ctx.remove_input(node, node.input[2])
+            ctx.remove_input(node, node.input[2], 2)
 
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[1], 1)
         node.set_attr("pads", paddings)
 
         origin_dtype = ctx.get_dtype(node.output[0])
         if origin_dtype not in [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT,
                                 onnx_pb.TensorProto.DOUBLE]:
-            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
-            cast_node.set_attr("to", onnx_pb.TensorProto.FLOAT)
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
             ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
             ctx.copy_shape(node.name, cast_node.output[0])
 
             cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                                           name=utils.make_name(node.name) + "_castback")
-            cast_back_node.set_attr("to", origin_dtype)
+                                                           name=utils.make_name(node.name) + "_castback",
+                                                           to=origin_dtype)
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
@@ -509,14 +752,13 @@ class Pad:
         origin_dtype = ctx.get_dtype(node.output[0])
         if origin_dtype not in [TensorProto.FLOAT, TensorProto.DOUBLE,
                                 TensorProto.INT32, TensorProto.INT64]:
-            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0])
-            cast_node.set_attr("to", TensorProto.FLOAT)
+            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=TensorProto.FLOAT)
             ctx.set_dtype(cast_node.output[0], TensorProto.FLOAT)
             ctx.copy_shape(node.name, cast_node.output[0])
 
             cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                                           name=utils.make_name(node.name) + "_castback")
-            cast_back_node.set_attr("to", origin_dtype)
+                                                           name=utils.make_name(node.name) + "_castback",
+                                                           to=origin_dtype)
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
@@ -525,6 +767,7 @@ class Pad:
 class BatchNorm:
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
+        tf_type = node.type
         node.type = "BatchNormalization"
         # tf inputs: x, scale, bias, mean, variance
         # tf outputs: y, batch_mean, batch_var
@@ -536,28 +779,59 @@ class BatchNorm:
         consumers = [ctx.find_output_consumers(output_name) for output_name in node.output[1:]]
         if not any(consumers):
             new_output = [node.output[0]]
+            # the setter makes a copy of new_output
             node.output = new_output
 
         conv_convert_inputs(ctx, node, with_kernel=False)
 
+        inp_shape = ctx.get_shape(node.input[0])
+        inp_rank = len(inp_shape) if inp_shape is not None else None
         scale_shape = ctx.get_shape(node.input[1])
         mean_shape = ctx.get_shape(node.input[3])
         var_shape = ctx.get_shape(node.input[4])
         val_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1]))
+        is_training = node.get_attr_value('is_training', True)
 
-        if mean_shape != scale_shape:
+        if is_training and node.get_attr_value('exponential_avg_factor', 1.0) == 1.0:
+            # Sometimes TF uses a BatchNorm op with training = True and exponential_avg_factor = 1.0
+            # to perform layer mean/variance normalization. In such cases, the mean/var are computed from the input.
+            # TF allows mean/variance to be excluded only if is_training and exponential_avg_factor == 1.0
+            utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
+                            node.name, tf_type)
+            dims = [0] + list(range(2, inp_rank))
+            avg = ctx.make_node("ReduceMean", [node.input[0]], attr={'axes': dims, 'keepdims': True}).output[0]
+            avg_squeezed = GraphBuilder(ctx).make_squeeze({"data": avg, "axes": dims})
+            sub = ctx.make_node("Sub", [node.input[0], avg]).output[0]
+            var_squeezed = ctx.make_node("ReduceSumSquare", [sub], attr={'axes': dims, 'keepdims': False}).output[0]
+
+            inp_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
+            dims_const = ctx.make_const(utils.make_name("axes_const"), np.array(dims, dtype=np.int64)).output[0]
+            reduce_dims = ctx.make_node("Gather", [inp_shape, dims_const]).output[0]
+            dims_product = ctx.make_node("ReduceProd", [reduce_dims], attr={'axes': [0], 'keepdims': False})
+            cnt_float = ctx.make_node("Cast", [dims_product.output[0]], attr={'to': ctx.get_dtype(node.input[0])})
+
+            pop_var_squeezed = ctx.make_node("Div", [var_squeezed, cnt_float.output[0]]).output[0]
+            ctx.replace_inputs(node, node.input[:3] + [avg_squeezed, pop_var_squeezed])
+        else:
+            logger.warning("Node %s of type %s has is_training set to true, which is not supperted. "
+                           "Please re-save the model with training set to false.",
+                           node.name, tf_type)
+            # As long as the mean/variance estimates are provided, we should be OK
+            is_training = False
+
+        if not is_training and mean_shape != scale_shape and all(d >= 0 for d in scale_shape):
             new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(as_list=False), scale_shape),
                                       dtype=val_type)
             new_mean_node_name = utils.make_name(node.name)
             ctx.make_const(new_mean_node_name, new_mean_value)
-            node.input[3] = new_mean_node_name
+            ctx.replace_input(node, node.input[3], new_mean_node_name, 3)
 
-        if var_shape != scale_shape:
+        if not is_training and var_shape != scale_shape and all(d >= 0 for d in scale_shape):
             new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(as_list=False), scale_shape),
                                      dtype=val_type)
             new_val_node_name = utils.make_name(node.name)
             ctx.make_const(new_val_node_name, new_var_value)
-            node.input[4] = new_val_node_name
+            ctx.replace_input(node, node.input[4], new_val_node_name, 4)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
@@ -633,7 +907,7 @@ class CropAndResize:
                       name=name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
     @classmethod
-    def version_11(cls, ctx, node, **kwargs):
+    def any_version_after11(cls, opset, ctx, node, **kwargs):
         # create loop of resize to cater to tensorflow CropAndResize, one box one iteration
         mode = "nearest" if node.get_attr("method") is not None and node.get_attr(
             "method").s == b"nearest" else "linear"
@@ -679,16 +953,25 @@ class CropAndResize:
                                 attr={"mode": mode, "extrapolation_value": extrapolation_value,
                                       "coordinate_transformation_mode": "tf_crop_and_resize"})
         recovered_x = g.make_node("Transpose", [resized_x.output[0]], attr={'perm': constants.NCHW_TO_NHWC})
-        squeeze_x = g.make_node("Squeeze", inputs=[recovered_x.output[0]], attr={"axes": [0]})
+        squeeze_x = GraphBuilder(g).make_squeeze({'data': recovered_x.output[0], 'axes': [0]}, return_node=True)
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
         trip_node = ctx.make_node("Size", [box_ind.output[0]])
         cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
         ctx.remove_node(node.name)
+        branches = {"body": g}
         inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]], name=node.name,
-                                   outputs=node.output)
-        inner_loop.set_body_graph_as_attr("body", g)
+                                   outputs=node.output, branches=branches)
+
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        cls.any_version_after11(11, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Signature of operator Squeeze changed.
+        cls.any_version_after11(13, ctx, node, **kwargs)
 
 
 @tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
@@ -708,7 +991,7 @@ class Resize:
         scaler = [1., 1., float(nh) / h, float(nw) / w]
         node.set_attr("scales", scaler)
         node.set_attr("mode", mode)
-        ctx.remove_input(node, node.input[1])
+        ctx.remove_input(node, node.input[1], 1)
         node.data_format = "NHWC"
         conv_convert_inputs(ctx, node, with_kernel=False)
 
@@ -739,10 +1022,17 @@ class Resize:
             concat_shape.output[0]
         ]
         transformation_mode = "asymmetric"
+        nearest_mode = "floor"
+        if "align_corners" in node.attr and node.attr["align_corners"].i:
+            transformation_mode = "align_corners"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
-            transformation_mode = "half_pixel"
+            if node.type == "ResizeNearestNeighbor":
+                transformation_mode = "half_pixel"
+                nearest_mode = "round_prefer_ceil"
+            else:
+                transformation_mode = "half_pixel"
         resize = ctx.make_node("Resize", resize_inputs,
-                               attr={"mode": mode, "nearest_mode": "floor",
+                               attr={"mode": mode, "nearest_mode": nearest_mode,
                                      "coordinate_transformation_mode": transformation_mode})
         shapes = node.output_shapes
         dtypes = node.output_dtypes
@@ -813,7 +1103,7 @@ class Resize:
 @tf_op("MatrixBandPart")
 class MatrixBandPart:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
+    def any_version_after7(cls, opset, ctx, node, **kwargs):
         # T output = MatrixBandPart(T input, int num_lower, int num_upper)
         # data-flow: first generate mask matrix and then use element-wise mul op
         input_rank = len(ctx.get_shape(node.input[0]))
@@ -871,10 +1161,12 @@ class MatrixBandPart:
         cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(np.bool))
         col_init = one_line.output[0]
 
-        loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init], output_count=2)
-        loop_node.set_body_graph_as_attr("body", g)
+        branches = {"body": g}
+        loop_node = ctx.make_node(op_type="Loop", inputs=[trip_cnt, cond.output[0], col_init],
+                                  output_count=2, branches=branches)
         # convert generated mask matrix from bool to right shape and data type
-        squeeze = ctx.make_node(op_type="Squeeze", inputs=[loop_node.output[1]], attr={"axes": [squeeze_axis]})
+        squeeze = GraphBuilder(ctx).make_squeeze(
+            {'data': loop_node.output[1], 'axes': [squeeze_axis]}, return_node=True)
         cast1 = ctx.make_node(op_type="Cast", inputs=squeeze.output, attr={"to": onnx_pb.TensorProto.FLOAT})
         if axis == 1:
             mask_matrix = ctx.make_node(op_type="Transpose", inputs=cast1.output)
@@ -889,6 +1181,15 @@ class MatrixBandPart:
                       name=node.name, outputs=node.output, shapes=shapes,
                       dtypes=dtypes)
 
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        cls.any_version_after7(7, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Signature of operator Squeeze changed.
+        cls.any_version_after7(13, ctx, node, **kwargs)
+
 
 def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
     label_dtype = ctx.get_dtype(label.output[0])
@@ -898,15 +1199,16 @@ def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
     log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=logit.output)
     # implement tf.multiply(-1, tf.reduce_sum(tf.multiply(label, log_softmax), axis=1))
     mul1 = ctx.make_node(op_type="Mul", inputs=[label.output[0], log_softmax.output[0]])
-    reduce_sum = ctx.make_node(op_type="ReduceSum", inputs=[mul1.output[0]], attr={"axes": [-1]})
+    reduce_sum_output = GraphBuilder(ctx).make_reduce_sum(
+        {"data": mul1.output[0], "axes": [-1], "keepdims": 1, "noop_with_empty_axes": 1})
     const_negative_one = ctx.make_const(name=utils.make_name("const_negative_one"),
                                         np_val=np.array(-1).astype(utils.ONNX_TO_NUMPY_DTYPE[logit_dtype]))
-    mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum.output[0]])
+    mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum_output])
     shapes = tf_ori_node.output_shapes
     dtypes = tf_ori_node.output_dtypes
     ctx.remove_node(tf_ori_node.name)
-    ctx.make_node(op_type="Squeeze", inputs=[mul2.output[0]], attr={"axes": [1]},
-                  outputs=[tf_ori_node.output[0]], shapes=[shapes[0]], dtypes=[dtypes[0]])
+    GraphBuilder(ctx).make_squeeze({'axes': [1], 'data': mul2.output[0], 'outputs': [tf_ori_node.output[0]]},
+                                   shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs):
@@ -926,14 +1228,15 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
         indices_cast = ctx.make_node("Cast", [indices_name], attr={"to": TensorProto.INT64})
         indices_name = indices_cast.output[0]
     indices_size = ctx.make_node("Size", [indices_name])
-    indices_unsqueeze = ctx.make_node("Unsqueeze", [indices_name], attr={"axes": [1]})
+    gb = GraphBuilder(ctx)
+    indices_unsqueeze = gb.make_unsqueeze({'data': indices_name, "axes": [1]}, return_node=True)
     zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, dtype=np.int64))
     one_const = ctx.make_const(utils.make_name("one"), np.array(1, dtype=np.int64))
     id_name = utils.make_name("sparse_softmax_id")
     id_output = utils.port_name(id_name)
     controlflow.make_range(ctx, zero_const.output[0], indices_size.output[0], one_const.output[0],
                            id_output, id_name, shape=[-1], dtype=TensorProto.INT64)
-    id_unsqueeze = ctx.make_node("Unsqueeze", [id_output], attr={"axes": [1]})
+    id_unsqueeze = gb.make_unsqueeze({'data': id_output, "axes": [1]}, return_node=True)
     indices_with_id = ctx.make_node("Concat",
                                     [id_unsqueeze.output[0], indices_unsqueeze.output[0]],
                                     attr={"axis": 1})
@@ -949,9 +1252,9 @@ def sparse_softmax_cross_entropy_with_logits_op_by_gathernd(ctx, node, **kwargs)
     shapes = node.output_shapes
     dtypes = node.output_dtypes
     ctx.remove_node(node.name)
-    ctx.make_node(op_type="Squeeze",
-                  inputs=[mul2.output[0]], outputs=[node.output[0]],
-                  attr={"axes": [1]}, shapes=[shapes[0]], dtypes=[dtypes[0]])
+    gb = GraphBuilder(ctx)
+    gb.make_squeeze({'data': mul2.output[0], 'outputs': [node.output[0]], "axes": [1]},
+                    shapes=[shapes[0]], dtypes=[dtypes[0]])
 
 
 @tf_op("SoftmaxCrossEntropyWithLogits")
@@ -979,10 +1282,14 @@ def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_nod
     # "-log(q_i)" where i is the selected index specified by label, q_i = logic_i/sum, the detail process is as follows:
     # logit_exp=exp(logit) >> sum = tf.reduce_sum(logit_exp, axis = -1), masked_sum = reduce_sum(mul(logit_exp, mul))
     # >> -log(masked_sum/sum)
-    logit_exp = ctx.make_node(op_type="Exp", inputs=[logit]).output[0]
-    logit_exp_sum = ctx.make_node(op_type="ReduceSum", inputs=[logit_exp], attr={"axes": [-1], "keepdims": 0}).output[0]
+    logit_max = ctx.make_node(op_type="ReduceMax", inputs=[logit], attr={"axes": [-1], "keepdims": 1}).output[0]
+    logit_norm = ctx.make_node(op_type="Sub", inputs=[logit, logit_max]).output[0]
+    logit_exp = ctx.make_node(op_type="Exp", inputs=[logit_norm]).output[0]
+    logit_exp_sum = GraphBuilder(ctx).make_reduce_sum(
+        {"data": logit_exp, "axes": [-1], "keepdims": 0, "noop_with_empty_axes": 1})
     masked = ctx.make_node(op_type="Mul", inputs=[label, logit_exp]).output[0]
-    masked_sum = ctx.make_node(op_type="ReduceSum", inputs=[masked], attr={"axes": [-1], "keepdims": 0}).output[0]
+    masked_sum = GraphBuilder(ctx).make_reduce_sum(
+        {"data": masked, "axes": [-1], "keepdims": 0, "noop_with_empty_axes": 1})
     probability = ctx.make_node(op_type="Div", inputs=[masked_sum, logit_exp_sum]).output[0]
     log_prob = ctx.make_node(op_type="Log", inputs=[probability]).output[0]
     const_negative_one = ctx.make_const(name=utils.make_name("const_negative_one"),
@@ -1023,10 +1330,11 @@ class SparseSoftmaxCrossEntropyWithLogits:
         log_softmax = ctx.make_node(op_type="LogSoftmax", inputs=[logit_name])
         # implement tf.multiply(np.float32(-1.0), tf.reduce_sum(tf.multiply(one_hot, log_softmax), axis=1))
         mul1 = ctx.make_node(op_type="Mul", inputs=[onehot.output[0], log_softmax.output[0]])
-        reduce_sum = ctx.make_node(op_type="ReduceSum", inputs=[mul1.output[0]], attr={"axes": [1]})
+        reduce_sum_output = GraphBuilder(ctx).make_reduce_sum(
+            {"data": mul1.output[0], "axes": [1], "keepdims": 1, "noop_with_empty_axes": 1})
         const_name = utils.make_name("const_negative_one")
         const_negative_one = ctx.make_const(name=const_name, np_val=np.array(-1).astype(dtype))
-        mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum.output[0]])
+        mul2 = ctx.make_node(op_type="Mul", inputs=[const_negative_one.output[0], reduce_sum_output])
 
         shapes = node.output_shapes
         dtypes = node.output_dtypes
