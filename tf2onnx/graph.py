@@ -1077,7 +1077,8 @@ class Graph(object):
             if op.type == "PlaceholderWithDefault":
                 utils.make_sure(op.inputs[0] is not None, "Cannot find node with output {}".format(op.input[0]))
                 utils.make_sure(op.inputs[0].is_const(),
-                                "non-const default value for PlaceholderWithDefault is not supported.")
+                                "non-const default value for PlaceholderWithDefault node '%s' is not supported. "
+                                "Use the --use_default or --ignore_default flags to convert this node.", op.name)
                 # copy the tensor value, set its name to current node's output, add as initializer
                 value = op.inputs[0].get_tensor_value(as_list=False)
                 tensor = numpy_helper.from_array(value, op.output[0])

@@ -367,7 +367,8 @@ def run_rewriters(g, funcs, continue_on_error):
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
-                     input_names=None, output_names=None, is_subgraph=False, const_node_values=None,
+                     input_names=None, output_names=None, ignore_default=None, use_default=None,
+                     is_subgraph=False, const_node_values=None,
                      initialized_tables=None):
     """Convert tensorflow graph to onnx graph.
         Args:
@@ -383,6 +384,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             inputs_as_nchw: transpose inputs in list from nchw to nhwc
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
+            ignore_default: list of node names of PlaceholderWithDefault ops to change into Placeholder ops
+            use_default: list of node names of PlaceholderWithDefault ops to change into Identity ops using the default
             const_node_values: a dict returned by compress_graph_def mapping node names to tensor values
             initialized_tables: mapping from table shared_names to tuple of keys and values of table
         Return:
@@ -416,7 +419,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
 
     onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
-        tensorflow_to_onnx(tf_graph, shape_override, const_node_values)
+        tensorflow_to_onnx(tf_graph, shape_override, const_node_values, ignore_default, use_default)
     if not is_subgraph:
         # make tf2onnx internal subgraphs from the tensorflow subgraphs
         ordered_func = resolve_functions(tf_graph)
