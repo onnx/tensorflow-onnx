@@ -1,9 +1,12 @@
+import copy
+
 from tf2onnx.handler import tfl_op
 from tf2onnx import constants, utils
 import numpy as np
 
 from tf2onnx.tf_loader import find_function
 from tf2onnx.onnx_opset.controlflow import parameter_binding, inline_subgraph
+from tf2onnx.graph_builder import GraphBuilder
 from onnx.onnx_pb import TensorProto
 
 def find_scan_outputs(while_node, while_g, body_g):
@@ -59,14 +62,21 @@ class TflWhile:
         for k, v in output_map.items():
             ctx.replace_all_inputs(k, v)  # ops=ctx.get_nodes()
 
-        wire_tfl_while_body(body, loop_node.inputs, output_shapes, output_dtypes, cond_graph, scan_outputs)
-        find_scan_outputs(node, ctx, body)
+        body = wire_tfl_while_body(body, loop_node.inputs, output_shapes, output_dtypes, cond_graph, scan_outputs)
+
+        for i in range(len(scan_outputs)):
+            squeeze_node = GraphBuilder(body).make_squeeze(
+                {'data': body.outputs[-1-i], "axes": [0]}, return_node=True)
+            body.outputs[-1-i] = squeeze_node.output[0]
 
         loop_node.set_body_graph_as_attr("body", body)
 
 def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
                         output_dtypes, cond_graph, scan_outputs):
     """Wire subgraph graph into main."""
+
+    g = copy.deepcopy(g)
+    graph_inputs = g.inputs.copy()
 
     # onnx will pass in cond as argument
     iter_node = g.make_node("Placeholder", [], name=utils.make_name("iteration_num"),
@@ -75,10 +85,26 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
                             output_count=1, dtypes=[TensorProto.BOOL], shapes=[[]])
     cond_binding = parameter_binding(cond_graph, g.outputs)
 
+    to_remove = set()
     for idx, scan_output in scan_outputs:
+        inp = graph_inputs[idx]
+
+        # remove consumers of scan input
+        stack = [inp]
+        while stack:
+            node = stack.pop()
+            if node not in to_remove:
+                to_remove.add(node)
+                for out in node.output:
+                    stack += g.find_output_consumers(out)
+
+        cond_binding = {k: "@@ALLOC" if v == g.outputs[idx] else v for k, v in cond_binding.items()}
         del g.func_inputs[idx]
         del g.outputs[idx]
         g.outputs.append(scan_output)
+
+    for node in to_remove:
+        g.remove_node(node.name)
 
     # in onnx the body inputs are: index, cond, [loop_vars]
     g.func_inputs = [iter_node.output[0], cond_node.output[0]] + g.func_inputs

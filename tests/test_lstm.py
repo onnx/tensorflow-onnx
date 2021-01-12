@@ -306,7 +306,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
     def test_single_dynamic_lstm_random_weights2(self, state_is_tuple=True):
         hidden_size = 128
         batch_size = 5
-        x_val = np.random.randn(7, 133).astype('f')
+        x_val = np.random.randn(100, 133).astype('f')
         x_val = np.stack([x_val] * batch_size)
 
         def func(x):
