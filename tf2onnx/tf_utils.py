@@ -220,7 +220,7 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
                     outputs_to_values[output_names[0]] = np.array(shape[i], dtype=np_dtype)
                     outputs_to_dtypes[node.outputs[0].name] = node.outputs[0].dtype
                     progress = True
-            can_fold = node.type not in ['Enter']
+            can_fold = node.type not in ['Enter', 'Placeholder', 'PlaceholderWithDefault']
             can_fold = can_fold and len(input_names) > 0 and all(inp in outputs_to_values for inp in input_names)
             # We can only fold nodes with a single output
             can_fold = can_fold and len(output_names) == 1 and output_names[0] not in outputs_to_values

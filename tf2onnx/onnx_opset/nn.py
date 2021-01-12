@@ -788,24 +788,49 @@ class BatchNorm:
 
         conv_convert_inputs(ctx, node, with_kernel=False)
 
+        inp_shape = ctx.get_shape(node.input[0])
+        inp_rank = len(inp_shape) if inp_shape is not None else None
         scale_shape = ctx.get_shape(node.input[1])
         mean_shape = ctx.get_shape(node.input[3])
         var_shape = ctx.get_shape(node.input[4])
         val_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1]))
+        is_training = node.get_attr_value('is_training', True)
 
-        if node.get_attr_value('is_training', 1) == 1:
+        if is_training and node.get_attr_value('exponential_avg_factor', 1.0) == 1.0:
+            # Sometimes TF uses a BatchNorm op with training = True and exponential_avg_factor = 1.0
+            # to perform layer mean/variance normalization. In such cases, the mean/var are computed from the input.
+            # TF allows mean/variance to be excluded only if is_training and exponential_avg_factor == 1.0
+            utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
+                            node.name, tf_type)
+            dims = [0] + list(range(2, inp_rank))
+            avg = ctx.make_node("ReduceMean", [node.input[0]], attr={'axes': dims, 'keepdims': True}).output[0]
+            avg_squeezed = GraphBuilder(ctx).make_squeeze({"data": avg, "axes": dims})
+            sub = ctx.make_node("Sub", [node.input[0], avg]).output[0]
+            var_squeezed = ctx.make_node("ReduceSumSquare", [sub], attr={'axes': dims, 'keepdims': False}).output[0]
+
+            inp_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
+            dims_const = ctx.make_const(utils.make_name("axes_const"), np.array(dims, dtype=np.int64)).output[0]
+            reduce_dims = ctx.make_node("Gather", [inp_shape, dims_const]).output[0]
+            dims_product = ctx.make_node("ReduceProd", [reduce_dims], attr={'axes': [0], 'keepdims': False})
+            cnt_float = ctx.make_node("Cast", [dims_product.output[0]], attr={'to': ctx.get_dtype(node.input[0])})
+
+            pop_var_squeezed = ctx.make_node("Div", [var_squeezed, cnt_float.output[0]]).output[0]
+            ctx.replace_inputs(node, node.input[:3] + [avg_squeezed, pop_var_squeezed])
+        else:
             logger.warning("Node %s of type %s has is_training set to true, which is not supperted. "
                            "Please re-save the model with training set to false.",
                            node.name, tf_type)
+            # As long as the mean/variance estimates are provided, we should be OK
+            is_training = False
 
-        if mean_shape != scale_shape and all(d >= 0 for d in scale_shape):
+        if not is_training and mean_shape != scale_shape and all(d >= 0 for d in scale_shape):
             new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(as_list=False), scale_shape),
                                       dtype=val_type)
             new_mean_node_name = utils.make_name(node.name)
             ctx.make_const(new_mean_node_name, new_mean_value)
             ctx.replace_input(node, node.input[3], new_mean_node_name, 3)
 
-        if var_shape != scale_shape and all(d >= 0 for d in scale_shape):
+        if not is_training and var_shape != scale_shape and all(d >= 0 for d in scale_shape):
             new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(as_list=False), scale_shape),
                                      dtype=val_type)
             new_val_node_name = utils.make_name(node.name)
@@ -1261,7 +1286,9 @@ def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_nod
     # "-log(q_i)" where i is the selected index specified by label, q_i = logic_i/sum, the detail process is as follows:
     # logit_exp=exp(logit) >> sum = tf.reduce_sum(logit_exp, axis = -1), masked_sum = reduce_sum(mul(logit_exp, mul))
     # >> -log(masked_sum/sum)
-    logit_exp = ctx.make_node(op_type="Exp", inputs=[logit]).output[0]
+    logit_max = ctx.make_node(op_type="ReduceMax", inputs=[logit], attr={"axes": [-1], "keepdims": 1}).output[0]
+    logit_norm = ctx.make_node(op_type="Sub", inputs=[logit, logit_max]).output[0]
+    logit_exp = ctx.make_node(op_type="Exp", inputs=[logit_norm]).output[0]
     logit_exp_sum = GraphBuilder(ctx).make_reduce_sum(
         {"data": logit_exp, "axes": [-1], "keepdims": 0, "noop_with_empty_axes": 1})
     masked = ctx.make_node(op_type="Mul", inputs=[label, logit_exp]).output[0]

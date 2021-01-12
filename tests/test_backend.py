@@ -23,7 +23,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.tf_loader import is_tf2
+from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default
 from tf2onnx.onnx_opset.signal import make_dft_constant
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
@@ -711,24 +711,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-    #@unittest.skip("doesn't work with the new ut func interface, fix later")
-    #def test_placeholder_with_default_use_default(self):
-    #    x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
-    #    def func():
-    #        x = tf.constant(x_val, name="x")
-    #        y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
-    #    return tf.identity(y, name=_TFOUTPUT)
-    #    self._run_test_case(func, [_OUTPUT], {})
+    def test_placeholder_with_default_use_default(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf.constant(x_val, name="x")
+            y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {}, as_session=True, premade_placeholders=True)
 
-    #@unittest.skip("doesn't work with the new ut func interface, fix later")
-    #def test_placeholder_with_default_use_feed(self):
-    #    x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
-    #    def func():
-    #        x = tf.constant(x_val, name="x")
-    #        y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
-    #        return tf.identity(y, name=_TFOUTPUT)
-    #    x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
-    #    self._run_test_case(func, [_OUTPUT], {_INPUT: x_feed_val})
+    def test_placeholder_with_default_use_feed(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf.constant(x_val, name="x")
+            y = tf_placeholder_with_default(x, x_val.shape, name=_TFINPUT)
+            return tf.identity(y, name=_TFOUTPUT)
+        x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_feed_val}, as_session=True, premade_placeholders=True)
 
     @check_onnxruntime_incompatibility("Add")
     def test_add_bcast(self):
@@ -2219,6 +2217,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
             y, _, _ = fused_batch_norm(
                 x, scale, offset, mean=mean, variance=var,
                 epsilon=epsilon, data_format=data_format, is_training=False)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
+
+    @check_opset_min_version(7, "batchnorm")
+    def test_fused_batchnorm_training(self):
+        x_shape = [1, 28, 28, 2]
+        x_dtype = np.float32
+        scale_dtype = np.float32
+        scale_shape = [2]
+        # only nhwc is support on cpu for tensorflow
+        data_format = "NHWC"
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        def func(x):
+            scale = tf.constant(scale_val, name='scale')
+            offset = tf.constant(offset_val, name='offset')
+            epsilon = 0.001
+            y, _, _ = fused_batch_norm(
+                x, scale, offset, mean=None, variance=None,
+                epsilon=epsilon, data_format=data_format, is_training=True)
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
 
@@ -3721,6 +3740,48 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return indices_, dense_shape_
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: indices_val, _INPUT1: dense_shape_val,
                                                         _INPUT2: new_shape_val, _INPUT3: shape_pad_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "Range")
+    def test_ragged_range_float(self):
+        starts_val = np.array([0, 0, 1, 10, 0.5, 0.5], dtype=np.float32)
+        limits_val = np.array([-5, -2, 7, 100, 1, 1], dtype=np.float32)
+        deltas_val = np.array([-1, 1, 2, 20, 1, 1.1], dtype=np.float32)
+        def func(starts, limits, deltas):
+            x = tf.ragged.range(starts, limits, deltas)
+            rt_nested_splits = tf.identity(x.row_splits, name=_TFOUTPUT)
+            rt_dense_values = tf.identity(x.flat_values, name=_TFOUTPUT1)
+            return rt_nested_splits, rt_dense_values
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: starts_val, _INPUT1: limits_val,
+                                                        _INPUT2: deltas_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "Range")
+    def test_ragged_range_int(self):
+        starts_val = np.array([0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.int32)
+        limits_val = np.array([-6, -5, -4, -1, 0, 1, 4, 5, 6, 2, -2], dtype=np.int32)
+        deltas_val = np.array([-5, -5, -5, -5, 5, 5, 5, 5, 5, 1, -1], dtype=np.int32)
+        def func(starts, limits, deltas):
+            x = tf.ragged.range(starts, limits, deltas)
+            rt_nested_splits = tf.identity(x.row_splits, name=_TFOUTPUT)
+            rt_dense_values = tf.identity(x.flat_values, name=_TFOUTPUT1)
+            return rt_nested_splits, rt_dense_values
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: starts_val, _INPUT1: limits_val,
+                                                        _INPUT2: deltas_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "Range")
+    def test_ragged_range_scalar(self):
+        starts_val = np.array(0, dtype=np.int32)
+        limits_val = np.array([5, -1, -1, 2, 7, 100, 4, 5, 6], dtype=np.int32)
+        deltas_val = np.array(1, dtype=np.int32)
+        def func(starts, limits, deltas):
+            x = tf.ragged.range(starts, limits, deltas)
+            rt_nested_splits = tf.identity(x.row_splits, name=_TFOUTPUT)
+            rt_dense_values = tf.identity(x.flat_values, name=_TFOUTPUT1)
+            return rt_nested_splits, rt_dense_values
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: starts_val, _INPUT1: limits_val,
+                                                        _INPUT2: deltas_val})
 
     @check_opset_min_version(9, "Compress")
     def test_dynamic_partition_both_vector(self):

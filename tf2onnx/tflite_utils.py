@@ -5,18 +5,14 @@
 tf2onnx.tflite_utils - utilities for parsing tflite files into onnx graph
 """
 
-import numpy as np
-import tensorflow as tf
-from onnx import helper, onnx_pb, numpy_helper
-from tensorflow.core.framework import types_pb2, tensor_pb2
-from tensorflow.python.framework import tensor_util
 import collections
 import importlib
 
+from onnx import helper, onnx_pb, numpy_helper
+from tensorflow.core.framework import types_pb2, tensor_pb2
+from tensorflow.python.framework import tensor_util
 from tflite.TensorType import TensorType as TFLiteTensorType
 from tflite.Model import Model
-from tflite.BuiltinOperator import BuiltinOperator
-from tflite.BuiltinOptions import BuiltinOptions
 
 
 TFLITE_TO_ONNX_DTYPE = {

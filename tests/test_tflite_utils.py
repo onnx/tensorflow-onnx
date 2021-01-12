@@ -6,13 +6,16 @@
 import os
 import tensorflow as tf
 
-from common import *
+from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from backend_test_base import Tf2OnnxBackendTestBase
 from tf2onnx.tf_loader import from_function, tf_session
 from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph
 
+# pylint: disable=missing-docstring
+
 
 class TFListUtilsTests(Tf2OnnxBackendTestBase):
+
     @check_tf_min_version("2.0")
     def test_parse_tflite_graph(self):
 
@@ -44,7 +47,6 @@ class TFListUtilsTests(Tf2OnnxBackendTestBase):
             sess_outputs = [sess.graph.get_tensor_by_name(n) for n in output_names_with_port]
             converter = tf.compat.v1.lite.TFLiteConverter.from_session(sess, sess_inputs, sess_outputs)
 
-        from tensorflow.lite.python.convert import ConverterError
         tflite_model = converter.convert()
         tflite_path = os.path.join(self.test_data_directory, self._testMethodName + ".tflite")
         dir_name = os.path.dirname(tflite_path)
@@ -55,7 +57,7 @@ class TFListUtilsTests(Tf2OnnxBackendTestBase):
 
         tflite_graphs, opcodes_map, model = read_tflite_model(tflite_path)
         self.assertEqual(1, len(tflite_graphs))
-        onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, inputs, outputs, graph_name = \
+        onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, inputs, outputs, _ = \
             parse_tflite_graph(tflite_graphs[0], opcodes_map, model)
         self.assertEqual(2, op_cnt['MUL'])
         self.assertEqual(1, op_cnt['ADD'])
@@ -63,7 +65,7 @@ class TFListUtilsTests(Tf2OnnxBackendTestBase):
 
         self.assertEqual(1, attr_cnt['WeightsFormat'])
         self.assertEqual(names, inputs)
-        self.assertEqual(1, len(outputs))
+        self.assertEqual(output_names, outputs)
 
         for name, shape, dtype in zip(names, inp_shapes, inp_dtypes):
             self.assertEqual(shape, output_shapes[name])

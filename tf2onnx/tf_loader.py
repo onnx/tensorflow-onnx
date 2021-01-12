@@ -12,6 +12,7 @@ import logging
 from distutils.version import LooseVersion
 
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.ops import lookup_ops
 
 from tf2onnx import utils
@@ -72,6 +73,7 @@ if is_tf2():
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.io.gfile
     tf_placeholder = tf.compat.v1.placeholder
+    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
     extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 elif LooseVersion(tf.__version__) >= "1.13":
     # 1.13 introduced the compat namespace
@@ -82,6 +84,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.compat.v1.placeholder
+    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
     extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 else:
     # older than 1.13
@@ -92,6 +95,7 @@ else:
     tf_import_meta_graph = tf.train.import_meta_graph
     tf_gfile = tf.gfile
     tf_placeholder = tf.placeholder
+    tf_placeholder_with_default = tf.placeholder_with_default
     extract_sub_graph = tf.graph_util.extract_sub_graph
 
 
@@ -275,13 +279,16 @@ def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, valu
                                         removed_resource_to_placeholder, placeholder_to_table_info):
     # pylint: disable=protected-access
     for r in trackable.__dict__.values():
-        if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource') and hasattr(r, 'resource_handle'):
+        if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource'):
+            try:
+                table_handle = id(r.resource_handle)
+            except Exception:  # pylint: disable=broad-except
+                continue
             initializer = r._create_resource.concrete_functions[0].function_def
             new_names, new_k_dtypes, new_v_dtypes = get_hash_table_info(initializer.node_def)
             table_names.extend(new_names)
             key_dtypes.extend(new_k_dtypes)
             value_dtypes.extend(new_v_dtypes)
-            table_handle = id(r.resource_handle)
             if table_handle in removed_resource_to_placeholder and len(new_names) == 1:
                 table_info = (new_names[0], new_k_dtypes[0], new_v_dtypes[0])
                 placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
@@ -311,6 +318,12 @@ def _remove_non_variable_resources_from_captures(concrete_func):
                 for i in reversed(range(len(concrete_func._captured_inputs))):
                     if concrete_func._captured_inputs[i] is val_tensor:
                         concrete_func._captured_inputs.pop(i)
+            elif val_tensor.dtype != tf.resource:
+                npval = val_tensor.numpy()
+                if not hasattr(npval, 'dtype'):
+                    # Hack around a TF bug until PR is merged: https://github.com/tensorflow/tensorflow/pull/45610
+                    arr = np.array(npval)
+                    val_tensor.numpy = lambda arr=arr: arr
     else:
         logger.warning(
             "Could not search for non-variable resources. Concrete function internal representation may have changed.")

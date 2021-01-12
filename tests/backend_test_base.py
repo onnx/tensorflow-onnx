@@ -99,7 +99,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
                       check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
-                      large_model=False, test_tflite=True, skip_tfl_consistency_check=False):
+                      large_model=False, test_tflite=True, skip_tfl_consistency_check=False, premade_placeholders=False):
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -145,8 +145,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             with tf_session() as sess:
                 tf_set_random_seed(1)
                 input_list = []
-                for k, v in clean_feed_dict.items():
-                    input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
+                if not premade_placeholders:
+                    for k, v in clean_feed_dict.items():
+                        input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
                 func(*input_list)
                 variables_lib.global_variables_initializer().run()
                 tf_tables_initializer().run()

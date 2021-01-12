@@ -47,12 +47,6 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
     3 process found info according to ONNX requirement
     """
 
-    def __init__(self, g):
-        super(LSTMRewriterBase, self).__init__(g)
-        # {var_name: (finder, connector)}
-        self.state_variable_handler = list()
-        self.state_variable_handlers = list()
-
     def create_context(self):
         return LSTMContext()
 
@@ -66,6 +60,8 @@ class LSTMRewriterBase(UnitRnnRewriterBase):
         5 attributes, e.g., activation_alpha, activation_beta... optional
         """
         logger.debug("parse unit rnn")
+        self.state_variable_handler = list()
+        self.state_variable_handlers = list()
 
         logger.debug("match unit cell against loop body graph")
         cell_match = self.find_cell(context)

@@ -61,7 +61,7 @@ def get_args():
     parser.add_argument("--inputs", help="model input_names")
     parser.add_argument("--outputs", help="model output_names")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
-    parser.add_argument("--custom-ops", help="list of custom ops")
+    parser.add_argument("--custom-ops", help="comma-separated map of custom ops to domains in format OpName:domain")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
     parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=constants.POSSIBLE_TARGETS,
@@ -104,11 +104,11 @@ def get_args():
 
     return args
 
-
-def default_custom_op_handler(ctx, node, name, args):
-    node.domain = constants.TENSORFLOW_OPSET.domain
-    return node
-
+def make_default_custom_op_handler(domain):
+    def default_custom_op_handler(ctx, node, name, args):
+        node.domain = domain
+        return node
+    return default_custom_op_handler
 
 def main():
     args = get_args()
@@ -123,9 +123,17 @@ def main():
     custom_ops = {}
     initialized_tables = None
     if args.custom_ops:
-        # default custom ops for tensorflow-onnx are in the "tf" namespace
-        custom_ops = {op: (default_custom_op_handler, []) for op in args.custom_ops.split(",")}
-        extra_opset.append(constants.TENSORFLOW_OPSET)
+        using_tf_opset = False
+        for op in args.custom_ops.split(","):
+            if ":" in op:
+                op, domain = op.split(":")
+            else:
+                # default custom ops for tensorflow-onnx are in the "tf" namespace
+                using_tf_opset = True
+                domain = constants.TENSORFLOW_OPSET.domain
+            custom_ops[op] = (make_default_custom_op_handler(domain), [])
+        if using_tf_opset:
+            extra_opset.append(constants.TENSORFLOW_OPSET)
 
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:

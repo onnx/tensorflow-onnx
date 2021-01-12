@@ -2034,6 +2034,86 @@ class SparseToDense:
         ctx.replace_inputs(node, [expand_node.output[0], sparse_indices, sparse_vals])
 
 
+@tf_op("RaggedRange")
+class RaggedRange:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        starts, limits, deltas = node.input
+        data_dtype = ctx.get_dtype(starts)
+        data_np_dtype = utils.map_onnx_to_numpy_type(data_dtype)
+        data_is_float = np.dtype(data_np_dtype).kind == 'f'
+
+        if data_is_float:
+            sub_node = ctx.make_node("Sub", [limits, starts]).output[0]
+            div_node = ctx.make_node("Div", [sub_node, deltas]).output[0]
+            ceil_node = ctx.make_node("Ceil", [div_node]).output[0]
+            row_lens = ctx.make_node("Cast", [ceil_node], attr={'to': TensorProto.INT64}).output[0]
+
+        else:
+            # compute ceil(a/b) with ints
+            starts_cast = ctx.make_node("Cast", [starts], attr={'to': TensorProto.INT64}).output[0]
+            limits_cast = ctx.make_node("Cast", [limits], attr={'to': TensorProto.INT64}).output[0]
+            deltas_cast = ctx.make_node("Cast", [deltas], attr={'to': TensorProto.INT64}).output[0]
+            sub_node = ctx.make_node("Sub", [limits_cast, starts_cast]).output[0]
+            div_node = ctx.make_node("Div", [sub_node, deltas_cast]).output[0]
+            mul_node = ctx.make_node("Mul", [div_node, deltas_cast]).output[0]
+            eq_node = ctx.make_node("Equal", [mul_node, sub_node]).output[0]
+            ne_node = ctx.make_node("Not", [eq_node]).output[0]
+            # we want to round up if it isn't evenly divisible
+            offset = ctx.make_node("Cast", [ne_node], attr={'to': TensorProto.INT64}).output[0]
+            row_lens = ctx.make_node("Add", [div_node, offset]).output[0]
+
+        const_zero_int64 = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.int64)).output[0]
+        if ctx.opset <= 11:
+            const_zero_double = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.float64)).output[0]
+            row_lens = ctx.make_node("Cast", [row_lens], attr={'to': TensorProto.DOUBLE}).output[0]
+            row_lens = ctx.make_node("Max", [row_lens, const_zero_double]).output[0]
+            row_lens = ctx.make_node("Cast", [row_lens], attr={'to': TensorProto.INT64}).output[0]
+        else:
+            row_lens = ctx.make_node("Max", [row_lens, const_zero_int64]).output[0]
+
+        const_zero_list = ctx.make_const(utils.make_name("const_zero_list"), np.array([0], dtype=np.int64)).output[0]
+
+        max_row_len = ctx.make_node("ReduceMax", [row_lens], attr={'axes': [0], 'keeepdims': False}).output[0]
+        inp_shape = ctx.make_node("Shape", [row_lens]).output[0]
+        range_len = ctx.make_node("Mul", [max_row_len, inp_shape]).output[0]
+
+        # ORT seems to have a shape inference bug for the Range node. Use CumSum instead.
+        one_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[1])
+        ones_of_shape = ctx.make_node("ConstantOfShape", [range_len], attr={"value": one_tensor}).output[0]
+        range_node = ctx.make_node("CumSum", [ones_of_shape, const_zero_int64], attr={'exclusive': True}).output[0]
+        #const_one_int64 = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=np.int64)).output[0]
+        #range_node = ctx.make_node("Range", [const_zero_int64, range_len, const_one_int64]).output[0]
+
+        col_indices_dense = ctx.make_node("Mod", [range_node, max_row_len]).output[0]
+        row_indices_dense = ctx.make_node("Div", [range_node, max_row_len]).output[0]
+        row_lens_dense = ctx.make_node("Gather", [row_lens, row_indices_dense]).output[0]
+        indices_to_keep = ctx.make_node("Less", [col_indices_dense, row_lens_dense]).output[0]
+        col_indices = ctx.make_node("Compress", [col_indices_dense, indices_to_keep]).output[0]
+        row_indices = ctx.make_node("Compress", [row_indices_dense, indices_to_keep]).output[0]
+
+
+        split_ends = ctx.make_node("CumSum", [row_lens, const_zero_int64]).output[0]
+        splits_out = ctx.make_node("Concat", [const_zero_list, split_ends], attr={'axis': 0}).output[0]
+        col_indices_cast = ctx.make_node("Cast", [col_indices], attr={'to': data_dtype}).output[0]
+
+        if ctx.get_rank(starts) != 1:
+            starts = ctx.make_node("Expand", [starts, inp_shape]).output[0]
+
+        if ctx.get_rank(deltas) != 1:
+            deltas = ctx.make_node("Expand", [deltas, inp_shape]).output[0]
+
+        gather_starts = ctx.make_node("Gather", [starts, row_indices]).output[0]
+        gather_deltas = ctx.make_node("Gather", [deltas, row_indices]).output[0]
+
+        mul_node = ctx.make_node("Mul", [col_indices_cast, gather_deltas], op_name_scope=node.name).output[0]
+        dense_vals_out = ctx.make_node("Add", [gather_starts, mul_node], op_name_scope=node.name).output[0]
+
+        ctx.replace_all_inputs(node.output[0], splits_out)
+        ctx.replace_all_inputs(node.output[1], dense_vals_out)
+        ctx.remove_node(node.name)
+
+
 @tf_op("SparseReshape")
 class SparseReshape:
     @classmethod

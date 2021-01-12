@@ -439,10 +439,12 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _mul_handler(self, trans, node):
         multiplier_input_id = None
         multiplier_input_node = None
-        for i, input_node in zip(node.input, node.inputs):
-            if i != trans.output[0]:
-                multiplier_input_id = i
+        multiplier_input_idx = None
+        for idx, (input_id, input_node) in enumerate(zip(node.input, node.inputs)):
+            if input_id != trans.output[0]:
+                multiplier_input_id = input_id
                 multiplier_input_node = input_node
+                multiplier_input_idx = idx
 
         # node's inputs may come from one same node. if so the multiplier_input_node may be none
         if multiplier_input_node is None:
@@ -491,6 +493,11 @@ class TransposeOptimizer(GraphOptimizerBase):
             if multiplier.shape[0] == 1:
                 # shape is (1)
                 return self._switch_transpose_and_node(node, trans)
+
+            if not self._nodes_has_single_consumer_node([multiplier_input_node]):
+                new_inp = self._g.copy_const(multiplier_input_node)
+                self._g.replace_input(node, multiplier_input_id, new_inp.output[0], multiplier_input_idx)
+                multiplier_input_node = new_inp
 
             # shape is (N). reshape so that trans(shape) = 1,1,...,N
             perm = list(trans.get_attr('perm').ints)
