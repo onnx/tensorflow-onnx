@@ -1,5 +1,11 @@
-from tf2onnx.handler import tfl_op
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license.
 
+"""
+tfl_direct
+"""
+
+from tf2onnx.handler import tfl_op
 
 @tfl_op("TFL_ABS", tf_op="Abs")
 @tfl_op("TFL_CEIL", tf_op="Ceil")

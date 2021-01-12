@@ -1,3 +1,9 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license.
+
+"""
+tfl_math
+"""
 
 import logging
 import numpy as np
@@ -45,91 +51,6 @@ class TflDiv:
     def to_tf(cls, ctx, node, **kwargs):
         separate_fused_activation_function(ctx, node)
 
-@tfl_op(["TFL_CONCATENATION"], onnx_op="Concat")
-class TflConcatenation:
-    @classmethod
-    def version_1(cls, ctx, node, **kwargs):
-        pass
-
-@tfl_op(["TFL_SPLIT"], tf_op="Split")
-class TflSplit:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        node.attr['num_split'] = node.attr['num_splits']
-        del node.attr['num_splits']
-
-@tfl_op(["TFL_SPLIT_V"], tf_op="SplitV")
-class TflSplit:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        node.attr['num_split'] = node.attr['num_splits']
-        del node.attr['num_splits']
-
-direct_tfl_to_tf_map = [
-    ("TFL_GREATER", "Greater"),
-    ("TFL_GREATER_EQUAL", "GreaterEqual"),
-    ("TFL_LESS", "Less"),
-    ("TFL_LESS_EQUAL", "LessEqual"),
-    ("TFL_EQUAL", "Equal"),
-    ("TFL_EXP", "Exp"),
-    ("TFL_SQRT", "Sqrt"),
-    ("TFL_NEG", "Neg"),
-    ("TFL_POW", "Pow"),
-    ("TFL_FLOOR", "Floor"),
-    ("TFL_CEIL", "Ceil"),
-    ("TFL_TANH", "Tanh"),
-    ("TFL_SIN", "Sin"),
-    ("TFL_COS", "Cos"),
-    ("TFL_LOG", "Log"),
-    ("TFL_ABS", "Abs"),
-    ("TFL_LOGICAL_AND", "LogicalAnd"),
-    ("TFL_LOGICAL_NOT", "LogicalNot"),
-    ("TFL_LOGICAL_OR", "LogicalOr"),
-]
-# for tfl_op_name, tf_op_name in direct_tfl_to_tf_map:
-#     @tfl_op([tfl_op_name], tf_op=tf_op_name)
-#     class TflDirectOp:
-#         @classmethod
-#         def to_tf(cls, ctx, node, **kwargs):
-#             pass
-
-@tfl_op(["TFL_TRANSPOSE"], tf_op="Transpose")
-class TflTranspose:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        pass
-
-@tfl_op(["TFL_GATHER"], onnx_op="Gather")
-class TflGather:
-    @classmethod
-    def version_1(cls, ctx, node, **kwargs):
-        pass
-
-@tfl_op(["TFL_RESHAPE"], tf_op="Reshape")
-class TflReshape:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        if 'new_shape' in node.attr:
-            del node.attr['new_shape']
-        #utils.make_sure('new_shape' not in node.attr, "new_shape attr not yet supported for reshape (use input)")
-
-@tfl_op(["TFL_SLICE"], tf_op="Slice")
-class TflSlice:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        pass
-
-@tfl_op(["TFL_CAST"], tf_op="Cast")
-class TflCast:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        dst = ctx.get_dtype(node.output[0])
-        if "out_data_type" in node.attr:
-            del node.attr["out_data_type"]
-            del node.attr["in_data_type"]
-        node.set_attr("to", dst)
-
-
 @tfl_op(["TFL_LOGISTIC"], tf_op="Sigmoid")
 class TflLogistic:
     @classmethod
@@ -144,31 +65,12 @@ class TflReduceOp:
     def to_tf(cls, ctx, node, **kwargs):
         pass
 
-@tfl_op(["TFL_PACK"], tf_op="Pack")
-class TFlPackOp:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        node.attr["N"] = node.attr["values_count"]
-        del node.attr["values_count"]
-
 @tfl_op(["TFL_LOCAL_RESPONSE_NORMALIZATION"], tf_op="LRN")
 class TFlLocalResponseNormalizationOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         node.attr["depth_radius"] = node.attr["radius"]
         del node.attr["radius"]
-
-@tfl_op(["TFL_PADV2"], tf_op="PadV2")
-class TflPadV2Op:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        pass
-
-@tfl_op(["TFL_NON_MAX_SUPPRESSION_V4"], tf_op="NonMaxSuppressionV4")
-class TflNonMaxSuppressionV4Op:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        node.set_attr("pad_to_max_output_size", 1)
 
 @tfl_op(["TFL_RANGE"], tf_op="Range")
 class TflRangeOp:
@@ -255,21 +157,6 @@ class TflFullyConnectedOp:
         del node.attr["keep_num_dims"]
         del node.attr["asymmetric_quantize_inputs"]
 
-# DONE
-
-@tfl_op(["TFL_UNIQUE"], tf_op="Unique")
-class TFlUniqueOp:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        node.attr["out_idx"] = node.attr["idx_out_type"]
-        del node.attr["idx_out_type"]
-
-@tfl_op(["TFL_TOPK_V2"], tf_op="TopKV2")
-class TFlTopKV2Op:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        node.set_attr("sorted", 1)
-
 @tfl_op(["TFL_SOFTMAX"], tf_op="Softmax")
 class TFlSoftmaxOp:
     @classmethod
@@ -278,16 +165,3 @@ class TFlSoftmaxOp:
         beta_node = ctx.make_const(utils.make_name("beta"), np.array(beta, dtype=np.float32))
         mul_node = ctx.insert_new_node_on_output("Mul", node.output[0], name=utils.make_name(node.name))
         ctx.replace_inputs(mul_node, [node.output[0], beta_node.output[0]])
-
-
-@tfl_op(["TFL_SPACE_TO_BATCH_ND"], tf_op="SpaceToBatchND")
-class TFlSpaceToBatchNDOp:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        pass
-
-@tfl_op(["TFL_SPACE_TO_DEPTH"], tf_op="SpaceToDepth")
-class TFlSpaceToDepthOp:
-    @classmethod
-    def to_tf(cls, ctx, node, **kwargs):
-        node.set_attr("data_format", "NHWC")

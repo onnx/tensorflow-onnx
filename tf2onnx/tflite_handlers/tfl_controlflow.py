@@ -1,3 +1,10 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license.
+
+"""
+tfl_controlflow
+"""
+
 import copy
 
 from tf2onnx.handler import tfl_op
@@ -8,10 +15,6 @@ from tf2onnx.tf_loader import find_function
 from tf2onnx.onnx_opset.controlflow import parameter_binding, inline_subgraph
 from tf2onnx.graph_builder import GraphBuilder
 from onnx.onnx_pb import TensorProto
-
-def find_scan_outputs(while_node, while_g, body_g):
-    print("hi")
-    pass
 
 @tfl_op(["TFL_WHILE"])
 class TflWhile:

@@ -3,4 +3,5 @@ from . import (
     tfl_nn,
     tfl_controlflow,
     tfl_direct,
+    tfl_tensor
 )

@@ -1,3 +1,9 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license.
+
+"""
+tfl_nn
+"""
 
 from tf2onnx.handler import tfl_op
 from tf2onnx import constants, utils
@@ -83,3 +89,21 @@ class TflSlice:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         pass
+
+@tfl_op(["TFL_SPACE_TO_BATCH_ND"], tf_op="SpaceToBatchND")
+class TFlSpaceToBatchNDOp:
+    @classmethod
+    def to_tf(cls, ctx, node, **kwargs):
+        pass
+
+@tfl_op(["TFL_SPACE_TO_DEPTH"], tf_op="SpaceToDepth")
+class TFlSpaceToDepthOp:
+    @classmethod
+    def to_tf(cls, ctx, node, **kwargs):
+        node.set_attr("data_format", "NHWC")
+
+@tfl_op(["TFL_NON_MAX_SUPPRESSION_V4"], tf_op="NonMaxSuppressionV4")
+class TflNonMaxSuppressionV4Op:
+    @classmethod
+    def to_tf(cls, ctx, node, **kwargs):
+        node.set_attr("pad_to_max_output_size", 1)
