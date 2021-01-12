@@ -376,7 +376,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
                          is_tflite=False):
 
     if is_tflite:
-        from tf2onnx.tflite_rewriters.slice_concat_to_scatter_rewriter import rewrite_slice_concat_to_scatter
+        from tf2onnx.tflite_rewriters.tensor_list_set_rewriter import rewrite_slice_concat_to_scatter
         run_rewriters(g, [rewrite_slice_concat_to_scatter], continue_on_error)
         tfl_ops_mapping = handler.tfl_op.create_tfl_to_tf_mapping()
         _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True)
