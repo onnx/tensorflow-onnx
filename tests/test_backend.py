@@ -23,7 +23,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default
+from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default, tf_placeholder
 from tf2onnx.onnx_opset.signal import make_dft_constant
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
@@ -727,6 +727,33 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(y, name=_TFOUTPUT)
         x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_feed_val}, as_session=True, premade_placeholders=True)
+
+    def test_placeholder_with_default_computed_use_default(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        y_val = np.array([2.0, -4.0, 6.0, -8.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf_placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            y = tf_placeholder(tf.float32, y_val.shape, name=_TFINPUT1)
+            total = tf.add(x, y)
+            z = tf_placeholder_with_default(total, x_val.shape, name=_TFINPUT2)
+            total2 = tf.add(total, z)
+            return tf.identity(total2, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, as_session=True,
+                            premade_placeholders=True, process_args={'use_default': [_TFINPUT2]})
+
+    def test_placeholder_with_default_computed_ignore_default(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        y_val = np.array([2.0, -4.0, 6.0, -8.0], dtype=np.float32).reshape((2, 2))
+        z_val = np.array([3.0, 6.0, 9.0, 10.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf_placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            y = tf_placeholder(tf.float32, y_val.shape, name=_TFINPUT1)
+            total = tf.add(x, y)
+            z = tf_placeholder_with_default(total, x_val.shape, name=_TFINPUT2)
+            total2 = tf.add(total, z)
+            return tf.identity(total2, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val}, as_session=True,
+                            premade_placeholders=True, process_args={'ignore_default': [_TFINPUT2]})
 
     @check_onnxruntime_incompatibility("Add")
     def test_add_bcast(self):
