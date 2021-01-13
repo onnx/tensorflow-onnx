@@ -40,7 +40,7 @@ class TflWhile:
         
         scan_outputs = sorted(body.scan_outputs, reverse=True)
         def input_is_unused(g, index):
-            return len(g.find_output_consumers(g.inputs[index].output[0])) == 0
+            return len(g.find_output_consumers(g.func_inputs[index])) == 0
         scan_outputs = [(i, out) for i, out in scan_outputs if input_is_unused(cond_graph, i)]
 
         output_shapes = output_shapes
@@ -79,7 +79,7 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
     """Wire subgraph graph into main."""
 
     g = copy.deepcopy(g)
-    graph_inputs = g.inputs.copy()
+    graph_inputs = g.func_inputs.copy()
 
     # onnx will pass in cond as argument
     iter_node = g.make_node("Placeholder", [], name=utils.make_name("iteration_num"),
@@ -90,7 +90,7 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
 
     to_remove = set()
     for idx, scan_output in scan_outputs:
-        inp = graph_inputs[idx]
+        inp = g.get_node_by_output(graph_inputs[idx])
 
         # remove consumers of scan input
         stack = [inp]

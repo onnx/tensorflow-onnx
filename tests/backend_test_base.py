@@ -38,7 +38,7 @@ if is_tf2():
 else:
     tf_set_random_seed = tf.set_random_seed
     tf_tables_initializer = tf.tables_initializer
-    tf_lite = tf.lite
+    tf_lite = None
 
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
@@ -112,6 +112,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         tf_reset_default_graph()
         graph_def = None
         initialized_tables = None
+        if tf_lite is None:
+            test_tflite = False
 
         np.random.seed(1)  # Make it reproducible.
         clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
