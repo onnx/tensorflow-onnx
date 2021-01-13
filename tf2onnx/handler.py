@@ -19,15 +19,18 @@ from tf2onnx import constants
 class tf_op:
     """Class to implement the decorator to register handlers that map tf to onnx."""
 
+    # Maps domains (string) to lists (idx represents opset) of dicts (key = op to handle, value = handler)
     _OPSETS = collections.OrderedDict()
+    # Cache of mapping for current domain and opset. Maps op names to handlers [(func, kwargs) tuple]
     _MAPPING = None
+    # Cache of mapping from domain to map of op name to handlers. Used to fetch handlers from different domains
     _DOMAIN_MAPPING = None
 
     def __init__(self, name, domain=constants.ONNX_DOMAIN, **kwargs):
         """Called decorator from decorator.
 
-        :param name: The name of the tensorflow operator.
-        :param domain: The domain the operator belongs to, defaults to onnx.
+        :param name: The name (or list of names) of the tensorflow operator.
+        :param domain: The domain the handler requires, defaults to onnx.
         :param kwargs: Dictionary that are passed to the handler. A key 'onnx_op' will change the operator name.
         """
         if not isinstance(name, list):
@@ -47,13 +50,20 @@ class tf_op:
         """Register old style custom handler.
 
         :param func: The handler.
-        :param version: The domain the operator belongs to, defaults to onnx.
         :param version: The version of the handler.
         """
         tf_op.register_handler(func, version, self.names, self.domain, self.kwargs)
 
     @staticmethod
     def register_handler(func, version, names, domain, kwargs):
+        """Register handler.
+
+        :param func: The handler.
+        :param version: (int) The opset of onnx (or other domain) required for the handler.
+        :param names: List of names of the operators to convert.
+        :param domain: The domain the handler requires, defaults to onnx.
+
+        """
         opset = tf_op._OPSETS.get(domain)
         if not opset:
             opset = []
@@ -97,7 +107,7 @@ class tf_op:
     def find_effective_op(name, domain=None):
         """Find the effective version of an op create_mapping.
            This is used if we need to compose ops from other ops where we'd need to find the
-           op that is doing to be used in the final graph, for example there is a custom op
+           op that is going to be used in the final graph, for example there is a custom op
            that overrides a onnx op ...
 
         :param name: The operator name.
@@ -111,8 +121,18 @@ class tf_op:
             return None
         return map_info
 
+
 class tfl_op:
+    """Class to implement the decorator to register handlers that map tflite to tf or onnx."""
+
     def __init__(self, name, domain=constants.ONNX_DOMAIN, **kwargs):
+        """Called decorator from decorator.
+
+        :param name: The name (or list of names) of the tflite operator.
+        :param domain: The domain the operator belongs to, defaults to onnx. Use 'com.google.tensorflow' for tflite->tf
+        :param kwargs: Dictionary that are passed to the handler. A key 'onnx_op' will change the operator name.
+                       'tf_op' will convert the op to tf during a tflite to tf conversion pass.
+        """
         if not isinstance(name, list):
             name = [name]
         self.names = name
@@ -120,7 +140,9 @@ class tfl_op:
         self.kwargs = kwargs
 
     def __call__(self, func):
+        # Register any handlers of the form 'version_#'
         tf_op(self.names, self.domain, **self.kwargs)(func)
+        # TFLite to TF handlers have the function name 'to_tf' which takes the optional 'tf_op' kwarg
         if hasattr(func, 'to_tf'):
             tf_op.register_handler(func.to_tf, 0, self.names, 'com.google.tensorflow', self.kwargs)
         return func

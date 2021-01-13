@@ -2,8 +2,8 @@
 
 | Build Type | OS | Python | Tensorflow | Onnx opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.4 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.3 | 7-12 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.4 | 7-13 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.4 | 7-13 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
 
 ## Supported Versions
 
@@ -11,7 +11,7 @@
 
 tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support ONNX opset-6 to opset-12. By default we use opset-9 for the resulting ONNX graph since most runtimes will support opset-9.
+We support ONNX opset-6 to opset-13. By default we use opset-9 for the resulting ONNX graph since most runtimes will support opset-9.
 Support for future opsets add added as they are released.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 12```.
@@ -172,6 +172,10 @@ TensorFlow model's input/output names, which can be found with [summarize graph 
 
 By default we preserve the image format of inputs (`nchw` or `nhwc`) as given in the TensorFlow model. If your hosts (for example windows) native format nchw and the model is written for nhwc, ```--inputs-as-nchw``` tensorflow-onnx will transpose the input. Doing so is convenient for the application and the converter in many cases can optimize the transpose away. For example ```--inputs input0:0,input1:0 --inputs-as-nchw input0:0``` assumes that images are passed into ```input0:0``` as nchw while the TensorFlow model given uses nhwc.
 
+#### --ignore_default, --use_default
+
+ONNX requires default values for graph inputs to be constant, while Tensorflow's PlaceholderWithDefault op accepts computed defaults.  To convert such models, pass a comma-separated list of node names to the ignore_default and/or use_default flags.  PlaceholderWithDefault nodes with matching names will be replaced with Placeholder or Identity ops, respectively.
+
 #### --opset
 
 By default we use the opset 8 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
@@ -289,6 +293,7 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             custom_rewriter=None, extra_opset=None,
             shape_override=None, inputs_as_nchw=None,
             input_names=None, output_names=None,
+            ignore_default=None, use_default=None,
             const_node_values=None):
     """Convert tensorflow graph to onnx graph.
         Args:
@@ -304,6 +309,8 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             inputs_as_nchw: transpose inputs in list from nchw to nchw
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
+            ignore_default: list of node names of PlaceholderWithDefault ops to change into Placeholder ops
+            use_default: list of node names of PlaceholderWithDefault ops to change into Identity ops
             const_node_values: an optional dict mapping node names to tensor values
         Return:
             onnx graph

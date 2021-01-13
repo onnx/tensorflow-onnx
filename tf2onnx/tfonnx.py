@@ -492,7 +492,8 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
-                     input_names=None, output_names=None, is_subgraph=False, const_node_values=None,
+                     input_names=None, output_names=None, ignore_default=None, use_default=None,
+                     is_subgraph=False, const_node_values=None,
                      initialized_tables=None, tflite_path=None):
     """Convert tensorflow graph to onnx graph.
         Args:
@@ -571,7 +572,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
 
         onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
-            tensorflow_to_onnx(tf_graph, shape_override, const_node_values)
+            tensorflow_to_onnx(tf_graph, shape_override, const_node_values, ignore_default, use_default)
         if not is_subgraph:
             # make tf2onnx internal subgraphs from the tensorflow subgraphs
             ordered_func = resolve_functions(tf_graph)

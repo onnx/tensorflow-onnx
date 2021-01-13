@@ -60,6 +60,10 @@ def get_args():
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names")
     parser.add_argument("--outputs", help="model output_names")
+    parser.add_argument("--ignore_default", help="comma-separated list of names of PlaceholderWithDefault "
+                                                 "ops to change into Placeholder ops")
+    parser.add_argument("--use_default", help="comma-separated list of names of PlaceholderWithDefault ops to "
+                                              "change into Identity ops using their default value")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
     parser.add_argument("--custom-ops", help="comma-separated map of custom ops to domains in format OpName:domain")
     parser.add_argument("--extra_opset", default=None,
@@ -90,6 +94,10 @@ def get_args():
         args.inputs, args.shape_override = utils.split_nodename_and_shape(args.inputs)
     if args.outputs:
         args.outputs = args.outputs.split(",")
+    if args.ignore_default:
+        args.ignore_default = args.ignore_default.split(",")
+    if args.use_default:
+        args.use_default = args.use_default.split(",")
     if args.inputs_as_nchw:
         args.inputs_as_nchw = args.inputs_as_nchw.split(",")
     if args.target:
@@ -184,6 +192,8 @@ def main():
                              input_names=inputs,
                              output_names=outputs,
                              inputs_as_nchw=args.inputs_as_nchw,
+                             ignore_default=args.ignore_default,
+                             use_default=args.use_default,
                              const_node_values=const_node_values,
                              initialized_tables=initialized_tables,
                              tflite_path=tflite_path)
