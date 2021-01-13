@@ -108,37 +108,6 @@ def rewrite_slice_concat_to_scatter(g, ops):
                 continue
 
             g.scan_outputs.append((scan_output_idx, scan_output))
-
-            print("Hello", len(to_remove))
-
-
-            # Assert all except 1st elt of begin_slice.inputs[2] is -1
-            # Assert all except 1st elt of end_slice.inputs[1] is 0
-            # Assert end_slice.inputs[1][0] = end_slice.inputs[1][0] + 1
-
-            # Determine if in while node
-
-            # Add as scan output
-            # If opset is too low (likely), remove nodes if safe
-
-            # Find input index
-            # Make sure init at 0
-            # If so, det if safe to remove nodes
-            # Add fake scan output node?
-
-            # If contained in a while node, blahblah:
-            #   Add to list of scan outputs
-            # When while node converts:
-            #   Find and destroy scan inputs
-
-            # Get unsqueezed index? 
-            # indices_const = begin_slice.inputs[2].input[0]
-            # update_shape = g.make_node("Shape", [update_tensor]).output[0]
-            # indices_expanded = g.make_node("Expand", [indices_const, update_shape]).output[0]
-            # scatter_node = g.make_node("ScatterElements", [original_tensor, indices_expanded, update_tensor])
-            # g.replace_all_inputs(concat.output[0], scatter_node.output[0])
-
-            print("hi")
     return ops
 
 def get_uniform_const_val(n):
