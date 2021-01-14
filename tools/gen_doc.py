@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 tool to list tensorflow op to onnx op mapping in markdown
 """

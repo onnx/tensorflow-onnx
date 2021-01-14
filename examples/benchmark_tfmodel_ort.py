@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 The following code compares the speed of tensorflow against onnxruntime
 with a model downloaded from Tensorflow Hub.
