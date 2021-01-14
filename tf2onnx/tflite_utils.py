@@ -11,8 +11,8 @@ import importlib
 from onnx import helper, onnx_pb, numpy_helper
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
-from tflite.TensorType import TensorType as TFLiteTensorType
-from tflite.Model import Model
+from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
+from tf2onnx.tflite.Model import Model
 
 
 TFLITE_TO_ONNX_DTYPE = {
@@ -100,7 +100,7 @@ def lookup_enum(idx, enum_name):
         return map_tflite_dtype_to_onnx(idx)
     if enum_name in enum_cache:
         return enum_cache[enum_name][idx]
-    module = importlib.import_module('tflite.' + enum_name)
+    module = importlib.import_module('tf2onnx.tflite.' + enum_name)
     enum_class = getattr(module, enum_name)
     idx_to_name = {value: key for key, value in enum_class.__dict__.items() if not key.startswith('_')}
     enum_cache[enum_name] = idx_to_name
@@ -111,7 +111,7 @@ def get_options_class(name):
     """Each tflite optype has a flatbuffer Options class (ex: AddOptions). Returns the options class given its name."""
     if name == "NONE":
         return None
-    module = importlib.import_module('tflite.' + name)
+    module = importlib.import_module('tf2onnx.tflite.' + name)
     return getattr(module, name)
 
 
