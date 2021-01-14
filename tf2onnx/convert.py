@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
 
 """
 python -m tf2onnx.convert : tool to convert a frozen tensorflow graph to onnx

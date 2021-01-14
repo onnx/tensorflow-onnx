@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
 
 """const fold Optimizer.
    if op's inputs are all const then do op computation when building the graph to improve performance

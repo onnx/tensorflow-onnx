@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
 
 """Methods to load tensorflow graph from graphdef, checkpoint or saved_model."""
 

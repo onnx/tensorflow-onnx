@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
 
 """Identity Optimizer.
    Remove useless Identity node in graphs including subgraphs, but does not hurt model output names.
