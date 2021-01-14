@@ -1148,8 +1148,10 @@ class Pack:
         # insert Unsqueeze on each input
         for i, n in enumerate(node.inputs):
             dtype = ctx.get_dtype(node.input[i])
-            shape = ctx.get_shape(node.input[i]).copy()
-            shape.insert(axis, 1)
+            shape = ctx.get_shape(node.input[i])
+            if shape is not None:
+                shape = shape.copy()
+                shape.insert(axis, 1)
             new_node = gb.make_unsqueeze(
                 {'data': node.input[i], 'axes': [axis]},
                 op_name_scope=node.name, shapes=[shape], dtypes=[dtype], return_node=True)

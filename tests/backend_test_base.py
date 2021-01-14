@@ -267,6 +267,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             except (RuntimeError, ValueError) as e:
                 test_tflite = False
         if test_tflite:
+            skip_tfl_consistency_check = True
             if not skip_tfl_consistency_check:
                 for expected_val, tf_lite_val in zip(expected, tf_lite_output_data):
                     if check_value:
