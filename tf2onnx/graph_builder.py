@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
 
 """
 tf2onnx.graph_helper - class to help building graph, such as helping to make complex node

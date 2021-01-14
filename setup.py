@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
 
 import distutils.command.build
 import os
@@ -79,6 +77,7 @@ setup(
     tests_require=['graphviz', 'parameterized', 'pytest', 'pytest-cov', 'pyyaml'],
     cmdclass=cmdclass,
     packages=find_packages(),
+    license='Apache License v2.0',
     author='onnx@microsoft.com',
     author_email='onnx@microsoft.com',
     url='https://github.com/onnx/tensorflow-onnx',
