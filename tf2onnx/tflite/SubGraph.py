@@ -33,7 +33,7 @@ class SubGraph(object):
             x = self._tab.Vector(o)
             x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 4
             x = self._tab.Indirect(x)
-            from tflite.Tensor import Tensor
+            from tf2onnx.tflite.Tensor import Tensor
             obj = Tensor()
             obj.Init(self._tab.Bytes, x)
             return obj
@@ -112,7 +112,7 @@ class SubGraph(object):
             x = self._tab.Vector(o)
             x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 4
             x = self._tab.Indirect(x)
-            from tflite.Operator import Operator
+            from tf2onnx.tflite.Operator import Operator
             obj = Operator()
             obj.Init(self._tab.Bytes, x)
             return obj
