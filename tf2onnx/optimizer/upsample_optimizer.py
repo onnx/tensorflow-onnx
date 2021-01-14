@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Resize Optimizer.
     Replace resize operations with all ones in scale with Identity nodes
 """
