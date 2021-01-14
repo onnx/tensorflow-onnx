@@ -1,5 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-
 """
 This example retrieves a model from tensorflowhub.
 It is converted into ONNX. Predictions are compared to

@@ -1,5 +1,3 @@
-<!--- SPDX-License-Identifier: Apache-2.0 -->
-
 ## `tf2onnx` Support Status
 ### Domain: "" (default domain)
 | Tensorflow Op | Convertible to ONNX Op Versions |
@@ -230,14 +228,14 @@
 | Where | 9 ~ 13 |
 | While | 7 ~ 13 |
 | ZerosLike | 1 ~ 13 |
-### Domain: "com.microsoft"
+### Domain: "com.microsoft" 
 | Tensorflow Op | Convertible to ONNX Op Versions |
 | ------------- | ------------------------------- |
 | Conv2DBackpropInput | 1 |
 | CropAndResize | 1 |
 | MatrixInverse | 1 |
 | Range | 1 |
-### Domain: "ai.onnx.contrib"
+### Domain: "ai.onnx.contrib" 
 | Tensorflow Op | Convertible to ONNX Op Versions |
 | ------------- | ------------------------------- |
 | Equal | 1 |

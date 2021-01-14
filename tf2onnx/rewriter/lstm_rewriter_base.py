@@ -1,5 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-
 # Licensed under the MIT license.
 
 # Temporary base class exclusive for LSTMs for stacked LSTM layer support.
