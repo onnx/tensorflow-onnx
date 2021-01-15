@@ -2034,6 +2034,65 @@ class SparseToDense:
         ctx.replace_inputs(node, [expand_node.output[0], sparse_indices, sparse_vals])
 
 
+def ragged_lengths_to_sparse_indices(ctx, ragged_lens):
+    const_zero_int64 = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.int64)).output[0]
+    num_cols = ctx.make_node("ReduceMax", [ragged_lens], attr={'axes': [0], 'keeepdims': True}).output[0]
+    num_rows = ctx.make_node("Shape", [ragged_lens]).output[0]
+    range_len = ctx.make_node("Mul", [num_cols, num_rows]).output[0]
+
+    # ORT seems to have a shape inference bug for the Range node. Use CumSum instead.
+    one_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[1])
+    ones_of_shape = ctx.make_node("ConstantOfShape", [range_len], attr={"value": one_tensor}).output[0]
+    range_node = ctx.make_node("CumSum", [ones_of_shape, const_zero_int64], attr={'exclusive': True}).output[0]
+    #const_one_int64 = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=np.int64)).output[0]
+    #range_node = ctx.make_node("Range", [const_zero_int64, range_len, const_one_int64]).output[0]
+
+    col_indices_dense = ctx.make_node("Mod", [range_node, num_cols]).output[0]
+    row_indices_dense = ctx.make_node("Div", [range_node, num_cols]).output[0]
+    row_lens_dense = ctx.make_node("Gather", [ragged_lens, row_indices_dense]).output[0]
+    indices_to_keep = ctx.make_node("Less", [col_indices_dense, row_lens_dense]).output[0]
+    col_indices = ctx.make_node("Compress", [col_indices_dense, indices_to_keep]).output[0]
+    row_indices = ctx.make_node("Compress", [row_indices_dense, indices_to_keep]).output[0]
+    return num_rows, num_cols, row_indices, col_indices
+
+
+@tf_op("RaggedTensorToSparse")
+class RaggedTensorToSparse:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # https://www.tensorflow.org/guide/ragged_tensor#multiple_ragged_dimensions
+        dense_values = node.inputs[-1]
+        nested_splits = node.inputs[:-1]
+        sparse_indices = None
+        dense_shape_dims = []
+        for split in nested_splits:
+            if ctx.get_dtype(split.output[0]) != TensorProto.INT64:
+                split = ctx.make_node("Cast", [split.output[0]], attr={'to': TensorProto.INT64})
+            max_int64 = int(utils.get_max_value(np.int64))
+            slice1 = GraphBuilder(ctx).make_slice(
+                {"data": split.output[0], "ends": [max_int64], "starts": [1], "axes": [0]})
+            slice2 = GraphBuilder(ctx).make_slice(
+                {"data": split.output[0], "ends": [-1], "starts": [0], "axes": [0]})
+            ragged_lens = ctx.make_node("Sub", [slice1, slice2]).output[0]
+            num_rows, num_cols, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, ragged_lens)
+            if not dense_shape_dims:
+                dense_shape_dims.append(num_rows)
+            dense_shape_dims.append(num_cols)
+            if sparse_indices is None:
+                row_indices = GraphBuilder(ctx).make_unsqueeze({"data": row_indices, "axes": [1]})
+            else:
+                row_indices = ctx.make_node("Gather", [sparse_indices, row_indices]).output[0]
+            col_indices = GraphBuilder(ctx).make_unsqueeze({"data": col_indices, "axes": [1]})
+            sparse_indices = ctx.make_node("Concat", [row_indices, col_indices], attr={'axis': 1},
+                                           op_name_scope=node.name).output[0]
+        dense_shape = ctx.make_node("Concat", dense_shape_dims, attr={'axis': 0}, op_name_scope=node.name).output[0]
+
+        ctx.replace_all_inputs(node.output[0], sparse_indices)
+        ctx.replace_all_inputs(node.output[1], dense_values.output[0])
+        ctx.replace_all_inputs(node.output[2], dense_shape)
+        ctx.remove_node(node.name)
+
+
 @tf_op("RaggedRange")
 class RaggedRange:
     @classmethod
@@ -2074,24 +2133,7 @@ class RaggedRange:
 
         const_zero_list = ctx.make_const(utils.make_name("const_zero_list"), np.array([0], dtype=np.int64)).output[0]
 
-        max_row_len = ctx.make_node("ReduceMax", [row_lens], attr={'axes': [0], 'keeepdims': False}).output[0]
-        inp_shape = ctx.make_node("Shape", [row_lens]).output[0]
-        range_len = ctx.make_node("Mul", [max_row_len, inp_shape]).output[0]
-
-        # ORT seems to have a shape inference bug for the Range node. Use CumSum instead.
-        one_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[1])
-        ones_of_shape = ctx.make_node("ConstantOfShape", [range_len], attr={"value": one_tensor}).output[0]
-        range_node = ctx.make_node("CumSum", [ones_of_shape, const_zero_int64], attr={'exclusive': True}).output[0]
-        #const_one_int64 = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=np.int64)).output[0]
-        #range_node = ctx.make_node("Range", [const_zero_int64, range_len, const_one_int64]).output[0]
-
-        col_indices_dense = ctx.make_node("Mod", [range_node, max_row_len]).output[0]
-        row_indices_dense = ctx.make_node("Div", [range_node, max_row_len]).output[0]
-        row_lens_dense = ctx.make_node("Gather", [row_lens, row_indices_dense]).output[0]
-        indices_to_keep = ctx.make_node("Less", [col_indices_dense, row_lens_dense]).output[0]
-        col_indices = ctx.make_node("Compress", [col_indices_dense, indices_to_keep]).output[0]
-        row_indices = ctx.make_node("Compress", [row_indices_dense, indices_to_keep]).output[0]
-
+        _, _, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, row_lens)
 
         split_ends = ctx.make_node("CumSum", [row_lens, const_zero_int64]).output[0]
         splits_out = ctx.make_node("Concat", [const_zero_list, split_ends], attr={'axis': 0}).output[0]

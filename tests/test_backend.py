@@ -3766,6 +3766,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                                         _INPUT2: new_shape_val, _INPUT3: shape_pad_val})
 
     @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "CumSum")
+    def test_ragged_tensor_to_sparse(self):
+        splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
+        splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        def func(splits1, splits2, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits1, splits2], validate=True)
+            s = x.to_sparse()
+            indices, values, shape = s.indices, s.values, s.dense_shape
+            indices = tf.identity(indices, name=_TFOUTPUT)
+            values = tf.identity(values, name=_TFOUTPUT1)
+            shape = tf.identity(shape, name=_TFOUTPUT2)
+            return indices, values, shape
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2],
+                            {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
     @check_opset_min_version(11, "Range")
     def test_ragged_range_float(self):
         starts_val = np.array([0, 0, 1, 10, 0.5, 0.5], dtype=np.float32)
