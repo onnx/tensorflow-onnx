@@ -70,7 +70,7 @@ class TflDepthwiseConv2D:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         separate_fused_activation_function(ctx, node)
-        # No need to change 'padding' attribute
+        # No need to change 'padding' or 'depth_multiplier' attributes
         stride_h = node.get_attr_int("stride_h")
         stride_w = node.get_attr_int("stride_w")
         dilation_w_factor = node.get_attr_int("dilation_w_factor")
@@ -81,7 +81,6 @@ class TflDepthwiseConv2D:
         del node.attr["stride_w"]
         del node.attr["dilation_h_factor"]
         del node.attr["dilation_w_factor"]
-        del node.attr["depth_multiplier"]  # TODO: use this?
         transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1], name=None, perm=[1, 2, 3, 0])
         transpose_node.skip_conversion = True
         node.set_attr("data_format", "NHWC")
