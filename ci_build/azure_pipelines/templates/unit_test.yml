@@ -2,8 +2,8 @@
 
 parameters:
     onnx_opsets: ['13', '12', '11', '10', '9', '8', '7']
-    skip_tflite_tests: ['True', 'False']
-    skip_tf_tests: ['True', 'False']
+    skip_tflite_tests: 'True'
+    skip_tf_tests: 'False'
 
 steps:
 - ${{ each onnx_opset in parameters.onnx_opsets }}:
@@ -18,5 +18,5 @@ steps:
     condition: succeededOrFailed()
     env:
         CI_ONNX_OPSET: '${{ onnx_opset }}'
-        CI_SKIP_TFLITE_TESTS: '${{ skip_tflite_tests }}'
-        CI_SKIP_TF_TESTS: '${{ skip_tf_tests }}'
+        CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tflite_tests }}'
+        CI_SKIP_TF_TESTS: '${{ parameters.skip_tf_tests }}'

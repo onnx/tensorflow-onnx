@@ -8,8 +8,6 @@ stages:
         python_versions: ['3.8']
         tf_versions: ['2.4.0']
         onnx_opsets: ['']
-        skip_tflite_tests: ['True']
-        skip_tf_tests: ['False']
         job:
           steps:
           - template: 'unit_test.yml'
@@ -20,8 +18,8 @@ stages:
         python_versions: ['3.8']
         tf_versions: ['2.4.0']
         onnx_opsets: ['']
-        skip_tflite_tests: ['False']
-        skip_tf_tests: ['True']
+        skip_tflite_tests: 'False'
+        skip_tf_tests: 'True'
         job:
           steps:
           - template: 'unit_test.yml'
@@ -32,8 +30,6 @@ stages:
         python_versions: ['3.7']
         tf_versions: ['2.3.0']
         onnx_opsets: ['']
-        skip_tflite_tests: ['True']
-        skip_tf_tests: ['False']
         job:
           steps:
           - template: 'unit_test.yml'
@@ -44,7 +40,6 @@ stages:
         python_versions: ['3.7']
         tf_versions: ['1.14.0','1.15.2','2.2.0','2.3.0']
         onnx_opsets: ['']
-        skip_tflite_tests: ['True']
         job:
           steps:
           - template: 'unit_test.yml'
@@ -55,7 +50,6 @@ stages:
         python_versions: [3.6']
         tf_versions: ['1.12.3']
         onnx_opsets: ['']
-        skip_tflite_tests: ['True']
         job:
           steps:
           - template: 'unit_test.yml'
@@ -66,7 +60,6 @@ stages:
         platforms: ['windows']
         tf_versions: ['1.14.0']
         onnx_opsets: ['']
-        skip_tflite_tests: ['True']
         job:
           steps:
           - template: 'unit_test.yml'
