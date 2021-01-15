@@ -102,6 +102,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
                       check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
                       large_model=False, test_tflite=True, skip_tfl_consistency_check=False, premade_placeholders=False):
+        if self.config.skip_tflite_tests:
+            test_tflite = False
+        test_tf = not self.config.skip_tf_tests
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -190,7 +193,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 sess_inputs = [sess.graph.get_tensor_by_name(k) for k in feed_dict.keys()]
                 sess_outputs = [sess.graph.get_tensor_by_name(n) for n in output_names_with_port]
                 converter = tf_lite.TFLiteConverter.from_session(sess, sess_inputs, sess_outputs)
-                converter.optimizations = [tf.lite.Optimize.DEFAULT]
+                #converter.optimizations = [tf.lite.Optimize.DEFAULT]
                 #converter.inference_input_type = tf.int8  # or tf.uint8
                 #converter.inference_output_type = tf.int8  # or tf.uint8
                 # converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
@@ -219,33 +222,35 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 utils.save_protobuf(model_path, graph_def)
                 self.logger.debug("created file  %s", model_path)
 
-            g = process_tf_graph(sess.graph, opset=self.config.opset,
-                                 input_names=list(feed_dict.keys()),
-                                 output_names=output_names_with_port,
-                                 target=self.config.target,
-                                 const_node_values=const_node_values,
-                                 initialized_tables=initialized_tables,
-                                 **process_args)
-            g = optimizer.optimize_graph(g, catch_errors=False)
-            actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
+            if test_tf:
+                g = process_tf_graph(sess.graph, opset=self.config.opset,
+                                    input_names=list(feed_dict.keys()),
+                                    output_names=output_names_with_port,
+                                    target=self.config.target,
+                                    const_node_values=const_node_values,
+                                    initialized_tables=initialized_tables,
+                                    **process_args)
+                g = optimizer.optimize_graph(g, catch_errors=False)
+                actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
 
-        for expected_val, actual_val in zip(expected, actual):
-            if check_value:
-                if expected_val.dtype == np.object:
-                    decode = np.vectorize(lambda x: x.decode('UTF-8'))
-                    expected_val_str = decode(expected_val)
-                    self.assertAllEqual(expected_val_str, actual_val)
-                else:
-                    self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
-            if check_dtype:
-                self.assertEqual(expected_val.dtype, actual_val.dtype)
-            # why need shape checke: issue when compare [] with scalar
-            # https://github.com/numpy/numpy/issues/11071
-            if check_shape:
-                self.assertEqual(expected_val.shape, actual_val.shape)
+        if test_tf:
+            for expected_val, actual_val in zip(expected, actual):
+                if check_value:
+                    if expected_val.dtype == np.object:
+                        decode = np.vectorize(lambda x: x.decode('UTF-8'))
+                        expected_val_str = decode(expected_val)
+                        self.assertAllEqual(expected_val_str, actual_val)
+                    else:
+                        self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
+                if check_dtype:
+                    self.assertEqual(expected_val.dtype, actual_val.dtype)
+                # why need shape checke: issue when compare [] with scalar
+                # https://github.com/numpy/numpy/issues/11071
+                if check_shape:
+                    self.assertEqual(expected_val.shape, actual_val.shape)
 
-        if graph_validator:
-            self.assertTrue(graph_validator(g))
+            if graph_validator:
+                self.assertTrue(graph_validator(g))
 
         if test_tflite:
             #feed_dict['input:0'] = np.array([10, 20, 100, 200], dtype=np.int8).reshape((2, 2))

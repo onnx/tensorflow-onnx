@@ -53,6 +53,8 @@ class TestConfig(object):
         self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", constants.PREFERRED_OPSET))
         self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(constants.DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
+        self.skip_tflite_tests = os.environ.get("TF2ONNX_SKIP_TFLITE_TESTS", "FALSE").upper() == "TRUE"
+        self.skip_tf_tests = os.environ.get("TF2ONNX_SKIP_TF_TESTS", "FALSE").upper() == "TRUE"
         self.backend_version = self._get_backend_version()
         self.log_level = logging.WARNING
         self.temp_dir = utils.get_temp_directory()
