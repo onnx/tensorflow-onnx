@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """Merge Duplicated Nodes Optimizer.
    Remove duplicate nodes except identity nodes which should be handled by identity optimizer.

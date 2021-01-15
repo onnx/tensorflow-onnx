@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Unit Tests for layered lstm"""
 
 import numpy as np

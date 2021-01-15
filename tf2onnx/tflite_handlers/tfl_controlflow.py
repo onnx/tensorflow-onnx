@@ -6,15 +6,17 @@ tfl_controlflow
 """
 
 import copy
+import numpy as np
+from onnx.onnx_pb import TensorProto
 
 from tf2onnx.handler import tfl_op
-from tf2onnx import constants, utils
-import numpy as np
-
+from tf2onnx import utils
 from tf2onnx.tf_loader import find_function
 from tf2onnx.onnx_opset.controlflow import parameter_binding, inline_subgraph
-from tf2onnx.graph_builder import GraphBuilder
-from onnx.onnx_pb import TensorProto
+
+
+# pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement,invalid-name
+
 
 @tfl_op(["TFL_WHILE"])
 class TflWhile:
@@ -37,7 +39,7 @@ class TflWhile:
 
         cond_binding = parameter_binding(cond_graph, tfl_while_inputs)
         cond_outputs = inline_subgraph(ctx, cond_graph, cond_name, cond_binding)
-        
+
         scan_outputs = sorted(body.scan_outputs, reverse=True)
         def input_is_unused(g, index):
             return len(g.find_output_consumers(g.func_inputs[index])) == 0
@@ -118,7 +120,6 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
     for p, c in zip(loop_node_inputs, g.func_inputs):
         shape = p.output_shapes[0]
         g.set_shape(c, shape)
-    
     cond_outputs = inline_subgraph(g, cond_graph, "cond__", cond_binding)
 
     g.outputs = [cond_outputs[0]] + g.outputs
@@ -128,7 +129,6 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
 class TflIfOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
-        then_branch = node.get_attr_str("then_subgraph_index")
         node.attr["then_branch"] = node.attr["then_subgraph_index"]
         del node.attr["then_subgraph_index"]
         node.attr["else_branch"] = node.attr["else_subgraph_index"]

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This example builds a simple model without training.
 It is converted into ONNX. Predictions are compared to

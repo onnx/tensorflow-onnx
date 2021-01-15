@@ -6,11 +6,13 @@ tfl_tensor
 """
 
 import logging
-import numpy as np
 from tf2onnx.handler import tfl_op
-from tf2onnx import constants, utils
 
 logger = logging.getLogger(__name__)
+
+
+# pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement,invalid-name
+
 
 @tfl_op(["TFL_CONCATENATION"], onnx_op="Concat")
 class TflConcatenation:
@@ -26,7 +28,7 @@ class TflSplit:
         del node.attr['num_splits']
 
 @tfl_op(["TFL_SPLIT_V"], tf_op="SplitV")
-class TflSplit:
+class TflSplitV:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         node.attr['num_split'] = node.attr['num_splits']

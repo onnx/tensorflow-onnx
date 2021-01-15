@@ -1,3 +1,5 @@
+<!--- SPDX-License-Identifier: Apache-2.0 -->
+
 # Contributing
 
 We're always looking for your help to fix bugs and improve the product. Create a pull request and we'll be happy to take a look.

@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 """ tf2onnx mapping functions for onnx ml domain. """
 import logging
 import numpy as np

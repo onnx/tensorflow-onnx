@@ -6,16 +6,18 @@ tfl_nn
 """
 
 from tf2onnx.handler import tfl_op
-from tf2onnx import constants, utils
 from tf2onnx.tflite_handlers.tfl_math import separate_fused_activation_function
-import numpy as np
+
+
+# pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement,invalid-name
+
 
 @tfl_op(["TFL_TRANSPOSE_CONV"], tf_op="Conv2DBackpropInput")
 class TflTransposeConv:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         # No need to change 'padding' attribute
-        stride_h = node.get_attr_int("stride_h") # TODO: Permute this?
+        stride_h = node.get_attr_int("stride_h")
         stride_w = node.get_attr_int("stride_w")
         node.set_attr("strides", [1, stride_h, stride_w, 1])
         del node.attr["stride_h"]
@@ -30,7 +32,7 @@ class TflConv2D:
     def to_tf(cls, ctx, node, **kwargs):
         separate_fused_activation_function(ctx, node)
         # No need to change 'padding' attribute
-        stride_h = node.get_attr_int("stride_h") # TODO: Permute this?
+        stride_h = node.get_attr_int("stride_h")
         stride_w = node.get_attr_int("stride_w")
         dilation_w_factor = node.get_attr_int("dilation_w_factor")
         dilation_h_factor = node.get_attr_int("dilation_h_factor")
@@ -51,9 +53,9 @@ class TflAveragePool:
     def to_tf(cls, ctx, node, **kwargs):
         separate_fused_activation_function(ctx, node)
         # No need to change 'padding' attribute
-        stride_h = node.get_attr_int("stride_h") # TODO: Permute this?
+        stride_h = node.get_attr_int("stride_h")
         stride_w = node.get_attr_int("stride_w")
-        filter_height = node.get_attr_int("filter_height") # TODO: Permute this?
+        filter_height = node.get_attr_int("filter_height")
         filter_width = node.get_attr_int("filter_width")
         node.set_attr("strides", [1, stride_h, stride_w, 1])
         node.set_attr("ksize", [1, filter_height, filter_width, 1])
@@ -68,9 +70,8 @@ class TflDepthwiseConv2D:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         separate_fused_activation_function(ctx, node)
-        depth_multiplier = node.get_attr_int('depth_multiplier') # TODO: use this?
         # No need to change 'padding' attribute
-        stride_h = node.get_attr_int("stride_h") # TODO: Permute this?
+        stride_h = node.get_attr_int("stride_h")
         stride_w = node.get_attr_int("stride_w")
         dilation_w_factor = node.get_attr_int("dilation_w_factor")
         dilation_h_factor = node.get_attr_int("dilation_h_factor")
@@ -80,6 +81,7 @@ class TflDepthwiseConv2D:
         del node.attr["stride_w"]
         del node.attr["dilation_h_factor"]
         del node.attr["dilation_w_factor"]
+        del node.attr["depth_multiplier"]  # TODO: use this?
         transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1], name=None, perm=[1, 2, 3, 0])
         transpose_node.skip_conversion = True
         node.set_attr("data_format", "NHWC")

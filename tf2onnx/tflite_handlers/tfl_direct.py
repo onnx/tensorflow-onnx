@@ -7,6 +7,10 @@ tfl_direct
 
 from tf2onnx.handler import tfl_op
 
+
+# pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement,invalid-name
+
+
 @tfl_op("TFL_ABS", tf_op="Abs")
 @tfl_op("TFL_CEIL", tf_op="Ceil")
 @tfl_op("TFL_COS", tf_op="Cos")

@@ -8,9 +8,13 @@ tfl_math
 import logging
 import numpy as np
 from tf2onnx.handler import tfl_op
-from tf2onnx import constants, utils
+from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
+
+
+# pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement,invalid-name
+
 
 def separate_fused_activation_function(ctx, node):
     activation_fn = node.attr['fused_activation_function'].s
@@ -23,7 +27,7 @@ def separate_fused_activation_function(ctx, node):
     elif activation_fn == b'TANH':
         ctx.insert_new_node_on_output("Tanh", node.output[0])
     else:
-        # SIGN_BIT and RELU_N1_TO_1 not supported yet
+        # TODO: SIGN_BIT and RELU_N1_TO_1 not supported yet
         utils.make_sure(activation_fn == b'NONE', "Unsupported fused activation function %s on node %s",
                         activation_fn, node.name)
 
@@ -135,12 +139,15 @@ class TflFullyConnectedOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         separate_fused_activation_function(ctx, node)
-        utils.make_sure(node.attr['weights_format'].s == b'DEFAULT', "Only default weights format supported for fully connected op")
-        utils.make_sure(node.attr['keep_num_dims'].i == 0, "Only keep_num_dims=False supported for fully connected op")
+        utils.make_sure(node.attr['weights_format'].s == b'DEFAULT',
+                        "Only default weights format supported for fully connected op")
+        utils.make_sure(node.attr['keep_num_dims'].i == 0,
+                        "Only keep_num_dims=False supported for fully connected op")
         if node.attr['asymmetric_quantize_inputs'].i == 1:
             dynamic_quantize_inputs(ctx, node)
 
-        transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1], name=None, input_index=1, perm=[1, 0])
+        transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1],
+                                                      name=None, input_index=1, perm=[1, 0])
         transpose_node.skip_conversion = True
         node.set_attr("transpose_a", 0)
         node.set_attr("transpose_b", 0)
