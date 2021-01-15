@@ -2135,17 +2135,17 @@ class RaggedRange:
 
         const_zero_list = ctx.make_const(utils.make_name("const_zero_list"), np.array([0], dtype=np.int64)).output[0]
 
-        _, _, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, row_lens)
+        num_rows, _, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, row_lens)
 
         split_ends = ctx.make_node("CumSum", [row_lens, const_zero_int64]).output[0]
         splits_out = ctx.make_node("Concat", [const_zero_list, split_ends], attr={'axis': 0}).output[0]
         col_indices_cast = ctx.make_node("Cast", [col_indices], attr={'to': data_dtype}).output[0]
 
         if ctx.get_rank(starts) != 1:
-            starts = ctx.make_node("Expand", [starts, inp_shape]).output[0]
+            starts = ctx.make_node("Expand", [starts, num_rows]).output[0]
 
         if ctx.get_rank(deltas) != 1:
-            deltas = ctx.make_node("Expand", [deltas, inp_shape]).output[0]
+            deltas = ctx.make_node("Expand", [deltas, num_rows]).output[0]
 
         gather_starts = ctx.make_node("Gather", [starts, row_indices]).output[0]
         gather_deltas = ctx.make_node("Gather", [deltas, row_indices]).output[0]
