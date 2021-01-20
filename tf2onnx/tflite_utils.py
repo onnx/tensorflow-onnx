@@ -13,6 +13,7 @@ from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
 from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
+from tf2onnx.flexbuffers import read_flexbuffer
 
 
 TFLITE_TO_ONNX_DTYPE = {
@@ -133,6 +134,8 @@ def read_tflite_model(tflite_path):
         code = lookup_enum(op_code.DeprecatedBuiltinCode(), 'BuiltinOperator')
         if code == 'PLACEHOLDER_FOR_GREATER_OP_CODES':
             code = lookup_enum(op_code.BuiltinCode(), 'BuiltinOperator')
+        if code == 'CUSTOM':
+            code == op_code.CustomCode().decode()
         opcodes_map[i] = code
     tflite_graphs = [model.Subgraphs(i) for i in range(model.SubgraphsLength())]
     return tflite_graphs, opcodes_map, model
@@ -257,6 +260,10 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
                 attr['scale'] = quant.ScaleAsNumpy().tolist()
                 attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
                 attr['quantized_dimension'] = quant.QuantizedDimension()
+        if not op.CustomOptionsIsNone():
+            custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
+            if custom_ops_format == 'FLEXBUFFERS':
+                attr.update(read_flexbuffer(op.CustomOptionsAsNumpy().tobytes()))
         if option_class is not None:
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
