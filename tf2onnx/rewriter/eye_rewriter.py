@@ -167,6 +167,6 @@ def rewrite_eye(g, ops):
             zero_matrix = g.make_node("ConstantOfShape", matrix_shape_int64.output)
 
             g.make_node("EyeLike", zero_matrix.output, attr={"dtype": output_dtypes[0]},
-                        name=old_output.name, shapes=output_shapes, dtypes=output_dtypes, outputs=[old_output.output[0]])
+                        name=old_output.name, shapes=output_shapes, dtypes=output_dtypes, outputs=old_output.output)
 
     return g.get_nodes()

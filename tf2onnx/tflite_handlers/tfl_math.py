@@ -22,8 +22,11 @@ def separate_fused_activation_function(ctx, node):
     if activation_fn == b'RELU':
         ctx.insert_new_node_on_output("Relu", node.output[0])
     elif activation_fn == b'RELU6':
-        new_node = ctx.insert_new_node_on_output("Relu6", node.output[0])
-        new_node.skip_conversion = False
+        # This is a TF op. We will convert it on the 2nd pass.
+        shape = ctx.get_shape(node.output[0])
+        dtype = ctx.get_dtype(node.output[0])
+        new_node = ctx.make_node("Relu6", [node.output[0]], skip_conversion=False, shapes=[shape], dtypes=[dtype])
+        ctx.insert_node_on_output(new_node, node.output[0])
     elif activation_fn == b'TANH':
         ctx.insert_new_node_on_output("Tanh", node.output[0])
     else:
