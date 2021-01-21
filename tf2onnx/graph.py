@@ -558,7 +558,7 @@ class Graph(object):
             skip_conversion: bool, indicate whether this created node would be mapped during conversion.
             raw: whether to store data at field of raw_data or the specific field according to its dtype
         """
-        if raw:
+        if raw and np_val.dtype != np.object:
             onnx_tensor = numpy_helper.from_array(np_val, name)
         else:
             onnx_tensor = helper.make_tensor(name, utils.map_numpy_to_onnx_dtype(np_val.dtype),
