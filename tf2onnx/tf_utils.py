@@ -293,7 +293,7 @@ def get_hash_table_info(nodes_or_graph_def):
     key_dtypes = []
     val_dtypes = []
     for n in nodes:
-        if n.op == "HashTableV2":
+        if n.op in ["HashTableV2", "MutableHashTableV2"]:
             if all(k in n.attr for k in ['shared_name', 'key_dtype', 'value_dtype']):
                 name = n.attr['shared_name'].s
                 if name != b'':
