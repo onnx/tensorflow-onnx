@@ -1,4 +1,5 @@
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 # Temporary base class exclusive for LSTMs for stacked LSTM layer support.
 # Once GRU, BiLSTM, BiGRU re-writers will also be enhanced for stacked layer support

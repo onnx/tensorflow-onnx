@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """
 tf2onnx.tf_utils - misc utilities for tf2onnx that interface with tensorflow

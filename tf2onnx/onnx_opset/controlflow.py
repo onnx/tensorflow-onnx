@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """
 controlflow
@@ -268,7 +268,8 @@ class IfOp:
             branches[branch] = g
 
         _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
-                          shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
+                          shapes=output_shapes, dtypes=output_dtypes, outputs=node.output, skip_conversion=True,
+                          branches=branches)
 
 
 @tf_op(["TensorListSetItem"])
@@ -629,6 +630,7 @@ def parameter_binding(g, inputs, state_vars=None):
         else:
             binding[k] = inputs[i]
             i += 1
+    utils.make_sure(i == len(inputs), "Parameter count mismatch while binding controlflow")
     return binding
 
 

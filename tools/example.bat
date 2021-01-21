@@ -1,3 +1,5 @@
+rem SPDX-License-Identifier: Apache-2.0
+
 set frozen=tests/models/fc-layers/frozen.pb
 set output=/tmp/model.onnx
 set input_names=X:0

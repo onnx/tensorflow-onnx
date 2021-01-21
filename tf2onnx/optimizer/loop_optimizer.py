@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """Loop Optimizer.
    some op in loop's body graph can be moved out to the loop

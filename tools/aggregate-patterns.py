@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """
 Tool to find common patterns in onnx graphs.

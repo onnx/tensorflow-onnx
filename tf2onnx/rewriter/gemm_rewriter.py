@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """
 tf2onnx.rewrite - rewrite tensorflow subgraph to onnx gemm op
