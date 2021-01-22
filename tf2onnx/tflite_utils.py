@@ -135,7 +135,7 @@ def read_tflite_model(tflite_path):
         if code == 'PLACEHOLDER_FOR_GREATER_OP_CODES':
             code = lookup_enum(op_code.BuiltinCode(), 'BuiltinOperator')
         if code == 'CUSTOM':
-            code == op_code.CustomCode().decode()
+            code = op_code.CustomCode().decode()
         opcodes_map[i] = code
     tflite_graphs = [model.Subgraphs(i) for i in range(model.SubgraphsLength())]
     return tflite_graphs, opcodes_map, model
@@ -180,7 +180,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
             output_shapes[name] = tensor.ShapeSignatureAsNumpy().tolist()
         buf = model.Buffers(tensor.Buffer())
         dtypes[name] = map_tflite_dtype_to_onnx(tensor.Type())
-        if not buf.DataIsNone():
+        if not buf.DataIsNone() and tensor.Buffer() > 0:
             # For const values we use TF to decode the binary data from the buffer
             t = tensor_pb2.TensorProto()
             t.tensor_content = buf.DataAsNumpy().tobytes()
