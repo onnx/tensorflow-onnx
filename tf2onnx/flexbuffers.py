@@ -1,4 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+
+
+"""
+tf2onnx.flexbuffers - Code for parsing flexbuffers
+"""
+
 import struct
+
+
+class FlexbufferParseException(Exception):
+    pass
 
 
 def read_int(buffer, offset, bit_size):
@@ -18,6 +29,7 @@ def read_float(buffer, offset, bit_size):
         return struct.unpack('<f', buffer[offset:offset+4])[0]
     if bit_size == 3:
         return struct.unpack('<d', buffer[offset:offset+8])[0]
+    raise FlexbufferParseException("Invalid bit size for flexbuffer float: %d" % bit_size)
 
 
 def read_string(buffer, offset, size):
@@ -42,6 +54,7 @@ def read_array(buffer, offset, length, bit_size, packed_type):
 
 
 def read_buffer(buffer, offset, parent_bit_size, packed_type):
+    """Recursively decode flatbuffer object into python representation"""
     bit_size = packed_type & 3
     value_type = packed_type >> 2
     byte_size = 1 << bit_size
@@ -116,6 +129,7 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
         return read_bytes(buffer, data_offset, size)
     if value_type == 0x1a:
         return read_uint(buffer, offset, parent_bit_size) > 0
+    raise FlexbufferParseException("Invalid flexbuffer value type %r" % value_type)
 
 
 def read_flexbuffer(buffer):
