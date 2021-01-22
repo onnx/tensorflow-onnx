@@ -149,7 +149,6 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
                    'n6 [op_type=Identity] n5_graph_outputs_Identity__4 [op_type=Identity] ' \
                    'input -> n1 n1:0 -> n3 n1:0 -> n2 n2:0 -> ReplacedOp__6 n3:0 -> ReplacedOp__6 ' \
                    'ReplacedOp__6:0 -> n6 ReplacedOp__6:0 -> n5_graph_outputs_Identity__4 }'
-        self.maxDiff = None
         self.assertEqual(expected, result)
 
     def test_match_flipped(self):
