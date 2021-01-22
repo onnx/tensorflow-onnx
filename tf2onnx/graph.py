@@ -465,6 +465,9 @@ class Graph(object):
         self.graph_name = graph_name or utils.make_name("tf2onnx")
         self._is_subgraph = is_subgraph
         self.ta_reads = []
+        # A list of index, output tuples of potential scan outputs in this graph
+        # Used by the tflite while loop handler
+        self.scan_outputs = []
         self.func_inputs = []
 
         self._target = set(target)
