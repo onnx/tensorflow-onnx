@@ -462,9 +462,12 @@ class Graph(object):
         self._output_to_consumers = {}
         self._input_to_graph = {}
         self.shapes = {}
-        self.graph_name = graph_name or "tf2onnx"
+        self.graph_name = graph_name or utils.make_name("tf2onnx")
         self._is_subgraph = is_subgraph
         self.ta_reads = []
+        # A list of index, output tuples of potential scan outputs in this graph
+        # Used by the tflite while loop handler
+        self.scan_outputs = []
         self.func_inputs = []
 
         self._target = set(target)
@@ -1006,7 +1009,7 @@ class Graph(object):
             all_input = list(filter(lambda a: a != '', all_input))
             for inp in sorted(all_input):
                 j = self.get_node_by_output(inp)
-                utils.make_sure(j is not None, "Cannot find node with output %r", inp)
+                utils.make_sure(j is not None, "Cannot find node with output %r in graph %r", inp, self.graph_name)
                 if self.parent_graph and j.name not in op_name_to_index:
                     # there might be some outer-scoped inputs for an inner Graph.
                     pass
