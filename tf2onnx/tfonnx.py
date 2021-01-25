@@ -18,12 +18,15 @@ from onnx import onnx_pb
 
 import tf2onnx
 import tf2onnx.onnx_opset  # pylint: disable=unused-import
+import tf2onnx.tflite_handlers  # pylint: disable=unused-import
 import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
+from tf2onnx.tflite_rewriters import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.tf_loader import is_function, resolve_functions, set_function
 from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
+from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph
 
 from . import constants, logging, schemas, utils, handler
 
@@ -238,7 +241,7 @@ def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, impacted_ops)
 
 
-def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None):
+def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None, is_tflite=False):
     logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
@@ -258,17 +261,19 @@ def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None):
         map_info = ops_mapping.get(op)
         if map_info is None:
             unmapped_op[op] += 1
-            logger.error("Tensorflow op [%s: %s] is not supported", node.name, op)
+            if not is_tflite:
+                logger.error("Tensorflow op [%s: %s] is not supported", node.name, op)
             continue
         mapped_op[op] += 1
 
         func, kwargs = map_info
         if kwargs:
-            # if there is a onnx_op key we'll map the old type to a new type
-            onnx_op = kwargs.get("onnx_op")
-            if onnx_op:
-                kwargs["tf_op"] = op
-                node.type = onnx_op
+            # if there is a tf_op/onnx_op key we'll map the old type to a new type
+            converted_op = kwargs.get("tf_op" if is_tflite else "onnx_op")
+            if converted_op:
+                # sometimes the handler wants to know what the old op name was
+                kwargs["tfl_op" if is_tflite else "tf_op"] = op
+                node.type = converted_op
         body_graphs = node.get_body_graphs()
         if body_graphs:
             for attr, b_g in body_graphs.items():
@@ -287,10 +292,17 @@ def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None):
 
         try:
             func(g, node, **kwargs, initialized_tables=initialized_tables)
-            node.skip_conversion = True
+            if not is_tflite:
+                # tensorflow nodes must be converted in the next pass
+                node.skip_conversion = True
         except Exception as ex:
+            try:
+                # If the graph is corrupt from the exception this can fail
+                summary = node.summary
+            except Exception:
+                summary = ""
             logger.error("Failed to convert node %r (fct=%r)\n%r",
-                         node.name, func, node.summary, exc_info=1)
+                         node.name, func, summary, exc_info=1)
             exceptions.append(ex)
 
     return mapped_op, unmapped_op, exceptions
@@ -369,7 +381,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
                      input_names=None, output_names=None, ignore_default=None, use_default=None,
                      is_subgraph=False, const_node_values=None,
-                     initialized_tables=None):
+                     initialized_tables=None, tflite_path=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -388,6 +400,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             use_default: list of node names of PlaceholderWithDefault ops to change into Identity ops using the default
             const_node_values: a dict returned by compress_graph_def mapping node names to tensor values
             initialized_tables: mapping from table shared_names to tuple of keys and values of table
+            tflite_path: Path to a tflite file to convert. If used, pass None to tf_graph
         Return:
             onnx graph
     """
@@ -405,10 +418,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                            "please upgrade onnx package to avoid potential conversion issue.",
                            utils.get_onnx_version(), opset)
 
-    is_func = is_function(tf_graph)
-    if not is_func:
-        tf_graph = infer_shape(tf_graph, shape_override)
-
     if shape_override is None:
         shape_override = {}
     if inputs_as_nchw is None:
@@ -416,24 +425,50 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if target is None:
         target = constants.DEFAULT_TARGET
 
-    outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
+    if tflite_path is not None:
+        tflite_graphs, opcodes, model = read_tflite_model(tflite_path)
+        main_g = None
+        for i in reversed(range(len(tflite_graphs))):
+            tfl_graph = tflite_graphs[i]
+            prefix = '' if i == 0 else tfl_graph.Name().decode() + '_'
+            onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = \
+                parse_tflite_graph(tfl_graph, opcodes, model, prefix)
+            g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_outputs, is_subgraph=is_subgraph)
+            fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
+                                      f_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True)
+            fg.graph_name = graph_name
+            if i == 0:
+                main_g = fg
+            else:
+                fg.func_inputs = f_inputs
+                set_function(graph_name, fg)
+    
+        return main_g
 
-    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
-        tensorflow_to_onnx(tf_graph, shape_override, const_node_values, ignore_default, use_default)
-    if not is_subgraph:
-        # make tf2onnx internal subgraphs from the tensorflow subgraphs
-        ordered_func = resolve_functions(tf_graph)
-        for func in ordered_func:
-            f_inputs_names = [t.name for t in func.inputs]
-            f_output_names = [t.name for t in func.outputs]
-            fg = process_tf_graph(func, continue_on_error, False, target, opset,
-                                  custom_op_handlers, custom_rewriter,
-                                  extra_opset, shape_override, inputs_as_nchw,
-                                  f_inputs_names, f_output_names, is_subgraph=True,
-                                  const_node_values=const_node_values)
-            fg.graph_name = func.name
-            fg.func_inputs = f_inputs_names
-            set_function(func.name, fg)
+    else:
+
+        is_func = is_function(tf_graph)
+        if not is_func:
+            tf_graph = infer_shape(tf_graph, shape_override)
+
+        outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
+
+        onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
+            tensorflow_to_onnx(tf_graph, shape_override, const_node_values, ignore_default, use_default)
+        if not is_subgraph:
+            # make tf2onnx internal subgraphs from the tensorflow subgraphs
+            ordered_func = resolve_functions(tf_graph)
+            for func in ordered_func:
+                f_inputs_names = [t.name for t in func.inputs]
+                f_output_names = [t.name for t in func.outputs]
+                fg = process_tf_graph(func, continue_on_error, False, target, opset,
+                                    custom_op_handlers, custom_rewriter,
+                                    extra_opset, shape_override, inputs_as_nchw,
+                                    f_inputs_names, f_output_names, is_subgraph=True,
+                                    const_node_values=const_node_values)
+                fg.graph_name = func.name
+                fg.func_inputs = f_inputs_names
+                set_function(func.name, fg)
 
     io_to_check = []
     if input_names:
@@ -451,6 +486,21 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             raise ValueError("Inputs/Outputs Not Found")
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names, is_subgraph=is_subgraph)
+    g = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
+                             output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt)
+    return g
+
+
+def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
+                         output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt,
+                         is_tflite=False):
+
+    if is_tflite:
+        run_rewriters(g, [rewrite_tfl_scan_outputs], continue_on_error)
+        tfl_ops_mapping = handler.tfl_op.create_tfl_to_tf_mapping()
+        _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True)
+        if exceptions and not continue_on_error:
+            raise exceptions[0]
 
     # create ops mapping for the desired opsets
     ops_mapping = handler.tf_op.create_mapping(g.opset, g.extra_opset)

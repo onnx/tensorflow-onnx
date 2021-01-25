@@ -2,6 +2,8 @@
 
 """tf2onnx.tflite_rewriters module"""
 
-from . import (
-    tfl_scan_output_rewriter
-)
+from tf2onnx.tflite_rewriters.tfl_scan_output_rewriter import rewrite_tfl_scan_outputs
+
+__all__ = [
+    "rewrite_tfl_scan_outputs",
+]
