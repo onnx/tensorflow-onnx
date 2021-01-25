@@ -816,7 +816,7 @@ class BatchNorm:
 
             pop_var_squeezed = ctx.make_node("Div", [var_squeezed, cnt_float.output[0]]).output[0]
             ctx.replace_inputs(node, node.input[:3] + [avg_squeezed, pop_var_squeezed])
-        else:
+        elif is_training:
             logger.warning("Node %s of type %s has is_training set to true, which is not supperted. "
                            "Please re-save the model with training set to false.",
                            node.name, tf_type)
