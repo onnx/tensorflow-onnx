@@ -1194,10 +1194,11 @@ class Unpack:
         # for each output we need to squeeze axis
         for n in node.output:
             op_name = utils.make_name(node.name)
-            squeeze_node = GraphBuilder(ctx).make_squeeze({'data': n, 'axes': [axis]}, name=op_name, return_node=True)
+            shape = ctx.get_shape(n)
+            dtype = ctx.get_dtype(n)
+            squeeze_node = GraphBuilder(ctx).make_squeeze(
+                {'data': n, 'axes': [axis]}, name=op_name, return_node=True, shapes=[shape], dtypes=[dtype])
             ctx.insert_node_on_output(squeeze_node, n)
-            ctx.copy_shape(n, squeeze_node.output[0])
-            ctx.copy_dtype(n, squeeze_node.output[0])
 
         # split node is 1 rank higher than squeeze nodes
         output_shape = ctx.get_shape(node.output[0])
