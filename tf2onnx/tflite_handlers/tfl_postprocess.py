@@ -7,10 +7,10 @@ tfl_postprocess
 
 import logging
 import numpy as np
+
 from tf2onnx.handler import tfl_op
 from tf2onnx import utils
 from tf2onnx.graph_builder import GraphBuilder
-from onnx.onnx_pb import TensorProto
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 class TflDetectionPostProcess:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        # This ops is basically NMS with a little post-processing. 
-        # TFLite implementation: 
+        # This ops is basically NMS with a little post-processing.
+        # TFLite implementation:
         # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/micro/kernels/detection_postprocess.cc
 
         # box_encodings.shape = [batch_dim, box_num, 4]
@@ -89,7 +89,6 @@ class TflDetectionPostProcess:
         box_and_class_idx = ctx.make_node('Concat', [selected_boxes_idx, selected_classes], attr={'axis': 1}).output[0]
 
         box_cnt = ctx.make_node('Shape', [selected_classes_sq]).output[0]
-        
         box_cnt_float = ctx.make_node('Cast', [box_cnt], attr={'to': box_cnt_dtype}).output[0]
 
         adjusted_boxes_sq = GraphBuilder(ctx).make_squeeze({'data': adjusted_boxes, 'axes': [0]})
