@@ -11,6 +11,8 @@ parameters:
   run_setup: 'True'
   report_coverage: 'False'
   artifact_name: 'single_test_coverage'
+  skip_tflite_tests: 'True'
+  skip_tf_tests: 'False'
 
 jobs:
   - job: ${{ parameters.job.name }}
@@ -27,7 +29,7 @@ jobs:
                 ${{ each onnx_backend in parameters.onnx_backends }}:
                   ${{ each onnx_backend_version in onnx_backend.value }}:
                     ${{ each onnx_opset in parameters.onnx_opsets }}:
-                      ${{ format('{0} python{1} tf{2} onnx{3} opset{4} {5}{6}', platform, python_version, tf_version, onnx_version, onnx_opset, onnx_backend.key, onnx_backend_version) }}:
+                      ${{ format('{0} python{1}{2} tf{3} onnx{4} {5}{6}{7}', platform, python_version, replace(replace(parameters.skip_tflite_tests,'True', ''), 'False', ' tflite'), tf_version, onnx_version, replace(format('opset{0} ', onnx_opset), 'opset ', ''), onnx_backend.key, onnx_backend_version) }}:
                         ${{ if eq(platform, 'linux') }}:
                           CI_VM_IMAGE: 'ubuntu-16.04'
                         ${{ if eq(platform, 'windows') }}:
@@ -42,6 +44,8 @@ jobs:
                           CI_ONNX_OPSET: '${{ onnx_opset }}'
                         CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
                         CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
+                        CI_SKIP_TF_TESTS: '${{ parameters.skip_tflite_tests }}'
+                        CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tf_tests }}'
 
                         ${{ if eq(tf_version, '') }}:
                           CI_PIP_TF_NAME: 'tensorflow'

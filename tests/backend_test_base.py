@@ -231,7 +231,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                       large_model=False, premade_placeholders=False):
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
-        run_tfl_consistency_test = test_tf and test_tflite and not self.config.skip_tfl_consistency_check
+        run_tfl_consistency_test = test_tf and test_tflite and not self.config.skip_tfl_consistency_test
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}
@@ -292,7 +292,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                  input_names=input_names_without_port,
                                  output_names=tfl_outputs,
                                  target=self.config.target,
-                                 const_node_values=const_node_values,
                                  tflite_path=tflite_path,
                                  **tfl_process_args)
             g = optimizer.optimize_graph(g)
@@ -303,8 +302,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
-
-        return g
 
     def save_onnx_model(self, model_proto, feed_dict, postfix="", external_tensor_storage=None):
         target_path = utils.save_onnx_model(self.test_data_directory, self._testMethodName + postfix, feed_dict,
