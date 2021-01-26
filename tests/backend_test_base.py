@@ -231,7 +231,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                       large_model=False, premade_placeholders=False):
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
-        run_tfl_consistency_test = test_tf and test_tflite and not self.config.skip_tfl_consistency_test
+        run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
         # optional - passed to process_tf_graph
         if process_args is None:
             process_args = {}

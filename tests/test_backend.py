@@ -781,8 +781,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("Issue with matmul with 2 copies of same input")
     def test_matmul1(self):
-        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x_val = np.array([1.0, 2.0, -3.0, -4.0, 5.0, 6.0], dtype=np.float32).reshape((2, 3))
         def func(x):
             x_ = tf.matmul(x, x, transpose_a=True)
             return tf.identity(x_, name=_TFOUTPUT)
