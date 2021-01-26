@@ -2590,6 +2590,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite interpreter crashes on empty axis")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_constant_axis(self):
         # Tests for constant axis.
@@ -2608,6 +2609,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite reverse_v2 does not support multiple axes")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_vector_axis(self):
         x_val_shape = [1, 2, 3, 4]
@@ -2631,6 +2633,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite interpreter crashes on empty axis")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_1D_tensor(self):
         # For tensors with 1 dimension and no axis to reverse.

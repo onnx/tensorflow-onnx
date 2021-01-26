@@ -242,6 +242,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         tf_reset_default_graph()
         if tf_lite is None:
             test_tflite = False
+        g = None
 
         expected, graph_def, initialized_tables = \
             self.freeze_and_run_tf(func, feed_dict, output_names_with_port, as_session,
@@ -302,6 +303,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
+
+        if g is None:
+            raise unittest.SkipTest("Both tf and tflite marked to skip")
+        return g
 
     def save_onnx_model(self, model_proto, feed_dict, postfix="", external_tensor_storage=None):
         target_path = utils.save_onnx_model(self.test_data_directory, self._testMethodName + postfix, feed_dict,

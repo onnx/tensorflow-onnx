@@ -44,8 +44,8 @@ jobs:
                           CI_ONNX_OPSET: '${{ onnx_opset }}'
                         CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
                         CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
-                        CI_SKIP_TF_TESTS: '${{ parameters.skip_tflite_tests }}'
-                        CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tf_tests }}'
+                        CI_SKIP_TF_TESTS: '${{ parameters.skip_tf_tests }}'
+                        CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tflite_tests }}'
 
                         ${{ if eq(tf_version, '') }}:
                           CI_PIP_TF_NAME: 'tensorflow'
