@@ -89,7 +89,6 @@ class TflDetectionPostProcess:
         box_and_class_idx = ctx.make_node('Concat', [selected_boxes_idx, selected_classes], attr={'axis': 1}).output[0]
 
         box_cnt = ctx.make_node('Shape', [selected_classes_sq]).output[0]
-
         box_cnt_float = ctx.make_node('Cast', [box_cnt], attr={'to': box_cnt_dtype}).output[0]
 
         adjusted_boxes_sq = GraphBuilder(ctx).make_squeeze({'data': adjusted_boxes, 'axes': [0]})

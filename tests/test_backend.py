@@ -781,8 +781,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("Issue with matmul with 2 copies of same input")
     def test_matmul1(self):
-        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x_val = np.array([1.0, 2.0, -3.0, -4.0, 5.0, 6.0], dtype=np.float32).reshape((2, 3))
         def func(x):
             x_ = tf.matmul(x, x, transpose_a=True)
             return tf.identity(x_, name=_TFOUTPUT)
@@ -1318,6 +1319,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1})
 
+    @skip_tflite("Advanced constant shape folding not implemented for tflite")
     def test_slice_from_shape_const_fold(self):
         x_val = np.array([4, 3], dtype=np.int64)
         x_shape = np.array([-1, 3], dtype=np.int64)
@@ -2125,6 +2127,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_4(self):
@@ -2136,6 +2139,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_5(self):
@@ -2147,6 +2151,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_6(self):
@@ -2203,6 +2208,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.concat([x[:, :, :10], x[:, :, 9::-1]], axis=0, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     def test_strided_slice_reverse_3(self):
         x_val = np.zeros((1, 16, 32, 1)).astype(np.float32)
@@ -2335,6 +2341,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converter mistranslates quantize op")
     @check_tf_min_version("1.15")
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_signed_input(self):
@@ -2345,6 +2352,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converter crashes")
     @check_tf_min_version("2.0")
     @check_opset_min_version(13, "quantize_and_dequantize")
     def test_qdq_per_channel_signed_input(self):
@@ -2589,6 +2597,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite interpreter crashes on empty axis")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_constant_axis(self):
         # Tests for constant axis.
@@ -2607,6 +2616,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite reverse_v2 does not support multiple axes")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_vector_axis(self):
         x_val_shape = [1, 2, 3, 4]
@@ -2630,6 +2640,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite interpreter crashes on empty axis")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_1D_tensor(self):
         # For tensors with 1 dimension and no axis to reverse.
@@ -4393,8 +4404,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         current_opset = self.config.opset
         self.config.opset = 12
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
-        self.config.opset = current_opset
+        try:
+            self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
+        finally:
+            self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
     def test_rfft_ops(self):
