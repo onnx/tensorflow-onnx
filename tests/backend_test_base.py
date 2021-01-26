@@ -176,7 +176,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 tf.import_graph_def(graph_def, name='')
                 graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def, fold_constant=constant_fold)
 
-        if self.config.is_debug_mode:
+        if True or self.config.is_debug_mode:
             model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
             utils.save_protobuf(model_path, graph_def)
             self.logger.debug("created file  %s", model_path)

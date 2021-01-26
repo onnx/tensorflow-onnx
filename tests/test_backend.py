@@ -1319,6 +1319,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1})
 
+    @skip_tflite("Advanced constant shape folding not implemented for tflite")
     def test_slice_from_shape_const_fold(self):
         x_val = np.array([4, 3], dtype=np.int64)
         x_shape = np.array([-1, 3], dtype=np.int64)
