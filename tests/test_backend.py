@@ -2127,6 +2127,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_4(self):
@@ -2138,6 +2139,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_5(self):
@@ -2149,6 +2151,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_6(self):
@@ -2205,6 +2208,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.concat([x[:, :, :10], x[:, :, 9::-1]], axis=0, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     def test_strided_slice_reverse_3(self):
         x_val = np.zeros((1, 16, 32, 1)).astype(np.float32)
@@ -2337,6 +2341,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converter mistranslates quantize op")
     @check_tf_min_version("1.15")
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_signed_input(self):
@@ -2347,6 +2352,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converter crashes")
     @check_tf_min_version("2.0")
     @check_opset_min_version(13, "quantize_and_dequantize")
     def test_qdq_per_channel_signed_input(self):

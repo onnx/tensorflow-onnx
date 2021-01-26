@@ -251,7 +251,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         if test_tflite:
             tflite_path = self.convert_to_tflite(graph_def, feed_dict, output_names_with_port)
             test_tflite = tflite_path is not None
-        
+
         if test_tf:
             tf_reset_default_graph()
             with tf_session() as sess:
@@ -261,12 +261,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 tf.import_graph_def(graph_def, name='')
 
                 g = process_tf_graph(sess.graph, opset=self.config.opset,
-                                    input_names=list(feed_dict.keys()),
-                                    output_names=output_names_with_port,
-                                    target=self.config.target,
-                                    const_node_values=const_node_values,
-                                    initialized_tables=initialized_tables,
-                                    **process_args)
+                                     input_names=list(feed_dict.keys()),
+                                     output_names=output_names_with_port,
+                                     target=self.config.target,
+                                     const_node_values=const_node_values,
+                                     initialized_tables=initialized_tables,
+                                     **process_args)
                 g = optimizer.optimize_graph(g, catch_errors=False)
                 actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
 
@@ -278,7 +278,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         if test_tflite:
             tfl_results, tfl_outputs = self.run_tflite(tflite_path, feed_dict)
             test_tflite = tfl_results is not None
-            
+
         if test_tflite:
             if run_tfl_consistency_test:
                 self.assert_results_equal(expected, tfl_results, rtol, atol, check_value, check_shape, check_dtype)

@@ -434,7 +434,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = \
                 parse_tflite_graph(tfl_graph, opcodes, model, prefix)
             g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_outputs, is_subgraph=is_subgraph)
-            fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
+            fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                                       f_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True)
             fg.graph_name = graph_name
             if i == 0:
@@ -442,33 +442,31 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             else:
                 fg.func_inputs = f_inputs
                 set_function(graph_name, fg)
-    
+
         return main_g
 
-    else:
+    is_func = is_function(tf_graph)
+    if not is_func:
+        tf_graph = infer_shape(tf_graph, shape_override)
 
-        is_func = is_function(tf_graph)
-        if not is_func:
-            tf_graph = infer_shape(tf_graph, shape_override)
+    outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
 
-        outputs_to_values, outputs_to_dtypes = compute_const_folding_using_tf(tf_graph, const_node_values, output_names)
-
-        onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
-            tensorflow_to_onnx(tf_graph, shape_override, const_node_values, ignore_default, use_default)
-        if not is_subgraph:
-            # make tf2onnx internal subgraphs from the tensorflow subgraphs
-            ordered_func = resolve_functions(tf_graph)
-            for func in ordered_func:
-                f_inputs_names = [t.name for t in func.inputs]
-                f_output_names = [t.name for t in func.outputs]
-                fg = process_tf_graph(func, continue_on_error, False, target, opset,
-                                    custom_op_handlers, custom_rewriter,
-                                    extra_opset, shape_override, inputs_as_nchw,
-                                    f_inputs_names, f_output_names, is_subgraph=True,
-                                    const_node_values=const_node_values)
-                fg.graph_name = func.name
-                fg.func_inputs = f_inputs_names
-                set_function(func.name, fg)
+    onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, _ = \
+        tensorflow_to_onnx(tf_graph, shape_override, const_node_values, ignore_default, use_default)
+    if not is_subgraph:
+        # make tf2onnx internal subgraphs from the tensorflow subgraphs
+        ordered_func = resolve_functions(tf_graph)
+        for func in ordered_func:
+            f_inputs_names = [t.name for t in func.inputs]
+            f_output_names = [t.name for t in func.outputs]
+            fg = process_tf_graph(func, continue_on_error, False, target, opset,
+                                  custom_op_handlers, custom_rewriter,
+                                  extra_opset, shape_override, inputs_as_nchw,
+                                  f_inputs_names, f_output_names, is_subgraph=True,
+                                  const_node_values=const_node_values)
+            fg.graph_name = func.name
+            fg.func_inputs = f_inputs_names
+            set_function(func.name, fg)
 
     io_to_check = []
     if input_names:
@@ -486,12 +484,12 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             raise ValueError("Inputs/Outputs Not Found")
 
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, output_names, is_subgraph=is_subgraph)
-    g = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
+    g = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                              output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt)
     return g
 
 
-def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target, 
+def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                          output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt,
                          is_tflite=False):
 
