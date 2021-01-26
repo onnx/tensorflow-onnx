@@ -4404,8 +4404,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         current_opset = self.config.opset
         self.config.opset = 12
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
-        self.config.opset = current_opset
+        try:
+            self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
+        finally:
+            self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
     def test_rfft_ops(self):

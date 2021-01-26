@@ -88,7 +88,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_backend(self, g, outputs, input_dict, large_model=False, postfix=""):
         tensor_storage = ExternalTensorStorage() if large_model else None
         model_proto = g.make_model("test", external_tensor_storage=tensor_storage)
-        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage, postfix=postfix)
+        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage,
+                                          postfix=postfix)
 
         if self.config.backend == "onnxruntime":
             y = self.run_onnxruntime(model_path, input_dict, outputs)
