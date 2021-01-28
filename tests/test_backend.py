@@ -74,6 +74,7 @@ if is_tf2():
     floormod = tf.math.floormod
     matrix_diag_part = tf.compat.v1.matrix_diag_part
     fake_quant_with_min_max_args = tf.quantization.fake_quant_with_min_max_args
+    fake_quant_with_min_max_vars = tf.quantization.fake_quant_with_min_max_vars
 elif LooseVersion(tf.__version__) >= "1.13":
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
     conv3d_transpose = tf.compat.v1.nn.conv3d_transpose
@@ -95,6 +96,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     floormod = tf.floormod
     matrix_diag_part = tf.compat.v1.matrix_diag_part
     fake_quant_with_min_max_args = tf.compat.v1.quantization.fake_quant_with_min_max_args
+    fake_quant_with_min_max_vars = tf.compat.v1.quantization.fake_quant_with_min_max_vars
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
     conv3d_transpose = tf.nn.conv3d_transpose
@@ -4333,6 +4335,28 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func_neg, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
         except ValueError:
             pass
+
+    @check_opset_min_version(10)
+    @check_tf_min_version("1.14")
+    def test_fakequant_with_min_max_vars(self):
+        def func(x):
+            ret = fake_quant_with_min_max_vars(
+                x, min=-1024, max=1023, num_bits=8, narrow_range=False, name=None)
+            return tf.identity(ret, name=_TFOUTPUT)
+
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024.
+        x_val0 = np.abs(x_val)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0}, rtol=1e-6, atol=1e-4)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
+
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024
+        x_val[0, 0] = -1024
+        x_val[0, 1] = -1023
+        x_val[0, 2] = 1024
+        x_val[1, 0] = 1023
+        x_val[1, 1] = 1025
+        x_val[1, 2] = -1025
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
 
     @check_opset_min_version(9, "atan2")
     def test_atan2(self):
