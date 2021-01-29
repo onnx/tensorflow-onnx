@@ -2445,6 +2445,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
+    @check_tf_min_version("2.0", "Results are slightly different in tf1")
+    @check_opset_min_version(11, "resize bicubic")
+    def test_resize_bicubic(self):
+        x_shape = [1, 15, 20, 2]
+        new_size_val = np.array([30, 40], dtype=np.int32)
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        def func(x, new_size):
+            y = tf.image.resize(x, new_size, method=tf.image.ResizeMethod.BICUBIC)
+            return tf.identity(y, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: new_size_val}, rtol=1e-6, atol=1e-5)
+
     @check_opset_min_version(10, "resize scale can less than 1")
     def test_resize_nearest_neighbor2(self):
         x_shape = [1, 300, 20, 2]
