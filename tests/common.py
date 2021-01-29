@@ -31,6 +31,7 @@ __all__ = [
     "check_opset_max_version",
     "skip_tf2",
     "skip_tflite",
+    "requires_tflite",
     "check_opset_after_tf_version",
     "check_target",
     "skip_caffe2_backend",
@@ -193,6 +194,13 @@ def skip_tflite(message=""):
                 config.skip_tflite_tests = tmp
         return test
     return decorator
+
+
+def requires_tflite(message=""):
+    """ Skip test if tflite tests are disabled """
+    config = get_test_config()
+    reason = _append_message("test requires tflite", message)
+    return unittest.skipIf(config.skip_tflite_tests, reason)
 
 
 def requires_custom_ops(message=""):
