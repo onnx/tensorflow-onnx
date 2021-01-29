@@ -210,11 +210,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_tflite(self, tflite_path, feed_dict):
         try:
             interpreter = tf.lite.Interpreter(tflite_path)
-            interpreter.allocate_tensors()
             input_details = interpreter.get_input_details()
             output_details = interpreter.get_output_details()
             input_name_to_index = {n['name'].split(':')[0]: n['index'] for n in input_details}
             feed_dict_without_port = {k.split(':')[0]: v for k, v in feed_dict.items()}
+            for k, v in feed_dict_without_port.items():
+                interpreter.resize_tensor_input(input_name_to_index[k], v.shape)
+            interpreter.allocate_tensors()
             # The output names might be different in the tflite but the order is the same
             output_names = [n['name'] for n in output_details]
             for k, v in feed_dict_without_port.items():

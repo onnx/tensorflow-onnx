@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 """tf2onnx.tflite_handlers module"""
 
 from . import (
@@ -7,5 +7,6 @@ from . import (
     tfl_nn,
     tfl_controlflow,
     tfl_direct,
-    tfl_tensor
+    tfl_tensor,
+    tfl_postprocess,
 )

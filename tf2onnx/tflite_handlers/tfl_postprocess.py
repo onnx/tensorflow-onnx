@@ -7,6 +7,7 @@ tfl_postprocess
 
 import logging
 import numpy as np
+from onnx.onnx_pb import TensorProto
 
 from tf2onnx.handler import tfl_op
 from tf2onnx import utils
@@ -76,7 +77,8 @@ class TflDetectionPostProcess:
 
         nms_inputs = [adjusted_boxes, scores, max_boxes_per_class_const, iou_threshold_const, score_threshold_const]
         # shape: [-1, 3], elts of format [batch_index, class_index, box_index]
-        selected_indices = ctx.make_node('NonMaxSuppression', nms_inputs, attr={'center_point_box': 0}).output[0]
+        selected_indices = ctx.make_node('NonMaxSuppression', nms_inputs, attr={'center_point_box': 0},
+                                         op_name_scope=node.name).output[0]
 
         selected_boxes_idx = GraphBuilder(ctx).make_slice(
             {'data': selected_indices, 'starts': [2], 'ends': [3], 'axes': [1]})
@@ -89,7 +91,6 @@ class TflDetectionPostProcess:
         box_and_class_idx = ctx.make_node('Concat', [selected_boxes_idx, selected_classes], attr={'axis': 1}).output[0]
 
         box_cnt = ctx.make_node('Shape', [selected_classes_sq]).output[0]
-        box_cnt_float = ctx.make_node('Cast', [box_cnt], attr={'to': box_cnt_dtype}).output[0]
 
         adjusted_boxes_sq = GraphBuilder(ctx).make_squeeze({'data': adjusted_boxes, 'axes': [0]})
         detection_boxes = ctx.make_node('Gather', [adjusted_boxes_sq, selected_boxes_idx_sq]).output[0]
@@ -97,7 +98,16 @@ class TflDetectionPostProcess:
         detection_scores = ctx.make_node('GatherND', [class_predictions_sq, box_and_class_idx]).output[0]
 
         k_const = ctx.make_const(utils.make_name('const_k'), np.array([max_detections], np.int64)).output[0]
-        min_k = ctx.make_node('Min', [k_const, box_cnt]).output[0]
+        if ctx.opset >= 12:
+            min_k = ctx.make_node('Min', [k_const, box_cnt]).output[0]
+        else:
+            # Lower opsets only support Min between floats
+            box_cnt_float = ctx.make_node('Cast', [box_cnt], attr={'to': TensorProto.FLOAT}).output[0]
+            k_const_float = ctx.make_node('Cast', [k_const], attr={'to': TensorProto.FLOAT}).output[0]
+            min_k_float = ctx.make_node('Min', [k_const_float, box_cnt_float]).output[0]
+            min_k = ctx.make_node('Cast', [min_k_float], attr={'to': TensorProto.INT64}).output[0]
+        min_k_cast = ctx.make_node('Cast', [min_k], attr={'to': box_cnt_dtype}).output[0]
+
         scores_top_k, scores_top_k_idx = ctx.make_node('TopK', [detection_scores, min_k], output_count=2).output
 
         scores_top_k_idx_unsq = GraphBuilder(ctx).make_unsqueeze({'data': scores_top_k_idx, 'axes': [0]})
@@ -107,7 +117,7 @@ class TflDetectionPostProcess:
         classes_sort_cast = ctx.make_node('Cast', [selected_classes_sort], attr={'to': classes_dtype}).output[0]
         detection_boxes_sorted = ctx.make_node('Gather', [detection_boxes, scores_top_k_idx_unsq]).output[0]
 
-        pad_amount = ctx.make_node('Sub', [k_const, box_cnt]).output[0]
+        pad_amount = ctx.make_node('Sub', [k_const, min_k]).output[0]
 
         quad_zero_const = ctx.make_const(utils.make_name('quad_zero_const'), np.array([0, 0, 0, 0], np.int64)).output[0]
         duo_zero_const = ctx.make_const(utils.make_name('duo_zero_const'), np.array([0, 0], np.int64)).output[0]
@@ -123,4 +133,6 @@ class TflDetectionPostProcess:
         ctx.replace_all_inputs(node.output[0], detection_boxes_padded)
         ctx.replace_all_inputs(node.output[1], detection_classes_padded)
         ctx.replace_all_inputs(node.output[2], detection_scores_padded)
-        ctx.replace_all_inputs(node.output[3], box_cnt_float)
+        ctx.replace_all_inputs(node.output[3], min_k_cast)
+
+        ctx.remove_node(node.name)
