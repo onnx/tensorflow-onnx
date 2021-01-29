@@ -11,6 +11,8 @@ parameters:
   run_setup: 'True'
   report_coverage: 'False'
   artifact_name: 'single_test_coverage'
+  skip_tflite_tests: 'True'
+  skip_tf_tests: 'False'
 
 jobs:
   - job: ${{ parameters.job.name }}
@@ -27,73 +29,42 @@ jobs:
                 ${{ each onnx_backend in parameters.onnx_backends }}:
                   ${{ each onnx_backend_version in onnx_backend.value }}:
                     ${{ each onnx_opset in parameters.onnx_opsets }}:
-                      ${{ if ne(onnx_opset, '') }}:
-                        ${{ format('{0} python{1} tf{2} onnx{3} opset{4} {5}{6}', platform, python_version, tf_version, onnx_version, onnx_opset, onnx_backend.key, onnx_backend_version) }}:
-                          ${{ if eq(platform, 'linux') }}:
-                            CI_VM_IMAGE: 'ubuntu-16.04'
-                          ${{ if eq(platform, 'windows') }}:
-                            CI_VM_IMAGE: 'vs2017-win2016'
-                          ${{ if eq(platform, 'mac') }}:
-                            CI_VM_IMAGE: 'macOS-10.13'
-                          CI_PYTHON_VERSION: '${{ python_version }}'
-                          CI_TF_VERSION: '${{ tf_version }}'
-                          CI_ONNX_VERSION: '${{ onnx_version }}'
+                      ${{ format('{0} python{1}{2} tf{3} onnx{4} {5}{6}{7}', platform, python_version, replace(replace(parameters.skip_tflite_tests,'True', ''), 'False', ' tflite'), tf_version, onnx_version, replace(format('opset{0} ', onnx_opset), 'opset ', ''), onnx_backend.key, onnx_backend_version) }}:
+                        ${{ if eq(platform, 'linux') }}:
+                          CI_VM_IMAGE: 'ubuntu-16.04'
+                        ${{ if eq(platform, 'windows') }}:
+                          CI_VM_IMAGE: 'vs2017-win2016'
+                        ${{ if eq(platform, 'mac') }}:
+                          CI_VM_IMAGE: 'macOS-10.13'
+                        CI_PLATFORM: '${{ platform }}'
+                        CI_PYTHON_VERSION: '${{ python_version }}'
+                        CI_TF_VERSION: '${{ tf_version }}'
+                        CI_ONNX_VERSION: '${{ onnx_version }}'
+                        ${{ if ne(onnx_opset, '') }}:
                           CI_ONNX_OPSET: '${{ onnx_opset }}'
-                          CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
-                          CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
+                        CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
+                        CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
+                        CI_SKIP_TF_TESTS: '${{ parameters.skip_tf_tests }}'
+                        CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tflite_tests }}'
 
-                          ${{ if eq(tf_version, '') }}:
-                            CI_PIP_TF_NAME: 'tensorflow'
-                          ${{ if ne(tf_version, '') }}:
-                            CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
+                        ${{ if eq(tf_version, '') }}:
+                          CI_PIP_TF_NAME: 'tensorflow'
+                        ${{ if ne(tf_version, '') }}:
+                          CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
 
-                          ${{ if eq(onnx_version, '') }}:
-                            CI_PIP_ONNX_NAME: 'onnx'
-                          ${{ if ne(onnx_version, '') }}:
-                            CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
+                        ${{ if eq(onnx_version, '') }}:
+                          CI_PIP_ONNX_NAME: 'onnx'
+                        ${{ if ne(onnx_version, '') }}:
+                          CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
 
-                          ${{ if eq(onnx_backend_version, '') }}:
+                        ${{ if eq(onnx_backend_version, '') }}:
+                          CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                        ${{ if ne(onnx_backend_version, '') }}:
+                          ${{ if ne(onnx_backend_version, 'nightly') }}:
+                            CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                          ${{ if eq(onnx_backend_version, 'nightly') }}:
                             CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                          ${{ if ne(onnx_backend_version, '') }}:
-                            ${{ if ne(onnx_backend_version, 'nightly') }}:
-                              CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
-                            ${{ if eq(onnx_backend_version, 'nightly') }}:
-                              CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                              CI_ONNXRUNTIME_NIGHTLY: 'true'
-
-                      ${{ if eq(onnx_opset, '') }}:
-                        ${{ format('{0} python{1} tf{2} onnx{3} {4}{5}', platform, python_version, tf_version, onnx_version, onnx_backend.key, onnx_backend_version) }}:
-                          ${{ if eq(platform, 'linux') }}:
-                            CI_VM_IMAGE: 'ubuntu-16.04'
-                          ${{ if eq(platform, 'windows') }}:
-                            CI_VM_IMAGE: 'vs2017-win2016'
-                          ${{ if eq(platform, 'mac') }}:
-                            CI_VM_IMAGE: 'macOS-10.13'
-                          CI_PLATFORM: '${{ platform }}'
-                          CI_PYTHON_VERSION: '${{ python_version }}'
-                          CI_TF_VERSION: '${{ tf_version }}'
-                          CI_ONNX_VERSION: '${{ onnx_version }}'
-                          CI_ONNX_BACKEND: '${{ onnx_backend.key }}'
-                          CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
-
-                          ${{ if eq(tf_version, '') }}:
-                            CI_PIP_TF_NAME: 'tensorflow'
-                          ${{ if ne(tf_version, '') }}:
-                            CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
-
-                          ${{ if eq(onnx_version, '') }}:
-                            CI_PIP_ONNX_NAME: 'onnx'
-                          ${{ if ne(onnx_version, '') }}:
-                            CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
-
-                          ${{ if eq(onnx_backend_version, '') }}:
-                            CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                          ${{ if ne(onnx_backend_version, '') }}:
-                            ${{ if ne(onnx_backend_version, 'nightly') }}:
-                              CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
-                            ${{ if eq(onnx_backend_version, 'nightly') }}:
-                              CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                              CI_ONNXRUNTIME_NIGHTLY: 'true'
+                            CI_ONNXRUNTIME_NIGHTLY: 'true'
 
     # Insert all properties other than pool/steps/strategy
     ${{ each pair in parameters.job }}:
