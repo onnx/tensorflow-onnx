@@ -31,6 +31,7 @@ import six
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
+import tensorflow_text
 
 # contrib ops are registered only when the module is imported, the following import statement is needed,
 # otherwise tf runtime error will show up when the tf model is restored from pb file because of un-registered ops.
@@ -389,6 +390,7 @@ class Test(object):
             if self.large_model:
                 const_node_values = compress_graph_def(graph_def)
             tf.import_graph_def(graph_def, name='')
+            utils.save_protobuf("frozen.pb", graph_def)
 
         with tf_session(graph=tf_graph) as sess:
             # create the input data
@@ -435,7 +437,7 @@ class Test(object):
                                           shape_override=shape_override, input_names=inputs.keys(),
                                           const_node_values=const_node_values,
                                           initialized_tables=initialized_tables)
-                onnx_graph = optimizer.optimize_graph(onnx_graph)
+                #onnx_graph = optimizer.optimize_graph(onnx_graph)
                 print("ONNX", onnx_graph.dump_node_statistics())
                 external_tensor_storage = ExternalTensorStorage() if self.large_model else None
                 model_proto = onnx_graph.make_model("converted from tf2onnx",

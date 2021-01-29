@@ -3221,7 +3221,7 @@ nnlm-zh-dim50-with-normalization:
   concrete_function: 0
 
 Wiki-words-250-with-normalization:
-  disabled: false
+  disabled: true
   skip_conversion: true
   model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-250-with-normalization"
   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-250-with-normalization/model.onnx"
@@ -3239,7 +3239,7 @@ Wiki-words-250-with-normalization:
   concrete_function: 0
 
 Wiki-words-500:
-  disabled: false
+  disabled: true
   skip_conversion: true
   model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-500"
   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-500/model.onnx"
@@ -3257,7 +3257,7 @@ Wiki-words-500:
   concrete_function: 0
 
 Wiki-words-500-with-normalization:
-  disabled: false
+  disabled: true
   skip_conversion: true
   model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-500-with-normalization"
   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-500-with-normalization/model.onnx"
@@ -3332,7 +3332,7 @@ universal-sentence-encoder-qa:
   signature_def: "default"
 
 covid-twitter-bert:
-  disabled: false
+  disabled: true
   skip_conversion: true
   model: "C:/Users/tomwi/Documents/tfhubmodels/covid-twitter-bert"
   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/covid-twitter-bert/model.onnx"
@@ -3355,6 +3355,25 @@ covid-twitter-bert:
   structured_outputs:
     - transformer_encoder
     - transformer_encoder_1
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+universal-sentence-encoder-multilingual:
+  disabled: false
+  skip_conversion: false
+  model: "C:/Users/tomwi/Documents/tfhubmodels/universal-sentence-encoder-multilingual"
+  converted_model: "C:/Users/tomwi/Documents/tfhubmodels/universal-sentence-encoder-multilingual/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "inputs:0": [100]
+  outputs:
+    - Identity:0
   rtol: 0.05
   atol: 0.0005
   tag: "serve"

@@ -1,5 +1,5 @@
-# SPDX-License-Identifier: Apache-2.0
-
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license.
 """ tf2onnx mapping functions for string ops using contrib ops domain. """
 import logging
 import numpy as np
@@ -120,3 +120,29 @@ class StringEqual:
             not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
             ctx.copy_shape(output_name, not_node.output[0])
             ctx.copy_dtype(output_name, not_node.output[0])
+
+@tf_op("SentencepieceOp", domain=constants.CONTRIB_OPS_DOMAIN)
+class SentencepieceOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        # This op will be removed when its consumer is converted
+        pass
+
+@tf_op("SentencepieceTokenizeOp", domain=constants.CONTRIB_OPS_DOMAIN)
+class SentencepieceTokenizeOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        input_node = node.inputs[0]
+        utils.make_sure(input_node.type == "SentencepieceOp", "Input 0 to node %s is not SentencepieceOp", node.name)
+        ctx.remove_input(node, node.input[0], 0)
+
+        nbest_size_cast = ctx.make_node("Cast", [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+        ctx.replace_input(node, node.input[1], nbest_size_cast, 1)
+        for i in range(1, len(node.input)):
+            unsqueeze = GraphBuilder(ctx).make_unsqueeze({'data': node.input[i], 'axes': [0]})
+            ctx.replace_input(node, node.input[i], unsqueeze, i)
+        node.set_attr("model", input_node.attr['model'].s)
+        node.type = "SentencepieceTokenizer"
+        if ctx.is_safe_to_remove_nodes([input_node]):
+            ctx.remove_node(input_node.name)
