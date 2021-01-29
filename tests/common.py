@@ -30,6 +30,7 @@ __all__ = [
     "check_opset_min_version",
     "check_opset_max_version",
     "skip_tf2",
+    "skip_tflite",
     "check_opset_after_tf_version",
     "check_target",
     "skip_caffe2_backend",
@@ -53,6 +54,9 @@ class TestConfig(object):
         self.opset = int(os.environ.get("TF2ONNX_TEST_OPSET", constants.PREFERRED_OPSET))
         self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(constants.DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
+        self.skip_tflite_tests = os.environ.get("TF2ONNX_SKIP_TFLITE_TESTS", "FALSE").upper() == "TRUE"
+        self.skip_tf_tests = os.environ.get("TF2ONNX_SKIP_TF_TESTS", "FALSE").upper() == "TRUE"
+        self.run_tfl_consistency_test = os.environ.get("TF2ONNX_RUN_TFL_CONSISTENCY_TEST", "FALSE").upper() == "TRUE"
         self.backend_version = self._get_backend_version()
         self.log_level = logging.WARNING
         self.temp_dir = utils.get_temp_directory()
@@ -92,6 +96,9 @@ class TestConfig(object):
                             "tf_version={}".format(self.tf_version),
                             "opset={}".format(self.opset),
                             "target={}".format(self.target),
+                            "skip_tflite_tests={}".format(self.skip_tflite_tests),
+                            "skip_tf_tests={}".format(self.skip_tf_tests),
+                            "run_tfl_consistency_test={}".format(self.run_tfl_consistency_test),
                             "backend={}".format(self.backend),
                             "backend_version={}".format(self.backend_version),
                             "is_debug_mode={}".format(self.is_debug_mode),
@@ -167,6 +174,25 @@ def skip_tf2(message=""):
     """ Skip if tf_version > max_required_version """
     reason = _append_message("test needs to be fixed for tf-2.x", message)
     return unittest.skipIf(tf_loader.is_tf2(), reason)
+
+
+def skip_tflite(message=""):
+    """ Skip the tflite conversion for this test """
+    config = get_test_config()
+    reason = _append_message("test disabled for tflite", message)
+    if config.skip_tf_tests:
+        # If we are skipping tf also, there is no reason to run this test
+        return unittest.skip(reason)
+    def decorator(func):
+        def test(self):
+            tmp = config.skip_tflite_tests
+            config.skip_tflite_tests = True
+            try:
+                func(self)
+            finally:
+                config.skip_tflite_tests = tmp
+        return test
+    return decorator
 
 
 def requires_custom_ops(message=""):

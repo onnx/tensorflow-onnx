@@ -34,9 +34,11 @@ from tf2onnx.graph import ExternalTensorStorage
 if is_tf2():
     tf_set_random_seed = tf.compat.v1.set_random_seed
     tf_tables_initializer = tf.compat.v1.tables_initializer
+    tf_lite = tf.compat.v1.lite
 else:
     tf_set_random_seed = tf.set_random_seed
     tf_tables_initializer = tf.tables_initializer
+    tf_lite = None
 
 
 class Tf2OnnxBackendTestBase(unittest.TestCase):
@@ -83,10 +85,11 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = m.run(output_names, inputs)
         return results
 
-    def run_backend(self, g, outputs, input_dict, large_model=False):
+    def run_backend(self, g, outputs, input_dict, large_model=False, postfix=""):
         tensor_storage = ExternalTensorStorage() if large_model else None
         model_proto = g.make_model("test", external_tensor_storage=tensor_storage)
-        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage)
+        model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage,
+                                          postfix=postfix)
 
         if self.config.backend == "onnxruntime":
             y = self.run_onnxruntime(model_path, input_dict, outputs)
@@ -96,104 +99,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             raise ValueError("unknown backend")
         return y
 
-    def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
-                      convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
-                      check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
-                      large_model=False, premade_placeholders=False):
-        # optional - passed to process_tf_graph
-        if process_args is None:
-            process_args = {}
-        # optional - pass distinct feed_dict to onnx runtime
-        if onnx_feed_dict is None:
-            onnx_feed_dict = feed_dict
-        input_names_with_port = list(feed_dict)
-        tf_reset_default_graph()
-        graph_def = None
-        initialized_tables = None
-
-        np.random.seed(1)  # Make it reproducible.
-        clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
-        if is_tf2() and not as_session:
-            #
-            # use eager to execute the tensorflow func
-            #
-            # numpy doesn't work for all ops, make it tf.Tensor()
-            input_tensors = [tf.TensorSpec(shape=v.shape, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
-                             for k, v in feed_dict.items()]
-            input_list = [tf.convert_to_tensor(v, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
-                          for k, v in feed_dict.items()]
-            tf.random.set_seed(1)
-            expected = func(*input_list)
-            if isinstance(expected, (list, tuple)):
-                # list or tuple
-                expected = [x.numpy() for x in expected]
-            else:
-                # single result
-                expected = [expected.numpy()]
-
-            # now make the eager functions a graph
-            concrete_func = tf.function(func, input_signature=tuple(input_tensors))
-            concrete_func = concrete_func.get_concrete_function()
-            graph_def = from_function(concrete_func,
-                                      input_names=list(feed_dict.keys()),
-                                      output_names=output_names_with_port,
-                                      large_model=large_model)
-        else:
-            #
-            # use graph to execute the tensorflow func
-            #
-            with tf_session() as sess:
-                tf_set_random_seed(1)
-                input_list = []
-                if not premade_placeholders:
-                    for k, v in clean_feed_dict.items():
-                        input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
-                func(*input_list)
-                variables_lib.global_variables_initializer().run()
-                tf_tables_initializer().run()
-
-                output_dict = []
-                for out_name in output_names_with_port:
-                    output_dict.append(sess.graph.get_tensor_by_name(out_name))
-                expected = sess.run(output_dict, feed_dict=feed_dict)
-                graph_def = freeze_session(sess,
-                                           input_names=list(feed_dict.keys()),
-                                           output_names=output_names_with_port)
-                table_names, key_dtypes, value_dtypes = get_hash_table_info(graph_def)
-                initialized_tables = {}
-                for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
-                    h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
-                    k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
-                    initialized_tables[n] = (sess.run(k), sess.run(v))
-
-            tf_reset_default_graph()
-            with tf_session() as sess:
-                tf.import_graph_def(graph_def, name='')
-                graph_def = tf_optimize(list(feed_dict.keys()), output_names_with_port,
-                                        graph_def, fold_constant=constant_fold)
-
-        tf_reset_default_graph()
-        with tf_session() as sess:
-            const_node_values = None
-            if large_model:
-                const_node_values = compress_graph_def(graph_def)
-            tf.import_graph_def(graph_def, name='')
-
-            if self.config.is_debug_mode:
-                model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
-                utils.save_protobuf(model_path, graph_def)
-                self.logger.debug("created file  %s", model_path)
-
-            g = process_tf_graph(sess.graph, opset=self.config.opset,
-                                 input_names=list(feed_dict.keys()),
-                                 output_names=output_names_with_port,
-                                 target=self.config.target,
-                                 const_node_values=const_node_values,
-                                 initialized_tables=initialized_tables,
-                                 **process_args)
-            g = optimizer.optimize_graph(g, catch_errors=False)
-            actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
-
+    def assert_results_equal(self, expected, actual, rtol, atol, check_value=True, check_shape=True, check_dtype=True):
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
                 if expected_val.dtype == np.object:
@@ -209,9 +115,198 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if check_shape:
                 self.assertEqual(expected_val.shape, actual_val.shape)
 
-        if graph_validator:
-            self.assertTrue(graph_validator(g))
+    def freeze_and_run_tf(self, func, feed_dict, outputs, as_session, premade_placeholders, large_model, constant_fold):
+        np.random.seed(1)  # Make it reproducible.
+        clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
+        if is_tf2() and not as_session:
+            #
+            # use eager to execute the tensorflow func
+            #
+            # numpy doesn't work for all ops, make it tf.Tensor()
+            input_tensors = [tf.TensorSpec(shape=v.shape, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
+                             for k, v in feed_dict.items()]
+            input_list = [tf.convert_to_tensor(v, dtype=tf.as_dtype(v.dtype), name=utils.node_name(k))
+                          for k, v in feed_dict.items()]
+            tf.random.set_seed(1)
+            result = func(*input_list)
+            if isinstance(result, (list, tuple)):
+                # list or tuple
+                result = [x.numpy() for x in result]
+            else:
+                # single result
+                result = [result.numpy()]
 
+            # now make the eager functions a graph
+            concrete_func = tf.function(func, input_signature=tuple(input_tensors))
+            concrete_func = concrete_func.get_concrete_function()
+            graph_def = from_function(concrete_func,
+                                      input_names=list(feed_dict.keys()),
+                                      output_names=outputs,
+                                      large_model=large_model)
+            initialized_tables = None
+        else:
+            #
+            # use graph to execute the tensorflow func
+            #
+            with tf_session() as sess:
+                tf_set_random_seed(1)
+                input_list = []
+                if not premade_placeholders:
+                    for k, v in clean_feed_dict.items():
+                        input_list.append(tf_placeholder(name=k, shape=v.shape, dtype=tf.as_dtype(v.dtype)))
+                func(*input_list)
+                variables_lib.global_variables_initializer().run()
+                tf_tables_initializer().run()
+
+                output_dict = []
+                for out_name in outputs:
+                    output_dict.append(sess.graph.get_tensor_by_name(out_name))
+                result = sess.run(output_dict, feed_dict=feed_dict)
+                graph_def = freeze_session(sess,
+                                           input_names=list(feed_dict.keys()),
+                                           output_names=outputs)
+                table_names, key_dtypes, value_dtypes = get_hash_table_info(graph_def)
+                initialized_tables = {}
+                for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
+                    h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+                    k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+                    initialized_tables[n] = (sess.run(k), sess.run(v))
+
+            tf_reset_default_graph()
+            with tf_session() as sess:
+                tf.import_graph_def(graph_def, name='')
+                graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def, fold_constant=constant_fold)
+
+        if True or self.config.is_debug_mode:
+            model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
+            utils.save_protobuf(model_path, graph_def)
+            self.logger.debug("created file  %s", model_path)
+        return result, graph_def, initialized_tables
+
+    def convert_to_tflite(self, graph_def, feed_dict, outputs):
+        if not feed_dict:
+            return None   # Can't make TFlite model with no inputs
+        tf_reset_default_graph()
+        with tf_session() as sess:
+            tf.import_graph_def(graph_def, name='')
+            sess_inputs = [sess.graph.get_tensor_by_name(k) for k in feed_dict.keys()]
+            sess_outputs = [sess.graph.get_tensor_by_name(n) for n in outputs]
+            converter = tf_lite.TFLiteConverter.from_session(sess, sess_inputs, sess_outputs)
+            #converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+            from tensorflow.lite.python.convert import ConverterError
+            try:
+                tflite_model = converter.convert()
+                tflite_path = os.path.join(self.test_data_directory, self._testMethodName + ".tflite")
+                dir_name = os.path.dirname(tflite_path)
+                if dir_name:
+                    os.makedirs(dir_name, exist_ok=True)
+                with open(tflite_path, 'wb') as f:
+                    f.write(tflite_model)
+                return tflite_path
+            except ConverterError:
+                return None
+
+    def run_tflite(self, tflite_path, feed_dict):
+        try:
+            interpreter = tf.lite.Interpreter(tflite_path)
+            interpreter.allocate_tensors()
+            input_details = interpreter.get_input_details()
+            output_details = interpreter.get_output_details()
+            input_name_to_index = {n['name'].split(':')[0]: n['index'] for n in input_details}
+            feed_dict_without_port = {k.split(':')[0]: v for k, v in feed_dict.items()}
+            # The output names might be different in the tflite but the order is the same
+            output_names = [n['name'] for n in output_details]
+            for k, v in feed_dict_without_port.items():
+                interpreter.set_tensor(input_name_to_index[k], v)
+            interpreter.invoke()
+            result = [interpreter.get_tensor(output['index']) for output in output_details]
+            return result, output_names
+        except (RuntimeError, ValueError):
+            # tflite sometimes converts from tf but produces an invalid model
+            return None, None
+
+    def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
+                      convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
+                      check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
+                      large_model=False, premade_placeholders=False):
+        test_tf = not self.config.skip_tf_tests
+        test_tflite = not self.config.skip_tflite_tests
+        run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
+        # optional - passed to process_tf_graph
+        if process_args is None:
+            process_args = {}
+        # optional - pass distinct feed_dict to onnx runtime
+        if onnx_feed_dict is None:
+            onnx_feed_dict = feed_dict
+        input_names_with_port = list(feed_dict)
+        tf_reset_default_graph()
+        if tf_lite is None:
+            test_tflite = False
+        g = None
+
+        expected, graph_def, initialized_tables = \
+            self.freeze_and_run_tf(func, feed_dict, output_names_with_port, as_session,
+                                   premade_placeholders, large_model, constant_fold)
+
+        if test_tflite:
+            tflite_path = self.convert_to_tflite(graph_def, feed_dict, output_names_with_port)
+            test_tflite = tflite_path is not None
+
+        if test_tf:
+            tf_reset_default_graph()
+            with tf_session() as sess:
+                const_node_values = None
+                if large_model:
+                    const_node_values = compress_graph_def(graph_def)
+                tf.import_graph_def(graph_def, name='')
+
+                g = process_tf_graph(sess.graph, opset=self.config.opset,
+                                     input_names=list(feed_dict.keys()),
+                                     output_names=output_names_with_port,
+                                     target=self.config.target,
+                                     const_node_values=const_node_values,
+                                     initialized_tables=initialized_tables,
+                                     **process_args)
+                g = optimizer.optimize_graph(g, catch_errors=False)
+                actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
+
+            self.assert_results_equal(expected, actual, rtol, atol, check_value, check_shape, check_dtype)
+
+            if graph_validator:
+                self.assertTrue(graph_validator(g))
+
+        if test_tflite:
+            tfl_results, tfl_outputs = self.run_tflite(tflite_path, feed_dict)
+            test_tflite = tfl_results is not None
+
+        if test_tflite:
+            if run_tfl_consistency_test:
+                self.assert_results_equal(expected, tfl_results, rtol, atol, check_value, check_shape, check_dtype)
+
+            tfl_process_args = process_args.copy()
+            if 'inputs_as_nchw' in tfl_process_args:
+                nchw_inps_with_port = tfl_process_args['inputs_as_nchw']
+                tfl_process_args['inputs_as_nchw'] = [i.split(':')[0] for i in nchw_inps_with_port]
+            input_names_without_port = [inp.split(':')[0] for inp in feed_dict.keys()]
+
+            g = process_tf_graph(None, opset=self.config.opset,
+                                 input_names=input_names_without_port,
+                                 output_names=tfl_outputs,
+                                 target=self.config.target,
+                                 tflite_path=tflite_path,
+                                 **tfl_process_args)
+            g = optimizer.optimize_graph(g)
+            onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
+            onnx_from_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port, postfix="_from_tflite")
+
+            self.assert_results_equal(tfl_results, onnx_from_tfl_res, rtol, atol, check_value, check_shape, check_dtype)
+
+            if graph_validator:
+                self.assertTrue(graph_validator(g))
+
+        if g is None:
+            raise unittest.SkipTest("Both tf and tflite marked to skip")
         return g
 
     def save_onnx_model(self, model_proto, feed_dict, postfix="", external_tensor_storage=None):
