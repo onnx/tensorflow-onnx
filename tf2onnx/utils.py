@@ -107,7 +107,9 @@ def split_nodename_and_shape(name):
     for i in range(1, len(splits), 3):
         inputs.append(splits[i])
         if splits[i + 1] is not None:
-            shapes[splits[i]] = [int(n) for n in splits[i + 1][1:-1].split(",")]
+            shape = [int(n) for n in splits[i + 1][1:-1].split(",")]
+            shape = [n if n >= 0 else None for n in shape]
+            shapes[splits[i]] = shape
     if not shapes:
         shapes = None
     return inputs, shapes

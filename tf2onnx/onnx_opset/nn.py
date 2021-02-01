@@ -978,10 +978,12 @@ class CropAndResize:
         cls.any_version_after11(13, ctx, node, **kwargs)
 
 
-@tf_op(["ResizeBilinear", "ResizeNearestNeighbor"])
+@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic"])
 class Resize:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
+        utils.make_sure(node.type != "ResizeBicubic", "Opset 11 is required for bicubic interpolation for node %s",
+                        node.name)
         mode = "linear" if node.type == "ResizeBilinear" else "nearest"
         node.type = "Upsample"
         shape = ctx.get_shape(node.input[0])
@@ -1009,7 +1011,16 @@ class Resize:
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
-        mode = "linear" if node.type == "ResizeBilinear" else "nearest"
+        cubic_coeff_a = None
+        exclude_outside = False
+        if node.type == "ResizeBilinear":
+            mode = "linear"
+        elif node.type == "ResizeBicubic":
+            mode = "cubic"
+            cubic_coeff_a = -0.5
+            exclude_outside = True
+        else:
+            mode = "nearest"
         roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
         const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0]).astype(np.int64))
         const_two = ctx.make_const(utils.make_name("const_two"), np.array([2]).astype(np.int64))
@@ -1035,9 +1046,11 @@ class Resize:
                 nearest_mode = "round_prefer_ceil"
             else:
                 transformation_mode = "half_pixel"
-        resize = ctx.make_node("Resize", resize_inputs,
-                               attr={"mode": mode, "nearest_mode": nearest_mode,
-                                     "coordinate_transformation_mode": transformation_mode})
+        attr = {"mode": mode, "nearest_mode": nearest_mode, "coordinate_transformation_mode": transformation_mode,
+                "exclude_outside": exclude_outside}
+        if cubic_coeff_a is not None:
+            attr["cubic_coeff_a"] = cubic_coeff_a
+        resize = ctx.make_node("Resize", resize_inputs, attr=attr)
         shapes = node.output_shapes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
@@ -1050,6 +1063,8 @@ class Resize:
         # float32 out = ResizeBilinear/ResizeNearestNeighbor(T images, int size)
         # https://www.tensorflow.org/api_docs/python/tf/image/resize_nearest_neighbor
         # wants the input to be NHWC - adjust target_shape to this.
+        utils.make_sure(node.type != "ResizeBicubic", "Opset 11 is required for bicubic interpolation for node %s",
+                        node.name)
         mode = "linear" if node.type == "ResizeBilinear" else "nearest"
 
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
