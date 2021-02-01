@@ -1,10 +1,12 @@
+<!--- SPDX-License-Identifier: Apache-2.0 -->
+
 tf2onnx - common issues when converting models.
 ========
 
 ## tensorflow op is not supported
 Example:
 
-```ValueError: tensorflow op NonMaxSuppression is not supported``` 
+```ValueError: tensorflow op NonMaxSuppression is not supported```
 
 means that the given tensorflow op is not mapped to ONNX. This could have multiple reasons:
 

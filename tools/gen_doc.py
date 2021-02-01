@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 tool to list tensorflow op to onnx op mapping in markdown
 """
@@ -18,8 +20,9 @@ args = parser.parse_args()
 
 
 LATEST_OPSET = {
-    "": 12, # default domain
-    "com.microsoft": 1 # microsoft domain
+    "": 13,  # default domain
+    "com.microsoft": 1,  # microsoft domain
+    "ai.onnx.contrib": 1,  # contrib ops
 }
 
 

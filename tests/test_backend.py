@@ -1,6 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
 
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+
 
 """Unit tests using onnx backends."""
 
@@ -23,7 +23,7 @@ from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx import constants, utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default
+from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default, tf_placeholder
 from tf2onnx.onnx_opset.signal import make_dft_constant
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
@@ -728,6 +728,33 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_feed_val = np.array([11.0, 22.0, -33.0, -44.0], dtype=np.float32).reshape((2, 2))
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_feed_val}, as_session=True, premade_placeholders=True)
 
+    def test_placeholder_with_default_computed_use_default(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        y_val = np.array([2.0, -4.0, 6.0, -8.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf_placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            y = tf_placeholder(tf.float32, y_val.shape, name=_TFINPUT1)
+            total = tf.add(x, y)
+            z = tf_placeholder_with_default(total, x_val.shape, name=_TFINPUT2)
+            total2 = tf.add(total, z)
+            return tf.identity(total2, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, as_session=True,
+                            premade_placeholders=True, process_args={'use_default': [_TFINPUT2]})
+
+    def test_placeholder_with_default_computed_ignore_default(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        y_val = np.array([2.0, -4.0, 6.0, -8.0], dtype=np.float32).reshape((2, 2))
+        z_val = np.array([3.0, 6.0, 9.0, 10.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf_placeholder(tf.float32, x_val.shape, name=_TFINPUT)
+            y = tf_placeholder(tf.float32, y_val.shape, name=_TFINPUT1)
+            total = tf.add(x, y)
+            z = tf_placeholder_with_default(total, x_val.shape, name=_TFINPUT2)
+            total2 = tf.add(total, z)
+            return tf.identity(total2, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val}, as_session=True,
+                            premade_placeholders=True, process_args={'ignore_default': [_TFINPUT2]})
+
     @check_onnxruntime_incompatibility("Add")
     def test_add_bcast(self):
         x1_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
@@ -754,8 +781,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("Issue with matmul with 2 copies of same input")
     def test_matmul1(self):
-        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        x_val = np.array([1.0, 2.0, -3.0, -4.0, 5.0, 6.0], dtype=np.float32).reshape((2, 3))
         def func(x):
             x_ = tf.matmul(x, x, transpose_a=True)
             return tf.identity(x_, name=_TFOUTPUT)
@@ -1291,6 +1319,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1})
 
+    @skip_tflite("Advanced constant shape folding not implemented for tflite")
     def test_slice_from_shape_const_fold(self):
         x_val = np.array([4, 3], dtype=np.int64)
         x_shape = np.array([-1, 3], dtype=np.int64)
@@ -2098,6 +2127,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_4(self):
@@ -2109,6 +2139,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_5(self):
@@ -2120,6 +2151,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     @skip_caffe2_backend("multiple dims not supported")
     def test_strided_slice_dynamic_6(self):
@@ -2176,6 +2208,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.concat([x[:, :, :10], x[:, :, 9::-1]], axis=0, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converts strided slice incorrectly (steps 1 dim larger than starts/stops)")
     @check_opset_min_version(10, "Slice")
     def test_strided_slice_reverse_3(self):
         x_val = np.zeros((1, 16, 32, 1)).astype(np.float32)
@@ -2308,6 +2341,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converter mistranslates quantize op")
     @check_tf_min_version("1.15")
     @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_signed_input(self):
@@ -2318,6 +2352,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite converter crashes")
     @check_tf_min_version("2.0")
     @check_opset_min_version(13, "quantize_and_dequantize")
     def test_qdq_per_channel_signed_input(self):
@@ -2409,6 +2444,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = resize_bilinear_v2(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
+
+    @check_tf_min_version("2.0", "Results are slightly different in tf1")
+    @check_opset_min_version(11, "resize bicubic")
+    def test_resize_bicubic(self):
+        x_shape = [1, 15, 20, 2]
+        new_size_val = np.array([30, 40], dtype=np.int32)
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        def func(x, new_size):
+            y = tf.image.resize(x, new_size, method=tf.image.ResizeMethod.BICUBIC)
+            return tf.identity(y, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: new_size_val}, rtol=1e-6, atol=1e-5)
 
     @check_opset_min_version(10, "resize scale can less than 1")
     def test_resize_nearest_neighbor2(self):
@@ -2562,6 +2608,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite interpreter crashes on empty axis")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_constant_axis(self):
         # Tests for constant axis.
@@ -2580,6 +2627,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite reverse_v2 does not support multiple axes")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_vector_axis(self):
         x_val_shape = [1, 2, 3, 4]
@@ -2603,6 +2651,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite interpreter crashes on empty axis")
     @check_opset_min_version(10, "ReverseSequence")
     def test_reversev2_1D_tensor(self):
         # For tensors with 1 dimension and no axis to reverse.
@@ -3739,6 +3788,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                                         _INPUT2: new_shape_val, _INPUT3: shape_pad_val})
 
     @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "CumSum")
+    def test_ragged_tensor_to_sparse(self):
+        splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
+        splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        def func(splits1, splits2, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits1, splits2], validate=True)
+            s = x.to_sparse()
+            indices, values, shape = s.indices, s.values, s.dense_shape
+            indices = tf.identity(indices, name=_TFOUTPUT)
+            values = tf.identity(values, name=_TFOUTPUT1)
+            shape = tf.identity(shape, name=_TFOUTPUT2)
+            return indices, values, shape
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2],
+                            {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
     @check_opset_min_version(11, "Range")
     def test_ragged_range_float(self):
         starts_val = np.array([0, 0, 1, 10, 0.5, 0.5], dtype=np.float32)
@@ -4349,8 +4415,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         current_opset = self.config.opset
         self.config.opset = 12
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
-        self.config.opset = current_opset
+        try:
+            self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
+        finally:
+            self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
     def test_rfft_ops(self):

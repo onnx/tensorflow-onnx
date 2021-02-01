@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """
 tf2onnx.tflite_utils - utilities for parsing tflite files into onnx graph
@@ -11,8 +11,9 @@ import importlib
 from onnx import helper, onnx_pb, numpy_helper
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
-from tflite.TensorType import TensorType as TFLiteTensorType
-from tflite.Model import Model
+from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
+from tf2onnx.tflite.Model import Model
+from tf2onnx.flexbuffers import read_flexbuffer
 
 
 TFLITE_TO_ONNX_DTYPE = {
@@ -100,7 +101,7 @@ def lookup_enum(idx, enum_name):
         return map_tflite_dtype_to_onnx(idx)
     if enum_name in enum_cache:
         return enum_cache[enum_name][idx]
-    module = importlib.import_module('tflite.' + enum_name)
+    module = importlib.import_module('tf2onnx.tflite.' + enum_name)
     enum_class = getattr(module, enum_name)
     idx_to_name = {value: key for key, value in enum_class.__dict__.items() if not key.startswith('_')}
     enum_cache[enum_name] = idx_to_name
@@ -111,7 +112,7 @@ def get_options_class(name):
     """Each tflite optype has a flatbuffer Options class (ex: AddOptions). Returns the options class given its name."""
     if name == "NONE":
         return None
-    module = importlib.import_module('tflite.' + name)
+    module = importlib.import_module('tf2onnx.tflite.' + name)
     return getattr(module, name)
 
 
@@ -133,6 +134,8 @@ def read_tflite_model(tflite_path):
         code = lookup_enum(op_code.DeprecatedBuiltinCode(), 'BuiltinOperator')
         if code == 'PLACEHOLDER_FOR_GREATER_OP_CODES':
             code = lookup_enum(op_code.BuiltinCode(), 'BuiltinOperator')
+        if code == 'CUSTOM':
+            code = op_code.CustomCode().decode()
         opcodes_map[i] = code
     tflite_graphs = [model.Subgraphs(i) for i in range(model.SubgraphsLength())]
     return tflite_graphs, opcodes_map, model
@@ -177,7 +180,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
             output_shapes[name] = tensor.ShapeSignatureAsNumpy().tolist()
         buf = model.Buffers(tensor.Buffer())
         dtypes[name] = map_tflite_dtype_to_onnx(tensor.Type())
-        if not buf.DataIsNone():
+        if not buf.DataIsNone() and tensor.Buffer() > 0:
             # For const values we use TF to decode the binary data from the buffer
             t = tensor_pb2.TensorProto()
             t.tensor_content = buf.DataAsNumpy().tobytes()
@@ -257,6 +260,10 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
                 attr['scale'] = quant.ScaleAsNumpy().tolist()
                 attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
                 attr['quantized_dimension'] = quant.QuantizedDimension()
+        if not op.CustomOptionsIsNone():
+            custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
+            if custom_ops_format == 'FLEXBUFFERS':
+                attr.update(read_flexbuffer(op.CustomOptionsAsNumpy().tobytes()))
         if option_class is not None:
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)

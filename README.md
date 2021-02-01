@@ -1,3 +1,5 @@
+<!--- SPDX-License-Identifier: Apache-2.0 -->
+
 # tf2onnx - Convert TensorFlow models to ONNX.
 
 | Build Type | OS | Python | Tensorflow | Onnx opset | Status |
@@ -166,11 +168,15 @@ The target onnx file path.
 
 #### --inputs, --outputs
 
-TensorFlow model's input/output names, which can be found with [summarize graph tool](#summarize_graph). Those names typically end with ```:0```, for example ```--inputs input0:0,input1:0```. Inputs and outputs are ***not*** needed for models in saved-model format. Some models specify placeholders with unknown ranks and dims which can not be mapped to onnx. In those cases one can add the shape after the input name inside `[]`, for example `--inputs X:0[1,28,28,3]`
+TensorFlow model's input/output names, which can be found with [summarize graph tool](#summarize_graph). Those names typically end with ```:0```, for example ```--inputs input0:0,input1:0```. Inputs and outputs are ***not*** needed for models in saved-model format. Some models specify placeholders with unknown ranks and dims which can not be mapped to onnx. In those cases one can add the shape after the input name inside `[]`, for example `--inputs X:0[1,28,28,3]`. Use -1 to indicate unknown dimensions.
 
 #### --inputs-as-nchw
 
 By default we preserve the image format of inputs (`nchw` or `nhwc`) as given in the TensorFlow model. If your hosts (for example windows) native format nchw and the model is written for nhwc, ```--inputs-as-nchw``` tensorflow-onnx will transpose the input. Doing so is convenient for the application and the converter in many cases can optimize the transpose away. For example ```--inputs input0:0,input1:0 --inputs-as-nchw input0:0``` assumes that images are passed into ```input0:0``` as nchw while the TensorFlow model given uses nhwc.
+
+#### --ignore_default, --use_default
+
+ONNX requires default values for graph inputs to be constant, while Tensorflow's PlaceholderWithDefault op accepts computed defaults.  To convert such models, pass a comma-separated list of node names to the ignore_default and/or use_default flags.  PlaceholderWithDefault nodes with matching names will be replaced with Placeholder or Identity ops, respectively.
 
 #### --opset
 
@@ -272,7 +278,7 @@ python tests/run_pretrained_models.py --backend onnxruntime --config tests/run_p
 #### <a name="save_pretrained_model"></a>Tool to save pre-trained model
 
 We provide an [utility](tools/save_pretrained_model.py) to save pre-trained model along with its config.
-Put `save_pretrained_model(sess, outputs, feed_inputs, save_dir, model_name)` in your last testing epoch and the pre-trained model and config will be saved under `save_dir/to_onnx`. 
+Put `save_pretrained_model(sess, outputs, feed_inputs, save_dir, model_name)` in your last testing epoch and the pre-trained model and config will be saved under `save_dir/to_onnx`.
 Please refer to the example in [tools/save_pretrained_model.py](tools/save_pretrained_model.py) for more information.
 Note the minimum required Tensorflow version is r1.6.
 
@@ -283,12 +289,13 @@ In some cases it will be useful to convert the models from TensorFlow to ONNX fr
 ```
 import tf2onnx
 
-tf2onnx.tfonnx.process_tf_graph(tf_graph, 
+tf2onnx.tfonnx.process_tf_graph(tf_graph,
             continue_on_error=False, verbose=False, target=None,
             opset=None, custom_op_handlers=None,
             custom_rewriter=None, extra_opset=None,
             shape_override=None, inputs_as_nchw=None,
             input_names=None, output_names=None,
+            ignore_default=None, use_default=None,
             const_node_values=None):
     """Convert tensorflow graph to onnx graph.
         Args:
@@ -304,6 +311,8 @@ tf2onnx.tfonnx.process_tf_graph(tf_graph,
             inputs_as_nchw: transpose inputs in list from nchw to nchw
             input_names: list of input node names in graph, input name format as node_name:port_id
             output_names: list of output node names in graph, output name format as node_name:port_id
+            ignore_default: list of node names of PlaceholderWithDefault ops to change into Placeholder ops
+            use_default: list of node names of PlaceholderWithDefault ops to change into Identity ops
             const_node_values: an optional dict mapping node names to tensor values
         Return:
             onnx graph
@@ -409,4 +418,4 @@ If you like to contribute and add new conversions to tf2onnx, the process is som
 
 ## License
 
-[MIT License](LICENSE)
+[Apache License v2.0](LICENSE)

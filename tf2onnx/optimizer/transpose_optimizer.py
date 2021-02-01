@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """Transpose Optimizer."""
 
@@ -100,6 +100,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         nodes = self.nodes
         # if channel==1 or height==width==1, replace transpose with reshape
         # replacing trans with reshape is because transpose will copy data even if this transpose doesn't nothing
+        need_sort = False
         for op in nodes:
             if op.type == "Transpose":
                 input_shape = self._g.get_shape(op.input[0])
@@ -112,7 +113,9 @@ class TransposeOptimizer(GraphOptimizerBase):
                     # replace transpose with reshape
                     self._g.remove_node(op.name)
                     self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output)
-                    self._g.topological_sort(self._g.get_nodes())
+                    need_sort = True
+        if need_sort:
+            self._g.topological_sort(self._g.get_nodes())
 
     def merge_duplicated_transposes(self):
         # strategy used in previous procedure is to move transpose nodes down if possible,
@@ -283,12 +286,12 @@ class TransposeOptimizer(GraphOptimizerBase):
                 op_handler = self._handler_map[p.type]
                 return op_handler(trans, p)
             return False
-        # move transpose into branches to let Transposes can be "handled" in each branch
-        for n in out_nodes:
-            branch_trans = n.graph.make_node("Transpose", [trans.input[0]], attr=trans.get_onnx_attrs())
-            n.graph.replace_input(n, trans.output[0], branch_trans.output[0])
-
-        self._g.remove_node(trans.name)
+        if out_nodes:
+            # move transpose into branches to let Transposes can be "handled" in each branch
+            for n in out_nodes:
+                branch_trans = n.graph.make_node("Transpose", [trans.input[0]], attr=trans.get_onnx_attrs())
+                n.graph.replace_input(n, trans.output[0], branch_trans.output[0])
+            self._g.remove_node(trans.name)
         return False
 
     def _remove_useless_tranpose(self, trans):

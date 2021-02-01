@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """
 tf2onnx.tf_utils - misc utilities for tf2onnx that interface with tensorflow
@@ -293,7 +293,7 @@ def get_hash_table_info(nodes_or_graph_def):
     key_dtypes = []
     val_dtypes = []
     for n in nodes:
-        if n.op == "HashTableV2":
+        if n.op in ["HashTableV2", "MutableHashTableV2"]:
             if all(k in n.attr for k in ['shared_name', 'key_dtype', 'value_dtype']):
                 name = n.attr['shared_name'].s
                 if name != b'':
@@ -317,7 +317,7 @@ def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
             n.attr['key_dtype'].type = key_dtype
             n.attr['value_dtype'].type = val_dtype
 
-def tflist_to_onnx(g, shape_override, const_node_values=None):
+def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=None, use_default=None):
     """
     Convert the tf-node list into an onnx graph with minimal rewrites so
     we can use the onnx graph as intermediate graph.
@@ -395,11 +395,20 @@ def tflist_to_onnx(g, shape_override, const_node_values=None):
             else:
                 attr[a] = get_tf_node_attr(node, a)
 
+        node_type = node.type
+        input_names = [i.name for i in node.inputs]
+        output_names = [i.name for i in node.outputs]
+
+        if node_type == 'PlaceholderWithDefault':
+            if ignore_default and node.name in ignore_default:
+                node_type = 'Placeholder'
+                input_names = []
+            elif use_default and node.name in use_default:
+                node_type = 'Identity'
+
         if takeit:
             try:
-                input_names = [i.name for i in node.inputs]
-                output_names = [i.name for i in node.outputs]
-                onnx_node = helper.make_node(node.type, input_names, output_names, name=node.name, **attr)
+                onnx_node = helper.make_node(node_type, input_names, output_names, name=node.name, **attr)
                 onnx_nodes.append(onnx_node)
             except Exception as ex:
                 logger.error("pass1 convert failed for %s, ex=%s", node, ex)
@@ -408,8 +417,8 @@ def tflist_to_onnx(g, shape_override, const_node_values=None):
     return onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, functions
 
 
-def tensorflow_to_onnx(graph, shape_override, const_node_values=None):
+def tensorflow_to_onnx(graph, shape_override, const_node_values=None, ignore_default=None, use_default=None):
     """
     Load tensorflow graph and do a conversion.
     """
-    return tflist_to_onnx(graph, shape_override, const_node_values)
+    return tflist_to_onnx(graph, shape_override, const_node_values, ignore_default, use_default)

@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT license.
+# SPDX-License-Identifier: Apache-2.0
+
 
 """
 tf2onnx.graph - class to manage graph manipulation on top of onnx
@@ -462,9 +462,12 @@ class Graph(object):
         self._output_to_consumers = {}
         self._input_to_graph = {}
         self.shapes = {}
-        self.graph_name = graph_name or "tf2onnx"
+        self.graph_name = graph_name or utils.make_name("tf2onnx")
         self._is_subgraph = is_subgraph
         self.ta_reads = []
+        # A list of index, output tuples of potential scan outputs in this graph
+        # Used by the tflite while loop handler
+        self.scan_outputs = []
         self.func_inputs = []
 
         self._target = set(target)
@@ -558,7 +561,7 @@ class Graph(object):
             skip_conversion: bool, indicate whether this created node would be mapped during conversion.
             raw: whether to store data at field of raw_data or the specific field according to its dtype
         """
-        if raw:
+        if raw and np_val.dtype != np.object:
             onnx_tensor = numpy_helper.from_array(np_val, name)
         else:
             onnx_tensor = helper.make_tensor(name, utils.map_numpy_to_onnx_dtype(np_val.dtype),
@@ -1006,7 +1009,7 @@ class Graph(object):
             all_input = list(filter(lambda a: a != '', all_input))
             for inp in sorted(all_input):
                 j = self.get_node_by_output(inp)
-                utils.make_sure(j is not None, "Cannot find node with output %r", inp)
+                utils.make_sure(j is not None, "Cannot find node with output %r in graph %r", inp, self.graph_name)
                 if self.parent_graph and j.name not in op_name_to_index:
                     # there might be some outer-scoped inputs for an inner Graph.
                     pass
@@ -1077,7 +1080,8 @@ class Graph(object):
             if op.type == "PlaceholderWithDefault":
                 utils.make_sure(op.inputs[0] is not None, "Cannot find node with output {}".format(op.input[0]))
                 utils.make_sure(op.inputs[0].is_const(),
-                                "non-const default value for PlaceholderWithDefault is not supported.")
+                                "non-const default value for PlaceholderWithDefault node '%s' is not supported. "
+                                "Use the --use_default or --ignore_default flags to convert this node.", op.name)
                 # copy the tensor value, set its name to current node's output, add as initializer
                 value = op.inputs[0].get_tensor_value(as_list=False)
                 tensor = numpy_helper.from_array(value, op.output[0])
