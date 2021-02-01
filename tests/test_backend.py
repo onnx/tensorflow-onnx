@@ -1532,6 +1532,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
 
     @check_opset_min_version(9, "OneHot")
+    @check_tf_min_version("2.3", "needs tf 2.3")
     def test_unsorted_segment_ops(self):
         tf_ops = [
             tf.math.unsorted_segment_max,
