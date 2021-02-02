@@ -1960,9 +1960,15 @@ class Unique:
         node_inputs = node.input
         node_outputs = node.output
         ctx.remove_node(node_name)
+        if dtypes[0] in [TensorProto.INT32, TensorProto.INT16, TensorProto.UINT8, TensorProto.UINT16]:
+            inp_cast = ctx.make_node("Cast", [node_inputs[0]], attr={'to': TensorProto.INT64}).output[0]
+            node_inputs[0] = inp_cast
         new_node = ctx.make_node("Unique", node_inputs, name=node_name, output_count=3, attr={'sorted': 0})
         ctx.replace_all_inputs(node_outputs[0], new_node.output[0])
         ctx.replace_all_inputs(node_outputs[1], new_node.output[2])
+        if ctx.get_dtype(new_node.output[0]) != dtypes[0]:
+            ctx.insert_new_node_on_output("Cast", new_node.output[0], name=utils.make_name(node.name) + "_cast",
+                                          to=dtypes[0])
         if len(node_outputs) > 1:
             # cast to int64 if needed
             if dtypes[1] != onnx_pb.TensorProto.INT64:
@@ -2064,18 +2070,18 @@ class RaggedTensorToSparse:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # https://www.tensorflow.org/guide/ragged_tensor#multiple_ragged_dimensions
-        dense_values = node.inputs[-1]
-        nested_splits = node.inputs[:-1]
+        dense_values = node.input[-1]
+        nested_splits = node.input[:-1]
         sparse_indices = None
         dense_shape_dims = []
         for split in nested_splits:
-            if ctx.get_dtype(split.output[0]) != TensorProto.INT64:
-                split = ctx.make_node("Cast", [split.output[0]], attr={'to': TensorProto.INT64})
+            if ctx.get_dtype(split) != TensorProto.INT64:
+                split = ctx.make_node("Cast", [split], attr={'to': TensorProto.INT64}).output[0]
             max_int64 = int(utils.get_max_value(np.int64))
             slice1 = GraphBuilder(ctx).make_slice(
-                {"data": split.output[0], "ends": [max_int64], "starts": [1], "axes": [0]})
+                {"data": split, "ends": [max_int64], "starts": [1], "axes": [0]})
             slice2 = GraphBuilder(ctx).make_slice(
-                {"data": split.output[0], "ends": [-1], "starts": [0], "axes": [0]})
+                {"data": split, "ends": [-1], "starts": [0], "axes": [0]})
             ragged_lens = ctx.make_node("Sub", [slice1, slice2]).output[0]
             num_rows, num_cols, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, ragged_lens)
             if not dense_shape_dims:
@@ -2091,7 +2097,7 @@ class RaggedTensorToSparse:
         dense_shape = ctx.make_node("Concat", dense_shape_dims, attr={'axis': 0}, op_name_scope=node.name).output[0]
 
         ctx.replace_all_inputs(node.output[0], sparse_indices)
-        ctx.replace_all_inputs(node.output[1], dense_values.output[0])
+        ctx.replace_all_inputs(node.output[1], dense_values)
         ctx.replace_all_inputs(node.output[2], dense_shape)
         ctx.remove_node(node.name)
 
