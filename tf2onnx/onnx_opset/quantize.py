@@ -24,14 +24,22 @@ logger = logging.getLogger(__name__)
 # pylint: disable=unused-argument,missing-docstring,unused-variable,pointless-string-statement,invalid-name
 
 
-@tf_op("FakeQuantWithMinMaxArgs")
+@tf_op(["FakeQuantWithMinMaxArgs", "FakeQuantWithMinMaxVars"])
 class FakeQuantWithMinMaxArgs:
     # see https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/fake-quant-with-min-max-args
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
         # hack to make up for the missing onnx pack op
-        amin = node.get_attr("min").f
-        amax = node.get_attr("max").f
+        if node.type == "FakeQuantWithMinMaxVars":
+            utils.make_sure(node.inputs[1].is_scalar(), "%s node %s requires const scalar value for min",
+                            node.type, node.name)
+            utils.make_sure(node.inputs[2].is_scalar(), "%s node %s requires const scalar value for max",
+                            node.type, node.name)
+            amin = node.inputs[1].get_tensor_value()
+            amax = node.inputs[2].get_tensor_value()
+        else:
+            amin = node.get_attr("min").f
+            amax = node.get_attr("max").f
         narrow_range = node.get_attr("narrow_range").i
         num_bits = node.get_attr("num_bits").i
 
@@ -58,10 +66,10 @@ class FakeQuantWithMinMaxArgs:
         zero = np.array(-min_adj, dtype=np.uint8)
         make_sure(
             zero == -min_adj,
-            "Cannot convert FakeQuantWithMinMaxArgs with "
+            "Cannot convert %s node %s with "
             "min=%r max=%r numbits=%r because zero_scale=%r "
             "is outside uint8 boundary",
-            amin, amax, num_bits, -min_adj)
+            node.type, node.name, amin, amax, num_bits, -min_adj)
         zero_point = ctx.make_const(
             utils.make_name("{}_zpy".format(node.name)), zero)
 
