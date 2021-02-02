@@ -278,8 +278,8 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
 def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
                                         removed_resource_to_placeholder, placeholder_to_table_info):
     # pylint: disable=protected-access
-    for key, r in trackable.__dict__.items():
-        if hasattr(r, '_create_resource'):
+    for r in trackable.__dict__.values():
+        if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource'):
             try:
                 table_handle = id(r.resource_handle)
             except Exception:  # pylint: disable=broad-except

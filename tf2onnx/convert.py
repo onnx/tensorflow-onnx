@@ -55,6 +55,7 @@ def get_args():
                         help="For TF2.x saved_model, index of func signature in __call__ (--signature_def is ignored)")
     parser.add_argument("--checkpoint", help="input from checkpoint")
     parser.add_argument("--keras", help="input from keras model")
+    parser.add_argument("--tflite", help="input from tflite model")
     parser.add_argument("--large_model", help="use the large model format (for models > 2GB)", action="store_true")
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names")
@@ -86,7 +87,7 @@ def get_args():
     if args.graphdef or args.checkpoint:
         if not args.input and not args.outputs:
             parser.error("graphdef and checkpoint models need to provide inputs and outputs")
-    if not any([args.graphdef, args.checkpoint, args.saved_model, args.keras]):
+    if not any([args.graphdef, args.checkpoint, args.saved_model, args.keras, args.tflite]):
         parser.print_help()
         sys.exit(1)
     if args.inputs:
@@ -126,6 +127,7 @@ def main():
     logger = logging.getLogger(constants.TF2ONNX_PACKAGE_NAME)
 
     extra_opset = args.extra_opset or []
+    tflite_path = None
     custom_ops = {}
     initialized_tables = None
     if args.custom_ops:
@@ -143,7 +145,7 @@ def main():
 
     if any(opset.domain == constants.CONTRIB_OPS_DOMAIN for opset in extra_opset):
         try:
-            import tensorflow_text
+            import tensorflow_text   # pylint: disable=import-outside-toplevel
         except ModuleNotFoundError:
             logger.warning("tensorflow_text not installed. Model will fail to load if tensorflow_text ops are used.")
 
@@ -163,18 +165,28 @@ def main():
         graph_def, inputs, outputs = tf_loader.from_keras(
             args.keras, args.inputs, args.outputs)
         model_path = args.keras
+    if args.tflite:
+        graph_def = None
+        inputs = None
+        outputs = None
+        tflite_path = args.tflite
+        model_path = tflite_path
 
     if args.verbose:
         logger.info("inputs: %s", inputs)
         logger.info("outputs: %s", outputs)
 
-    with tf.Graph().as_default() as tf_graph:
-        const_node_values = None
-        if args.large_model:
-            const_node_values = compress_graph_def(graph_def)
-        if args.output_frozen_graph:
-            utils.save_protobuf(args.output_frozen_graph, graph_def)
-        tf.import_graph_def(graph_def, name='')
+    tf_graph = None
+    const_node_values = None
+    if graph_def is not None:
+        with tf.Graph().as_default() as tf_graph:
+            const_node_values = None
+            if args.large_model:
+                const_node_values = compress_graph_def(graph_def)
+            if args.output_frozen_graph:
+                utils.save_protobuf(args.output_frozen_graph, graph_def)
+            tf.import_graph_def(graph_def, name='')
+
     with tf_loader.tf_session(graph=tf_graph):
         g = process_tf_graph(tf_graph,
                              continue_on_error=args.continue_on_error,
@@ -189,7 +201,8 @@ def main():
                              ignore_default=args.ignore_default,
                              use_default=args.use_default,
                              const_node_values=const_node_values,
-                             initialized_tables=initialized_tables)
+                             initialized_tables=initialized_tables,
+                             tflite_path=tflite_path)
 
     onnx_graph = optimizer.optimize_graph(g)
 

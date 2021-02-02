@@ -12,7 +12,7 @@ from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 # pylint: disable=missing-docstring
 
-def rewrite_slice_concat_to_scatter(g, ops):
+def rewrite_tfl_scan_outputs(g, ops):
     pattern0 = \
         OpTypePattern('TFL_CONCATENATION', name='concat', inputs=[
             OpTypePattern('TFL_SLICE', name='begin_slice'),

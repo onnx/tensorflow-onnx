@@ -3221,7 +3221,7 @@ nnlm-zh-dim50-with-normalization:
   concrete_function: 0
 
 Wiki-words-250-with-normalization:
-  disabled: true
+  disabled: false
   skip_conversion: true
   model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-250-with-normalization"
   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-250-with-normalization/model.onnx"
@@ -3239,7 +3239,7 @@ Wiki-words-250-with-normalization:
   concrete_function: 0
 
 Wiki-words-500:
-  disabled: true
+  disabled: false
   skip_conversion: true
   model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-500"
   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-500/model.onnx"
@@ -3257,7 +3257,7 @@ Wiki-words-500:
   concrete_function: 0
 
 Wiki-words-500-with-normalization:
-  disabled: true
+  disabled: false
   skip_conversion: true
   model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-500-with-normalization"
   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/Wiki-words-500-with-normalization/model.onnx"
@@ -3332,7 +3332,7 @@ universal-sentence-encoder-qa:
   signature_def: "default"
 
 covid-twitter-bert:
-  disabled: true
+  disabled: false
   skip_conversion: true
   model: "C:/Users/tomwi/Documents/tfhubmodels/covid-twitter-bert"
   converted_model: "C:/Users/tomwi/Documents/tfhubmodels/covid-twitter-bert/model.onnx"

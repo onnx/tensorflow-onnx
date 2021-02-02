@@ -100,7 +100,8 @@ def infer_shape_for_op(op):
             op.outputs[0].set_shape(new_shape)
             logger.debug("set placeholder op [%s] with new shape %s", op.outputs[0].name, new_shape)
             return True
-        logger.warning("Shape of placeholder %s is unknown, treated it as a scalar", op.name)
+        logger.warning("Shape of placeholder '%s' is unknown, treated it as a scalar. Please use the --input flag "
+                       "and append the shape to the input name if this input is not a scalar.", op.name)
         op.outputs[0].set_shape([])
         return True
 
