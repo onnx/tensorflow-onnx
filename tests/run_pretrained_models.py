@@ -40,6 +40,11 @@ except:  # pylint: disable=bare-except
     # not needed for tf-2.0
     pass
 
+try:
+    import tensorflow_text  # pylint: disable=unused-import
+except ModuleNotFoundError:
+    pass
+
 from tf2onnx import tf_loader, logging, optimizer, utils, tf_utils, constants
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.tf_loader import tf_session, tf_reset_default_graph
