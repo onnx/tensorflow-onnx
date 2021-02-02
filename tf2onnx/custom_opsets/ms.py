@@ -63,10 +63,10 @@ class ConvTransposeWithDynamicPads:
         input_shape = ctx.make_node("Shape", [node.input[2]])
         hw_indices = ctx.make_const(utils.make_name("hw_indices"), np.array([1, 2]).astype(np.int64))
         input_shape_hw = ctx.make_node("Gather", [input_shape.output[0], hw_indices.output[0]])
-        output_shape = node.inputs[0]
-        if ctx.get_dtype(output_shape.output[0]) != onnx_pb.TensorProto.INT64:
-            output_shape = ctx.make_node("Cast", [output_shape.output[0]], attr={"to": onnx_pb.TensorProto.INT64})
-        output_shape_hw = ctx.make_node("Gather", [output_shape.output[0], hw_indices.output[0]])
+        output_shape = node.input[0]
+        if ctx.get_dtype(output_shape) != onnx_pb.TensorProto.INT64:
+            output_shape = ctx.make_node("Cast", [output_shape], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
+        output_shape_hw = ctx.make_node("Gather", [output_shape, hw_indices.output[0]])
         kernel_shape_hw = list(ctx.get_shape(node.input[1]))[0:2]
         kernel_shape = ctx.make_const(utils.make_name("const_convtrans"), np.array(kernel_shape_hw).astype(np.int64))
         strides = conv_dims_attr(node, "strides")
