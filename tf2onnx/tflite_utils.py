@@ -294,6 +294,11 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
         if wants_dequantized_input:
             input_names = [get_dequant(inp) for inp in input_names]
         output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
+        if optype == "TFLite_Detection_PostProcess":
+            # There's a bug in tflite for the output shapes of this op
+            for out, shape in zip(output_names, [[-1, -1, 4], [-1, -1], [-1, -1], [-1]]):
+                if len(output_shapes[out]) != len(shape):
+                    output_shapes[out] = shape
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]
         onnx_node = helper.make_node("TFL_" + optype, input_names, output_names, name=output_names[0], **attr)
