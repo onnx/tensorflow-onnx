@@ -143,6 +143,12 @@ def main():
         if using_tf_opset:
             extra_opset.append(constants.TENSORFLOW_OPSET)
 
+    if any(opset.domain == constants.CONTRIB_OPS_DOMAIN for opset in extra_opset):
+        try:
+            import tensorflow_text   # pylint: disable=import-outside-toplevel
+        except ModuleNotFoundError:
+            logger.warning("tensorflow_text not installed. Model will fail to load if tensorflow_text ops are used.")
+
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:
         graph_def, inputs, outputs = tf_loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
