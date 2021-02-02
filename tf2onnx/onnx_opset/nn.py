@@ -315,10 +315,10 @@ def build_dynamic_target_size(ctx, transposed_intput, target_hw):
         A tensor of rank 2 containing [n c nh nw]
     """
     # We get the first half [n c] of the target shape
-    shape_of_transposed_input = ctx.make_node("Shape", [transposed_intput.output[0]])
+    shape_of_transposed_input = ctx.make_node("Shape", [transposed_intput])
     first_half_of_shape = GraphBuilder(ctx).make_slice(
         {"data": shape_of_transposed_input.output[0], "ends": [2], "starts": [0]})
-    target_size_int64 = ctx.make_node("Cast", [target_hw.output[0]], attr={'to': TensorProto.INT64})
+    target_size_int64 = ctx.make_node("Cast", [target_hw], attr={'to': TensorProto.INT64})
     # We build a tensor containing [n c nh nw]
     final_target_size = ctx.make_node("Concat", [first_half_of_shape, target_size_int64.output[0]], {'axis': 0})
     return final_target_size
@@ -916,10 +916,10 @@ class CropAndResize:
         mode = "nearest" if node.get_attr("method") is not None and node.get_attr(
             "method").s == b"nearest" else "linear"
         extrapolation_value = float(node.get_attr("extrapolation_value", "0").f)
-        input_x = node.inputs[0]
-        boxes = node.inputs[1]
-        box_ind = node.inputs[2]
-        crop_size = node.inputs[3]
+        input_x = node.input[0]
+        boxes = node.input[1]
+        box_ind = node.input[2]
+        crop_size = node.input[3]
         trip_name = utils.make_name(node.name + "_i")
         cond_name = utils.make_name(node.name + "_cond")
         cond_out_name = utils.make_name(node.name + "cond_out")
@@ -932,9 +932,9 @@ class CropAndResize:
         const_one = g.make_const(utils.make_name(node.name + "_const_one"), np.array([1], dtype=np.int32))
         const_one_long = g.make_const(utils.make_name(node.name + "_const_one_long"), np.array([1], dtype=np.int64))
         index_end = g.make_node("Add", [trip_name, const_one_long.output[0]])
-        box_index_from = g.make_node("Slice", [box_ind.output[0], trip_name, index_end.output[0]], name="Slice_a")
+        box_index_from = g.make_node("Slice", [box_ind, trip_name, index_end.output[0]], name="Slice_a")
         box_index_to = g.make_node("Add", [box_index_from.output[0], const_one.output[0]])
-        target_x = g.make_node("Slice", [input_x.output[0], box_index_from.output[0], box_index_to.output[0],
+        target_x = g.make_node("Slice", [input_x, box_index_from.output[0], box_index_to.output[0],
                                          const_zero.output[0]], name="Slice_b")
         transposed_x = g.make_node("Transpose", [target_x.output[0]], attr={'perm': constants.NHWC_TO_NCHW})
         const_zero_zero = g.make_const(utils.make_name(node.name + "_const_zero_zero"),
@@ -943,7 +943,7 @@ class CropAndResize:
                                      np.array([1, 1], dtype=np.float32))
         const_four = g.make_const(utils.make_name(node.name + "_const_four"), np.array([4], dtype=np.int64))
         const_empty_float = g.make_const(utils.make_name("const_empty_float"), np.array([], dtype=np.float32))
-        box = g.make_node("Slice", [boxes.output[0], trip_name, index_end.output[0], const_zero_long.output[0]],
+        box = g.make_node("Slice", [boxes, trip_name, index_end.output[0], const_zero_long.output[0]],
                           name="Slice_c")
         roi_raw = g.make_node("Reshape", [box.output[0], const_four.output[0]])
         roi_raw_first_half = GraphBuilder(g).make_slice({"data": roi_raw.output[0], "ends": [2], "starts": [0]})
@@ -951,7 +951,7 @@ class CropAndResize:
         roi_concat_1 = g.make_node("Concat", [const_zero_zero.output[0], roi_raw_first_half], attr={'axis': 0})
         roi_concat_2 = g.make_node("Concat", [const_one_one.output[0], roi_raw_second_half], attr={'axis': 0})
         final_roi = g.make_node("Concat", [roi_concat_1.output[0], roi_concat_2.output[0]], attr={'axis': 0})
-        final_crop_size = build_dynamic_target_size(g, transposed_x, crop_size)
+        final_crop_size = build_dynamic_target_size(g, transposed_x.output[0], crop_size)
         resized_x = g.make_node("Resize", [transposed_x.output[0], final_roi.output[0], const_empty_float.output[0],
                                            final_crop_size.output[0]],
                                 attr={"mode": mode, "extrapolation_value": extrapolation_value,
@@ -961,7 +961,7 @@ class CropAndResize:
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
-        trip_node = ctx.make_node("Size", [box_ind.output[0]])
+        trip_node = ctx.make_node("Size", [box_ind])
         cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
         ctx.remove_node(node.name)
         branches = {"body": g}
@@ -1070,7 +1070,7 @@ class Resize:
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
         input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
         if use_target_size:
-            final_target_size = build_dynamic_target_size(ctx, input_nchw, node.inputs[1])
+            final_target_size = build_dynamic_target_size(ctx, input_nchw.output[0], node.input[1])
             roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
             const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([], dtype=np.float32))
             resize_inputs = [

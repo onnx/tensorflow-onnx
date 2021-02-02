@@ -154,25 +154,25 @@ class ClipByValueOp:
         # fetch those upfront since they are not accessible once we remove 'node'
         shapes = node.output_shapes
         dtypes = node.output_dtypes
-        input_dtype = node.inputs[0].output_dtypes[0]
+        input_dtype = ctx.get_dtype(node.input[0])
         name = node.name
-        min_node = node.inputs[1]
-        if min_node.output_dtypes[0] not in supported:
+        min_node = node.input[1]
+        if ctx.get_dtype(min_node) not in supported:
             # cast min if needed
-            min_node = ctx.insert_new_node_on_input(node, "Cast", min_node.output[0], to=onnx_pb.TensorProto.FLOAT)
-        max_node = node.inputs[2]
-        if max_node.output_dtypes[0] not in supported:
+            min_node = ctx.insert_new_node_on_input(node, "Cast", min_node, to=onnx_pb.TensorProto.FLOAT).output[0]
+        max_node = node.input[2]
+        if ctx.get_dtype(max_node) not in supported:
             # cast max if needed
-            max_node = ctx.insert_new_node_on_input(node, "Cast", max_node.output[0], to=onnx_pb.TensorProto.FLOAT)
+            max_node = ctx.insert_new_node_on_input(node, "Cast", max_node, to=onnx_pb.TensorProto.FLOAT).output[0]
         ctx.remove_node(name)
-        new_node = ctx.make_node("Max", [node.input[0], min_node.output[0]], outputs=[node.output[0]],
+        new_node = ctx.make_node("Max", [node.input[0], min_node], outputs=[node.output[0]],
                                  shapes=shapes, dtypes=dtypes)
         if input_dtype not in supported:
             # cast the data tensor if needed
             ctx.insert_new_node_on_input(new_node, "Cast", new_node.input[0], to=onnx_pb.TensorProto.FLOAT)
 
         new_node = ctx.insert_new_node_on_output("Min", new_node.output[0], name=utils.make_name(name))
-        new_node.input.append(max_node.output[0])
+        new_node.input.append(max_node)
         # copy shape and type
         ctx.set_dtype(new_node.output[0], dtypes[0])
         ctx.set_shape(new_node.output[0], shapes[0])
