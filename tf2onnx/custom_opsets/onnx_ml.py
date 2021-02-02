@@ -42,19 +42,23 @@ class LookupTableFind:
 
         dtype = ctx.get_dtype(node.output[0])
         in_dtype = ctx.get_dtype(node.input[1])
-        utils.make_sure(dtype == TensorProto.INT64 and in_dtype == TensorProto.STRING,
-                        "Only lookup tables of type string->int64 are currently supported.")
+        utils.make_sure(dtype == TensorProto.INT64, "Only lookup tables with value type int64 are currently supported.")
 
-        cats_strings, cats_int64s = initialized_tables[shared_name]
         shape = ctx.get_shape(node.output[0])
 
         node_name = node.name
-        node_inputs = node.input
+        node_inputs = node.input.copy()
         node_outputs = node.output
+
+        cats_strings, cats_int64s = initialized_tables[shared_name]
+        if in_dtype != TensorProto.STRING:
+            # cats_strings is a list of keys in bytes
+            cats_strings = np.vectorize(lambda s: s.encode("UTF-8"))(cats_strings.astype(np.str))
+            node_inputs[1] = ctx.make_node("Cast", [node_inputs[1]], attr={'to': TensorProto.STRING}).output[0]
 
         if node.inputs[1].is_const():
             # Handle explicitly since const folding doesn't work for tables
-            key_np = node.inputs[1].get_tensor_value(as_list=False)
+            key_np = node.inputs[1].get_tensor_value(as_list=False).astype(np.str)
             ctx.remove_node(node.name)
             key_to_val = dict(zip(cats_strings, cats_int64s))
             def lookup_value(key):

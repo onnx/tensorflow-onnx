@@ -1501,7 +1501,7 @@ class SpaceToBatch:
             # onnx op "SpaceToDepth" does the same work on input tensor except that it works on "C",
             # and it only supports NCHW
             # T out = SpaceToBatchND(T input, int32 block_shape, int32 crops)
-            input_tensor = node.inputs[0]
+            input_tensor = node.input[0]
             shapes = [ctx.get_shape(node.output[0])]
             dtypes = [ctx.get_dtype(node.output[0])]
 
@@ -1513,12 +1513,12 @@ class SpaceToBatch:
                     0, bottom, right, 0]
             ctx.remove_node(node.name)
             if ctx.opset <= 10:
-                pad_op = ctx.make_node("Pad", input_tensor.output, attr={"pads": pads})
+                pad_op = ctx.make_node("Pad", [input_tensor], attr={"pads": pads})
             else:
                 # TODO: we should be able to support dynamic input here.
                 pads_name = utils.make_name(node.name)
                 ctx.make_const(name=pads_name, np_val=np.array(pads, dtype=np.int64))
-                pad_op = ctx.make_node("Pad", [input_tensor.output[0], pads_name])
+                pad_op = ctx.make_node("Pad", [input_tensor, pads_name])
 
             # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
             trans1 = ctx.make_node("Transpose", pad_op.output, {"perm": [3, 0, 1, 2]})

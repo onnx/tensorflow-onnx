@@ -306,6 +306,7 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     resource_id_to_placeholder = {}
     graph_captures_copy = None
     func_captures_copy = None
+    id_to_resource = {}
     if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
         graph_captures_copy = concrete_func.graph._captures.copy()
         func_captures_copy = concrete_func._captured_inputs.copy()
@@ -314,6 +315,7 @@ def _remove_non_variable_resources_from_captures(concrete_func):
             val_tensor, name_tensor = v
             if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
                 resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
+                id_to_resource[id(val_tensor)] = val_tensor
                 del concrete_func.graph._captures[k]
                 for i in reversed(range(len(concrete_func._captured_inputs))):
                     if concrete_func._captured_inputs[i] is val_tensor:
@@ -327,7 +329,7 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     else:
         logger.warning(
             "Could not search for non-variable resources. Concrete function internal representation may have changed.")
-    return resource_id_to_placeholder, graph_captures_copy, func_captures_copy
+    return resource_id_to_placeholder, graph_captures_copy, func_captures_copy, id_to_resource
 
 
 def _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy):
@@ -392,7 +394,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         outputs = list(set(output_names) & set(outputs))
 
     # Avoid errors due to bug in TF freezing
-    removed_resource_to_placeholder, graph_captures_copy, func_captures_copy = \
+    removed_resource_to_placeholder, graph_captures_copy, func_captures_copy, id_to_resource = \
         _remove_non_variable_resources_from_captures(concrete_func)
 
     try:
@@ -419,9 +421,14 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         except Exception:  # pylint: disable=broad-except
             logger.warning("Could not initialize table with shared_name = %r", n)
 
-    for placeholder in removed_resource_to_placeholder.values():
+    for resource_id, placeholder in removed_resource_to_placeholder.items():
+        import uuid
         if placeholder not in placeholder_to_table_info:
-            logger.error("Could not find table resource to replace placeholder %s", placeholder)
+            handle = id_to_resource[resource_id]
+            n = str(uuid.uuid4()).encode()
+            k, v = lookup_ops.lookup_table_export_v2(handle, tf.int64, tf.int64)
+            initialized_tables[n] = (k.numpy(), v.numpy())
+            placeholder_to_table_info[placeholder] = (n, tf.int64.as_datatype_enum, tf.int64.as_datatype_enum)
 
     replace_placeholders_with_tables(frozen_graph, placeholder_to_table_info)
 

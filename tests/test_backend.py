@@ -4103,6 +4103,32 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {}, as_session=True)
         os.remove(filnm)
 
+    @check_opset_min_version(8, "CategoryMapper")
+    def test_hashtable_lookup_int64(self):
+        query = np.array([42, 56], dtype=np.int64)
+        def func(query_holder):
+            keys = tf.constant([3, 42, 57], tf.int64)
+            values = tf.constant([1, 2, 3], tf.int64)
+            init = lookup_ops.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64)
+            hash_table = lookup_ops.StaticHashTable(init, tf.constant(9, tf.int64))
+            lookup_results = hash_table.lookup(query_holder)
+            ret = tf.add(lookup_results, 0, name=_TFOUTPUT)
+            return ret
+        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, constant_fold=False, as_session=True)
+
+    @check_opset_min_version(8, "CategoryMapper")
+    def test_hashtable_lookup_int64_const(self):
+        query = np.array([42, 56], dtype=np.int64)
+        def func():
+            keys = tf.constant([3, 42, 57], tf.int64)
+            values = tf.constant([1, 2, 3], tf.int64)
+            init = lookup_ops.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64)
+            hash_table = lookup_ops.StaticHashTable(init, tf.constant(9, tf.int64))
+            lookup_results = hash_table.lookup(tf.constant(query))
+            ret = tf.add(lookup_results, 0, name=_TFOUTPUT)
+            return ret
+        self._run_test_case(func, [_OUTPUT], {}, constant_fold=False, as_session=True)
+
     def test_hashtable_size(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
