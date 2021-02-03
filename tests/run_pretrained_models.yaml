@@ -436,3 +436,21 @@ keras_mobilenet_v2:
     "input_1:0": [1, 224, 224, 3]
   outputs:
     - Identity:0
+
+ssd_mobilenet_v2_300_float_tflite:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/ssd_mobilenet_v2_300_float.tflite
+  model: "ssd_mobilenet_v2_300_float.tflite"
+  model_type: tflite
+  input_get: get_car
+  opset_constraints:
+    "onnx":
+      "min": 11
+  inputs:
+    "normalized_input_image_tensor": [1, 300, 300, 3]
+  outputs:
+    - TFLite_Detection_PostProcess
+    - TFLite_Detection_PostProcess:1
+    - TFLite_Detection_PostProcess:2
+    - TFLite_Detection_PostProcess:3

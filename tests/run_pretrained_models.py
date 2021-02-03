@@ -591,6 +591,8 @@ def get_args():
     parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
+    parser.add_argument("--skip_tf_tests", help="skip non-tflite tests", default="False")
+    parser.add_argument("--skip_tflite_tests", help="skip tflite tests", default="False")
     parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
     parser.add_argument("--debug", help="debug mode", action="store_true")
     parser.add_argument("--list", help="list tests", action="store_true")
@@ -603,6 +605,8 @@ def get_args():
     args = parser.parse_args()
 
     args.target = args.target.split(",")
+    args.skip_tf_tests = args.skip_tf_tests.upper() == "TRUE"
+    args.skip_tflite_tests = args.skip_tflite_tests.upper() == "TRUE"
     if args.extra_opset:
         tokens = args.extra_opset.split(':')
         if len(tokens) != 2:
@@ -695,6 +699,13 @@ def main():
         if args.tests is None:
             if t.disabled and not args.include_disabled:
                 logger.info("Skip %s: disabled", test)
+                continue
+
+            if args.skip_tflite_tests and t.model_type == "tflite":
+                logger.info("Skip %s: tflite test", test)
+                continue
+            if args.skip_tf_tests and t.model_type != "tflite":
+                logger.info("Skip %s: not tflite test", test)
                 continue
 
             condition, reason = t.check_opset_constraints(args.opset, args.extra_opset)
