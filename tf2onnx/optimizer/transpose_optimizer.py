@@ -702,15 +702,14 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _quantize_handler(self, trans, node):
         # Used for QuantizeLinear and DequantizeLinear
-        if self._switch_transpose_and_node(node, trans):
-            if 'axis' in node.attr:
-                perm = trans.get_attr_value("perm")
-                axis = node.get_attr_value("axis")
-                new_axis = perm[axis]
-                node.set_attr("axis", new_axis)
-            return True
-        else:
+        if not self._switch_transpose_and_node(node, trans):
             return False
+        if 'axis' in node.attr:
+            perm = trans.get_attr_value("perm")
+            axis = node.get_attr_value("axis")
+            new_axis = perm[axis]
+            node.set_attr("axis", new_axis)
+        return True
 
     def _simple_through_handler(self, trans, node):
         return self._switch_transpose_and_node(node, trans)
