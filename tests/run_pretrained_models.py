@@ -56,15 +56,27 @@ TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
 PERFITER = 1000
 
 
-def get_beach(shape):
-    """Get beach image as input."""
+def get_img(shape, path, dtype, should_scale=True):
+    """Get image as input."""
     resize_to = shape[1:3]
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beach.jpg")
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
     img = PIL.Image.open(path)
     img = img.resize(resize_to, PIL.Image.ANTIALIAS)
-    img_np = np.array(img).astype(np.float32)
+    img_np = np.array(img).astype(dtype)
     img_np = np.stack([img_np] * shape[0], axis=0).reshape(shape)
-    return img_np / 255
+    if should_scale:
+        img_np = img_np / 255
+    return img_np
+
+
+def get_beach(shape):
+    """Get beach image as input."""
+    return get_img(shape, "beach.jpg", np.float32, should_scale=True)
+
+
+def get_car(shape):
+    """Get car image as input."""
+    return get_img(shape, "car.JPEG", np.float32, should_scale=True)
 
 
 def get_random(shape):
@@ -133,6 +145,7 @@ def get_sentences(shape):
 
 _INPUT_FUNC_MAPPING = {
     "get_beach": get_beach,
+    "get_car": get_car,
     "get_random": get_random,
     "get_random256": get_random256,
     "get_ramp": get_ramp,
@@ -219,6 +232,9 @@ class Test(object):
         elif url.endswith('.zip'):
             ftype = 'zip'
             dir_name = fname.replace(".zip", "")
+        elif url.endswith('.tflite'):
+            ftype = 'tflite'
+            dir_name = fname.replace(".tflite", "")
         dir_name = os.path.join(cache_dir, dir_name)
         os.makedirs(dir_name, exist_ok=True)
         fpath = os.path.join(dir_name, fname)
@@ -266,7 +282,7 @@ class Test(object):
         return result
 
     def to_onnx(self, tf_graph, opset=None, extra_opset=None, shape_override=None, input_names=None,
-                const_node_values=None, initialized_tables=None):
+                const_node_values=None, initialized_tables=None, tflite_path=None):
         """Convert graph to tensorflow."""
         if extra_opset is None:
             extra_opset = []
@@ -275,8 +291,8 @@ class Test(object):
         return process_tf_graph(tf_graph, continue_on_error=False, opset=opset,
                                 extra_opset=extra_opset, target=Test.target, shape_override=shape_override,
                                 input_names=input_names, output_names=self.output_names,
-                                const_node_values=const_node_values,
-                                initialized_tables=initialized_tables)
+                                const_node_values=const_node_values, initialized_tables=initialized_tables,
+                                tflite_path=tflite_path)
 
     def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
@@ -340,6 +356,7 @@ class Test(object):
         input_names = list(self.input_names.keys())
         initialized_tables = {}
         outputs = self.output_names
+        tflite_path = None
         if self.model_type in ["checkpoint"]:
             graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
@@ -355,11 +372,42 @@ class Test(object):
                 graph_def, input_names, outputs, initialized_tables = loaded
         elif self.model_type in ["keras"]:
             graph_def, input_names, outputs = tf_loader.from_keras(model_path, input_names, outputs)
+        elif self.model_type in ["tflite"]:
+            tflite_path = model_path
+            graph_def = None
         else:
             graph_def, input_names, outputs = tf_loader.from_graphdef(model_path, input_names, outputs)
 
         if utils.is_debug_mode():
             utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
+
+        if tflite_path is not None:
+            inputs = {}
+            for k in input_names:
+                v = self.input_names[k]
+                inputs[k] = self.make_input(v)
+
+            interpreter = tf.lite.Interpreter(tflite_path)
+            input_details = interpreter.get_input_details()
+            output_details = interpreter.get_output_details()
+            input_name_to_index = {n['name'].split(':')[0]: n['index'] for n in input_details}
+            for k, v in inputs.items():
+                interpreter.resize_tensor_input(input_name_to_index[k], v.shape)
+            interpreter.allocate_tensors()
+            def run_tflite():
+                for k, v in inputs.items():
+                    interpreter.set_tensor(input_name_to_index[k], v)
+                interpreter.invoke()
+                result = [interpreter.get_tensor(output['index']) for output in output_details]
+                return result
+            tf_results = run_tflite()
+            if self.perf:
+                logger.info("Running TFLite perf")
+                start = time.time()
+                for _ in range(PERFITER):
+                    _ = run_tflite()
+                self.tf_runtime = time.time() - start
+            logger.info("TFLite OK")
 
         if not self.run_tf_frozen:
             inputs = {}
@@ -384,45 +432,50 @@ class Test(object):
                 self.tf_runtime = time.time() - start
             logger.info("TensorFlow OK")
 
-        inputs = {}
         shape_override = {}
-        tf_reset_default_graph()
-
-        from tf2onnx.tf_utils import compress_graph_def
         const_node_values = None
-        with tf.Graph().as_default() as tf_graph:
-            if self.large_model:
-                const_node_values = compress_graph_def(graph_def)
-            tf.import_graph_def(graph_def, name='')
+        tf_graph = None
 
-        with tf_session(graph=tf_graph) as sess:
-            # create the input data
-            for k in input_names:
-                v = self.input_names[k]
-                t = sess.graph.get_tensor_by_name(k)
-                expected_dtype = tf.as_dtype(t.dtype).name
-                if isinstance(v, six.text_type) and v.startswith("np."):
-                    np_value = eval(v)  # pylint: disable=eval-used
-                    if expected_dtype != np_value.dtype:
-                        logger.warning("dtype mismatch for input %s: expected=%s, actual=%s", k, expected_dtype,
-                                       np_value.dtype)
-                    inputs[k] = np_value.astype(expected_dtype)
-                else:
-                    if expected_dtype == "string":
-                        inputs[k] = self.make_input(v).astype(np.str).astype(np.object)
+        if graph_def is not None:
+            inputs = {}
+            tf_reset_default_graph()
+
+            with tf.Graph().as_default() as tf_graph:
+                from tf2onnx.tf_utils import compress_graph_def
+                if self.large_model:
+                    const_node_values = compress_graph_def(graph_def)
+                tf.import_graph_def(graph_def, name='')
+
+            with tf_session(graph=tf_graph) as sess:
+                # create the input data
+                for k in input_names:
+                    v = self.input_names[k]
+                    t = sess.graph.get_tensor_by_name(k)
+                    expected_dtype = tf.as_dtype(t.dtype).name
+                    if isinstance(v, six.text_type) and v.startswith("np."):
+                        np_value = eval(v)  # pylint: disable=eval-used
+                        if expected_dtype != np_value.dtype:
+                            logger.warning("dtype mismatch for input %s: expected=%s, actual=%s", k, expected_dtype,
+                                           np_value.dtype)
+                        inputs[k] = np_value.astype(expected_dtype)
                     else:
-                        inputs[k] = self.make_input(v).astype(expected_dtype)
+                        if expected_dtype == "string":
+                            inputs[k] = self.make_input(v).astype(np.str).astype(np.object)
+                        else:
+                            inputs[k] = self.make_input(v).astype(expected_dtype)
 
-            if self.force_input_shape:
-                for k, v in inputs.items():
-                    shape_override[k] = list(v.shape)
+                if self.force_input_shape:
+                    for k, v in inputs.items():
+                        shape_override[k] = list(v.shape)
 
-            # run the model with tensorflow
-            if self.skip_tensorflow:
-                logger.info("TensorFlow SKIPPED")
-            elif self.run_tf_frozen:
-                tf_results = self.run_tensorflow(sess, inputs)
-                logger.info("TensorFlow OK")
+                # run the model with tensorflow
+                if self.skip_tensorflow:
+                    logger.info("TensorFlow SKIPPED")
+                elif self.run_tf_frozen:
+                    tf_results = self.run_tensorflow(sess, inputs)
+                    logger.info("TensorFlow OK")
+                tf_graph = sess.graph
+
 
         model_proto = None
         if self.skip_conversion:
@@ -436,10 +489,10 @@ class Test(object):
         else:
             try:
                 # convert model to onnx
-                onnx_graph = self.to_onnx(sess.graph, opset=opset, extra_opset=extra_opset,
+                onnx_graph = self.to_onnx(tf_graph, opset=opset, extra_opset=extra_opset,
                                           shape_override=shape_override, input_names=inputs.keys(),
                                           const_node_values=const_node_values,
-                                          initialized_tables=initialized_tables)
+                                          initialized_tables=initialized_tables, tflite_path=tflite_path)
                 onnx_graph = optimizer.optimize_graph(onnx_graph)
                 print("ONNX", onnx_graph.dump_node_statistics())
                 external_tensor_storage = ExternalTensorStorage() if self.large_model else None
