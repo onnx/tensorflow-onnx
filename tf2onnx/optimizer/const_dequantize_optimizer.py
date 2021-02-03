@@ -91,10 +91,8 @@ class ConstDequantizeOptimizer(GraphOptimizerBase):
             new_prod = 1
             for i, d in enumerate(new_shape):
                 new_prod *= d
-                if new_prod == prod:
-                    break
-            if new_prod == prod and new_shape[i] == input_shape[old_axis]:
-                return i
+                if new_prod == prod and new_shape[i] == input_shape[old_axis]:
+                    return i
             return None
         if node.type == "Unsqueeze":
             if graph.opset >= 13:

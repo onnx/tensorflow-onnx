@@ -7,6 +7,7 @@ tfl_math
 
 import logging
 import numpy as np
+from onnx.onnx_pb import TensorProto
 from tf2onnx.handler import tfl_op
 from tf2onnx import utils
 
@@ -88,12 +89,19 @@ class TflRangeOp:
 @tfl_op(["TFL_QUANTIZE"], onnx_op="QuantizeLinear")
 class TflQuantizeOp:
     @classmethod
+    def version_1(cls, ctx, node, dequantize=False, **kwargs):
+        # We could just let the TFL_QUANTIZE fall through as an unconverted op, but they are added programmatically
+        # so that might be confusing.
+        raise ValueError("Opset 10 is required for quantization. Consider using the --dequantize flag or --opset 10.")
+
+    @classmethod
     def version_10(cls, ctx, node, **kwargs):
         scale = node.get_attr_value('scale')
         zero_point = node.get_attr_value('zero_point')
         axis = node.get_attr_value('quantized_dimension')
         np_q_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.output[0]))
         if len(scale) > 1 or len(zero_point) > 1:
+            utils.make_sure(ctx.opset >= 13, "Opset 13 is required for per-axis quantization for node %s", node.name)
             node.set_attr("axis", axis)
         scale_node = ctx.make_const(utils.make_name("scale"), np.array(scale[0], dtype=np.float32))
         zero_point_node = ctx.make_const(utils.make_name("zero_point"), np.array(zero_point[0], dtype=np_q_type))
@@ -101,17 +109,56 @@ class TflQuantizeOp:
         del node.attr["scale"]
         del node.attr["zero_point"]
         del node.attr["quantized_dimension"]
+        if "min" in node.attr:
+            del node.attr["min"]
+        if "max" in node.attr:
+            del node.attr["max"]
 
 @tfl_op(["TFL_DEQUANTIZE"], onnx_op="DequantizeLinear")
 class TflDequantizeOp:
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
+        scale = np.array(node.get_attr_value('scale'), dtype=np.float32)
+        zero_point = np.array(node.get_attr_value('zero_point'), dtype=np.float32)
+        axis = node.get_attr_value('quantized_dimension')
+        in_rank = ctx.get_rank(node.input[0])
+        def expand_tensor(t):
+            if t.shape == (1,):
+                return t[0]
+            utils.make_sure(in_rank is not None, "Cannot dequantize node %s with unknown input rank", node.name)
+            new_shape = [1] * in_rank
+            new_shape[axis] = t.shape[0]
+            return t.reshape(new_shape)
+        scale = expand_tensor(scale)
+        zero_point = expand_tensor(zero_point)
+        np_q_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0]))
+        if node.inputs[0].is_const():
+            x_val = node.inputs[0].get_tensor_value(as_list=False).astype(np.float32)
+            new_val = (x_val - zero_point) * scale
+            dequant_const = ctx.make_const(utils.make_name(node.name), new_val)
+            ctx.replace_all_inputs(node.output[0], dequant_const.output[0])
+            ctx.remove_node(node.name)
+        else:
+            scale_const = ctx.make_const(utils.make_name(node.name + "_scale"), scale).output[0]
+            zero_point_const = ctx.make_const(utils.make_name(node.name + "_zero_point"), zero_point).output[0]
+            cast_node = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.FLOAT},
+                                      op_name_scope=node.name).output[0]
+            sub_node = ctx.make_node("Sub", [cast_node, zero_point_const], op_name_scope=node.name).output[0]
+            mul_node = ctx.make_node("Mul", [sub_node, scale_const], op_name_scope=node.name).output[0]
+            ctx.replace_all_inputs(node.output[0], mul_node)
+            ctx.remove_node(node.name)
+
+    @classmethod
+    def version_10(cls, ctx, node, dequantize=False, **kwargs):
+        if dequantize:
+            cls.version_1(ctx, node, dequantize=True, **kwargs)
+            return
         scale = node.get_attr_value('scale')
         zero_point = node.get_attr_value('zero_point')
         axis = node.get_attr_value('quantized_dimension')
         np_q_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0]))
         if len(scale) > 1 or len(zero_point) > 1:
-            utils.make_sure(ctx.opset >= 13, "Opset 13 is required for per-axis quantization")
+            utils.make_sure(ctx.opset >= 13, "Opset 13 is required for per-axis quantization for node %s", node.name)
             node.set_attr("axis", axis)
             scale_node = ctx.make_const(utils.make_name("scale"), np.array(scale, dtype=np.float32))
             zero_point_node = ctx.make_const(utils.make_name("zero_point"), np.array(zero_point, dtype=np_q_type))
@@ -122,6 +169,10 @@ class TflDequantizeOp:
         del node.attr["scale"]
         del node.attr["zero_point"]
         del node.attr["quantized_dimension"]
+        if "min" in node.attr:
+            del node.attr["min"]
+        if "max" in node.attr:
+            del node.attr["max"]
 
 def dynamic_quantize_inputs(ctx, node):
     if ctx.opset < 11:
