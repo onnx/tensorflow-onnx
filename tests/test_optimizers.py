@@ -9,7 +9,7 @@ from __future__ import unicode_literals
 
 import unittest
 import numpy as np
-from onnx import helper, TensorProto, OperatorSetIdProto
+from onnx import helper, numpy_helper, TensorProto, OperatorSetIdProto
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version, get_test_config
 from tf2onnx import utils, constants
@@ -1240,6 +1240,30 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                              "Cast", 0)
 
     # Const Fold Optimizer Tests End
+
+    # Const Dequantize Optimizer Tests Start
+
+    @check_opset_min_version(10, "DequantizeLinear")
+    def test_const_dequantize_reshape(self):
+        inputval = numpy_helper.from_array(np.random.randint(0, 100, (2, 3, 4, 5), np.uint8), name='X')
+        scale = numpy_helper.from_array(np.array(0.75, dtype=np.float32), name='scale')
+        zero_point = numpy_helper.from_array(np.array(3, dtype=np.uint8), name='zero_point')
+        shape = numpy_helper.from_array(np.array([6, 20], dtype=np.int64), name='shape')
+        node1 = helper.make_node("DequantizeLinear", ["X", "scale", "zero_point"], ["Y"], name="dequantize")
+        node2 = helper.make_node("Reshape", ["Y", "shape"], ["Z"], name="reshape")
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "const-dequantize-test",
+            [],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (6, 20))],
+            [inputval, scale, zero_point, shape]
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["Z"], {}, model_proto, "Reshape", 0)
+
+    # Const Dequantize Optimizer Tests End
 
     def test_transpose_back_to_back_non_const(self):
 
