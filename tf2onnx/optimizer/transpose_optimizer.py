@@ -202,6 +202,8 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Sub": self._sub_handler,
             "Tanh": self._simple_through_handler,
             "Transpose": self._transpose_handler,
+            "DequantizeLinear": self._quantize_handler,
+            "QuantizeLinear": self._quantize_handler,
         }
 
     def _handle_node_having_branches(self, node):
@@ -697,6 +699,17 @@ class TransposeOptimizer(GraphOptimizerBase):
                         self._g.replace_input(node, node.input[3], new_axes_const.output[0], 3)
                     return self._switch_transpose_and_node(node, trans)
         return False
+
+    def _quantize_handler(self, trans, node):
+        # Used for QuantizeLinear and DequantizeLinear
+        if not self._switch_transpose_and_node(node, trans):
+            return False
+        if 'axis' in node.attr:
+            perm = trans.get_attr_value("perm")
+            axis = node.get_attr_value("axis")
+            new_axis = perm[axis]
+            node.set_attr("axis", new_axis)
+        return True
 
     def _simple_through_handler(self, trans, node):
         return self._switch_transpose_and_node(node, trans)
