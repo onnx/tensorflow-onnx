@@ -45,9 +45,17 @@ class TFLiteDetectionPostProcessTests(Tf2OnnxBackendTestBase):
     def test_postprocess_model4(self):
         self._test_postprocess(num_classes=5, num_boxes=99, detections_per_class=2, max_detections=20, extra_class=True)
 
-    def _test_postprocess(self, num_classes, num_boxes, detections_per_class, max_detections, extra_class=False):
+    @requires_tflite("TFLite_Detection_PostProcess")
+    @check_opset_min_version(11, "Pad")
+    def test_postprocess_model5(self):
+        self._test_postprocess(num_classes=1, num_boxes=100, detections_per_class=0,
+                               max_detections=50, use_regular_nms=False)
+
+    def _test_postprocess(self, num_classes, num_boxes, detections_per_class,
+                          max_detections, extra_class=False, use_regular_nms=True):
         model = self.make_postprocess_model(num_classes=num_classes, detections_per_class=detections_per_class,
-                                            max_detections=max_detections, x_scale=11.0, w_scale=6.0)
+                                            max_detections=max_detections, x_scale=11.0, w_scale=6.0,
+                                            use_regular_nms=use_regular_nms)
 
         np.random.seed(42)
         box_encodings_val = np.random.random_sample([1, num_boxes, 4]).astype(np.float32)

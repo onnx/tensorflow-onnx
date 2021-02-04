@@ -69,7 +69,12 @@ class TflDetectionPostProcess:
         score_threshold = np.array(node.get_attr_value('nms_score_threshold'), np.float32)
         score_threshold_const = ctx.make_const(utils.make_name('score_threshold'), score_threshold).output[0]
 
-        boxes_per_class = np.array(node.get_attr_value('detections_per_class', 100), np.int64)
+        if node.get_attr_value('use_regular_nms', False):
+            boxes_per_class = np.array(node.get_attr_value('detections_per_class', 100), np.int64)
+        else:
+            # When tflite uses FastNMS, detections_per_class is ignored.
+            logging.warning("NMS node %s uses fast NMS. ONNX will approximate with standard NMS.", node.name)
+            boxes_per_class = np.array(max_detections, np.int64)
         max_boxes_per_class_const = ctx.make_const(utils.make_name('max_boxes_per_class'), boxes_per_class).output[0]
 
         # scores.shape = [batch_dim, classes_num, box_num]
