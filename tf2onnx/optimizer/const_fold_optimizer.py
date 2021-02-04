@@ -54,7 +54,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         if node.is_const() or node.is_graph_input():
             return True
 
-        skip_type = ["Identity"]
+        skip_type = ["Identity", "DequantizeLinear"]
         if node.type in skip_type:
             return True
 
@@ -72,6 +72,10 @@ class ConstFoldOptimizer(GraphOptimizerBase):
                 return True
             self.logger.debug("need to add function to fold op %s whose op_type is %s", node.name, node.type)
         return False
+
+    @staticmethod
+    def compute_const_folding(node, graph):
+        return _func_map[node.type](node, graph)
 
     @staticmethod
     def _all_inputs_are_const(nodes):
