@@ -587,9 +587,9 @@ class DepthwiseConv2d:
 
         node.set_attr("kernel_shape", [k_h, k_w])
         strides = conv_dims_attr(node, "strides")
-        conv_dims_attr(node, "dilations")
+        dilations = conv_dims_attr(node, "dilations")
         node.set_attr("group", k_input_channels)
-        add_padding(ctx, node, kernel_shape, strides)
+        add_padding(ctx, node, kernel_shape, strides, dilations)
 
         new_kernel_shape = [k_h, k_w, 1, k_output_channels]
         conv_convert_inputs(ctx, node, with_kernel=True, new_kernel_shape=new_kernel_shape)
