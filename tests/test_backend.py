@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-
 """Unit tests using onnx backends."""
 
 from __future__ import division
@@ -2229,6 +2228,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(5*10*10*10*10*20*30).astype("float32").reshape((5, 10, 10, 10, 10, 20, 30))
         y_val = np.array(9, dtype=np.int32)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(10, "Slice")
+    @skip_tflite("not supported in tflite")
+    def test_strided_slice_ellipse(self):
+        def func1(x):
+            x_ = x[..., tf.newaxis]
+            return tf.identity(x_, name=_TFOUTPUT)
+        shape = [1, 8, 64]
+        x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+
+        def func2(x):
+            x_ = x[:, tf.newaxis, ..., :, tf.newaxis]
+            return tf.identity(x_, name=_TFOUTPUT)
+        shape = [2, 3, 4, 5]
+        x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
+        self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(7, "batchnorm")
     def test_fused_batchnorm(self):

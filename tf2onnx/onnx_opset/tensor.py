@@ -72,7 +72,6 @@ class Size:
             ctx.copy_shape(output_name, output_cast.output[0])
 
 
-
 @tf_op("Flatten")
 class Flatten:
     @classmethod
@@ -630,6 +629,7 @@ class Split:
         # Default axis is not -1 but doesn't matter since we always set it.
         cls.version_1(ctx, node, **kwargs)
 
+
 @tf_op("SplitV")
 class SplitV:
     @classmethod
@@ -874,15 +874,6 @@ class StridedSlice:
         ellipsis_mask = ellipsis_mask.i if ellipsis_mask is not None else 0
         shrink_axis_mask = node.get_attr("shrink_axis_mask")
         shrink_axis_mask = shrink_axis_mask.i if shrink_axis_mask is not None else 0
-        if new_axis_mask != 0:
-            unqueeze_at = []
-            for bit in range(32):
-                if (new_axis_mask >> bit) & 1 == 1:
-                    unqueeze_at.append(bit)
-                    begin_mask |= 1 << bit
-                    end_mask |= 1 << bit
-            input_x = GraphBuilder(ctx).make_unsqueeze(
-                {'data': input_x.output[0], 'axes': unqueeze_at}, return_node=True)
 
         param_shape = ctx.get_shape(node.input[1]) or \
                       ctx.get_shape(node.input[2]) or \
@@ -892,6 +883,27 @@ class StridedSlice:
             "StridedSlice op {} requires the shape of begin/end/strides".format(node.name)
         )
         param_rank = param_shape[0]
+
+        if new_axis_mask != 0:
+            unqueeze_at = []
+            ellipsis_gap = 0
+            num_new = 0
+            for bit in range(32):
+                if (new_axis_mask >> bit) & 1 == 1:
+                    num_new += 1
+                if (ellipsis_mask >> bit) & 1:
+                    input_shape = ctx.get_shape(input_x.output[0])
+                    # calculate what rank for ellipsis: input rank - (being rank - all new_axis - 1)
+                    ellipsis_gap = len(input_shape) - param_rank + num_new + 1
+                if (new_axis_mask >> bit) & 1 == 1:
+                    unqueeze_at.append(bit + ellipsis_gap)
+                    begin_mask |= 1 << bit
+                    end_mask |= 1 << bit
+
+            input_x = GraphBuilder(ctx).make_unsqueeze(
+                {'data': input_x.output[0], 'axes': unqueeze_at}, return_node=True)
+
+
         # use in onnx graph to mask begin
         new_begin_mask = [1] * param_rank
         # use in onnx graph to mask end
