@@ -2230,6 +2230,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(10, "Slice")
+    @skip_tflite("not supported in tflite")
     def test_strided_slice_ellipse(self):
         def func1(x):
             x_ = x[..., tf.newaxis]
