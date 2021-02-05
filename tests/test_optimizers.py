@@ -1512,6 +1512,86 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         model_proto = self.make_model(graph, producer_name="onnx-tests")
         self.run_and_compare(["Z"], {}, model_proto, "Reshape", 0)
 
+    @check_opset_min_version(13, "DequantizeLinear")
+    def test_const_dequantize_reshape_per_channel(self):
+        inputval = numpy_helper.from_array(np.random.randint(0, 100, (2, 3, 4, 5), np.uint8), name='X')
+        scale = numpy_helper.from_array(np.array([0.75, 1., 0.2], dtype=np.float32), name='scale')
+        zero_point = numpy_helper.from_array(np.array([3, 4, 50], dtype=np.uint8), name='zero_point')
+        shape = numpy_helper.from_array(np.array([1, 1, 2, 3, 20], dtype=np.int64), name='shape')
+        node1 = helper.make_node("DequantizeLinear", ["X", "scale", "zero_point"], ["Y"], name="dequantize", axis=-3)
+        node2 = helper.make_node("Reshape", ["Y", "shape"], ["Z"], name="reshape")
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "const-dequantize-test",
+            [],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (1, 1, 2, 3, 20))],
+            [inputval, scale, zero_point, shape]
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["Z"], {}, model_proto, "Reshape", 0)
+
+    @check_opset_min_version(13, "DequantizeLinear")
+    def test_const_dequantize_reshape_per_channel_skipped(self):
+        inputval = numpy_helper.from_array(np.random.randint(0, 100, (2, 3, 4, 5), np.uint8), name='X')
+        scale = numpy_helper.from_array(np.array([0.75, 1., 0.2, 0.3], dtype=np.float32), name='scale')
+        zero_point = numpy_helper.from_array(np.array([3, 4, 50, 2], dtype=np.uint8), name='zero_point')
+        shape = numpy_helper.from_array(np.array([1, 6, 2, 2, 5], dtype=np.int64), name='shape')
+        node1 = helper.make_node("DequantizeLinear", ["X", "scale", "zero_point"], ["Y"], name="dequantize", axis=2)
+        node2 = helper.make_node("Reshape", ["Y", "shape"], ["Z"], name="reshape")
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "const-dequantize-test",
+            [],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (1, 6, 2, 2, 5))],
+            [inputval, scale, zero_point, shape]
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        # No optimization can be done here since the channel axis has changed size
+        self.run_and_compare(["Z"], {}, model_proto, "Reshape", 1)
+
+    @check_opset_min_version(13, "DequantizeLinear")
+    def test_const_dequantize_transpose_per_channel(self):
+        inputval = numpy_helper.from_array(np.random.randint(0, 100, (2, 3, 4, 5), np.uint8), name='X')
+        scale = numpy_helper.from_array(np.array([0.75, 1., 0.2], dtype=np.float32), name='scale')
+        zero_point = numpy_helper.from_array(np.array([3, 4, 50], dtype=np.uint8), name='zero_point')
+        node1 = helper.make_node("DequantizeLinear", ["X", "scale", "zero_point"], ["Y"], name="dequantize", axis=1)
+        node2 = helper.make_node("Transpose", ["Y"], ["Z"], name="transpose", perm=[0, 2, 3, 1])
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "const-dequantize-test",
+            [],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (2, 4, 5, 3))],
+            [inputval, scale, zero_point]
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["Z"], {}, model_proto, "Transpose", 0)
+
+    @check_opset_min_version(13, "DequantizeLinear")
+    def test_const_dequantize_unsqueeze_per_channel(self):
+        inputval = numpy_helper.from_array(np.random.randint(0, 100, (2, 3, 4, 5), np.uint8), name='X')
+        scale = numpy_helper.from_array(np.array([0.75, 1., 0.2], dtype=np.float32), name='scale')
+        zero_point = numpy_helper.from_array(np.array([3, 4, 50], dtype=np.uint8), name='zero_point')
+        axes = numpy_helper.from_array(np.array([-1, 0, -8, 3, 5], dtype=np.int64), name='axes')
+        node1 = helper.make_node("DequantizeLinear", ["X", "scale", "zero_point"], ["Y"], name="dequantize", axis=1)
+        node2 = helper.make_node("Unsqueeze", ["Y", "axes"], ["Z"], name="unsqueeze")
+
+        graph = helper.make_graph(
+            [node1, node2],
+            "const-dequantize-test",
+            [],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, (1, 1, 2, 1, 3, 1, 4, 5, 1))],
+            [inputval, scale, zero_point, axes]
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["Z"], {}, model_proto, "Transpose", 0)
+
     # Const Dequantize Optimizer Tests End
 
     def test_transpose_back_to_back_non_const(self):

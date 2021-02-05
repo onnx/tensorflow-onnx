@@ -45,6 +45,14 @@ class ConstDequantizeOptimizer(GraphOptimizerBase):
             return False
         if not self._all_inputs_are_const(dequant_node.inputs):
             return False
+        if len(dequant_node.inputs[1].get_tensor_value(as_list=False).flatten()) != 1:
+            # If using per-channel quantization, we must compute the new axis
+            old_axis = dequant_node.get_attr_value("axis")
+            input_shape = dequant_node.inputs[0].get_tensor_value(as_list=False).shape
+            new_axis = self.compute_new_axis(node, graph, old_axis, input_shape)
+            if new_axis is None:
+                return False
+            dequant_node.set_attr("axis", new_axis)
         graph.replace_input(node, node.input[0], dequant_node.input[0], 0)
         const_outputs = ConstFoldOptimizer.compute_const_folding(node, graph)
         graph.replace_all_inputs(node.output[0], dequant_node.output[0])
@@ -65,3 +73,40 @@ class ConstDequantizeOptimizer(GraphOptimizerBase):
         node_out_set = set(node.output)
         graph_out_set = set(graph.outputs)
         return node_out_set.intersection(graph_out_set)
+
+    @staticmethod
+    def compute_new_axis(node, graph, old_axis, input_shape):
+        if old_axis < 0:
+            old_axis += len(input_shape)
+        if node.type == "Transpose":
+            perm = node.get_attr_value("perm")
+            if perm is None:
+                return None
+            return perm.index(old_axis)
+        if node.type == "Reshape":
+            prod = 1
+            for d in input_shape[:old_axis+1]:
+                prod *= d
+            new_shape = node.inputs[1].get_tensor_value(as_list=True)
+            new_prod = 1
+            for i, d in enumerate(new_shape):
+                new_prod *= d
+                if new_prod == prod:
+                    break
+            if new_prod == prod and new_shape[i] == input_shape[old_axis]:
+                return i
+            return None
+        if node.type == "Unsqueeze":
+            if graph.opset >= 13:
+                axes = node.inputs[1].get_tensor_value(as_list=True)
+            else:
+                axes = node.get_attr_value("axes")
+            new_rank = len(input_shape) + len(axes)
+            axes = [axis if axis >= 0 else axis + new_rank for axis in axes]
+            for i in range(new_rank):
+                if i not in axes:
+                    if old_axis == 0:
+                        return i
+                    old_axis -= 1
+            return None
+        return None
