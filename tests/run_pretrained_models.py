@@ -9,7 +9,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
-# pylint: disable=wrong-import-position
+# pylint: disable=wrong-import-position,too-many-nested-blocks
 
 import argparse
 import os
@@ -79,6 +79,16 @@ def get_car(shape):
     return get_img(shape, "car.JPEG", np.float32, should_scale=True)
 
 
+def get_ade20k(shape):
+    """Get truck image from ade20k segmentation dataset."""
+    return get_img(shape, "ade20k.jpg", np.float32, should_scale=True)
+
+
+def get_ade20k_uint8(shape):
+    """Get truck image from ade20k segmentation dataset."""
+    return get_img(shape, "ade20k.jpg", np.uint8, should_scale=False)
+
+
 def get_random(shape):
     """Get random input."""
     np.random.seed(42)
@@ -146,6 +156,8 @@ def get_sentences(shape):
 _INPUT_FUNC_MAPPING = {
     "get_beach": get_beach,
     "get_car": get_car,
+    "get_ade20k": get_ade20k,
+    "get_ade20k_uint8": get_ade20k_uint8,
     "get_random": get_random,
     "get_random256": get_random256,
     "get_ramp": get_ramp,
@@ -171,7 +183,7 @@ class Test(object):
     target = []
 
     def __init__(self, url, local, input_func, input_names, output_names,
-                 disabled=False, rtol=0.01, atol=1e-6,
+                 disabled=False, rtol=0.01, atol=1e-6, ptol=0, dequantize=False,
                  check_only_shape=False, model_type="frozen", force_input_shape=False,
                  skip_tensorflow=False, opset_constraints=None, tf_min_version=None, tag=None,
                  skip_conversion=False, converted_model=None, signature_def=None, concrete_function=None,
@@ -190,6 +202,8 @@ class Test(object):
         self.structured_outputs = structured_outputs  # Needed to determine output order for tf_function
         self.rtol = rtol
         self.atol = atol
+        self.ptol = ptol
+        self.dequantize = dequantize
         self.check_only_shape = check_only_shape
         self.perf = None
         self.tf_runtime = 0
@@ -292,7 +306,7 @@ class Test(object):
                                 extra_opset=extra_opset, target=Test.target, shape_override=shape_override,
                                 input_names=input_names, output_names=self.output_names,
                                 const_node_values=const_node_values, initialized_tables=initialized_tables,
-                                tflite_path=tflite_path)
+                                tflite_path=tflite_path, dequantize=self.dequantize)
 
     def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
@@ -531,7 +545,11 @@ class Test(object):
                             np.testing.assert_array_equal(tf_res.shape, onnx_res.shape)
                     else:
                         for tf_res, onnx_res in zip(tf_results, onnx_results):
-                            np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
+                            good_cnt = np.count_nonzero(np.isclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol))
+                            bad_cnt = tf_res.size - good_cnt
+                            if bad_cnt > self.ptol / 100 * tf_res.size:
+                                # Prints a nice error message with stats
+                                np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
                     logger.info("Results: OK")
                 return True
             except Exception:
@@ -658,10 +676,10 @@ def load_tests_from_yaml(path):
                 opset_constraints.append(c)
 
         kwargs = {}
-        for kw in ["rtol", "atol", "disabled", "check_only_shape", "model_type", "concrete_function",
+        for kw in ["rtol", "atol", "ptol", "disabled", "check_only_shape", "model_type", "concrete_function",
                    "skip_tensorflow", "force_input_shape", "tf_min_version", "tag", "skip_conversion",
                    "converted_model", "signature_def", "large_model", "structured_outputs", "run_tf_frozen",
-                   "use_custom_ops"]:
+                   "use_custom_ops", "dequantize"]:
             if settings.get(kw) is not None:
                 kwargs[kw] = settings[kw]
 

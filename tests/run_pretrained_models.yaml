@@ -454,3 +454,30 @@ ssd_mobilenet_v2_300_float_tflite:
     - TFLite_Detection_PostProcess:1
     - TFLite_Detection_PostProcess:2
     - TFLite_Detection_PostProcess:3
+
+deeplabv3_mnv2_ade20k_float_tflite:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_float.tflite
+  model: "deeplabv3_mnv2_ade20k_float.tflite"
+  model_type: tflite
+  input_get: get_ade20k
+  ptol: 0.001
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
+
+deeplabv3_mnv2_ade20k_uint8_tflite:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
+  model: "deeplabv3_mnv2_ade20k_uint8.tflite"
+  model_type: tflite
+  input_get: get_ade20k_uint8
+  ptol: 1.0
+  dequantize: true
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
