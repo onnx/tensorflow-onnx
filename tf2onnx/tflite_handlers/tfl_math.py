@@ -131,7 +131,6 @@ class TflDequantizeOp:
             return t.reshape(new_shape)
         scale = expand_tensor(scale)
         zero_point = expand_tensor(zero_point)
-        np_q_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0]))
         if node.inputs[0].is_const():
             x_val = node.inputs[0].get_tensor_value(as_list=False).astype(np.float32)
             new_val = (x_val - zero_point) * scale

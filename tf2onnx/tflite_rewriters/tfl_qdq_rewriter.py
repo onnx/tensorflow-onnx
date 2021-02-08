@@ -4,8 +4,6 @@
 """
 tf2onnx.tflite_rewriters.tfl_qdq_rewriter - Remove qdq sequences to dequantize model
 """
-import numpy as np
-
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 

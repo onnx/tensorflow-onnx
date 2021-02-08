@@ -9,7 +9,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
-# pylint: disable=wrong-import-position
+# pylint: disable=wrong-import-position,too-many-nested-blocks
 
 import argparse
 import os
@@ -545,7 +545,6 @@ class Test(object):
                             np.testing.assert_array_equal(tf_res.shape, onnx_res.shape)
                     else:
                         for tf_res, onnx_res in zip(tf_results, onnx_results):
-                            # pylint: disable=too-many-nested-blocks
                             good_cnt = np.count_nonzero(np.isclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol))
                             bad_cnt = tf_res.size - good_cnt
                             if bad_cnt > self.ptol / 100 * tf_res.size:
