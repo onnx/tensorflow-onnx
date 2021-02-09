@@ -871,6 +871,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("1.14")
     @check_opset_min_version(12, "GatherND with batch_dims")
     def test_gather_batch_dims_no_trans(self):
         x_val = np.arange(2 * 2 * 3 * 5 * 4, dtype=np.float32).reshape((2, 2, 3, 5, 4))
@@ -880,6 +881,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: idx_val})
 
+    @check_tf_min_version("1.14")
     @check_opset_min_version(12, "GatherND with batch_dims")
     def test_gather_batch_dims(self):
         x_val = np.arange(2 * 2 * 3 * 5 * 4, dtype=np.float32).reshape((2, 2, 3, 5, 4))
