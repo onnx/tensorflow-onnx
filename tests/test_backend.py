@@ -3838,6 +3838,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
 
     @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "CumSum")
+    def test_ragged_tensor_to_tensor(self):
+        splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
+        splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        def func(splits1, splits2, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits1, splits2], validate=True)
+            y = x.to_tensor(default_value=7)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
+
+    @check_tf_min_version("2.2", "ragged to_tensor with constrained shape")
+    @check_opset_min_version(11, "CumSum")
+    def test_ragged_tensor_to_tensor_constrain_shape(self):
+        splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
+        splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        def func(splits1, splits2, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits1, splits2], validate=True)
+            y = x.to_tensor(default_value=7, shape=[20, None, 2])
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
     @check_opset_min_version(11, "Range")
     def test_ragged_range_float(self):
         starts_val = np.array([0, 0, 1, 10, 0.5, 0.5], dtype=np.float32)
