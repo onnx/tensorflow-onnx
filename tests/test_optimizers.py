@@ -355,7 +355,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
     @check_opset_min_version(10, "Slice in opset 10 can accept dynamic 'start' and 'ends'")
-    def test_transpose_slice_10(self, input_shape, slice_size, perm_input, perm_output):
+    def test_transpose_slice_opset_10(self, input_shape, slice_size, perm_input, perm_output):
         axes_combinations = []
         axes = list(range(len(input_shape)))
         for i in range(1, len(input_shape) + 1):
