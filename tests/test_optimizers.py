@@ -8,7 +8,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import unittest
-import itertools
 import numpy as np
 from onnx import helper, numpy_helper, TensorProto, OperatorSetIdProto
 from parameterized import parameterized
@@ -311,84 +310,82 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
-        ([2, 3, 4, 5], [1, 2, 1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
-        ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ([2, 3, 4, 5], [1, 2, 1, 2], [1], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ([2, 3, 4, 5], [1, 2, 1, 2], [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ([2, 3, 4, 5], [1, 2, 1, 2], [0, 1, 2, 3], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [2], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [2, 3], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [0, 1, 2, 3, 4], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
     @check_opset_max_version(9, "Slice in opset 9 and takes 'axes, 'start' and 'ends' as attributes")
-    def test_transpose_slice(self, input_shape, slice_size, perm_input, perm_output):
-        axes_combinations = []
-        axes = list(range(len(input_shape)))
-        for i in range(1, len(input_shape) + 1):
-            axes_combinations.extend(list(itertools.combinations(axes, i)))
-        for axes in axes_combinations:
-            axes = np.array(list(axes), dtype=np.int64)
-            starts = np.array([0] * axes.size, dtype=np.int64)
-            ends = []
-            for i in range(axes.size):
-                ends.append(slice_size[axes[i]])
-            ends = np.array(ends, dtype=np.int64)
-            output_shape = input_shape.copy()
-            for axis in axes:
-                output_shape[perm_input[axis]] = slice_size[axis]
-            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
-            node2 = helper.make_node("Slice", ["Y"], ["Z"], starts=starts, ends=ends, axes=axes, name="slice")
-            node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=perm_output, name="trans_2")
+    def test_transpose_slice(self, input_shape, slice_size, axes, perm_input, perm_output):
+        axes = np.array(axes, dtype=np.int64)
+        starts = np.array([0] * axes.size, dtype=np.int64)
+        ends = []
+        for i in range(axes.size):
+            ends.append(slice_size[axes[i]])
+        ends = np.array(ends, dtype=np.int64)
+        output_shape = input_shape.copy()
+        for axis in axes:
+            output_shape[perm_input[axis]] = slice_size[axis]
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node2 = helper.make_node("Slice", ["Y"], ["Z"], starts=starts, ends=ends, axes=axes, name="slice")
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=perm_output, name="trans_2")
 
-            graph = helper.make_graph(
-                [node1, node2, node3],
-                "slice-test",
-                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
-                [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, output_shape)],
-                [
-                    helper.make_tensor("starts", TensorProto.INT64, starts.shape, starts),
-                    helper.make_tensor("ends", TensorProto.INT64, ends.shape, ends),
-                    helper.make_tensor("axes", TensorProto.INT64, axes.shape, axes)
-                ]
-            )
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "slice-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, output_shape)],
+            [
+                helper.make_tensor("starts", TensorProto.INT64, starts.shape, starts),
+                helper.make_tensor("ends", TensorProto.INT64, ends.shape, ends),
+                helper.make_tensor("axes", TensorProto.INT64, axes.shape, axes)
+            ]
+        )
 
-            model_proto = self.make_model(graph, producer_name="onnx-tests")
-            self.run_transpose_compare(["Z1"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                       model_proto, remaining_transpose_num=0)
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z1"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
-        ([2, 3, 4, 5], [1, 2, 1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
-        ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ([2, 3, 4, 5], [1, 2, 1, 2], [1], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ([2, 3, 4, 5], [1, 2, 1, 2], [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ([2, 3, 4, 5], [1, 2, 1, 2], [0, 1, 2, 3], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [2], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [2, 3], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ([2, 3, 4, 5, 6], [1, 2, 1, 2, 1], [0, 1, 2, 3, 4], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
     @check_opset_min_version(10, "Slice in opset 10 can accept dynamic 'start' and 'ends'")
-    def test_transpose_slice_opset_10(self, input_shape, slice_size, perm_input, perm_output):
-        axes_combinations = []
-        axes = list(range(len(input_shape)))
-        for i in range(1, len(input_shape) + 1):
-            axes_combinations.extend(list(itertools.combinations(axes, i)))
-        for axes in axes_combinations:
-            axes = np.array(list(axes), dtype=np.int32)
-            starts = np.array([0] * axes.size, dtype=np.int32)
-            ends = []
-            for i in range(axes.size):
-                ends.append(slice_size[axes[i]])
-            ends = np.array(ends, dtype=np.int32)
-            output_shape = input_shape.copy()
-            for axis in axes:
-                output_shape[perm_input[axis]] = slice_size[axis]
-            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
-            node2 = helper.make_node("Slice", ["Y", "starts", "ends", "axes"], ["Z"], name="slice")
-            node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=perm_output, name="trans_2")
+    def test_transpose_slice_opset_10(self, input_shape, slice_size, axes, perm_input, perm_output):
+        axes = np.array(axes, dtype=np.int32)
+        starts = np.array([0] * axes.size, dtype=np.int32)
+        ends = []
+        for i in range(axes.size):
+            ends.append(slice_size[axes[i]])
+        ends = np.array(ends, dtype=np.int32)
+        output_shape = input_shape.copy()
+        for axis in axes:
+            output_shape[perm_input[axis]] = slice_size[axis]
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node2 = helper.make_node("Slice", ["Y", "starts", "ends", "axes"], ["Z"], name="slice")
+        node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=perm_output, name="trans_2")
 
-            graph = helper.make_graph(
-                [node1, node2, node3],
-                "slice-test",
-                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
-                [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, output_shape)],
-                [
-                    helper.make_tensor("starts", TensorProto.INT32, starts.shape, starts),
-                    helper.make_tensor("ends", TensorProto.INT32, ends.shape, ends),
-                    helper.make_tensor("axes", TensorProto.INT32, axes.shape, axes)
-                ]
-            )
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "slice-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("Z1", TensorProto.FLOAT, output_shape)],
+            [
+                helper.make_tensor("starts", TensorProto.INT32, starts.shape, starts),
+                helper.make_tensor("ends", TensorProto.INT32, ends.shape, ends),
+                helper.make_tensor("axes", TensorProto.INT32, axes.shape, axes)
+            ]
+        )
 
-            model_proto = self.make_model(graph, producer_name="onnx-tests")
-            self.run_transpose_compare(["Z1"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                       model_proto, remaining_transpose_num=0)
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z1"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
         ((2, 3, 4, 5), (2, 4, 5, 3), [0, 2, 3, 1], [0, 3, 1, 2]),
