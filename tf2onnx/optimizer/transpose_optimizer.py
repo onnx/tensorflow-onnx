@@ -676,7 +676,21 @@ class TransposeOptimizer(GraphOptimizerBase):
                 input1.set_tensor_value(new_pads)
                 input1.data_format = "NCHW"
             return self._switch_transpose_and_node(node, trans)
-        return False
+        # when the second input is not a constant, let's shuffle it with Split followed by Concat
+        # there are examples of models, where this non-constant input
+        # gets constant folded anyway by a framework.
+        split = self._g.make_node("Split", inputs=[node.input[1]], attr={}, output_count=trans_rank * 2)
+        pads = split.output
+        if trans_rank == 4:
+            new_pads = self._g.make_node("Concat", [pads[0], pads[3], pads[1], pads[2],
+                                                    pads[4], pads[7], pads[5], pads[6]],
+                                         {'axis': 0})
+        else:
+            new_pads = self._g.make_node("Concat", [pads[0], pads[4], pads[1], pads[2], pads[3],
+                                                    pads[5], pads[9], pads[6], pads[7], pads[8]],
+                                         {'axis': 0})
+        self._g.replace_input(node, node.input[1], new_pads.output[0], 1)
+        return self._switch_transpose_and_node(node, trans)
 
     def _reducemean_handler(self, trans, node):
         axes = node.get_attr("axes").ints

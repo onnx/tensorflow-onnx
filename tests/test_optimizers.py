@@ -973,6 +973,34 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((1, 3, 4, 5), (2, 6, 4, 8), [1, 0, 1, 3, 0, 0, 2, 0], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 3, 4, 5, 6), (2, 5, 6, 8, 10), [1, 0, 1, 3, 1, 0, 2, 2, 1, 1], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    @check_opset_min_version(11, "pad")
+    def test_transpose_pad11_non_const_pads(self, input_shape, output_shape, pads, perm_input, perm_output):
+
+        pads_val = np.array(pads, dtype=np.int64)
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node1 = helper.make_node("Pad", ["Y", "Pads"], ["Z"], name="pad")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm_output, name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-pad-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape),
+             helper.make_tensor_value_info("Pads", TensorProto.INT64, pads_val.shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"],
+                                   {
+                                       "X": np.random.randn(*input_shape).astype(np.float32),
+                                       "Pads": pads_val
+                                   },
+                                   model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
         ((1, 3, 4, 5), (1, 3, 1, 1), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5, 6), (1, 3, 1, 1, 1), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
