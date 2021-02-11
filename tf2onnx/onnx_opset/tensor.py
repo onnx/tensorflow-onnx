@@ -2116,6 +2116,33 @@ def ragged_lengths_to_sparse_indices(ctx, ragged_lens):
     return num_rows, num_cols, row_indices, col_indices
 
 
+def ragged_nested_splits_to_sparse_indices(ctx, nested_splits, op_name_scope):
+    sparse_indices = None
+    dense_shape_dims = []
+    for split in nested_splits:
+        if ctx.get_dtype(split) != TensorProto.INT64:
+            split = ctx.make_node("Cast", [split], attr={'to': TensorProto.INT64}).output[0]
+        max_int64 = int(utils.get_max_value(np.int64))
+        slice1 = GraphBuilder(ctx).make_slice(
+            {"data": split, "ends": [max_int64], "starts": [1], "axes": [0]})
+        slice2 = GraphBuilder(ctx).make_slice(
+            {"data": split, "ends": [-1], "starts": [0], "axes": [0]})
+        ragged_lens = ctx.make_node("Sub", [slice1, slice2]).output[0]
+        num_rows, num_cols, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, ragged_lens)
+        if not dense_shape_dims:
+            dense_shape_dims.append(num_rows)
+        dense_shape_dims.append(num_cols)
+        if sparse_indices is None:
+            row_indices = GraphBuilder(ctx).make_unsqueeze({"data": row_indices, "axes": [1]})
+        else:
+            row_indices = ctx.make_node("Gather", [sparse_indices, row_indices]).output[0]
+        col_indices = GraphBuilder(ctx).make_unsqueeze({"data": col_indices, "axes": [1]})
+        sparse_indices = ctx.make_node("Concat", [row_indices, col_indices], attr={'axis': 1},
+                                       op_name_scope=op_name_scope).output[0]
+    dense_shape = ctx.make_node("Concat", dense_shape_dims, attr={'axis': 0}, op_name_scope=op_name_scope).output[0]
+    return sparse_indices, dense_shape
+
+
 @tf_op("RaggedTensorToSparse")
 class RaggedTensorToSparse:
     @classmethod
@@ -2123,34 +2150,41 @@ class RaggedTensorToSparse:
         # https://www.tensorflow.org/guide/ragged_tensor#multiple_ragged_dimensions
         dense_values = node.input[-1]
         nested_splits = node.input[:-1]
-        sparse_indices = None
-        dense_shape_dims = []
-        for split in nested_splits:
-            if ctx.get_dtype(split) != TensorProto.INT64:
-                split = ctx.make_node("Cast", [split], attr={'to': TensorProto.INT64}).output[0]
-            max_int64 = int(utils.get_max_value(np.int64))
-            slice1 = GraphBuilder(ctx).make_slice(
-                {"data": split, "ends": [max_int64], "starts": [1], "axes": [0]})
-            slice2 = GraphBuilder(ctx).make_slice(
-                {"data": split, "ends": [-1], "starts": [0], "axes": [0]})
-            ragged_lens = ctx.make_node("Sub", [slice1, slice2]).output[0]
-            num_rows, num_cols, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, ragged_lens)
-            if not dense_shape_dims:
-                dense_shape_dims.append(num_rows)
-            dense_shape_dims.append(num_cols)
-            if sparse_indices is None:
-                row_indices = GraphBuilder(ctx).make_unsqueeze({"data": row_indices, "axes": [1]})
-            else:
-                row_indices = ctx.make_node("Gather", [sparse_indices, row_indices]).output[0]
-            col_indices = GraphBuilder(ctx).make_unsqueeze({"data": col_indices, "axes": [1]})
-            sparse_indices = ctx.make_node("Concat", [row_indices, col_indices], attr={'axis': 1},
-                                           op_name_scope=node.name).output[0]
-        dense_shape = ctx.make_node("Concat", dense_shape_dims, attr={'axis': 0}, op_name_scope=node.name).output[0]
-
+        sparse_indices, dense_shape = ragged_nested_splits_to_sparse_indices(ctx, nested_splits, node.name)
         ctx.replace_all_inputs(node.output[0], sparse_indices)
         ctx.replace_all_inputs(node.output[1], dense_values)
         ctx.replace_all_inputs(node.output[2], dense_shape)
         ctx.remove_node(node.name)
+
+
+@tf_op("RaggedTensorToTensor")
+class RaggedTensorToTensor:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        shape, values, default_value, *row_partition_tensors = node.input
+        partition_types = node.get_attr_value("row_partition_types")
+        error_msg = "Only ROW_SPLITS partition type is supported for RaggedTensorToTensor. types: %r"
+        utils.make_sure(all(t == b'ROW_SPLITS' for t in partition_types), error_msg, partition_types)
+        nested_splits = row_partition_tensors
+        sparse_indices, dense_shape = ragged_nested_splits_to_sparse_indices(ctx, nested_splits, node.name)
+        # A shape of rank 0 means the natural shape should be used.
+        if ctx.get_rank(shape) != 0:
+            if ctx.get_dtype(shape) != TensorProto.INT64:
+                shape = ctx.make_node("Cast", [shape], attr={'to': TensorProto.INT64}).output[0]
+            const_zero_int64 = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.int64)).output[0]
+            unspec_dims = ctx.make_node("Less", [shape, const_zero_int64]).output[0]
+            out_shape = ctx.make_node("Where", [unspec_dims, dense_shape, shape]).output[0]
+            out_shape_unsq = GraphBuilder(ctx).make_unsqueeze({'data': out_shape, 'axes': [0]})
+            amt_idx_in_bounds = ctx.make_node("Sub", [out_shape_unsq, sparse_indices]).output[0]
+            amt_in_bounds_flat = ctx.make_node("ReduceMin", [amt_idx_in_bounds], attr={'axes': [1], 'keepdims': False})
+            idx_in_bounds = ctx.make_node("Greater", [amt_in_bounds_flat.output[0], const_zero_int64]).output[0]
+            sparse_indices = ctx.make_node("Compress", [sparse_indices, idx_in_bounds], attr={'axis': 0}).output[0]
+            values = ctx.make_node("Compress", [values, idx_in_bounds], attr={'axis': 0}).output[0]
+        else:
+            out_shape = dense_shape
+        expand_node = ctx.make_node("Expand", [default_value, out_shape])
+        node.type = "ScatterND"
+        ctx.replace_inputs(node, [expand_node.output[0], sparse_indices, values])
 
 
 @tf_op("RaggedRange")
