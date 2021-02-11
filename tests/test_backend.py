@@ -3859,6 +3859,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14", "ragged needs tf 1.14")
     @check_opset_min_version(11, "CumSum")
+    def test_ragged_gather(self):
+        splits_val = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        indices_val = np.array([1, 3, 2, 0, 1, 1, 4, 3, 3], dtype=np.int32)
+        def func(splits, rt_dense_values, indices):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits], validate=True)
+            g = tf.gather(x, indices)
+            rt_nested_splits = tf.identity(g.row_splits, name=_TFOUTPUT)
+            rt_dense_values = tf.identity(g.flat_values, name=_TFOUTPUT1)
+            return rt_nested_splits, rt_dense_values
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1],
+                            {_INPUT: splits_val, _INPUT1: dense_vals_val, _INPUT2: indices_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "CumSum")
     def test_ragged_tensor_to_tensor(self):
         splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
         splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
