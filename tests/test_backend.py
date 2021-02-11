@@ -871,6 +871,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(12, "GatherND with batch_dims")
+    def test_gather_batch_dims_no_trans(self):
+        x_val = np.arange(2 * 2 * 3 * 5 * 4, dtype=np.float32).reshape((2, 2, 3, 5, 4))
+        idx_val = np.array([[[1, 0, 2, 0], [1, 1, 1, 0]], [[0, 0, 0, 0], [2, 1, 1, 0]]], dtype=np.int32)
+        def func(x, idx):
+            x_ = tf.gather(x, idx, batch_dims=2, axis=2)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: idx_val})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(12, "GatherND with batch_dims")
+    def test_gather_batch_dims(self):
+        x_val = np.arange(2 * 2 * 3 * 5 * 4, dtype=np.float32).reshape((2, 2, 3, 5, 4))
+        idx_val = np.array([[[1, 0, 2, 0], [1, 1, 1, 0]], [[0, 0, 0, 0], [2, 1, 1, 0]]], dtype=np.int32)
+        def func(x, idx):
+            x_ = tf.gather(x, idx, batch_dims=2, axis=3)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: idx_val})
+
     @check_opset_min_version(10, "Slice")
     def test_roll_axis_scalar(self):
         x_val = np.arange(4 * 3 * 5 * 2, dtype=np.float32).reshape((4, 3, 5, 2))
