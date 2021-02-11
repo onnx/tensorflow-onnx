@@ -438,6 +438,7 @@ class Test(object):
                 tf_results = list(tf_results_d.values())
             else:
                 tf_results = [tf_results_d[output] for output in self.structured_outputs]
+            tf_results = [tf_res.numpy() for tf_res in tf_results]
             if self.perf:
                 logger.info("Running TF perf")
                 start = time.time()

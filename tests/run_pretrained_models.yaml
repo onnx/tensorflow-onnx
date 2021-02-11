@@ -468,7 +468,7 @@ deeplabv3_mnv2_ade20k_float_tflite:
   outputs:
     - ArgMax
 
-deeplabv3_mnv2_ade20k_uint8_tflite:
+deeplabv3_mnv2_ade20k_uint8_tflite_dequantize:
   tf_min_version: 2.1
   disabled: false
   url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
@@ -477,6 +477,54 @@ deeplabv3_mnv2_ade20k_uint8_tflite:
   input_get: get_ade20k_uint8
   ptol: 1.0
   dequantize: true
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
+
+deeplabv3_mnv2_ade20k_uint8_tflite:
+  tf_min_version: 2.1
+  disabled: true   # Requires ORT nightly for dequantize of int32
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
+  model: "deeplabv3_mnv2_ade20k_uint8.tflite"
+  model_type: tflite
+  input_get: get_ade20k_uint8
+  opset_constraints:
+    "onnx":
+      "min": 10
+  ptol: 1.5
+  dequantize: false
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
+
+deeplabv3_mnv2_ade20k_int8_tflite_dequantize:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_int8.tflite
+  model: "deeplabv3_mnv2_ade20k_int8.tflite"
+  model_type: tflite
+  input_get: get_ade20k_uint8   # the input is uint8 despite the model name
+  ptol: 3.0
+  dequantize: true
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
+
+deeplabv3_mnv2_ade20k_int8_tflite:
+  tf_min_version: 2.1
+  disabled: true   # Requires ORT nightly for dequantize of int32
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_int8.tflite
+  model: "deeplabv3_mnv2_ade20k_int8.tflite"
+  model_type: tflite
+  input_get: get_ade20k_uint8   # the input is uint8 despite the model name
+  opset_constraints:
+    "onnx":
+      "min": 13
+  ptol: 1.9
+  dequantize: false
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
   outputs:
