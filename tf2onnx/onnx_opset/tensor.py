@@ -425,7 +425,10 @@ class GatherV2:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # for GatherV2 axis come as input
+        err_msg = "Opset 12 required for batch_dims attribute of GatherV2"
+        utils.make_sure(node.get_attr_value("batch_dims", 0) == 0, err_msg)
         node.type = "Gather"
+        utils.make_sure(node.inputs[2].is_const(), "Axis of GatherV2 node must be constant")
         axis = node.inputs[2].get_tensor_value()
         ctx.remove_input(node, node.input[2], 2)
         node.set_attr("axis", axis)
@@ -434,6 +437,42 @@ class GatherV2:
     def version_11(cls, ctx, node, **kwargs):
         # no change
         cls.version_1(ctx, node, **kwargs)
+
+    @classmethod
+    def version_12(cls, ctx, node, **kwargs):
+        batch_dims = node.get_attr_value("batch_dims", 0)
+        if batch_dims == 0:
+            cls.version_1(ctx, node, **kwargs)
+            return
+        # If batch_dims is not zero, use GatherND to simulate Gather with batch dims.
+        data_inp, indices_inp, axis_inp = node.input
+        utils.make_sure(node.inputs[2].is_const(), "Axis of GatherV2 node must be constant")
+        axis = node.inputs[2].get_tensor_value()
+        ctx.remove_input(node, axis_inp, 2)
+        if ctx.get_dtype(indices_inp) != TensorProto.INT64:
+            indices_inp = ctx.make_node("Cast", [indices_inp], attr={'to': TensorProto.INT64}).output[0]
+        unperm = None
+        # GatherND doesn't take an axis so we have to transpose stuff around
+        if axis != batch_dims:
+            data_rank = ctx.get_rank(data_inp)
+            indices_rank = ctx.get_rank(indices_inp)
+            result_rank = data_rank + indices_rank - 1 - batch_dims
+            shift_amt = axis - batch_dims
+            err_msg = "Cannot convert GatherV2 with batch dims since inputs have unknown ranks."
+            utils.make_sure(data_rank is not None and indices_rank is not None, err_msg)
+            perm = list(range(data_rank))
+            perm = perm[:batch_dims] + perm[axis:axis+1] + perm[batch_dims:axis] + perm[axis+1:]
+            data_inp = ctx.make_node("Transpose", [data_inp], attr={'perm': perm}).output[0]
+            ctx.replace_input(node, node.input[0], data_inp, 0)
+            unperm = list(range(result_rank))
+            j = indices_rank+shift_amt
+            unperm = unperm[:batch_dims] + unperm[indices_rank:j] + unperm[batch_dims:indices_rank] + unperm[j:]
+        node.type = "GatherND"
+        unsqueeze_node = GraphBuilder(ctx).make_unsqueeze({'data': indices_inp, 'axes': [-1]})
+        ctx.replace_input(node, node.input[1], unsqueeze_node, 1)
+        if unperm is not None:
+            ctx.update_node_shape_dtype(node, override=True)
+            ctx.insert_new_node_on_output("Transpose", node.output[0], perm=unperm)
 
 
 def _make_gathernd_inner_loop(ctx, params, index, dtype):
@@ -2079,6 +2118,33 @@ def ragged_lengths_to_sparse_indices(ctx, ragged_lens):
     return num_rows, num_cols, row_indices, col_indices
 
 
+def ragged_nested_splits_to_sparse_indices(ctx, nested_splits, op_name_scope):
+    sparse_indices = None
+    dense_shape_dims = []
+    for split in nested_splits:
+        if ctx.get_dtype(split) != TensorProto.INT64:
+            split = ctx.make_node("Cast", [split], attr={'to': TensorProto.INT64}).output[0]
+        max_int64 = int(utils.get_max_value(np.int64))
+        slice1 = GraphBuilder(ctx).make_slice(
+            {"data": split, "ends": [max_int64], "starts": [1], "axes": [0]})
+        slice2 = GraphBuilder(ctx).make_slice(
+            {"data": split, "ends": [-1], "starts": [0], "axes": [0]})
+        ragged_lens = ctx.make_node("Sub", [slice1, slice2]).output[0]
+        num_rows, num_cols, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, ragged_lens)
+        if not dense_shape_dims:
+            dense_shape_dims.append(num_rows)
+        dense_shape_dims.append(num_cols)
+        if sparse_indices is None:
+            row_indices = GraphBuilder(ctx).make_unsqueeze({"data": row_indices, "axes": [1]})
+        else:
+            row_indices = ctx.make_node("Gather", [sparse_indices, row_indices]).output[0]
+        col_indices = GraphBuilder(ctx).make_unsqueeze({"data": col_indices, "axes": [1]})
+        sparse_indices = ctx.make_node("Concat", [row_indices, col_indices], attr={'axis': 1},
+                                       op_name_scope=op_name_scope).output[0]
+    dense_shape = ctx.make_node("Concat", dense_shape_dims, attr={'axis': 0}, op_name_scope=op_name_scope).output[0]
+    return sparse_indices, dense_shape
+
+
 @tf_op("RaggedTensorToSparse")
 class RaggedTensorToSparse:
     @classmethod
@@ -2086,34 +2152,41 @@ class RaggedTensorToSparse:
         # https://www.tensorflow.org/guide/ragged_tensor#multiple_ragged_dimensions
         dense_values = node.input[-1]
         nested_splits = node.input[:-1]
-        sparse_indices = None
-        dense_shape_dims = []
-        for split in nested_splits:
-            if ctx.get_dtype(split) != TensorProto.INT64:
-                split = ctx.make_node("Cast", [split], attr={'to': TensorProto.INT64}).output[0]
-            max_int64 = int(utils.get_max_value(np.int64))
-            slice1 = GraphBuilder(ctx).make_slice(
-                {"data": split, "ends": [max_int64], "starts": [1], "axes": [0]})
-            slice2 = GraphBuilder(ctx).make_slice(
-                {"data": split, "ends": [-1], "starts": [0], "axes": [0]})
-            ragged_lens = ctx.make_node("Sub", [slice1, slice2]).output[0]
-            num_rows, num_cols, row_indices, col_indices = ragged_lengths_to_sparse_indices(ctx, ragged_lens)
-            if not dense_shape_dims:
-                dense_shape_dims.append(num_rows)
-            dense_shape_dims.append(num_cols)
-            if sparse_indices is None:
-                row_indices = GraphBuilder(ctx).make_unsqueeze({"data": row_indices, "axes": [1]})
-            else:
-                row_indices = ctx.make_node("Gather", [sparse_indices, row_indices]).output[0]
-            col_indices = GraphBuilder(ctx).make_unsqueeze({"data": col_indices, "axes": [1]})
-            sparse_indices = ctx.make_node("Concat", [row_indices, col_indices], attr={'axis': 1},
-                                           op_name_scope=node.name).output[0]
-        dense_shape = ctx.make_node("Concat", dense_shape_dims, attr={'axis': 0}, op_name_scope=node.name).output[0]
-
+        sparse_indices, dense_shape = ragged_nested_splits_to_sparse_indices(ctx, nested_splits, node.name)
         ctx.replace_all_inputs(node.output[0], sparse_indices)
         ctx.replace_all_inputs(node.output[1], dense_values)
         ctx.replace_all_inputs(node.output[2], dense_shape)
         ctx.remove_node(node.name)
+
+
+@tf_op("RaggedTensorToTensor")
+class RaggedTensorToTensor:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        shape, values, default_value, *row_partition_tensors = node.input
+        partition_types = node.get_attr_value("row_partition_types")
+        error_msg = "Only ROW_SPLITS partition type is supported for RaggedTensorToTensor. types: %r"
+        utils.make_sure(all(t == b'ROW_SPLITS' for t in partition_types), error_msg, partition_types)
+        nested_splits = row_partition_tensors
+        sparse_indices, dense_shape = ragged_nested_splits_to_sparse_indices(ctx, nested_splits, node.name)
+        # A shape of rank 0 means the natural shape should be used.
+        if ctx.get_rank(shape) != 0:
+            if ctx.get_dtype(shape) != TensorProto.INT64:
+                shape = ctx.make_node("Cast", [shape], attr={'to': TensorProto.INT64}).output[0]
+            const_zero_int64 = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.int64)).output[0]
+            unspec_dims = ctx.make_node("Less", [shape, const_zero_int64]).output[0]
+            out_shape = ctx.make_node("Where", [unspec_dims, dense_shape, shape]).output[0]
+            out_shape_unsq = GraphBuilder(ctx).make_unsqueeze({'data': out_shape, 'axes': [0]})
+            amt_idx_in_bounds = ctx.make_node("Sub", [out_shape_unsq, sparse_indices]).output[0]
+            amt_in_bounds_flat = ctx.make_node("ReduceMin", [amt_idx_in_bounds], attr={'axes': [1], 'keepdims': False})
+            idx_in_bounds = ctx.make_node("Greater", [amt_in_bounds_flat.output[0], const_zero_int64]).output[0]
+            sparse_indices = ctx.make_node("Compress", [sparse_indices, idx_in_bounds], attr={'axis': 0}).output[0]
+            values = ctx.make_node("Compress", [values, idx_in_bounds], attr={'axis': 0}).output[0]
+        else:
+            out_shape = dense_shape
+        expand_node = ctx.make_node("Expand", [default_value, out_shape])
+        node.type = "ScatterND"
+        ctx.replace_inputs(node, [expand_node.output[0], sparse_indices, values])
 
 
 @tf_op("RaggedRange")
@@ -2176,6 +2249,77 @@ class RaggedRange:
 
         ctx.replace_all_inputs(node.output[0], splits_out)
         ctx.replace_all_inputs(node.output[1], dense_vals_out)
+        ctx.remove_node(node.name)
+
+
+@tf_op("RaggedGather")
+class RaggedGather:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        *params_nested_splits, params_dense_values, indices = node.input
+        inp_ragged_rank = node.get_attr_value("PARAMS_RAGGED_RANK")
+        out_ragged_rank = node.get_attr_value("OUTPUT_RAGGED_RANK")
+        err_msg = "RaggedGather conversion only supports ragged rank of 1"
+        utils.make_sure(inp_ragged_rank == 1 and out_ragged_rank == 1 and len(params_nested_splits) == 1, err_msg)
+        splits = params_nested_splits[0]
+        err_msg2 = "RaggedGather conversion only supports tensors with no dense dimensions"
+        utils.make_sure(ctx.get_rank(splits) in [None, 1] and ctx.get_rank(params_dense_values) in [None, 1], err_msg2)
+        splits_dtype = ctx.get_dtype(splits)
+
+        if splits_dtype != TensorProto.INT64:
+            splits_64 = ctx.make_node("Cast", [splits], attr={'to': TensorProto.INT64}).output[0]
+        else:
+            splits_64 = splits
+
+        max_int64 = int(utils.get_max_value(np.int64))
+        slice1 = GraphBuilder(ctx).make_slice(
+            {"data": splits_64, "ends": [max_int64], "starts": [1], "axes": [0]})
+        slice2 = GraphBuilder(ctx).make_slice(
+            {"data": splits_64, "ends": [-1], "starts": [0], "axes": [0]})
+        ragged_lens = ctx.make_node("Sub", [slice1, slice2]).output[0]
+
+        gathered_lens = ctx.make_node("Gather", [ragged_lens, indices], op_name_scope=node.name).output[0]
+
+        const_zero_unsq = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64)).output[0]
+        const_one_unsq = ctx.make_const(utils.make_name("const_one"), np.array([1], dtype=np.int64)).output[0]
+        gathered_lens_w_zero = ctx.make_node("Concat", [const_zero_unsq, gathered_lens], attr={'axis': 0}).output[0]
+
+        const_zero_int64 = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.int64)).output[0]
+        const_one_int64 = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=np.int64)).output[0]
+
+        gathered_splits = ctx.make_node("CumSum", [gathered_lens_w_zero, const_zero_int64]).output[0]
+        if splits_dtype != TensorProto.INT64:
+            output_splits = ctx.make_node("Cast", [gathered_splits], attr={'to': splits_dtype}).output[0]
+        else:
+            output_splits = gathered_splits
+
+        # Now that we have the splits, we just need to make the list of values.
+        total_length = GraphBuilder(ctx).make_slice(
+            {"data": gathered_splits, "ends": [max_int64], "starts": [-1], "axes": [0]})
+        gathered_starts = ctx.make_node("Gather", [splits_64, indices], op_name_scope=node.name).output[0]
+        # We disregard any length 0 segments
+        non_zero_pos = ctx.make_node("Greater", [gathered_lens, const_zero_int64]).output[0]
+        non_zero_lens = ctx.make_node("Compress", [gathered_lens, non_zero_pos]).output[0]
+        non_zero_lens_shifted = ctx.make_node("Concat", [const_zero_unsq, non_zero_lens], attr={'axis': 0}).output[0]
+        non_zero_prev_lens = GraphBuilder(ctx).make_slice(
+            {"data": non_zero_lens_shifted, "ends": [-1], "starts": [0], "axes": [0]})
+        non_zero_starts = ctx.make_node("Compress", [gathered_starts, non_zero_pos]).output[0]
+        non_zero_splits = ctx.make_node("Compress", [gathered_splits, non_zero_pos]).output[0]
+
+        prev_starts = GraphBuilder(ctx).make_slice(
+            {"data": non_zero_starts, "ends": [-1], "starts": [0], "axes": [0]})
+        prev_starts_concat = ctx.make_node("Concat", [const_one_unsq, prev_starts], attr={'axis': 0}).output[0]
+        deltas = ctx.make_node("Sub", [non_zero_starts, prev_starts_concat]).output[0]
+        deltas2 = ctx.make_node("Sub", [deltas, non_zero_prev_lens]).output[0]
+        deltas3 = ctx.make_node("Add", [deltas2, const_one_int64]).output[0]
+        one_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[1])
+        ones_of_shape = ctx.make_node("ConstantOfShape", [total_length], attr={"value": one_tensor}).output[0]
+        full_deltas = ctx.make_node("ScatterElements", [ones_of_shape, non_zero_splits, deltas3], attr={'axis': 0})
+        full_indices = ctx.make_node("CumSum", [full_deltas.output[0], const_zero_int64]).output[0]
+        output_values = ctx.make_node("Gather", [params_dense_values, full_indices], op_name_scope=node.name).output[0]
+
+        ctx.replace_all_inputs(node.output[0], output_splits)
+        ctx.replace_all_inputs(node.output[1], output_values)
         ctx.remove_node(node.name)
 
 

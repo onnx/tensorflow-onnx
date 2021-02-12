@@ -871,6 +871,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(12, "GatherND with batch_dims")
+    def test_gather_batch_dims_no_trans(self):
+        x_val = np.arange(2 * 2 * 3 * 5 * 4, dtype=np.float32).reshape((2, 2, 3, 5, 4))
+        idx_val = np.array([[[1, 0, 2, 0], [1, 1, 1, 0]], [[0, 0, 0, 0], [2, 1, 1, 0]]], dtype=np.int32)
+        def func(x, idx):
+            x_ = tf.gather(x, idx, batch_dims=2, axis=2)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: idx_val})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(12, "GatherND with batch_dims")
+    def test_gather_batch_dims(self):
+        x_val = np.arange(2 * 2 * 3 * 5 * 4, dtype=np.float32).reshape((2, 2, 3, 5, 4))
+        idx_val = np.array([[[1, 0, 2, 0], [1, 1, 1, 0]], [[0, 0, 0, 0], [2, 1, 1, 0]]], dtype=np.int32)
+        def func(x, idx):
+            x_ = tf.gather(x, idx, batch_dims=2, axis=3)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: idx_val})
+
     @check_opset_min_version(10, "Slice")
     def test_roll_axis_scalar(self):
         x_val = np.arange(4 * 3 * 5 * 2, dtype=np.float32).reshape((4, 3, 5, 2))
@@ -3845,6 +3865,45 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return indices, values, shape
         self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2],
                             {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "CumSum")
+    def test_ragged_gather(self):
+        splits_val = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        indices_val = np.array([1, 3, 2, 0, 1, 1, 4, 3, 3], dtype=np.int32)
+        def func(splits, rt_dense_values, indices):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits], validate=True)
+            g = tf.gather(x, indices)
+            rt_nested_splits = tf.identity(g.row_splits, name=_TFOUTPUT)
+            rt_dense_values = tf.identity(g.flat_values, name=_TFOUTPUT1)
+            return rt_nested_splits, rt_dense_values
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1],
+                            {_INPUT: splits_val, _INPUT1: dense_vals_val, _INPUT2: indices_val})
+
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "CumSum")
+    def test_ragged_tensor_to_tensor(self):
+        splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
+        splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        def func(splits1, splits2, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits1, splits2], validate=True)
+            y = x.to_tensor(default_value=7)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
+
+    @check_tf_min_version("2.2", "ragged to_tensor with constrained shape")
+    @check_opset_min_version(11, "CumSum")
+    def test_ragged_tensor_to_tensor_constrain_shape(self):
+        splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
+        splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        def func(splits1, splits2, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits1, splits2], validate=True)
+            y = x.to_tensor(default_value=7, shape=[20, None, 2])
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
 
     @check_tf_min_version("1.14", "ragged needs tf 1.14")
     @check_opset_min_version(11, "Range")

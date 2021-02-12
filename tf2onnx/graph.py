@@ -561,11 +561,13 @@ class Graph(object):
             skip_conversion: bool, indicate whether this created node would be mapped during conversion.
             raw: whether to store data at field of raw_data or the specific field according to its dtype
         """
-        if raw and np_val.dtype != np.object:
+        np_val_flat = np_val.flatten()
+        is_bytes = np_val.dtype == np.object and len(np_val_flat) > 0 and isinstance(np_val_flat[0], bytes)
+        if raw and not is_bytes:
             onnx_tensor = numpy_helper.from_array(np_val, name)
         else:
             onnx_tensor = helper.make_tensor(name, utils.map_numpy_to_onnx_dtype(np_val.dtype),
-                                             np_val.shape, np_val, raw=False)
+                                             np_val.shape, np_val_flat, raw=False)
         dtype = onnx_tensor.data_type
         node = self.make_node("Const", [], outputs=[name], name=name, attr={"value": onnx_tensor},
                               skip_conversion=skip_conversion, dtypes=[dtype], infer_shape_dtype=False)
