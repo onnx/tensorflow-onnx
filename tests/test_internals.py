@@ -108,6 +108,22 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
                    'n5_raw_output___3:0 -> n6 n5_raw_output___3:0 -> n5_graph_outputs_Identity__4 }'
         self.assertEqual(expected, result)
 
+    def test_make_const_string(self):
+        graph_proto = self.sample_net()
+        g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
+        arr1 = np.array("test", np.object)
+        arr2 = np.array([["A", "B"], ["C", "D"]], np.object)
+        arr3 = np.array(b"test", np.object)
+        arr4 = np.array([[b"A", b"B"], [b"C", b"D"]], np.object)
+        const1 = g.make_const("const1", arr1)
+        const2 = g.make_const("const2", arr2)
+        const3 = g.make_const("const3", arr3)
+        const4 = g.make_const("const4", arr4)
+        np.testing.assert_equal(const1.get_tensor_value(False), arr1)
+        np.testing.assert_equal(const2.get_tensor_value(False), arr2)
+        np.testing.assert_equal(const3.get_tensor_value(False), arr1)
+        np.testing.assert_equal(const4.get_tensor_value(False), arr2)
+
     def test_remove_input(self):
         graph_proto = self.sample_net()
         g = GraphUtil.create_graph_from_onnx_graph(graph_proto)
