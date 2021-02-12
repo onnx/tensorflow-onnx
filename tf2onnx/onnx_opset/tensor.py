@@ -356,6 +356,8 @@ class Roll:
     def any_version(cls, opset, ctx, node, **kwargs):
         utils.make_sure(node.inputs[2].is_const(), "Can only convert Roll is axis is const")
         axes = node.inputs[2].get_tensor_value()
+        if axes == -1:
+            axes = len(ctx.get_shape(node.input[0])) + axes
         if not isinstance(axes, list):
             axes = [axes]
         shifts_dtype = ctx.get_dtype(node.input[1])
