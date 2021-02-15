@@ -458,7 +458,13 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         # node's inputs may come from one same node. if so the multiplier_input_node may be none
         if multiplier_input_node is None:
-            return False
+            if not self._nodes_has_single_consumer_node([trans]):
+                return False
+            self._g.replace_all_inputs(node.output[0], trans.output[0])
+            self._g.replace_input(node, node.input[0], trans.input[0], 0)
+            self._g.replace_input(node, node.input[1], trans.input[0], 1)
+            self._g.replace_input(trans, trans.input[0], node.output[0], 0)
+            return True
 
         # convert  mul(trans(x), trans(y)) ->  trans(mul(x, y))
         if multiplier_input_node.type == "Transpose":
