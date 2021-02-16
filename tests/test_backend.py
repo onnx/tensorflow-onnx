@@ -2350,9 +2350,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
         var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
         def func(x, mean, offset, var):
             scale = tf.constant(scale_val, name='scale')
-            y = tf.raw_ops.FusedBatchNormV3(x=x, scale=scale, offset=offset, mean=mean, variance=var, is_training=False, name=_TFOUTPUT)
+            y = tf.raw_ops.FusedBatchNormV3(x=x, scale=scale, offset=offset, mean=mean, variance=var,
+                                            is_training=False, name=_TFOUTPUT)
             return y
-            return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT],
                             {_INPUT: x_val, _INPUT1: mean_val, _INPUT2: offset_val, _INPUT3: var_val})
 
