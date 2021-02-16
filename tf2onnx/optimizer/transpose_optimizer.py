@@ -193,6 +193,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Pad": self._pad_handler,
             "Reciprocal": self._simple_through_handler,
             "ReduceMean": self._reducemean_handler,
+            "ReduceSum": self._reducesum_handler,
             "Relu": self._simple_through_handler,
             "Shape": self._shape_handler,
             "Sigmoid": self._simple_through_handler,
@@ -709,6 +710,34 @@ class TransposeOptimizer(GraphOptimizerBase):
         # by default, if keepdims is not specified, it is 1
         if axes == list(range(1, trans_rank - 1)) and ((keepdims and keepdims.i == 1) or (not keepdims)):
             node.set_attr("axes", list(range(2, trans_rank)))
+            return self._switch_transpose_and_node(node, trans)
+        return False
+
+    def _reducesum_handler(self, trans, node):
+        keepdims = node.get_attr("keepdims")
+        # make sure keepdims is 1, then we can do the swap, otherwise, please don't, because
+        # once keepdims is not set, original dims are lost, so transpose back won't work well.
+        # by default, if keepdims is not specified, it is 1
+        if keepdims and keepdims.i == 0:
+            return False
+        if self._g.opset <= 12:
+            axes = node.get_attr("axes").ints
+            perm = trans.get_attr('perm').ints
+            new_axes = [perm[axis] for axis in axes]
+            node.set_attr("axes", new_axes)
+            return self._switch_transpose_and_node(node, trans)
+        if node.inputs[1].is_const():
+            axes = node.inputs[1].get_tensor_value()
+            perm = trans.get_attr('perm').ints
+            axes = [perm[axes[i]] for i in range(len(axes))]
+            new_axes = np.array(axes, dtype=np.int64)
+            if self._nodes_has_single_consumer_node([node.inputs[1]]):
+                node.inputs[1].set_tensor_value(new_axes)
+            else:
+                new_axes_const = self._g.make_const(
+                    utils.make_name(node.inputs[1].name), new_axes
+                )
+                self._g.replace_input(node, node.input[1], new_axes_const.output[0], 1)
             return self._switch_transpose_and_node(node, trans)
         return False
 
