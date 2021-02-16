@@ -722,7 +722,6 @@ class TransposeOptimizer(GraphOptimizerBase):
             return False
         if self._g.opset <= 12:
             axes = node.get_attr("axes").ints
-            trans_rank = get_transpose_rank(trans)
             perm = trans.get_attr('perm').ints
             new_axes = [perm[axis] for axis in axes]
             node.set_attr("axes", new_axes)
