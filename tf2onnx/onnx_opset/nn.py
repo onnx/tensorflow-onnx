@@ -854,7 +854,7 @@ class BatchNorm:
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
-        # is_test was removed - no change for us        
+        # is_test was removed - no change for us
         cls.version_6(ctx, node, **kwargs)
 
 
