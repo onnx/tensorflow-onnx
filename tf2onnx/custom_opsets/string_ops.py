@@ -121,6 +121,28 @@ class StringEqual:
             ctx.copy_shape(output_name, not_node.output[0])
             ctx.copy_dtype(output_name, not_node.output[0])
 
+@tf_op(["StringLower", "StringUpper"])
+class StringLower:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        if node.type == "StringLower":
+            case_action = "LOWER"
+        else:
+            case_action = "UPPER"
+        node.type = "StringNormalizer"
+        str_input = node.input[0]
+        rank = ctx.get_rank(node.input[0])
+        shape = ctx.get_shape(node.input[0])
+        if rank != 1:
+            ctx.insert_new_node_on_input(node, "Flatten", node.input[0], axis=0)
+        node.set_attr("case_change_action", case_action)
+        if rank != 1:
+            if shape is None or -1 in shape:
+                new_shape = ctx.make_node("Shape", [str_input]).output[0]
+            else:
+                new_shape = ctx.make_const(utils.make_name("shape"), np.array(shape, np.int64)).output[0]
+            ctx.insert_new_node_on_output("Reshape", node.output[0], inputs=[node.output[0], new_shape])
+
 @tf_op("SentencepieceOp", domain=constants.CONTRIB_OPS_DOMAIN)
 class SentencepieceOp:
     @classmethod
