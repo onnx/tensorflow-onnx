@@ -2855,6 +2855,36 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(res, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("1.14", "tf.strings.lower")
+    @check_opset_min_version(10, "StringNormalizer")
+    def test_string_lower(self):
+        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
+        def func(text1):
+            x = tf.strings.lower(text1)
+            x_ = tf.identity(x, name=_TFOUTPUT)
+            return x_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: text_val1})
+
+    @check_tf_min_version("1.14", "tf.strings.lower")
+    @check_opset_min_version(10, "StringNormalizer")
+    def test_string_lower_flat(self):
+        text_val1 = np.array(["a", "Test 1 2 3", "♠♣", "Hi there", "test test", "♥♦"], dtype=np.str)
+        def func(text1):
+            x = tf.strings.lower(text1)
+            x_ = tf.identity(x, name=_TFOUTPUT)
+            return x_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: text_val1})
+
+    @check_tf_min_version("1.14", "tf.strings.lower")
+    @check_opset_min_version(10, "StringNormalizer")
+    def test_string_upper(self):
+        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
+        def func(text1):
+            x = tf.strings.upper(text1)
+            x_ = tf.identity(x, name=_TFOUTPUT)
+            return x_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: text_val1})
+
     @check_opset_min_version(6, "cast")
     def test_shape_int32(self):
         x_val = np.array([[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]], dtype=np.float32)
