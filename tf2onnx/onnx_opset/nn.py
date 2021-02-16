@@ -780,6 +780,21 @@ class BatchNorm:
         # output: y, mean, var, savedmean, savedvar,
         # detach unused outputs. While we could let the unused outputs dangle,
         # some runtimes like pytorch/caffe2 do complain about it.
+
+        # onnx batchnorm requires same T for all inputs
+        mean_type = ctx.get_dtype(node.input[3])
+        x_dtype = ctx.get_dtype(node.input[0])
+        if x_dtype != mean_type:
+            # TODO: this works but more efficient would be to flip the other inputs. We'd need to check
+            # TODO: first if this works with the onnx implementation so its a later for now
+            ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=mean_type)
+            # casting the input[0] will change the output dtype of bn so we need to cast back
+            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+                                                           name=utils.make_name(node.name) + "_castback",
+                                                           to=x_dtype)
+            ctx.set_dtype(cast_back_node.output[0], x_dtype)
+            ctx.copy_shape(node.name, cast_back_node.output[0])
+
         consumers = [ctx.find_output_consumers(output_name) for output_name in node.output[1:]]
         if not any(consumers):
             new_output = [node.output[0]]
@@ -839,7 +854,7 @@ class BatchNorm:
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
-        # is_test was removed - no change for us
+        # is_test was removed - no change for us        
         cls.version_6(ctx, node, **kwargs)
 
 
