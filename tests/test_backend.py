@@ -2335,6 +2335,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
 
+    @skip_tflite("tflite converts aborts")
+    @check_opset_min_version(11, "batchnorm")
+    @check_tf_min_version("2.4")
+    def test_batchnorm_mixed(self):
+        x_shape = [1, 32, 32, 2]
+        x_dtype = np.float16
+        scale_dtype = np.float32
+        scale_shape = [2]
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        mean_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        def func(x, mean, offset, var):
+            scale = tf.constant(scale_val, name='scale')
+            y = tf.raw_ops.FusedBatchNormV3(x=x, scale=scale, offset=offset, mean=mean, variance=var,
+                                            is_training=False, name=_TFOUTPUT)
+            return y
+        self._run_test_case(func, [_OUTPUT],
+                            {_INPUT: x_val, _INPUT1: mean_val, _INPUT2: offset_val, _INPUT3: var_val})
+
     @check_opset_min_version(7, "batchnorm")
     @check_tf_min_version("1.13")
     def test_batchnorm(self):
