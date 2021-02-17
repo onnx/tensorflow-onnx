@@ -2979,6 +2979,35 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
+    @check_opset_min_version(11, "CumSum")
+    def test_matrix_band_part_3(self):
+        for low, high in [(-1, 3), (2, 3), (4, 3), (0, -1), (0, 0)]:
+            input_val = np.random.randint(0, 666, (10, 15)).astype(np.int32)
+            def func(input_x):
+                res = tf.linalg.band_part(input_x, low, high)
+                return tf.identity(res, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_matrix_band_part_4(self):
+        for low, high in [(-1, 3), (2, 3), (4, 3), (0, -1), (0, 0)]:
+            input_val = np.random.randint(0, 666, (2, 3, 10, 15)).astype(np.int32)
+            def func(input_x):
+                res = tf.linalg.band_part(input_x, low, high)
+                return tf.identity(res, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_matrix_band_part_5(self):
+        for low_val, high_val in [(2, 3), (4, 3), (0, 0), (2, 0)]:
+            low_val = np.array(low_val, np.int32)
+            high_val = np.array(high_val, np.int32)
+            input_val = np.random.randint(0, 666, (2, 3, 10, 15)).astype(np.int32)
+            def func(input_x, low, high):
+                res = tf.linalg.band_part(input_x, low, high)
+                return tf.identity(res, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: low_val, _INPUT2: high_val})
+
     def test_floordiv(self):
         input_val_1 = np.random.random_sample(100).astype(np.int32)
         input_val_2 = (np.random.random_sample(100) + 1).astype(np.int32)
