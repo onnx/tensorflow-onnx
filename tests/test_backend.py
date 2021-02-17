@@ -1800,16 +1800,61 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
 
-    @unittest.skip("TF RandomUniformInt is not supported")
     def test_randomuniform_int(self):
         def func():
-            shape = tf.constant([2, 3], name="shape")
-            x_ = random_uniform(shape, name="rand", dtype=tf.int32, maxval=10)
+            shape = tf.constant([100, 3], name="shape")
+            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=2, maxval=10)
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
         # since results are random, compare the shapes only
-        self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        results = self.run_backend(g, [_OUTPUT], {})
+        numbers = set(results[0].flatten())
+        self.assertEqual(sorted(numbers), list(range(2, 10)))
+
+    def test_randomuniform_int_nonconst_max(self):
+        m_val = np.array(8, dtype=np.int32)
+        def func(m):
+            shape = tf.constant([100, 3], name="shape")
+            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=0, maxval=m)
+            x_ = tf.identity(x_, name="output1")
+            x_ = tf.identity(x_, name="output2")
+            return tf.identity(x_, name=_TFOUTPUT)
+        g = self._run_test_case(func, [_OUTPUT], {_INPUT: m_val}, check_value=False, check_shape=True)
+        results = self.run_backend(g, [_OUTPUT], {_INPUT: m_val})
+        numbers = set(results[0].flatten())
+        self.assertEqual(sorted(numbers), list(range(8)))
+
+    def test_randomuniform_int_nonconst_min_max(self):
+        n_val = np.array(2, dtype=np.int32)
+        m_val = np.array(10, dtype=np.int32)
+        def func(n, m):
+            shape = tf.constant([100, 3], name="shape")
+            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=n, maxval=m)
+            x_ = tf.identity(x_, name="output1")
+            x_ = tf.identity(x_, name="output2")
+            return tf.identity(x_, name=_TFOUTPUT)
+        g = self._run_test_case(func, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val}, check_value=False, check_shape=True)
+        results = self.run_backend(g, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val})
+        numbers = set(results[0].flatten())
+        self.assertEqual(sorted(numbers), list(range(2, 10)))
+
+    @check_opset_min_version(9, "RandomUniformLike")
+    def test_randomuniform_int_nonconst_min_max_shape(self):
+        n_val = np.array(2, dtype=np.int32)
+        m_val = np.array(10, dtype=np.int32)
+        s_val = np.array([100, 3], dtype=np.int64)
+        def func(n, m, s):
+            x_ = random_uniform(s, name="rand", dtype=tf.int32, minval=n, maxval=m)
+            x_ = tf.identity(x_, name="output1")
+            x_ = tf.identity(x_, name="output2")
+            return tf.identity(x_, name=_TFOUTPUT)
+        g = self._run_test_case(func, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val},
+                                check_value=False, check_shape=True)
+        results = self.run_backend(g, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val})
+        numbers = set(results[0].flatten())
+        self.assertEqual(sorted(numbers), list(range(2, 10)))
 
     @skip_caffe2_backend()
     @check_opset_after_tf_version("2.2", 9, "RandomUniform")
