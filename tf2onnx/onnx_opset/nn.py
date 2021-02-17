@@ -1134,6 +1134,57 @@ class Resize:
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
 
+@tf_op("AdjustContrastv2")
+class AdjustContrastv2:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        images, contrast_factor = node.input
+        dtype = ctx.get_dtype(images)
+        if ctx.get_dtype(contrast_factor) != dtype:
+            contrast_factor = ctx.make_node("Cast", [dtype], attr={'to': dtype}).output[0]
+        rank = ctx.get_rank(images)
+        utils.make_sure(rank is not None, "AdjustContrastv2 requires input of known rank")
+        # Reduce everything except channels
+        axes_to_reduce = list(range(rank))[:-1]
+        mean = ctx.make_node("ReduceMean", [images], attr={'axes': axes_to_reduce, 'keepdims': True},
+                             op_name_scope=node.name).output[0]
+        diff = ctx.make_node("Sub", [images, mean], op_name_scope=node.name).output[0]
+        scaled = ctx.make_node("Mul", [diff, contrast_factor], op_name_scope=node.name).output[0]
+        result = ctx.make_node("Add", [scaled, mean], op_name_scope=node.name).output[0]
+        ctx.replace_all_inputs(node.output[0], result)
+        ctx.remove_node(node.name)
+
+
+@tf_op("AdjustSaturation")
+class AdjustSaturation:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        images, factor = node.input
+        dtype = ctx.get_dtype(images)
+        np_dtype = utils.map_onnx_to_numpy_type(dtype)
+        k = ctx.make_const(utils.make_name("three"), np.array([3], np.int64)).output[0]
+        ordered, indices = ctx.make_node("TopK", [images, k], attr={'axis': -1}, output_count=2).output
+        # Sorted and separated into channels
+        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1}, output_count=3).output
+        delta = ctx.make_node("Sub", [max_c, min_c]).output[0]
+        scaled_delta = ctx.make_node("Mul", [delta, factor], op_name_scope=node.name).output[0]
+        new_delta = ctx.make_node("Min", [scaled_delta, max_c]).output[0]
+        new_min = ctx.make_node("Sub", [max_c, new_delta]).output[0]
+        delta2 = ctx.make_node("Sub", [mid_c, min_c]).output[0]
+        const_zero = ctx.make_const(utils.make_name("zero"), np.array(0, np_dtype)).output[0]
+        delta_z = ctx.make_node("Equal", [delta, const_zero]).output[0]
+        delta_z_cast = ctx.make_node("Cast", [delta_z], attr={'to': dtype}).output[0]
+        delta_nz = ctx.make_node("Add", [delta, delta_z_cast]).output[0]
+        delta2_scale = ctx.make_node("Div", [new_delta, delta_nz]).output[0]
+        new_delta2 = ctx.make_node("Mul", [delta2, delta2_scale], op_name_scope=node.name).output[0]
+        new_mid = ctx.make_node("Add", [new_min, new_delta2]).output[0]
+        new_ordered = ctx.make_node("Concat", [max_c, new_mid, new_min], attr={'axis': -1}).output[0]
+        # Now put it back in order
+        result = ctx.make_node("GatherElements", [new_ordered, indices], attr={'axis': -1}).output[0]
+        ctx.replace_all_inputs(node.output[0], result)
+        ctx.remove_node(node.name)
+
+
 @tf_op("MatrixBandPart")
 class MatrixBandPart:
     @classmethod
