@@ -2380,6 +2380,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
 
+    @skip_tflite("tflite converts aborts")
+    @check_opset_min_version(11, "batchnorm")
+    @check_tf_min_version("2.4")
+    def test_batchnorm_mixed(self):
+        x_shape = [1, 32, 32, 2]
+        x_dtype = np.float16
+        scale_dtype = np.float32
+        scale_shape = [2]
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        mean_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        def func(x, mean, offset, var):
+            scale = tf.constant(scale_val, name='scale')
+            y = tf.raw_ops.FusedBatchNormV3(x=x, scale=scale, offset=offset, mean=mean, variance=var,
+                                            is_training=False, name=_TFOUTPUT)
+            return y
+        self._run_test_case(func, [_OUTPUT],
+                            {_INPUT: x_val, _INPUT1: mean_val, _INPUT2: offset_val, _INPUT3: var_val})
+
     @check_opset_min_version(7, "batchnorm")
     @check_tf_min_version("1.13")
     def test_batchnorm(self):
@@ -2551,6 +2572,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = resize_bilinear_v2(x, x_new_size_)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
+
+    def test_adjust_contrast(self):
+        x_shape = [4, 3, 2]
+        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        y_val = np.array(2.1, np.float32)
+        def func(x, y):
+            x_ = tf.image.adjust_contrast(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(11, "GatherElements")
+    def test_adjust_saturation(self):
+        x_val = np.array([[1, 2, 3], [4, 4, 4], [3, 2, 3], [3, 2, 2]], dtype=np.float32).reshape([2, 2, 3])
+        y_val = np.array(2.1, np.float32)
+        def func(x, y):
+            x_ = tf.image.adjust_saturation(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        y_val = np.array(0.5, np.float32)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_tf_min_version("2.0", "Results are slightly different in tf1")
     @check_opset_min_version(11, "resize bicubic")
