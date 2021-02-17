@@ -1188,7 +1188,7 @@ class AdjustSaturation:
 @tf_op("MatrixBandPart")
 class MatrixBandPart:
     @classmethod
-    def version_7(cls, opset, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         # T output = MatrixBandPart(T input, int num_lower, int num_upper)
         # data-flow: first generate mask matrix and then use element-wise mul op
         input_rank = len(ctx.get_shape(node.input[0]))
@@ -1274,7 +1274,6 @@ class MatrixBandPart:
         rank = ctx.get_rank(data)
         int_max_val = utils.get_max_value(np.int64)
         dtype = ctx.get_dtype(data)
-        np_dtype = utils.map_onnx_to_numpy_type(dtype)
         if rank == 2:
             shape = ctx.make_node("Shape", [data]).output[0]
         else:
@@ -1288,8 +1287,6 @@ class MatrixBandPart:
                 zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
                 const_of_shape = ctx.make_node("ConstantOfShape", [shape], attr={'value': zero_tensor}).output[0]
                 identity_node = ctx.make_node("EyeLike", [const_of_shape]).output[0]
-            one_const = ctx.make_const(utils.make_name("one"), np.array(1, np_dtype)).output[0]
-            mask = ctx.make_node("Sub", [one_const, identity_node]).output[0]
             shapes = node.output_shapes
             dtypes = node.output_dtypes
             ctx.remove_node(node.name)
@@ -1316,12 +1313,16 @@ class MatrixBandPart:
         if num_upper_const is None or num_upper_const >= 0:
             if ctx.get_dtype(num_upper) != TensorProto.INT64:
                 num_upper = ctx.make_node("Cast", [num_upper], attr={'to': TensorProto.INT64}).output[0]
-            conditions.append(ctx.make_node("LessOrEqual", [idx_diff, num_upper]).output[0])
+            greater = ctx.make_node("Greater", [idx_diff, num_upper]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            conditions.append(less_or_equal)
         if num_lower_const is None or num_lower_const >= 0:
             if ctx.get_dtype(num_lower) != TensorProto.INT64:
                 num_lower = ctx.make_node("Cast", [num_lower], attr={'to': TensorProto.INT64}).output[0]
             num_lower_neg = ctx.make_node("Neg", [num_lower]).output[0]
-            conditions.append(ctx.make_node("LessOrEqual", [num_lower_neg, idx_diff]).output[0])
+            greater = ctx.make_node("Greater", [num_lower_neg, idx_diff]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            conditions.append(less_or_equal)
         if len(conditions) == 0:
             node.type = "Identity"
             ctx.replace_inputs(node, [data])
