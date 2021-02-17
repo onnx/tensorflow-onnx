@@ -117,7 +117,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
 
     def run_onnxruntime(self, model_path, inputs, output_names):
         """Run test against onnxruntime backend."""
-        from ortcustomops import get_library_path
+        from onnxruntime_customops import get_library_path
         import onnxruntime as rt
         opt = rt.SessionOptions()
         opt.register_custom_ops_library(get_library_path())

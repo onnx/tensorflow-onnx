@@ -207,7 +207,7 @@ def requires_custom_ops(message=""):
     """ Skip until custom ops framework is on PyPI. """
     reason = _append_message("test needs custom ops framework", message)
     try:
-        import ortcustomops  #pylint: disable=import-outside-toplevel,unused-import
+        import onnxruntime_customops  #pylint: disable=import-outside-toplevel,unused-import
         can_import = True
     except ModuleNotFoundError:
         can_import = False

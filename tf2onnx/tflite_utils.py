@@ -141,6 +141,18 @@ def read_tflite_model(tflite_path):
     return tflite_graphs, opcodes_map, model
 
 
+def get_quantization_attr(quant_params):
+    attr = {}
+    attr['scale'] = quant_params.ScaleAsNumpy().tolist()
+    attr['zero_point'] = quant_params.ZeroPointAsNumpy().tolist()
+    attr['quantized_dimension'] = quant_params.QuantizedDimension()
+    if not quant_params.MaxIsNone():
+        attr['max'] = quant_params.MaxAsNumpy().tolist()
+    if not quant_params.MinIsNone():
+        attr['min'] = quant_params.MinAsNumpy().tolist()
+    return attr
+
+
 def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
     """
     Returns a Graph object along with some op count stats. All tflite op types are prefixed with "TFL_".
@@ -204,10 +216,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
         if tensor_name in tensor_name_to_dequant_output:
             return tensor_name_to_dequant_output[tensor_name]
         dequant_name = tensor_name + "_dequant"
-        attr = {}
-        attr['scale'] = quant.ScaleAsNumpy().tolist()
-        attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
-        attr['quantized_dimension'] = quant.QuantizedDimension()
+        attr = get_quantization_attr(quant)
         onnx_node = helper.make_node("TFL_DEQUANTIZE", [tensor_name], [dequant_name], name=dequant_name, **attr)
         onnx_nodes.append(onnx_node)
         tensor_name_to_dequant_output[tensor_name] = dequant_name
@@ -225,10 +234,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
             return tensor_name
         prequant_name = tensor_name + "_prequant"
         quantize_name = tensor_name + "_quantize"
-        attr = {}
-        attr['scale'] = quant.ScaleAsNumpy().tolist()
-        attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
-        attr['quantized_dimension'] = quant.QuantizedDimension()
+        attr = get_quantization_attr(quant)
         onnx_node = helper.make_node("TFL_QUANTIZE", [prequant_name], [tensor_name], name=quantize_name, **attr)
         onnx_nodes.append(onnx_node)
         output_shapes[prequant_name] = output_shapes[tensor_name].copy()
@@ -249,17 +255,13 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
             quant = out_tensor.Quantization()
             has_prequantized_output = False
             if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
-                attr['scale'] = quant.ScaleAsNumpy().tolist()
-                attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
-                attr['quantized_dimension'] = quant.QuantizedDimension()
+                attr.update(get_quantization_attr(quant))
         elif optype == 'DEQUANTIZE':
             in_tensor = tflite_g.Tensors(op.Inputs(0))
             quant = in_tensor.Quantization()
             wants_dequantized_input = False
             if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
-                attr['scale'] = quant.ScaleAsNumpy().tolist()
-                attr['zero_point'] = quant.ZeroPointAsNumpy().tolist()
-                attr['quantized_dimension'] = quant.QuantizedDimension()
+                attr.update(get_quantization_attr(quant))
         if not op.CustomOptionsIsNone():
             custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
             if custom_ops_format == 'FLEXBUFFERS':
@@ -294,6 +296,11 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
         if wants_dequantized_input:
             input_names = [get_dequant(inp) for inp in input_names]
         output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
+        if optype == "TFLite_Detection_PostProcess":
+            # There's a bug in tflite for the output shapes of this op
+            for out, shape in zip(output_names, [[-1, -1, 4], [-1, -1], [-1, -1], [-1]]):
+                if len(output_shapes[out]) != len(shape):
+                    output_shapes[out] = shape
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]
         onnx_node = helper.make_node("TFL_" + optype, input_names, output_names, name=output_names[0], **attr)

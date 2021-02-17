@@ -65,6 +65,8 @@ def get_args():
     parser.add_argument("--use_default", help="comma-separated list of names of PlaceholderWithDefault ops to "
                                               "change into Identity ops using their default value")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
+    parser.add_argument("--dequantize", help="Remove quantization from model. Only supported for tflite currently.",
+                        action="store_true")
     parser.add_argument("--custom-ops", help="comma-separated map of custom ops to domains in format OpName:domain")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
@@ -104,6 +106,9 @@ def get_args():
         args.target = args.target.split(",")
     if args.signature_def:
         args.signature_def = [args.signature_def]
+    if args.dequantize:
+        if not args.tflite:
+            parser.error("dequantize flag is currently only supported for tflite")
     if args.extra_opset:
         tokens = args.extra_opset.split(':')
         if len(tokens) != 2:
@@ -142,6 +147,12 @@ def main():
             custom_ops[op] = (make_default_custom_op_handler(domain), [])
         if using_tf_opset:
             extra_opset.append(constants.TENSORFLOW_OPSET)
+
+    if any(opset.domain == constants.CONTRIB_OPS_DOMAIN for opset in extra_opset):
+        try:
+            import tensorflow_text   # pylint: disable=import-outside-toplevel
+        except ModuleNotFoundError:
+            logger.warning("tensorflow_text not installed. Model will fail to load if tensorflow_text ops are used.")
 
     # get the frozen tensorflow model from graphdef, checkpoint or saved_model.
     if args.graphdef:
@@ -196,7 +207,8 @@ def main():
                              use_default=args.use_default,
                              const_node_values=const_node_values,
                              initialized_tables=initialized_tables,
-                             tflite_path=tflite_path)
+                             tflite_path=tflite_path,
+                             dequantize=args.dequantize)
 
     onnx_graph = optimizer.optimize_graph(g)
 

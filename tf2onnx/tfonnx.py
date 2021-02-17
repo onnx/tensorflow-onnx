@@ -241,7 +241,7 @@ def rewrite_incomplete_type_support_rs6(g, ops):
     return rewrite_incomplete_type_support(g, ops, impacted_ops)
 
 
-def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None, is_tflite=False):
+def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None, is_tflite=False, dequantize=False):
     logger.verbose("Mapping TF node to ONNX node(s)")
     mapped_op = collections.Counter()
     unmapped_op = collections.Counter()
@@ -291,7 +291,7 @@ def tensorflow_onnx_mapping(g, ops_mapping, initialized_tables=None, is_tflite=F
                 logger.debug("finish handling subgraph of %s's attribute %s", node.name, attr)
 
         try:
-            func(g, node, **kwargs, initialized_tables=initialized_tables)
+            func(g, node, **kwargs, initialized_tables=initialized_tables, dequantize=dequantize)
             if not is_tflite:
                 # tensorflow nodes must be converted in the next pass
                 node.skip_conversion = True
@@ -381,7 +381,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
                      input_names=None, output_names=None, ignore_default=None, use_default=None,
                      is_subgraph=False, const_node_values=None,
-                     initialized_tables=None, tflite_path=None):
+                     initialized_tables=None, tflite_path=None, dequantize=False):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -435,7 +435,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                 parse_tflite_graph(tfl_graph, opcodes, model, prefix)
             g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_outputs, is_subgraph=is_subgraph)
             fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
-                                      f_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True)
+                                      f_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True, dequantize=dequantize)
             fg.graph_name = graph_name
             if i == 0:
                 main_g = fg
@@ -491,12 +491,16 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
 def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                          output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt,
-                         is_tflite=False):
+                         is_tflite=False, dequantize=False):
 
     if is_tflite:
-        run_rewriters(g, [rewrite_tfl_scan_outputs], continue_on_error)
+        tfl_rewriters = []
+        if dequantize:
+            tfl_rewriters.append(rewrite_tfl_qdq)
+        tfl_rewriters.append(rewrite_tfl_scan_outputs)
+        run_rewriters(g, tfl_rewriters, continue_on_error)
         tfl_ops_mapping = handler.tfl_op.create_tfl_to_tf_mapping()
-        _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True)
+        _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True, dequantize=False)
         if exceptions and not continue_on_error:
             raise exceptions[0]
 
@@ -577,7 +581,8 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
     g.delete_unused_nodes(output_names)
     topological_sort(g, continue_on_error)
 
-    mapped_op, unmapped_op, exceptions = tensorflow_onnx_mapping(g, ops_mapping, initialized_tables)
+    mapped_op, unmapped_op, exceptions = \
+        tensorflow_onnx_mapping(g, ops_mapping, initialized_tables, dequantize=dequantize)
     if unmapped_op:
         logger.error("Unsupported ops: %s", unmapped_op)
     if exceptions and not continue_on_error:

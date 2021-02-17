@@ -436,3 +436,96 @@ keras_mobilenet_v2:
     "input_1:0": [1, 224, 224, 3]
   outputs:
     - Identity:0
+
+ssd_mobilenet_v2_300_float_tflite:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/ssd_mobilenet_v2_300_float.tflite
+  model: "ssd_mobilenet_v2_300_float.tflite"
+  model_type: tflite
+  input_get: get_car
+  opset_constraints:
+    "onnx":
+      "min": 11
+  inputs:
+    "normalized_input_image_tensor": [1, 300, 300, 3]
+  outputs:
+    - TFLite_Detection_PostProcess
+    - TFLite_Detection_PostProcess:1
+    - TFLite_Detection_PostProcess:2
+    - TFLite_Detection_PostProcess:3
+
+deeplabv3_mnv2_ade20k_float_tflite:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_float.tflite
+  model: "deeplabv3_mnv2_ade20k_float.tflite"
+  model_type: tflite
+  input_get: get_ade20k
+  ptol: 0.001
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
+
+deeplabv3_mnv2_ade20k_uint8_tflite_dequantize:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
+  model: "deeplabv3_mnv2_ade20k_uint8.tflite"
+  model_type: tflite
+  input_get: get_ade20k_uint8
+  ptol: 1.0
+  dequantize: true
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
+
+deeplabv3_mnv2_ade20k_uint8_tflite:
+  tf_min_version: 2.1
+  disabled: true   # Requires ORT nightly for dequantize of int32
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
+  model: "deeplabv3_mnv2_ade20k_uint8.tflite"
+  model_type: tflite
+  input_get: get_ade20k_uint8
+  opset_constraints:
+    "onnx":
+      "min": 10
+  ptol: 1.5
+  dequantize: false
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
+
+deeplabv3_mnv2_ade20k_int8_tflite_dequantize:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_int8.tflite
+  model: "deeplabv3_mnv2_ade20k_int8.tflite"
+  model_type: tflite
+  input_get: get_ade20k_uint8   # the input is uint8 despite the model name
+  ptol: 3.0
+  dequantize: true
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax
+
+deeplabv3_mnv2_ade20k_int8_tflite:
+  tf_min_version: 2.1
+  disabled: true   # Requires ORT nightly for dequantize of int32
+  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_int8.tflite
+  model: "deeplabv3_mnv2_ade20k_int8.tflite"
+  model_type: tflite
+  input_get: get_ade20k_uint8   # the input is uint8 despite the model name
+  opset_constraints:
+    "onnx":
+      "min": 13
+  ptol: 1.9
+  dequantize: false
+  inputs:
+    "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
+  outputs:
+    - ArgMax

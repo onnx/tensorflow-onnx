@@ -76,12 +76,17 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_onnxruntime(self, model_path, inputs, output_names):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
+        providers = ['CPUExecutionProvider']
+        if rt.get_device() == "GPU":
+            gpus = os.environ.get("CUDA_VISIBLE_DEVICES")
+            if gpus is None or len(gpus) > 1:
+                providers = ['CUDAExecutionProvider']
         opt = rt.SessionOptions()
         # in case of issues with the runtime, one can enable more logging
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
-        m = rt.InferenceSession(model_path, opt)
+        m = rt.InferenceSession(model_path, opt, providers=providers)
         results = m.run(output_names, inputs)
         return results
 
@@ -177,10 +182,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 tf.import_graph_def(graph_def, name='')
                 graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def, fold_constant=constant_fold)
 
-        if True or self.config.is_debug_mode:
-            model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
-            utils.save_protobuf(model_path, graph_def)
-            self.logger.debug("created file  %s", model_path)
+        model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
+        utils.save_protobuf(model_path, graph_def)
+        self.logger.debug("created file  %s", model_path)
         return result, graph_def, initialized_tables
 
     def convert_to_tflite(self, graph_def, feed_dict, outputs):

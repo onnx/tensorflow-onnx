@@ -1,0 +1,494 @@
+bit-m-r152x4-ilsvrc2012_classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/bit-m-r152x4-ilsvrc2012_classification"
+  converted_model: "D:/co_tfhubmodels/bit-m-r152x4-ilsvrc2012_classification/model.zip"
+  model_type: saved_model
+  large_model: true
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bit-s-r50x1-ilsvrc2012_classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/bit-s-r50x1-ilsvrc2012_classification"
+  converted_model: "D:/co_tfhubmodels/bit-s-r50x1-ilsvrc2012_classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bit-s-r101x1-ilsvrc2012_classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/bit-s-r101x1-ilsvrc2012_classification"
+  converted_model: "D:/co_tfhubmodels/bit-s-r101x1-ilsvrc2012_classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+efficientnet-b0-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/efficientnet-b0-classification"
+  converted_model: "D:/co_tfhubmodels/efficientnet-b0-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 224, 224, 3]
+  outputs:
+    - logits:0
+  rtol: 0.01
+  atol: 0.0001
+  tag: ''
+  signature_def: 'default'
+
+efficientnet-b1-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/efficientnet-b1-classification"
+  converted_model: "D:/co_tfhubmodels/efficientnet-b1-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 240, 240, 3]
+  outputs:
+    - logits:0
+  rtol: 0.01
+  atol: 0.0001
+  tag: ''
+  signature_def: 'default'
+
+efficientnet-b4-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/efficientnet-b4-classification"
+  converted_model: "D:/co_tfhubmodels/efficientnet-b4-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 380, 380, 3]
+  outputs:
+    - logits:0
+  rtol: 0.01
+  atol: 0.0001
+  tag: ''
+  signature_def: 'default'
+
+imagenet-inception_resnet_v2-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-inception_resnet_v2-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-inception_resnet_v2-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 299, 299, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-inception_v1-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-inception_v1-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-inception_v1-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 1
+
+imagenet-inception_v3-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-inception_v3-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-inception_v3-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 299, 299, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 2
+
+imagenet-mobilenet_v1_025_128-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_025_128-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_025_128-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 128, 128, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 2
+
+imagenet-mobilenet_v1_025_128-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_025_128-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_025_128-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 128, 128, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 0
+
+imagenet-mobilenet_v1_025_224-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_025_224-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_025_224-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 2
+
+imagenet-mobilenet_v1_075_128-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_075_128-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_075_128-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 128, 128, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 1
+
+imagenet-mobilenet_v1_075_192-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_075_192-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_075_192-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 192, 192, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 2
+
+imagenet-mobilenet_v1_100_160-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_100_160-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_100_160-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 160, 160, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 2
+
+imagenet-mobilenet_v2_050_160-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_050_160-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_050_160-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 160, 160, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 3
+
+imagenet-mobilenet_v2_050_192-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_050_192-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_050_192-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 192, 192, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-mobilenet_v2_050_192-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_050_192-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_050_192-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 192, 192, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-mobilenet_v2_050_224-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_050_224-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_050_224-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-mobilenet_v2_100_96-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_100_96-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v2_100_96-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 96, 96, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 3
+
+imagenet-nasnet_large-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-nasnet_large-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-nasnet_large-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 331, 331, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-nasnet_mobile-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-nasnet_mobile-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-nasnet_mobile-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 3
+
+imagenet-resnet_v1_101-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-resnet_v1_101-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-resnet_v1_101-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+nnlm-en-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/nnlm-en-dim50-with-normalization"
+  converted_model: "D:/co_tfhubmodels/nnlm-en-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-es-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/nnlm-es-dim50-with-normalization"
+  converted_model: "D:/co_tfhubmodels/nnlm-es-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-ko-dim128-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/nnlm-ko-dim128-with-normalization"
+  converted_model: "D:/co_tfhubmodels/nnlm-ko-dim128-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nonsemantic-speech-benchmark-trill:
+  disabled: false
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/nonsemantic-speech-benchmark-trill"
+  converted_model: "D:/co_tfhubmodels/nonsemantic-speech-benchmark-trill/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_wav
+  inputs:
+    "samples:0": [128]
+    "sample_rate:0":
+      value: 16000
+  outputs:
+    - Identity:0
+    - Identity_1:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 4
+
+resnet_50-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/resnet_50-classification"
+  converted_model: "D:/co_tfhubmodels/resnet_50-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 1
+
+universal-sentence-encoder:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/universal-sentence-encoder"
+  converted_model: "D:/co_tfhubmodels/universal-sentence-encoder/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "inputs:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"

@@ -120,3 +120,51 @@ class StringEqual:
             not_node = ctx.insert_new_node_on_output("Not", output_name, name=utils.make_name(node.name))
             ctx.copy_shape(output_name, not_node.output[0])
             ctx.copy_dtype(output_name, not_node.output[0])
+
+@tf_op(["StringLower", "StringUpper"])
+class StringLower:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        if node.type == "StringLower":
+            case_action = "LOWER"
+        else:
+            case_action = "UPPER"
+        node.type = "StringNormalizer"
+        str_input = node.input[0]
+        rank = ctx.get_rank(node.input[0])
+        shape = ctx.get_shape(node.input[0])
+        if rank != 1:
+            ctx.insert_new_node_on_input(node, "Flatten", node.input[0], axis=0)
+        node.set_attr("case_change_action", case_action)
+        if rank != 1:
+            if shape is None or -1 in shape:
+                new_shape = ctx.make_node("Shape", [str_input]).output[0]
+            else:
+                new_shape = ctx.make_const(utils.make_name("shape"), np.array(shape, np.int64)).output[0]
+            ctx.insert_new_node_on_output("Reshape", node.output[0], inputs=[node.output[0], new_shape])
+
+@tf_op("SentencepieceOp", domain=constants.CONTRIB_OPS_DOMAIN)
+class SentencepieceOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        # This op will be removed when its consumer is converted
+        pass
+
+@tf_op("SentencepieceTokenizeOp", domain=constants.CONTRIB_OPS_DOMAIN)
+class SentencepieceTokenizeOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        input_node = node.inputs[0]
+        utils.make_sure(input_node.type == "SentencepieceOp", "Input 0 to node %s is not SentencepieceOp", node.name)
+        ctx.remove_input(node, node.input[0], 0)
+
+        nbest_size_cast = ctx.make_node("Cast", [node.input[1]], attr={'to': TensorProto.INT64}).output[0]
+        ctx.replace_input(node, node.input[1], nbest_size_cast, 1)
+        for i in range(1, len(node.input)):
+            unsqueeze = GraphBuilder(ctx).make_unsqueeze({'data': node.input[i], 'axes': [0]})
+            ctx.replace_input(node, node.input[i], unsqueeze, i)
+        node.set_attr("model", input_node.attr['model'].s)
+        node.type = "SentencepieceTokenizer"
+        if ctx.is_safe_to_remove_nodes([input_node]):
+            ctx.remove_node(input_node.name)

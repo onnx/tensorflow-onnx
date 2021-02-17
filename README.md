@@ -130,12 +130,14 @@ You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSD
 python -m tf2onnx.convert
     --saved-model SOURCE_SAVED_MODEL_PATH |
     --checkpoint SOURCE_CHECKPOINT_METAFILE_PATH |
+    --tflite SOURCE_TFLITE_PATH |
     --input | --graphdef SOURCE_GRAPHDEF_PB
     --output TARGET_ONNX_MODEL
     [--inputs GRAPH_INPUTS]
     [--outputs GRAPH_OUTPUS]
     [--inputs-as-nchw inputs_provided_as_nchw]
     [--opset OPSET]
+    [--dequantize]
     [--tag TAG]
     [--signature_def SIGNATURE_DEF]
     [--concrete_function CONCRETE_FUNCTION]
@@ -157,6 +159,12 @@ TensorFlow model as saved_model. We expect the path to the saved_model directory
 #### --checkpoint
 
 TensorFlow model as checkpoint. We expect the path to the .meta file.
+
+#### --tflite
+
+(This is experimental)
+
+Convert a tflite model by providing a path to the .tflite file. Inputs/outputs do not need to be specified.
 
 #### --input or --graphdef
 
@@ -181,6 +189,12 @@ ONNX requires default values for graph inputs to be constant, while Tensorflow's
 #### --opset
 
 By default we use the opset 8 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
+
+#### --dequantize
+
+(This is experimental, only supported for tflite)
+
+Produces a float32 model from a quantized tflite model. Detects ReLU and ReLU6 ops from quantization bounds.
 
 #### --tag
 
@@ -387,7 +401,7 @@ The converter needs to take care of a few things:
 
 tf2onnx starts with a frozen graph. This is because of item 3 above.
 
-### Step 2 - 1:1 convertion of the protobuf from tensorflow to onnx
+### Step 2 - 1:1 conversion of the protobuf from tensorflow to onnx
 
 tf2onnx first does a simple conversion from the TensorFlow protobuf format to the ONNX protobuf format without looking at individual ops.
 We do this so we can use the ONNX graph as internal representation and write helper functions around it.
