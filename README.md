@@ -401,7 +401,7 @@ The converter needs to take care of a few things:
 
 tf2onnx starts with a frozen graph. This is because of item 3 above.
 
-### Step 2 - 1:1 convertion of the protobuf from tensorflow to onnx
+### Step 2 - 1:1 conversion of the protobuf from tensorflow to onnx
 
 tf2onnx first does a simple conversion from the TensorFlow protobuf format to the ONNX protobuf format without looking at individual ops.
 We do this so we can use the ONNX graph as internal representation and write helper functions around it.
