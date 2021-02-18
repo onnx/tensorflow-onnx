@@ -88,7 +88,6 @@ class Node(object):
             utils.make_sure(o not in self.graph._output_to_node_name, "output %s already in output mapping", o)
             self.graph._output_to_node_name[o] = self.name
 
-    # TODO(tomwildenhain): Rename to "input_nodes"
     @property
     def inputs(self):
         """Input node objects."""
@@ -447,7 +446,7 @@ class Graph(object):
     """"Class that provides graph manipulation and matching."""
 
     def __init__(self, nodes, output_shapes=None, dtypes=None, target=None, opset=None, extra_opset=None,
-                 output_names=None, is_subgraph=False, graph_name=None):
+                 input_names=None, output_names=None, is_subgraph=False, graph_name=None):
         """Create Graph.
         Args:
             nodes: list of Node()
@@ -480,13 +479,27 @@ class Graph(object):
             utils.make_sure(isinstance(extra_opset, list), "invalid extra_opset")
         self._extra_opset = extra_opset
 
-        self._order_sensitive_inputs = []
         self.outputs = output_names if output_names is not None else []
 
         self.parent_graph = None
         self.contained_graphs = {}  # {node_name: {node_attribute_name: Graph}}
 
         ops = [Node(node, self) for node in nodes]
+        if input_names is not None:
+            input_names_set = set(input_names)
+            for n in ops:
+                for i, out in enumerate(n.output):
+                    if out in input_names_set and not n.is_graph_input():
+                        n.output[i] = utils.make_name("@@ALLOC")
+                        ops.append(Node(helper.make_node("Placeholder", [], outputs=[out], name=out), self))
+                        logger.info("Created placeholder for input %s", out)
+
+        input_nodes = {n.output[0]: n for n in ops if n.is_graph_input()}
+        if input_names is not None:
+            self.inputs = [input_nodes[n] for n in input_names]
+        else:
+            self.inputs = list(input_nodes.values())
+
         self.reset_nodes(ops)
 
         if not is_subgraph:
@@ -525,6 +538,11 @@ class Graph(object):
                      extra_opset=self.extra_opset, output_names=[])
 
     @property
+    def input_names(self):
+        """Placeholder node outputs"""
+        return [node.output[0] for node in self.inputs]
+
+    @property
     def opset(self):
         return self._opset
 
@@ -535,15 +553,6 @@ class Graph(object):
     def is_target(self, *names):
         """Return True if target platform contains any name."""
         return any(name in self._target for name in names)
-
-    @property
-    def inputs(self):
-        """Input to the graph."""
-        all_inputs = self._order_sensitive_inputs
-        for n in self._nodes:
-            if n.is_graph_input() and n not in all_inputs:
-                all_inputs.append(n)
-        return all_inputs
 
     def make_consts(self, values, np_type=np.int64, skip_conversion=False, raw=True):
         """create list of consts of same type"""
@@ -677,8 +686,8 @@ class Graph(object):
         if node_name in self.contained_graphs:
             del self.contained_graphs[node_name]
 
-        if node in self._order_sensitive_inputs:
-            self._order_sensitive_inputs.remove(node)
+        if node in self.inputs:
+            self.inputs.remove(node)
 
         for op_output in node.output:
             del self._output_to_node_name[op_output]
@@ -725,9 +734,9 @@ class Graph(object):
             for op_input in inps:
                 self._register_input_name(op_input, op)
 
-        for n in self._order_sensitive_inputs:
+        for n in self.inputs:
             if n not in ops:
-                self._order_sensitive_inputs.remove(n)
+                raise ValueError("graph input " + n + " not exist")
         for o in self.outputs:
             if o not in self._output_to_node_name:
                 raise ValueError("graph output " + o + " not exist")
@@ -888,7 +897,7 @@ class Graph(object):
             shape = self.get_shape(name)
 
         new_node = self.make_node("Placeholder", [], outputs=[name], dtypes=[dtype], shapes=[shape])
-        self._order_sensitive_inputs.append(new_node)
+        self.inputs.append(new_node)
 
     def add_graph_input_with_default(self, name, default_const, dtype=None, shape=None):
         """Add placeholderwithdefault."""
@@ -902,7 +911,7 @@ class Graph(object):
         default_const.output = [default_const_name]
         new_node = self.make_node("PlaceholderWithDefault", [default_const_name], outputs=[name],
                                   dtypes=[dtype], shapes=[shape])
-        self._order_sensitive_inputs.append(new_node)
+        self.inputs.append(new_node)
 
     def add_graph_output(self, name, dtype=None, shape=None):
         """Add node output as graph's output."""
@@ -1061,24 +1070,21 @@ class Graph(object):
         #    optimizer = TransposeOptimizer(self, False)
         #    optimizer.optimize()
         ops = []
-        order_non_sensitive_placeholders = []
-        order_sensitive_placeholders = self._order_sensitive_inputs
         const_ops = []
+        graph_inputs = self.inputs.copy()
         for op in self.get_nodes():
             if op.is_const():
                 const_ops.append(op)
-                continue
-            if op.is_graph_input():
-                if op not in self._order_sensitive_inputs:
-                    order_non_sensitive_placeholders.append(op)
-                continue
-            ops.append(op)
-        placeholder_ops = order_sensitive_placeholders + order_non_sensitive_placeholders
+            elif op.is_graph_input():
+                if op not in graph_inputs:
+                    graph_inputs.append(op)
+            else:
+                ops.append(op)
 
         # create initializers for placeholder with default nodes
         initializers = []
         placeholder_default_const_ops = []
-        for op in placeholder_ops:
+        for op in graph_inputs:
             if op.type == "PlaceholderWithDefault":
                 utils.make_sure(op.inputs[0] is not None, "Cannot find node with output {}".format(op.input[0]))
                 utils.make_sure(op.inputs[0].is_const(),
@@ -1102,7 +1108,7 @@ class Graph(object):
             initializers.append(tensor)
 
         # create input_tensor_values
-        input_ids = [op.output[0] for op in placeholder_ops]
+        input_ids = [op.output[0] for op in graph_inputs]
         # onnx with IR version below 4 requires initializer should be in inputs.
         # here we check opset version rather than IR version for the reason:
         # https://github.com/onnx/tensorflow-onnx/pull/557
@@ -1478,12 +1484,12 @@ class Graph(object):
                     processing_set.add(node)
         return res_set
 
-    def extract_sub_graph_nodes(self, outputs_name, input_checker=None, ignore_unused_placeholder=True):
+    def extract_sub_graph_nodes(self, outputs_name, input_checker=None, remove_unused_inputs=True):
         """Return nodes of subgraph having output_ids as outputs.
         Args:
             output_ids: output node output id of the subgraph to find
             input_checker: customized input check function: bool func(node)
-            ignore_unused_placeholder: bool, indicates whether unused placeholder will be removed
+            remove_unused_inputs: bool, indicates whether unused placeholder inputs will be removed
                 in the resulting nodes.
         Return:
             a list of nodes
@@ -1496,13 +1502,9 @@ class Graph(object):
             node = self.get_node_by_output(output, search_in_parent_graphs=False)
             res_set = res_set.union(self._extract_sub_graph_nodes(node, input_checker))
 
-        if not ignore_unused_placeholder:
+        if not remove_unused_inputs:
             # add back placeholder nodes if they are not connected to outputs.
-            for node in self.get_nodes():
-                if node.is_graph_input():
-                    res_set.add(node)
-                elif node.type == "PlaceholderWithDefault" and node.inputs[0].is_const():
-                    res_set.add(node.inputs[0])
+            res_set = res_set.union(self.inputs)
 
         return list(res_set)
 
@@ -1514,7 +1516,7 @@ class Graph(object):
 
         # we need keep those placeholders that are used as input of Loop's body graph.
         # some of them are not used in the graph, but still need be there to keep the graph complete.
-        related_nodes = self.extract_sub_graph_nodes(outputs_name, ignore_unused_placeholder=False)
+        related_nodes = self.extract_sub_graph_nodes(outputs_name, remove_unused_inputs=False)
         for node in related_nodes:
             attr_body_graphs = node.get_body_graphs()
             if attr_body_graphs:
@@ -1660,7 +1662,7 @@ class GraphUtil(object):
         for n in graph_proto.output:
             output_names.append(n.name)
 
-        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, extra_opset, output_names)
+        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, extra_opset, None, output_names)
         const_nodes = GraphUtil._parse_graph_initializer(g, graph_proto)
         GraphUtil._parse_graph_input(g, graph_proto, [n.name for n in const_nodes])
 
