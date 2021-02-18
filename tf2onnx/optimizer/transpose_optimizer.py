@@ -508,20 +508,19 @@ class TransposeOptimizer(GraphOptimizerBase):
             return self._switch_transpose_and_node(node, trans)
 
         # if multiplier is 1-D
-        if len(multiplier.shape) == 1:
-            if multiplier.shape[0] == 1:
-                # shape is (1)
-                return self._switch_transpose_and_node(node, trans)
+        if len(multiplier.shape) == 1 and multiplier.shape[0] == 1:
+            # shape is (1)
+            return self._switch_transpose_and_node(node, trans)
 
+        # if multiplier has shape (N,) or (1, N) or (1, 1, N) ....
+        if np.prod(multiplier.shape) == multiplier.shape[-1]:
             if not self._nodes_has_single_consumer_node([multiplier_input_node]):
                 new_inp = self._g.copy_const(multiplier_input_node)
                 self._g.replace_input(node, multiplier_input_id, new_inp.output[0], multiplier_input_idx)
                 multiplier_input_node = new_inp
-
-            # shape is (N). reshape so that trans(shape) = 1,1,...,N
             perm = list(trans.get_attr('perm').ints)
             new_shape = np.ones(len(perm), dtype=np.int32)
-            new_shape[perm[-1]] = multiplier.shape[0]
+            new_shape[perm[-1]] = multiplier.shape[-1]
             multiplier_input_node.set_tensor_value(multiplier.reshape(new_shape))
             return self._switch_transpose_and_node(node, trans)
 
