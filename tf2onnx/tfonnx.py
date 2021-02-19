@@ -405,6 +405,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         Return:
             onnx graph
     """
+    # NOTE: process_parsed_graph and Graph are always given tensors post-rename.
+    # process_tf_graph (this function) gets tensors pre-rename.
     if verbose:
         logger.warning("Argument verbose for process_tf_graph is deprecated. Please use --verbose option instead.")
     del verbose
@@ -441,23 +443,27 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                              non_exists)
                 raise ValueError("Inputs/Outputs Not Found")
 
+    def rename_tensors_in_dict(d):
+        if tensors_to_rename is None:
+            return d
+        return {tensors_to_rename.get(k, k): v for k, v in d.items()}
+
     def rename_tensors_in_list(tensors):
-        if tensors_to_rename is None or tensor is None:
-            return
-        for i, t in enumerate(tensors):
-            if t in tensors_to_rename:
-                tensors[i] = tensors_to_rename[t]
+        if tensors_to_rename is None or tensors is None:
+            return tensors
+        return [tensors_to_rename.get(t, t) for t in tensors]
 
     def rename_tensors_in_nodes(onnx_nodes):
         if tensors_to_rename is None:
             return
         for n in onnx_nodes:
-            rename_tensors_in_list(n.input)
-            rename_tensors_in_list(n.output)
+            n.input[:] = rename_tensors_in_list(n.input)
+            n.output[:] = rename_tensors_in_list(n.output)
 
     if tflite_path is not None:
         tflite_graphs, opcodes, model = read_tflite_model(tflite_path)
         main_g = None
+        inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
         for i in reversed(range(len(tflite_graphs))):
             tfl_graph = tflite_graphs[i]
             prefix = '' if i == 0 else tfl_graph.Name().decode() + '_'
@@ -473,11 +479,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                 if output_names is not None:
                     g_outputs = output_names
             rename_tensors_in_nodes(onnx_nodes)
-            rename_tensors_in_list(g_inputs)
-            rename_tensors_in_list(g_outputs)
+            g_inputs = rename_tensors_in_list(g_inputs)
+            g_outputs = rename_tensors_in_list(g_outputs)
+            output_shapes = rename_tensors_in_dict(output_shapes)
+            dtypes = rename_tensors_in_dict(dtypes)
             g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, g_inputs, g_outputs, is_subgraph)
             fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
-                                      f_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True, dequantize=dequantize)
+                                      g_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True, dequantize=dequantize)
             fg.graph_name = graph_name
             if i == 0:
                 main_g = fg
@@ -500,21 +508,25 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         for func in ordered_func:
             f_inputs_names = [t.name for t in func.inputs]
             f_output_names = [t.name for t in func.outputs]
-            rename_tensors_in_list(f_inputs_names)
-            rename_tensors_in_list(f_output_names)
+            f_inputs_names = rename_tensors_in_list(f_inputs_names)
+            f_output_names = rename_tensors_in_list(f_output_names)
             fg = process_tf_graph(func, continue_on_error, False, target, opset,
                                   custom_op_handlers, custom_rewriter,
                                   extra_opset, shape_override, inputs_as_nchw,
                                   f_inputs_names, f_output_names, is_subgraph=True,
-                                  const_node_values=const_node_values)
+                                  const_node_values=const_node_values, tensors_to_rename=tensors_to_rename,
+                                  initialized_tables=initialized_tables)
             fg.graph_name = func.name
             set_function(func.name, fg)
 
     check_io(input_names, output_names, output_shapes)
 
     rename_tensors_in_nodes(onnx_nodes)
-    rename_tensors_in_list(input_names)
-    rename_tensors_in_list(output_names)
+    input_names = rename_tensors_in_list(input_names)
+    output_names = rename_tensors_in_list(output_names)
+    output_shapes = rename_tensors_in_dict(output_shapes)
+    dtypes = rename_tensors_in_dict(dtypes)
+    inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, input_names, output_names, is_subgraph)
     g = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                              output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt)

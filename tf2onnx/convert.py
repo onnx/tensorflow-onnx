@@ -58,12 +58,14 @@ def get_args():
     parser.add_argument("--tflite", help="input from tflite model")
     parser.add_argument("--large_model", help="use the large model format (for models > 2GB)", action="store_true")
     parser.add_argument("--output", help="output model file")
-    parser.add_argument("--inputs", help="model input_names")
-    parser.add_argument("--outputs", help="model output_names")
+    parser.add_argument("--inputs", help="model input_names (optional for saved_model, keras, and tflite)")
+    parser.add_argument("--outputs", help="model output_names (optional for saved_model, keras, and tflite)")
     parser.add_argument("--ignore_default", help="comma-separated list of names of PlaceholderWithDefault "
                                                  "ops to change into Placeholder ops")
     parser.add_argument("--use_default", help="comma-separated list of names of PlaceholderWithDefault ops to "
                                               "change into Identity ops using their default value")
+    parser.add_argument("--rename-inputs", help="input names to use in final model (optional)")
+    parser.add_argument("--rename-outputs", help="output names to use in final model (optional)")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
     parser.add_argument("--dequantize", help="Remove quantization from model. Only supported for tflite currently.",
                         action="store_true")
@@ -87,7 +89,7 @@ def get_args():
         # for backward compativility
         args.graphdef = args.input
     if args.graphdef or args.checkpoint:
-        if not args.input and not args.outputs:
+        if not args.inputs or not args.outputs:
             parser.error("graphdef and checkpoint models need to provide inputs and outputs")
     if not any([args.graphdef, args.checkpoint, args.saved_model, args.keras, args.tflite]):
         parser.print_help()
@@ -100,6 +102,10 @@ def get_args():
         args.ignore_default = args.ignore_default.split(",")
     if args.use_default:
         args.use_default = args.use_default.split(",")
+    if args.rename_outputs:
+        args.rename_outputs = args.rename_outputs.split(",")
+    if args.rename_inputs:
+        args.rename_inputs = args.rename_inputs.split(",")
     if args.inputs_as_nchw:
         args.inputs_as_nchw = args.inputs_as_nchw.split(",")
     if args.target:
@@ -135,6 +141,7 @@ def main():
     tflite_path = None
     custom_ops = {}
     initialized_tables = None
+    tensors_to_rename = {}
     if args.custom_ops:
         using_tf_opset = False
         for op in args.custom_ops.split(","):
@@ -162,9 +169,9 @@ def main():
         graph_def, inputs, outputs = tf_loader.from_checkpoint(args.checkpoint, args.inputs, args.outputs)
         model_path = args.checkpoint
     if args.saved_model:
-        graph_def, inputs, outputs, initialized_tables = tf_loader.from_saved_model(
-            args.saved_model, args.inputs, args.outputs, args.tag,
-            args.signature_def, args.concrete_function, args.large_model, return_initialized_tables=True)
+        graph_def, inputs, outputs, initialized_tables, tensors_to_rename = tf_loader.from_saved_model(
+            args.saved_model, args.inputs, args.outputs, args.tag, args.signature_def, args.concrete_function,
+            args.large_model, return_initialized_tables=True, return_tensors_to_rename=True)
         model_path = args.saved_model
     if args.keras:
         graph_def, inputs, outputs = tf_loader.from_keras(
@@ -180,6 +187,11 @@ def main():
     if args.verbose:
         logger.info("inputs: %s", inputs)
         logger.info("outputs: %s", outputs)
+
+    if args.rename_inputs:
+        tensors_to_rename.update(zip(inputs, args.rename_inputs))
+    if args.rename_outputs:
+        tensors_to_rename.update(zip(outputs, args.rename_outputs))
 
     tf_graph = None
     const_node_values = None
@@ -206,6 +218,7 @@ def main():
                              ignore_default=args.ignore_default,
                              use_default=args.use_default,
                              const_node_values=const_node_values,
+                             tensors_to_rename=tensors_to_rename,
                              initialized_tables=initialized_tables,
                              tflite_path=tflite_path,
                              dequantize=args.dequantize)
@@ -218,6 +231,8 @@ def main():
     # write onnx graph
     logger.info("")
     logger.info("Successfully converted TensorFlow model %s to ONNX", model_path)
+    logger.info("Model inputs: %s", onnx_graph.input_names)
+    logger.info("Model outputs: %s", onnx_graph.outputs)
     if args.output:
         if args.large_model:
             utils.save_onnx_zip(args.output, model_proto, tensor_storage)
