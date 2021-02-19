@@ -422,21 +422,22 @@ def from_graph(graph_def, name=None, input_names=None, output_names=None, opset=
                 input_names = tf_loader.inputs_without_resource(sess, input_names)
                 frozen_graph = tf_loader.tf_optimize(input_names, output_names, graph_def)
 
-    model_proto, external_tensor_storage = _convert_common(frozen_graph,
-                        name=name,
-                        continue_on_error=True,
-                        target=None,
-                        opset=opset,
-                        custom_op_handlers=custom_ops,
-                        extra_opset=extra_opset,
-                        shape_override=shape_override,
-                        input_names=input_names,
-                        output_names=output_names,
-                        inputs_as_nchw=inputs_as_nchw,
-                        large_model=large_model,
-                        tensors_to_rename=tensors_to_rename,
-                        initialized_tables=initialized_tables,
-                        output_path=output_path)
+    model_proto, external_tensor_storage = _convert_common(
+        frozen_graph,
+        name=name,
+        continue_on_error=True,
+        target=None,
+        opset=opset,
+        custom_op_handlers=custom_ops,
+        extra_opset=extra_opset,
+        shape_override=shape_override,
+        input_names=input_names,
+        output_names=output_names,
+        inputs_as_nchw=inputs_as_nchw,
+        large_model=large_model,
+        tensors_to_rename=tensors_to_rename,
+        initialized_tables=initialized_tables,
+        output_path=output_path)
 
     return model_proto, external_tensor_storage
 
