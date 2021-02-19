@@ -146,22 +146,22 @@ def _convert_common(frozen_graph, name="unknown", input_names=None, output_names
                 utils.save_protobuf(output_frozen_graph, frozen_graph)
             tf.import_graph_def(frozen_graph, name='')
             g = process_tf_graph(tf_graph,
-                                continue_on_error=True,
-                                target=target,
-                                opset=opset,
-                                custom_op_handlers=custom_ops,
-                                extra_opset=extra_opset,
-                                shape_override=shape_override,
-                                input_names=input_names,
-                                output_names=output_names,
-                                inputs_as_nchw=inputs_as_nchw,
-                                const_node_values=const_node_values,
-                                tensors_to_rename=tensors_to_rename,
-                                use_default=use_default,
-                                dequantize=dequantize,
-                                ignore_default=False,
-                                tflite_path=tflite_path,
-                                initialized_tables=initialized_tables)
+                                 continue_on_error=True,
+                                 target=target,
+                                 opset=opset,
+                                 custom_op_handlers=custom_ops,
+                                 extra_opset=extra_opset,
+                                 shape_override=shape_override,
+                                 input_names=input_names,
+                                 output_names=output_names,
+                                 inputs_as_nchw=inputs_as_nchw,
+                                 const_node_values=const_node_values,
+                                 tensors_to_rename=tensors_to_rename,
+                                 use_default=use_default,
+                                 dequantize=dequantize,
+                                 ignore_default=False,
+                                 tflite_path=tflite_path,
+                                 initialized_tables=initialized_tables)
             onnx_graph = optimizer.optimize_graph(g)
             model_proto = onnx_graph.make_model("converted from {}".format(name),
                                                 external_tensor_storage=external_tensor_storage)
@@ -233,25 +233,26 @@ def main():
         logger.info("outputs: %s", outputs)
 
     _, _ = _convert_common(
-                        graph_def,
-                        name=model_path,
-                        continue_on_error=args.continue_on_error,
-                        target=args.target,
-                        opset=args.opset,
-                        custom_op_handlers=custom_ops,
-                        extra_opset=extra_opset,
-                        shape_override=args.shape_override,
-                        input_names=inputs,
-                        output_names=outputs,
-                        inputs_as_nchw=args.inputs_as_nchw,
-                        large_model=args.large_model,
-                        tensors_to_rename=None,
-                        ignore_default=args.ignore_default,
-                        use_default=args.use_default,
-                        tflite_path=tflite_path,
-                        dequantize=args.dequantize,
-                        initialized_tables=initialized_tables,
-                        output_path=args.output)
+        graph_def,
+        name=model_path,
+        continue_on_error=args.continue_on_error,
+        target=args.target,
+        opset=args.opset,
+        custom_op_handlers=custom_ops,
+        extra_opset=extra_opset,
+        shape_override=args.shape_override,
+        input_names=inputs,
+        output_names=outputs,
+        inputs_as_nchw=args.inputs_as_nchw,
+        large_model=args.large_model,
+        tensors_to_rename=None,
+        ignore_default=args.ignore_default,
+        use_default=args.use_default,
+        tflite_path=tflite_path,
+        dequantize=args.dequantize,
+        initialized_tables=initialized_tables,
+        output_frozen_graph=args.output_frozen_graph,
+        output_path=args.output)
 
     # write onnx graph
     logger.info("")
@@ -307,21 +308,22 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         tensors_to_rename[k] = k.replace(":0", "")
     tensors_to_rename = None
     frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
-    model_proto, external_tensor_storage = _convert_common(frozen_graph,
-                        name=model.name,
-                        continue_on_error=True,
-                        target=None,
-                        opset=opset,
-                        custom_op_handlers=custom_ops,
-                        extra_opset=extra_opset,
-                        shape_override=shape_override,
-                        input_names=input_names,
-                        output_names=output_names,
-                        inputs_as_nchw=inputs_as_nchw,
-                        large_model=large_model,
-                        tensors_to_rename=tensors_to_rename,
-                        initialized_tables=initialized_tables,
-                        output_path=output_path)
+    model_proto, external_tensor_storage = _convert_common(
+        frozen_graph,
+        name=model.name,
+        continue_on_error=True,
+        target=None,
+        opset=opset,
+        custom_op_handlers=custom_ops,
+        extra_opset=extra_opset,
+        shape_override=shape_override,
+        input_names=input_names,
+        output_names=output_names,
+        inputs_as_nchw=inputs_as_nchw,
+        large_model=large_model,
+        tensors_to_rename=tensors_to_rename,
+        initialized_tables=initialized_tables,
+        output_path=output_path)
 
     return model_proto, external_tensor_storage
 
@@ -360,21 +362,22 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
     initialized_tables = None
     tensors_to_rename = None
     frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
-    model_proto, external_tensor_storage = _convert_common(frozen_graph,
-                        name=concrete_func.name,
-                        continue_on_error=True,
-                        target=None,
-                        opset=opset,
-                        custom_op_handlers=custom_ops,
-                        extra_opset=extra_opset,
-                        shape_override=shape_override,
-                        input_names=input_names,
-                        output_names=output_names,
-                        inputs_as_nchw=inputs_as_nchw,
-                        large_model=large_model,
-                        tensors_to_rename=tensors_to_rename,
-                        initialized_tables=initialized_tables,
-                        output_path=output_path)
+    model_proto, external_tensor_storage = _convert_common(
+        frozen_graph,
+        name=concrete_func.name,
+        continue_on_error=True,
+        target=None,
+        opset=opset,
+        custom_op_handlers=custom_ops,
+        extra_opset=extra_opset,
+        shape_override=shape_override,
+        input_names=input_names,
+        output_names=output_names,
+        inputs_as_nchw=inputs_as_nchw,
+        large_model=large_model,
+        tensors_to_rename=tensors_to_rename,
+        initialized_tables=initialized_tables,
+        output_path=output_path)
 
     return model_proto, external_tensor_storage
 
