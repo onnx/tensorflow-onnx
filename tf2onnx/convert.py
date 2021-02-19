@@ -2,7 +2,7 @@
 
 
 """
-python -m tf2onnx.convert : tool to convert a frozen tensorflow graph to onnx
+python -m tf2onnx.convert : api and commandline tool to convert a tensorflow model to onnx
 """
 
 from __future__ import division
@@ -227,6 +227,68 @@ def main():
             logger.info("ONNX model is saved at %s", args.output)
     else:
         logger.info("To export ONNX model to file, please run with `--output` option")
+
+
+def _convert_body(frozen_graph, name="unknown", input_names=None, output_names=None, initialized_tables=None, opset=None, custom_ops=None,
+                  custom_op_handlers=None, custom_rewriter=None, continue_on_error=False,  inputs_as_nchw=None, extra_opset=None,
+                  shape_override=None, target=None, large_model=False):
+    model_proto = None
+    external_tensor_storage = None
+    const_node_values = None
+
+    with tf.device("/cpu:0"):
+        with tf.Graph().as_default() as tf_graph:
+            if large_model:
+                const_node_values = compress_graph_def(frozen_graph)
+                external_tensor_storage = ExternalTensorStorage()
+
+            tf.import_graph_def(frozen_graph, name='')
+            g = process_tf_graph(tf_graph,
+                                continue_on_error=True,
+                                target=target,
+                                opset=opset,
+                                custom_op_handlers=custom_ops,
+                                extra_opset=extra_opset,
+                                shape_override=shape_override,
+                                input_names=input_names,
+                                output_names=output_names,
+                                inputs_as_nchw=inputs_as_nchw,
+                                const_node_values=const_node_values,
+                                initialized_tables=initialized_tables)
+            onnx_graph = optimizer.optimize_graph(g)
+            model_proto = onnx_graph.make_model("converted from {}".format(name), external_tensor_storage=external_tensor_storage)
+    return model_proto, external_tensor_storage
+
+
+def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None, custom_rewriter=None,
+               inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None, large_model=False):
+
+    from tensorflow.python.keras.saving import saving_utils as _saving_utils
+    function = _saving_utils.trace_model_call(model, input_signature)
+    concrete_func = function.get_concrete_function(*input_signature)
+
+    input_names = [input_tensor.name for input_tensor in concrete_func.inputs
+                    if input_tensor.dtype != tf.dtypes.resource]
+    output_names = [output_tensor.name for output_tensor in concrete_func.outputs
+                    if output_tensor.dtype != tf.dtypes.resource]
+
+    frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
+    initialized_tables = None
+    model_proto, external_tensor_storage = _convert_body(frozen_graph,
+                        name=model.name,
+                        continue_on_error=True,
+                        target=None,
+                        opset=opset,
+                        custom_op_handlers=custom_ops,
+                        extra_opset=extra_opset,
+                        shape_override=shape_override,
+                        input_names=input_names,
+                        output_names=output_names,
+                        inputs_as_nchw=inputs_as_nchw,
+                        large_model=large_model,
+                        initialized_tables=initialized_tables)
+            
+    return model_proto, external_tensor_storage
 
 
 if __name__ == "__main__":
