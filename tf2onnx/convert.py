@@ -128,9 +128,9 @@ def make_default_custom_op_handler(domain):
 
 def _convert_common(frozen_graph, name="unknown", input_names=None, output_names=None, initialized_tables=None,
                     opset=None, custom_ops=None, custom_op_handlers=None, custom_rewriter=None, ignore_default=False,
-                    continue_on_error=False,  inputs_as_nchw=None, extra_opset=None, shape_override=None,
+                    continue_on_error=False, inputs_as_nchw=None, extra_opset=None, shape_override=None,
                     target=None, tensors_to_rename=None, large_model=False, use_default=False, dequantize=False,
-                  tflite_path=None, output_frozen_graph=None, output_path=None):
+                    tflite_path=None, output_frozen_graph=None, output_path=None):
     """Common processing for conversion."""
 
     model_proto = None
@@ -297,7 +297,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     concrete_func = function.get_concrete_function(*input_signature)
 
     input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                    if input_tensor.dtype != tf.dtypes.resource]
+                   if input_tensor.dtype != tf.dtypes.resource]
     output_names = [output_tensor.name for output_tensor in concrete_func.outputs
                     if output_tensor.dtype != tf.dtypes.resource]
 
@@ -355,7 +355,7 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
     concrete_func = function.get_concrete_function(*input_signature)
 
     input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                    if input_tensor.dtype != tf.dtypes.resource]
+                   if input_tensor.dtype != tf.dtypes.resource]
     output_names = [output_tensor.name for output_tensor in concrete_func.outputs
                     if output_tensor.dtype != tf.dtypes.resource]
 
