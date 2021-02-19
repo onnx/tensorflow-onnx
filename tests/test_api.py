@@ -10,13 +10,12 @@ from __future__ import unicode_literals
 # pylint: disable=missing-docstring,unused-import
 
 import os
-import unittest
 import zipfile
 
 import numpy as np
 import tensorflow as tf
 
-from common import check_tf_min_version
+from common import check_tf_min_version, unittest_main
 from backend_test_base import Tf2OnnxBackendTestBase
 import tf2onnx
 
