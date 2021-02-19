@@ -66,15 +66,15 @@ class ApiTests(Tf2OnnxBackendTestBase):
         ky1 = model(x)
         self.assertAllClose(ky1.numpy(), oy[0], rtol=0.3, atol=0.1)
 
-    @check_tf_min_version("1.15")
+    @check_tf_min_version("2.0")
     def test_keras_api(self):
         self._test_keras_api(large_model=False)
 
-    @check_tf_min_version("1.15")
+    @check_tf_min_version("2.0")
     def test_keras_api_large(self):
         self._test_keras_api(large_model=True)
 
-    @check_tf_min_version("1.15")
+    @check_tf_min_version("2.0")
     def test_function(self):
         def func(x, y):
             return x * y

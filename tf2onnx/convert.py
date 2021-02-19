@@ -287,7 +287,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    if LooseVersion(tf.__version__) < "1.15":
+    if LooseVersion(tf.__version__) < "2.0":
         raise NotImplementedError("from_keras requires tf-1.15 or newer")
 
     from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
@@ -349,7 +349,7 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    if LooseVersion(tf.__version__) < "1.15":
+    if LooseVersion(tf.__version__) < "2.0":
         raise NotImplementedError("from_keras requires tf-1.15 or newer")
 
     concrete_func = function.get_concrete_function(*input_signature)
