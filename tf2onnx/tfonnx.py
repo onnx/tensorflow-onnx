@@ -442,7 +442,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                 raise ValueError("Inputs/Outputs Not Found")
 
     def rename_tensors_in_list(tensors):
-        if tensors_to_rename is None or tensor is None:
+        if tensors_to_rename is None or tensors is None:
             return
         for i, t in enumerate(tensors):
             if t in tensors_to_rename:

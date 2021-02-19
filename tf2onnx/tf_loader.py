@@ -143,11 +143,12 @@ def from_function(func, input_names, output_names, large_model=False):
         frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
     # output_names = [i.name for i in frozen_func.outputs]
-    tf_reset_default_graph()
-    with tf_session() as sess:
-        tf.import_graph_def(graph_def, name='')
-        input_names = inputs_without_resource(sess, input_names)
-        graph_def = tf_optimize(input_names, output_names, graph_def)
+    with tf.device("/cpu:0"):
+        with tf.Graph().as_default() as tf_graph:
+            with tf_session(graph=tf_graph) as sess:
+                tf.import_graph_def(graph_def, name='')
+                input_names = inputs_without_resource(sess, input_names)
+                graph_def = tf_optimize(input_names, output_names, graph_def)
     return graph_def
 
 

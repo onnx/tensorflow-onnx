@@ -14,6 +14,7 @@ from __future__ import unicode_literals
 import argparse
 import os
 import sys
+from distutils.version import LooseVersion
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -117,11 +118,61 @@ def get_args():
 
     return args
 
+
 def make_default_custom_op_handler(domain):
     def default_custom_op_handler(ctx, node, name, args):
         node.domain = domain
         return node
     return default_custom_op_handler
+
+
+def _convert_common(frozen_graph, name="unknown", input_names=None, output_names=None, initialized_tables=None,
+                    opset=None, custom_ops=None, custom_op_handlers=None, custom_rewriter=None, ignore_default=False,
+                    continue_on_error=False,  inputs_as_nchw=None, extra_opset=None, shape_override=None,
+                    target=None, tensors_to_rename=None, large_model=False, use_default=False, dequantize=False,
+                  tflite_path=None, output_frozen_graph=None, output_path=None):
+    """Common processing for conversion."""
+
+    model_proto = None
+    external_tensor_storage = None
+    const_node_values = None
+
+    with tf.device("/cpu:0"):
+        with tf.Graph().as_default() as tf_graph:
+            if large_model:
+                const_node_values = compress_graph_def(frozen_graph)
+                external_tensor_storage = ExternalTensorStorage()
+            if output_frozen_graph:
+                utils.save_protobuf(output_frozen_graph, frozen_graph)
+            tf.import_graph_def(frozen_graph, name='')
+            g = process_tf_graph(tf_graph,
+                                continue_on_error=True,
+                                target=target,
+                                opset=opset,
+                                custom_op_handlers=custom_ops,
+                                extra_opset=extra_opset,
+                                shape_override=shape_override,
+                                input_names=input_names,
+                                output_names=output_names,
+                                inputs_as_nchw=inputs_as_nchw,
+                                const_node_values=const_node_values,
+                                tensors_to_rename=tensors_to_rename,
+                                use_default=use_default,
+                                dequantize=dequantize,
+                                ignore_default=False,
+                                tflite_path=tflite_path,
+                                initialized_tables=initialized_tables)
+            onnx_graph = optimizer.optimize_graph(g)
+            model_proto = onnx_graph.make_model("converted from {}".format(name),
+                                                external_tensor_storage=external_tensor_storage)
+        if output_path:
+            if large_model:
+                utils.save_onnx_zip(output_path, model_proto, external_tensor_storage)
+            else:
+                utils.save_protobuf(output_path, model_proto)
+
+    return model_proto, external_tensor_storage
+
 
 def main():
     args = get_args()
@@ -181,89 +232,66 @@ def main():
         logger.info("inputs: %s", inputs)
         logger.info("outputs: %s", outputs)
 
-    tf_graph = None
-    const_node_values = None
-    if graph_def is not None:
-        with tf.Graph().as_default() as tf_graph:
-            const_node_values = None
-            if args.large_model:
-                const_node_values = compress_graph_def(graph_def)
-            if args.output_frozen_graph:
-                utils.save_protobuf(args.output_frozen_graph, graph_def)
-            tf.import_graph_def(graph_def, name='')
-
-    with tf_loader.tf_session(graph=tf_graph):
-        g = process_tf_graph(tf_graph,
-                             continue_on_error=args.continue_on_error,
-                             target=args.target,
-                             opset=args.opset,
-                             custom_op_handlers=custom_ops,
-                             extra_opset=extra_opset,
-                             shape_override=args.shape_override,
-                             input_names=inputs,
-                             output_names=outputs,
-                             inputs_as_nchw=args.inputs_as_nchw,
-                             ignore_default=args.ignore_default,
-                             use_default=args.use_default,
-                             const_node_values=const_node_values,
-                             initialized_tables=initialized_tables,
-                             tflite_path=tflite_path,
-                             dequantize=args.dequantize)
-
-    onnx_graph = optimizer.optimize_graph(g)
-
-    tensor_storage = ExternalTensorStorage() if args.large_model else None
-    model_proto = onnx_graph.make_model("converted from {}".format(model_path), external_tensor_storage=tensor_storage)
+    _, _ = _convert_common(
+                        graph_def,
+                        name=model_path,
+                        continue_on_error=args.continue_on_error,
+                        target=args.target,
+                        opset=args.opset,
+                        custom_op_handlers=custom_ops,
+                        extra_opset=extra_opset,
+                        shape_override=args.shape_override,
+                        input_names=inputs,
+                        output_names=outputs,
+                        inputs_as_nchw=args.inputs_as_nchw,
+                        large_model=args.large_model,
+                        tensors_to_rename=None,
+                        ignore_default=args.ignore_default,
+                        use_default=args.use_default,
+                        tflite_path=tflite_path,
+                        dequantize=args.dequantize,
+                        initialized_tables=initialized_tables,
+                        output_path=args.output)
 
     # write onnx graph
     logger.info("")
     logger.info("Successfully converted TensorFlow model %s to ONNX", model_path)
     if args.output:
         if args.large_model:
-            utils.save_onnx_zip(args.output, model_proto, tensor_storage)
             logger.info("Zipped ONNX model is saved at %s. Unzip before opening in onnxruntime.", args.output)
         else:
-            utils.save_protobuf(args.output, model_proto)
             logger.info("ONNX model is saved at %s", args.output)
     else:
         logger.info("To export ONNX model to file, please run with `--output` option")
 
 
-def _convert_body(frozen_graph, name="unknown", input_names=None, output_names=None, initialized_tables=None, opset=None, custom_ops=None,
-                  custom_op_handlers=None, custom_rewriter=None, continue_on_error=False,  inputs_as_nchw=None, extra_opset=None,
-                  shape_override=None, target=None, large_model=False):
-    model_proto = None
-    external_tensor_storage = None
-    const_node_values = None
+def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
+               custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
+               target=None, large_model=False, output_path=None):
+    """Returns a ONNX model_proto for a tf.keras model.
 
-    with tf.device("/cpu:0"):
-        with tf.Graph().as_default() as tf_graph:
-            if large_model:
-                const_node_values = compress_graph_def(frozen_graph)
-                external_tensor_storage = ExternalTensorStorage()
+    Args:
+        model: the tf.keras model we want to convert
+        input_signature: a tf.TensorSpec or a numpy array defining the shape/dtype of the input
+        opset: the opset to be used for the ONNX model, default is the latest
+        target: list of workarounds applied to help certain platforms
+        custom_op_handlers: dictionary of custom ops handlers
+        custom_rewriter: list of custom graph rewriters
+        extra_opset: list of extra opset's, for example the opset's used by custom ops
+        shape_override: dict with inputs that override the shapes given by tensorflow
+        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        large_model: use the ONNX external tensor storage format
+        output_path: save model to output_path
 
-            tf.import_graph_def(frozen_graph, name='')
-            g = process_tf_graph(tf_graph,
-                                continue_on_error=True,
-                                target=target,
-                                opset=opset,
-                                custom_op_handlers=custom_ops,
-                                extra_opset=extra_opset,
-                                shape_override=shape_override,
-                                input_names=input_names,
-                                output_names=output_names,
-                                inputs_as_nchw=inputs_as_nchw,
-                                const_node_values=const_node_values,
-                                initialized_tables=initialized_tables)
-            onnx_graph = optimizer.optimize_graph(g)
-            model_proto = onnx_graph.make_model("converted from {}".format(name), external_tensor_storage=external_tensor_storage)
-    return model_proto, external_tensor_storage
+    Returns:
+        An ONNX model_proto and an external_tensor_storage dict.
+    """
+    if LooseVersion(tf.__version__) < "1.15":
+        raise NotImplementedError("from_keras requires tf-1.15 or newer")
 
+    from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
 
-def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None, custom_rewriter=None,
-               inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None, large_model=False):
-
-    from tensorflow.python.keras.saving import saving_utils as _saving_utils
+    # let tensorflow do the checking if model is a valid model
     function = _saving_utils.trace_model_call(model, input_signature)
     concrete_func = function.get_concrete_function(*input_signature)
 
@@ -272,9 +300,14 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     output_names = [output_tensor.name for output_tensor in concrete_func.outputs
                     if output_tensor.dtype != tf.dtypes.resource]
 
-    frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
     initialized_tables = None
-    model_proto, external_tensor_storage = _convert_body(frozen_graph,
+
+    tensors_to_rename = {v.name: k for k, v in concrete_func.structured_outputs.items()}
+    for k in input_names:
+        tensors_to_rename[k] = k.replace(":0", "")
+    tensors_to_rename = None
+    frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
+    model_proto, external_tensor_storage = _convert_common(frozen_graph,
                         name=model.name,
                         continue_on_error=True,
                         target=None,
@@ -286,8 +319,122 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
                         output_names=output_names,
                         inputs_as_nchw=inputs_as_nchw,
                         large_model=large_model,
-                        initialized_tables=initialized_tables)
-            
+                        tensors_to_rename=tensors_to_rename,
+                        initialized_tables=initialized_tables,
+                        output_path=output_path)
+
+    return model_proto, external_tensor_storage
+
+
+def from_function(function, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
+                  custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None,
+                  large_model=False, output_path=None):
+    """Returns a ONNX model_proto for a tf.function.
+
+    Args:
+        function: the tf.function we want to convert
+        input_signature: a tf.TensorSpec or a numpy array defining the shape/dtype of the input
+        opset: the opset to be used for the ONNX model, default is the latest
+        target: list of workarounds applied to help certain platforms
+        custom_op_handlers: dictionary of custom ops handlers
+        custom_rewriter: list of custom graph rewriters
+        extra_opset: list of extra opset's, for example the opset's used by custom ops
+        shape_override: dict with inputs that override the shapes given by tensorflow
+        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        large_model: use the ONNX external tensor storage format
+        output_path: save model to output_path
+
+    Returns:
+        An ONNX model_proto and an external_tensor_storage dict.
+    """
+    if LooseVersion(tf.__version__) < "1.15":
+        raise NotImplementedError("from_keras requires tf-1.15 or newer")
+
+    concrete_func = function.get_concrete_function(*input_signature)
+
+    input_names = [input_tensor.name for input_tensor in concrete_func.inputs
+                    if input_tensor.dtype != tf.dtypes.resource]
+    output_names = [output_tensor.name for output_tensor in concrete_func.outputs
+                    if output_tensor.dtype != tf.dtypes.resource]
+
+    initialized_tables = None
+    tensors_to_rename = None
+    frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
+    model_proto, external_tensor_storage = _convert_common(frozen_graph,
+                        name=concrete_func.name,
+                        continue_on_error=True,
+                        target=None,
+                        opset=opset,
+                        custom_op_handlers=custom_ops,
+                        extra_opset=extra_opset,
+                        shape_override=shape_override,
+                        input_names=input_names,
+                        output_names=output_names,
+                        inputs_as_nchw=inputs_as_nchw,
+                        large_model=large_model,
+                        tensors_to_rename=tensors_to_rename,
+                        initialized_tables=initialized_tables,
+                        output_path=output_path)
+
+    return model_proto, external_tensor_storage
+
+
+def from_graph(graph_def, name=None, input_names=None, output_names=None, opset=None, custom_ops=None,
+               custom_op_handlers=None, custom_rewriter=None, inputs_as_nchw=None, extra_opset=None,
+               shape_override=None, target=None, large_model=False, output_path=None):
+    """Returns a ONNX model_proto for a tensorflow graphdef.
+
+    Args:
+        graphdef: the graphdef we want to convert
+        input_names: list of input names
+        output_names: list of output names
+        name: A name for the graph
+        opset: the opset to be used for the ONNX model, default is the latest
+        target: list of workarounds applied to help certain platforms
+        custom_op_handlers: dictionary of custom ops handlers
+        custom_rewriter: list of custom graph rewriters
+        extra_opset: list of extra opset's, for example the opset's used by custom ops
+        shape_override: dict with inputs that override the shapes given by tensorflow
+        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        large_model: use the ONNX external tensor storage format
+        output_path: save model to output_path
+
+    Returns:
+        An ONNX model_proto and an external_tensor_storage dict.
+    """
+    if not input_names:
+        raise ValueError("input_names needs to be provided")
+    if not output_names:
+        raise ValueError("output_names needs to be provided")
+    if not name:
+        name = "unknown"
+    initialized_tables = None
+    tensors_to_rename = None
+
+    with tf.device("/cpu:0"):
+        with tf.Graph().as_default() as tf_graph:
+            with tf_loader.tf_session(graph=tf_graph) as sess:
+                tf.import_graph_def(graph_def, name='')
+                frozen_graph = tf_loader.freeze_session(sess, input_names=input_names, output_names=output_names)
+                input_names = tf_loader.inputs_without_resource(sess, input_names)
+                frozen_graph = tf_loader.tf_optimize(input_names, output_names, graph_def)
+
+    model_proto, external_tensor_storage = _convert_common(frozen_graph,
+                        name=name,
+                        continue_on_error=True,
+                        target=None,
+                        opset=opset,
+                        custom_op_handlers=custom_ops,
+                        extra_opset=extra_opset,
+                        shape_override=shape_override,
+                        input_names=input_names,
+                        output_names=output_names,
+                        inputs_as_nchw=inputs_as_nchw,
+                        large_model=large_model,
+                        tensors_to_rename=tensors_to_rename,
+                        initialized_tables=initialized_tables,
+                        output_path=output_path)
+
     return model_proto, external_tensor_storage
 
 
