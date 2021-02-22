@@ -126,11 +126,8 @@ def make_default_custom_op_handler(domain):
     return default_custom_op_handler
 
 
-def _convert_common(frozen_graph, name="unknown", input_names=None, output_names=None, initialized_tables=None,
-                    opset=None, custom_ops=None, custom_op_handlers=None, custom_rewriter=None, ignore_default=False,
-                    continue_on_error=False, inputs_as_nchw=None, extra_opset=None, shape_override=None,
-                    target=None, tensors_to_rename=None, large_model=False, use_default=False, dequantize=False,
-                    tflite_path=None, output_frozen_graph=None, output_path=None):
+def _convert_common(frozen_graph, name="unknown", large_model=False, output_path=None,
+                    output_frozen_graph=None, **kwargs):
     """Common processing for conversion."""
 
     model_proto = None
@@ -145,23 +142,7 @@ def _convert_common(frozen_graph, name="unknown", input_names=None, output_names
             if output_frozen_graph:
                 utils.save_protobuf(output_frozen_graph, frozen_graph)
             tf.import_graph_def(frozen_graph, name='')
-            g = process_tf_graph(tf_graph,
-                                 continue_on_error=True,
-                                 target=target,
-                                 opset=opset,
-                                 custom_op_handlers=custom_ops,
-                                 extra_opset=extra_opset,
-                                 shape_override=shape_override,
-                                 input_names=input_names,
-                                 output_names=output_names,
-                                 inputs_as_nchw=inputs_as_nchw,
-                                 const_node_values=const_node_values,
-                                 tensors_to_rename=tensors_to_rename,
-                                 use_default=use_default,
-                                 dequantize=dequantize,
-                                 ignore_default=False,
-                                 tflite_path=tflite_path,
-                                 initialized_tables=initialized_tables)
+            g = process_tf_graph(tf_graph, const_node_values=const_node_values, **kwargs)
             onnx_graph = optimizer.optimize_graph(g)
             model_proto = onnx_graph.make_model("converted from {}".format(name),
                                                 external_tensor_storage=external_tensor_storage)
