@@ -134,8 +134,8 @@ class ApiTests(Tf2OnnxBackendTestBase):
         x = np.array([5.], dtype=np.float32)
         tensors_to_rename = {"pred:0": "pred", "X:0": "X"}
         model_proto, _ = tf2onnx.convert.from_graph_def(graph_def, input_names=["X:0"], output_names=["pred:0"],
-                                                    opset=self.config.opset, output_path=output_path,
-                                                    tensors_to_rename=tensors_to_rename)
+                                                        opset=self.config.opset, output_path=output_path,
+                                                        tensors_to_rename=tensors_to_rename)
         output_names = [n.name for n in model_proto.graph.output]
         oy = self.run_onnxruntime(output_path, {"X": x}, output_names)
         self.assertTrue(output_names[0] == "pred")
