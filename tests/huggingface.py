@@ -95,7 +95,7 @@ class TestTransformers(unittest.TestCase):
         if not large:
             model_path = model_path + ".onnx"
         _, _ = tf2onnx.convert.from_keras(model, input_signature=input_signature,
-                            opset=13, large_model=large, output_path=model_path)
+                                          opset=13, large_model=large, output_path=model_path)
 
         if large:
             # need to unpack the zip for run_onnxruntime()
