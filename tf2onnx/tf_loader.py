@@ -462,7 +462,8 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
     with tf.device("/cpu:0"):
         if is_tf2():
             frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables, tensors_to_rename = \
-                _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function, large_model)
+                _from_saved_model_v2(model_path, input_names, output_names,
+                                     tag, signatures, concrete_function, large_model)
             result = [frozen_graph, input_names, output_names]
             if return_concrete_func:
                 result += [concrete_func, imported]
@@ -501,10 +502,9 @@ def from_keras(model_path, input_names, output_names):
             concrete_func = function.get_concrete_function()
             # allow to pass inputs and outputs from caller if we don't want all of them
             input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                        if input_tensor.dtype != tf.dtypes.resource]
+                           if input_tensor.dtype != tf.dtypes.resource]
             output_names = [output_tensor.name for output_tensor in concrete_func.outputs
                             if output_tensor.dtype != tf.dtypes.resource]
-
             frozen_graph = from_function(concrete_func, input_names, output_names)
         else:
             # Handles Keras when Eager mode is disabled.

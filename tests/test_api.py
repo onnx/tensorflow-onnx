@@ -128,7 +128,7 @@ class ApiTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.15")
     def test_graphdef(self):
         output_path = os.path.join(self.test_data_directory, "model.onnx")
-        graph_def, input_names, outputs = tf2onnx.tf_loader.from_graphdef(
+        graph_def, _, _ = tf2onnx.tf_loader.from_graphdef(
             "tests/models/regression/graphdef/frozen.pb", ["X:0"], ["pred:0"])
 
         x = np.array([5.], dtype=np.float32)
