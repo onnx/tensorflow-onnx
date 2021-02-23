@@ -1813,6 +1813,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
 
+    def test_randomuniform_int_scalar(self):
+        def func():
+            shape = tf.constant(np.array([], np.int32), name="shape")
+            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=2, maxval=10)
+            x_ = tf.identity(x_, name="output1")
+            x_ = tf.identity(x_, name="output2")
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        results = self.run_backend(g, [_OUTPUT], {})
+        self.assertTrue(2 <= results[0] < 10)
+
     def test_randomuniform_int_nonconst_max(self):
         m_val = np.array(8, dtype=np.int32)
         def func(m):

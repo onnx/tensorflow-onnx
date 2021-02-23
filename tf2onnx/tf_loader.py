@@ -145,12 +145,11 @@ def from_function(func, input_names, output_names, large_model=False):
         frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
     # output_names = [i.name for i in frozen_func.outputs]
-    with tf.device("/cpu:0"):
-        with tf.Graph().as_default() as tf_graph:
-            with tf_session(graph=tf_graph) as sess:
-                tf.import_graph_def(graph_def, name='')
-                input_names = inputs_without_resource(sess, input_names)
-                graph_def = tf_optimize(input_names, output_names, graph_def)
+    with tf.Graph().as_default() as tf_graph:
+        with tf_session(graph=tf_graph) as sess:
+            tf.import_graph_def(graph_def, name='')
+            input_names = inputs_without_resource(sess, input_names)
+            graph_def = tf_optimize(input_names, output_names, graph_def)
     return graph_def
 
 
@@ -173,10 +172,8 @@ def remove_redundant_inputs(frozen_graph, input_names):
     """Remove redundant inputs not in frozen graph."""
     frozen_inputs = []
     # get inputs in frozen graph
-    for n in frozen_graph.node:
-        for inp in input_names:
-            if utils.node_name(inp) == n.name:
-                frozen_inputs.append(inp)
+    node_names = set(n.name for n in frozen_graph.node)
+    frozen_inputs = [inp for inp in input_names if utils.node_name(inp) in node_names]
     deleted_inputs = list(set(input_names) - set(frozen_inputs))
     if deleted_inputs:
         logger.warning("inputs [%s] is not in frozen graph, delete them", ",".join(deleted_inputs))
@@ -266,17 +263,24 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
         # TF1.12 changed the api
         get_signature_def = lambda meta_graph_def, k: meta_graph_def.signature_def[k]
 
-    input_names = []
-    output_names = []
-    for k in signatures:
-        inputs_tensor_info = get_signature_def(imported, k).inputs
-        for _, input_tensor in inputs_tensor_info.items():
-            input_names.append(input_tensor.name)
-        outputs_tensor_info = get_signature_def(imported, k).outputs
-        for _, output_tensor in outputs_tensor_info.items():
-            output_names.append(output_tensor.name)
+    if input_names is None:
+        input_names = []
+        for k in signatures:
+            inputs_tensor_info = get_signature_def(imported, k).inputs
+            for _, input_tensor in inputs_tensor_info.items():
+                if input_tensor.name not in input_names:
+                    input_names.append(input_tensor.name)
+    tensors_to_rename = {}
+    if output_names is None:
+        output_names = []
+        for k in signatures:
+            outputs_tensor_info = get_signature_def(imported, k).outputs
+            for structured_name, output_tensor in outputs_tensor_info.items():
+                if output_tensor.name not in output_names:
+                    output_names.append(output_tensor.name)
+                    tensors_to_rename[output_tensor.name] = structured_name
     frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-    return frozen_graph, input_names, output_names
+    return frozen_graph, input_names, output_names, tensors_to_rename
 
 
 def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
@@ -376,8 +380,8 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         utils.make_sure(hasattr(imported, "__call__"), err_no_call)
         utils.make_sure(concrete_function_index < len(imported.__call__.concrete_functions),
                         err_index, concrete_function_index, len(imported.__call__.concrete_functions) - 1)
-        sig = imported.__call__.concrete_functions[concrete_function_index].structured_input_signature[0]
-        concrete_func = imported.__call__.get_concrete_function(*sig)
+        args, kwargs = imported.__call__.concrete_functions[concrete_function_index].structured_input_signature
+        concrete_func = imported.__call__.get_concrete_function(*args, **kwargs)
     elif signature_def:
         utils.make_sure(signature_def[0] in valid_sigs, err_sig_nomatch, signature_def[0])
         concrete_func = imported.signatures[signature_def[0]]
@@ -386,14 +390,30 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         logger.warning(wrn_sig_1, valid_sigs[0])
         concrete_func = imported.signatures[valid_sigs[0]]
 
-    inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
-    outputs = [tensor.name for tensor in concrete_func.outputs if tensor.dtype != tf.dtypes.resource]
+    tensors_to_rename = {}
+    if input_names is None:
+        inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
+        if concrete_func.structured_input_signature is not None:
+            args, kwargs = concrete_func.structured_input_signature
+            structured_inputs = [t.name for t in args if isinstance(t, tf.TensorSpec)] + sorted(kwargs.keys())
+            structured_inputs = set(inp + ":0" for inp in structured_inputs)
+            if any(inp in structured_inputs for inp in inputs):
+                inputs = [inp for inp in inputs if inp in structured_inputs]
+    else:
+        inputs = input_names
 
-    # filter by user specified inputs/outputs
-    if input_names:
-        inputs = list(set(input_names) & set(inputs))
-    if output_names:
-        outputs = list(set(output_names) & set(outputs))
+    if output_names is None:
+        outputs = [tensor.name for tensor in concrete_func.outputs if tensor.dtype != tf.dtypes.resource]
+        if isinstance(concrete_func.structured_outputs, dict):
+            # outputs are sorted, sort structured_outputs the same way
+            structured_outputs = sorted(concrete_func.structured_outputs.keys())
+            tensors_to_rename.update(zip(outputs, structured_outputs))
+            logger.info("Output names: %r", structured_outputs)
+        else:
+            logger.info("Output names: %r", outputs)
+    else:
+        outputs = output_names
+        logger.info("Outputs not left as None; will use provided names not structured output names.")
 
     # Avoid errors due to bug in TF freezing
     removed_resource_to_placeholder, graph_captures_copy, func_captures_copy = \
@@ -429,34 +449,36 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
 
     replace_placeholders_with_tables(frozen_graph, placeholder_to_table_info)
 
-    return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables
+    return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables, tensors_to_rename
 
 
 def from_saved_model(model_path, input_names, output_names, tag=None,
                      signatures=None, concrete_function=None, large_model=False,
-                     return_concrete_func=False, return_initialized_tables=False):
+                     return_concrete_func=False, return_initialized_tables=False, return_tensors_to_rename=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
     with tf.device("/cpu:0"):
         if is_tf2():
-            frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables = \
+            frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables, tensors_to_rename = \
                 _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function, large_model)
             result = [frozen_graph, input_names, output_names]
             if return_concrete_func:
                 result += [concrete_func, imported]
             if return_initialized_tables:
                 result += [initialized_tables]
+            if return_tensors_to_rename:
+                result += [tensors_to_rename]
         else:
             with tf_session() as sess:
-                frozen_graph, input_names, output_names = \
+                frozen_graph, input_names, output_names, tensors_to_rename = \
                     _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
                 result = [frozen_graph, input_names, output_names]
-                if return_concrete_func:
-                    result += [None, None]
                 if return_initialized_tables:
                     result += [{}]
+                if return_tensors_to_rename:
+                    result += [tensors_to_rename]
     tf_reset_default_graph()
     return result
 

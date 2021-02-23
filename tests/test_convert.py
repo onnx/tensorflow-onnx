@@ -88,6 +88,34 @@ class Tf2OnnxConvertTest(unittest.TestCase):
                                        '--output',
                                        'converted_checkpoint.onnx']))
 
+    def test_convert_graphdef_cut_input(self):
+        """ convert graphdef, change input to start from Mul:0 and rename it """
+        self.assertTrue(run_test_case(['',
+                                       '--input',
+                                       'tests/models/regression/graphdef/frozen.pb',
+                                       '--inputs',
+                                       'Mul:0',
+                                       '--rename-inputs',
+                                       'new_input',
+                                       '--outputs',
+                                       'pred:0',
+                                       '--output',
+                                       'converted_graphdef_cut_input.onnx']))
+
+    def test_convert_graphdef_cut_output(self):
+        """ convert graphdef, change output to Mul:0 and rename it """
+        self.assertTrue(run_test_case(['',
+                                       '--input',
+                                       'tests/models/regression/graphdef/frozen.pb',
+                                       '--inputs',
+                                       'X:0',
+                                       '--rename-outputs',
+                                       'new_output',
+                                       '--outputs',
+                                       'Mul:0',
+                                       '--output',
+                                       'converted_graphdef_cut_output.onnx']))
+
 
 if __name__ == '__main__':
     unittest.main()
