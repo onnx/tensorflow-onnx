@@ -2,8 +2,11 @@
 
 # tf2onnx - Convert TensorFlow, Keras and Tflite models to ONNX.
 
-tf2onnx converts Tensorflow (tf-1.x or tf-2.x), tf.keras and tflite models to ONNX via command 
+tf2onnx converts TensorFlow (tf-1.x or tf-2.x), tf.keras and tflite models to ONNX via command 
 line or python api.
+
+__Note: after tf2onnx-1.8.3 we made a change that impacts the output names for the ONNX model.
+Instead of taking the output names from the tensorflow graph (ie. for keras models this is frequently Identity:0) we decided that it is better to use the structured output names of the model so the output names are now identical to the names in the keras or saved model.__
 
 TensorFlow has many more ops than ONNX and occasionally mapping a model to ONNX creates issues.
 
@@ -332,11 +335,11 @@ model_proto, external_tensor_storage = tf2onnx.convert.from_function(function,
         An ONNX model_proto and an external_tensor_storage dict.
 ```
 
-### from_graph
+### from_graph_def
 ```
 import tf2onnx
 
-model_proto, external_tensor_storage = tf2onnx.convert.from_graph(graph_def,
+model_proto, external_tensor_storage = tf2onnx.convert.from_graph_def(graph_def,
                 name=None, input_names=None, output_names=None, opset=None,
                 custom_ops=None, custom_op_handlers=None, custom_rewriter=None, 
                 inputs_as_nchw=None, extra_opset=None,
@@ -344,7 +347,7 @@ model_proto, external_tensor_storage = tf2onnx.convert.from_graph(graph_def,
                 output_path=None)
 
     Args:
-        graphdef: the graphdef we want to convert
+        graph_def: the graph_def we want to convert
         input_names: list of input names
         output_names: list of output names
         name: A name for the graph

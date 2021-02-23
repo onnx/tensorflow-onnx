@@ -282,7 +282,6 @@ class TestTransformers(unittest.TestCase):
     def test_TFXLM_CLMENDE(self):
         self._test_TFXLM("xlm-clm-ende-1024", large=True)
 
-
     # BART
 
     def _test_TFBart(self, size, large=False):

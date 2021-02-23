@@ -394,13 +394,13 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
         return model_proto, external_tensor_storage
 
 
-def from_graph(graph_def, name=None, input_names=None, output_names=None, opset=None, custom_ops=None,
+def from_graph_def(graph_def, name=None, input_names=None, output_names=None, opset=None, custom_ops=None,
                custom_op_handlers=None, custom_rewriter=None, inputs_as_nchw=None, extra_opset=None,
                shape_override=None, target=None, large_model=False, tensors_to_rename=None, output_path=None):
     """Returns a ONNX model_proto for a tensorflow graphdef.
 
     Args:
-        graphdef: the graphdef we want to convert
+        graph_def: the graphdef we want to convert
         input_names: list of input names
         output_names: list of output names
         name: A name for the graph
