@@ -111,6 +111,7 @@ def inputs_without_resource(sess, input_names):
         pass
     return input_names
 
+
 def convert_variables_to_constants_large_model(func):
     # For large models we use internal tf methods as a hack
 
@@ -133,6 +134,7 @@ def convert_variables_to_constants_large_model(func):
     frozen_graph_def, _ = _replace_variables_by_constants(converter_data=converter_data)
     return frozen_graph_def
 
+
 def from_function(func, input_names, output_names, large_model=False):
     if large_model:
         return convert_variables_to_constants_large_model(func)
@@ -143,11 +145,11 @@ def from_function(func, input_names, output_names, large_model=False):
         frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
     graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
     # output_names = [i.name for i in frozen_func.outputs]
-    tf_reset_default_graph()
-    with tf_session() as sess:
-        tf.import_graph_def(graph_def, name='')
-        input_names = inputs_without_resource(sess, input_names)
-        graph_def = tf_optimize(input_names, output_names, graph_def)
+    with tf.Graph().as_default() as tf_graph:
+        with tf_session(graph=tf_graph) as sess:
+            tf.import_graph_def(graph_def, name='')
+            input_names = inputs_without_resource(sess, input_names)
+            graph_def = tf_optimize(input_names, output_names, graph_def)
     return graph_def
 
 
@@ -213,17 +215,18 @@ def from_checkpoint(model_path, input_names, output_names):
     # make sure we start with clean default graph
     tf_reset_default_graph()
     # model_path = checkpoint/checkpoint.meta
-    with tf_session() as sess:
-        saver = tf_import_meta_graph(model_path, clear_devices=True)
-        # restore from model_path minus the ".meta"
-        saver.restore(sess, model_path[:-5])
-        input_names = inputs_without_resource(sess, input_names)
-        frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-        input_names = remove_redundant_inputs(frozen_graph, input_names)
+    with tf.device("/cpu:0"):
+        with tf_session() as sess:
+            saver = tf_import_meta_graph(model_path, clear_devices=True)
+            # restore from model_path minus the ".meta"
+            saver.restore(sess, model_path[:-5])
+            input_names = inputs_without_resource(sess, input_names)
+            frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
+            input_names = remove_redundant_inputs(frozen_graph, input_names)
 
-    tf_reset_default_graph()
-    with tf_session() as sess:
-        frozen_graph = tf_optimize(input_names, output_names, frozen_graph)
+        tf_reset_default_graph()
+        with tf_session() as sess:
+            frozen_graph = tf_optimize(input_names, output_names, frozen_graph)
     tf_reset_default_graph()
     return frozen_graph, input_names, output_names
 
@@ -267,9 +270,9 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
             for _, input_tensor in inputs_tensor_info.items():
                 if input_tensor.name not in input_names:
                     input_names.append(input_tensor.name)
+    tensors_to_rename = {}
     if output_names is None:
         output_names = []
-        tensors_to_rename = {}
         for k in signatures:
             outputs_tensor_info = get_signature_def(imported, k).outputs
             for structured_name, output_tensor in outputs_tensor_info.items():
@@ -402,6 +405,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     if output_names is None:
         outputs = [tensor.name for tensor in concrete_func.outputs if tensor.dtype != tf.dtypes.resource]
         if isinstance(concrete_func.structured_outputs, dict):
+            # outputs are sorted, sort structured_outputs the same way
             structured_outputs = sorted(concrete_func.structured_outputs.keys())
             tensors_to_rename.update(zip(outputs, structured_outputs))
             logger.info("Output names: %r", structured_outputs)
@@ -409,7 +413,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
             logger.info("Output names: %r", outputs)
     else:
         outputs = output_names
-        logger.warning("Outputs not left as None; will use provided names not structured output names.")
+        logger.info("Outputs not left as None; will use provided names not structured output names.")
 
     # Avoid errors due to bug in TF freezing
     removed_resource_to_placeholder, graph_captures_copy, func_captures_copy = \
@@ -447,6 +451,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
 
     return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables, tensors_to_rename
 
+
 def from_saved_model(model_path, input_names, output_names, tag=None,
                      signatures=None, concrete_function=None, large_model=False,
                      return_concrete_func=False, return_initialized_tables=False, return_tensors_to_rename=False):
@@ -454,28 +459,27 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
-    if is_tf2():
-        frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables, tensors_to_rename = \
-            _from_saved_model_v2(model_path, input_names, output_names, tag, signatures, concrete_function, large_model)
-        result = [frozen_graph, input_names, output_names]
-        if return_concrete_func:
-            result += [concrete_func, imported]
-        if return_initialized_tables:
-            result += [initialized_tables]
-        if return_tensors_to_rename:
-            result += [tensors_to_rename]
-    else:
-        with tf_session() as sess:
-            frozen_graph, input_names, output_names, tensors_to_rename = \
-                _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
+    with tf.device("/cpu:0"):
+        if is_tf2():
+            frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables, tensors_to_rename = \
+                _from_saved_model_v2(model_path, input_names, output_names,
+                                     tag, signatures, concrete_function, large_model)
             result = [frozen_graph, input_names, output_names]
             if return_concrete_func:
-                result += [None, None]
+                result += [concrete_func, imported]
             if return_initialized_tables:
-                result += [{}]
+                result += [initialized_tables]
             if return_tensors_to_rename:
                 result += [tensors_to_rename]
-
+        else:
+            with tf_session() as sess:
+                frozen_graph, input_names, output_names, tensors_to_rename = \
+                    _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
+                result = [frozen_graph, input_names, output_names]
+                if return_initialized_tables:
+                    result += [{}]
+                if return_tensors_to_rename:
+                    result += [tensors_to_rename]
     tf_reset_default_graph()
     return result
 
@@ -488,35 +492,35 @@ def from_keras(model_path, input_names, output_names):
 
     # Handles Keras when Eager mode is enabled.
     custom_objects = None
-    if context.executing_eagerly():
-        _keras.backend.clear_session()
-        _keras.backend.set_learning_phase(False)
-        keras_model = _keras.models.load_model(model_path, custom_objects)
+    with tf.device("/cpu:0"):
+        if context.executing_eagerly():
+            _keras.backend.clear_session()
+            _keras.backend.set_learning_phase(False)
+            keras_model = _keras.models.load_model(model_path, custom_objects)
 
-        function = _saving_utils.trace_model_call(keras_model)
-        concrete_func = function.get_concrete_function()
-        # allow to pass inputs and outputs from caller if we don't want all of them
-        input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                       if input_tensor.dtype != tf.dtypes.resource]
-        output_names = [output_tensor.name for output_tensor in concrete_func.outputs
-                        if output_tensor.dtype != tf.dtypes.resource]
-
-        frozen_graph = from_function(concrete_func, input_names, output_names)
-    else:
-        # Handles Keras when Eager mode is disabled.
-        _keras.backend.clear_session()
-        _keras.backend.set_learning_phase(False)
-        keras_model = _keras.models.load_model(model_path, custom_objects)
-        # allow to pass inputs and outputs from caller if we don't want all of them
-        input_names = keras_model.inputs
-        output_names = keras_model.outputs
-        sess = _keras.backend.get_session()
-        input_names = inputs_without_resource(sess, input_names)
-        frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-        tf_reset_default_graph()
-        with tf_session() as sess:
-            frozen_graph = tf_optimize(input_names, output_names, frozen_graph)
-        tf_reset_default_graph()
+            function = _saving_utils.trace_model_call(keras_model)
+            concrete_func = function.get_concrete_function()
+            # allow to pass inputs and outputs from caller if we don't want all of them
+            input_names = [input_tensor.name for input_tensor in concrete_func.inputs
+                           if input_tensor.dtype != tf.dtypes.resource]
+            output_names = [output_tensor.name for output_tensor in concrete_func.outputs
+                            if output_tensor.dtype != tf.dtypes.resource]
+            frozen_graph = from_function(concrete_func, input_names, output_names)
+        else:
+            # Handles Keras when Eager mode is disabled.
+            _keras.backend.clear_session()
+            _keras.backend.set_learning_phase(False)
+            keras_model = _keras.models.load_model(model_path, custom_objects)
+            # allow to pass inputs and outputs from caller if we don't want all of them
+            input_names = keras_model.inputs
+            output_names = keras_model.outputs
+            sess = _keras.backend.get_session()
+            input_names = inputs_without_resource(sess, input_names)
+            frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
+            tf_reset_default_graph()
+            with tf_session() as sess:
+                frozen_graph = tf_optimize(input_names, output_names, frozen_graph)
+            tf_reset_default_graph()
     return frozen_graph, input_names, output_names
 
 
