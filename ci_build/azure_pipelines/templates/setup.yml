@@ -17,13 +17,10 @@ steps:
       pip uninstall -y onnx
       pip install --index-url https://test.pypi.org/simple/ onnx
     fi
-    if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
-    then
-      pip uninstall -y onnxruntime
-      # install numpy upfront since it is not on https://test.pypi.org/simple/
-      pip install 'numpy>=1.18'
-      pip install --index-url https://test.pypi.org/simple/ ort-nightly
-    fi
+    pip uninstall -y onnxruntime
+    # install numpy upfront since it is not on https://test.pypi.org/simple/
+    pip install 'numpy>=1.18'
+    pip install -i https://test.pypi.org/simple/ ort-nightly==1.7.0.dev202102184
 
     python setup.py install
     pip freeze --all
