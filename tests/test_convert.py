@@ -116,6 +116,14 @@ class Tf2OnnxConvertTest(unittest.TestCase):
                                        '--output',
                                        'converted_graphdef_cut_output.onnx']))
 
+    @check_tf_min_version("2.2")
+    def test_convert_tflite(self):
+        """ convert tflite """
+        self.assertTrue(run_test_case(['',
+                                       '--tflite',
+                                       'tests/models/regression/tflite/model.tflite',
+                                       '--output',
+                                       'converted_checkpoint.onnx']))
 
 if __name__ == '__main__':
     unittest.main()
