@@ -318,7 +318,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
 
     with tf.device("/cpu:0"):
-        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
+        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names, large_model=large_model)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=model.name,
@@ -374,7 +374,7 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
 
     with tf.device("/cpu:0"):
-        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
+        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names, large_model=large_model)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=concrete_func.name,
