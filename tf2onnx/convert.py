@@ -148,7 +148,8 @@ def _convert_common(frozen_graph, name="unknown", large_model=False, output_path
             external_tensor_storage = ExternalTensorStorage()
         if output_frozen_graph:
             utils.save_protobuf(output_frozen_graph, frozen_graph)
-        tf.import_graph_def(frozen_graph, name='')
+        if not kwargs.get("tflite_path"):
+            tf.import_graph_def(frozen_graph, name='')
         g = process_tf_graph(tf_graph, const_node_values=const_node_values, **kwargs)
         onnx_graph = optimizer.optimize_graph(g)
         model_proto = onnx_graph.make_model("converted from {}".format(name),
