@@ -106,6 +106,9 @@ class TestTransformers(unittest.TestCase):
         onnx_results = self.run_onnxruntime(model_path, input_dict, outputs)
         self.assertAllClose(tf_results, onnx_results, rtol=rtol, atol=atol)
 
+
+    # BERT
+
     def test_TFBertModel(self):
         from transformers import BertTokenizer, TFBertForQuestionAnswering
         tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
@@ -116,6 +119,31 @@ class TestTransformers(unittest.TestCase):
                 tf.TensorSpec((None, None), tf.int32, name="token_type_ids"),
                 tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
         self.run_test(model, input_dict, input_signature=spec)
+
+    def test_TFBertFineTunedSquadModel(self):
+        from transformers import BertTokenizer, TFBertForQuestionAnswering
+        name = "bert-large-uncased-whole-word-masking-finetuned-squad"
+        tokenizer = BertTokenizer.from_pretrained(name)
+        model = TFBertForQuestionAnswering.from_pretrained(name)
+        question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
+        input_dict = tokenizer(question, text, return_tensors='tf')
+        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
+                tf.TensorSpec((None, None), tf.int32, name="token_type_ids"),
+                tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
+        self.run_test(model, input_dict, input_signature=spec)
+
+    def test_TFDisillBertModel(self):
+        from transformers import DistilBertTokenizer, TFDistilBertForQuestionAnswering
+        name = 'distilbert-base-uncased'
+        name = 'distilbert-base-uncased-distilled-squad'
+        tokenizer = DistilBertTokenizer.from_pretrained(name)
+        model = TFDistilBertForQuestionAnswering.from_pretrained(name)
+        question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
+        input_dict = tokenizer(question, text, return_tensors='tf')
+        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
+                tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
+        outputs = ["start_logits", "end_logits"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, rtol=1e-5)
 
     ## T5
 
