@@ -5,7 +5,7 @@
 The following tutorials show how to convert various models to ONNX.
 
 [The original Bert model](https://github.com/onnx/tensorflow-onnx/blob/master/tutorials/BertTutorial.ipynb)<br/>
-By now this model is a bit old and it is much easier to use huggingface. How to convert the huggingface tensorflow models see [huggingface.py](https://github.com/onnx/tensorflow-onnx/blob/master/tests/huggingface.py)
+By now this model is a bit old and it is much easier to use huggingface. To see how to convert the huggingface tensorflow models see [huggingface.py](https://github.com/onnx/tensorflow-onnx/blob/master/tests/huggingface.py)
 
 
 [ssd-mobilenet](https://github.com/onnx/tensorflow-onnx/blob/master/tutorials/ConvertingSSDMobilenetToONNX.ipynb)
