@@ -8,11 +8,13 @@ tf2onnx.tflite_utils - utilities for parsing tflite files into onnx graph
 import collections
 import importlib
 import logging
+import struct
 
 from onnx import helper, onnx_pb, numpy_helper
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
 import tensorflow as tf
+import numpy as np
 from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
 from tf2onnx.flexbuffers import read_flexbuffer
@@ -171,6 +173,24 @@ def get_quantization_attr(quant_params):
     return attr
 
 
+def parse_tflite_string_tensor(buffer_bytes, shape):
+    """Returns an onnx tensor with the string data encoded in the tflite tensor data buffer"""
+    def read_int(offset):
+        return struct.unpack('<i', buffer_bytes[offset:offset+4])[0]
+    offset = 0
+    count = read_int(offset)
+    offset += 4
+    offset_list = []
+    for i in range(count):
+        offset_list.append(read_int(offset))
+        offset += 4
+    offset_list.append(len(buffer_bytes))
+    string_list = []
+    for i in range(count):
+        string_list.append(buffer_bytes[offset_list[i]:offset_list[i+1]].decode("utf-8"))
+    return numpy_helper.from_array(np.array(string_list, dtype=np.object).reshape(shape))
+
+
 def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_shapes_override=None):
     """
     Returns a Graph object along with some op count stats. All tflite op types are prefixed with "TFL_".
@@ -223,8 +243,11 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             for d in output_shapes[name]:
                 t.tensor_shape.dim.add().size = d
             t.dtype = map_tflite_dtype_to_tf(tensor.Type())
-            np_data = tensor_util.MakeNdarray(t)
-            onnx_tensor = numpy_helper.from_array(np_data, name=name)
+            if t.dtype == tf.string:
+                onnx_tensor = parse_tflite_string_tensor(t.tensor_content, output_shapes[name])
+            else:
+                np_data = tensor_util.MakeNdarray(t)
+                onnx_tensor = numpy_helper.from_array(np_data, name=name)
             onnx_node = helper.make_node("Const", [], outputs=[name], name=name, value=onnx_tensor)
             onnx_nodes.append(onnx_node)
             op_cnt["Const"] += 1
@@ -287,9 +310,12 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
         if not op.CustomOptionsIsNone():
             custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
             if custom_ops_format == 'FLEXBUFFERS':
-                data = read_flexbuffer(op.CustomOptionsAsNumpy().tobytes())
-                if isinstance(data, dict):
-                    attr.update(read_flexbuffer(op.CustomOptionsAsNumpy().tobytes()))
+                try:
+                    data = read_flexbuffer(op.CustomOptionsAsNumpy().tobytes())
+                    if isinstance(data, dict):
+                        attr.update(read_flexbuffer(op.CustomOptionsAsNumpy().tobytes()))
+                except Exception as e:    # pylint: disable=broad-except
+                    logger.warning("Could not parse attributes for custom op '%s'", optype)
         if option_class is not None:
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)

@@ -249,6 +249,9 @@ class Test(object):
         elif url.endswith('.tflite'):
             ftype = 'tflite'
             dir_name = fname.replace(".tflite", "")
+        elif self.model_type == 'tflite':
+            fname = self.local
+            dir_name = fname.replace(".tflite", "") + "_dir"
         dir_name = os.path.join(cache_dir, dir_name)
         os.makedirs(dir_name, exist_ok=True)
         fpath = os.path.join(dir_name, fname)
