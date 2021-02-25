@@ -629,7 +629,7 @@ class PoolOp:
             input_shapes = [ctx.get_shape(node.input[0])]
             output_shapes = [ctx.get_shape(node.output[0])]
             cast_node = ctx.make_node("Cast", [node.input[0]], dtypes=[onnx_pb.TensorProto.FLOAT], shapes=input_shapes,
-                                      name=node.name + "_cast",  attr={"to": onnx_pb.TensorProto.FLOAT})
+                                      name=node.name + "_cast", attr={"to": onnx_pb.TensorProto.FLOAT})
             _ = ctx.insert_node_on_output(cast_node, node.inputs[0].output[0])
             cast_back_node = ctx.make_node("Cast", [node.output[0]], dtypes=[origin_dtype], shapes=output_shapes,
                                            name=node.name + "_castback", attr={"to": origin_dtype})
