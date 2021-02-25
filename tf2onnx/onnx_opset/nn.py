@@ -624,18 +624,16 @@ class PoolOp:
             spatial = 2
 
         origin_dtype = ctx.get_dtype(node.output[0])
-        if origin_dtype not in [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT,
-                                onnx_pb.TensorProto.DOUBLE]:
+        if origin_dtype not in [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]:
             # the onnx spec doesn't allow int types for pool ops
-            cast_node = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
-            ctx.set_dtype(cast_node.output[0], onnx_pb.TensorProto.FLOAT)
-            ctx.copy_shape(node.name, cast_node.output[0])
+            input_shapes = [ctx.get_shape(node.input[0])]
+            output_shapes = [ctx.get_shape(node.output[0])]
+            _ = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT,
+                                             dtypes=[onnx_pb.TensorProto.FLOAT], shapes=input_shapes)
 
-            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                                           name=utils.make_name(node.name) + "_castback",
-                                                           to=origin_dtype)
-            ctx.set_dtype(cast_back_node.output[0], origin_dtype)
-            ctx.copy_shape(node.name, cast_back_node.output[0])
+            _ = ctx.insert_new_node_on_output("Cast", node.output[0],
+                                              name=utils.make_name(node.name) + "_castback",
+                                              to=origin_dtype, dtypes=[origin_dtype], shapes=output_shapes)
 
         if len(node.input) < 3:
             kernel_shape_tf = node.get_attr("ksize").ints

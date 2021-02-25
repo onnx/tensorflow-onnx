@@ -1253,7 +1253,8 @@ class Graph(object):
 
         # don't remove output from parent since others might depend on it
 
-    def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, **kwargs):
+    def insert_new_node_on_input(self, node, op_type, input_name, name=None,
+                                 shapes=None, dtypes=None, domain=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             node: we want to replace the input for this node
@@ -1262,6 +1263,8 @@ class Graph(object):
                 if scalar, new node placed above input_name
                 if list, new node placed above input_name[0]. list is inputs into new node
             name: the name of the new op
+            shapes: shape of outputs
+            dtypes: dtypes of outputs
             kwargs: attributes of the new node
 
         Returns:
@@ -1273,7 +1276,8 @@ class Graph(object):
         if not isinstance(input_name, list):
             input_name = [input_name]
 
-        new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
+        new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output],
+                                  name=name, domain=domain, shapes=shapes, dtypes=dtypes)
         for i, n in enumerate(node.input):
             if n == input_name[0]:
                 self.replace_input(node, node.input[i], new_output, i)
@@ -1295,7 +1299,8 @@ class Graph(object):
         self.replace_all_inputs(output_name, new_output, ops=to_replace)
         return node
 
-    def insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None, domain=None, **kwargs):
+    def insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None,
+                                  domain=None, shapes=None, dtypes=None, **kwargs):
         """Create and insert a new node into the graph.
         It then calls insert_node_on_output.
 
@@ -1303,6 +1308,8 @@ class Graph(object):
             op_type: type for new operation
             output_name: the names of the outputs above us
             name: the name of the new op
+            shapes: shape of outputs
+            dtypes: dtypes of outputs
             kwargs: attributes of the new node
 
         Returns:
@@ -1320,7 +1327,8 @@ class Graph(object):
             name = utils.make_name(op_type)
 
         new_output = port_name(name)
-        new_node = self.make_node(op_type, inputs, attr=kwargs, outputs=[new_output], name=name, domain=domain)
+        new_node = self.make_node(op_type, inputs, attr=kwargs, outputs=[new_output],
+                                  name=name, domain=domain, shapes=shapes, dtypes=dtypes)
         return self.insert_node_on_output(new_node, output_name)
 
     def find_output_consumers(self, output_name):
