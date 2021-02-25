@@ -319,6 +319,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.logger.debug(str(p))
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("1.15", "required for max_pool args")
+    def test_maxpool_int(self):
+        x_shape = [8, 16, 16, 3]
+        x_val = make_xval(x_shape).astype("int32")
+        def func(x):
+            mp = tf.nn.max_pool(x, ksize=[2], strides=[1, 2, 2, 1], padding="SAME")
+            return tf.identity(mp, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @skip_tf_cpu("only tf_gpu can run maxpool with NCHW format")
     def test_maxpool_gpu(self):
         # make sure converter behaves well when data format is NCHW
