@@ -145,6 +145,23 @@ class TestTransformers(unittest.TestCase):
         outputs = ["start_logits", "end_logits"]
         self.run_test(model, input_dict, input_signature=spec, outputs=outputs, rtol=1e-5)
 
+    ## FUNNEL
+
+    def _test_TFFunnelSquad(self, size, large=False):
+        from transformers import FunnelTokenizer, TFFunnelForQuestionAnswering
+        tokenizer = FunnelTokenizer.from_pretrained(size)
+        model = TFFunnelForQuestionAnswering.from_pretrained(size)
+        question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
+        input_dict = tokenizer(question, text, return_tensors='tf')
+        spec = (tf.TensorSpec((None, 14), tf.int32, name="input_ids"),
+                tf.TensorSpec((None, 14), tf.int32, name="token_type_ids"),
+                tf.TensorSpec((None, 14), tf.int32, name="attention_mask"))
+        outputs = ["start_logits", "end_logits"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, rtol=1e-5)
+
+    def test_TFFunnelSquadSmall(self):
+        self._test_TFFunnelSquad("funnel-transformer/small")
+
     ## T5
 
     def _test_TFT5Model(self, size, large=False):
