@@ -222,6 +222,7 @@ class TFlSoftmaxOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         beta = node.get_attr_value("beta")
-        beta_node = ctx.make_const(utils.make_name("beta"), np.array(beta, dtype=np.float32))
-        mul_node = ctx.insert_new_node_on_output("Mul", node.output[0], name=utils.make_name(node.name))
-        ctx.replace_inputs(mul_node, [node.output[0], beta_node.output[0]])
+        if beta != 1:
+            beta_node = ctx.make_const(utils.make_name("beta"), np.array(beta, dtype=np.float32))
+            mul_node = ctx.insert_new_node_on_output("Mul", node.output[0], name=utils.make_name(node.name))
+            ctx.replace_inputs(mul_node, [node.output[0], beta_node.output[0]])
