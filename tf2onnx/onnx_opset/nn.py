@@ -628,12 +628,12 @@ class PoolOp:
             # the onnx spec doesn't allow int types for pool ops
             input_shapes = [ctx.get_shape(node.input[0])]
             output_shapes = [ctx.get_shape(node.output[0])]
-            _ = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT,
-                                             dtypes=[onnx_pb.TensorProto.FLOAT], shapes=input_shapes)
-
-            _ = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                              name=utils.make_name(node.name) + "_castback",
-                                              to=origin_dtype, dtypes=[origin_dtype], shapes=output_shapes)
+            cast_node = ctx.make_node("Cast", [node.input[0]], dtypes=[onnx_pb.TensorProto.FLOAT], shapes=input_shapes,
+                                      name=node.name + "_cast",  attr={"to": onnx_pb.TensorProto.FLOAT})
+            _ = ctx.insert_node_on_output(cast_node, node.inputs[0].output[0])
+            cast_back_node = ctx.make_node("Cast", [node.output[0]], dtypes=[origin_dtype], shapes=output_shapes,
+                                           name=node.name + "_castback", attr={"to": origin_dtype})
+            _ = ctx.insert_node_on_output(cast_back_node, node.output[0])
 
         if len(node.input) < 3:
             kernel_shape_tf = node.get_attr("ksize").ints
