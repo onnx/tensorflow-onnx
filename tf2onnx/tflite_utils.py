@@ -7,14 +7,17 @@ tf2onnx.tflite_utils - utilities for parsing tflite files into onnx graph
 
 import collections
 import importlib
+import logging
 
 from onnx import helper, onnx_pb, numpy_helper
 from tensorflow.core.framework import types_pb2, tensor_pb2
 from tensorflow.python.framework import tensor_util
+import tensorflow as tf
 from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
 from tf2onnx.flexbuffers import read_flexbuffer
 
+logger = logging.getLogger(__name__)
 
 TFLITE_TO_ONNX_DTYPE = {
     TFLiteTensorType.FLOAT32: onnx_pb.TensorProto.FLOAT,
@@ -138,7 +141,22 @@ def read_tflite_model(tflite_path):
             code = op_code.CustomCode().decode()
         opcodes_map[i] = code
     tflite_graphs = [model.Subgraphs(i) for i in range(model.SubgraphsLength())]
-    return tflite_graphs, opcodes_map, model
+    # Shapes stored in tflite models are not always reliable so we get them from the interpreter if possible.
+    tensor_shapes = {}
+    try:
+        interpreter = tf.lite.Interpreter(tflite_path)
+        interpreter.allocate_tensors()
+        tensor_cnt = model.Subgraphs(0).TensorsLength()
+        for i in range(tensor_cnt):
+            name = model.Subgraphs(0).Tensors(i).Name().decode()
+            details = interpreter._get_tensor_details(i)   # pylint: disable=protected-access
+            if "shape_signature" in details:
+                tensor_shapes[name] = details["shape_signature"].tolist()
+            elif "shape" in details:
+                tensor_shapes[name] = details["shape"].tolist()
+    except Exception as e:    # pylint: disable=broad-except
+        logger.warning("Error loading model into tflite interpreter: %s", e)
+    return tflite_graphs, opcodes_map, model, tensor_shapes
 
 
 def get_quantization_attr(quant_params):
@@ -153,7 +171,7 @@ def get_quantization_attr(quant_params):
     return attr
 
 
-def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
+def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_shapes_override=None):
     """
     Returns a Graph object along with some op count stats. All tflite op types are prefixed with "TFL_".
     Names of graph inputs are optionally prefixed with a string to prevent name conflicts in subgraphs.
@@ -165,6 +183,8 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
     output_shapes = {}
     dtypes = {}
     tensor_names = {}
+    if tensor_shapes_override is None:
+        tensor_shapes_override = {}
     # Map tensor name to tflite Tensor object so we can fetch quantization info as needed
     name_to_tensor = {}
     # If a node takes a quantized tensor as input, we must add a dequantize op after it.
@@ -183,7 +203,9 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
         tensor_names[i] = name
         name_to_tensor[name] = tensor
 
-        if tensor.ShapeIsNone():
+        if name in tensor_shapes_override:
+            output_shapes[name] = tensor_shapes_override[name]
+        elif tensor.ShapeIsNone():
             output_shapes[name] = None
         elif tensor.ShapeSignatureIsNone():
             # The shape signature uses -1 to signify unknown dims. Old models don't have this and use Shape instead.
@@ -265,7 +287,9 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix=''):
         if not op.CustomOptionsIsNone():
             custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
             if custom_ops_format == 'FLEXBUFFERS':
-                attr.update(read_flexbuffer(op.CustomOptionsAsNumpy().tobytes()))
+                data = read_flexbuffer(op.CustomOptionsAsNumpy().tobytes())
+                if isinstance(data, dict):
+                    attr.update(read_flexbuffer(op.CustomOptionsAsNumpy().tobytes()))
         if option_class is not None:
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)

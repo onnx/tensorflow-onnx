@@ -461,14 +461,17 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             n.output[:] = rename_tensors_in_list(n.output)
 
     if tflite_path is not None:
-        tflite_graphs, opcodes, model = read_tflite_model(tflite_path)
+        tflite_graphs, opcodes, model, tensor_shapes = read_tflite_model(tflite_path)
         main_g = None
         inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
         for i in reversed(range(len(tflite_graphs))):
             tfl_graph = tflite_graphs[i]
             prefix = '' if i == 0 else tfl_graph.Name().decode() + '_'
+            tensor_shapes_from_interpreter = None
+            if i == 0:
+                tensor_shapes_from_interpreter = tensor_shapes
             onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = \
-                parse_tflite_graph(tfl_graph, opcodes, model, prefix)
+                parse_tflite_graph(tfl_graph, opcodes, model, prefix, tensor_shapes_from_interpreter)
             g_inputs = f_inputs
             g_outputs = f_outputs
             if i == 0:
