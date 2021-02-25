@@ -148,7 +148,8 @@ def _convert_common(frozen_graph, name="unknown", large_model=False, output_path
             external_tensor_storage = ExternalTensorStorage()
         if output_frozen_graph:
             utils.save_protobuf(output_frozen_graph, frozen_graph)
-        tf.import_graph_def(frozen_graph, name='')
+        if not kwargs.get("tflite_path"):
+            tf.import_graph_def(frozen_graph, name='')
         g = process_tf_graph(tf_graph, const_node_values=const_node_values, **kwargs)
         onnx_graph = optimizer.optimize_graph(g)
         model_proto = onnx_graph.make_model("converted from {}".format(name),
@@ -317,7 +318,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
 
     with tf.device("/cpu:0"):
-        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
+        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names, large_model=large_model)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=model.name,
@@ -373,7 +374,7 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
 
     with tf.device("/cpu:0"):
-        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names)
+        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names, large_model=large_model)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=concrete_func.name,
