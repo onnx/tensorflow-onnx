@@ -529,3 +529,23 @@ deeplabv3_mnv2_ade20k_int8_tflite:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
   outputs:
     - ArgMax
+
+mobilebert_tflite:
+  tf_min_version: 2.1
+  disabled: true   # Converts but produces incorrect results. Working on fixing it.
+  url: https://tfhub.dev/tensorflow/lite-model/mobilebert/1/metadata/1?lite-format=tflite
+  model: "lite-model_mobilebert_1_metadata_1.tflite"
+  model_type: tflite
+  input_get: get_ones_int32
+  dequantize: true
+  inputs:
+    "input_ids": [1, 384]
+    "input_mask":
+      shape: [1, 384]
+      input_get: get_ones_int32
+    "segment_ids":
+      shape: [1, 384]
+      input_get: get_zeros_then_ones
+  outputs:
+    - end_logits
+    - start_logits
