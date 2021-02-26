@@ -12,7 +12,7 @@ from __future__ import unicode_literals
 import logging
 
 import numpy as np
-from onnx import onnx_pb
+from onnx import onnx_pb, helper
 from onnx.numpy_helper import to_array
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
@@ -34,12 +34,9 @@ def make_dft_constant(length, dtype, fft_length):
     return both
 
 
-@tf_op("RFFT")
-class RFFTOp:
-    # support more dtype
-
+class CommonFFTOp:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
+    def any_version(cls, const_length, opset, ctx, node, **kwargs):
         """
         Inspired from `Python implementation of RFFT
         <https://jakevdp.github.io/blog/2013/08/28/understanding-the-fft/>`_.
@@ -104,28 +101,25 @@ class RFFTOp:
         consumer_types = set(op.type for op in consumers)
         utils.make_sure(
             consumer_types == {'ComplexAbs'},
-            "Current implementation of RFFT only allows ComplexAbs as consumer not %r",
+            "Current implementation of RFFT or FFT only allows ComplexAbs as consumer not %r",
             consumer_types)
 
-        onnx_dtype = ctx.get_dtype(node.input[0])
+        input_name = node.input[0]
+        onnx_dtype = ctx.get_dtype(input_name)
         utils.make_sure(onnx_dtype in supported_dtypes, "Unsupported input type.")
         shape = ctx.get_shape(node.input[0])
-        np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
         shape_n = shape[-1]
-        utils.make_sure(len(node.input) == 2, "Two inputs expected not %r", len(node.input))
-
-        # This input should be a constant.
-        fft_length_name = node.input[1]
-        node_fft_length = ctx.get_node_by_output(fft_length_name, search_in_parent_graphs=True)
-        utils.make_sure(node_fft_length.type == 'Const',
-                        "fft_length should be a constant, the other case is not implemented yet.")
-        value = node_fft_length.get_attr("value")
-        value_array = to_array(value.t)
-        utils.make_sure(value_array.shape == (1,), "Unexpected shape for fft_length (%r)", value_array.shape)
-        fft_length = value_array[0]
-
-        # TODO: handle this parameter when onnx.helper.make_node is fixed.
-        # Tcomplex = node.get_attr("Tcomplex")
+        
+        if onnx_dtype in (onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128):
+            parent = ctx.get_node_by_output_in_current_graph(node.input[0])
+            utils.make_sure(
+                parent.type == 'Cast' and parent.get_attr_value('to') == onnx_dtype,
+                "Current implementation of FFT or RFFT assumes the input is real or complex produced "
+                "by a node Cast just before this one.")
+            input_name = parent.input[0]
+            onnx_dtype = ctx.get_dtype(input_name)
+        
+        np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
 
         if np_dtype == np.float16:
             res_onnx_dtype = utils.map_numpy_to_onnx_dtype(np.float16)
@@ -137,19 +131,80 @@ class RFFTOp:
             res_onnx_dtype = utils.map_numpy_to_onnx_dtype(np.float64)
             np_dtype = np.float64
 
-        real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)
-        onx_real_imag_part = ctx.make_const(
-            name=utils.make_name('cst_rfft_%d' % shape_n), np_val=real_imag_part)
+        if const_length:
+            # RFFT: length of FFT is known, some computation
+            # (see function make_dft_constant)
+            # can be done at conversion time and stored as constant
+            utils.make_sure(len(node.input) == 2, "Two inputs expected not %r", len(node.input))
+
+            # This input should be a constant.
+            fft_length_name = node.input[1]
+            node_fft_length = ctx.get_node_by_output(fft_length_name, search_in_parent_graphs=True)
+            utils.make_sure(node_fft_length.type == 'Const',
+                            "fft_length should be a constant, the other case is not implemented yet.")
+            value = node_fft_length.get_attr("value")
+            value_array = to_array(value.t)
+            utils.make_sure(value_array.shape == (1,), "Unexpected shape for fft_length (%r)", value_array.shape)
+            fft_length = value_array[0]
+
+            # TODO: handle this parameter when onnx.helper.make_node is fixed.
+            # Tcomplex = node.get_attr("Tcomplex")
+
+            real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)
+            onx_real_imag_part = ctx.make_const(
+                name=utils.make_name('cst_rfft_%d' % shape_n), np_val=real_imag_part)
+            onx_real_imag_part_name = onx_real_imag_part.name
+        else:
+            # FFT: length of FFT is unknown, the matrix
+            # created by function make_dft_constant must be
+            # done in ONNX.
+            dyn_shape_all = ctx.make_node("Shape", inputs=[node.input[0]],
+                                      name=utils.make_name('CPLX_' + node.name + 'shape'))
+            m1_cst = ctx.make_const(name=utils.make_name('CPLX_m1'), np_val=np.array([-1], dtype=np.int64))
+            dyn_shape = ctx.make_node('Gather', inputs=[dyn_shape_all.output[0], m1_cst.name])
+            one_tensor = helper.make_tensor("value", res_onnx_dtype, dims=[1], vals=[1])
+            cst_1 = ctx.make_node("ConstantOfShape", inputs=[dyn_shape.output[0]], attr={"value": one_tensor})
+            just_0 = ctx.make_const(name=utils.make_name('CPLX1'), np_val=np.array([0], dtype=np.int64))
+            rng1 = ctx.make_node("CumSum", inputs=[cst_1.output[0], just_0.name],
+                                  name=utils.make_name('CPLX_' + node.name + 'range'))
+            p1_cst = ctx.make_const(name=utils.make_name('CPLX_p1'), np_val=np.array([1], dtype=np_dtype))
+            rng = ctx.make_node("Sub", inputs=[rng1.output[0], p1_cst.name],
+                                  name=utils.make_name('CPLX_' + node.name + 'range'))
+            resh_cst = ctx.make_const(name=utils.make_name('CPLX_reshape'), np_val=np.array([1, -1], dtype=np.int64))
+            rng_tr1 = ctx.make_node("Reshape", inputs=[rng.output[0], resh_cst.name],
+                                  name=utils.make_name('CPLX_' + node.name + 'range'))
+            resh_cst = ctx.make_const(name=utils.make_name('CPLX_reshape'), np_val=np.array([-1, 1], dtype=np.int64))
+            rng_tr2 = ctx.make_node("Reshape", inputs=[rng.output[0], resh_cst.name],
+                                  name=utils.make_name('CPLX_' + node.name + 'range'))
+            rng_mat = ctx.make_node('MatMul', inputs=[rng_tr2.output[0], rng_tr1.output[0]],
+                                    name=utils.make_name('CPLX_' + node.name + 'range2'))
+            pi_cst = ctx.make_const(name=utils.make_name('CPLX_pi'), np_val=np.array([np.pi * 2], dtype=np_dtype))
+            angle_pi = ctx.make_node("Mul", inputs=[rng_mat.output[0], pi_cst.name],
+                                     name=utils.make_name('CPLX_' + node.name + 'angle_pi'))
+            shape_cast = ctx.make_node('Cast', inputs=[dyn_shape.output[0]], attr={'to': res_onnx_dtype}) 
+            angle_pibn = ctx.make_node("Div", inputs=[angle_pi.output[0], shape_cast.output[0]],
+                                       name=utils.make_name('CPLX_' + node.name + 'angle'))
+            angle = ctx.make_node("Unsqueeze", inputs=[angle_pibn.output[0]],
+                                  name=utils.make_name('CPLX_' + node.name + 'angles'),
+                                  attr={'axes': [0]})
+            rng_cos = ctx.make_node("Cos", inputs=[angle.output[0]],
+                                    name=utils.make_name('CPLX_' + node.name + 'cos'))
+            rng_sin = ctx.make_node("Sin", inputs=[angle.output[0]],
+                                    name=utils.make_name('CPLX_' + node.name + 'sin'))
+            onx_real_imag_part = ctx.make_node("Concat", inputs=[rng_cos.output[0], rng_sin.output[0]],
+                                               name=utils.make_name('CPLX_' + node.name + '_cst_fft'),
+                                               attr={'axis': 0})
+            onx_real_imag_part_name = onx_real_imag_part.output[0]
 
         shapei = list(np.arange(len(shape)))
         perm = shapei[:-2] + [shapei[-1], shapei[-2]]
         trx = ctx.make_node(
-            "Transpose", inputs=[node.input[0]], attr=dict(perm=perm),
+            "Transpose", inputs=[input_name], attr=dict(perm=perm),
             name=utils.make_name(node.name + 'tr'))
 
         ctx.remove_node(node.name)
         mult = ctx.make_node(
-            "MatMul", inputs=[onx_real_imag_part.name, trx.output[0]],
+            "MatMul", inputs=[onx_real_imag_part_name, trx.output[0]],
             name=utils.make_name('CPLX_' + node.name + 'rfft'))
 
         new_shape = [2] + list(shape)
@@ -161,6 +216,24 @@ class RFFTOp:
             shapes=[new_shape], dtypes=[res_onnx_dtype])
 
         ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+
+
+@tf_op("RFFT")
+class RFFTOp(CommonFFTOp):
+    # support more dtype
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        return cls.any_version(True, 1, ctx,  node, **kwargs)
+
+
+@tf_op("FFT")
+class FFTOp(CommonFFTOp):
+    # support more dtype
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        return cls.any_version(False, 1, ctx,  node, **kwargs)
 
 
 @tf_op("ComplexAbs")
