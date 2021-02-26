@@ -109,7 +109,7 @@ class CommonFFTOp:
         utils.make_sure(onnx_dtype in supported_dtypes, "Unsupported input type.")
         shape = ctx.get_shape(node.input[0])
         shape_n = shape[-1]
-        
+
         if onnx_dtype in (onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128):
             parent = ctx.get_node_by_output_in_current_graph(node.input[0])
             utils.make_sure(
@@ -159,7 +159,7 @@ class CommonFFTOp:
             # created by function make_dft_constant must be
             # done in ONNX.
             dyn_shape_all = ctx.make_node("Shape", inputs=[node.input[0]],
-                                      name=utils.make_name('CPLX_' + node.name + 'shape'))
+                                          name=utils.make_name('CPLX_' + node.name + 'shape'))
             m1_cst = ctx.make_const(name=utils.make_name('CPLX_m1'), np_val=np.array([-1], dtype=np.int64))
             dyn_shape = ctx.make_node('Gather', inputs=[dyn_shape_all.output[0], m1_cst.name])
             one_tensor = helper.make_tensor("value", res_onnx_dtype, dims=[1], vals=[1])
@@ -181,7 +181,7 @@ class CommonFFTOp:
             pi_cst = ctx.make_const(name=utils.make_name('CPLX_pi'), np_val=np.array([np.pi * 2], dtype=np_dtype))
             angle_pi = ctx.make_node("Mul", inputs=[rng_mat.output[0], pi_cst.name],
                                      name=utils.make_name('CPLX_' + node.name + 'angle_pi'))
-            shape_cast = ctx.make_node('Cast', inputs=[dyn_shape.output[0]], attr={'to': res_onnx_dtype}) 
+            shape_cast = ctx.make_node('Cast', inputs=[dyn_shape.output[0]], attr={'to': res_onnx_dtype})
             angle_pibn = ctx.make_node("Div", inputs=[angle_pi.output[0], shape_cast.output[0]],
                                        name=utils.make_name('CPLX_' + node.name + 'angle'))
             angle = ctx.make_node("Unsqueeze", inputs=[angle_pibn.output[0]],
