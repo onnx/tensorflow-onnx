@@ -69,7 +69,8 @@ class TestTransformers(unittest.TestCase):
             print(f'==== avg keras name={self.name}, time={val}')
         return pred
 
-    def run_test(self, model, input_dict, rtol=1e-2, atol=1e-4, input_signature=None, outputs=None, large=True):
+    def run_test(self, model, input_dict, rtol=1e-2, atol=1e-4, input_signature=None,
+                 outputs=None, large=True, extra_input=None):
 
         # always use external model format for consistency
         large = True
@@ -94,6 +95,7 @@ class TestTransformers(unittest.TestCase):
         model_path = os.path.join(dst, self.name)
         if not large:
             model_path = model_path + ".onnx"
+        print("= convert")
         _, _ = tf2onnx.convert.from_keras(model, input_signature=input_signature,
                                           opset=13, large_model=large, output_path=model_path)
 
@@ -103,9 +105,28 @@ class TestTransformers(unittest.TestCase):
                 z.extractall(os.path.dirname(model_path))
             model_path = os.path.join(os.path.dirname(model_path), "__MODEL_PROTO.onnx")
 
+        print("= running ort")
+        if extra_input:
+            input_dict.update(extra_input)
         onnx_results = self.run_onnxruntime(model_path, input_dict, outputs)
         self.assertAllClose(tf_results, onnx_results, rtol=rtol, atol=atol)
 
+    def spec_and_pad(self, input_dict, max_length=None, batchdim=None):
+        spec = []
+        new_dict = {}
+        for k, v in input_dict.items():
+            shape = v.shape
+            if len(shape) == 2:
+                if not max_length:
+                    shape = [batchdim, None]
+                else:
+                    shape = [batchdim, max_length]
+            spec.append(tf.TensorSpec(shape, dtype=v.dtype, name=k))
+            if max_length:
+                l = len(v[0])
+                v = tf.pad(v, [[0, 0], [0, max_length-l]])
+            new_dict[k] = v
+        return tuple(spec), new_dict
 
     # BERT
 
@@ -115,9 +136,7 @@ class TestTransformers(unittest.TestCase):
         model = TFBertForQuestionAnswering.from_pretrained('bert-base-cased')
         question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
         input_dict = tokenizer(question, text, return_tensors='tf')
-        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="token_type_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
+        spec, input_dict = self.spec_and_pad(input_dict)
         self.run_test(model, input_dict, input_signature=spec)
 
     def test_TFBertFineTunedSquadModel(self):
@@ -127,9 +146,7 @@ class TestTransformers(unittest.TestCase):
         model = TFBertForQuestionAnswering.from_pretrained(name)
         question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
         input_dict = tokenizer(question, text, return_tensors='tf')
-        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="token_type_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
+        spec, input_dict = self.spec_and_pad(input_dict)
         self.run_test(model, input_dict, input_signature=spec)
 
     def test_TFDisillBertModel(self):
@@ -140,8 +157,7 @@ class TestTransformers(unittest.TestCase):
         model = TFDistilBertForQuestionAnswering.from_pretrained(name)
         question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
         input_dict = tokenizer(question, text, return_tensors='tf')
-        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
+        spec, input_dict = self.spec_and_pad(input_dict)
         outputs = ["start_logits", "end_logits"]
         self.run_test(model, input_dict, input_signature=spec, outputs=outputs, rtol=1e-5)
 
@@ -153,9 +169,7 @@ class TestTransformers(unittest.TestCase):
         model = TFFunnelForQuestionAnswering.from_pretrained(size)
         question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
         input_dict = tokenizer(question, text, return_tensors='tf')
-        spec = (tf.TensorSpec((None, 14), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, 14), tf.int32, name="token_type_ids"),
-                tf.TensorSpec((None, 14), tf.int32, name="attention_mask"))
+        spec, input_dict = self.spec_and_pad(input_dict, max_length=model.config.max_length)
         outputs = ["start_logits", "end_logits"]
         self.run_test(model, input_dict, input_signature=spec, outputs=outputs, rtol=1e-5)
 
@@ -172,10 +186,10 @@ class TestTransformers(unittest.TestCase):
             tokenizer("Studies have been shown that owning a dog is good for you", return_tensors="tf").input_ids
         decoder_input_ids = \
             tokenizer("Studies show that", return_tensors="tf").input_ids
-        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="decoder_input_ids"))
+        input_dict = {"input_ids": input_ids, "decoder_input_ids": decoder_input_ids}
+        spec, input_dict = self.spec_and_pad(input_dict)
         outputs = ["last_hidden_state"]
-        self.run_test(model, {"input_ids": input_ids, "decoder_input_ids": decoder_input_ids},
+        self.run_test(model, input_dict,
                       input_signature=spec, outputs=outputs, large=large)
 
     def test_TFT5ModelSmall(self):
@@ -199,12 +213,10 @@ class TestTransformers(unittest.TestCase):
         from transformers import AlbertTokenizer, TFAlbertModel
         tokenizer = AlbertTokenizer.from_pretrained(size)
         model = TFAlbertModel.from_pretrained(size)
-        inputs = tokenizer("Hello, my dog is cute", return_tensors="tf")
-        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="token_type_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
         outputs = ["last_hidden_state"]
-        self.run_test(model, inputs, input_signature=spec, outputs=outputs, large=large)
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
 
     def test_TFAlbertBaseV1(self):
         self._test_TFAlbert("albert-base-v1", large=True)
@@ -236,21 +248,19 @@ class TestTransformers(unittest.TestCase):
         from transformers import CTRLTokenizer, TFCTRLModel
         tokenizer = CTRLTokenizer.from_pretrained('ctrl')
         model = TFCTRLModel.from_pretrained('ctrl')
-        inputs = tokenizer("Hello, my dog is cute", return_tensors="tf")
-        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
         outputs = ["last_hidden_state"]
-        self.run_test(model, inputs, input_signature=spec, outputs=outputs, large=True)
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=True)
 
     def _test_TFGpt2(self, size, large=False):
         from transformers import GPT2Tokenizer, TFGPT2Model
         tokenizer = GPT2Tokenizer.from_pretrained(size)
         model = TFGPT2Model.from_pretrained(size)
-        inputs = tokenizer("Hello, my dog is cute", return_tensors="tf")
-        spec = (tf.TensorSpec((None, None), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, None), tf.int32, name="attention_mask"))
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
         outputs = ["last_hidden_state"]
-        self.run_test(model, inputs, input_signature=spec, outputs=outputs, large=large)
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
 
     # GPT2
 
@@ -272,13 +282,18 @@ class TestTransformers(unittest.TestCase):
         from transformers import LongformerTokenizer, TFLongformerModel
         tokenizer = LongformerTokenizer.from_pretrained(size)
         model = TFLongformerModel.from_pretrained(size)
-        inputs = tokenizer("Hello, my dog is cute", return_tensors="tf")
-        spec = (tf.TensorSpec((1, 8), tf.int32, name="input_ids"),
-                tf.TensorSpec((1, 8), tf.int32, name="attention_mask"))
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict, max_length=512)
         outputs = ["last_hidden_state"]
-        self.run_test(model, inputs, input_signature=spec, outputs=outputs, large=large)
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
 
     def test_TFLongformerBase(self):
+        # fails since transformers-2.4.2?
+        #
+        # transformers/models/longformer/modeling_tf_longformer.py", line 1839, in _pad_to_window_size
+        # if tf.math.greater(padding_len, 0)
+        # OperatorNotAllowedInGraphError: using a `tf.Tensor` as a Python `bool` is not allowed
+        #
         self._test_TFLongformer("allenai/longformer-base-4096", large=True)
 
     def test_TFLongformerLarge(self):
@@ -295,11 +310,17 @@ class TestTransformers(unittest.TestCase):
         decoder_input_ids = \
             tokenizer("Studies show that", return_tensors="tf").input_ids
 
-        spec = (tf.TensorSpec((1, 13), tf.int32, name="input_ids"),
-                tf.TensorSpec((1, 4), tf.int32, name="decoder_input_ids"))
+        input_dict = {"input_ids": input_ids, "decoder_input_ids": decoder_input_ids}
+
+        # this comes from TFPegasusEncoder/Decoder like:
+        #   self.embed_scale = tf.math.sqrt(float(config.d_model)) if config.scale_embedding else 1.0
+        # while this is mean to come from config tf tells us that those are model inputs
+        # this might be new in tensformers-2.4.2, we did not notice before that
+        extra_input = {"tf_pegasus_model/model/decoder/mul/y:0": np.array([32.], dtype=np.float32),
+                       "tf_pegasus_model/model/encoder/mul/y:0": np.array([32.], dtype=np.float32)}
+        spec, input_dict = self.spec_and_pad(input_dict, max_length=model.config.max_length)
         outputs = ["last_hidden_state"]
-        self.run_test(model, {"input_ids": input_ids, "decoder_input_ids": decoder_input_ids},
-                      input_signature=spec, outputs=outputs, large=large)
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large, extra_input=extra_input)
 
     def test_TFPegasus(self):
         self._test_TFPegasus("google/pegasus-xsum", large=True)
@@ -310,13 +331,10 @@ class TestTransformers(unittest.TestCase):
         from transformers import TFXLMModel, XLMTokenizer
         tokenizer = XLMTokenizer.from_pretrained(size)
         model = TFXLMModel.from_pretrained(size)
-        inputs = tokenizer("Hello, my dog is cute", return_tensors="tf")
-        input_size = None # tokenizer.max_model_input_sizes[size]
-        spec = (tf.TensorSpec((None, input_size), tf.int32, name="input_ids"),
-                tf.TensorSpec((None, input_size), tf.int32, name="token_type_ids"),
-                tf.TensorSpec((None, input_size), tf.int32, name="attention_mask"))
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
         outputs = ["last_hidden_state"]
-        self.run_test(model, inputs, input_signature=spec, outputs=outputs, large=large, atol=0.005)
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large, atol=0.005)
 
     def test_TFXLM(self):
         self._test_TFXLM("xlm-mlm-en-2048", large=True)
@@ -333,13 +351,10 @@ class TestTransformers(unittest.TestCase):
         from transformers import BartTokenizer, TFBartModel
         tokenizer = BartTokenizer.from_pretrained(size)
         model = TFBartModel.from_pretrained(size)
-        inputs = tokenizer("Hello, my dog is cute", return_tensors="tf")
-        print(inputs)
-        l = 8
-        spec = (tf.TensorSpec((1, l), tf.int32, name="input_ids"),
-                tf.TensorSpec((1, l), tf.int32, name="attention_mask"))
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict, max_length=model.config.max_length)
         outputs = ["last_hidden_state"]
-        self.run_test(model, inputs, input_signature=spec, outputs=outputs, large=large)
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
 
     def test_TFBartBase(self):
         self._test_TFBart("facebook/bart-base", large=True)
