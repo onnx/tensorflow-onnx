@@ -118,7 +118,7 @@ class CommonFFTOp:
                 "by a node Cast just before this one.")
             input_name = parent.input[0]
             onnx_dtype = ctx.get_dtype(input_name)
-        
+
         np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
 
         if np_dtype == np.float16:
@@ -166,16 +166,16 @@ class CommonFFTOp:
             cst_1 = ctx.make_node("ConstantOfShape", inputs=[dyn_shape.output[0]], attr={"value": one_tensor})
             just_0 = ctx.make_const(name=utils.make_name('CPLX1'), np_val=np.array([0], dtype=np.int64))
             rng1 = ctx.make_node("CumSum", inputs=[cst_1.output[0], just_0.name],
-                                  name=utils.make_name('CPLX_' + node.name + 'range'))
+                                 name=utils.make_name('CPLX_' + node.name + 'range'))
             p1_cst = ctx.make_const(name=utils.make_name('CPLX_p1'), np_val=np.array([1], dtype=np_dtype))
             rng = ctx.make_node("Sub", inputs=[rng1.output[0], p1_cst.name],
-                                  name=utils.make_name('CPLX_' + node.name + 'range'))
+                                name=utils.make_name('CPLX_' + node.name + 'range'))
             resh_cst = ctx.make_const(name=utils.make_name('CPLX_reshape'), np_val=np.array([1, -1], dtype=np.int64))
             rng_tr1 = ctx.make_node("Reshape", inputs=[rng.output[0], resh_cst.name],
-                                  name=utils.make_name('CPLX_' + node.name + 'range'))
+                                    name=utils.make_name('CPLX_' + node.name + 'range'))
             resh_cst = ctx.make_const(name=utils.make_name('CPLX_reshape'), np_val=np.array([-1, 1], dtype=np.int64))
             rng_tr2 = ctx.make_node("Reshape", inputs=[rng.output[0], resh_cst.name],
-                                  name=utils.make_name('CPLX_' + node.name + 'range'))
+                                    name=utils.make_name('CPLX_' + node.name + 'range'))
             rng_mat = ctx.make_node('MatMul', inputs=[rng_tr2.output[0], rng_tr1.output[0]],
                                     name=utils.make_name('CPLX_' + node.name + 'range2'))
             pi_cst = ctx.make_const(name=utils.make_name('CPLX_pi'), np_val=np.array([np.pi * 2], dtype=np_dtype))
@@ -224,7 +224,7 @@ class RFFTOp(CommonFFTOp):
 
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        return cls.any_version(True, 1, ctx,  node, **kwargs)
+        return cls.any_version(True, 1, ctx, node, **kwargs)
 
 
 @tf_op("FFT")
@@ -233,7 +233,7 @@ class FFTOp(CommonFFTOp):
 
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        return cls.any_version(False, 1, ctx,  node, **kwargs)
+        return cls.any_version(False, 1, ctx, node, **kwargs)
 
 
 @tf_op("ComplexAbs")
