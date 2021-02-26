@@ -64,7 +64,7 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
     if value_type in [0x1, 0x2, 0x3]:
         read_fn = {0x1: read_int, 0x2: read_uint, 0x3: read_float}[value_type]
         return read_fn(buffer, offset, parent_bit_size)
-    if value_type in [0x4, 0x5]:
+    if value_type == 0x4:
         str_offset = read_indirect(buffer, offset, parent_bit_size)
         size = 0
         while read_int(buffer, str_offset + size, 0) != 0:
@@ -72,11 +72,13 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
         return read_string(buffer, str_offset, size)
     if value_type == 0x5:
         str_offset = read_indirect(buffer, offset, parent_bit_size)
-        size_byte_size = 1 << bit_size
+        size_bit_size = bit_size
+        size_byte_size = 1 << size_bit_size
         size = read_uint(buffer, str_offset - size_byte_size, bit_size)
         while read_int(buffer, str_offset + size, 0) != 0:
             size_byte_size <<= 1
-            size = read_uint(buffer, str_offset - size_byte_size, bit_size)
+            size_bit_size += 1
+            size = read_uint(buffer, str_offset - size_byte_size, size_bit_size)
         return read_string(buffer, str_offset, size)
     if value_type in [0x6, 0x7, 0x8]:
         read_fn = {0x6: read_int, 0x7: read_uint, 0x8: read_float}[value_type]
