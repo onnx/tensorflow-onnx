@@ -184,9 +184,13 @@ class CommonFFTOp:
             shape_cast = ctx.make_node('Cast', inputs=[dyn_shape.output[0]], attr={'to': res_onnx_dtype})
             angle_pibn = ctx.make_node("Div", inputs=[angle_pi.output[0], shape_cast.output[0]],
                                        name=utils.make_name('CPLX_' + node.name + 'angle'))
-            angle = ctx.make_node("Unsqueeze", inputs=[angle_pibn.output[0]],
-                                  name=utils.make_name('CPLX_' + node.name + 'angles'),
-                                  attr={'axes': [0]})
+            if opset >= 13:
+                angle = ctx.make_node("Unsqueeze", inputs=[angle_pibn.output[0], just_0.name],
+                                      name=utils.make_name('CPLX_' + node.name + 'angles'))
+            else:
+                angle = ctx.make_node("Unsqueeze", inputs=[angle_pibn.output[0]],
+                                      name=utils.make_name('CPLX_' + node.name + 'angles'),
+                                      attr={'axes': [0]})
             rng_cos = ctx.make_node("Cos", inputs=[angle.output[0]],
                                     name=utils.make_name('CPLX_' + node.name + 'cos'))
             rng_sin = ctx.make_node("Sin", inputs=[angle.output[0]],
@@ -234,6 +238,10 @@ class FFTOp(CommonFFTOp):
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         return cls.any_version(False, 1, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        return cls.any_version(False, 13, ctx, node, **kwargs)
 
 
 @tf_op("ComplexAbs")
