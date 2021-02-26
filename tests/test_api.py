@@ -74,7 +74,7 @@ class ApiTests(Tf2OnnxBackendTestBase):
     def test_keras_api(self):
         self._test_keras_api(large_model=False)
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("2.2")
     def test_keras_api_large(self):
         self._test_keras_api(large_model=True)
 
