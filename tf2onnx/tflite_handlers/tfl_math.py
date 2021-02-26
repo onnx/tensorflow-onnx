@@ -199,6 +199,16 @@ class TflFullyConnectedOp:
         if node.attr['asymmetric_quantize_inputs'].i == 1:
             dynamic_quantize_inputs(ctx, node)
 
+        if ctx.get_rank(node.input[0]) != 2:
+            # When a fullyconnected node has keep_num_dims=0 and input[0] rank > 2, the extra dims must be compressed
+            utils.make_sure(ctx.get_rank(node.input[1]) == 2, "weights for FullyConnected must have rank 2")
+            weights_shape = ctx.get_shape(node.input[1])[1]
+            utils.make_sure(weights_shape != -1, "weights for FullyConnected must have known shape")
+            shape_const = ctx.make_const(utils.make_name("reshape_shape"), np.array([-1, weights_shape], np.int64))
+            reshape_node = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
+            reshape_node.skip_conversion = True
+            ctx.replace_inputs(node, [reshape_node.output[0], node.input[1]])
+
         transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1],
                                                       name=None, input_index=1, perm=[1, 0])
         transpose_node.skip_conversion = True
