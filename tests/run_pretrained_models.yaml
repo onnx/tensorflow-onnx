@@ -549,3 +549,22 @@ mobilebert_tflite:
   outputs:
     - end_logits
     - start_logits
+
+palm_detection_tflite:
+  tf_min_version: 2.1
+  disabled: false   # Converts but produces incorrect results. Working on fixing it.
+  url: https://github.com/google/mediapipe/raw/master/mediapipe/modules/palm_detection/palm_detection.tflite
+  model: "palm_detection.tflite"
+  model_type: tflite
+  input_get: get_beach
+  opset_constraints:
+    "onnx":
+      "min": 11    # Resize node
+  dequantize: true
+  inputs:
+    "input": [1, 128, 128, 3]
+  outputs:
+    - regressors
+    - classificators
+  rtol: 0.02
+  atol: 0.0005
