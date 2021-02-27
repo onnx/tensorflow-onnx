@@ -118,6 +118,11 @@ class TflQuantizeOp:
 class TflDequantizeOp:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
+        if 'scale' not in node.attr:
+            # Somtimes tflite uses a Dequantize to go from fp16 to fp32
+            node.type = "Cast"
+            node.set_attr('to', ctx.get_dtype(node.output[0]))
+            return
         scale = np.array(node.get_attr_value('scale'), dtype=np.float32)
         zero_point = np.array(node.get_attr_value('zero_point'), dtype=np.float32)
         axis = node.get_attr_value('quantized_dimension')
@@ -149,7 +154,7 @@ class TflDequantizeOp:
 
     @classmethod
     def version_10(cls, ctx, node, dequantize=False, **kwargs):
-        if dequantize:
+        if dequantize or 'scale' not in node.attr:
             cls.version_1(ctx, node, dequantize=True, **kwargs)
             return
         scale = node.get_attr_value('scale')
