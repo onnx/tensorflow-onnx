@@ -158,7 +158,7 @@ class CommonFFTOp:
             # FFT: length of FFT is unknown, the matrix
             # created by function make_dft_constant must be
             # done in ONNX.
-            dyn_shape_all = ctx.make_node("Shape", inputs=[node.input[0]],
+            dyn_shape_all = ctx.make_node("Shape", inputs=[input_name],
                                           name=utils.make_name('CPLX_' + node.name + 'shape'))
             m1_cst = ctx.make_const(name=utils.make_name('CPLX_m1'), np_val=np.array([-1], dtype=np.int64))
             dyn_shape = ctx.make_node('Gather', inputs=[dyn_shape_all.output[0], m1_cst.name])
