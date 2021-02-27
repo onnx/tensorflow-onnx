@@ -317,7 +317,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                 try:
                     data = read_flexbuffer(op.CustomOptionsAsNumpy().tobytes())
                 except Exception as e:    # pylint: disable=broad-except
-                    logger.warning("Could not parse attributes for custom op '%s'", optype)
+                    logger.warning("Could not parse attributes for custom op '%s': %s", optype, e)
                 if isinstance(data, dict):
                     attr.update(data)
                 elif optype.startswith("TFL_Flex") and isinstance(data, list):
