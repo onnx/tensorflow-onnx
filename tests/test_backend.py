@@ -3533,7 +3533,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
 
     @check_tf_min_version("2.3")
-    @check_opset_min_version(10, "NonMaxSuppression")
+    @check_opset_min_version(12, "GatherND with batch_dims")
     def test_combined_non_max_suppression_pad_and_clip(self):
         batch_size = 8
         box_num = 10
@@ -3556,7 +3556,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3], {_INPUT: boxes_val, _INPUT1: scores_val})
 
     @check_tf_min_version("2.3")
-    @check_opset_min_version(10, "NonMaxSuppression")
+    @check_opset_min_version(12, "GatherND with batch_dims")
     def test_combined_non_max_suppression_no_pad_no_clip(self):
         batch_size = 8
         box_num = 10

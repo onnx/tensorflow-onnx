@@ -1777,13 +1777,12 @@ class CombinedNonMaxSuppression:
         shape = ctx.get_shape(boxes)
         share_boxes_across_classes = shape is not None and shape[2] == 1
         utils.make_sure(share_boxes_across_classes,
-            "CombinedNonMaxSuppression only currently implemented for boxes shared across classes.")
+                        "CombinedNonMaxSuppression only currently implemented for boxes shared across classes.")
 
         scores_shape = ctx.make_node("Shape", [scores]).output[0]
         # value: [batch_size]
         batch_size = GraphBuilder(ctx).make_slice({'data': scores_shape, 'starts': [0], 'ends': [1], 'axes': [0]})
 
-        num_boxes = GraphBuilder(ctx).make_slice({'data': scores_shape, 'starts': [1], 'ends': [2], 'axes': [0]})
         num_classes = GraphBuilder(ctx).make_slice({'data': scores_shape, 'starts': [2], 'ends': [3], 'axes': [0]})
         max_per_class_times_classes = ctx.make_node("Mul", [max_per_class, num_classes]).output[0]
 
@@ -1857,6 +1856,7 @@ class CombinedNonMaxSuppression:
         idx_by_batch = ctx.make_node("ScatterND", [idx_by_batch_empty, combined_idx, selected_range]).output[0]
 
         k_val = ctx.make_node("Min", [max_total_size, max_per_class_times_classes]).output[0]
+
         # shape: [batch_size, k_val]
         top_k_vals, top_k_indices = \
             ctx.make_node("TopK", [scores_by_batch, k_val], attr={'axis': 1}, output_count=2).output
@@ -1866,7 +1866,8 @@ class CombinedNonMaxSuppression:
 
         target_size = max_total_size
         if pad_per_class:
-            target_size = ctx.make_node("Min", [max_total_size, max_per_class_times_classes]).output[0]
+            target_size = k_val
+
         pad_amt = ctx.make_node("Sub", [target_size, k_val]).output[0]
         pads_const = ctx.make_const(utils.make_name("pad_const"), np.array([0, 0, 0], np.int64)).output[0]
         pads = ctx.make_node("Concat", [pads_const, pad_amt], attr={'axis': 0}).output[0]
