@@ -529,3 +529,42 @@ deeplabv3_mnv2_ade20k_int8_tflite:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
   outputs:
     - ArgMax
+
+mobilebert_tflite:
+  tf_min_version: 2.1
+  disabled: true   # Converts but produces incorrect results. Working on fixing it.
+  url: https://tfhub.dev/tensorflow/lite-model/mobilebert/1/metadata/1?lite-format=tflite
+  model: "lite-model_mobilebert_1_metadata_1.tflite"
+  model_type: tflite
+  input_get: get_ones_int32
+  dequantize: true
+  inputs:
+    "input_ids": [1, 384]
+    "input_mask":
+      shape: [1, 384]
+      input_get: get_ones_int32
+    "segment_ids":
+      shape: [1, 384]
+      input_get: get_zeros_then_ones
+  outputs:
+    - end_logits
+    - start_logits
+
+palm_detection_tflite:
+  tf_min_version: 2.1
+  disabled: false   # Converts but produces incorrect results. Working on fixing it.
+  url: https://github.com/google/mediapipe/raw/master/mediapipe/modules/palm_detection/palm_detection.tflite
+  model: "palm_detection.tflite"
+  model_type: tflite
+  input_get: get_beach
+  opset_constraints:
+    "onnx":
+      "min": 11    # Resize node
+  dequantize: true
+  inputs:
+    "input": [1, 128, 128, 3]
+  outputs:
+    - regressors
+    - classificators
+  rtol: 0.02
+  atol: 0.0005

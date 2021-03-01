@@ -1,26 +1,40 @@
 <!--- SPDX-License-Identifier: Apache-2.0 -->
 
-# tf2onnx - Convert TensorFlow models to ONNX.
+# tf2onnx - Convert TensorFlow, Keras and Tflite models to ONNX.
+
+tf2onnx converts TensorFlow (tf-1.x or tf-2.x), tf.keras and tflite models to ONNX via command 
+line or python api.
+
+__Note: after tf2onnx-1.8.3 we made a change that impacts the output names for the ONNX model.
+Instead of taking the output names from the tensorflow graph (ie. for keras models this is frequently Identity:0) we decided that it is better to use the structured output names of the model so the output names are now identical to the names in the keras or saved model.__
+
+TensorFlow has many more ops than ONNX and occasionally mapping a model to ONNX creates issues.
+
+You find a list of supported Tensorflow ops and their mapping to ONNX [here](support_status.md).
+
+The common issues we run into we try to document here [Troubleshooting Guide](Troubleshooting.md).
+
+<br/>
 
 | Build Type | OS | Python | Tensorflow | Onnx opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
 | Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.4 | 7-13 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
 | Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.4 | 7-13 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+<br/>
 
 ## Supported Versions
 
 ### ONNX
 
-tensorflow-onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
+tf2onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support ONNX opset-6 to opset-13. By default we use opset-9 for the resulting ONNX graph since most runtimes will support opset-9.
-Support for future opsets add added as they are released.
+We support ONNX opset-6 to opset-13. By default we use ```opset-9``` for the resulting ONNX graph since most runtimes will support opset-9.
 
-If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 12```.
+If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 13```.
 
 ### TensorFlow
 
-We support all ```tf-1.x graphs```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 and up```. tf2onnx-1.5.4 was the last version that was tested all the way back to tf-1.4.
+We support ```tf-1.x graphs``` and ```tf-2```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 and up```.
 
 When running under tf-2.x tf2onnx will use the tensorflow V2 controlflow.
 
@@ -28,20 +42,7 @@ You can install tf2onnx on top of tf-1.x or tf-2.x.
 
 ### Python
 
-We support Python ```3.6```, ```3.7``` and ```3.8```. tf2onnx-1.5.4 was the last release that supports Python 3.5.
-
-## Status
-
-We support many TensorFlow models. Support for Fully Connected, Convolutional and dynamic LSTM networks is mature.
-A list of models that we use for testing can be found [here](tests/run_pretrained_models.yaml).
-
-Supported RNN classes and APIs: LSTMCell, BasicLSTMCell, GRUCell, GRUBlockCell, MultiRNNCell, and user defined RNN cells inheriting rnn_cell_impl.RNNCell, used along with DropoutWrapper, BahdanauAttention, AttentionWrapper.
-Check [tips](examples/rnn_tips.md) when converting RNN models.
-
-You find a list of supported Tensorflow ops and their mapping to ONNX [here](support_status.md).
-
-TensorFlow has broad functionality and occasionally mapping it to ONNX creates issues.
-The common issues we run into we try to document here [Troubleshooting Guide](Troubleshooting.md).
+We support Python ```3.6```, ```3.7``` and ```3.8```.
 
 ## Prerequisites
 
@@ -51,10 +52,6 @@ If you don't have TensorFlow installed already, install the desired TensorFlow b
 
 ```pip install tensorflow```
 
-or
-
-```pip install tensorflow-gpu```
-
 ### (Optional) Install runtime
 
 If you want to run tests, install a runtime that can run ONNX models. For example:
@@ -63,19 +60,13 @@ ONNX Runtime (available for Linux, Windows, and Mac):
 
 ```pip install onnxruntime```
 
-For pytorch/caffe2, follow the instructions here:
-
-```https://pytorch.org/```
-
-We tested with pytorch/caffe2 and onnxruntime and unit tests are passing for those.
-
 ## Installation
 
 ### Install from pypi
 
 ```pip install -U tf2onnx```
 
-### Install latest from source
+### Install latest from github
 
 ```pip install git+https://github.com/onnx/tensorflow-onnx```
 
@@ -93,7 +84,7 @@ or
 
 tensorflow-onnx requires onnx-1.5 or better and will install/upgrade onnx if needed.
 
-To create a distribution:
+To create a wheel for distribution:
 
 ```python setup.py bdist_wheel```
 
@@ -106,9 +97,9 @@ To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providi
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-path --output model.onnx```
 
-The above command uses a default of `8` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
+The above command uses a default of `9` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
 
-```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 10 --output model.onnx```
+```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 13 --output model.onnx```
 
 If your TensorFlow model is in a format other than `saved model`, then you need to provide the inputs and outputs of the model graph.
 
@@ -123,6 +114,10 @@ For `graphdef` format:
 If your model is in `checkpoint` or `graphdef` format and you do not know the input and output nodes of the model, you can use the [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) TensorFlow utility. The `summarize_graph` tool does need to be downloaded and built from source. If you have the option of going to your model provider and obtaining the model in `saved model` format, then we recommend doing so.
 
 You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSDMobilenetToONNX.ipynb)
+
+We recently added support for tflite. You convert ```tflite``` models via command line, for example:
+
+```python -m tf2onnx.convert --opset 13 --tflite tflite--file --output model.onnx```
 
 ## CLI reference
 
@@ -162,8 +157,6 @@ TensorFlow model as checkpoint. We expect the path to the .meta file.
 
 #### --tflite
 
-(This is experimental)
-
 Convert a tflite model by providing a path to the .tflite file. Inputs/outputs do not need to be specified.
 
 #### --input or --graphdef
@@ -188,7 +181,7 @@ ONNX requires default values for graph inputs to be constant, while Tensorflow's
 
 #### --opset
 
-By default we use the opset 8 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 5``` would create a onnx graph that uses only ops available in opset 5. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
+By default we use the opset 9 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 13``` would create a onnx graph that uses only ops available in opset 13. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
 
 #### --dequantize
 
@@ -212,13 +205,13 @@ Only valid with parameter `--saved_model`. If a model contains a list of concret
 
 #### --large_model
 
-(This is experimental, valid only for TF2.x models)
+(Can be used only for TF2.x models)
 
 Only valid with parameter `--saved_model`. When set, creates a zip file containing the ONNX protobuf model and large tensor values stored externally. This allows for converting models that exceed the 2 GB protobuf limit.
 
 #### --output_frozen_graph
 
-Saves the frozen tensorflow graph to file.
+Saves the frozen and optimize tensorflow graph to file.
 
 #### --custom-ops
 
@@ -233,26 +226,13 @@ Some models require special handling to run on some runtimes. In particular, the
 
 #### --fold_const
 
-Deprecated. Constant folding is always enabled.
+Deprecated. 
 
 ### <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
 
 To find the inputs and outputs for the TensorFlow graph the model developer will know or you can consult TensorFlow's [summarize_graph](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/graph_transforms) tool, for example:
 ```
 summarize_graph --in_graph=tests/models/fc-layers/frozen.pb
-```
-### <a name="freeze_graph"></a>Tool to Freeze Graph
-
-The TensorFlow tool to freeze the graph is [here](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/tools/freeze_graph.py).
-
-For example:
-```
-python -m tensorflow.python.tools.freeze_graph \
-    --input_graph=my_checkpoint_dir/graphdef.pb \
-    --input_binary=true \
-    --output_node_names=output \
-    --input_checkpoint=my_checkpoint_dir \
-    --output_graph=tests/models/fc-layers/frozen.pb
 ```
 
 ## Testing
@@ -297,54 +277,92 @@ Please refer to the example in [tools/save_pretrained_model.py](tools/save_pretr
 Note the minimum required Tensorflow version is r1.6.
 
 ## Python API Reference
+With tf2onnx-1.8.4 we updated our API. Our old API still works - you find the documentation [here](https://github.com/onnx/tensorflow-onnx/blob/v1.8.3/README.md#python-api-reference).
 
-In some cases it will be useful to convert the models from TensorFlow to ONNX from a python script. You can use the following API:
-
+### from_keras (tf-2.0 and newer)
 ```
 import tf2onnx
 
-tf2onnx.tfonnx.process_tf_graph(tf_graph,
-            continue_on_error=False, verbose=False, target=None,
-            opset=None, custom_op_handlers=None,
-            custom_rewriter=None, extra_opset=None,
-            shape_override=None, inputs_as_nchw=None,
-            input_names=None, output_names=None,
-            ignore_default=None, use_default=None,
-            const_node_values=None):
-    """Convert tensorflow graph to onnx graph.
-        Args:
-            tf_graph: tensorflow graph
-            continue_on_error: if an op can't be processed (aka there is no mapping), continue
-            verbose: print summary stats (deprecated)
-            target: list of workarounds applied to help certain platforms
-            opset: the opset to be used (int, default is latest)
-            custom_op_handlers: dictionary of custom ops handlers
-            custom_rewriter: list of custom graph rewriters
-            extra_opset: list of extra opset's, for example the opset's used by custom ops
-            shape_override: dict with inputs that override the shapes given by tensorflow
-            inputs_as_nchw: transpose inputs in list from nchw to nchw
-            input_names: list of input node names in graph, input name format as node_name:port_id
-            output_names: list of output node names in graph, output name format as node_name:port_id
-            ignore_default: list of node names of PlaceholderWithDefault ops to change into Placeholder ops
-            use_default: list of node names of PlaceholderWithDefault ops to change into Identity ops
-            const_node_values: an optional dict mapping node names to tensor values
-        Return:
-            onnx graph
-    """
+model_proto, external_tensor_storage = tf2onnx.convert.from_keras(model,
+                input_signature=None, opset=None, custom_ops=None,
+                custom_op_handlers=None, custom_rewriter=None,
+                inputs_as_nchw=None, extra_opset=None shape_override=None,
+                target=None, large_model=False, output_path=None)
+
+    Args:
+        model: the tf.keras model we want to convert
+        input_signature: a tf.TensorSpec or a numpy array defining the shape/dtype of the input
+        opset: the opset to be used for the ONNX model, default is the latest
+        target: list of workarounds applied to help certain platforms
+        custom_op_handlers: dictionary of custom ops handlers
+        custom_rewriter: list of custom graph rewriters
+        extra_opset: list of extra opset's, for example the opset's used by custom ops
+        shape_override: dict with inputs that override the shapes given by tensorflow
+        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        large_model: use the ONNX external tensor storage format
+        output_path: save model to output_path
+
+    Returns:
+        An ONNX model_proto and an external_tensor_storage dict.
 ```
-For example in [examples/call_converter_via_python.py]():
+
+See [tutorials/keras-resnet50.ipynb](keras-resnet50) for an end to end example.
+
+### from_function (tf-2.0 and newer)
 ```
-import tensorflow as tf
 import tf2onnx
 
-with tf.Session() as sess:
-    x = tf.placeholder(tf.float32, [2, 3], name="input")
-    x_ = tf.add(x, x)
-    _ = tf.identity(x_, name="output")
-    onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph, input_names=["input:0"], output_names=["output:0"])
-    model_proto = onnx_graph.make_model("test")
-    with open("/tmp/model.onnx", "wb") as f:
-        f.write(model_proto.SerializeToString())
+model_proto, external_tensor_storage = tf2onnx.convert.from_function(function,
+                input_signature=None, opset=None, custom_ops=None,
+                custom_op_handlers=None, custom_rewriter=None,
+                inputs_as_nchw=None, extra_opset=None, shape_override=None,
+                target=None, large_model=False, output_path=None)
+
+    Args:
+        function: the tf.function we want to convert
+        input_signature: a tf.TensorSpec or a numpy array defining the shape/dtype of the input
+        opset: the opset to be used for the ONNX model, default is the latest
+        target: list of workarounds applied to help certain platforms
+        custom_op_handlers: dictionary of custom ops handlers
+        custom_rewriter: list of custom graph rewriters
+        extra_opset: list of extra opset's, for example the opset's used by custom ops
+        shape_override: dict with inputs that override the shapes given by tensorflow
+        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        large_model: use the ONNX external tensor storage format
+        output_path: save model to output_path
+
+    Returns:
+        An ONNX model_proto and an external_tensor_storage dict.
+```
+
+### from_graph_def
+```
+import tf2onnx
+
+model_proto, external_tensor_storage = tf2onnx.convert.from_graph_def(graph_def,
+                name=None, input_names=None, output_names=None, opset=None,
+                custom_ops=None, custom_op_handlers=None, custom_rewriter=None, 
+                inputs_as_nchw=None, extra_opset=None,
+                shape_override=None, target=None, large_model=False,
+                output_path=None)
+
+    Args:
+        graph_def: the graph_def we want to convert
+        input_names: list of input names
+        output_names: list of output names
+        name: A name for the graph
+        opset: the opset to be used for the ONNX model, default is the latest
+        target: list of workarounds applied to help certain platforms
+        custom_op_handlers: dictionary of custom ops handlers
+        custom_rewriter: list of custom graph rewriters
+        extra_opset: list of extra opset's, for example the opset's used by custom ops
+        shape_override: dict with inputs that override the shapes given by tensorflow
+        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        large_model: use the ONNX external tensor storage format
+        output_path: save model to output_path
+
+    Returns:
+        An ONNX model_proto and an external_tensor_storage dict.
 ```
 
 ### Creating custom op mappings from python
@@ -416,9 +434,14 @@ In the next step we apply graph matching code on the graph to re-write subgraphs
 
 In the fourth step we look at individual ops that need attention. The dictionary _OPS_MAPPING will map tensorflow op types to a method that is used to process the op. The simplest case is direct_op() where the op can be taken as is. Whenever possible we try to group ops into common processing, for example all ops that require dealing with broadcasting are mapped to broadcast_op(). For an op that composes the tensorflow op from multiple onnx ops, see relu6_op().
 
-### Step 5 - final processing
+### Step 5 - optimize the functional ONNX graph
 
-Once all ops are converted, we need to do a topological sort since ONNX requires it. process_tf_graph() is the method that takes care of all above steps.
+We than try to optimize the functional ONNX graph. For example we remove ops that are not needed,
+remove transposes as much as possible, de-dupe constants, fuse ops whenever possible, ...
+
+### Step 6 - final processing
+
+Once all ops are converted and optimize, we need to do a topological sort since ONNX requires it. process_tf_graph() is the method that takes care of all above steps.
 
 ## Extending tf2onnx
 

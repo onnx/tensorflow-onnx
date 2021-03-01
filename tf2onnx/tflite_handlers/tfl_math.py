@@ -118,6 +118,11 @@ class TflQuantizeOp:
 class TflDequantizeOp:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
+        if 'scale' not in node.attr:
+            # Somtimes tflite uses a Dequantize to go from fp16 to fp32
+            node.type = "Cast"
+            node.set_attr('to', ctx.get_dtype(node.output[0]))
+            return
         scale = np.array(node.get_attr_value('scale'), dtype=np.float32)
         zero_point = np.array(node.get_attr_value('zero_point'), dtype=np.float32)
         axis = node.get_attr_value('quantized_dimension')
@@ -149,7 +154,7 @@ class TflDequantizeOp:
 
     @classmethod
     def version_10(cls, ctx, node, dequantize=False, **kwargs):
-        if dequantize:
+        if dequantize or 'scale' not in node.attr:
             cls.version_1(ctx, node, dequantize=True, **kwargs)
             return
         scale = node.get_attr_value('scale')
@@ -199,6 +204,16 @@ class TflFullyConnectedOp:
         if node.attr['asymmetric_quantize_inputs'].i == 1:
             dynamic_quantize_inputs(ctx, node)
 
+        if ctx.get_rank(node.input[0]) != 2:
+            # When a fullyconnected node has keep_num_dims=0 and input[0] rank > 2, the extra dims must be compressed
+            utils.make_sure(ctx.get_rank(node.input[1]) == 2, "weights for FullyConnected must have rank 2")
+            weights_shape = ctx.get_shape(node.input[1])[1]
+            utils.make_sure(weights_shape != -1, "weights for FullyConnected must have known shape")
+            shape_const = ctx.make_const(utils.make_name("reshape_shape"), np.array([-1, weights_shape], np.int64))
+            reshape_node = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
+            reshape_node.skip_conversion = True
+            ctx.replace_inputs(node, [reshape_node.output[0], node.input[1]])
+
         transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1],
                                                       name=None, input_index=1, perm=[1, 0])
         transpose_node.skip_conversion = True
@@ -222,6 +237,13 @@ class TFlSoftmaxOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
         beta = node.get_attr_value("beta")
-        beta_node = ctx.make_const(utils.make_name("beta"), np.array(beta, dtype=np.float32))
-        mul_node = ctx.insert_new_node_on_output("Mul", node.output[0], name=utils.make_name(node.name))
-        ctx.replace_inputs(mul_node, [node.output[0], beta_node.output[0]])
+        if beta != 1:
+            beta_node = ctx.make_const(utils.make_name("beta"), np.array(beta, dtype=np.float32))
+            mul_node = ctx.insert_new_node_on_output("Mul", node.output[0], name=utils.make_name(node.name))
+            ctx.replace_inputs(mul_node, [node.output[0], beta_node.output[0]])
+
+@tfl_op(["TFL_PRELU"], onnx_op="PRelu")
+class TflPreluOp:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        pass

@@ -391,8 +391,8 @@ class While:
         for idx, name in enumerate(tf_while_inputs):
             if idx == 1:
                 # onnx does not know maximum_iterations in the body so move this to a state var
-                body_input_to_state_var[body.func_inputs[idx]] = maximum_iterations_name
-                cond_input_to_state_var[cond_graph.func_inputs[idx]] = maximum_iterations_name
+                body_input_to_state_var[body.input_names[idx]] = maximum_iterations_name
+                cond_input_to_state_var[cond_graph.input_names[idx]] = maximum_iterations_name
                 continue
             if idx < 2:
                 # skip  [0,1] loop_counter, max_iterations
@@ -404,9 +404,9 @@ class While:
                 continue
 
             # tensor arrays we read from can't be loop_vars and we fetch them from the outer context instead
-            if body.func_inputs[idx] in body.ta_reads:
-                body_input_to_state_var[body.func_inputs[idx]] = name
-                cond_input_to_state_var[cond_graph.func_inputs[idx]] = name
+            if body.input_names[idx] in body.ta_reads:
+                body_input_to_state_var[body.input_names[idx]] = name
+                cond_input_to_state_var[cond_graph.input_names[idx]] = name
                 input_idx_to_remove.append(idx)
             else:
                 loop_vars.append(name)
@@ -424,8 +424,8 @@ class While:
             ctx.remove_node(n.name)
             # make the node output bad
             ctx.replace_all_inputs(n.output[0], "@@ALLOC")  # ops=ctx.get_nodes()
-            del body.func_inputs[idx]
-            del cond_graph.func_inputs[idx]
+            del body.inputs[idx]
+            del cond_graph.inputs[idx]
             del tf_while_inputs[idx]
             scan_output_names.append(body.outputs[idx])
             del body.outputs[idx]
@@ -487,13 +487,10 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
                             output_count=1, dtypes=[onnx_pb.TensorProto.BOOL], shapes=[[]])
 
     # in onnx the body inputs are: index, cond, [loop_vars]
-    func_inputs = [i for i in g.func_inputs[2:] if i not in body_input_to_state_var]
-    func_inputs = [g.func_inputs[0], cond_node.output[0]] + func_inputs
+    func_inputs = [i for i in g.input_names[2:] if i not in body_input_to_state_var]
+    func_inputs = [g.input_names[0], cond_node.output[0]] + func_inputs
     g.set_dtype(func_inputs[0], onnx_pb.TensorProto.INT64)
-    g.func_inputs = func_inputs
-    # tell graph lib to keep inputs in order
-    g._order_sensitive_inputs = \
-        [g.get_node_by_output(name) for name in func_inputs]  # pylint: disable=protected-access
+    g.inputs = [g.get_node_by_output(inp) for inp in func_inputs]
 
     for p, c in zip(loop_node_inputs, func_inputs):
         shape = p.output_shapes[0]
@@ -624,7 +621,7 @@ def inline_subgraph(parent, g, scope, binding):
 def parameter_binding(g, inputs, state_vars=None):
     binding = {}
     i = 0
-    for k in g.func_inputs:
+    for k in g.input_names:
         if state_vars and k in state_vars:
             binding[k] = state_vars[k]
         else:

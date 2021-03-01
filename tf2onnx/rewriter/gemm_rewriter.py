@@ -90,6 +90,7 @@ def rewrite_gemm(g, ops):
                 if c_shape is None: continue
                 if a_mul_b_shape is None: continue
                 if -1 in c_shape + a_mul_b_shape: continue
+                if g.get_rank(a_edge_name) != 2 or g.get_rank(b_edge_name) != 2: continue
                 compatible = True
                 for i in range(1, len(c_shape) + 1):
                     if c_shape[-i] not in [1, a_mul_b_shape[-i]]:

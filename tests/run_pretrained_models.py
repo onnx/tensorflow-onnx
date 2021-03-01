@@ -249,6 +249,9 @@ class Test(object):
         elif url.endswith('.tflite'):
             ftype = 'tflite'
             dir_name = fname.replace(".tflite", "")
+        elif self.model_type == 'tflite':
+            fname = self.local
+            dir_name = fname.replace(".tflite", "") + "_dir"
         dir_name = os.path.join(cache_dir, dir_name)
         os.makedirs(dir_name, exist_ok=True)
         fpath = os.path.join(dir_name, fname)
@@ -296,7 +299,7 @@ class Test(object):
         return result
 
     def to_onnx(self, tf_graph, opset=None, extra_opset=None, shape_override=None, input_names=None,
-                const_node_values=None, initialized_tables=None, tflite_path=None):
+                const_node_values=None, initialized_tables=None, tflite_path=None, tensors_to_rename=None):
         """Convert graph to tensorflow."""
         if extra_opset is None:
             extra_opset = []
@@ -306,7 +309,8 @@ class Test(object):
                                 extra_opset=extra_opset, target=Test.target, shape_override=shape_override,
                                 input_names=input_names, output_names=self.output_names,
                                 const_node_values=const_node_values, initialized_tables=initialized_tables,
-                                tflite_path=tflite_path, dequantize=self.dequantize)
+                                tflite_path=tflite_path, dequantize=self.dequantize,
+                                tensors_to_rename=tensors_to_rename)
 
     def run_caffe2(self, name, model_proto, inputs):
         """Run test again caffe2 backend."""
@@ -320,7 +324,7 @@ class Test(object):
             self.onnx_runtime = time.time() - start
         return results
 
-    def run_onnxruntime(self, name, model_proto, inputs, external_tensor_storage=None):
+    def run_onnxruntime(self, name, model_proto, inputs, outputs, external_tensor_storage=None):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
         model_path = utils.save_onnx_model(TEMP_DIR, name, inputs, model_proto, include_test_data=True,
@@ -334,11 +338,11 @@ class Test(object):
             m = rt.InferenceSession(model_path, opt)
         else:
             m = rt.InferenceSession(model_path)
-        results = m.run(self.output_names, inputs)
+        results = m.run(outputs, inputs)
         if self.perf:
             start = time.time()
             for _ in range(PERFITER):
-                _ = m.run(self.output_names, inputs)
+                _ = m.run(outputs, inputs)
             self.onnx_runtime = time.time() - start
         return results
 
@@ -371,19 +375,20 @@ class Test(object):
         initialized_tables = {}
         outputs = self.output_names
         tflite_path = None
+        to_rename = None
         if self.model_type in ["checkpoint"]:
             graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
-            loaded = tf_loader.from_saved_model(model_path, input_names, outputs, self.tag, self.signatures,
+            loaded = tf_loader.from_saved_model(model_path, None, None, self.tag, self.signatures,
                                                 self.concrete_function, self.large_model,
                                                 return_concrete_func=not self.run_tf_frozen,
-                                                return_initialized_tables=True)
+                                                return_initialized_tables=True, return_tensors_to_rename=True)
             if not self.run_tf_frozen:
                 # Must maintain ref to imported since concrete_func uses weak refs
                 # pylint: disable=unused-variable
-                graph_def, input_names, outputs, concrete_func, imported, initialized_tables = loaded
+                graph_def, input_names, outputs, concrete_func, imported, initialized_tables, to_rename = loaded
             else:
-                graph_def, input_names, outputs, initialized_tables = loaded
+                graph_def, input_names, outputs, initialized_tables, to_rename = loaded
         elif self.model_type in ["keras"]:
             graph_def, input_names, outputs = tf_loader.from_keras(model_path, input_names, outputs)
         elif self.model_type in ["tflite"]:
@@ -434,10 +439,8 @@ class Test(object):
             # If there is only a single output a dict might not be returned
             if isinstance(tf_results_d, tf.Tensor):
                 tf_results = [tf_results_d]
-            elif self.structured_outputs is None:
-                tf_results = list(tf_results_d.values())
             else:
-                tf_results = [tf_results_d[output] for output in self.structured_outputs]
+                tf_results = [tf_results_d[k] for k in sorted(tf_results_d.keys())]
             tf_results = [tf_res.numpy() for tf_res in tf_results]
             if self.perf:
                 logger.info("Running TF perf")
@@ -507,7 +510,8 @@ class Test(object):
                 onnx_graph = self.to_onnx(tf_graph, opset=opset, extra_opset=extra_opset,
                                           shape_override=shape_override, input_names=inputs.keys(),
                                           const_node_values=const_node_values,
-                                          initialized_tables=initialized_tables, tflite_path=tflite_path)
+                                          initialized_tables=initialized_tables, tflite_path=tflite_path,
+                                          tensors_to_rename=to_rename)
                 onnx_graph = optimizer.optimize_graph(onnx_graph)
                 print("ONNX", onnx_graph.dump_node_statistics())
                 external_tensor_storage = ExternalTensorStorage() if self.large_model else None
@@ -532,7 +536,11 @@ class Test(object):
             if backend == "caffe2":
                 onnx_results = self.run_caffe2(name, model_proto, inputs)
             elif backend == "onnxruntime":
-                onnx_results = self.run_onnxruntime(name, model_proto, inputs, external_tensor_storage)
+                if to_rename is None:
+                    struc_outputs = self.output_names
+                else:
+                    struc_outputs = [to_rename.get(k, k) for k in self.output_names]
+                onnx_results = self.run_onnxruntime(name, model_proto, inputs, struc_outputs, external_tensor_storage)
             else:
                 raise ValueError("unknown backend")
             logger.info("Run_ONNX OK")

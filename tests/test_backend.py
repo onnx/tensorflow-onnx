@@ -321,6 +321,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.logger.debug(str(p))
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("1.15", "required for max_pool args")
+    def test_maxpool_int(self):
+        x_shape = [8, 16, 16, 3]
+        x_val = make_xval(x_shape).astype("int32")
+        def func(x):
+            mp = tf.nn.max_pool(x, ksize=[2], strides=[1, 2, 2, 1], padding="SAME")
+            return tf.identity(mp, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @skip_tf_cpu("only tf_gpu can run maxpool with NCHW format")
     def test_maxpool_gpu(self):
         # make sure converter behaves well when data format is NCHW
@@ -1814,6 +1823,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
         results = self.run_backend(g, [_OUTPUT], {})
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
+
+    def test_randomuniform_int_scalar(self):
+        def func():
+            shape = tf.constant(np.array([], np.int32), name="shape")
+            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=2, maxval=10)
+            x_ = tf.identity(x_, name="output1")
+            x_ = tf.identity(x_, name="output2")
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        results = self.run_backend(g, [_OUTPUT], {})
+        self.assertTrue(2 <= results[0] < 10)
 
     def test_randomuniform_int_nonconst_max(self):
         m_val = np.array(8, dtype=np.int32)
@@ -4768,6 +4789,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(op_, name=_TFOUTPUT)
         with self.assertRaises(ValueError):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "range")
+    def test_fft_ops(self):
+        x_val = make_xval([3, 4]).astype(np.float32)
+        def func1(x):
+            xc = tf.cast(x, tf.complex64)
+            op_ = tf.signal.fft(xc)
+            return tf.abs(op_, name=_TFOUTPUT)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(11, "topk")
     def test_invert_permutation(self):
