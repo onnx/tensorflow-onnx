@@ -32,8 +32,12 @@ def read_float(buffer, offset, bit_size):
     raise FlexbufferParseException("Invalid bit size for flexbuffer float: %d" % bit_size)
 
 
-def read_string(buffer, offset, size):
-    return buffer[offset:offset+size].decode('utf-8')
+def read_string(buffer, offset, size, decode_strings):
+    data = buffer[offset:offset+size]
+    if decode_strings:
+        # Flexbuffer requires all strings to be valid UTF-8 but FlexOps don't always respect this.
+        data = data.decode('utf-8')
+    return data
 
 
 def read_indirect(buffer, offset, bit_size):
@@ -44,16 +48,16 @@ def read_bytes(buffer, offset, size):
     return buffer[offset:offset+size]
 
 
-def read_array(buffer, offset, length, bit_size, packed_type):
+def read_array(buffer, offset, length, bit_size, packed_type, decode_strings):
     byte_size = 1 << bit_size
     arr = []
     for i in range(length):
         item_offset = offset + (i * byte_size)
-        arr.append(read_buffer(buffer, item_offset, bit_size, packed_type))
+        arr.append(read_buffer(buffer, item_offset, bit_size, packed_type, decode_strings))
     return arr
 
 
-def read_buffer(buffer, offset, parent_bit_size, packed_type):
+def read_buffer(buffer, offset, parent_bit_size, packed_type, decode_strings):
     """Recursively decode flatbuffer object into python representation"""
     bit_size = packed_type & 3
     value_type = packed_type >> 2
@@ -69,7 +73,7 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
         size = 0
         while read_int(buffer, str_offset + size, 0) != 0:
             size += 1
-        return read_string(buffer, str_offset, size)
+        return read_string(buffer, str_offset, size, decode_strings)
     if value_type == 0x5:
         str_offset = read_indirect(buffer, offset, parent_bit_size)
         size_bit_size = bit_size
@@ -79,7 +83,7 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
             size_byte_size <<= 1
             size_bit_size += 1
             size = read_uint(buffer, str_offset - size_byte_size, size_bit_size)
-        return read_string(buffer, str_offset, size)
+        return read_string(buffer, str_offset, size, decode_strings)
     if value_type in [0x6, 0x7, 0x8]:
         read_fn = {0x6: read_int, 0x7: read_uint, 0x8: read_float}[value_type]
         data_offset = read_indirect(buffer, offset, parent_bit_size)
@@ -95,10 +99,10 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
         obj = {}
         for i in range(length):
             key_offset = keys_vector_offset + i * key_byte_size
-            key = read_buffer(buffer, key_offset, key_bit_size, (0x4 << 2) | key_bit_size)
+            key = read_buffer(buffer, key_offset, key_bit_size, (0x4 << 2) | key_bit_size, decode_strings)
             value_offset = values_offset + i * byte_size
             value_packed_type = read_uint(buffer, packed_types_offset + i, 0)
-            value = read_buffer(buffer, value_offset, bit_size, value_packed_type)
+            value = read_buffer(buffer, value_offset, bit_size, value_packed_type, decode_strings)
             obj[key] = value
         return obj
     if value_type == 0xa:
@@ -109,7 +113,7 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
         for i in range(length):
             item_offset = items_offset + (i * byte_size)
             packed_type = read_uint(buffer, packed_types_offset + i, 0)
-            arr.append(read_buffer(buffer, item_offset, bit_size, packed_type))
+            arr.append(read_buffer(buffer, item_offset, bit_size, packed_type, decode_strings))
         return arr
     if value_type in [0xb, 0xc, 0xd, 0xe, 0xf, 0x24]:
         length_offset = read_indirect(buffer, offset, parent_bit_size) - byte_size
@@ -117,13 +121,13 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
         item_value_type = value_type - 0xb + 0x1
         packed_type = item_value_type << 2
         items_offset = read_indirect(buffer, offset, parent_bit_size)
-        return read_array(buffer, items_offset, length, bit_size, packed_type)
+        return read_array(buffer, items_offset, length, bit_size, packed_type, decode_strings)
     if 0x10 <= value_type <= 0x18:
         length = (value_type - 0x10) // 3 + 2
         value_type = ((value_type - 0x10) % 3) + 1
         packed_type = value_type << 2
         items_offset = read_indirect(buffer, offset, parent_bit_size)
-        return read_array(buffer, items_offset, length, bit_size, packed_type)
+        return read_array(buffer, items_offset, length, bit_size, packed_type, decode_strings)
     if value_type == 0x19:
         data_offset = read_indirect(buffer, offset, parent_bit_size)
         size_offset = data_offset - byte_size
@@ -134,9 +138,9 @@ def read_buffer(buffer, offset, parent_bit_size, packed_type):
     raise FlexbufferParseException("Invalid flexbuffer value type %r" % value_type)
 
 
-def read_flexbuffer(buffer):
+def read_flexbuffer(buffer, decode_strings=True):
     byte_size = read_uint(buffer, len(buffer) - 1, 0)
     bit_size = {1: 0, 2: 1, 4: 2, 8: 3, 16: 4}[byte_size]
     packed_type = read_uint(buffer, len(buffer) - 2, 0)
     offset = len(buffer) - 2 - byte_size
-    return read_buffer(buffer, offset, bit_size, packed_type)
+    return read_buffer(buffer, offset, bit_size, packed_type, decode_strings)

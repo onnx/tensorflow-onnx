@@ -19,6 +19,7 @@ from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
 from tf2onnx.flexbuffers import read_flexbuffer
 from tf2onnx.tf_utils import read_tf_node_attrs, read_tf_node_def_attrs
+from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +311,17 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                 attr.update(get_quantization_attr(quant))
         input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength()) if op.Inputs(i) != -1]
         output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
-        if not op.CustomOptionsIsNone():
+        if optype.startswith("TFL_Flex"):
+            data = read_flexbuffer(op.CustomOptionsAsNumpy().tobytes(), decode_strings=False)
+            utils.make_sure(isinstance(data, list), "Flex ops are expected to store data as a flexbuffer list")
+            tf_op = data[0].decode("utf-8")
+            tf_node_def = node_def_pb2.NodeDef()
+            tf_node_def.ParseFromString(data[1])
+            input_tf_dtypes = [map_tflite_dtype_to_tf(name_to_tensor[inp].Type()) for inp in input_names]
+            tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes)
+            attr.update(tf_attrs)
+            optype = tf_op
+        elif not op.CustomOptionsIsNone():
             custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
             if custom_ops_format == 'FLEXBUFFERS':
                 data = None
@@ -320,14 +331,6 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                     logger.warning("Could not parse attributes for custom op '%s': %s", optype, e)
                 if isinstance(data, dict):
                     attr.update(data)
-                elif optype.startswith("TFL_Flex") and isinstance(data, list):
-                    tf_op = data[0]
-                    tf_node_def = node_def_pb2.NodeDef()
-                    tf_node_def.ParseFromString(data[1].encode("utf-8"))
-                    input_tf_dtypes = [map_tflite_dtype_to_tf(name_to_tensor[inp].Type()) for inp in input_names]
-                    tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes)
-                    attr.update(tf_attrs)
-                    optype = tf_op
         if option_class is not None:
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
