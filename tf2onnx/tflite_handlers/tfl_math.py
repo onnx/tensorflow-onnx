@@ -241,3 +241,9 @@ class TFlSoftmaxOp:
             beta_node = ctx.make_const(utils.make_name("beta"), np.array(beta, dtype=np.float32))
             mul_node = ctx.insert_new_node_on_output("Mul", node.output[0], name=utils.make_name(node.name))
             ctx.replace_inputs(mul_node, [node.output[0], beta_node.output[0]])
+
+@tfl_op(["TFL_PRELU"], onnx_op="PRelu")
+class TflPreluOp:
+    @classmethod
+    def version_7(cls, ctx, node, **kwargs):
+        pass
