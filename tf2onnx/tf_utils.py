@@ -318,16 +318,16 @@ def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
             n.attr['key_dtype'].type = key_dtype
             n.attr['value_dtype'].type = val_dtype
 
-def read_tf_node_def_attrs(node_def, input_dtypes):
+def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
     from tf2onnx.tf_loader import tf_session, tf_placeholder
     del node_def.input[:]
     node_def.name = "node"
 
     g = tf.Graph()
     with g.as_default():
-        for i, dtype in enumerate(input_dtypes):
+        for i, (dtype, shape) in enumerate(zip(input_dtypes, input_shapes)):
             inp = "input" + str(i)
-            tf_placeholder(dtype, name=inp)
+            tf_placeholder(dtype, name=inp, shape=shape)
             node_def.input.append(inp)
         mini_graph_def = g.as_graph_def()
         mini_graph_def.node.append(node_def)

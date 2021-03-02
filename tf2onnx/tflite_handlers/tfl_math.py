@@ -66,6 +66,7 @@ class TflLogistic:
         pass
 
 @tfl_op(["TFL_REDUCE_MAX"], tf_op="Max")
+@tfl_op(["TFL_REDUCE_MIN"], tf_op="Min")
 @tfl_op(["TFL_REDUCE_ANY"], tf_op="Any")
 @tfl_op(["TFL_REDUCE_PROD"], tf_op="Prod")
 class TflReduceOp:

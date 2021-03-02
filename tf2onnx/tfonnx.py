@@ -26,7 +26,7 @@ from tf2onnx.tflite_rewriters import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.tf_loader import is_function, resolve_functions, set_function
 from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
-from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph
+from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph, topsort_tfl_subgraphs
 
 from . import constants, logging, schemas, utils, handler
 
@@ -462,19 +462,20 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     if tflite_path is not None:
         tflite_graphs, opcodes, model, tensor_shapes = read_tflite_model(tflite_path)
+        tflite_graphs = topsort_tfl_subgraphs(tflite_graphs, opcodes, model)
         main_g = None
         inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
-        for i in reversed(range(len(tflite_graphs))):
-            tfl_graph = tflite_graphs[i]
-            prefix = '' if i == 0 else tfl_graph.Name().decode() + '_'
+        for i, tfl_graph in enumerate(tflite_graphs):
+            is_main_g = i == len(tflite_graphs) - 1
+            prefix = '' if is_main_g else tfl_graph.Name().decode() + '_'
             tensor_shapes_from_interpreter = None
-            if i == 0:
+            if is_main_g:
                 tensor_shapes_from_interpreter = tensor_shapes
             onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, f_inputs, f_outputs, graph_name = \
                 parse_tflite_graph(tfl_graph, opcodes, model, prefix, tensor_shapes_from_interpreter)
             g_inputs = f_inputs
             g_outputs = f_outputs
-            if i == 0:
+            if is_main_g:
                 # Override IO in main graph
                 check_io(input_names, output_names, output_shapes)
                 if input_names is not None:
@@ -490,7 +491,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                                       g_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True, dequantize=dequantize)
             fg.graph_name = graph_name
-            if i == 0:
+            if is_main_g:
                 main_g = fg
             else:
                 set_function(graph_name, fg)

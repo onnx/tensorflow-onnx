@@ -584,6 +584,7 @@ class IsFinite:
 
         shapes = node.output_shapes
         dtypes = [onnx_pb.TensorProto.BOOL] * len(node.output_dtypes)
+        outputs = node.output
 
         ctx.remove_node(node.name)
 
@@ -593,7 +594,7 @@ class IsFinite:
                                  shapes=shapes, dtypes=dtypes)
         or_node = ctx.make_node("Or", inputs=[inf_node.output[0], nan_node.output[0]], name=utils.make_name(node.name),
                                 shapes=shapes, dtypes=dtypes)
-        _ = ctx.make_node("Not", inputs=or_node.output, name=node.name,
+        _ = ctx.make_node("Not", inputs=or_node.output, name=node.name, outputs=outputs,
                           shapes=shapes, dtypes=dtypes)
 
 

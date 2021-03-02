@@ -1818,7 +1818,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         # since results are random, compare the shapes only
         g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {})
+        results = self.run_backend(g, g.outputs, {})
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
 
@@ -1831,7 +1831,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         # since results are random, compare the shapes only
         g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {})
+        results = self.run_backend(g, g.outputs, {})
         self.assertTrue(2 <= results[0] < 10)
 
     def test_randomuniform_int_nonconst_max(self):
@@ -1843,7 +1843,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
         g = self._run_test_case(func, [_OUTPUT], {_INPUT: m_val}, check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {_INPUT: m_val})
+        feed_dict = {_INPUT: m_val}
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = { k.split(":")[0]: v for k, v in feed_dict.items() }
+        results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(8)))
 
@@ -1857,7 +1861,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
         g = self._run_test_case(func, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val}, check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val})
+        feed_dict = {_INPUT: n_val, _INPUT1: m_val}
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = { k.split(":")[0]: v for k, v in feed_dict.items() }
+        results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
 
@@ -4710,6 +4718,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
+    @skip_tflite("FlexRFFT2D")
     def test_rfft_ops(self):
 
         def dft_slow(x, M):

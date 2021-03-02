@@ -163,6 +163,55 @@ def read_tflite_model(tflite_path):
     return tflite_graphs, opcodes_map, model, tensor_shapes
 
 
+def get_subgraph_dependencies(tflite_g, opcodes_map, model):
+    """Returns a list of subgraph names referenced by the provided graph"""
+    dependencies = []
+    for i in range(tflite_g.OperatorsLength()):
+        op = tflite_g.Operators(i)
+        options_type_name = lookup_enum(op.BuiltinOptionsType(), 'BuiltinOptions')
+        option_class = get_options_class(options_type_name)
+        if option_class is not None:
+            options = option_class()
+            options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
+            for attr in FUNCTION_ATTRS:
+                if hasattr(options, attr):
+                    value = getattr(options, attr)()
+                    dependencies.append(model.Subgraphs(value).Name().decode())
+    return dependencies
+
+
+def topsort_tfl_subgraphs(tflite_graphs, opcodes_map, model):
+    """Returns topologically sorted subgraphs of a model. Guarantees main graph is placed at the end."""
+    main_g = tflite_graphs[0].Name().decode()
+    dependencies = {}
+    name_to_graph = {}
+    for g in tflite_graphs:
+        name = g.Name().decode()
+        name_to_graph[name] = g
+        ds = get_subgraph_dependencies(g, opcodes_map, model)
+        utils.make_sure(main_g not in ds, "Main graph %s is a dependency of subgraph %s", main_g, name)
+        dependencies[name] = ds
+
+    ordered = []
+    visited = set()
+    visiting = set()
+    def visit(g):
+        utils.make_sure(g not in visiting, "Subgraphs have cyclic dependencies: %r", dependencies)
+        if g in visited:
+            return
+        visiting.add(g)
+        for d in dependencies[g]:
+            visit(d)
+        visited.add(g)
+        ordered.append(g)
+        visiting.remove(g)
+
+    for g in reversed(tflite_graphs):
+        visit(g.Name().decode())
+
+    return [name_to_graph[n] for n in ordered]
+
+
 def get_quantization_attr(quant_params):
     attr = {}
     attr['scale'] = quant_params.ScaleAsNumpy().tolist()
@@ -318,7 +367,10 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             tf_node_def = node_def_pb2.NodeDef()
             tf_node_def.ParseFromString(data[1])
             input_tf_dtypes = [map_tflite_dtype_to_tf(name_to_tensor[inp].Type()) for inp in input_names]
-            tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes)
+            def shape_to_tf_shape(dims):
+                return [None if d < 0 else d for d in dims]
+            input_shapes = [shape_to_tf_shape(output_shapes[inp]) for inp in input_names]
+            tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes, input_shapes)
             attr.update(tf_attrs)
             optype = tf_op
         elif not op.CustomOptionsIsNone():
