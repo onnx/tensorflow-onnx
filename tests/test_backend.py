@@ -1529,6 +1529,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
     @check_opset_min_version(11, "Pad")
+    @skip_tflite("unknown rank")
     def test_segment_mean_unknown_rank(self):
         segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
         data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
@@ -1881,7 +1882,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         g = self._run_test_case(func, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val},
                                 check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val})
+        feed_dict = {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val}
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = { k.split(":")[0]: v for k, v in feed_dict.items() }
+        results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
 
@@ -4057,6 +4062,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14", "ragged needs tf 1.14")
     @check_opset_min_version(11, "CumSum")
+    @skip_tflite("unknown rank")
     def test_ragged_tensor_to_tensor(self):
         splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
         splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)

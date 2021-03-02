@@ -59,9 +59,9 @@ class TFListUtilsTests(Tf2OnnxBackendTestBase):
         self.assertEqual(1, len(tflite_graphs))
         onnx_nodes, op_cnt, attr_cnt, output_shapes, dtypes, inputs, outputs, _ = \
             parse_tflite_graph(tflite_graphs[0], opcodes_map, model, tensor_shapes_override=tensor_shapes)
-        self.assertEqual(2, op_cnt['MUL'])
-        self.assertEqual(1, op_cnt['ADD'])
-        self.assertEqual(1, op_cnt['FULLY_CONNECTED'])
+        self.assertEqual(2, op_cnt['TFL_MUL'])
+        self.assertEqual(1, op_cnt['TFL_ADD'])
+        self.assertEqual(1, op_cnt['TFL_FULLY_CONNECTED'])
 
         self.assertEqual(1, attr_cnt['WeightsFormat'])
         self.assertEqual(names, inputs)
