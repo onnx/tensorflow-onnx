@@ -1849,7 +1849,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         feed_dict = {_INPUT: m_val}
         if "input" in g.input_names:
             # TFLite inputs don't have port numbers
-            feed_dict = { k.split(":")[0]: v for k, v in feed_dict.items() }
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
         results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(8)))
@@ -1867,7 +1867,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         feed_dict = {_INPUT: n_val, _INPUT1: m_val}
         if "input" in g.input_names:
             # TFLite inputs don't have port numbers
-            feed_dict = { k.split(":")[0]: v for k, v in feed_dict.items() }
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
         results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
@@ -1887,7 +1887,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         feed_dict = {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val}
         if "input" in g.input_names:
             # TFLite inputs don't have port numbers
-            feed_dict = { k.split(":")[0]: v for k, v in feed_dict.items() }
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
         results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))

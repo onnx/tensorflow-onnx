@@ -26,7 +26,7 @@ from tf2onnx.tflite_rewriters import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.tf_loader import is_function, resolve_functions, set_function
 from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
-from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph, topsort_tfl_subgraphs
+from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph
 
 from . import constants, logging, schemas, utils, handler
 
@@ -462,7 +462,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     if tflite_path is not None:
         tflite_graphs, opcodes, model, tensor_shapes = read_tflite_model(tflite_path)
-        tflite_graphs = topsort_tfl_subgraphs(tflite_graphs, opcodes, model)
         main_g = None
         inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
         for i, tfl_graph in enumerate(tflite_graphs):

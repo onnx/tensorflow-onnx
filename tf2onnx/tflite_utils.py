@@ -18,7 +18,7 @@ import numpy as np
 from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
 from tf2onnx.flexbuffers import read_flexbuffer
-from tf2onnx.tf_utils import read_tf_node_attrs, read_tf_node_def_attrs
+from tf2onnx.tf_utils import read_tf_node_def_attrs
 from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
@@ -126,6 +126,7 @@ def get_options_class(name):
 def read_tflite_model(tflite_path):
     """
     Given the path to a tflite model, returns tuple (tflite_graphs, opcodes_map, model)
+    Graphs are topologically sorted and the main graph is last
     Pass these to parse_tflite_graph
     """
     with open(tflite_path, 'rb') as f:
@@ -144,7 +145,6 @@ def read_tflite_model(tflite_path):
         if code == 'CUSTOM':
             code = op_code.CustomCode().decode()
         opcodes_map[i] = code
-    tflite_graphs = [model.Subgraphs(i) for i in range(model.SubgraphsLength())]
     # Shapes stored in tflite models are not always reliable so we get them from the interpreter if possible.
     tensor_shapes = {}
     try:
@@ -160,14 +160,16 @@ def read_tflite_model(tflite_path):
                 tensor_shapes[name] = details["shape"].tolist()
     except Exception as e:    # pylint: disable=broad-except
         logger.warning("Error loading model into tflite interpreter: %s", e)
+    tflite_graphs = get_model_subgraphs(model)
     return tflite_graphs, opcodes_map, model, tensor_shapes
 
 
-def get_subgraph_dependencies(tflite_g, opcodes_map, model):
-    """Returns a list of subgraph names referenced by the provided graph"""
+def get_subgraph_dependencies(model, graph_idx):
+    """Returns a list of subgraph indices referenced by the indicated graph"""
     dependencies = []
-    for i in range(tflite_g.OperatorsLength()):
-        op = tflite_g.Operators(i)
+    g = model.Subgraphs(graph_idx)
+    for i in range(g.OperatorsLength()):
+        op = g.Operators(i)
         options_type_name = lookup_enum(op.BuiltinOptionsType(), 'BuiltinOptions')
         option_class = get_options_class(options_type_name)
         if option_class is not None:
@@ -176,21 +178,20 @@ def get_subgraph_dependencies(tflite_g, opcodes_map, model):
             for attr in FUNCTION_ATTRS:
                 if hasattr(options, attr):
                     value = getattr(options, attr)()
-                    dependencies.append(model.Subgraphs(value).Name().decode())
+                    dependencies.append(value)
     return dependencies
 
 
-def topsort_tfl_subgraphs(tflite_graphs, opcodes_map, model):
+def get_model_subgraphs(model):
     """Returns topologically sorted subgraphs of a model. Guarantees main graph is placed at the end."""
-    main_g = tflite_graphs[0].Name().decode()
+    main_g = 0
     dependencies = {}
-    name_to_graph = {}
-    for g in tflite_graphs:
-        name = g.Name().decode()
-        name_to_graph[name] = g
-        ds = get_subgraph_dependencies(g, opcodes_map, model)
-        utils.make_sure(main_g not in ds, "Main graph %s is a dependency of subgraph %s", main_g, name)
-        dependencies[name] = ds
+    idx_to_graph = {}
+    for i in range(model.SubgraphsLength()):
+        idx_to_graph[i] = model.Subgraphs(i)
+        ds = get_subgraph_dependencies(model, i)
+        utils.make_sure(main_g not in ds, "Main graph %s is a dependency of subgraph %s", main_g, i)
+        dependencies[i] = ds
 
     ordered = []
     visited = set()
@@ -206,10 +207,10 @@ def topsort_tfl_subgraphs(tflite_graphs, opcodes_map, model):
         ordered.append(g)
         visiting.remove(g)
 
-    for g in reversed(tflite_graphs):
-        visit(g.Name().decode())
+    for g in reversed(range(model.SubgraphsLength())):
+        visit(g)
 
-    return [name_to_graph[n] for n in ordered]
+    return [idx_to_graph[i] for i in ordered]
 
 
 def get_quantization_attr(quant_params):

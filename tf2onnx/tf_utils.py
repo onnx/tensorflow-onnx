@@ -319,10 +319,12 @@ def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
             n.attr['value_dtype'].type = val_dtype
 
 def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
-    from tf2onnx.tf_loader import tf_session, tf_placeholder
+    """Given a tf node def, returns a dict of attribute names to values"""
+    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
     del node_def.input[:]
     node_def.name = "node"
 
+    # read_tf_node_attrs uses some tf methods that require the node to be loaded into a valid TF graph
     g = tf.Graph()
     with g.as_default():
         for i, (dtype, shape) in enumerate(zip(input_dtypes, input_shapes)):
@@ -340,6 +342,7 @@ def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
 
 
 def read_tf_node_attrs(node):
+    """Given a tf Node, returns a dict of attribute names to values"""
     attr = {}
     attr_cnt = collections.Counter()
 
