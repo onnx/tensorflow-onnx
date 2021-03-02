@@ -1761,6 +1761,144 @@ class NonMaxSuppression:
         cls.any_version(13, ctx, node, **kwargs)
 
 
+@tf_op(["CombinedNonMaxSuppression"])
+class CombinedNonMaxSuppression:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # boxes.shape = [batch_size, num_boxes, (1 OR num_classes), 4]
+        # scores.shape = [batch_size, num_boxes, num_classes]
+        boxes, scores, max_per_class, max_total_size, iou_threshold, score_threshold = node.input
+
+        max_per_class = ctx.make_node("Cast", [max_per_class], attr={'to': TensorProto.INT64}).output[0]
+        max_total_size = ctx.make_node("Cast", [max_total_size], attr={'to': TensorProto.INT64}).output[0]
+
+        pad_per_class = node.get_attr_value("pad_per_class", False)
+        clip_boxes = node.get_attr_value("clip_boxes", True)
+        shape = ctx.get_shape(boxes)
+        share_boxes_across_classes = shape is not None and shape[2] == 1
+        utils.make_sure(share_boxes_across_classes,
+                        "CombinedNonMaxSuppression only currently implemented for boxes shared across classes.")
+
+        scores_shape = ctx.make_node("Shape", [scores]).output[0]
+        # value: [batch_size]
+        batch_size = GraphBuilder(ctx).make_slice({'data': scores_shape, 'starts': [0], 'ends': [1], 'axes': [0]})
+
+        num_classes = GraphBuilder(ctx).make_slice({'data': scores_shape, 'starts': [2], 'ends': [3], 'axes': [0]})
+        max_per_class_times_classes = ctx.make_node("Mul", [max_per_class, num_classes]).output[0]
+
+        const_zero_float = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.float32)).output[0]
+        const_one_float = ctx.make_const(utils.make_name("const_one"), np.array(1, np.float32)).output[0]
+        const_zero = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.int64)).output[0]
+        const_neg_one = ctx.make_const(utils.make_name("const_neg_one"), np.array(-1, np.int64)).output[0]
+        const_one = ctx.make_const(utils.make_name("const_one"), np.array(1, np.int64)).output[0]
+
+        boxes_sq = GraphBuilder(ctx).make_squeeze({'data': boxes, 'axes': [2]})
+        # scores_trans.shape = [batch_size, num_classes, num_boxes]
+        scores_trans = ctx.make_node("Transpose", [scores], attr={'perm': [0, 2, 1]}).output[0]
+        # shape: [num_selected, 3], elts of format [batch_index, class_index, box_index]
+        selected_indices = ctx.make_node(
+            "NonMaxSuppression", [boxes_sq, scores_trans, max_per_class, iou_threshold, score_threshold],
+            op_name_scope=node.name).output[0]
+        selected_classes_unsq = GraphBuilder(ctx).make_slice(
+            {'data': selected_indices, 'starts': [1], 'ends': [2], 'axes': [1]})
+        selected_classes = GraphBuilder(ctx).make_squeeze({'data': selected_classes_unsq, 'axes': [1]})
+        # shape: [num_selected]
+        selected_scores = ctx.make_node("GatherND", [scores_trans, selected_indices], op_name_scope=node.name).output[0]
+        # shape: [num_selected, 1]
+        selected_batch_idx = GraphBuilder(ctx).make_slice(
+            {'data': selected_indices, 'starts': [0], 'ends': [1], 'axes': [1]})
+        selected_box_num = GraphBuilder(ctx).make_slice(
+            {'data': selected_indices, 'starts': [2], 'ends': [3], 'axes': [1]})
+        combined_box_idx = ctx.make_node("Concat", [selected_batch_idx, selected_box_num], attr={'axis': 1}).output[0]
+        selected_boxes_unsq = ctx.make_node("GatherND", [boxes, combined_box_idx], op_name_scope=node.name).output[0]
+        # shape: [num_selected, 4]
+        selected_boxes = GraphBuilder(ctx).make_squeeze({'data': selected_boxes_unsq, 'axes': [1]})
+
+        clipped_boxes = selected_boxes
+        if clip_boxes:
+            clipped_boxes = ctx.make_node('Max', [clipped_boxes, const_zero_float]).output[0]
+            clipped_boxes = ctx.make_node('Min', [clipped_boxes, const_one_float]).output[0]
+
+        # shape: [num_selected]
+        batch_idx_sq = GraphBuilder(ctx).make_squeeze({'data': selected_batch_idx, 'axes': [1]})
+        # value: [num_selected]
+        num_selected = ctx.make_node("Shape", [selected_scores]).output[0]
+        num_selected_sq = GraphBuilder(ctx).make_squeeze({'data': num_selected, 'axes': [0]})
+        # shape: [num_selected]
+        selected_range = ctx.make_node("Range", [const_zero, num_selected_sq, const_one]).output[0]
+
+
+        id_shape = ctx.make_node("Concat", [batch_size, batch_size], attr={'axis': 0}).output[0]
+        zero_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
+        zeros_of_shape = ctx.make_node("ConstantOfShape", [id_shape], attr={"value": zero_tensor}).output[0]
+        # shape: [batch_size, batch_size]
+        id_matrix = ctx.make_node("EyeLike", [zeros_of_shape]).output[0]
+        # shape: [num_selected, batch_size]
+        one_hot_batch_idx = ctx.make_node("Gather", [id_matrix, batch_idx_sq], attr={'axis': 0}).output[0]
+        cum_batch_idx = ctx.make_node("CumSum", [one_hot_batch_idx, const_zero], {'exclusive': True}).output[0]
+        # shape: [num_selected]
+        idx_within_batch = ctx.make_node("GatherND", [cum_batch_idx, selected_batch_idx], attr={'batch_dims': 1},
+                                         op_name_scope=node.name).output[0]
+        idx_within_batch_unsq = GraphBuilder(ctx).make_unsqueeze({'data': idx_within_batch, 'axes': [1]})
+        combined_idx = ctx.make_node("Concat", [selected_batch_idx, idx_within_batch_unsq], attr={'axis': 1}).output[0]
+
+        zero_tensor_float = helper.make_tensor("value", TensorProto.FLOAT, dims=[1], vals=[0])
+        neg_one_tensor_float = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[-1])
+        # value: [batch_size, max_per_class_times_classes]
+        results_grid_shape = ctx.make_node(
+            "Concat", [batch_size, max_per_class_times_classes], attr={'axis': 0}).output[0]
+        scores_by_batch_empty = ctx.make_node(
+            "ConstantOfShape", [results_grid_shape], attr={"value": zero_tensor_float}).output[0]
+        idx_by_batch_empty = ctx.make_node(
+            "ConstantOfShape", [results_grid_shape], attr={"value": neg_one_tensor_float}).output[0]
+
+        scores_by_batch = ctx.make_node("ScatterND", [scores_by_batch_empty, combined_idx, selected_scores]).output[0]
+        idx_by_batch = ctx.make_node("ScatterND", [idx_by_batch_empty, combined_idx, selected_range]).output[0]
+
+        k_val = ctx.make_node("Min", [max_total_size, max_per_class_times_classes]).output[0]
+
+        # shape: [batch_size, k_val]
+        top_k_vals, top_k_indices = \
+            ctx.make_node("TopK", [scores_by_batch, k_val], attr={'axis': 1}, output_count=2).output
+
+        top_k_selected_indices = ctx.make_node("GatherElements", [idx_by_batch, top_k_indices], attr={'axis': 1},
+                                               op_name_scope=node.name).output[0]
+
+        target_size = max_total_size
+        if pad_per_class:
+            target_size = k_val
+
+        pad_amt = ctx.make_node("Sub", [target_size, k_val]).output[0]
+        pads_const = ctx.make_const(utils.make_name("pad_const"), np.array([0, 0, 0], np.int64)).output[0]
+        pads = ctx.make_node("Concat", [pads_const, pad_amt], attr={'axis': 0}).output[0]
+
+        top_scores_pad = ctx.make_node("Pad", [top_k_vals, pads, const_zero_float]).output[0]
+        top_indices_pad = ctx.make_node("Pad", [top_k_selected_indices, pads, const_neg_one]).output[0]
+        top_indices_increment = ctx.make_node("Add", [top_indices_pad, const_one]).output[0]
+
+        valid_indices = ctx.make_node("Greater", [top_k_selected_indices, const_neg_one]).output[0]
+        valid_indices_int = ctx.make_node("Cast", [valid_indices], attr={'to': TensorProto.INT32}).output[0]
+        # shape: [batch_size]
+        valid_indices_cnt = GraphBuilder(ctx).make_reduce_sum(
+            {"data": valid_indices_int, "axes": [-1], "keepdims": 0, "noop_with_empty_axes": 1})
+
+        box_pads = ctx.make_const(utils.make_name("pad_const"), np.array([1, 0, 0, 0], np.int64)).output[0]
+        class_pads = ctx.make_const(utils.make_name("pad_const"), np.array([1, 0], np.int64)).output[0]
+        clipped_boxes_pad = ctx.make_node("Pad", [clipped_boxes, box_pads, const_zero_float]).output[0]
+        selected_classes_pad = ctx.make_node("Pad", [selected_classes, class_pads, const_zero]).output[0]
+        nmsed_boxes = ctx.make_node("Gather", [clipped_boxes_pad, top_indices_increment], attr={'axis': 0},
+                                    op_name_scope=node.name).output[0]
+        nmsed_classes = ctx.make_node("Gather", [selected_classes_pad, top_indices_increment], attr={'axis': 0},
+                                      op_name_scope=node.name).output[0]
+        nmsed_classes_float = ctx.make_node("Cast", [nmsed_classes], attr={'to': TensorProto.FLOAT}).output[0]
+
+        ctx.replace_all_inputs(node.output[0], nmsed_boxes)
+        ctx.replace_all_inputs(node.output[1], top_scores_pad)
+        ctx.replace_all_inputs(node.output[2], nmsed_classes_float)
+        ctx.replace_all_inputs(node.output[3], valid_indices_cnt)
+        ctx.remove_node(node.name)
+
+
 @tf_op("ReverseSequence")
 class ReverseSequence:
     @classmethod
