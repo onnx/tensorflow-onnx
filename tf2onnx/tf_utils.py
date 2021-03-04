@@ -318,14 +318,36 @@ def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
             n.attr['key_dtype'].type = key_dtype
             n.attr['value_dtype'].type = val_dtype
 
-def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=None, use_default=None):
-    """
-    Convert the tf-node list into an onnx graph with minimal rewrites so
-    we can use the onnx graph as intermediate graph.
-    """
+def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
+    """Given a tf node def, returns a dict of attribute names to values"""
+    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
+    del node_def.input[:]
+    node_def.name = "node"
+
+    # read_tf_node_attrs uses some tf methods that require the node to be loaded into a valid TF graph
+    g = tf.Graph()
+    with g.as_default():
+        for i, (dtype, shape) in enumerate(zip(input_dtypes, input_shapes)):
+            inp = "input" + str(i)
+            tf_placeholder(dtype, name=inp, shape=shape)
+            node_def.input.append(inp)
+        mini_graph_def = g.as_graph_def()
+        mini_graph_def.node.append(node_def)
+    g2 = tf.Graph()
+    with g2.as_default():
+        with tf_session() as sess:
+            tf.import_graph_def(mini_graph_def, name='')
+            node = sess.graph.get_operation_by_name("node")
+            return read_tf_node_attrs(node)
+
+
+def read_tf_node_attrs(node):
+    """Given a tf Node, returns a dict of attribute names to values"""
+    attr = {}
+    attr_cnt = collections.Counter()
 
     # ignore the following attributes
-    ignored_attr = {"unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
+    ignored_attr = {"T", "unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
                     "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
                     "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
@@ -333,10 +355,37 @@ def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=Non
                     "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
                     "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
                     "Toutput_types", "dense_shapes", "Tdense", "Tsegmentids", "Tshift", "Tnumsegments", "SrcT",
+                    "body", "cond", "then_branch", "else_branch", "f",
                     "Tcomplex", "Treal",  # For RFFT, Tcomplex is ignored because
                                           # onnx.helper.make_node fails,
                                           # TODO: it should be added back.
                     }
+
+    for a in node.node_def.attr:
+        attr_cnt[a] += 1
+        value = get_tf_node_attr(node, a)
+        if a in ignored_attr or isinstance(value, tensor_pb2.TensorProto):
+            pass
+        elif a == "shape":
+            shape = get_tf_shape_attr(node)
+            if shape is not None:
+                attr[a] = shape
+        elif a == "DstT":
+            attr["to"] = map_tf_dtype(value)
+        elif isinstance(value, tf.DType):
+            attr[a] = map_tf_dtype(value)
+        elif isinstance(value, list) and len(value) > 0 and isinstance(value[0], tf.DType):
+            attr[a] = [map_tf_dtype(v) for v in value]
+        else:
+            attr[a] = get_tf_node_attr(node, a)
+
+    return attr, attr_cnt
+
+def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=None, use_default=None):
+    """
+    Convert the tf-node list into an onnx graph with minimal rewrites so
+    we can use the onnx graph as intermediate graph.
+    """
 
     node_list = g.get_operations()
     functions = {}
@@ -360,41 +409,27 @@ def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=Non
             dtypes[out.name] = map_tf_dtype(out.dtype)
             output_shapes[out.name] = shape
 
-    # minimal conversion of attributes
     for node in ops:
-        attr = {}
+        attr, new_attr_cnt = read_tf_node_attrs(node)
+        attr_cnt += new_attr_cnt
         takeit = True
         op_cnt[node.type] += 1
         for a in node.node_def.attr:
             attr_cnt[a] += 1
             value = get_tf_node_attr(node, a)
-            if a in ignored_attr:
-                pass
-            elif a == "T":
+            if a == "T":
                 if value and not isinstance(value, list):
                     dtypes[node.name] = map_tf_dtype(value)
-            elif a == "shape":
-                shape = get_tf_shape_attr(node)
-                if shape is not None:
-                    attr[a] = shape
             elif a in {"body", "cond", "then_branch", "else_branch", "f"}:
                 input_shapes = [inp.get_shape() for inp in node.inputs]
                 nattr = get_tf_node_attr(node, a)
                 attr[a] = nattr.name
                 functions[nattr.name] = input_shapes
-            elif a == "DstT":
-                attr["to"] = map_tf_dtype(value)
             elif isinstance(value, tensor_pb2.TensorProto):
                 if const_node_values and node.name in const_node_values:
                     value.tensor_content = const_node_values[node.name]
                 onnx_tensor = tf_to_onnx_tensor(value, name=port_name(node.name))
                 attr[a] = onnx_tensor
-            elif isinstance(value, tf.DType):
-                attr[a] = map_tf_dtype(value)
-            elif isinstance(value, list) and len(value) > 0 and isinstance(value[0], tf.DType):
-                attr[a] = [map_tf_dtype(v) for v in value]
-            else:
-                attr[a] = get_tf_node_attr(node, a)
 
         node_type = node.type
         input_names = [i.name for i in node.inputs]

@@ -167,7 +167,9 @@ class TFLiteDetectionPostProcessTests(Tf2OnnxBackendTestBase):
         operators = builder.EndVector(1)
 
         # subgraph
+        graph_name = builder.CreateString("TFLite graph")
         SubGraph.SubGraphStart(builder)
+        SubGraph.SubGraphAddName(builder, graph_name)
         SubGraph.SubGraphAddTensors(builder, tensors)
         SubGraph.SubGraphAddInputs(builder, inputs)
         SubGraph.SubGraphAddOutputs(builder, outputs)

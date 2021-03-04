@@ -11,13 +11,15 @@ import logging
 import struct
 
 from onnx import helper, onnx_pb, numpy_helper
-from tensorflow.core.framework import types_pb2, tensor_pb2
+from tensorflow.core.framework import types_pb2, tensor_pb2, node_def_pb2
 from tensorflow.python.framework import tensor_util
 import tensorflow as tf
 import numpy as np
 from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
 from tf2onnx.flexbuffers import read_flexbuffer
+from tf2onnx.tf_utils import read_tf_node_def_attrs
+from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +126,7 @@ def get_options_class(name):
 def read_tflite_model(tflite_path):
     """
     Given the path to a tflite model, returns tuple (tflite_graphs, opcodes_map, model)
+    Graphs are topologically sorted and the main graph is last
     Pass these to parse_tflite_graph
     """
     with open(tflite_path, 'rb') as f:
@@ -142,7 +145,6 @@ def read_tflite_model(tflite_path):
         if code == 'CUSTOM':
             code = op_code.CustomCode().decode()
         opcodes_map[i] = code
-    tflite_graphs = [model.Subgraphs(i) for i in range(model.SubgraphsLength())]
     # Shapes stored in tflite models are not always reliable so we get them from the interpreter if possible.
     tensor_shapes = {}
     try:
@@ -158,7 +160,57 @@ def read_tflite_model(tflite_path):
                 tensor_shapes[name] = details["shape"].tolist()
     except Exception as e:    # pylint: disable=broad-except
         logger.warning("Error loading model into tflite interpreter: %s", e)
+    tflite_graphs = get_model_subgraphs(model)
     return tflite_graphs, opcodes_map, model, tensor_shapes
+
+
+def get_subgraph_dependencies(model, graph_idx):
+    """Returns a list of subgraph indices referenced by the indicated graph"""
+    dependencies = []
+    g = model.Subgraphs(graph_idx)
+    for i in range(g.OperatorsLength()):
+        op = g.Operators(i)
+        options_type_name = lookup_enum(op.BuiltinOptionsType(), 'BuiltinOptions')
+        option_class = get_options_class(options_type_name)
+        if option_class is not None:
+            options = option_class()
+            options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
+            for attr in FUNCTION_ATTRS:
+                if hasattr(options, attr):
+                    value = getattr(options, attr)()
+                    dependencies.append(value)
+    return dependencies
+
+
+def get_model_subgraphs(model):
+    """Returns topologically sorted subgraphs of a model. Guarantees main graph is placed at the end."""
+    main_g = 0
+    dependencies = {}
+    idx_to_graph = {}
+    for i in range(model.SubgraphsLength()):
+        idx_to_graph[i] = model.Subgraphs(i)
+        ds = get_subgraph_dependencies(model, i)
+        utils.make_sure(main_g not in ds, "Main graph %s is a dependency of subgraph %s", main_g, i)
+        dependencies[i] = ds
+
+    ordered = []
+    visited = set()
+    visiting = set()
+    def visit(g):
+        utils.make_sure(g not in visiting, "Subgraphs have cyclic dependencies: %r", dependencies)
+        if g in visited:
+            return
+        visiting.add(g)
+        for d in dependencies[g]:
+            visit(d)
+        visited.add(g)
+        ordered.append(g)
+        visiting.remove(g)
+
+    for g in reversed(range(model.SubgraphsLength())):
+        visit(g)
+
+    return [idx_to_graph[i] for i in ordered]
 
 
 def get_quantization_attr(quant_params):
@@ -288,34 +340,50 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
 
     for i in range(tflite_g.OperatorsLength()):
         op = tflite_g.Operators(i)
-        optype = opcodes_map[op.OpcodeIndex()]
+        optype = 'TFL_' + opcodes_map[op.OpcodeIndex()]
         op_cnt[optype] += 1
         attr = {}
         options_type_name = lookup_enum(op.BuiltinOptionsType(), 'BuiltinOptions')
         option_class = get_options_class(options_type_name)
         wants_dequantized_input = True
         has_prequantized_output = True
-        if optype == 'QUANTIZE':
+        if optype == 'TFL_QUANTIZE':
             out_tensor = tflite_g.Tensors(op.Outputs(0))
             quant = out_tensor.Quantization()
             has_prequantized_output = False
             if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
                 attr.update(get_quantization_attr(quant))
-        elif optype == 'DEQUANTIZE':
+        elif optype == 'TFL_DEQUANTIZE':
             in_tensor = tflite_g.Tensors(op.Inputs(0))
             quant = in_tensor.Quantization()
             wants_dequantized_input = False
             if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
                 attr.update(get_quantization_attr(quant))
-        if not op.CustomOptionsIsNone():
+        input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength()) if op.Inputs(i) != -1]
+        output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
+        if optype.startswith("TFL_Flex"):
+            data = read_flexbuffer(op.CustomOptionsAsNumpy().tobytes(), decode_strings=False)
+            utils.make_sure(isinstance(data, list), "Flex ops are expected to store data as a flexbuffer list")
+            tf_op = data[0].decode("utf-8")
+            tf_node_def = node_def_pb2.NodeDef()
+            tf_node_def.ParseFromString(data[1])
+            input_tf_dtypes = [map_tflite_dtype_to_tf(name_to_tensor[inp].Type()) for inp in input_names]
+            def shape_to_tf_shape(dims):
+                return [None if d < 0 else d for d in dims]
+            input_shapes = [shape_to_tf_shape(output_shapes[inp]) for inp in input_names]
+            tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes, input_shapes)
+            attr.update(tf_attrs)
+            optype = tf_op
+        elif not op.CustomOptionsIsNone():
             custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
             if custom_ops_format == 'FLEXBUFFERS':
+                data = None
                 try:
                     data = read_flexbuffer(op.CustomOptionsAsNumpy().tobytes())
-                    if isinstance(data, dict):
-                        attr.update(read_flexbuffer(op.CustomOptionsAsNumpy().tobytes()))
                 except Exception as e:    # pylint: disable=broad-except
                     logger.warning("Could not parse attributes for custom op '%s': %s", optype, e)
+                if isinstance(data, dict):
+                    attr.update(data)
         if option_class is not None:
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
@@ -342,18 +410,16 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                         value = model.Subgraphs(value).Name().decode()
                 attr_cnt[a] += 1
                 attr[proper_to_snake_case(a)] = value
-        input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength()) if op.Inputs(i) != -1]
         if wants_dequantized_input:
             input_names = [get_dequant(inp) for inp in input_names]
-        output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
-        if optype == "TFLite_Detection_PostProcess":
+        if optype == "TFL_TFLite_Detection_PostProcess":
             # There's a bug in tflite for the output shapes of this op
             for out, shape in zip(output_names, [[-1, -1, 4], [-1, -1], [-1, -1], [-1]]):
                 if len(output_shapes[out]) != len(shape):
                     output_shapes[out] = shape
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]
-        onnx_node = helper.make_node("TFL_" + optype, input_names, output_names, name=output_names[0], **attr)
+        onnx_node = helper.make_node(optype, input_names, output_names, name=output_names[0], **attr)
         onnx_nodes.append(onnx_node)
 
     inputs = [tensor_names[tflite_g.Inputs(i)] for i in range(tflite_g.InputsLength())]
