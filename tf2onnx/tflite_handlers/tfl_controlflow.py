@@ -114,7 +114,8 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
     # in onnx the body inputs are: index, cond, [loop_vars]
     g.inputs = [iter_node, cond_node] + g.inputs
 
-    for p, c in zip(loop_node_inputs, g.input_names):
+    # Shapes of iteration and cond are already known
+    for p, c in zip(loop_node_inputs[2:], g.input_names[2:]):
         shape = p.output_shapes[0]
         g.set_shape(c, shape)
 
