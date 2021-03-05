@@ -22,6 +22,7 @@ from tf2onnx.rewriter.thresholded_relu_rewriter import rewrite_thresholded_relu
 from tf2onnx.rewriter.transpose_rewriter import rewrite_transpose
 from tf2onnx.rewriter.conv2d_with_add_rewriter import rewrite_biasadd_with_conv2d
 from tf2onnx.rewriter.quantization_ops_rewriter import rewrite_quantize_and_dequantize
+from tf2onnx.rewriter.layer_normalization_rewriter import rewrite_layer_normalization
 
 
 __all__ = [
@@ -44,5 +45,6 @@ __all__ = [
     "rewrite_custom_rnn_cell",
     "rewrite_generic_loop",
     "rewrite_biasadd_with_conv2d",
-    "rewrite_quantize_and_dequantize"
+    "rewrite_quantize_and_dequantize",
+    "rewrite_layer_normalization"
 ]
