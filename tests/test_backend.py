@@ -3291,7 +3291,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "BatchToSpaceND")
     def test_batch_to_spacend_non_const_7d(self):
-        x_type, y_type, z_type = np.int64, np.int64, np.int64
+        x_type, y_type, z_type = np.float32, np.int64, np.int64
         # test 3D upto 7D input tensors
         for x_shape in [[12, 4, 4], [12, 4, 8, 3], [12, 4, 8, 3, 2], [12, 4, 8, 3, 2, 3], [12, 4, 8, 3, 2, 1, 3]]:
             # test 1D upto 2D block shapes
@@ -3310,7 +3310,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "SpaceToBatchND")
     def test_space_to_batchnd_non_const_7d(self):
-        x_type, y_type, z_type = np.int64, np.int64, np.int64
+        x_type, y_type, z_type = np.float32, np.int64, np.int64
         # test 3D upto 7D input tensors
         for x_shape in [[2, 4, 4], [1, 4, 8, 3], [1, 4, 8, 3, 2], [1, 4, 8, 3, 2, 3], [1, 4, 8, 3, 2, 1, 3]]:
             # test 1D upto 2D block shapes
