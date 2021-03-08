@@ -490,8 +490,9 @@ class TransposeOptimizer(GraphOptimizerBase):
         # todo: apply this block if we have model case multiplier_input_id==0, and verify that.
         if multiplier_input_id == node.input[1]:
             t_p = trans.inputs[0]
+            trans_rank = get_transpose_rank(trans)
             # make sure conv don't have bias set
-            if t_p.type == "Conv" and t_p.inputs[1].is_const() and len(t_p.input) == 2:
+            if t_p.type == "Conv" and t_p.inputs[1].is_const() and len(t_p.input) == 2 and trans_rank == 4:
                 conv = t_p
                 numpy_val = conv.inputs[1].get_tensor_value(as_list=False)
                 transposed_val = np.transpose(numpy_val, (2, 3, 1, 0))
