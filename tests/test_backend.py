@@ -620,6 +620,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=0.01)
 
+    def test_depthwiseconv_shared_kernel(self):
+        x_shape = [1, 3, 4, 3]
+        kernel_shape = [3, 3, 3, 3]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
+        def func(x, y):
+            kernel = tf.constant(kernel_val, dtype=tf.float32, name='k')
+            conv1 = tf.nn.depthwise_conv2d(x, kernel, strides=[1, 1, 1, 1], padding='VALID')
+            conv2 = tf.nn.depthwise_conv2d(y, kernel, strides=[1, 1, 1, 1], padding='VALID')
+            conv = tf.add(conv1, conv2)
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=0.08)
+
     @check_tf_min_version("1.14", "tf depthwise_conv2d dilations")
     @check_opset_min_version(11, "non-const pads")
     def test_depthwiseconv_dilations(self):
