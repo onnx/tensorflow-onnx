@@ -217,6 +217,9 @@ def main():
             args.keras, args.inputs, args.outputs)
         model_path = args.keras
     if args.tflite:
+        # Optional, but used to cut graph if provided.
+        inputs = args.inputs
+        outputs = args.outputs
         tflite_path = args.tflite
         model_path = tflite_path
 
