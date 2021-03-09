@@ -55,7 +55,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def pre_optimize_action(self):
         # make Reshape into a const, which then can be fused into Conv's weight for mobilenet_v1_75_192
-        self._output_names = [name.split(":")[0] for name in self._g.outputs]
+        self._output_names = [self._g.get_node_by_output(out).name for out in self._g.outputs]
         ops = self.nodes
         constable_reshape_ops = [n for n in ops
                                  if (n.type == "Reshape"
@@ -179,6 +179,8 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _initialize_handlers(self):
         self._handler_map = {
             "Add": self._add_handler,
+            "ArgMax": self._arg_min_max_handler,
+            "ArgMin": self._arg_min_max_handler,
             "Cast": self._simple_through_handler,
             "Clip": self._simple_through_handler,
             "Concat": self._concat_handler,
@@ -192,8 +194,14 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Mul": self._mul_handler,
             "Pad": self._pad_handler,
             "Reciprocal": self._simple_through_handler,
-            "ReduceMean": self._reducemean_handler,
+            "ReduceLogSum": self._reduce_handler,
+            "ReduceLogSumExp": self._reduce_handler,
+            "ReduceMax": self._reduce_handler,
+            "ReduceMean": self._reduce_handler,
+            "ReduceMin": self._reduce_handler,
+            "ReduceProd": self._reduce_handler,
             "ReduceSum": self._reducesum_handler,
+            "ReduceSumSquare": self._reduce_handler,
             "Relu": self._simple_through_handler,
             "Shape": self._shape_handler,
             "Sigmoid": self._simple_through_handler,
@@ -258,7 +266,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         return input_index
 
     # the assumption is: both node and trans have only 1 output
-    def _switch_transpose_and_node(self, node, trans):
+    def _switch_transpose_and_node(self, node, trans, update_shape=True):
         if not self._nodes_has_single_consumer_node([trans]):
             return False
 
@@ -271,7 +279,7 @@ class TransposeOptimizer(GraphOptimizerBase):
         # need to transpose node shape in backward direction as well after switch
         # otherwise, reshape added in post_optimize_action may not work correctly
         shape = self._g.get_shape(node.output[0])
-        if shape:
+        if update_shape and shape:
             # only nhwc transpose can reach here
             new_shape = [shape[i] for i in NHWC_TO_NCHW]
             self._g.set_shape(node.output[0], new_shape)
@@ -701,31 +709,49 @@ class TransposeOptimizer(GraphOptimizerBase):
         self._g.replace_input(node, node.input[1], new_pads.output[0], 1)
         return self._switch_transpose_and_node(node, trans)
 
-    def _reducemean_handler(self, trans, node):
-        axes = node.get_attr("axes").ints
-        keepdims = node.get_attr("keepdims")
+    def _arg_min_max_handler(self, trans, node):
+        axis = node.get_attr_value("axis", 0)
+        node.set_attr("axes", [axis])
+        result = self._reduce_handler(trans, node)
+        new_axis = node.get_attr_value("axes")[0]
+        node.set_attr("axis", new_axis)
+        del node.attr["axes"]
+        return result
+
+    def _reduce_handler(self, trans, node):
+        keepdims = node.get_attr_value("keepdims", 1)
         trans_rank = get_transpose_rank(trans)
-        # make sure keepdims is 1, then we can do the swap, otherwise, please don't, because
-        # once keepdims is not set, original dims are lost, so transpose back won't work well.
-        # by default, if keepdims is not specified, it is 1
-        if axes == list(range(1, trans_rank - 1)) and ((keepdims and keepdims.i == 1) or (not keepdims)):
-            node.set_attr("axes", list(range(2, trans_rank)))
-            return self._switch_transpose_and_node(node, trans)
-        return False
+        axes = node.get_attr_value("axes", list(range(trans_rank)))
+        perm = trans.get_attr("perm").ints
+        axes = [a + trans_rank if a < 0 else a for a in axes]
+        new_axes = [perm[a] for a in axes]
+        update_shape = keepdims == 1
+        shape = self._g.get_shape(node.output[0])
+        if not self._switch_transpose_and_node(node, trans, update_shape):
+            return False
+        node.set_attr("axes", new_axes)
+        if keepdims == 0:
+            remaining_axes = []
+            j = 0
+            for i in range(trans_rank):
+                if i in new_axes:
+                    remaining_axes.append(None)
+                else:
+                    remaining_axes.append(j)
+                    j += 1
+            new_perm = [remaining_axes[p] for p in perm if remaining_axes[p] is not None]
+            if shape:
+                new_shape = [shape[new_perm.index(i)] for i in range(len(new_perm))]
+                self._g.set_shape(node.output[0], new_shape)
+            trans.set_attr("perm", new_perm)
+        return True
 
     def _reducesum_handler(self, trans, node):
         keepdims = node.get_attr("keepdims")
-        # make sure keepdims is 1, then we can do the swap, otherwise, please don't, because
-        # once keepdims is not set, original dims are lost, so transpose back won't work well.
-        # by default, if keepdims is not specified, it is 1
+        if self._g.opset <= 12:
+            return self._reduce_handler(trans, node)
         if keepdims and keepdims.i == 0:
             return False
-        if self._g.opset <= 12:
-            axes = node.get_attr("axes").ints
-            perm = trans.get_attr('perm').ints
-            new_axes = [perm[axis] for axis in axes]
-            node.set_attr("axes", new_axes)
-            return self._switch_transpose_and_node(node, trans)
         if node.inputs[1].is_const():
             axes = node.inputs[1].get_tensor_value()
             perm = trans.get_attr('perm').ints
