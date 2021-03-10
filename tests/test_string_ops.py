@@ -8,8 +8,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import unittest
 import numpy as np
 import tensorflow as tf
+import tensorflow_text as tf_text
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import requires_custom_ops
@@ -121,6 +123,28 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
         import onnxruntime as rt
         opt = rt.SessionOptions()
         opt.register_custom_ops_library(get_library_path())
+        #import shutil
+        #shutil.copy(model_path, "c:/temp/lll.onnx")
+        #import onnx
+        #with open(model_path, "rb") as f:
+        #    print(onnx.load(f))
         m = rt.InferenceSession(model_path, opt)
         results = m.run(output_names, inputs)
         return results
+
+    @requires_custom_ops("RegexSplitWithOffsets")
+    def test_regex_split_with_offsets(self):
+        text_val = np.array([["a Test 1 2 3 ♠♣"],
+                             ["Hi there test test ♥♦"]], dtype=np.str)
+        def func(text):
+            x, begin_offsets, end_offets = tf_text.regex_split_with_offsets(text, "\\s", "")
+            x_ = tf.identity(x.to_tensor(), name=_TFOUTPUT)
+            return x_
+        self._run_test_case(func, [_OUTPUT], {_INPUT: text_val})
+
+
+if __name__ == "__main__":
+    #cl = StringOpsTests()
+    #cl.setUp()
+    #cl.test_regex_split_with_offsets()
+    unittest.main()

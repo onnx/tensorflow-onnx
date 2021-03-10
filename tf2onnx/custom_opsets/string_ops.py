@@ -168,3 +168,30 @@ class SentencepieceTokenizeOp:
         node.type = "SentencepieceTokenizer"
         if ctx.is_safe_to_remove_nodes([input_node]):
             ctx.remove_node(input_node.name)
+
+@tf_op("RegexSplitWithOffsets", domain=constants.CONTRIB_OPS_DOMAIN)
+class RegexSplitWithOffsetsOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        node.type = "StringRegexSplitWithOffsets"
+        ctx.remove_output(node.output[2])
+        del node.output[2]
+        print('------------------------')
+        print(node.input)
+        print(node.output)
+
+
+@tf_op("RaggedTensorToTensor", domain=constants.CONTRIB_OPS_DOMAIN)
+class RaggedTensorToTensorOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        node.type = "RaggedTensorToDense"
+        print('------------------------')
+        print(node.input)
+        print(node.output)
+        for o in node.input:
+            print("##i", o, ctx.get_shape(o), ctx.get_dtype(o))
+        for o in node.output:
+            print("##o", o, ctx.get_shape(o), ctx.get_dtype(o))
