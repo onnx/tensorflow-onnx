@@ -3308,7 +3308,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # test 3D upto 7D input tensors
         for x_shape in [[12, 4, 4], [12, 4, 8, 3], [12, 4, 8, 3, 2], [12, 4, 8, 3, 2, 3], [12, 4, 8, 3, 2, 1, 3]]:
             # test 1D upto 2D block shapes
-            for block_shape in [[2, 3], [2]]:
+            for block_shape in [[2, 3], [2, 2], [2]]:
                 # crop 1 layer at end of each dim
                 # x and z can be dynamic.
                 # y = block_shape cannot be dynamic without change to Transpose op spec
