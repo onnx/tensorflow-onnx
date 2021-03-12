@@ -20,6 +20,7 @@ from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import nn, math
+from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW
 
 logger = logging.getLogger(__name__)
 
@@ -1392,9 +1393,8 @@ class BatchToSpace:
 
         # if 3d or 4d tensor & square 2d block_shape , can optimize
         cond1 = xlen in [3, 4]
-        cond2 = node.inputs[2].is_const()
-        cond3 = blocklen == 2 and block_shape[0] == block_shape[1]
-        if cond1 and cond2 and cond3:
+        cond2 = blocklen == 2 and block_shape[0] == block_shape[1]
+        if cond1 and cond2:
             # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
             # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
             # and we only support 3D and 4D here, and the data format is NHC and NHWC
@@ -1403,47 +1403,81 @@ class BatchToSpace:
             # T out = BatchToSpaceND(T input, int32 block_shape, int32 crops)
             input_tensor = node.inputs[0]
             input_shape = ctx.get_shape(input_tensor.output[0])
-            crops = node.inputs[2].get_tensor_value()
 
-            # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
             if len(input_shape) == 3:
                 # insert automatically an Unsqueeze op if the input is 3d
                 unsqz1 = GraphBuilder(ctx).make_unsqueeze(
                     {"axes": [3], "data": input_tensor.output[0]}, return_node=True)
+                # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
                 trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
             else:
-                trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
+                # Add explicit NHWC_TO_NCHW transpose before and NCHW_TO_NHWC transpose after subgraph.
+                # That enables more optimizations in TransposeOptimizer.
+                trans_nchw = ctx.make_node("Transpose", input_tensor.output, {"perm": NHWC_TO_NCHW})
+                # NCHW TO CNHW
+                trans1 = ctx.make_node("Transpose", trans_nchw.output, {"perm": [1, 0, 2, 3]})
             reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": block_shape[0]})
-            trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
 
-            # implement crop logic, the data format is NHWC
-            slice_axis = [1, 2]
-            top, bottom = crops[0]
-            left, right = crops[1]
-            starts = [top, left]
-            ends = []
-            for end in [bottom, right]:
-                if end != 0:
-                    ends.append(-end)
-                else:
-                    ends.append(np.iinfo(np.int32).max)
+            # implement crop logic, the data format is NCHW
+            slice_axis = [2, 3]
+            if node.inputs[2].is_const():
+                crops = node.inputs[2].get_tensor_value()
+                top, bottom = crops[0]
+                left, right = crops[1]
+                starts = [top, left]
+                ends = []
+                for end in [bottom, right]:
+                    if end != 0:
+                        ends.append(-end)
+                    else:
+                        ends.append(np.iinfo(np.int32).max)
+                attr = {"axes": slice_axis, "ends": ends, "starts": starts}
+            else:
+                shape = ctx.make_const(name=utils.make_name("shape"), np_val=np.array([-1], dtype=np.int64))
+                reshape = ctx.make_node("Cast",
+                                        ctx.make_node("Reshape", inputs=[node.input[2], shape.output[0]]).output,
+                                        attr={"to": utils.map_numpy_to_onnx_dtype(np.int64)})
+                crops = ctx.make_node("Split", inputs=reshape.output, attr={}, output_count=4).output
+                zero = ctx.make_const(name=utils.make_name("zero"), np_val=np.array([0], dtype=np.int64)).output[0]
+                int32_max = ctx.make_const(name=utils.make_name("int32_max"),
+                                           np_val=np.array([np.iinfo(np.int32).max], dtype=np.int64)).output[0]
+                def crop_to_end(crop):
+                    eq = ctx.make_node("Equal", [crop, zero])
+                    not_eq = ctx.make_node("Not", eq.output)
+                    cast_eq = ctx.make_node("Cast", eq.output, attr={"to": utils.map_numpy_to_onnx_dtype(np.int64)})
+                    cast_not_eq = ctx.make_node("Cast", not_eq.output,
+                                                attr={"to": utils.map_numpy_to_onnx_dtype(np.int64)})
+                    neg = ctx.make_node("Neg", cast_not_eq.output)
+                    add = ctx.make_node("Add",
+                                        [
+                                            ctx.make_node("Mul", [crop, neg.output[0]]).output[0],
+                                            ctx.make_node("Mul", [int32_max, cast_eq.output[0]]).output[0],
+                                        ])
+                    return add.output[0]
 
-            attr = {"axes": slice_axis, "ends": ends, "starts": starts}
-            inputs_map = {"data": trans2.output[0], **attr}
+                starts = ctx.make_node("Concat", [crops[0], crops[2]], {'axis': 0})
+                ends = ctx.make_node("Concat", [crop_to_end(crops[1]), crop_to_end(crops[3])], {'axis': 0})
+                axes = ctx.make_const(name=utils.make_name("axes"), np_val=np.array(slice_axis, dtype=np.int64))
+                attr = {"axes": axes.output[0], "ends": ends.output[0], "starts": starts.output[0]}
+            inputs_map = {"data": reorganize_node.output[0], **attr}
             dtypes = node.output_dtypes
             shapes = node.output_shapes
 
+            ctx.remove_node(node.name)
             if len(input_shape) == 3:
                 # add a squeeze op to convert output into 3d
                 kwargs = {**inputs_map}
-                ctx.remove_node(node.name)
-                slice1 = GraphBuilder(ctx).make_slice(kwargs)
-                GraphBuilder(ctx).make_squeeze(
-                    {"axes": [3], "data": slice1, "outputs": node.output}, name=node.name, dtypes=dtypes, shapes=shapes)
+                node_slice = GraphBuilder(ctx).make_slice(kwargs)
+                # CNHW TO NHWC
+                trans2 = ctx.make_node("Transpose", [node_slice], {"perm": [1, 2, 3, 0]})
+                GraphBuilder(ctx).make_squeeze({"axes": [3], "data": trans2.output[0], "outputs": node.output},
+                                               name=node.name, shapes=shapes, dtypes=dtypes)
             else:
-                kwargs = {**inputs_map, "outputs": node.output}
-                ctx.remove_node(node.name)
-                GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
+                node_slice = GraphBuilder(ctx).make_slice(inputs_map)
+                # CNHW TO NCHW
+                trans2 = ctx.make_node("Transpose", [node_slice], {"perm": [1, 0, 2, 3]})
+                ctx.make_node("Transpose", trans2.output, {"perm": NCHW_TO_NHWC},
+                              name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
         else:
             def mknode(optype, inputs, attrs=None):
                 nodename = utils.make_name(node.name + '_' + optype.lower())
@@ -1545,7 +1579,10 @@ class SpaceToBatch:
 
         # if 3d or 4d tensor & square 2d block_shape , can optimize
         cond1 = xlen in [3, 4]
-        cond2 = node.inputs[2].is_const()
+        # with opset 11 (or above), we can deal with non-const pads
+        # by creating a subgraph with Split and Concat and pass its output
+        # to Pad's second input
+        cond2 = node.inputs[2].is_const() or ctx.opset >= 11
         cond3 = blocklen == 2 and block_shape[0] == block_shape[1]
         if cond1 and cond2 and cond3:
             # https://www.tensorflow.org/api_docs/python/tf/space_to_batch_nd
@@ -1555,29 +1592,60 @@ class SpaceToBatch:
             # and it only supports NCHW
             # T out = SpaceToBatchND(T input, int32 block_shape, int32 crops)
             input_tensor = node.inputs[0]
+            input_shape = ctx.get_shape(input_tensor.output[0])
             shapes = [ctx.get_shape(node.output[0])]
             dtypes = [ctx.get_dtype(node.output[0])]
 
-            # implement pads logic, the data format is NHWC
-            paddings = node.inputs[2].get_tensor_value()
-            top, bottom = paddings[0]
-            left, right = paddings[1]
-            pads = [0, top, left, 0,
-                    0, bottom, right, 0]
-            ctx.remove_node(node.name)
-            if ctx.opset <= 10:
-                pad_op = ctx.make_node("Pad", input_tensor.output, attr={"pads": pads})
+            if len(input_shape) == 3:
+                # insert automatically an Unsqueeze op if the input is 3d
+                unsqz1 = GraphBuilder(ctx).make_unsqueeze(
+                    {"axes": [3], "data": input_tensor.output[0]}, return_node=True)
+                # NHWC TO CNHW
+                trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
+            else:
+                # Add explicit NHWC_TO_NCHW transpose before and NCHW_TO_NHWC transpose after subgraph.
+                # That enables more optimizations in TransposeOptimizer.
+                trans_nchw = ctx.make_node("Transpose", input_tensor.output, {"perm": NHWC_TO_NCHW})
+                # NCHW TO CNHW
+                trans1 = ctx.make_node("Transpose", trans_nchw.output, {"perm": [1, 0, 2, 3]})
+            # implement pads logic, the data format is NCHW
+            if ctx.opset <= 10 or node.inputs[2].is_const():
+                paddings = node.inputs[2].get_tensor_value()
+                top, bottom = paddings[0]
+                left, right = paddings[1]
+                pads = [0, 0, top, left,
+                        0, 0, bottom, right]
+                if ctx.opset <= 10:
+                    pad_op = ctx.make_node("Pad", trans1.output, attr={"pads": pads})
+                else:
+                    new_pads = ctx.make_const(name=utils.make_name("pads"), np_val=np.array(pads, dtype=np.int64))
+                    pad_op = ctx.make_node("Pad", [trans1.output[0], new_pads.output[0]])
             else:
                 # TODO: we should be able to support dynamic input here.
-                pads_name = utils.make_name(node.name)
-                ctx.make_const(name=pads_name, np_val=np.array(pads, dtype=np.int64))
-                pad_op = ctx.make_node("Pad", [input_tensor.output[0], pads_name])
+                shape = ctx.make_const(name=utils.make_name("shape"), np_val=np.array([-1], dtype=np.int64))
+                reshape = ctx.make_node("Reshape", inputs=[node.input[2], shape.output[0]])
+                cast = ctx.make_node("Cast", reshape.output, attr={'to': utils.map_numpy_to_onnx_dtype(np.int64)})
+                split = ctx.make_node("Split", inputs=cast.output, attr={}, output_count=4)
+                pads = split.output
+                zero = ctx.make_const(name=utils.make_name("zero"), np_val=np.array([0], dtype=np.int64)).output[0]
+                new_pads = ctx.make_node("Concat", [zero, zero, pads[0], pads[2], zero, zero, pads[1], pads[3]],
+                                         {'axis': 0})
+                pad_op = ctx.make_node("Pad", [trans1.output[0], new_pads.output[0]])
 
-            # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
-            trans1 = ctx.make_node("Transpose", pad_op.output, {"perm": [3, 0, 1, 2]})
-            reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": block_shape[0]})
-            ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]},
-                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+            reorganize_node = ctx.make_node(node.type, pad_op.output, attr={"blocksize": block_shape[0]})
+
+            ctx.remove_node(node.name)
+            if len(input_shape) == 3:
+                # CNHW TO NHWC
+                trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
+                # add a squeeze op to convert output into 3d
+                GraphBuilder(ctx).make_squeeze({"axes": [3], "data": trans2.output[0], "outputs": node.output},
+                                               name=node.name, shapes=shapes, dtypes=dtypes)
+            else:
+                # CNHW TO NCHW
+                trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 0, 2, 3]})
+                ctx.make_node("Transpose", trans2.output, {"perm": NCHW_TO_NHWC},
+                              name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
         else:
             def mknode(optype, inputs, attrs=None):
                 nodename = utils.make_name(node.name + '_' + optype.lower())
