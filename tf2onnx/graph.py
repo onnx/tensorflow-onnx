@@ -116,7 +116,7 @@ class Node(object):
             external_tensor_storage.name_counter += 1
             external_tensor_storage.name_to_tensor_data[tensor_name] = a.t.raw_data
             external_tensor_storage.node_to_modified_value_attr[self] = a
-            a.t.raw_data = b'__EXTERNAL'
+            a.t.raw_data = b''
             location = a.t.external_data.add()
             location.key = "location"
             location.value = tensor_name
