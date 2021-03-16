@@ -227,6 +227,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(9, "ConstantOfShape")
+    def test_layer_normalization(self):
+        x_val = make_xval([3, 4, 5])
+        scale_val = make_xval([3, 4, 5]) * 0.2
+        bias_val = make_xval([3, 4, 5]) * 0.1
+        def func(x):
+            mean = tf.reduce_mean(x, axis=[2], keepdims=True)
+            centered = tf.subtract(x, mean)
+            variance = tf.add(tf.reduce_mean(tf.square(centered), axis=[2], keepdims=True), 0.001)
+            inv_std_dev = tf.math.rsqrt(variance)
+            normalized = tf.multiply(centered, inv_std_dev)
+            scaled = tf.multiply(normalized, scale_val)
+            biased = tf.add(scaled, bias_val)
+            return tf.identity(biased, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
+                            graph_validator=lambda g: (check_op_count(g, "InstanceNormalization", 1)))
+
+    @check_opset_min_version(9, "ConstantOfShape")
     def test_eye_non_const1(self):
         # tf.eye(num_rows), num_rows is not const here
         x_val = np.array(5, dtype=np.int32)
@@ -3304,11 +3321,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "BatchToSpaceND")
     def test_batch_to_spacend_non_const_7d(self):
-        x_type, y_type, z_type = np.int64, np.int64, np.int64
+        x_type, y_type, z_type = np.float32, np.int64, np.int64
         # test 3D upto 7D input tensors
         for x_shape in [[12, 4, 4], [12, 4, 8, 3], [12, 4, 8, 3, 2], [12, 4, 8, 3, 2, 3], [12, 4, 8, 3, 2, 1, 3]]:
             # test 1D upto 2D block shapes
-            for block_shape in [[2, 3], [2]]:
+            for block_shape in [[2, 3], [2, 2], [2]]:
                 # crop 1 layer at end of each dim
                 # x and z can be dynamic.
                 # y = block_shape cannot be dynamic without change to Transpose op spec
@@ -3323,7 +3340,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "SpaceToBatchND")
     def test_space_to_batchnd_non_const_7d(self):
-        x_type, y_type, z_type = np.int64, np.int64, np.int64
+        x_type, y_type, z_type = np.float32, np.int64, np.int64
         # test 3D upto 7D input tensors
         for x_shape in [[2, 4, 4], [1, 4, 8, 3], [1, 4, 8, 3, 2], [1, 4, 8, 3, 2, 3], [1, 4, 8, 3, 2, 1, 3]]:
             # test 1D upto 2D block shapes
