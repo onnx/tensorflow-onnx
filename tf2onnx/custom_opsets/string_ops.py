@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """ tf2onnx mapping functions for string ops using contrib ops domain. """
+import io
+import json
 import logging
 import numpy as np
 from onnx.onnx_pb import TensorProto
-
+from onnx.helper import make_attribute
 from tf2onnx import constants, handler
 from tf2onnx.handler import tf_op
 from tf2onnx import utils
@@ -175,12 +177,6 @@ class RegexSplitWithOffsetsOp:
     def version_1(cls, ctx, node, **kwargs):
         node.domain = constants.CONTRIB_OPS_DOMAIN
         node.type = "StringRegexSplitWithOffsets"
-        ctx.remove_output(node.output[2])
-        del node.output[2]
-        print('------------------------')
-        print(node.input)
-        print(node.output)
-
 
 @tf_op("RaggedTensorToTensor", domain=constants.CONTRIB_OPS_DOMAIN)
 class RaggedTensorToTensorOp:
@@ -188,10 +184,46 @@ class RaggedTensorToTensorOp:
     def version_1(cls, ctx, node, **kwargs):
         node.domain = constants.CONTRIB_OPS_DOMAIN
         node.type = "RaggedTensorToDense"
-        print('------------------------')
-        print(node.input)
-        print(node.output)
-        for o in node.input:
-            print("##i", o, ctx.get_shape(o), ctx.get_dtype(o))
-        for o in node.output:
-            print("##o", o, ctx.get_shape(o), ctx.get_dtype(o))
+        if ctx.get_dtype(node.input[1]) == TensorProto.STRING:
+            node.type = "StringRaggedTensorToDense"
+        if len(node.input) == 5:
+            # 5 inputs: shape, values, default_value, row_partition_tensors, row_partition_types
+            # 5 inputs from 0 to 4.
+            # The ONNX version merges only uses the data (input 1) and the indices (input 3)
+            ctx.remove_input(node, node.input[4])
+            if len(node.input) == 5:
+                del node.input[4]
+        utils.make_sure(len(node.input) == 4,
+                        "[RaggedTensorToTensorOp] the node should have 4 inputs not %r.",
+                        len(node.input))
+
+@tf_op("WordpieceTokenizeWithOffsets", domain=constants.CONTRIB_OPS_DOMAIN)
+class WordpieceTokenizeWithOffsetsOp:
+    @classmethod
+    def version_1(cls, ctx, node, initialized_tables=None, **kwargs):
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        node.type = "WordpieceTokenizer"
+        utils.make_sure(len(node.input) == 2,
+                        "[WordpieceTokenizeWithOffsetsOp] Expecting 2 inputs not %r.", len(node.input))
+        utils.make_sure(initialized_tables is not None,
+                        "[WordpieceTokenizeWithOffsetsOp] initialized_tables cannot be None.", len(node.input))
+        parent = ctx.get_node_by_output(node.input[1])
+        while parent.type == 'Identity':
+            parent = ctx.get_node_by_output(parent.input[0])
+        utils.make_sure(parent is not None,
+                        "[WordpieceTokenizeWithOffsetsOp] Unable to extract the vocabulary")
+        ressource = parent.get_attr_value('shared_name')
+        table = initialized_tables[ressource]
+        if isinstance(table, tuple):
+            table = table[0]
+        mapping = {}
+        for i, word in enumerate(table):
+            if isinstance(word, bytes):
+                word = word.decode('utf-8')
+            mapping[word] = i
+        st = io.StringIO()
+        json.dump(mapping, st, separators=(',', ':'))
+        node.attr['vocab'] = make_attribute('vocab', st.getvalue())
+
+        positions = ctx.make_const(utils.make_name("empty"), np.array([], np.int64))
+        ctx.replace_inputs(node, [node.input[0], positions.output[0]])

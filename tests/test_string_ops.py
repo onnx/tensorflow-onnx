@@ -12,6 +12,10 @@ import unittest
 import numpy as np
 import tensorflow as tf
 import tensorflow_text as tf_text
+from tensorflow.python.ops.ragged import ragged_tensor
+from tensorflow.python.ops import lookup_ops
+from tensorflow_text.python.ops.regex_split_ops import gen_regex_split_ops as lib_gen_regex_split_ops
+from tensorflow_text.python.ops.wordpiece_tokenizer import gen_wordpiece_tokenizer as lib_gen_wordpiece_tokenizer
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import requires_custom_ops
@@ -34,6 +38,8 @@ _TFOUTPUT1 = "output1"
 _OUTPUT1 = "output1:0"
 _TFOUTPUT2 = "output2"
 _OUTPUT2 = "output2:0"
+_TFOUTPUT3 = "output3"
+_OUTPUT3 = "output3:0"
 
 class StringOpsTests(Tf2OnnxBackendTestBase):
 
@@ -112,6 +118,19 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
             return tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
+    @requires_custom_ops("RegexSplitWithOffsets")
+    def test_regex_split_with_offsets(self):
+        text_val = np.array(["a Test 1 2 3 ♠♣",
+                             "Hi there test test ♥♦"], dtype=np.str)
+        def func(text):
+            tokens, begin_offsets, end_offsets, row_splits = lib_gen_regex_split_ops.regex_split_with_offsets(text, "(\\s)", "")
+            tokens_ = tf.identity(tokens, name=_TFOUTPUT)
+            begin_ = tf.identity(begin_offsets, name=_TFOUTPUT1)
+            end_ = tf.identity(end_offsets, name=_TFOUTPUT2)
+            rows_ = tf.identity(row_splits, name=_TFOUTPUT3)
+            return tokens_, begin_, end_, rows_
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3], {_INPUT: text_val})
+
     def _run_test_case(self, func, output_names_with_port, feed_dict, **kwargs):
         extra_opset = [utils.make_opsetid(constants.CONTRIB_OPS_DOMAIN, 1)]
         process_args = {"extra_opset": extra_opset}
@@ -123,28 +142,42 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
         import onnxruntime as rt
         opt = rt.SessionOptions()
         opt.register_custom_ops_library(get_library_path())
-        #import shutil
-        #shutil.copy(model_path, "c:/temp/lll.onnx")
-        #import onnx
-        #with open(model_path, "rb") as f:
-        #    print(onnx.load(f))
         m = rt.InferenceSession(model_path, opt)
         results = m.run(output_names, inputs)
         return results
 
-    @requires_custom_ops("RegexSplitWithOffsets")
-    def test_regex_split_with_offsets(self):
-        text_val = np.array([["a Test 1 2 3 ♠♣"],
-                             ["Hi there test test ♥♦"]], dtype=np.str)
+    @requires_custom_ops("WordpieceTokenizer")
+    def test_wordpiece_tokenizer(self):
+
+        def _CreateTable(vocab, num_oov=1):
+          init = tf.lookup.KeyValueTensorInitializer(
+              vocab,
+              tf.range(tf.size(vocab, out_type=tf.int64), dtype=tf.int64),
+              key_dtype=tf.string,
+              value_dtype=tf.int64,
+              name="hasht")
+          return lookup_ops.StaticVocabularyTable(
+              init, num_oov, lookup_key_dtype=tf.string)
+
+        vocab = _CreateTable(["great", "they", "the", "##'", "##re", "##est"])
+        text_val = np.array(["they're", "the", "greatest"], dtype=np.str)
+
         def func(text):
-            x, begin_offsets, end_offets = tf_text.regex_split_with_offsets(text, "\\s", "")
-            x_ = tf.identity(x.to_tensor(), name=_TFOUTPUT)
-            return x_
-        self._run_test_case(func, [_OUTPUT], {_INPUT: text_val})
+            inputs = ragged_tensor.convert_to_tensor_or_ragged_tensor(text)
+            print(inputs)
+            print(vocab)
+            result = lib_gen_wordpiece_tokenizer.wordpiece_tokenize_with_offsets(
+                inputs, vocab.resource_handle, "##", 200, True, "[UNK]")
+            tokens, begin_offsets, end_offsets, rows = result
+            tokens_ = tf.identity(tokens, name=_TFOUTPUT)
+            begin_ = tf.identity(begin_offsets, name=_TFOUTPUT1)
+            end_ = tf.identity(end_offsets, name=_TFOUTPUT2)
+            rows_ = tf.identity(rows, name=_TFOUTPUT3)
+            return tokens_, begin_, end_, rows_
+        # Fails due to Attempting to capture an EagerTensor without building a function.
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3],
+                            {_INPUT: text_val}, constant_fold=False, as_session=True)
 
 
 if __name__ == "__main__":
-    #cl = StringOpsTests()
-    #cl.setUp()
-    #cl.test_regex_split_with_offsets()
     unittest.main()
