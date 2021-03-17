@@ -1343,6 +1343,12 @@ class Graph(object):
                 nodes.extend(g.find_output_consumers(output_name))
         return nodes
 
+    def remove_output(self, output_name):
+        """Removes an output from all node consuming it."""
+        nodes = self.find_output_consumers(output_name)
+        for node in nodes:
+            self.remove_input(node, output_name)
+
     def _register_input_name(self, input_name, node, only_graph=False):
         "Register node taking a specific input."
         if not only_graph:
