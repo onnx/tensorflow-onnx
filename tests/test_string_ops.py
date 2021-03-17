@@ -11,8 +11,6 @@ from __future__ import unicode_literals
 import unittest
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.ops.ragged import ragged_tensor
-from tensorflow.python.ops import lookup_ops
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import requires_custom_ops
@@ -150,6 +148,8 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
     def test_wordpiece_tokenizer(self):
         from tensorflow_text.python.ops.wordpiece_tokenizer import (
             gen_wordpiece_tokenizer as lib_gen_wordpiece_tokenizer)
+        from tensorflow.python.ops.ragged import ragged_tensor
+        from tensorflow.python.ops import lookup_ops
 
         def _CreateTable(vocab, num_oov=1):
             init = tf.lookup.KeyValueTensorInitializer(
