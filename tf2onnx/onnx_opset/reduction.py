@@ -179,6 +179,8 @@ class SegmentSum():
         data_shape = ctx.get_shape(data_inp)
         data_rank = len(data_shape) if data_shape is not None else None
         data_dtype = ctx.get_dtype(data_inp)
+        seg_rank = ctx.get_rank(segment_inp)
+        utils.make_sure(seg_rank == 1, "Segment ops only supported for segments of rank 1, not %s", seg_rank)
         data_np_dtype = utils.map_onnx_to_numpy_type(data_dtype)
         seg_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(segment_inp))
 
