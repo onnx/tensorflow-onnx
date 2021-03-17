@@ -1,16 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """ tf2onnx mapping functions for string ops using contrib ops domain. """
-import io
-import json
 import logging
-import numpy as np
 from onnx.onnx_pb import TensorProto
-from onnx.helper import make_attribute
-from tf2onnx import constants, handler
+from tf2onnx import constants
 from tf2onnx.handler import tf_op
 from tf2onnx import utils
-from tf2onnx.graph_builder import GraphBuilder
 
 logger = logging.getLogger(__name__)
 

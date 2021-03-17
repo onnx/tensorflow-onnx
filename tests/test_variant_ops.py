@@ -9,7 +9,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import unittest
-import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
@@ -55,7 +54,7 @@ class VariantOpsTests(Tf2OnnxBackendTestBase):
     @requires_custom_ops("RaggedTensorToTensorOp")
     def test_ragged_tensor(self):
         digits = tf.ragged.constant([[3, 1, 4, 1], [], [5, 9, 2], [6], []])
-        
+
         def func():
             x_ = digits.to_tensor()
             return tf.identity(x_, name=_TFOUTPUT)
