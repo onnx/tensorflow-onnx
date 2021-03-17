@@ -11,11 +11,10 @@ from __future__ import unicode_literals
 import unittest
 import numpy as np
 import tensorflow as tf
-
+from tensorflow_text.python.ops import regex_split_ops
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import requires_custom_ops
-from tf2onnx import utils
-from tf2onnx import constants
+from tf2onnx import utils, constants
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,import-outside-toplevel
 # pylint: disable=wrong-import-position
@@ -68,6 +67,17 @@ class VariantOpsTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT],
                             {_INPUT: x, _INPUT1: dv, _INPUT2: sh},
                             as_session=False)
+
+    @requires_custom_ops("RaggedTensorToTensorOp")
+    def test_regex_split_ragged_tensor(self):
+        x = np.array(["ab abc bc"], dtype=np.str)
+
+        def func(x):
+            actual_tokens, start, end = regex_split_ops.regex_split_with_offsets(
+                input=x, delim_regex_pattern="(\\s)", keep_delim_regex_pattern="")
+            shape = actual_tokens.shape
+            return tf.identity(shape, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x})
 
 
 if __name__ == "__main__":
