@@ -155,6 +155,14 @@ class Reshape:
     @classmethod
     def version_5(cls, ctx, node, **kwargs):
         dtype = ctx.get_dtype(node.output[0])
+        if node.inputs[1].is_const():
+            target_shape = node.inputs[1].get_tensor_value(as_list=True)
+            inp_shape = ctx.get_shape(node.input[0])
+            if inp_shape is not None and inp_shape == target_shape:
+                # Remove useless Reshape
+                node.type = "Identity"
+                ctx.replace_inputs(node, [node.input[0]])
+                return
         need_casting = dtype in [onnx_pb.TensorProto.INT32,
                                  onnx_pb.TensorProto.INT16,
                                  onnx_pb.TensorProto.INT64]
