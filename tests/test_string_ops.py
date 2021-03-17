@@ -13,8 +13,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.ragged import ragged_tensor
 from tensorflow.python.ops import lookup_ops
-from tensorflow_text.python.ops.regex_split_ops import gen_regex_split_ops as lib_gen_regex_split_ops
-from tensorflow_text.python.ops.wordpiece_tokenizer import gen_wordpiece_tokenizer as lib_gen_wordpiece_tokenizer
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import requires_custom_ops
@@ -119,6 +117,8 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops("RegexSplitWithOffsets")
     def test_regex_split_with_offsets(self):
+        from tensorflow_text.python.ops.regex_split_ops import (
+            gen_regex_split_ops as lib_gen_regex_split_ops)
         text_val = np.array(["a Test 1 2 3 ♠♣",
                              "Hi there test test ♥♦"], dtype=np.str)
         def func(text):
@@ -148,6 +148,8 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops("WordpieceTokenizer")
     def test_wordpiece_tokenizer(self):
+        from tensorflow_text.python.ops.wordpiece_tokenizer import (
+            gen_wordpiece_tokenizer as lib_gen_wordpiece_tokenizer)
 
         def _CreateTable(vocab, num_oov=1):
             init = tf.lookup.KeyValueTensorInitializer(
