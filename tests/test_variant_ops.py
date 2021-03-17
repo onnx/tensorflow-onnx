@@ -9,6 +9,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import unittest
+import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
@@ -53,12 +54,20 @@ class VariantOpsTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops("RaggedTensorToTensorOp")
     def test_ragged_tensor(self):
-        digits = tf.ragged.constant([[3, 1, 4, 1], [], [5, 9, 2], [6], []])
+        x = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int64)
+        sh = np.array([2, 3], dtype=np.int64)
+        dv = np.array(-1, dtype=np.int64)
 
-        def func():
-            x_ = digits.to_tensor()
+        def func(x, dv, sh):
+            r = tf.RaggedTensor.from_tensor(x, padding=-1)
+            x_ = tf.raw_ops.RaggedTensorToTensor(
+                shape=sh, values=r.flat_values, default_value=dv,
+                row_partition_tensors=[r.row_splits],
+                row_partition_types=["ROW_SPLITS"])
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {})
+        self._run_test_case(func, [_OUTPUT],
+                            {_INPUT: x, _INPUT1: dv, _INPUT2: sh},
+                            as_session=False)
 
 
 if __name__ == "__main__":
