@@ -11,7 +11,6 @@ from __future__ import unicode_literals
 import unittest
 import numpy as np
 import tensorflow as tf
-import tensorflow_text as tf_text
 from tensorflow.python.ops.ragged import ragged_tensor
 from tensorflow.python.ops import lookup_ops
 from tensorflow_text.python.ops.regex_split_ops import gen_regex_split_ops as lib_gen_regex_split_ops
@@ -123,7 +122,8 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
         text_val = np.array(["a Test 1 2 3 ♠♣",
                              "Hi there test test ♥♦"], dtype=np.str)
         def func(text):
-            tokens, begin_offsets, end_offsets, row_splits = lib_gen_regex_split_ops.regex_split_with_offsets(text, "(\\s)", "")
+            tokens, begin_offsets, end_offsets, row_splits = lib_gen_regex_split_ops.regex_split_with_offsets(
+                text, "(\\s)", "")
             tokens_ = tf.identity(tokens, name=_TFOUTPUT)
             begin_ = tf.identity(begin_offsets, name=_TFOUTPUT1)
             end_ = tf.identity(end_offsets, name=_TFOUTPUT2)
@@ -150,22 +150,20 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
     def test_wordpiece_tokenizer(self):
 
         def _CreateTable(vocab, num_oov=1):
-          init = tf.lookup.KeyValueTensorInitializer(
-              vocab,
-              tf.range(tf.size(vocab, out_type=tf.int64), dtype=tf.int64),
-              key_dtype=tf.string,
-              value_dtype=tf.int64,
-              name="hasht")
-          return lookup_ops.StaticVocabularyTable(
-              init, num_oov, lookup_key_dtype=tf.string)
+            init = tf.lookup.KeyValueTensorInitializer(
+                vocab,
+                tf.range(tf.size(vocab, out_type=tf.int64), dtype=tf.int64),
+                key_dtype=tf.string,
+                value_dtype=tf.int64,
+                name="hasht")
+            return lookup_ops.StaticVocabularyTable(
+                init, num_oov, lookup_key_dtype=tf.string)
 
         vocab = _CreateTable(["great", "they", "the", "##'", "##re", "##est"])
         text_val = np.array(["they're", "the", "greatest"], dtype=np.str)
 
         def func(text):
             inputs = ragged_tensor.convert_to_tensor_or_ragged_tensor(text)
-            print(inputs)
-            print(vocab)
             result = lib_gen_wordpiece_tokenizer.wordpiece_tokenize_with_offsets(
                 inputs, vocab.resource_handle, "##", 200, True, "[UNK]")
             tokens, begin_offsets, end_offsets, rows = result
