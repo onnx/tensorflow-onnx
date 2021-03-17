@@ -20,6 +20,7 @@ from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import nn, math
+from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW
 
 logger = logging.getLogger(__name__)
 
@@ -1392,9 +1393,8 @@ class BatchToSpace:
 
         # if 3d or 4d tensor & square 2d block_shape , can optimize
         cond1 = xlen in [3, 4]
-        cond2 = node.inputs[2].is_const()
-        cond3 = blocklen == 2 and block_shape[0] == block_shape[1]
-        if cond1 and cond2 and cond3:
+        cond2 = blocklen == 2 and block_shape[0] == block_shape[1]
+        if cond1 and cond2:
             # https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/batch-to-space-n-d.html
             # the above link says the data format of input tensor should be (batch, spatial_shape, remaining_shape)
             # and we only support 3D and 4D here, and the data format is NHC and NHWC
@@ -1403,47 +1403,81 @@ class BatchToSpace:
             # T out = BatchToSpaceND(T input, int32 block_shape, int32 crops)
             input_tensor = node.inputs[0]
             input_shape = ctx.get_shape(input_tensor.output[0])
-            crops = node.inputs[2].get_tensor_value()
 
-            # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
             if len(input_shape) == 3:
                 # insert automatically an Unsqueeze op if the input is 3d
                 unsqz1 = GraphBuilder(ctx).make_unsqueeze(
                     {"axes": [3], "data": input_tensor.output[0]}, return_node=True)
+                # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
                 trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
             else:
-                trans1 = ctx.make_node("Transpose", input_tensor.output, {"perm": [3, 0, 1, 2]})
+                # Add explicit NHWC_TO_NCHW transpose before and NCHW_TO_NHWC transpose after subgraph.
+                # That enables more optimizations in TransposeOptimizer.
+                trans_nchw = ctx.make_node("Transpose", input_tensor.output, {"perm": NHWC_TO_NCHW})
+                # NCHW TO CNHW
+                trans1 = ctx.make_node("Transpose", trans_nchw.output, {"perm": [1, 0, 2, 3]})
             reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": block_shape[0]})
-            trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
 
-            # implement crop logic, the data format is NHWC
-            slice_axis = [1, 2]
-            top, bottom = crops[0]
-            left, right = crops[1]
-            starts = [top, left]
-            ends = []
-            for end in [bottom, right]:
-                if end != 0:
-                    ends.append(-end)
-                else:
-                    ends.append(np.iinfo(np.int32).max)
+            # implement crop logic, the data format is NCHW
+            slice_axis = [2, 3]
+            if node.inputs[2].is_const():
+                crops = node.inputs[2].get_tensor_value()
+                top, bottom = crops[0]
+                left, right = crops[1]
+                starts = [top, left]
+                ends = []
+                for end in [bottom, right]:
+                    if end != 0:
+                        ends.append(-end)
+                    else:
+                        ends.append(np.iinfo(np.int32).max)
+                attr = {"axes": slice_axis, "ends": ends, "starts": starts}
+            else:
+                shape = ctx.make_const(name=utils.make_name("shape"), np_val=np.array([-1], dtype=np.int64))
+                reshape = ctx.make_node("Cast",
+                                        ctx.make_node("Reshape", inputs=[node.input[2], shape.output[0]]).output,
+                                        attr={"to": utils.map_numpy_to_onnx_dtype(np.int64)})
+                crops = ctx.make_node("Split", inputs=reshape.output, attr={}, output_count=4).output
+                zero = ctx.make_const(name=utils.make_name("zero"), np_val=np.array([0], dtype=np.int64)).output[0]
+                int32_max = ctx.make_const(name=utils.make_name("int32_max"),
+                                           np_val=np.array([np.iinfo(np.int32).max], dtype=np.int64)).output[0]
+                def crop_to_end(crop):
+                    eq = ctx.make_node("Equal", [crop, zero])
+                    not_eq = ctx.make_node("Not", eq.output)
+                    cast_eq = ctx.make_node("Cast", eq.output, attr={"to": utils.map_numpy_to_onnx_dtype(np.int64)})
+                    cast_not_eq = ctx.make_node("Cast", not_eq.output,
+                                                attr={"to": utils.map_numpy_to_onnx_dtype(np.int64)})
+                    neg = ctx.make_node("Neg", cast_not_eq.output)
+                    add = ctx.make_node("Add",
+                                        [
+                                            ctx.make_node("Mul", [crop, neg.output[0]]).output[0],
+                                            ctx.make_node("Mul", [int32_max, cast_eq.output[0]]).output[0],
+                                        ])
+                    return add.output[0]
 
-            attr = {"axes": slice_axis, "ends": ends, "starts": starts}
-            inputs_map = {"data": trans2.output[0], **attr}
+                starts = ctx.make_node("Concat", [crops[0], crops[2]], {'axis': 0})
+                ends = ctx.make_node("Concat", [crop_to_end(crops[1]), crop_to_end(crops[3])], {'axis': 0})
+                axes = ctx.make_const(name=utils.make_name("axes"), np_val=np.array(slice_axis, dtype=np.int64))
+                attr = {"axes": axes.output[0], "ends": ends.output[0], "starts": starts.output[0]}
+            inputs_map = {"data": reorganize_node.output[0], **attr}
             dtypes = node.output_dtypes
             shapes = node.output_shapes
 
+            ctx.remove_node(node.name)
             if len(input_shape) == 3:
                 # add a squeeze op to convert output into 3d
                 kwargs = {**inputs_map}
-                ctx.remove_node(node.name)
-                slice1 = GraphBuilder(ctx).make_slice(kwargs)
-                GraphBuilder(ctx).make_squeeze(
-                    {"axes": [3], "data": slice1, "outputs": node.output}, name=node.name, dtypes=dtypes, shapes=shapes)
+                node_slice = GraphBuilder(ctx).make_slice(kwargs)
+                # CNHW TO NHWC
+                trans2 = ctx.make_node("Transpose", [node_slice], {"perm": [1, 2, 3, 0]})
+                GraphBuilder(ctx).make_squeeze({"axes": [3], "data": trans2.output[0], "outputs": node.output},
+                                               name=node.name, shapes=shapes, dtypes=dtypes)
             else:
-                kwargs = {**inputs_map, "outputs": node.output}
-                ctx.remove_node(node.name)
-                GraphBuilder(ctx).make_slice(kwargs, name=node.name, dtypes=dtypes, shapes=shapes)
+                node_slice = GraphBuilder(ctx).make_slice(inputs_map)
+                # CNHW TO NCHW
+                trans2 = ctx.make_node("Transpose", [node_slice], {"perm": [1, 0, 2, 3]})
+                ctx.make_node("Transpose", trans2.output, {"perm": NCHW_TO_NHWC},
+                              name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
         else:
             def mknode(optype, inputs, attrs=None):
                 nodename = utils.make_name(node.name + '_' + optype.lower())
@@ -1545,7 +1579,10 @@ class SpaceToBatch:
 
         # if 3d or 4d tensor & square 2d block_shape , can optimize
         cond1 = xlen in [3, 4]
-        cond2 = node.inputs[2].is_const()
+        # with opset 11 (or above), we can deal with non-const pads
+        # by creating a subgraph with Split and Concat and pass its output
+        # to Pad's second input
+        cond2 = node.inputs[2].is_const() or ctx.opset >= 11
         cond3 = blocklen == 2 and block_shape[0] == block_shape[1]
         if cond1 and cond2 and cond3:
             # https://www.tensorflow.org/api_docs/python/tf/space_to_batch_nd
@@ -1555,29 +1592,60 @@ class SpaceToBatch:
             # and it only supports NCHW
             # T out = SpaceToBatchND(T input, int32 block_shape, int32 crops)
             input_tensor = node.inputs[0]
+            input_shape = ctx.get_shape(input_tensor.output[0])
             shapes = [ctx.get_shape(node.output[0])]
             dtypes = [ctx.get_dtype(node.output[0])]
 
-            # implement pads logic, the data format is NHWC
-            paddings = node.inputs[2].get_tensor_value()
-            top, bottom = paddings[0]
-            left, right = paddings[1]
-            pads = [0, top, left, 0,
-                    0, bottom, right, 0]
-            ctx.remove_node(node.name)
-            if ctx.opset <= 10:
-                pad_op = ctx.make_node("Pad", input_tensor.output, attr={"pads": pads})
+            if len(input_shape) == 3:
+                # insert automatically an Unsqueeze op if the input is 3d
+                unsqz1 = GraphBuilder(ctx).make_unsqueeze(
+                    {"axes": [3], "data": input_tensor.output[0]}, return_node=True)
+                # NHWC TO CNHW
+                trans1 = ctx.make_node("Transpose", unsqz1.output, {"perm": [3, 0, 1, 2]})
+            else:
+                # Add explicit NHWC_TO_NCHW transpose before and NCHW_TO_NHWC transpose after subgraph.
+                # That enables more optimizations in TransposeOptimizer.
+                trans_nchw = ctx.make_node("Transpose", input_tensor.output, {"perm": NHWC_TO_NCHW})
+                # NCHW TO CNHW
+                trans1 = ctx.make_node("Transpose", trans_nchw.output, {"perm": [1, 0, 2, 3]})
+            # implement pads logic, the data format is NCHW
+            if ctx.opset <= 10 or node.inputs[2].is_const():
+                paddings = node.inputs[2].get_tensor_value()
+                top, bottom = paddings[0]
+                left, right = paddings[1]
+                pads = [0, 0, top, left,
+                        0, 0, bottom, right]
+                if ctx.opset <= 10:
+                    pad_op = ctx.make_node("Pad", trans1.output, attr={"pads": pads})
+                else:
+                    new_pads = ctx.make_const(name=utils.make_name("pads"), np_val=np.array(pads, dtype=np.int64))
+                    pad_op = ctx.make_node("Pad", [trans1.output[0], new_pads.output[0]])
             else:
                 # TODO: we should be able to support dynamic input here.
-                pads_name = utils.make_name(node.name)
-                ctx.make_const(name=pads_name, np_val=np.array(pads, dtype=np.int64))
-                pad_op = ctx.make_node("Pad", [input_tensor.output[0], pads_name])
+                shape = ctx.make_const(name=utils.make_name("shape"), np_val=np.array([-1], dtype=np.int64))
+                reshape = ctx.make_node("Reshape", inputs=[node.input[2], shape.output[0]])
+                cast = ctx.make_node("Cast", reshape.output, attr={'to': utils.map_numpy_to_onnx_dtype(np.int64)})
+                split = ctx.make_node("Split", inputs=cast.output, attr={}, output_count=4)
+                pads = split.output
+                zero = ctx.make_const(name=utils.make_name("zero"), np_val=np.array([0], dtype=np.int64)).output[0]
+                new_pads = ctx.make_node("Concat", [zero, zero, pads[0], pads[2], zero, zero, pads[1], pads[3]],
+                                         {'axis': 0})
+                pad_op = ctx.make_node("Pad", [trans1.output[0], new_pads.output[0]])
 
-            # NHWC TO CNHW, so onnx op will work on "N" which is the same as tensorflow
-            trans1 = ctx.make_node("Transpose", pad_op.output, {"perm": [3, 0, 1, 2]})
-            reorganize_node = ctx.make_node(node.type, trans1.output, attr={"blocksize": block_shape[0]})
-            ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]},
-                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+            reorganize_node = ctx.make_node(node.type, pad_op.output, attr={"blocksize": block_shape[0]})
+
+            ctx.remove_node(node.name)
+            if len(input_shape) == 3:
+                # CNHW TO NHWC
+                trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 2, 3, 0]})
+                # add a squeeze op to convert output into 3d
+                GraphBuilder(ctx).make_squeeze({"axes": [3], "data": trans2.output[0], "outputs": node.output},
+                                               name=node.name, shapes=shapes, dtypes=dtypes)
+            else:
+                # CNHW TO NCHW
+                trans2 = ctx.make_node("Transpose", reorganize_node.output, {"perm": [1, 0, 2, 3]})
+                ctx.make_node("Transpose", trans2.output, {"perm": NCHW_TO_NHWC},
+                              name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
         else:
             def mknode(optype, inputs, attrs=None):
                 nodename = utils.make_name(node.name + '_' + optype.lower())
@@ -1759,6 +1827,144 @@ class NonMaxSuppression:
     def version_13(cls, ctx, node, **kwargs):
         # Parameters moved to inputs for operator Squeeze, Unsqueeze.
         cls.any_version(13, ctx, node, **kwargs)
+
+
+@tf_op(["CombinedNonMaxSuppression"])
+class CombinedNonMaxSuppression:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # boxes.shape = [batch_size, num_boxes, (1 OR num_classes), 4]
+        # scores.shape = [batch_size, num_boxes, num_classes]
+        boxes, scores, max_per_class, max_total_size, iou_threshold, score_threshold = node.input
+
+        max_per_class = ctx.make_node("Cast", [max_per_class], attr={'to': TensorProto.INT64}).output[0]
+        max_total_size = ctx.make_node("Cast", [max_total_size], attr={'to': TensorProto.INT64}).output[0]
+
+        pad_per_class = node.get_attr_value("pad_per_class", False)
+        clip_boxes = node.get_attr_value("clip_boxes", True)
+        shape = ctx.get_shape(boxes)
+        share_boxes_across_classes = shape is not None and shape[2] == 1
+        utils.make_sure(share_boxes_across_classes,
+                        "CombinedNonMaxSuppression only currently implemented for boxes shared across classes.")
+
+        scores_shape = ctx.make_node("Shape", [scores]).output[0]
+        # value: [batch_size]
+        batch_size = GraphBuilder(ctx).make_slice({'data': scores_shape, 'starts': [0], 'ends': [1], 'axes': [0]})
+
+        num_classes = GraphBuilder(ctx).make_slice({'data': scores_shape, 'starts': [2], 'ends': [3], 'axes': [0]})
+        max_per_class_times_classes = ctx.make_node("Mul", [max_per_class, num_classes]).output[0]
+
+        const_zero_float = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.float32)).output[0]
+        const_one_float = ctx.make_const(utils.make_name("const_one"), np.array(1, np.float32)).output[0]
+        const_zero = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.int64)).output[0]
+        const_neg_one = ctx.make_const(utils.make_name("const_neg_one"), np.array(-1, np.int64)).output[0]
+        const_one = ctx.make_const(utils.make_name("const_one"), np.array(1, np.int64)).output[0]
+
+        boxes_sq = GraphBuilder(ctx).make_squeeze({'data': boxes, 'axes': [2]})
+        # scores_trans.shape = [batch_size, num_classes, num_boxes]
+        scores_trans = ctx.make_node("Transpose", [scores], attr={'perm': [0, 2, 1]}).output[0]
+        # shape: [num_selected, 3], elts of format [batch_index, class_index, box_index]
+        selected_indices = ctx.make_node(
+            "NonMaxSuppression", [boxes_sq, scores_trans, max_per_class, iou_threshold, score_threshold],
+            op_name_scope=node.name).output[0]
+        selected_classes_unsq = GraphBuilder(ctx).make_slice(
+            {'data': selected_indices, 'starts': [1], 'ends': [2], 'axes': [1]})
+        selected_classes = GraphBuilder(ctx).make_squeeze({'data': selected_classes_unsq, 'axes': [1]})
+        # shape: [num_selected]
+        selected_scores = ctx.make_node("GatherND", [scores_trans, selected_indices], op_name_scope=node.name).output[0]
+        # shape: [num_selected, 1]
+        selected_batch_idx = GraphBuilder(ctx).make_slice(
+            {'data': selected_indices, 'starts': [0], 'ends': [1], 'axes': [1]})
+        selected_box_num = GraphBuilder(ctx).make_slice(
+            {'data': selected_indices, 'starts': [2], 'ends': [3], 'axes': [1]})
+        combined_box_idx = ctx.make_node("Concat", [selected_batch_idx, selected_box_num], attr={'axis': 1}).output[0]
+        selected_boxes_unsq = ctx.make_node("GatherND", [boxes, combined_box_idx], op_name_scope=node.name).output[0]
+        # shape: [num_selected, 4]
+        selected_boxes = GraphBuilder(ctx).make_squeeze({'data': selected_boxes_unsq, 'axes': [1]})
+
+        clipped_boxes = selected_boxes
+        if clip_boxes:
+            clipped_boxes = ctx.make_node('Max', [clipped_boxes, const_zero_float]).output[0]
+            clipped_boxes = ctx.make_node('Min', [clipped_boxes, const_one_float]).output[0]
+
+        # shape: [num_selected]
+        batch_idx_sq = GraphBuilder(ctx).make_squeeze({'data': selected_batch_idx, 'axes': [1]})
+        # value: [num_selected]
+        num_selected = ctx.make_node("Shape", [selected_scores]).output[0]
+        num_selected_sq = GraphBuilder(ctx).make_squeeze({'data': num_selected, 'axes': [0]})
+        # shape: [num_selected]
+        selected_range = ctx.make_node("Range", [const_zero, num_selected_sq, const_one]).output[0]
+
+
+        id_shape = ctx.make_node("Concat", [batch_size, batch_size], attr={'axis': 0}).output[0]
+        zero_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
+        zeros_of_shape = ctx.make_node("ConstantOfShape", [id_shape], attr={"value": zero_tensor}).output[0]
+        # shape: [batch_size, batch_size]
+        id_matrix = ctx.make_node("EyeLike", [zeros_of_shape]).output[0]
+        # shape: [num_selected, batch_size]
+        one_hot_batch_idx = ctx.make_node("Gather", [id_matrix, batch_idx_sq], attr={'axis': 0}).output[0]
+        cum_batch_idx = ctx.make_node("CumSum", [one_hot_batch_idx, const_zero], {'exclusive': True}).output[0]
+        # shape: [num_selected]
+        idx_within_batch = ctx.make_node("GatherND", [cum_batch_idx, selected_batch_idx], attr={'batch_dims': 1},
+                                         op_name_scope=node.name).output[0]
+        idx_within_batch_unsq = GraphBuilder(ctx).make_unsqueeze({'data': idx_within_batch, 'axes': [1]})
+        combined_idx = ctx.make_node("Concat", [selected_batch_idx, idx_within_batch_unsq], attr={'axis': 1}).output[0]
+
+        zero_tensor_float = helper.make_tensor("value", TensorProto.FLOAT, dims=[1], vals=[0])
+        neg_one_tensor_float = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[-1])
+        # value: [batch_size, max_per_class_times_classes]
+        results_grid_shape = ctx.make_node(
+            "Concat", [batch_size, max_per_class_times_classes], attr={'axis': 0}).output[0]
+        scores_by_batch_empty = ctx.make_node(
+            "ConstantOfShape", [results_grid_shape], attr={"value": zero_tensor_float}).output[0]
+        idx_by_batch_empty = ctx.make_node(
+            "ConstantOfShape", [results_grid_shape], attr={"value": neg_one_tensor_float}).output[0]
+
+        scores_by_batch = ctx.make_node("ScatterND", [scores_by_batch_empty, combined_idx, selected_scores]).output[0]
+        idx_by_batch = ctx.make_node("ScatterND", [idx_by_batch_empty, combined_idx, selected_range]).output[0]
+
+        k_val = ctx.make_node("Min", [max_total_size, max_per_class_times_classes]).output[0]
+
+        # shape: [batch_size, k_val]
+        top_k_vals, top_k_indices = \
+            ctx.make_node("TopK", [scores_by_batch, k_val], attr={'axis': 1}, output_count=2).output
+
+        top_k_selected_indices = ctx.make_node("GatherElements", [idx_by_batch, top_k_indices], attr={'axis': 1},
+                                               op_name_scope=node.name).output[0]
+
+        target_size = max_total_size
+        if pad_per_class:
+            target_size = k_val
+
+        pad_amt = ctx.make_node("Sub", [target_size, k_val]).output[0]
+        pads_const = ctx.make_const(utils.make_name("pad_const"), np.array([0, 0, 0], np.int64)).output[0]
+        pads = ctx.make_node("Concat", [pads_const, pad_amt], attr={'axis': 0}).output[0]
+
+        top_scores_pad = ctx.make_node("Pad", [top_k_vals, pads, const_zero_float]).output[0]
+        top_indices_pad = ctx.make_node("Pad", [top_k_selected_indices, pads, const_neg_one]).output[0]
+        top_indices_increment = ctx.make_node("Add", [top_indices_pad, const_one]).output[0]
+
+        valid_indices = ctx.make_node("Greater", [top_k_selected_indices, const_neg_one]).output[0]
+        valid_indices_int = ctx.make_node("Cast", [valid_indices], attr={'to': TensorProto.INT32}).output[0]
+        # shape: [batch_size]
+        valid_indices_cnt = GraphBuilder(ctx).make_reduce_sum(
+            {"data": valid_indices_int, "axes": [-1], "keepdims": 0, "noop_with_empty_axes": 1})
+
+        box_pads = ctx.make_const(utils.make_name("pad_const"), np.array([1, 0, 0, 0], np.int64)).output[0]
+        class_pads = ctx.make_const(utils.make_name("pad_const"), np.array([1, 0], np.int64)).output[0]
+        clipped_boxes_pad = ctx.make_node("Pad", [clipped_boxes, box_pads, const_zero_float]).output[0]
+        selected_classes_pad = ctx.make_node("Pad", [selected_classes, class_pads, const_zero]).output[0]
+        nmsed_boxes = ctx.make_node("Gather", [clipped_boxes_pad, top_indices_increment], attr={'axis': 0},
+                                    op_name_scope=node.name).output[0]
+        nmsed_classes = ctx.make_node("Gather", [selected_classes_pad, top_indices_increment], attr={'axis': 0},
+                                      op_name_scope=node.name).output[0]
+        nmsed_classes_float = ctx.make_node("Cast", [nmsed_classes], attr={'to': TensorProto.FLOAT}).output[0]
+
+        ctx.replace_all_inputs(node.output[0], nmsed_boxes)
+        ctx.replace_all_inputs(node.output[1], top_scores_pad)
+        ctx.replace_all_inputs(node.output[2], nmsed_classes_float)
+        ctx.replace_all_inputs(node.output[3], valid_indices_cnt)
+        ctx.remove_node(node.name)
 
 
 @tf_op("ReverseSequence")
@@ -2032,13 +2238,13 @@ class Unique:
                 ctx.copy_shape(new_node.output[2], cast_node.output[0])
 
 
-@tf_op("Bincount")
+@tf_op(["Bincount", "DenseBincount"])
 class Bincount:
     @classmethod
     def any_version(cls, opset, ctx, node, **kwargs):
         # arr, size are int32
         arr_inp, size_inp, weights_inp = node.input
-
+        binary_output = node.get_attr_value("binary_output", False)
         arr_int64 = ctx.make_node("Cast", [arr_inp], attr={'to': TensorProto.INT64}).output[0]
         size_int64 = ctx.make_node("Cast", [size_inp], attr={'to': TensorProto.INT64}).output[0]
 
@@ -2047,22 +2253,55 @@ class Bincount:
         weights_is_zero = weights_shape is not None and 0 in weights_shape
         utils.make_sure(weights_is_zero, "Non-empty weights not yet supported for bincount")
 
-        values, _, _, counts = ctx.make_node("Unique", [arr_int64], attr={'sorted': 1}, output_count=4,
-                                             op_name_scope=node.name).output
+        if ctx.get_rank(arr_inp) == 2:
+            zero_const = ctx.make_const(utils.make_name("zero_const"), np.array(0, np.int64)).output[0]
+            one_const = ctx.make_const(utils.make_name("one_const"), np.array(1, np.int64)).output[0]
+            inp_shape = ctx.make_node("Shape", [arr_inp]).output[0]
+            num_rows = GraphBuilder(ctx).make_slice({"data": inp_shape, "starts": [0], "ends": [1], "axes": [0]})
+            num_rows_sq = GraphBuilder(ctx).make_squeeze({"data": num_rows, "axes": [0]})
+            row_idx = ctx.make_node("Range", [zero_const, num_rows_sq, one_const]).output[0]
+            row_idx_unsq = GraphBuilder(ctx).make_unsqueeze({"data": row_idx, "axes": [1]})
+            row_idx_expand = ctx.make_node("Expand", [row_idx_unsq, inp_shape]).output[0]
+            arr_int64_unsq = GraphBuilder(ctx).make_unsqueeze({"data": arr_int64, "axes": [2]})
+            row_idx_expand_unsq = GraphBuilder(ctx).make_unsqueeze({"data": row_idx_expand, "axes": [2]})
+            concat = ctx.make_node("Concat", [row_idx_expand_unsq, arr_int64_unsq], {"axis": 2}).output[0]
+            reshape_const = ctx.make_const(utils.make_name("reshape_const"), np.array([-1, 2], np.int64)).output[0]
+            reshaped = ctx.make_node("Reshape", [concat, reshape_const]).output[0]
+            values, _, _, counts = ctx.make_node("Unique", [reshaped], attr={'sorted': 1, 'axis': 0}, output_count=4,
+                                                 op_name_scope=node.name).output
+            values_to_check_unsq = GraphBuilder(ctx).make_slice(
+                {"data": values, "starts": [1], "ends": [2], "axes": [1]})
+            values_to_check = GraphBuilder(ctx).make_squeeze({"data": values_to_check_unsq, "axes": [1]})
+            size_unsq = GraphBuilder(ctx).make_unsqueeze({'data': size_int64, "axes": [0]})
+            output_shape = ctx.make_node("Concat", [num_rows, size_unsq], attr={"axis": 0}).output[0]
+        else:
+            values, _, _, counts = ctx.make_node("Unique", [arr_int64], attr={'sorted': 1}, output_count=4,
+                                                 op_name_scope=node.name).output
+            values_to_check = values
+            output_shape = GraphBuilder(ctx).make_unsqueeze({'data': size_int64, "axes": [0]})
+
         neg_one_const = ctx.make_const(utils.make_name("neg_one_const"), np.array(-1, np.int64)).output[0]
-        non_neg_val_locs = ctx.make_node("Greater", [values, neg_one_const]).output[0]
-        small_val_locs = ctx.make_node("Less", [values, size_int64]).output[0]
+        non_neg_val_locs = ctx.make_node("Greater", [values_to_check, neg_one_const]).output[0]
+        small_val_locs = ctx.make_node("Less", [values_to_check, size_int64]).output[0]
         valid_val_locs = ctx.make_node("And", [non_neg_val_locs, small_val_locs]).output[0]
 
         valid_values = ctx.make_node("Compress", [values, valid_val_locs], attr={'axis': 0}).output[0]
-        valid_counts = ctx.make_node("Compress", [counts, valid_val_locs], attr={'axis': 0}).output[0]
+        if binary_output:
+            counts_shape = ctx.make_node("Shape", [valid_values]).output[0]
+            counts_shape_1d = GraphBuilder(ctx).make_slice(
+                {"data": counts_shape, "starts": [0], "ends": [1], "axes": [0]})
+            ones_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[1])
+            valid_counts = ctx.make_node("ConstantOfShape", [counts_shape_1d], attr={'value': ones_tensor}).output[0]
+        else:
+            valid_counts = ctx.make_node("Compress", [counts, valid_val_locs], attr={'axis': 0}).output[0]
 
-        output_shape = GraphBuilder(ctx).make_unsqueeze({'data': size_int64, "axes": [0]})
+        zero_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
+        zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': zero_tensor}).output[0]
 
-        false_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
-        zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': false_tensor}).output[0]
-
-        result = ctx.make_node("ScatterElements", [zeros, valid_values, valid_counts], attr={'axis': 0}).output[0]
+        if ctx.get_rank(arr_inp) == 2:
+            result = ctx.make_node("ScatterND", [zeros, valid_values, valid_counts]).output[0]
+        else:
+            result = ctx.make_node("ScatterElements", [zeros, valid_values, valid_counts], attr={'axis': 0}).output[0]
         result_cast = result
         if res_dtype != TensorProto.INT64:
             result_cast = ctx.make_node("Cast", [result], attr={'to': res_dtype}).output[0]

@@ -45,7 +45,7 @@ class TflWhile:
         # They can then be optimized in this tfl loop handler provided they are not used in the cond subgraph.
         scan_outputs = sorted(body.scan_outputs, reverse=True)
         def input_is_unused(g, index):
-            return len(g.find_output_consumers(g.func_inputs[index])) == 0
+            return len(g.find_output_consumers(g.inputs[index])) == 0
         scan_outputs = [(i, out) for i, out in scan_outputs if input_is_unused(cond_graph, i)]
 
         for idx, _ in scan_outputs:
@@ -80,7 +80,7 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
     """Wire subgraph graph into main."""
 
     g = copy.deepcopy(g)
-    graph_inputs = g.func_inputs.copy()
+    graph_inputs = g.inputs.copy()
 
     # onnx will pass in cond as argument
     iter_node = g.make_node("Placeholder", [], name=utils.make_name("iteration_num"),
@@ -91,7 +91,7 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
 
     to_remove = set()
     for idx, scan_output in scan_outputs:
-        inp = g.get_node_by_output(graph_inputs[idx])
+        inp = graph_inputs[idx]
 
         # Remove consumers of scan input
         stack = [inp]
@@ -104,7 +104,7 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
 
         # Remove scan input from cond graph
         cond_binding = {k: "@@ALLOC" if v == g.outputs[idx] else v for k, v in cond_binding.items()}
-        del g.func_inputs[idx]
+        del g.inputs[idx]
         del g.outputs[idx]
         g.outputs.append(scan_output)
 
@@ -112,12 +112,10 @@ def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
         g.remove_node(node.name)
 
     # in onnx the body inputs are: index, cond, [loop_vars]
-    g.func_inputs = [iter_node.output[0], cond_node.output[0]] + g.func_inputs
-    # tell graph lib to keep inputs in order
-    g._order_sensitive_inputs = \
-        [g.get_node_by_output(name) for name in g.func_inputs]  # pylint: disable=protected-access
+    g.inputs = [iter_node, cond_node] + g.inputs
 
-    for p, c in zip(loop_node_inputs, g.func_inputs):
+    # Shapes of iteration and cond are already known
+    for p, c in zip(loop_node_inputs[2:], g.input_names[2:]):
         shape = p.output_shapes[0]
         g.set_shape(c, shape)
 

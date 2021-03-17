@@ -441,7 +441,7 @@ nnlm-ko-dim128-with-normalization:
   concrete_function: 0
 
 nonsemantic-speech-benchmark-trill:
-  disabled: false
+  disabled: true
   skip_conversion: true
   model: "D:/co_tfhubmodels/nonsemantic-speech-benchmark-trill"
   converted_model: "D:/co_tfhubmodels/nonsemantic-speech-benchmark-trill/model.onnx"
@@ -492,3 +492,1059 @@ universal-sentence-encoder:
   atol: 0.0005
   tag: "serve"
   signature_def: "serving_default"
+
+centernet-resnet50v2_512x512:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/centernet-resnet50v2_512x512"
+  converted_model: "D:/co_tfhubmodels/centernet-resnet50v2_512x512/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+compare_gan-model_12_cifar10_resnet_cifar:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/compare_gan-model_12_cifar10_resnet_cifar"
+  converted_model: "D:/co_tfhubmodels/compare_gan-model_12_cifar10_resnet_cifar/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "discriminator_representation/input:0": [64,32,32,3]
+  outputs:
+    - "discriminator_representation/result:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "discriminator"
+
+compare_gan-model_7_lsun_bedroom_resnet19:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/compare_gan-model_7_lsun_bedroom_resnet19"
+  converted_model: "D:/co_tfhubmodels/compare_gan-model_7_lsun_bedroom_resnet19/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "generator_evaluation/input:0": [64,128]
+  outputs:
+    - "generator_evaluation/result:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "generator"
+
+compare_gan-model_9_celebahq128_resnet19:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/compare_gan-model_9_celebahq128_resnet19"
+  converted_model: "D:/co_tfhubmodels/compare_gan-model_9_celebahq128_resnet19/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "generator_evaluation/input:0": [64,128]
+  outputs:
+    - "generator_evaluation/result:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "generator"
+
+craft-text-detector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/craft-text-detector/model.tflite"
+  converted_model: "D:/co_tfhubmodels/craft-text-detector/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_random
+  inputs:
+    "input": [1,3,800,600]
+  outputs:
+    - Identity
+    - Identity_1
+  rtol: 0.05
+  atol: 0.0005
+
+cropnet-feature_vector-concat:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/cropnet-feature_vector-concat"
+  converted_model: "D:/co_tfhubmodels/cropnet-feature_vector-concat/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "image:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  concrete_function: 2
+
+deeplabv3-xception65:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/deeplabv3-xception65/model.tflite"
+  converted_model: "D:/co_tfhubmodels/deeplabv3-xception65/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "sub_7": [1,513,513,3]
+  outputs:
+    - ResizeBilinear_2
+  rtol: 0.05
+  atol: 0.0005
+
+disease-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/disease-classification"
+  converted_model: "D:/co_tfhubmodels/disease-classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "mobilenetv2_1_00_224_input:0": [1,300,300,3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+efficientdet-d0:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/efficientdet-d0"
+  converted_model: "D:/co_tfhubmodels/efficientdet-d0/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [1,200,200,3]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bert-wiki_books:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/experts-bert-wiki_books"
+  converted_model: "D:/co_tfhubmodels/experts-bert-wiki_books/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bit-r50x1-in21k-bird:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/experts-bit-r50x1-in21k-bird"
+  converted_model: "D:/co_tfhubmodels/experts-bit-r50x1-in21k-bird/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bit-r50x1-in21k-vertebrate:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/experts-bit-r50x1-in21k-vertebrate"
+  converted_model: "D:/co_tfhubmodels/experts-bit-r50x1-in21k-vertebrate/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+faster_rcnn-resnet50_v1_1024x1024:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/faster_rcnn-resnet50_v1_1024x1024"
+  converted_model: "D:/co_tfhubmodels/faster_rcnn-resnet50_v1_1024x1024/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+ganeval-cifar10-convnet:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/ganeval-cifar10-convnet"
+  converted_model: "D:/co_tfhubmodels/ganeval-cifar10-convnet/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "Placeholder_2:0": [1, 32, 32, 3]
+  outputs:
+    - cifar10_convnet_3/avg_pool:0
+    - cifar10_convnet_3/Relu:0
+    - cifar10_convnet_3/Relu_1:0
+    - cifar10_convnet_3/Relu_2:0
+    - cifar10_convnet_3/Relu_3:0
+    - cifar10_convnet_3/Relu_4:0
+    - cifar10_convnet_3/Relu_5:0
+    - cifar10_convnet_3/Relu_6:0
+    - cifar10_convnet_3/Relu_7:0
+    - cifar10_convnet_3/Relu_8:0
+    - cifar10_convnet_3/Relu_9:0
+    - cifar10_convnet_3/Relu_10:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "image_feature_vector"
+
+imagenet-mobilenet_v1_025_192-quantops-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_025_192-quantops-feature_vector"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_025_192-quantops-feature_vector/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "hub_input/images:0": [1, 192, 192, 3]
+  outputs:
+    - "hub_output/feature_vector/SpatialSqueeze/ReadForQuantize:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+imagenet-mobilenet_v1_075_128-quantops-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_075_128-quantops-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_075_128-quantops-classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "hub_input/images:0": [1, 128, 128, 3]
+  outputs:
+    - "MobilenetV1/Logits/SpatialSqueeze/ReadForQuantize:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+imagenet-mobilenet_v1_075_160-quantops-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_075_160-quantops-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_075_160-quantops-classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "hub_input/images:0": [1, 160, 160, 3]
+  outputs:
+    - "MobilenetV1/Logits/SpatialSqueeze/ReadForQuantize:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+imagenet-mobilenet_v1_100_192-quantops-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_100_192-quantops-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_100_192-quantops-classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "hub_input/images:0": [1, 192, 192, 3]
+  outputs:
+    - "MobilenetV1/Logits/SpatialSqueeze/ReadForQuantize:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+imagenet-mobilenet_v1_100_224-quantops-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_100_224-quantops-classification"
+  converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_100_224-quantops-classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "hub_input/images:0": [1, 224, 224, 3]
+  outputs:
+    - "MobilenetV1/Logits/SpatialSqueeze/ReadForQuantize:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+llr-pretrain-adv-linear:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/llr-pretrain-adv-linear"
+  converted_model: "D:/co_tfhubmodels/llr-pretrain-adv-linear/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "Placeholder:0": [1, 1, 1, 2048]
+  outputs:
+    - "conv_2d/BiasAdd:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+mirnet-tfjs:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/mirnet-tfjs"
+  converted_model: "D:/co_tfhubmodels/mirnet-tfjs/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+mobilenet_v1_0.75_224:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/mobilenet_v1_0.75_224/model.tflite"
+  converted_model: "D:/co_tfhubmodels/mobilenet_v1_0.75_224/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input": [1, 224, 224, 3]
+  outputs:
+    - "MobilenetV1/Predictions/Reshape_1"
+  rtol: 0.05
+  atol: 0.0005
+
+on_device_vision-classifier-popular_wine_V1:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/on_device_vision-classifier-popular_wine_V1"
+  converted_model: "D:/co_tfhubmodels/on_device_vision-classifier-popular_wine_V1/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "hub_input/images:0": [1, 224, 224, 3]
+  outputs:
+    - transpose_1:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+progan-128:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/progan-128"
+  converted_model: "D:/co_tfhubmodels/progan-128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "input:0": [1, 512]
+  outputs:
+    - clip_by_value_1:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+remote_sensing-resisc45-resnet50:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/remote_sensing-resisc45-resnet50"
+  converted_model: "D:/co_tfhubmodels/remote_sensing-resisc45-resnet50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "Placeholder:0": [1, 200, 200, 3]
+  outputs:
+    - "resnet/root_block/max_pooling2d/MaxPool:0"
+    - "resnet/block1/unit03/add:0"
+    - "resnet/block2/unit04/add:0"
+    - "resnet/block3/unit06/add:0"
+    - "resnet/block4/unit03/add:0"
+    - "resnet/Squeeze:0"
+    - "resnet/head/Squeeze:0"
+    - "resnet/Squeeze:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+small_bert-bert_en_uncased_L-6_H-128_A-2:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/small_bert-bert_en_uncased_L-6_H-128_A-2"
+  converted_model: "D:/co_tfhubmodels/small_bert-bert_en_uncased_L-6_H-128_A-2/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+    - Identity_8:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+small_bert-bert_en_uncased_L-8_H-128_A-2:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/small_bert-bert_en_uncased_L-8_H-128_A-2"
+  converted_model: "D:/co_tfhubmodels/small_bert-bert_en_uncased_L-8_H-128_A-2/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+    - Identity_8:0
+    - Identity_9:0
+    - Identity_10:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+small_bert-bert_en_uncased_L-10_H-128_A-2:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/small_bert-bert_en_uncased_L-10_H-128_A-2"
+  converted_model: "D:/co_tfhubmodels/small_bert-bert_en_uncased_L-10_H-128_A-2/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+    - Identity_8:0
+    - Identity_9:0
+    - Identity_10:0
+    - Identity_11:0
+    - Identity_12:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+small_bert-bert_en_uncased_L-12_H-128_A-2:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/small_bert-bert_en_uncased_L-12_H-128_A-2"
+  converted_model: "D:/co_tfhubmodels/small_bert-bert_en_uncased_L-12_H-128_A-2/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+    - Identity_8:0
+    - Identity_9:0
+    - Identity_10:0
+    - Identity_11:0
+    - Identity_12:0
+    - Identity_13:0
+    - Identity_14:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+small_bert-bert_uncased_L-2_H-128_A-2:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/small_bert-bert_uncased_L-2_H-128_A-2"
+  converted_model: "D:/co_tfhubmodels/small_bert-bert_uncased_L-2_H-128_A-2/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_ids:0": [1, 512]
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+    "segment_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+  outputs:
+    - "bert/pooler/dense/Tanh:0"
+    - "bert/encoder/layer_1/output/LayerNorm/batchnorm/add_1:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "tokens"
+
+small_bert-bert_uncased_L-6_H-768_A-12:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/small_bert-bert_uncased_L-6_H-768_A-12"
+  converted_model: "D:/co_tfhubmodels/small_bert-bert_uncased_L-6_H-768_A-12/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_ids:0": [1, 512]
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+    "segment_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+  outputs:
+    - "bert/pooler/dense/Tanh:0"
+    - "bert/encoder/layer_5/output/LayerNorm/batchnorm/add_1:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "tokens"
+
+spiral-default-wgangp-celebahq64-gen-19steps-agent5:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/spiral-default-wgangp-celebahq64-gen-19steps-agent5"
+  converted_model: "D:/co_tfhubmodels/spiral-default-wgangp-celebahq64-gen-19steps-agent5/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "Placeholder:0": [1]  # int
+    "Placeholder_1:0": [1]  # float
+    "Placeholder_2:0": [1]  # float
+    "Placeholder_3:0": [1]
+    "Placeholder_4:0": [1]
+    "Placeholder_5:0": [1]
+    "Placeholder_6:0": [1]
+    "Placeholder_7:0": [1]
+    "Placeholder_8:0": [1]
+    "Placeholder_9:0":
+      shape: [1, 64, 64, 3]  # float
+      input_get: get_beach
+    "Placeholder_10:0": [1]  # int
+    "Placeholder_11:0": [1]  # int
+    "Placeholder_12:0": [1, 10]  # float
+    "Placeholder_13:0": [1, 256]  # float
+    "Placeholder_14:0": [1, 256]  # float
+    "Placeholder_15:0": [1]  # int
+    "Placeholder_16:0": [1]
+    "Placeholder_17:0": [1]
+    "Placeholder_18:0": [1]
+    "Placeholder_19:0": [1]
+    "Placeholder_20:0": [1]
+    "Placeholder_21:0": [1]
+    "Placeholder_22:0": [1]
+  outputs:
+    - "default/head/head/autoregressive_heads_1/blue_action:0"
+    - "default/head/head/autoregressive_heads_1/control_action:0"
+    - "default/head/head/autoregressive_heads_1/end_action:0"
+    - "default/head/head/autoregressive_heads_1/flag_action:0"
+    - "default/head/head/autoregressive_heads_1/green_action:0"
+    - "default/head/head/autoregressive_heads_1/pressure_action:0"
+    - "default/head/head/autoregressive_heads_1/red_action:0"
+    - "default/head/head/autoregressive_heads_1/size_action:0"
+    - "lstm/add_2:0"
+    - "lstm/mul_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "step"
+
+supcon-resnet_v1_101-imagenet-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/supcon-resnet_v1_101-imagenet-classification"
+  converted_model: "D:/co_tfhubmodels/supcon-resnet_v1_101-imagenet-classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "data_provider/Placeholder:0": [1, 224, 224, 3]
+  outputs:
+    - "call_model/ContrastiveModel/ClassificationHead/dense/BiasAdd_1:0"
+    - "call_model/ContrastiveModel/l2_normalize_1:0"
+    - "call_model/ContrastiveModel/ClassificationHead/dense/BiasAdd_1:0"
+    - "call_model/ContrastiveModel/ProjectionHead/l2_normalize_1:0"
+    - "call_model/ContrastiveModel/Encoder/Squeeze_1:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+tf2-preview-nnlm-es-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/tf2-preview-nnlm-es-dim50"
+  converted_model: "D:/co_tfhubmodels/tf2-preview-nnlm-es-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  concrete_function: 0
+
+tf2-preview-nnlm-ja-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/tf2-preview-nnlm-ja-dim50"
+  converted_model: "D:/co_tfhubmodels/tf2-preview-nnlm-ja-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  concrete_function: 0
+
+tf2-preview-nnlm-ko-dim50:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/tf2-preview-nnlm-ko-dim50"
+  converted_model: "D:/co_tfhubmodels/tf2-preview-nnlm-ko-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  concrete_function: 0
+
+tf2-preview-nnlm-id-dim50-with-normalization:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/tf2-preview-nnlm-id-dim50-with-normalization"
+  converted_model: "D:/co_tfhubmodels/tf2-preview-nnlm-id-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  concrete_function: 0
+
+tf2-preview-nnlm-ko-dim128:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/tf2-preview-nnlm-ko-dim128"
+  converted_model: "D:/co_tfhubmodels/tf2-preview-nnlm-ko-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  concrete_function: 0
+
+tiny_video_net-tvn2:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/tiny_video_net-tvn2"
+  converted_model: "D:/co_tfhubmodels/tiny_video_net-tvn2/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "Placeholder:0": [16, 256, 256, 3]
+  outputs:
+    - "dense/BiasAdd:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+unet-industrial-class_3:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/unet-industrial-class_3"
+  converted_model: "D:/co_tfhubmodels/unet-industrial-class_3/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "hub_input/input:0": [1, 512, 512, 1]
+  outputs:
+    - "UNet_v1/sigmoid:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+unet-industrial-class_4:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/unet-industrial-class_4"
+  converted_model: "D:/co_tfhubmodels/unet-industrial-class_4/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "hub_input/input:0": [1, 512, 512, 1]
+  outputs:
+    - "UNet_v1/sigmoid:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+vggish:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/vggish"
+  converted_model: "D:/co_tfhubmodels/vggish/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_wav
+  inputs:
+    "waveform:0": [48000]
+  outputs:
+    - "Identity:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  concrete_function: 0
+
+videoflow-evaluator:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/videoflow-evaluator"
+  converted_model: "D:/co_tfhubmodels/videoflow-evaluator/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "Placeholder:0": [1, 3, 64, 64, 3]
+    "Placeholder_1:0": [1, 1, 64, 64, 3]
+  outputs:
+    - truediv:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "eval"
+
+wiki40b-lm-ar:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/wiki40b-lm-ar"
+  converted_model: "D:/co_tfhubmodels/wiki40b-lm-ar/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-da:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/wiki40b-lm-da"
+  converted_model: "D:/co_tfhubmodels/wiki40b-lm-da/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-et:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/wiki40b-lm-et"
+  converted_model: "D:/co_tfhubmodels/wiki40b-lm-et/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-ko:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/wiki40b-lm-ko"
+  converted_model: "D:/co_tfhubmodels/wiki40b-lm-ko/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-ms:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/wiki40b-lm-ms"
+  converted_model: "D:/co_tfhubmodels/wiki40b-lm-ms/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-no:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/wiki40b-lm-no"
+  converted_model: "D:/co_tfhubmodels/wiki40b-lm-no/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-sl:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/wiki40b-lm-sl"
+  converted_model: "D:/co_tfhubmodels/wiki40b-lm-sl/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-tl:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels/wiki40b-lm-tl"
+  converted_model: "D:/co_tfhubmodels/wiki40b-lm-tl/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"

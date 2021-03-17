@@ -28,7 +28,7 @@ import six
 class OpTypePattern(object):
     """A tree pattern that matches TF expressions with certain op types."""
 
-    def __init__(self, op_type, name=None, inputs=None):
+    def __init__(self, op_type, name=None, inputs=None, allow_reorder=None):
         """Initializes an OpTypePattern.
 
         Args:
@@ -43,9 +43,12 @@ class OpTypePattern(object):
           inputs: Optional list of `OpTypePattern`s or strings that specify the
             patterns for the inputs of a matching op. If None, this pattern accepts
             any inputs of a matching op.
+          allow_reorder: Optional boolean that overrides allow_reorder in GraphMatcher
+            for this pattern's immediate inputs.
         """
         self._op_type = op_type
         self._name = name
+        self.allow_reorder = allow_reorder
         if inputs is None:
             inputs = []
         self._inputs = [
@@ -202,7 +205,10 @@ class GraphMatcher(object):
         if not op or len(op.inputs) != len(pattern.inputs):
             return False, match_list
 
-        if self._allow_reorder:
+        allow_reorder = pattern.allow_reorder
+        if allow_reorder is None:
+            allow_reorder = self._allow_reorder
+        if allow_reorder:
             pattern_inputs_list = permutations(pattern.inputs)
         else:
             pattern_inputs_list = [pattern.inputs]

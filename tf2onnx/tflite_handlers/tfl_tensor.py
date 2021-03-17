@@ -6,7 +6,9 @@ tfl_tensor
 """
 
 import logging
+import numpy as np
 from tf2onnx.handler import tfl_op
+from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +46,15 @@ class TflGather:
 class TflReshape:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
+        if len(node.input) == 1 or ctx.get_rank(node.input[1]) != 1:
+            new_shape = node.get_attr_value('new_shape')
+            if new_shape == [0]:
+                # Legacy tflite models use a shape parameter of [0] to indicate scalars
+                new_shape = []
+            new_shape_const = ctx.make_const(utils.make_name("new_shape"), np.array(new_shape, np.int64))
+            ctx.replace_inputs(node, [node.input[0], new_shape_const.output[0]])
         if 'new_shape' in node.attr:
             del node.attr['new_shape']
-        #utils.make_sure('new_shape' not in node.attr, "new_shape attr not yet supported for reshape (use input)")
 
 @tfl_op(["TFL_CAST"], tf_op="Cast")
 class TflCast:

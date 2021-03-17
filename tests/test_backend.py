@@ -51,6 +51,8 @@ _TFOUTPUT1 = "output1"
 _OUTPUT1 = "output1:0"
 _TFOUTPUT2 = "output2"
 _OUTPUT2 = "output2:0"
+_TFOUTPUT3 = "output3"
+_OUTPUT3 = "output3:0"
 
 
 if is_tf2():
@@ -225,6 +227,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(9, "ConstantOfShape")
+    def test_layer_normalization(self):
+        x_val = make_xval([3, 4, 5])
+        scale_val = make_xval([3, 4, 5]) * 0.2
+        bias_val = make_xval([3, 4, 5]) * 0.1
+        def func(x):
+            mean = tf.reduce_mean(x, axis=[2], keepdims=True)
+            centered = tf.subtract(x, mean)
+            variance = tf.add(tf.reduce_mean(tf.square(centered), axis=[2], keepdims=True), 0.001)
+            inv_std_dev = tf.math.rsqrt(variance)
+            normalized = tf.multiply(centered, inv_std_dev)
+            scaled = tf.multiply(normalized, scale_val)
+            biased = tf.add(scaled, bias_val)
+            return tf.identity(biased, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
+                            graph_validator=lambda g: (check_op_count(g, "InstanceNormalization", 1)))
+
+    @check_opset_min_version(9, "ConstantOfShape")
     def test_eye_non_const1(self):
         # tf.eye(num_rows), num_rows is not const here
         x_val = np.array(5, dtype=np.int32)
@@ -318,6 +337,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(mp, name=_TFOUTPUT)
             self.logger.debug(str(p))
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.15", "required for max_pool args")
+    def test_maxpool_int(self):
+        x_shape = [8, 16, 16, 3]
+        x_val = make_xval(x_shape).astype("int32")
+        def func(x):
+            mp = tf.nn.max_pool(x, ksize=[2], strides=[1, 2, 2, 1], padding="SAME")
+            return tf.identity(mp, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @skip_tf_cpu("only tf_gpu can run maxpool with NCHW format")
     def test_maxpool_gpu(self):
@@ -608,6 +636,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(conv, name=_TFOUTPUT)
         # rtol is a bit high, 2 values have a bit high error. Maybe use different input data.
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=0.01)
+
+    def test_depthwiseconv_shared_kernel(self):
+        x_shape = [1, 3, 4, 3]
+        kernel_shape = [3, 3, 3, 3]
+        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
+        def func(x, y):
+            kernel = tf.constant(kernel_val, dtype=tf.float32, name='k')
+            conv1 = tf.nn.depthwise_conv2d(x, kernel, strides=[1, 1, 1, 1], padding='VALID')
+            conv2 = tf.nn.depthwise_conv2d(y, kernel, strides=[1, 1, 1, 1], padding='VALID')
+            conv = tf.add(conv1, conv2)
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=0.08)
 
     @check_tf_min_version("1.14", "tf depthwise_conv2d dilations")
     @check_opset_min_version(11, "non-const pads")
@@ -1520,6 +1561,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
     @check_opset_min_version(11, "Pad")
+    @skip_tflite("unknown rank")
     def test_segment_mean_unknown_rank(self):
         segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
         data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
@@ -1809,9 +1851,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         # since results are random, compare the shapes only
         g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {})
+        results = self.run_backend(g, g.outputs, {})
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
+
+    def test_randomuniform_int_scalar(self):
+        def func():
+            shape = tf.constant(np.array([], np.int32), name="shape")
+            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=2, maxval=10)
+            x_ = tf.identity(x_, name="output1")
+            x_ = tf.identity(x_, name="output2")
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        results = self.run_backend(g, g.outputs, {})
+        self.assertTrue(2 <= results[0] < 10)
 
     def test_randomuniform_int_nonconst_max(self):
         m_val = np.array(8, dtype=np.int32)
@@ -1822,7 +1876,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
         g = self._run_test_case(func, [_OUTPUT], {_INPUT: m_val}, check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {_INPUT: m_val})
+        feed_dict = {_INPUT: m_val}
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
+        results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(8)))
 
@@ -1836,7 +1894,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
         g = self._run_test_case(func, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val}, check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val})
+        feed_dict = {_INPUT: n_val, _INPUT1: m_val}
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
+        results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
 
@@ -1852,7 +1914,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         g = self._run_test_case(func, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val},
                                 check_value=False, check_shape=True)
-        results = self.run_backend(g, [_OUTPUT], {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val})
+        feed_dict = {_INPUT: n_val, _INPUT1: m_val, _INPUT2: s_val}
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
+        results = self.run_backend(g, g.outputs, feed_dict)
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
 
@@ -3024,6 +3090,35 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
+    @check_opset_min_version(11, "CumSum")
+    def test_matrix_band_part_3(self):
+        for low, high in [(-1, 3), (2, 3), (4, 3), (0, -1), (0, 0), (-1, -1)]:
+            input_val = np.random.randint(0, 666, (10, 15)).astype(np.int32)
+            def func(input_x):
+                res = tf.linalg.band_part(input_x, low, high)
+                return tf.identity(res, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_matrix_band_part_4(self):
+        for low, high in [(-1, 3), (2, 3), (4, 3), (0, -1), (0, 0)]:
+            input_val = np.random.randint(0, 666, (2, 3, 10, 15)).astype(np.int32)
+            def func(input_x):
+                res = tf.linalg.band_part(input_x, low, high)
+                return tf.identity(res, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
+
+    @check_opset_min_version(11, "CumSum")
+    def test_matrix_band_part_5(self):
+        for low_val, high_val in [(2, 3), (4, 3), (0, 0), (2, 0)]:
+            low_val = np.array(low_val, np.int32)
+            high_val = np.array(high_val, np.int32)
+            input_val = np.random.randint(0, 666, (2, 3, 10, 15)).astype(np.int32)
+            def func(input_x, low, high):
+                res = tf.linalg.band_part(input_x, low, high)
+                return tf.identity(res, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: low_val, _INPUT2: high_val})
+
     def test_floordiv(self):
         input_val_1 = np.random.random_sample(100).astype(np.int32)
         input_val_2 = (np.random.random_sample(100) + 1).astype(np.int32)
@@ -3226,11 +3321,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "BatchToSpaceND")
     def test_batch_to_spacend_non_const_7d(self):
-        x_type, y_type, z_type = np.int64, np.int64, np.int64
+        x_type, y_type, z_type = np.float32, np.int64, np.int64
         # test 3D upto 7D input tensors
         for x_shape in [[12, 4, 4], [12, 4, 8, 3], [12, 4, 8, 3, 2], [12, 4, 8, 3, 2, 3], [12, 4, 8, 3, 2, 1, 3]]:
             # test 1D upto 2D block shapes
-            for block_shape in [[2, 3], [2]]:
+            for block_shape in [[2, 3], [2, 2], [2]]:
                 # crop 1 layer at end of each dim
                 # x and z can be dynamic.
                 # y = block_shape cannot be dynamic without change to Transpose op spec
@@ -3245,7 +3340,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "SpaceToBatchND")
     def test_space_to_batchnd_non_const_7d(self):
-        x_type, y_type, z_type = np.int64, np.int64, np.int64
+        x_type, y_type, z_type = np.float32, np.int64, np.int64
         # test 3D upto 7D input tensors
         for x_shape in [[2, 4, 4], [1, 4, 8, 3], [1, 4, 8, 3, 2], [1, 4, 8, 3, 2, 3], [1, 4, 8, 3, 2, 1, 3]]:
             # test 1D upto 2D block shapes
@@ -3479,6 +3574,52 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(ret1, name=_TFOUTPUT), tf.identity(ret2, name=_TFOUTPUT1)
 
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+    @check_tf_min_version("2.3")
+    @check_opset_min_version(12, "GatherND with batch_dims")
+    def test_combined_non_max_suppression_pad_and_clip(self):
+        batch_size = 8
+        box_num = 10
+        classes_num = 2
+        max_total_size = 9
+        boxes_val = np.random.random_sample([batch_size, box_num, 1, 4]).astype(np.float32) * 2 - 0.5
+        scores_val = np.random.random_sample([batch_size, box_num, classes_num]).astype(np.float32)
+
+        def func(boxes, scores):
+            nmsed_boxes, nmsed_scores, nmsed_classes, valid_detections = \
+                tf.image.combined_non_max_suppression(boxes=boxes, scores=scores, score_threshold=0.1,
+                                                      max_output_size_per_class=3, max_total_size=max_total_size,
+                                                      iou_threshold=0.5, pad_per_class=True, clip_boxes=True)
+            out1 = tf.identity(nmsed_boxes, name=_TFOUTPUT)
+            out2 = tf.identity(nmsed_scores, name=_TFOUTPUT1)
+            out3 = tf.identity(nmsed_classes, name=_TFOUTPUT2)
+            out4 = tf.identity(valid_detections, name=_TFOUTPUT3)
+            return out1, out2, out3, out4
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3], {_INPUT: boxes_val, _INPUT1: scores_val})
+
+    @check_tf_min_version("2.3")
+    @check_opset_min_version(12, "GatherND with batch_dims")
+    def test_combined_non_max_suppression_no_pad_no_clip(self):
+        batch_size = 8
+        box_num = 10
+        classes_num = 2
+        max_total_size = 9
+        boxes_val = np.random.random_sample([batch_size, box_num, 1, 4]).astype(np.float32) * 2 - 0.5
+        scores_val = np.random.random_sample([batch_size, box_num, classes_num]).astype(np.float32)
+
+        def func(boxes, scores):
+            nmsed_boxes, nmsed_scores, nmsed_classes, valid_detections = \
+                tf.image.combined_non_max_suppression(boxes=boxes, scores=scores, score_threshold=0.1,
+                                                      max_output_size_per_class=3, max_total_size=max_total_size,
+                                                      iou_threshold=0.5, pad_per_class=False, clip_boxes=False)
+            out1 = tf.identity(nmsed_boxes, name=_TFOUTPUT)
+            out2 = tf.identity(nmsed_scores, name=_TFOUTPUT1)
+            out3 = tf.identity(nmsed_classes, name=_TFOUTPUT2)
+            out4 = tf.identity(valid_detections, name=_TFOUTPUT3)
+            return out1, out2, out3, out4
+
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3], {_INPUT: boxes_val, _INPUT1: scores_val})
 
     def _conv1d_test(self, x_val, w, stride=None, padding="VALID", rtol=1e-07):
         if stride is None:
@@ -3900,6 +4041,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return y_
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("Bug in tflite output shapes")
+    @check_opset_min_version(11, "Unique")
+    @check_tf_min_version("2.3", "needs tf.math.bincount with axis attr")
+    def test_dense_bincount(self):
+        x_val = np.array([[5, 2, 3, 1, 3], [2, 7, 5, 9, 10]], dtype=np.int32)
+        y_val = np.array([[2.0, 1.5, 3.5, 4.5, 5.5], [6.5, 7.5, 8.5, 9.5, 10.5]], dtype=np.float32)
+        for a in [0, -1]:
+            for b in [True, False]:
+                def func(x, y):
+                    x_ = tf.math.bincount(x, axis=a, binary_output=b)
+                    y_ = tf.identity(x_, name=_TFOUTPUT)
+                    return y_
+                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
     @check_opset_min_version(11, "ScatterND")
     def test_sparse_to_dense(self):
         i_val = np.array([[0, 0, 0], [0, 0, 2], [0, 1, 3], [1, 2, 2], [1, 2, 3]], dtype=np.int64)
@@ -3999,6 +4154,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14", "ragged needs tf 1.14")
     @check_opset_min_version(11, "CumSum")
+    @skip_tflite("unknown rank")
     def test_ragged_tensor_to_tensor(self):
         splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
         splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
@@ -4660,6 +4816,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
+    @skip_tflite("FlexRFFT2D")
     def test_rfft_ops(self):
 
         def dft_slow(x, M):
@@ -4691,6 +4848,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(op_, name=_TFOUTPUT)
         with self.assertRaises(ValueError):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "range")
+    def test_fft_ops(self):
+        x_val = make_xval([3, 4]).astype(np.float32)
+        def func1(x):
+            xc = tf.cast(x, tf.complex64)
+            op_ = tf.signal.fft(xc)
+            return tf.abs(op_, name=_TFOUTPUT)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(11, "topk")
     def test_invert_permutation(self):

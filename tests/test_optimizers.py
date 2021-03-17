@@ -498,6 +498,27 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["OUT"], {"X": np.random.randn(*shape).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
+    @parameterized.expand([
+        ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    def test_transpose_mul_broadcastable_const(self, shape, perm_input, perm_output):
+        const = numpy_helper.from_array(np.random.random((1, shape[1])).astype(np.float32), name='const')
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans")
+        node1 = helper.make_node("Mul", ["Y", "const"], ["Z"], name="mul")
+        node2 = helper.make_node("Transpose", ["Z"], ["OUT"], perm=perm_output, name="trans_1")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-mul-const-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, shape)],
+            [const],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["OUT"], {"X": np.random.randn(*shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
         ((2, 3, 4, 5), [0, 2, 3, 1]),
@@ -1103,6 +1124,51 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             "transpose-reducesum-test",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
             [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
+        ((1, 3, 4, 5), (1, 3, 4), [2], [0, 2, 3, 1], [0, 2, 1]),
+        ((1, 3, 4, 5), (1, 3), [1, 2], [0, 2, 3, 1], [0, 1]),
+        ((1, 3, 4, 5), (), [0, 1, 2, 3], [0, 2, 3, 1], []),
+        ((1, 3, 4, 5, 6), (1, 3, 5, 6), [1], [0, 2, 3, 4, 1], [0, 3, 1, 2]),
+        ((1, 3, 4, 5, 6), (1, 3), [1, 2, 3], [0, 2, 3, 4, 1], [0, 1]),
+        ((1, 3, 4, 5, 6), (), [0, 1, 2, 3, 4], [0, 2, 3, 4, 1], []),
+    ])
+    def test_transpose_reducemax(self, input_shape, output_shape, axes, perm_input, perm_output):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node1 = helper.make_node("ReduceMax", ["Y"], ["Z"], axes=axes,
+                                 keepdims=0, name="reducemax")
+        if perm_output:
+            node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm_output, name="trans_2")
+        else:
+            node2 = helper.make_node("Identity", ["Z"], ["res"], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-reducemax-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    def test_transpose_argmax(self):
+        input_shape = [1, 2, 3, 4]
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("ArgMax", ["Y"], ["Z"], axis=3, keepdims=0, name="argmax")
+        node2 = helper.make_node("Cast", ["Z"], ["res"], to=TensorProto.INT32, name="cast")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-argmax-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.INT32, [1, 3, 4])],
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")

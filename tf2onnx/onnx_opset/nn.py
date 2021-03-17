@@ -12,7 +12,7 @@ from __future__ import unicode_literals
 import logging
 
 import numpy as np
-from onnx import onnx_pb
+from onnx import onnx_pb, helper
 from onnx.onnx_pb import TensorProto
 from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
@@ -117,28 +117,22 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
     if with_kernel:
         # Some ONNX convolution ops require to reshape the kernel (ie. depthwise_conv2d).
         if new_kernel_shape:
-            if node.inputs[1].is_const():
-                input_node = node.inputs[1]
-                val = input_node.get_tensor_value(as_list=False)
-                val = np.reshape(val, new_kernel_shape)
-                input_node.set_tensor_value(val)
+            kernel_name = node.input[1]
+            if ctx.opset < 5:
+                # Old reshape takes new shape as attribute.
+                reshape = ctx.insert_new_node_on_input(node, "Reshape", kernel_name)
+                reshape.set_attr("shape", new_kernel_shape)
+                reshape.skip_conversion = True
             else:
-                kernel_name = node.input[1]
-                if ctx.opset < 5:
-                    # Old reshape takes new shape as attribute.
-                    reshape = ctx.insert_new_node_on_input(node, "Reshape", kernel_name)
-                    reshape.set_attr("shape", new_kernel_shape)
-                    reshape.skip_conversion = True
-                else:
-                    # New reshape takes new shape as input[1].
-                    shape_name = utils.make_name(node.name)
-                    ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
+                # New reshape takes new shape as input[1].
+                shape_name = utils.make_name(node.name)
+                ctx.make_const(shape_name, np.array(new_kernel_shape, dtype=np.int64))
 
-                    reshape = ctx.make_node("Reshape", [kernel_name, shape_name])
-                    ctx.replace_input(node, kernel_name, reshape.output[0], 1)
+                reshape = ctx.make_node("Reshape", [kernel_name, shape_name])
+                ctx.replace_input(node, kernel_name, reshape.output[0], 1)
 
-                    reshape.skip_conversion = True
-                ctx.set_shape(reshape.output[0], new_kernel_shape)
+                reshape.skip_conversion = True
+            ctx.set_shape(reshape.output[0], new_kernel_shape)
 
         # Get kernel (may have be changed to a reshape above).
         kernel_node = node.inputs[1]
@@ -623,6 +617,18 @@ class PoolOp:
         else:
             spatial = 2
 
+        origin_dtype = ctx.get_dtype(node.output[0])
+        if origin_dtype not in [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE]:
+            # the onnx spec doesn't allow int types for pool ops
+            input_shapes = [ctx.get_shape(node.input[0])]
+            output_shapes = [ctx.get_shape(node.output[0])]
+            cast_node = ctx.make_node("Cast", [node.input[0]], dtypes=[onnx_pb.TensorProto.FLOAT], shapes=input_shapes,
+                                      name=node.name + "_cast", attr={"to": onnx_pb.TensorProto.FLOAT})
+            _ = ctx.insert_node_on_output(cast_node, node.inputs[0].output[0])
+            cast_back_node = ctx.make_node("Cast", [node.output[0]], dtypes=[origin_dtype], shapes=output_shapes,
+                                           name=node.name + "_castback", attr={"to": origin_dtype})
+            _ = ctx.insert_node_on_output(cast_back_node, node.output[0])
+
         if len(node.input) < 3:
             kernel_shape_tf = node.get_attr("ksize").ints
             strides_tf = node.get_attr("strides").ints
@@ -1056,7 +1062,8 @@ class Resize:
         if "align_corners" in node.attr and node.attr["align_corners"].i:
             transformation_mode = "align_corners"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
-            if node.type == "ResizeNearestNeighbor":
+            if node.type == "ResizeNearestNeighbor" and not ctx.is_target(constants.TARGET_TENSORRT):
+                # TensorRT only supports nearest_mode = "floor" for mode = "nearest"
                 transformation_mode = "half_pixel"
                 nearest_mode = "round_prefer_ceil"
             else:
@@ -1188,13 +1195,13 @@ class AdjustSaturation:
 @tf_op("MatrixBandPart")
 class MatrixBandPart:
     @classmethod
-    def any_version_after7(cls, opset, ctx, node, **kwargs):
+    def version_7(cls, ctx, node, **kwargs):
         # T output = MatrixBandPart(T input, int num_lower, int num_upper)
         # data-flow: first generate mask matrix and then use element-wise mul op
         input_rank = len(ctx.get_shape(node.input[0]))
         utils.make_sure(input_rank == 2, error_msg="MatrixBandPart op: only rank 2 is supported")
         bandpart = [node.inputs[ind].get_tensor_value() for ind in [1, 2]]
-        utils.make_sure(bandpart in [[-1, 0], [0, -1]], "only support Lower/Upper triangular for now")
+        utils.make_sure(bandpart in [[-1, 0], [0, -1]], "only support Lower/Upper triangular for opset < 11")
         # methods to generate mask matrix: if lower triangular is needed, then generate column one by one
         # otherwise row is generated one by one.
         axis, counter_axis, squeeze_axis = (1, 0, 2) if bandpart == [-1, 0] else (0, 1, 1)
@@ -1267,13 +1274,77 @@ class MatrixBandPart:
                       dtypes=dtypes)
 
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
-        cls.any_version_after7(7, ctx, node, **kwargs)
+    def version_11(cls, ctx, node, **kwargs):
+        num_lower_const = node.inputs[1].get_tensor_value() if node.inputs[1].is_const() else None
+        num_upper_const = node.inputs[2].get_tensor_value() if node.inputs[2].is_const() else None
+        data, num_lower, num_upper = node.input
+        rank = ctx.get_rank(data)
+        int_max_val = utils.get_max_value(np.int64)
+        dtype = ctx.get_dtype(data)
+        if rank == 2:
+            shape = ctx.make_node("Shape", [data]).output[0]
+        else:
+            whole_shape = ctx.make_node("Shape", [data]).output[0]
+            shape = GraphBuilder(ctx).make_slice(
+                {'data': whole_shape, 'starts': [-2], 'ends': [int_max_val], 'axes': [0]})
+        if num_lower_const == 0 and num_upper_const == 0:
+            if rank == 2:
+                identity_node = ctx.make_node("EyeLike", [data]).output[0]
+            else:
+                zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
+                const_of_shape = ctx.make_node("ConstantOfShape", [shape], attr={'value': zero_tensor}).output[0]
+                identity_node = ctx.make_node("EyeLike", [const_of_shape]).output[0]
+            shapes = node.output_shapes
+            dtypes = node.output_dtypes
+            ctx.remove_node(node.name)
+            ctx.make_node(op_type="Mul", inputs=[identity_node, data],
+                          name=node.name, outputs=node.output, shapes=shapes,
+                          dtypes=dtypes)
+            return
+        zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, np.int64)).output[0]
+        one_const = ctx.make_const(utils.make_name("one"), np.array(1, np.int64)).output[0]
+        conditions = []
+        row_cnt = GraphBuilder(ctx).make_slice({'data': shape, 'axes': [0], 'starts': [0], 'ends': [1]})
+        col_cnt = GraphBuilder(ctx).make_slice({'data': shape, 'axes': [0], 'starts': [1], 'ends': [2]})
+        limit = ctx.make_node("Mul", [row_cnt, col_cnt]).output[0]
+        # idx_cnt = ctx.make_node("Range", [zero_const, limit, one_const]).output[0]
 
-    @classmethod
-    def version_13(cls, ctx, node, **kwargs):
-        # Signature of operator Squeeze changed.
-        cls.any_version_after7(13, ctx, node, **kwargs)
+        ones_of_shape = ctx.make_node("Expand", [one_const, limit]).output[0]
+        idx_cnt = ctx.make_node("CumSum", [ones_of_shape, zero_const], attr={'exclusive': True}).output[0]
+
+        idx_reshape = ctx.make_node("Reshape", [idx_cnt, shape]).output[0]
+        row_idx = ctx.make_node("Div", [idx_reshape, col_cnt]).output[0]
+        col_idx = ctx.make_node("Mod", [idx_reshape, col_cnt]).output[0]
+        idx_diff = ctx.make_node("Sub", [col_idx, row_idx]).output[0]
+
+        if num_upper_const is None or num_upper_const >= 0:
+            if ctx.get_dtype(num_upper) != TensorProto.INT64:
+                num_upper = ctx.make_node("Cast", [num_upper], attr={'to': TensorProto.INT64}).output[0]
+            greater = ctx.make_node("Greater", [idx_diff, num_upper]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            conditions.append(less_or_equal)
+        if num_lower_const is None or num_lower_const >= 0:
+            if ctx.get_dtype(num_lower) != TensorProto.INT64:
+                num_lower = ctx.make_node("Cast", [num_lower], attr={'to': TensorProto.INT64}).output[0]
+            num_lower_neg = ctx.make_node("Neg", [num_lower]).output[0]
+            greater = ctx.make_node("Greater", [num_lower_neg, idx_diff]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            conditions.append(less_or_equal)
+        if len(conditions) == 0:
+            node.type = "Identity"
+            ctx.replace_inputs(node, [data])
+            return
+        if len(conditions) == 1:
+            cond = conditions[0]
+        if len(conditions) == 2:
+            cond = ctx.make_node("And", conditions).output[0]
+        mask = ctx.make_node("Cast", [cond], attr={'to': ctx.get_dtype(data)}).output[0]
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node(op_type="Mul", inputs=[mask, data],
+                      name=node.name, outputs=node.output, shapes=shapes,
+                      dtypes=dtypes)
 
 
 def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
