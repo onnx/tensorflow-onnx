@@ -283,7 +283,18 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
                     output_names.append(output_tensor.name)
                     tensors_to_rename[output_tensor.name] = structured_name
     frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-    return frozen_graph, input_names, output_names, tensors_to_rename
+    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
+    initialized_tables = {}
+    tf.tables_initializer().run()
+    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
+        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+        try:
+            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+            k, v = sess.run([k, v])
+            initialized_tables[n] = (k, v)
+        except Exception:  # pylint: disable=broad-except
+            logger.warning("Could not initialize table with shared_name = %r", n)
+    return frozen_graph, input_names, output_names, initialized_tables, tensors_to_rename
 
 
 def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
@@ -476,11 +487,11 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
                 result += [tensors_to_rename]
         else:
             with tf_session() as sess:
-                frozen_graph, input_names, output_names, tensors_to_rename = \
+                frozen_graph, input_names, output_names, initialized_tables, tensors_to_rename = \
                     _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
                 result = [frozen_graph, input_names, output_names]
                 if return_initialized_tables:
-                    result += [{}]
+                    result += [initialized_tables]
                 if return_tensors_to_rename:
                     result += [tensors_to_rename]
     tf_reset_default_graph()
