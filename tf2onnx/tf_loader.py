@@ -231,29 +231,32 @@ def from_checkpoint(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures):
+def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signature_names):
     """Load tensorflow graph from saved_model."""
 
     wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
-    wrn_empty_tag = "'--tag' value is empty string. Using tag =[[]]"
+    wrn_empty_tag = "'--tag' value is empty string. Using tags = []"
+    wrn_empty_sig = "'--signature_def' not provided. Using all signatures."
 
     if tag is None:
         tag = [tf.saved_model.tag_constants.SERVING]
         logger.warning(wrn_no_tag)
 
+    if not signature_names:
+        logger.warning(wrn_empty_sig)
+
     if tag == '':
-        tag = [[]]
+        tag = []
         logger.warning(wrn_empty_tag)
 
     if not isinstance(tag, list):
         tag = [tag]
 
     imported = tf.saved_model.loader.load(sess, tag, model_path)
+    signatures = []
     for k in imported.signature_def.keys():
-        if k.startswith("_"):
-            # consider signatures starting with '_' private
-            continue
-        signatures.append(k)
+        if k in signature_names or (not signature_names and not k.startswith("_")):
+            signatures.append(k)
     try:
         from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
         # pylint: disable=unnecessary-lambda
@@ -280,7 +283,18 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
                     output_names.append(output_tensor.name)
                     tensors_to_rename[output_tensor.name] = structured_name
     frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-    return frozen_graph, input_names, output_names, tensors_to_rename
+    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
+    initialized_tables = {}
+    tf.tables_initializer().run()
+    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
+        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+        try:
+            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+            k, v = sess.run([k, v])
+            initialized_tables[n] = (k, v)
+        except Exception:  # pylint: disable=broad-except
+            logger.warning("Could not initialize table with shared_name = %r", n)
+    return frozen_graph, input_names, output_names, initialized_tables, tensors_to_rename
 
 
 def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
@@ -473,11 +487,11 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
                 result += [tensors_to_rename]
         else:
             with tf_session() as sess:
-                frozen_graph, input_names, output_names, tensors_to_rename = \
+                frozen_graph, input_names, output_names, initialized_tables, tensors_to_rename = \
                     _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
                 result = [frozen_graph, input_names, output_names]
                 if return_initialized_tables:
-                    result += [{}]
+                    result += [initialized_tables]
                 if return_tensors_to_rename:
                     result += [tensors_to_rename]
     tf_reset_default_graph()
