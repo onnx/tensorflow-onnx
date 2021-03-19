@@ -231,29 +231,32 @@ def from_checkpoint(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures):
+def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signature_names):
     """Load tensorflow graph from saved_model."""
 
     wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
-    wrn_empty_tag = "'--tag' value is empty string. Using tag =[[]]"
+    wrn_empty_tag = "'--tag' value is empty string. Using tags = []"
+    wrn_empty_sig = "'--signature_def' not provided. Using all signatures."
 
     if tag is None:
         tag = [tf.saved_model.tag_constants.SERVING]
         logger.warning(wrn_no_tag)
 
+    if not signature_names:
+        logger.warning(wrn_empty_sig)
+
     if tag == '':
-        tag = [[]]
+        tag = []
         logger.warning(wrn_empty_tag)
 
     if not isinstance(tag, list):
         tag = [tag]
 
     imported = tf.saved_model.loader.load(sess, tag, model_path)
+    signatures = []
     for k in imported.signature_def.keys():
-        if k.startswith("_"):
-            # consider signatures starting with '_' private
-            continue
-        signatures.append(k)
+        if k in signature_names or (not signature_names and not k.startswith("_")):
+            signatures.append(k)
     try:
         from tensorflow.contrib.saved_model.python.saved_model import signature_def_utils
         # pylint: disable=unnecessary-lambda
