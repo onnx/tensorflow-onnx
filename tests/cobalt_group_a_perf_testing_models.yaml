@@ -1548,3 +1548,107 @@ wiki40b-lm-tl:
   atol: 0.0005
   tag: ""
   signature_def: "neg_log_likelihood"
+
+mil-nce-i3d:
+  # Conversion requires tf1
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/mil-nce-i3d"
+  converted_model: "D:/co_tfhubmodels/mil-nce-i3d/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "input_frames:0": [1, 10, 224, 224, 3]
+    "words:0": 
+      shape: [1]
+      input_get: get_sentences
+  outputs:
+    - "text_video/visual_module_1/StopGradient:0"
+    - "text_video/vis_embd/final_projection/add:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: ""
+
+mmv-tsm-resnet50:
+  # Conversion requires tf1
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/mmv-tsm-resnet50"
+  converted_model: "D:/co_tfhubmodels/mmv-tsm-resnet50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "input_frames:0": [1, 10, 224, 224, 3]
+  outputs:
+    - "text_audio_video/vid2audio_embd/batch_norm_1/batch_norm/add_1:0"
+    - "text_audio_video/vis_embd/batch_norm/batch_norm/add_1:0"
+    - "text_audio_video_2/visual_module_1/resnet_v2_50_inception_preprocessed/tsm_temporal_pool:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "video"
+
+inception_v1_quant:
+  disabled: true
+  skip_conversion: false
+  dequantize: true
+  model: "D:/co_tfhubmodels/inception_v1_quant/model.tflite"
+  converted_model: "D:/co_tfhubmodels/inception_v1_quant/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_ade20k_uint8
+  inputs:
+    "input": [1,224,224,3]
+  outputs:
+    - "InceptionV1/Logits/Predictions/Softmax"
+  rtol: 0.1
+  atol: 1   # output is uint8
+
+melgan:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/melgan/model.tflite"
+  converted_model: "D:/co_tfhubmodels/melgan/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_random
+  inputs:
+    "mels": [1,100,80]
+  outputs:
+    - Identity
+  rtol: 0.05
+  atol: 0.0005
+
+mobilenet_v1_0.25_192_quantized:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/mobilenet_v1_0.25_192_quantized/model.tflite"
+  converted_model: "D:/co_tfhubmodels/mobilenet_v1_0.25_192_quantized/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_ade20k_uint8
+  inputs:
+    "input": [1,192,192,3]
+  outputs:
+    - MobilenetV1/Predictions/Reshape_1
+  rtol: 0.1
+  ptol: 0.2
+  atol: 1   # output is uint8
+
+densenet:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels/densenet/model.tflite"
+  converted_model: "D:/co_tfhubmodels/densenet/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "Placeholder": [1,224,224,3]
+  outputs:
+    - softmax_tensor
+  rtol: 0.05
+  atol: 0.0005
