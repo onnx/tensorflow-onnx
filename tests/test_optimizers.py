@@ -1175,6 +1175,27 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
+    def test_transpose_tile(self):
+        input_shape = [1, 2, 3, 4]
+
+        repeats_value = [3, 6, 5, 11]
+        repeats_tensor = helper.make_tensor("A", TensorProto.INT64, [len(input_shape)], repeats_value)
+        repeats_const = helper.make_node("Constant", [], ["A"], value=repeats_tensor, name="repeats_const")
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Tile", ["Y", "A"], ["Z"], name="tile")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [repeats_const, node0, node1, node2],
+            "transpose-tile-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, [3, 22, 18, 20])],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
     @parameterized.expand([
         ((1, 3, 4, 5), (1, 3, 4, 1), [2], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5), (1, 3, 1, 1), [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),

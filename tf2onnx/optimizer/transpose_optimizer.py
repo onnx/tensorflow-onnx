@@ -213,6 +213,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Squeeze": self._squeeze_handler,
             "Sub": self._sub_handler,
             "Tanh": self._simple_through_handler,
+            "Tile": self._tile_handler,
             "Transpose": self._transpose_handler,
             "DequantizeLinear": self._quantize_handler,
             "QuantizeLinear": self._quantize_handler,
@@ -744,6 +745,22 @@ class TransposeOptimizer(GraphOptimizerBase):
                 new_shape = [shape[new_perm.index(i)] for i in range(len(new_perm))]
                 self._g.set_shape(node.output[0], new_shape)
             trans.set_attr("perm", new_perm)
+        return True
+
+    def _tile_handler(self, trans, node):
+        trans_rank = get_transpose_rank(trans)
+        if not node.inputs[1].is_const():
+            return False
+        if not self._switch_transpose_and_node(node, trans):
+            return False
+        repeats = node.inputs[1].get_tensor_value()
+        perm = NHWC_TO_NCHW if trans_rank == 4 else NDHWC_TO_NCDHW
+        repeats_val = [repeats[p] for p in perm]
+        new_repeats = np.array(repeats_val, dtype=np.int64)
+        if not self._nodes_has_single_consumer_node([node.inputs[1]]):
+            new_inp = self._g.copy_const(node.inputs[1])
+            self._g.replace_input(node, node.input[1], new_inp.output[0], 1)
+        node.inputs[1].set_tensor_value(new_repeats)
         return True
 
     def _reducesum_handler(self, trans, node):
