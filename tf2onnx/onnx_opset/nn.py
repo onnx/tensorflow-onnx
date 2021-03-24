@@ -1192,6 +1192,78 @@ class AdjustSaturation:
         ctx.remove_node(node.name)
 
 
+@tf_op("AdjustHue")
+class AdjustHue:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        images, angle_delta = node.input
+        dtype = ctx.get_dtype(images)
+        np_dtype = utils.map_onnx_to_numpy_type(dtype)
+
+        const_one = ctx.make_const(utils.make_name("const_one"), np.array(1.0, np_dtype)).output[0]
+        const_six = ctx.make_const(utils.make_name("const_six"), np.array(6.0, np_dtype)).output[0]
+        const_half = ctx.make_const(utils.make_name("const_half"), np.array(0.5, np_dtype)).output[0]
+        const_zero = ctx.make_const(utils.make_name("zero"), np.array(0, np_dtype)).output[0]
+
+        k = ctx.make_const(utils.make_name("three"), np.array([3], np.int64)).output[0]
+        ordered, indices = ctx.make_node("TopK", [images, k], attr={'axis': -1},
+                                         output_count=2, op_name_scope=node.name).output
+        # Sorted and separated into channels
+        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1}, output_count=3).output
+        delta = ctx.make_node("Sub", [max_c, min_c]).output[0]
+        delta2 = ctx.make_node("Sub", [mid_c, min_c]).output[0]
+        delta_z = ctx.make_node("Equal", [delta, const_zero]).output[0]
+        delta_z_cast = ctx.make_node("Cast", [delta_z], attr={'to': dtype}).output[0]
+        delta_nz = ctx.make_node("Add", [delta, delta_z_cast]).output[0]
+        progress_within_sector = ctx.make_node("Div", [delta2, delta_nz]).output[0]
+
+        # Compute HSV angle
+        sector_lookup = np.zeros((3, 3, 3, 1), np_dtype)
+        parity_lookup = np.zeros((3, 3, 3, 1), np_dtype)
+
+        sector_lookup[0, 1, 2, 0] = 0.0
+        sector_lookup[1, 0, 2, 0] = 2 / 6
+        sector_lookup[1, 2, 0, 0] = 2 / 6
+        sector_lookup[2, 1, 0, 0] = 4 / 6
+        sector_lookup[2, 0, 1, 0] = 4 / 6
+        sector_lookup[0, 2, 1, 0] = 1.0
+
+        parity_lookup[0, 1, 2, 0] = 1 / 6
+        parity_lookup[1, 0, 2, 0] = -1 / 6
+        parity_lookup[1, 2, 0, 0] = 1 / 6
+        parity_lookup[2, 1, 0, 0] = -1 / 6
+        parity_lookup[2, 0, 1, 0] = 1 / 6
+        parity_lookup[0, 2, 1, 0] = -1 / 6
+
+        sector_lookup_const = ctx.make_const(utils.make_name("hue_sector_lookup"), sector_lookup).output[0]
+        parity_lookup_const = ctx.make_const(utils.make_name("hue_parity_lookup"), parity_lookup).output[0]
+
+        sectors = ctx.make_node("GatherND", [sector_lookup_const, indices]).output[0]
+        parities = ctx.make_node("GatherND", [parity_lookup_const, indices]).output[0]
+
+        angle_offset = ctx.make_node("Mul", [progress_within_sector, parities]).output[0]
+        initial_angle = ctx.make_node("Add", [angle_offset, sectors]).output[0]
+
+        # Add angle delta
+        angle_delta_pos = ctx.make_node("Add", [angle_delta, const_one]).output[0]
+        new_angle = ctx.make_node("Add", [initial_angle, angle_delta_pos]).output[0]
+
+        # Convert to RGB
+        sector_to_rgb = ctx.make_const(utils.make_name("sector_to_rgb_const"), np.array([0, 4/6, 2/6], np_dtype))
+        add_node = ctx.make_node("Add", [new_angle, sector_to_rgb.output[0]]).output[0]
+        mod_node = ctx.make_node("Mod", [add_node, const_one], attr={'fmod': 1}).output[0]
+        sub_node = ctx.make_node("Sub", [mod_node, const_half]).output[0]
+        abs_node = ctx.make_node("Abs", [sub_node]).output[0]
+        mul_node = ctx.make_node("Mul", [abs_node, const_six]).output[0]
+        sub_node_2 = ctx.make_node("Sub", [mul_node, const_one]).output[0]
+        clip_node = ctx.make_node("Clip", [sub_node_2, const_zero, const_one]).output[0]
+        scaled_node = ctx.make_node("Mul", [clip_node, delta], op_name_scope=node.name).output[0]
+        offset_node = ctx.make_node("Add", [scaled_node, min_c], op_name_scope=node.name).output[0]
+
+        ctx.replace_all_inputs(node.output[0], offset_node)
+        ctx.remove_node(node.name)
+
+
 @tf_op("MatrixBandPart")
 class MatrixBandPart:
     @classmethod
