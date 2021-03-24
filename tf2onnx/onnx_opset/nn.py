@@ -897,9 +897,7 @@ class SampleDistortedBoundingBox:
         seed = node.get_attr_value("seed", 0)
         seed2 = node.get_attr_value("seed2", 0)
         rand_attr = {}
-        if seed == 0 and seed2 == 0:
-            combined_seed = None
-        else:
+        if seed != 0 or seed2 != 0:
             # Produce a unique value depending on both seeds. (diagonal grid traversal)
             combined_seed = (seed + seed2 + 1) * (seed + seed2 + 2) // 2 - seed
             rand_attr['seed'] = float(combined_seed)
@@ -969,9 +967,7 @@ class SampleDistortedBoundingBox:
         area_in_bounds = ctx.make_node("Not", [area_out_of_bounds]).output[0]
         acceptable = area_in_bounds
 
-        if no_boxes:
-            filtered_non_empty = all_boxes
-        else:
+        if not no_boxes:
             boxes_shape = ctx.make_const(utils.make_name("reshape_const"), np.array([-1, 4, 1], np.int64)).output[0]
             bounding_boxes_flat = ctx.make_node("Reshape", [bounding_boxes, boxes_shape]).output[0]
 
