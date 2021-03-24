@@ -2678,6 +2678,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
         y_val = np.array(0.5, np.float32)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @check_opset_min_version(11, "GatherND")
+    def test_adjust_hue(self):
+        x_val = np.array([[1, 2, 3], [4, 4, 4], [10, 2, 1], [10, 1, 2],
+                          [4, 6, 5], [5, 6, 4], [1, 3, 2], [3, 5, 3]], dtype=np.float32).reshape([2, 4, 3])
+        def func(x, y):
+            x_ = tf.image.adjust_hue(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        for i in range(-10, 10, 2):
+            y_val = np.array(i / 10, np.float32)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, rtol=1e-6, atol=2e-5)
+
     @check_tf_min_version("2.0", "Results are slightly different in tf1")
     @check_opset_min_version(11, "resize bicubic")
     def test_resize_bicubic(self):
