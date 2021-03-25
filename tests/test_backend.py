@@ -2659,6 +2659,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
         y_val = np.array(0.5, np.float32)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
+    @check_opset_min_version(11, "GatherND")
+    def test_adjust_hue(self):
+        x_val = np.array([[1, 2, 3], [4, 4, 4], [10, 2, 1], [10, 1, 2],
+                          [4, 6, 5], [5, 6, 4], [1, 3, 2], [3, 5, 3]], dtype=np.float32).reshape([2, 4, 3])
+        def func(x, y):
+            x_ = tf.image.adjust_hue(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        for i in range(-10, 10, 2):
+            y_val = np.array(i / 10, np.float32)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, rtol=1e-6, atol=2e-5)
+
     @check_tf_min_version("2.0", "Results are slightly different in tf1")
     @check_opset_min_version(11, "resize bicubic")
     def test_resize_bicubic(self):
@@ -4040,6 +4051,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
             y_ = tf.identity(x_, name=_TFOUTPUT)
             return y_
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @skip_tflite("Bug in tflite output shapes")
+    @check_opset_min_version(11, "Unique")
+    @check_tf_min_version("2.3", "needs tf.math.bincount with axis attr")
+    def test_dense_bincount(self):
+        x_val = np.array([[5, 2, 3, 1, 3], [2, 7, 5, 9, 10]], dtype=np.int32)
+        y_val = np.array([[2.0, 1.5, 3.5, 4.5, 5.5], [6.5, 7.5, 8.5, 9.5, 10.5]], dtype=np.float32)
+        for a in [0, -1]:
+            for b in [True, False]:
+                def func(x, y):
+                    x_ = tf.math.bincount(x, axis=a, binary_output=b)
+                    y_ = tf.identity(x_, name=_TFOUTPUT)
+                    return y_
+                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(11, "ScatterND")
     def test_sparse_to_dense(self):

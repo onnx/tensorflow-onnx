@@ -155,6 +155,14 @@ class Reshape:
     @classmethod
     def version_5(cls, ctx, node, **kwargs):
         dtype = ctx.get_dtype(node.output[0])
+        if node.inputs[1].is_const():
+            target_shape = node.inputs[1].get_tensor_value(as_list=True)
+            inp_shape = ctx.get_shape(node.input[0])
+            if inp_shape is not None and inp_shape == target_shape:
+                # Remove useless Reshape
+                node.type = "Identity"
+                ctx.replace_inputs(node, [node.input[0]])
+                return
         need_casting = dtype in [onnx_pb.TensorProto.INT32,
                                  onnx_pb.TensorProto.INT16,
                                  onnx_pb.TensorProto.INT64]
@@ -2238,13 +2246,13 @@ class Unique:
                 ctx.copy_shape(new_node.output[2], cast_node.output[0])
 
 
-@tf_op("Bincount")
+@tf_op(["Bincount", "DenseBincount"])
 class Bincount:
     @classmethod
     def any_version(cls, opset, ctx, node, **kwargs):
         # arr, size are int32
         arr_inp, size_inp, weights_inp = node.input
-
+        binary_output = node.get_attr_value("binary_output", False)
         arr_int64 = ctx.make_node("Cast", [arr_inp], attr={'to': TensorProto.INT64}).output[0]
         size_int64 = ctx.make_node("Cast", [size_inp], attr={'to': TensorProto.INT64}).output[0]
 
@@ -2253,22 +2261,55 @@ class Bincount:
         weights_is_zero = weights_shape is not None and 0 in weights_shape
         utils.make_sure(weights_is_zero, "Non-empty weights not yet supported for bincount")
 
-        values, _, _, counts = ctx.make_node("Unique", [arr_int64], attr={'sorted': 1}, output_count=4,
-                                             op_name_scope=node.name).output
+        if ctx.get_rank(arr_inp) == 2:
+            zero_const = ctx.make_const(utils.make_name("zero_const"), np.array(0, np.int64)).output[0]
+            one_const = ctx.make_const(utils.make_name("one_const"), np.array(1, np.int64)).output[0]
+            inp_shape = ctx.make_node("Shape", [arr_inp]).output[0]
+            num_rows = GraphBuilder(ctx).make_slice({"data": inp_shape, "starts": [0], "ends": [1], "axes": [0]})
+            num_rows_sq = GraphBuilder(ctx).make_squeeze({"data": num_rows, "axes": [0]})
+            row_idx = ctx.make_node("Range", [zero_const, num_rows_sq, one_const]).output[0]
+            row_idx_unsq = GraphBuilder(ctx).make_unsqueeze({"data": row_idx, "axes": [1]})
+            row_idx_expand = ctx.make_node("Expand", [row_idx_unsq, inp_shape]).output[0]
+            arr_int64_unsq = GraphBuilder(ctx).make_unsqueeze({"data": arr_int64, "axes": [2]})
+            row_idx_expand_unsq = GraphBuilder(ctx).make_unsqueeze({"data": row_idx_expand, "axes": [2]})
+            concat = ctx.make_node("Concat", [row_idx_expand_unsq, arr_int64_unsq], {"axis": 2}).output[0]
+            reshape_const = ctx.make_const(utils.make_name("reshape_const"), np.array([-1, 2], np.int64)).output[0]
+            reshaped = ctx.make_node("Reshape", [concat, reshape_const]).output[0]
+            values, _, _, counts = ctx.make_node("Unique", [reshaped], attr={'sorted': 1, 'axis': 0}, output_count=4,
+                                                 op_name_scope=node.name).output
+            values_to_check_unsq = GraphBuilder(ctx).make_slice(
+                {"data": values, "starts": [1], "ends": [2], "axes": [1]})
+            values_to_check = GraphBuilder(ctx).make_squeeze({"data": values_to_check_unsq, "axes": [1]})
+            size_unsq = GraphBuilder(ctx).make_unsqueeze({'data': size_int64, "axes": [0]})
+            output_shape = ctx.make_node("Concat", [num_rows, size_unsq], attr={"axis": 0}).output[0]
+        else:
+            values, _, _, counts = ctx.make_node("Unique", [arr_int64], attr={'sorted': 1}, output_count=4,
+                                                 op_name_scope=node.name).output
+            values_to_check = values
+            output_shape = GraphBuilder(ctx).make_unsqueeze({'data': size_int64, "axes": [0]})
+
         neg_one_const = ctx.make_const(utils.make_name("neg_one_const"), np.array(-1, np.int64)).output[0]
-        non_neg_val_locs = ctx.make_node("Greater", [values, neg_one_const]).output[0]
-        small_val_locs = ctx.make_node("Less", [values, size_int64]).output[0]
+        non_neg_val_locs = ctx.make_node("Greater", [values_to_check, neg_one_const]).output[0]
+        small_val_locs = ctx.make_node("Less", [values_to_check, size_int64]).output[0]
         valid_val_locs = ctx.make_node("And", [non_neg_val_locs, small_val_locs]).output[0]
 
         valid_values = ctx.make_node("Compress", [values, valid_val_locs], attr={'axis': 0}).output[0]
-        valid_counts = ctx.make_node("Compress", [counts, valid_val_locs], attr={'axis': 0}).output[0]
+        if binary_output:
+            counts_shape = ctx.make_node("Shape", [valid_values]).output[0]
+            counts_shape_1d = GraphBuilder(ctx).make_slice(
+                {"data": counts_shape, "starts": [0], "ends": [1], "axes": [0]})
+            ones_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[1])
+            valid_counts = ctx.make_node("ConstantOfShape", [counts_shape_1d], attr={'value': ones_tensor}).output[0]
+        else:
+            valid_counts = ctx.make_node("Compress", [counts, valid_val_locs], attr={'axis': 0}).output[0]
 
-        output_shape = GraphBuilder(ctx).make_unsqueeze({'data': size_int64, "axes": [0]})
+        zero_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
+        zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': zero_tensor}).output[0]
 
-        false_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[0])
-        zeros = ctx.make_node("ConstantOfShape", [output_shape], attr={'value': false_tensor}).output[0]
-
-        result = ctx.make_node("ScatterElements", [zeros, valid_values, valid_counts], attr={'axis': 0}).output[0]
+        if ctx.get_rank(arr_inp) == 2:
+            result = ctx.make_node("ScatterND", [zeros, valid_values, valid_counts]).output[0]
+        else:
+            result = ctx.make_node("ScatterElements", [zeros, valid_values, valid_counts], attr={'axis': 0}).output[0]
         result_cast = result
         if res_dtype != TensorProto.INT64:
             result_cast = ctx.make_node("Cast", [result], attr={'to': res_dtype}).output[0]
