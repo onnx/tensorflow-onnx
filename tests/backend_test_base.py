@@ -21,6 +21,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import variables as variables_lib
 from tensorflow.python.ops import lookup_ops
+import onnx
 from common import get_test_config
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
@@ -236,6 +237,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # tflite sometimes converts from tf but produces an invalid model
             return None, None
 
+    def assert_shapes_correct(self, graph):
+        model_proto = graph.make_model("test")
+        model_shapes = onnx.shape_inference.infer_shapes(model_proto, strict_mode=True)
+        def get_shape(info):
+            return [d.dim_value for d in info.type.tensor_type.shape.dim]
+        for info in model_shapes.graph.value_info:
+            onnx_shape = get_shape(info)
+            tf2onnx_shape = graph.get_shape(info.name)
+            self.assertEqual(onnx_shape, tf2onnx_shape)
+
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
                       check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
@@ -282,6 +293,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
 
             self.assert_results_equal(expected, actual, rtol, atol, check_value, check_shape, check_dtype)
+            self.assert_shapes_correct(g)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
@@ -311,6 +323,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             onnx_from_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port, postfix="_from_tflite")
 
             self.assert_results_equal(tfl_results, onnx_from_tfl_res, rtol, atol, check_value, check_shape, check_dtype)
+            self.assert_shapes_correct(g)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
