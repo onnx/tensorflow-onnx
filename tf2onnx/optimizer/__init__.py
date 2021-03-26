@@ -17,6 +17,7 @@ from .loop_optimizer import LoopOptimizer
 from .back_to_back_optimizer import BackToBackOptimizer
 from .upsample_optimizer import UpsampleOptimizer
 from .const_dequantize_optimizer import ConstDequantizeOptimizer
+from .reshape_optimizer import ReshapeOptimizer
 from .. import logging
 
 # optimizer sequence need to be considered carefully
@@ -29,6 +30,7 @@ _optimizers = OrderedDict([
     # merge_duplication should be used after optimize_transpose
     # for optimize_transpose may have some trans nodes that can be merge
     ("merge_duplication", MergeDuplicatedNodesOptimizer),
+    ("reshape_optimizer", ReshapeOptimizer),
     ("remove_identity", IdentityOptimizer),
     ("remove_back_to_back", BackToBackOptimizer),
 ])
