@@ -863,6 +863,7 @@ class StridedSlice:
             input_dtype = ctx.get_dtype(node.output[0])
             ctx.set_dtype(squeeze_node.output[0], input_dtype)
             ctx.copy_shape(node.output[0], squeeze_node.output[0])
+            ctx.update_node_shape_dtype(node, override=True)
 
         # onnx slice as of opset 7 does only take float tensors ... cast if needed
         input_dtype = ctx.get_dtype(node.input[0])
@@ -1263,10 +1264,11 @@ class Unpack:
             ctx.insert_node_on_output(squeeze_node, n)
 
         # split node is 1 rank higher than squeeze nodes
-        output_shape = ctx.get_shape(node.output[0])
-        if output_shape:
-            split_shape = output_shape[:axis] + [1] + output_shape[axis:]
-            ctx.set_shape(node.output[0], split_shape)
+        for out in node.output:
+            output_shape = ctx.get_shape(out)
+            if output_shape:
+                split_shape = output_shape[:axis] + [1] + output_shape[axis:]
+                ctx.set_shape(out, split_shape)
 
 
 @tf_op("OneHot")
