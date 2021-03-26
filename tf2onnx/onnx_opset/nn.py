@@ -887,6 +887,155 @@ class DepthToSpace:
         cls.version_1(ctx, node, **kwargs)
 
 
+@tf_op(["SampleDistortedBoundingBox", "SampleDistortedBoundingBoxV2"])
+class SampleDistortedBoundingBox:
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        # See tensorflow sample_distorted_bounding_box_op.cc
+        image_size, bounding_boxes, min_object_covered = node.input
+
+        seed = node.get_attr_value("seed", 0)
+        seed2 = node.get_attr_value("seed2", 0)
+        rand_attr = {}
+        if seed != 0 or seed2 != 0:
+            # Produce a unique value depending on both seeds. (diagonal grid traversal)
+            combined_seed = (seed + seed2 + 1) * (seed + seed2 + 2) // 2 - seed
+            rand_attr['seed'] = float(combined_seed)
+
+        min_aspect_ratio, max_aspect_ratio = node.get_attr_value("aspect_ratio_range", [0.75, 1.33])
+        ratio_range = max_aspect_ratio - min_aspect_ratio
+        min_area, max_area = node.get_attr_value("area_range", [0.05, 1.0])
+        max_attempts = node.get_attr_value("max_attempts", 100)
+        use_image_if_no_bounding_boxes = node.get_attr_value("use_image_if_no_bounding_boxes", 0)
+
+        min_area_node = ctx.make_const(utils.make_name("min_area"), np.array(min_area, np.float32)).output[0]
+        max_area_node = ctx.make_const(utils.make_name("max_area"), np.array(max_area, np.float32)).output[0]
+        min_ratio_node = ctx.make_const(utils.make_name("min_ratio"), np.array(min_aspect_ratio, np.float32)).output[0]
+        ratio_range_node = ctx.make_const(utils.make_name("max_ratio"), np.array(ratio_range, np.float32)).output[0]
+
+        boxes_tensor_shape = ctx.get_shape(bounding_boxes)
+        if boxes_tensor_shape is not None and 0 in boxes_tensor_shape and use_image_if_no_bounding_boxes:
+            no_boxes = True
+            min_area_node = ctx.make_node("Max", [min_object_covered, min_area_const]).output[0]
+        else:
+            no_boxes = False
+
+        rand_attr['shape'] = [max_attempts, 4]
+        random_nums = ctx.make_node("RandomUniform", [], attr=rand_attr, op_name_scope=node.name).output[0]
+        r1, r2, r3, r4 = ctx.make_node("Split", [random_nums], attr={'axis': 1}, output_count=4).output
+
+        # Use r1 to sample the aspect ratio
+        scaled_r1 = ctx.make_node("Mul", [r1, ratio_range_node]).output[0]
+        aspect_ratio = ctx.make_node("Add", [scaled_r1, min_ratio_node]).output[0]
+
+        image_size_float = ctx.make_node("Cast", [image_size], attr={'to': TensorProto.FLOAT}).output[0]
+        img_height = GraphBuilder(ctx).make_slice({"data": image_size_float, "starts": [0], "ends": [1], "axes": [0]})
+        img_width = GraphBuilder(ctx).make_slice({"data": image_size_float, "starts": [1], "ends": [2], "axes": [0]})
+        img_aspect_ratio = ctx.make_node("Div", [img_width, img_height]).output[0]
+        adjusted_aspect_ratio = ctx.make_node("Div", [aspect_ratio, img_aspect_ratio]).output[0]
+
+        # Use r2 to sample height
+        const_one = ctx.make_const(utils.make_name("const_one"), np.array(1, np.float32)).output[0]
+        min_height_squared = ctx.make_node("Div", [min_area_node, adjusted_aspect_ratio]).output[0]
+        max_height_squared = ctx.make_node("Div", [max_area_node, adjusted_aspect_ratio]).output[0]
+        min_height = ctx.make_node("Sqrt", [min_height_squared]).output[0]
+        max_height = ctx.make_node("Sqrt", [max_height_squared]).output[0]
+        max_allowed_height = ctx.make_node("Div", [img_aspect_ratio, aspect_ratio]).output[0]
+        max_allowed_height2 = ctx.make_node("Min", [max_allowed_height, const_one]).output[0]
+        max_height2 = ctx.make_node("Min", [max_height, max_allowed_height2]).output[0]
+        min_height2 = ctx.make_node("Min", [min_height, max_height2]).output[0]
+        height_range = ctx.make_node("Sub", [max_height2, min_height2]).output[0]
+        scaled_r2 = ctx.make_node("Mul", [r2, height_range]).output[0]
+        box_height = ctx.make_node("Add", [scaled_r2, min_height2]).output[0]
+        box_width = ctx.make_node("Mul", [box_height, adjusted_aspect_ratio]).output[0]
+
+        # Use r3 and r4 to get x and y pos
+        max_shift_x = ctx.make_node("Sub", [const_one, box_width]).output[0]
+        max_shift_y = ctx.make_node("Sub", [const_one, box_height]).output[0]
+        x1 = ctx.make_node("Mul", [r3, max_shift_x]).output[0]
+        y1 = ctx.make_node("Mul", [r4, max_shift_y]).output[0]
+
+        x2 = ctx.make_node("Add", [x1, box_width]).output[0]
+        y2 = ctx.make_node("Add", [y1, box_height]).output[0]
+
+        all_boxes = ctx.make_node("Concat", [y1, x1, y2, x2], attr={'axis': 1}).output[0]
+
+        area = ctx.make_node("Mul", [box_height, box_width]).output[0]
+        area_too_large = ctx.make_node("Greater", [area, max_area_node]).output[0]
+        area_too_small = ctx.make_node("Less", [area, min_area_node]).output[0]
+        area_out_of_bounds = ctx.make_node("Or", [area_too_large, area_too_small]).output[0]
+        area_in_bounds = ctx.make_node("Not", [area_out_of_bounds]).output[0]
+        acceptable = area_in_bounds
+
+        if not no_boxes:
+            boxes_shape = ctx.make_const(utils.make_name("reshape_const"), np.array([-1, 4, 1], np.int64)).output[0]
+            bounding_boxes_flat = ctx.make_node("Reshape", [bounding_boxes, boxes_shape]).output[0]
+
+            box_y1, box_x1, box_y2, box_x2 = \
+                ctx.make_node("Split", [bounding_boxes_flat], attr={'axis': 1}, output_count=4).output
+
+            combined_max_y = ctx.make_node("Min", [y2, box_y2]).output[0]
+            combined_max_x = ctx.make_node("Min", [x2, box_x2]).output[0]
+            combined_min_y = ctx.make_node("Max", [y1, box_y1]).output[0]
+            combined_min_x = ctx.make_node("Max", [x1, box_x1]).output[0]
+
+            box_height = ctx.make_node("Sub", [box_y2, box_y1]).output[0]
+            box_width = ctx.make_node("Sub", [box_x2, box_x1]).output[0]
+            box_area = ctx.make_node("Mul", [box_height, box_width]).output[0]
+
+            const_zero = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.float32)).output[0]
+            overlap_height = ctx.make_node("Sub", [combined_max_y, combined_min_y]).output[0]
+            non_neg_height = ctx.make_node("Max", [overlap_height, const_zero]).output[0]
+            overlap_width = ctx.make_node("Sub", [combined_max_x, combined_min_x]).output[0]
+            non_neg_width = ctx.make_node("Max", [overlap_width, const_zero]).output[0]
+
+            overlap_area = ctx.make_node("Mul", [non_neg_height, non_neg_width]).output[0]
+            overlap_ratio = ctx.make_node("Div", [overlap_area, box_area]).output[0]
+            overlap_bad = ctx.make_node("Less", [overlap_ratio, min_object_covered]).output[0]
+            overlap_ok = ctx.make_node("Not", [overlap_bad]).output[0]
+            overlap_ok_fp = ctx.make_node("Cast", [overlap_ok], attr={'to': TensorProto.FLOAT}).output[0]
+            num_ok = GraphBuilder(ctx).make_reduce_sum(
+                {"data": overlap_ok_fp, "axes": [0], "keepdims": 0, "noop_with_empty_axes": 1})
+            any_ok = ctx.make_node("Greater", [num_ok, const_zero]).output[0]
+            acceptable = ctx.make_node("And", [acceptable, any_ok]).output[0]
+
+        acceptable_sq = GraphBuilder(ctx).make_squeeze({'data': acceptable, 'axes': [1]})
+        filtered = ctx.make_node("Compress", [all_boxes, acceptable_sq], attr={'axis': 0}).output[0]
+        default_box = np.array([0.0, 0.0, 1.0, 1.0], np.float32).reshape([1, 4])
+        const_default_box = ctx.make_const(utils.make_name("default_box"), default_box).output[0]
+        filtered_non_empty = ctx.make_node("Concat", [filtered, const_default_box], attr={'axis': 0}).output[0]
+
+        first_valid_box = GraphBuilder(ctx).make_slice(
+            {"data": filtered_non_empty, "starts": [0], "ends": [1], "axes": [0]})
+        first_valid_box_sq = GraphBuilder(ctx).make_squeeze({'data': first_valid_box, 'axes': [0]})
+
+        int_dtype = ctx.get_dtype(image_size)
+        np_int_dtype = utils.map_onnx_to_numpy_type(int_dtype)
+        scale = ctx.make_node("Concat", [img_height, img_width, img_height, img_width], attr={'axis': 0}).output[0]
+        box_scaled = ctx.make_node("Mul", [first_valid_box_sq, scale]).output[0]
+        if ctx.opset >= 11:
+            box_rounded = ctx.make_node("Round", [box_scaled]).output[0]
+        else:
+            box_rounded = box_scaled   # Close enough
+        box_cast = ctx.make_node("Cast", [box_rounded], attr={'to': int_dtype}).output[0]
+        bb_begin, bb_end = ctx.make_node("Split", [box_cast], attr={'axis': 0}, output_count=2).output
+        bb_size = ctx.make_node("Sub", [bb_end, bb_begin]).output[0]
+
+        const_zero_int = ctx.make_const(utils.make_name("const_zero"), np.array([0], np_int_dtype)).output[0]
+        const_neg_one_int = ctx.make_const(utils.make_name("const_neg_one"), np.array([-1], np_int_dtype)).output[0]
+
+        begin = ctx.make_node("Concat", [bb_begin, const_zero_int], attr={'axis': 0},
+                              op_name_scope=node.name).output[0]
+        size = ctx.make_node("Concat", [bb_size, const_neg_one_int], attr={'axis': 0},
+                             op_name_scope=node.name).output[0]
+        bboxes = GraphBuilder(ctx).make_unsqueeze({'data': first_valid_box, 'axes': [0]})
+
+        ctx.replace_all_inputs(node.output[0], begin)
+        ctx.replace_all_inputs(node.output[1], size)
+        ctx.replace_all_inputs(node.output[2], bboxes)
+        ctx.remove_node(node.name)
+
+
 @tf_op(["CropAndResize"])
 class CropAndResize:
     @classmethod
