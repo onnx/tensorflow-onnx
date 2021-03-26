@@ -1946,6 +1946,25 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
 
+    @check_opset_min_version(9, "Compress")
+    def test_sample_distorted_bounding_box_v2(self):
+        x_val = np.array([200, 300, 3], dtype=np.int32)
+        y_val = np.random.uniform(size=[1, 1000, 4]).astype(np.float32)
+        y_val = np.array([[0, 0, 0.1, 0.1], [0.9, 0.9, 1, 1]], np.float32).reshape([1, 2, 4])
+
+        def func(image_size, bounding_boxes):
+            begin, size, bboxes = tf.image.sample_distorted_bounding_box(
+                image_size, bounding_boxes, seed=42, min_object_covered=0.8,
+                aspect_ratio_range=[0.05, 3], area_range=[0.05, 1], max_attempts=100,
+                use_image_if_no_bounding_boxes=False)
+            begin_ = tf.identity(begin, name=_TFOUTPUT)
+            size_ = tf.identity(size, name=_TFOUTPUT1)
+            bboxes_ = tf.identity(bboxes, name=_TFOUTPUT2)
+            return begin_, size_, bboxes_
+        # since results are random, compare the shapes only
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val, _INPUT1: y_val},
+                            check_value=False, check_shape=True)
+
     @skip_caffe2_backend()
     def test_argminmax(self):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
