@@ -1651,7 +1651,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
     @parameterized.expand([
         (["dims12", "dim0_unsq"], 0, 1, 3),  # Reshape [3, 7, 11] -> [7, 11, 3]
-        (["dim0_unsq", "dims12"], 2, 0, 2),  # Reshape [3, 7, 11] -> [11, 3, 77]
+        (["dim0_unsq", "dims12"], 2, 0, 2),  # Reshape [3, 7, 11] -> [11, 3, 7]
     ])
     def test_reshape_opt(self, concat_order, gather_i, starts, ends):
         x_shape = [3, 7, 11]
