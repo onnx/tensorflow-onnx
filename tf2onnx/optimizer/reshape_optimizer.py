@@ -82,7 +82,7 @@ class ReshapeOptimizer(GraphOptimizerBase):
             shift = most_common[0][0] if most_common else 0
             def get_reshape_dim(val, i, shift):
                 if val.is_const():
-                    return self.constant
+                    return val.constant
                 if get_shift(val, i) == shift:
                     return 0
                 # Use -1 only as a last resort
