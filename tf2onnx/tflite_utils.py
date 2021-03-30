@@ -422,7 +422,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             # If an op has non-scalar inputs and all scalar outputs, it is very likely the shapes are actually unknown.
             if not all(output_shapes[inp] == [] for inp in input_names):
                 for out in output_names:
-                    logger.info("Replacing scalar output shape of %s with unknown shape", out)
+                    logger.warning("Replacing scalar output shape of %s with unknown shape", out)
                     output_shapes[out] = None
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]

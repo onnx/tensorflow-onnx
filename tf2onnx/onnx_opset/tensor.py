@@ -2918,7 +2918,7 @@ class MatrixDiagPartV2V3:
         abs_k = body_graph.make_node('Abs', [current_k.output[0]])
 
         range_k = body_graph.make_node('Range', [abs_k.output[0], new_width.output[0], one],
-                                       domain="com.microsoft")
+                                       domain="com.microsoft", dtypes=[TensorProto.INT64])
         sliced_range = body_graph.make_node('Slice', [range_k.output[0], zeo, new_depth.output[0]])
         sliced_shape = body_graph.make_node('Shape', [sliced_range.output[0]])
         pad_length = body_graph.make_node('Sub', [new_depth.output[0], sliced_shape.output[0]])
@@ -3330,10 +3330,10 @@ class MatrixDiag:
                 def rowsetcolset():
                     # if col is set
                     gg = g.create_new_graph_with_same_config()
+                    gg.parent_graph = g
                     id_row = mknode2(gg, "Identity", [row])
                     id_col = mknode2(gg, "Identity", [col])
                     shape = mknode2(gg, "Concat", [id_row, id_col], attr={"axis": -1})
-                    gg.parent_graph = g
                     gg.add_graph_output(shape, TensorProto.INT64, [-1])
                     return gg
 
@@ -3604,18 +3604,21 @@ class MatrixSetDiagV3:
         ones = mknode("Add", [zeos, one])
 
         # make diag of 1s
-        ones_diag = ctx.make_node("MatrixDiagPartV3", [ones, k, zeo], attr)
+        ones_diag = ctx.make_node("MatrixDiagPartV3", [ones, k, zeo], attr,
+                                  shapes=[ctx.get_shape(x)], dtypes=[ctx.get_dtype(x)])
         MatrixDiagPartV2V3.version_11(ctx, ones_diag)
         # MatrixDiagPartV2V3.version_12(ctx, ones_diag) # todo: fix exception
 
         # make matrix of bool
         ctx.set_dtype(ones_diag.output[0], TensorProto.INT64)
-        ones_matrix = ctx.make_node("MatrixDiagV3", [ones_diag.output[0], k, row, col, zeo], attr)
+        ones_matrix = ctx.make_node("MatrixDiagV3", [ones_diag.output[0], k, row, col, zeo], attr,
+                                    shapes=[ctx.get_shape(x)], dtypes=[ctx.get_dtype(x)])
         MatrixDiag.version_12(ctx, ones_matrix)
         ones_bool = mknode("Equal", [ones_matrix.output[0], one])
 
         # make matrix out of diag
-        diag_matrix = ctx.make_node("MatrixDiagV3", [diag, k, row, col, cast(zeo)], attr)
+        diag_matrix = ctx.make_node("MatrixDiagV3", [diag, k, row, col, cast(zeo)], attr,
+                                    shapes=[ctx.get_shape(x)], dtypes=[ctx.get_dtype(x)])
         MatrixDiag.version_12(ctx, diag_matrix)
 
         shapes = node.output_shapes

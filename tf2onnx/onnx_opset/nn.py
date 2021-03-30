@@ -1016,7 +1016,10 @@ class SampleDistortedBoundingBox:
             acceptable = ctx.make_node("And", [acceptable, any_ok]).output[0]
 
         acceptable_sq = GraphBuilder(ctx).make_squeeze({'data': acceptable, 'axes': [1]})
-        filtered = ctx.make_node("Compress", [all_boxes, acceptable_sq], attr={'axis': 0}).output[0]
+        boxes_shape = ctx.get_shape(all_boxes)
+        filtered_shape = [-1] + boxes_shape[1:] if boxes_shape is not None else None
+        filtered = ctx.make_node("Compress", [all_boxes, acceptable_sq], attr={'axis': 0},
+                                 dtypes=[ctx.get_dtype(all_boxes)], shapes=[filtered_shape]).output[0]
         default_box = np.array([0.0, 0.0, 1.0, 1.0], np.float32).reshape([1, 4])
         const_default_box = ctx.make_const(utils.make_name("default_box"), default_box).output[0]
         filtered_non_empty = ctx.make_node("Concat", [filtered, const_default_box], attr={'axis': 0}).output[0]
@@ -1091,7 +1094,7 @@ class CropAndResize:
                                                             cast_node.output[0]],
                                         attr={"output_height": output_height, "output_width": output_width,
                                               "spatial_scale": 1.0, "sampling_ratio": 1},
-                                        name=utils.make_name(node.name), dtypes=dtypes, shapes=shapes)
+                                        name=utils.make_name(node.name))
         ctx.remove_node(name)
         ctx.make_node("Transpose", crop_and_resize.output, {"perm": [0, 2, 3, 1]},
                       name=name, outputs=node.output, shapes=shapes, dtypes=dtypes)

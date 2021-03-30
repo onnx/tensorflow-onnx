@@ -240,10 +240,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def assert_shapes_correct(self, graph):
         model_proto = graph.make_model("test")
 
-        if not any(graph.get_shape(out) is None for out in graph.outputs + graph.input_names):
+        run_checker = not self.config.skip_onnx_checker
+        if run_checker and not any(graph.get_shape(out) is None for out in graph.outputs + graph.input_names):
             onnx.checker.check_model(model_proto, full_check=True)
 
-        model_shapes = onnx.shape_inference.infer_shapes(model_proto, strict_mode=True)
+        model_shapes = onnx.shape_inference.infer_shapes(model_proto, strict_mode=run_checker)
+        allow_missing = self.config.allow_missing_shapes
         def get_shape(info):
             if not info.type.tensor_type.HasField("shape"):
                 return None
@@ -253,11 +255,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf2onnx_shape = graph.get_shape(info.name)
             if onnx_shape is None:
                 continue
+            if allow_missing and tf2onnx_shape is None:
+                continue
             self.assertTrue(tf2onnx_shape is not None)
-            if -1 in onnx_shape:
+            if -1 in onnx_shape or (allow_missing and -1 in tf2onnx_shape):
                 self.assertEqual(len(onnx_shape), len(tf2onnx_shape))
                 for d1, d2 in zip(onnx_shape, tf2onnx_shape):
-                    if d1 != -1:
+                    if d1 != -1 and (d2 != -1 or not allow_missing):
                         self.assertEqual(d1, d2)
             else:
                 self.assertEqual(onnx_shape, tf2onnx_shape)
