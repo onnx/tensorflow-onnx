@@ -30,7 +30,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         origin_model_path = self.save_onnx_model(origin_proto, onnx_feed_dict, postfix="_origin")
 
-        new_proto = GraphUtil.optimize_model_proto(origin_proto)
+        new_proto = GraphUtil.optimize_model_proto(origin_proto, catch_errors=False)
 
         self.assertTrue(new_proto, msg="model proto after optimizer should not be None")
 
