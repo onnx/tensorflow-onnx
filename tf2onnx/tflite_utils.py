@@ -243,6 +243,25 @@ def parse_tflite_string_tensor(buffer_bytes, shape):
     return numpy_helper.from_array(np.array(string_list, dtype=np.object).reshape(shape))
 
 
+def op_has_scalar_output(input_shapes, optype, attr):
+    # TFLite uses [] to denote both scalars and unknown output shapes. Return True if an op can have scalar outputs
+    # despite having non-scalar inputs.
+    if optype == "TFL_STRIDED_SLICE":
+        inp_rank = len(input_shapes[0])
+        return attr['shrink_axis_mask'] == 2 ** len(input_shapes[0]) - 1
+    if (optype.startswith("TFL_REDUCE") or optype in ['All']) and len(input_shapes) == 2:
+        inp_rank = len(input_shapes[0])
+        keep_dims = attr.get('keep_dims', True)
+        num_axes = input_shapes[1][0]
+        return not keep_dims and inp_rank == num_axes
+    if optype == "TFL_RESHAPE":
+        return input_shapes[1] == [0]
+    if optype == "Size":
+        # Op from TF
+        return True
+    return False
+
+
 def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_shapes_override=None):
     """
     Returns a Graph object along with some op count stats. All tflite op types are prefixed with "TFL_".
@@ -369,7 +388,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             tf_node_def.ParseFromString(data[1])
             input_tf_dtypes = [map_tflite_dtype_to_tf(name_to_tensor[inp].Type()) for inp in input_names]
             def shape_to_tf_shape(dims):
-                return [None if d < 0 else d for d in dims]
+                return [None if d < 0 else d for d in dims] if dims is not None else None
             input_shapes = [shape_to_tf_shape(output_shapes[inp]) for inp in input_names]
             tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes, input_shapes)
             attr.update(tf_attrs)
@@ -420,10 +439,12 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
         if all(output_shapes[out] == [] for out in output_names):
             # tflite uses [] to represent both scalars and completely unknown shapes
             # If an op has non-scalar inputs and all scalar outputs, it is very likely the shapes are actually unknown.
-            if not all(output_shapes[inp] == [] for inp in input_names):
-                for out in output_names:
-                    logger.warning("Replacing scalar output shape of %s with unknown shape", out)
-                    output_shapes[out] = None
+            inp_shapes = [output_shapes[inp] for inp in input_names]
+            if not all(s == [] for s in inp_shapes):
+                if any(s is None for s in inp_shapes) or not op_has_scalar_output(inp_shapes, optype, attr):
+                    for out in output_names:
+                        logger.warning("Replacing scalar output shape of %s with unknown shape", out)
+                        output_shapes[out] = None
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]
         onnx_node = helper.make_node(optype, input_names, output_names, name=output_names[0], **attr)
