@@ -22,9 +22,9 @@ def is_nhwc_transpose(transpose_node):
     return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints in [NCHW_TO_NHWC, NCDHW_TO_NDHWC]
 
 
-def is_nchw_transpose(transpose_node):
-    perm_attr = transpose_node.get_attr('perm')
-    return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints in [NHWC_TO_NCHW, NDHWC_TO_NCDHW]
+def is_tranpose_of_type(node, perm):
+    perm_attr = node.get_attr('perm')
+    return node.type == "Transpose" and  perm_attr and perm_attr.ints == perm
 
 
 def is_useless_transpose(transpose_node):
@@ -92,16 +92,23 @@ class TransposeOptimizer(GraphOptimizerBase):
     def post_optimize_action(self):
         def _calculate_new_shape(graph, op):
             input_shape = graph.get_shape(op.input[0])
+            tagged_shape = [d if d == 1 else "var" + str(i) for i, d in enumerate(input_shape)]
+            trim_shape = [d for d in tagged_shape if d != 1]
+
+            perm = op.get_attr_value("perm")
+            perm_shape = [tagged_shape[p] for p in perm]
+            trim_perm_shape = [d for d in perm_shape if d != 1]
+
+            if trim_perm_shape != trim_shape:
+                return None
+
             if input_shape.count(-1) <= 1:
-                if is_nchw_transpose(op):
-                    new_shape = [input_shape[0], input_shape[-1]] + input_shape[1:-1]
-                else:
-                    new_shape = [input_shape[0]] + input_shape[2:] + [input_shape[1]]
+                new_shape = [input_shape[p] for p in perm]
                 return graph.make_const(utils.make_name("new_shape"), np.array(new_shape, dtype=np.int64)).output[0]
 
             # reshape requires tha output shape can only contain one -1, if not some extra op needed.
             input_shape = graph.make_node("Shape", [op.input[0]]).output[0]
-            indice = graph.make_const(utils.make_name("indice"), np.array(op.get_attr('perm').ints)).output[0]
+            indice = graph.make_const(utils.make_name("indice"), np.array(perm, np.int64)).output[0]
 
             return graph.make_node("Gather", [input_shape, indice]).output[0]
 
@@ -110,14 +117,12 @@ class TransposeOptimizer(GraphOptimizerBase):
         # replacing trans with reshape is because transpose will copy data even if this transpose doesn't nothing
         need_sort = False
         for op in nodes:
-            if op.type == "Transpose":
+            if op.type == "Transpose" and "perm" in op.attr:
                 input_shape = self._g.get_shape(op.input[0])
                 if not input_shape:
                     continue
-
-                if (is_nchw_transpose(op) and (input_shape[-1] == 1 or (np.all(np.array(input_shape[1:-1]) == 1)))) \
-                   or (is_nhwc_transpose(op) and (input_shape[1] == 1 or (np.all(np.array(input_shape[2:]) == 1)))):
-                    new_shape = _calculate_new_shape(self._g, op)
+                new_shape = _calculate_new_shape(self._g, op)
+                if new_shape is not None:
                     # replace transpose with reshape
                     self._g.remove_node(op.name)
                     self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output)
@@ -227,6 +232,8 @@ class TransposeOptimizer(GraphOptimizerBase):
         }
 
     def _handle_node_having_branches(self, trans, node):
+        if not self._should_push_transpose(trans, node):
+            return False
         # create transpose pairs if some input are not.
         if not self._create_transpose_pairs_before_node(trans, node):
             return False
@@ -330,19 +337,54 @@ class TransposeOptimizer(GraphOptimizerBase):
                     return False
         return True
 
-    def _get_non_nchw_transpose_output_nodes(self, node):
+    def _cost_to_transpose(self, node, inp_id):
+        if node.type in ["Const", "Transpose"]:
+            # Transposes can be combined/folded, so there is no additional cost
+            return 0
+        prod = 1
+        shape = self._g.get_shape(inp_id)
+        if shape is None:
+            return 500
+        for d in shape:
+            if d == -1:
+                # Assume unknown dims are approx. 20
+                prod *= 20
+            prod *= d
+        return prod
+
+    def _should_push_transpose(self, trans, node):
+        perm = trans.get_attr_value("perm")
+        optimization_gains = 0
+        removed_nchws = 0
+        for n, inp_id in zip(node.inputs, node.input):
+            if is_tranpose_of_type(n, perm):
+                optimization_gains += self._cost_to_transpose(n.inputs[0], n.input[0])
+                if perm in [NCHW_TO_NHWC, NCDHW_TO_NDHWC]:
+                    removed_nchws += 1
+            else:
+                optimization_gains -= self._cost_to_transpose(n, inp_id)
+                if perm in [NHWC_TO_NCHW, NDHWC_TO_NCDHW]:
+                    removed_nchws -= 1
+        if removed_nchws != 0:
+            # Always push nchw transposes if possible
+            return removed_nchws > 0
+        return optimization_gains > 0
+
+    def _get_non_nchw_transpose_output_nodes(self, trans, node):
         # we just support node having 1 output, we need consider cases where node has more than 1 outputs
         assert len(node.output) == 1
+        perm = trans.get_attr_value("perm")
+        perm_inv = invert_perm(perm)
         non_nchw_tranpose_nodes = []
         consumers = self._g.find_output_consumers(node.output[0])
         for o in consumers:
-            if not is_nchw_transpose(o) and o not in non_nchw_tranpose_nodes:
+            if not is_tranpose_of_type(o, perm_inv) and o not in non_nchw_tranpose_nodes:
                 non_nchw_tranpose_nodes.append(o)
         return non_nchw_tranpose_nodes
 
     def _create_transpose_pairs_after_node(self, trans, node):
         assert len(node.output) == 1  # just support node who has 1 output
-        non_nchw_trans_consumers = self._get_non_nchw_transpose_output_nodes(node)
+        non_nchw_trans_consumers = self._get_non_nchw_transpose_output_nodes(trans, node)
         # add Transpose(0, 3, 1, 2) and Transpose(0, 2, 3, 1) before each non_nchw_trans_consumers
         for consumer in non_nchw_trans_consumers:
             perm = trans.get_attr_value("perm")
@@ -367,7 +409,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         non_nhwc_trans_inputs = []
         for input_id, n in zip(node.input, node.inputs):
-            if not is_nhwc_transpose(n):
+            if not is_tranpose_of_type(n, perm):
                 # check in case node has two inputs coming from a same node output.
                 if [input_id, n] not in non_nhwc_trans_inputs:
                     non_nhwc_trans_inputs.append([input_id, n])
@@ -451,7 +493,9 @@ class TransposeOptimizer(GraphOptimizerBase):
         return self._handle_node_having_branches(trans, node)
 
     def _transpose_handler(self, trans, node):
-        if is_nchw_transpose(node):
+        perm = trans.get_attr_value("perm")
+        perm_inv = invert_perm(perm)
+        if is_tranpose_of_type(node, perm_inv):
             for g in {self._g, node.graph}:
                 g.replace_all_inputs(node.output[0], trans.input[0])  # ops=g.get_nodes()
 
@@ -489,17 +533,16 @@ class TransposeOptimizer(GraphOptimizerBase):
             return True
 
         # convert  mul(trans(x), trans(y)) ->  trans(mul(x, y))
-        if multiplier_input_node.type == "Transpose":
-            if is_nhwc_transpose(multiplier_input_node):
-                if not self._nodes_has_single_consumer_node([multiplier_input_node]):
-                    return False
-                input_index = self._get_input_index_for_trans(node, multiplier_input_node)
-                if not self._switch_transpose_and_node(node, trans):
-                    return False
+        if is_tranpose_of_type(multiplier_input_node, trans.get_attr_value("perm")):
+            if not self._nodes_has_single_consumer_node([multiplier_input_node]):
+                return False
+            input_index = self._get_input_index_for_trans(node, multiplier_input_node)
+            if not self._switch_transpose_and_node(node, trans):
+                return False
 
-                self._g.replace_input(node, node.input[input_index], multiplier_input_node.input[0], input_index)
-                self._g.remove_node(multiplier_input_node.name)
-                return True
+            self._g.replace_input(node, node.input[input_index], multiplier_input_node.input[0], input_index)
+            self._g.remove_node(multiplier_input_node.name)
+            return True
 
         # handle const multipliers
         if not multiplier_input_node.is_const():

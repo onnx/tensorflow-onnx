@@ -456,6 +456,38 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=1)
 
     @parameterized.expand([
+        ((2, 3, 4, 5), (2, 4, 5, 3), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((2, 3, 4, 5, 6), (2, 4, 5, 6, 3), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    @check_opset_min_version(8, "Max in opset 10 supports broadcasting")
+    def test_transpose_max_no_cancel(self, input_shape1, input_shape2, perm_input, perm_output):
+        const_1_val = [2.0]
+        const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), const_1_val)
+        const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
+
+        const_2_val = np.random.randn(*input_shape2).astype(np.float32)
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, input_shape2, const_2_val.flatten())
+        const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
+
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node2 = helper.make_node("Max", ["Y", "non_const", "const_2", "const_1"], ["Z"], name="max")
+
+        output_shape = [None] * len(input_shape1)
+
+        graph = helper.make_graph(
+            [const_1_node, const_2_node, node1, node2],
+            "Max-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape1),
+             helper.make_tensor_value_info("non_const", TensorProto.FLOAT, input_shape2)],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z"], {"X": np.random.randn(*input_shape1).astype(np.float32),
+                                           "non_const": np.random.randn(*input_shape2).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=2)
+
+    @parameterized.expand([
         ((2, 3, 4, 5), (2, 4, 5, 3), [0, 2, 3, 1]),
         ((2, 3, 4, 5, 6), (2, 4, 5, 6, 3), [0, 2, 3, 4, 1]),
     ])
