@@ -156,7 +156,7 @@ def infer_onnx_shape_dtype(node, opset_version, input_shapes, input_dtypes, init
     try:
         try:
             inferred_model = shape_inference.infer_shapes(model_proto, strict_mode=True)
-        except TypeError as e:
+        except TypeError:
             # strict_mode arg doesn't exist in old onnx packages
             inferred_model = shape_inference.infer_shapes(model_proto)
     except Exception:  # pylint: disable=broad-except

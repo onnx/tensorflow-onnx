@@ -2029,6 +2029,10 @@ class ReverseSequence:
         if time_major:
             # get back to time_major
             op_name = utils.make_name(node.name)
+            curr_shape = ctx.get_shape(node.output[0])
+            if curr_shape is not None:
+                new_shape = [curr_shape[perm_val.index(i)] for i in range(len(perm_val))]
+                ctx.set_shape(node.output[0], new_shape)
             trans_back_node = ctx.insert_new_node_on_output("Transpose", node.output[0],
                                                             name=op_name, perm=perm_val)
             ctx.copy_dtype(node.output[0], trans_back_node.output[0])

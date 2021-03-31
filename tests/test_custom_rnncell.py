@@ -12,7 +12,7 @@ import tensorflow as tf
 
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import *
+from common import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from tf2onnx.tf_loader import is_tf2
 
 

@@ -234,7 +234,7 @@ imagenet-mobilenet_v1_075_192-feature_vector:
   concrete_function: 2
 
 imagenet-mobilenet_v1_100_160-classification:
-  disabled: false
+  disabled: true
   skip_conversion: false
   model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_100_160-classification"
   converted_model: "D:/co_tfhubmodels/imagenet-mobilenet_v1_100_160-classification/model.onnx"

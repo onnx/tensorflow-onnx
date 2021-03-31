@@ -120,10 +120,16 @@ class CustomRnnRewriter(LoopRewriterBase):
             loop_outputs_dtypes.append(body_g.get_dtype(out))
             shape = body_g.get_shape(out)
             if i < len(scan_props.state_outputs):
-                loop_outputs_shapes.append(shape)
+                if self.g.opset == 8:
+                    loop_outputs_shapes.append([1] + shape)
+                else:
+                    loop_outputs_shapes.append(shape)
             else:
                 if shape is None:
                     loop_outputs_shapes.append(None)
+                elif self.g.opset == 8:
+                    # In opset 8, the first dim of a scan output is the batch
+                    loop_outputs_shapes.append([1, scan_length] + shape)
                 else:
                     loop_outputs_shapes.append([scan_length] + shape)
 
