@@ -12,7 +12,7 @@ import tensorflow as tf
 
 from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import check_tf_min_version, check_opset_min_version, unittest_main, skip_opset, skip_tf2
+from common import *
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -325,6 +325,7 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.8")
     @skip_opset(9, "ReverseSequence")
     @skip_tf2()
+    @allow_missing_shapes("Missing RNN shape")
     def test_bidrectional_attention_wrapper_lstm_encoder(self):
         size = 30
         time_step = 3

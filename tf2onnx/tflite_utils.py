@@ -244,11 +244,13 @@ def parse_tflite_string_tensor(buffer_bytes, shape):
 
 
 def op_has_scalar_output(input_shapes, optype, attr):
-    # TFLite uses [] to denote both scalars and unknown output shapes. Return True if an op can have scalar outputs
-    # despite having non-scalar inputs.
+    """
+    TFLite uses [] to denote both scalars and unknown output shapes. Return True if an op can have scalar outputs
+    despite having non-scalar inputs. Otherwise, we will replace [] with None
+    """
     if optype == "TFL_STRIDED_SLICE":
         inp_rank = len(input_shapes[0])
-        return attr['shrink_axis_mask'] == 2 ** len(input_shapes[0]) - 1
+        return attr['shrink_axis_mask'] == 2 ** inp_rank - 1
     if (optype.startswith("TFL_REDUCE") or optype in ['All']) and len(input_shapes) == 2:
         inp_rank = len(input_shapes[0])
         keep_dims = attr.get('keep_dims', True)

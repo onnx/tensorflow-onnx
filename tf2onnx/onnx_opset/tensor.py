@@ -173,7 +173,7 @@ class Reshape:
             return
 
         # onnx < opset 8 does not know reshape for other types than float*, wrap the reshape in casts
-        input_cast = ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
+        ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
 
         # if the next node is already a cast we don't need to insert another one
         next_nodes = ctx.find_output_consumers(node.output[0])

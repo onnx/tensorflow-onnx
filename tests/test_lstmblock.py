@@ -33,7 +33,7 @@ else:
 
 class LSTMBlockTests(Tf2OnnxBackendTestBase):
 
-    def run_test_case(self, *args, **kwargs):
+    def run_test_case(self, *args, **kwargs):  #pylint: disable=arguments-differ
         # TF LSTM has an unknown dim
         tmp = self.config.allow_missing_shapes
         self.config.allow_missing_shapes = True

@@ -55,6 +55,34 @@ logger = logging.getLogger("run_pretrained")
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
 PERFITER = 1000
 
+import onnx
+def assert_shapes_correct(graph, allow_missing=False, run_checker=True):
+    model_proto = graph.make_model("test")
+
+    if run_checker and not any(graph.get_shape(out) is None for out in graph.outputs + graph.input_names):
+        onnx.checker.check_model(model_proto, full_check=True)
+
+    model_shapes = onnx.shape_inference.infer_shapes(model_proto)
+    def get_shape(info):
+        if not info.type.tensor_type.HasField("shape"):
+            return None
+        return [d.dim_value if d.HasField('dim_value') else -1 for d in info.type.tensor_type.shape.dim]
+    for info in model_shapes.graph.value_info:
+        onnx_shape = get_shape(info)
+        tf2onnx_shape = graph.get_shape(info.name)
+        if onnx_shape is None:
+            continue
+        if allow_missing and tf2onnx_shape is None:
+            continue
+        assert tf2onnx_shape is not None
+        if -1 in onnx_shape or (allow_missing and -1 in tf2onnx_shape):
+            assert len(onnx_shape) == len(tf2onnx_shape)
+            for d1, d2 in zip(onnx_shape, tf2onnx_shape):
+                if d1 != -1 and (d2 != -1 or not allow_missing):
+                    assert d1 == d2
+        else:
+            assert onnx_shape == tf2onnx_shape
+
 
 def get_img(shape, path, dtype, should_scale=True):
     """Get image as input."""
@@ -518,6 +546,7 @@ class Test(object):
                 model_proto = onnx_graph.make_model("converted from tf2onnx",
                                                     external_tensor_storage=external_tensor_storage)
                 logger.info("To_ONNX, OK")
+                assert_shapes_correct(onnx_graph)
                 if onnx_file:
                     self.create_onnx_file(name, model_proto, inputs, onnx_file, external_tensor_storage)
                 if self.converted_model:

@@ -237,10 +237,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # tflite sometimes converts from tf but produces an invalid model
             return None, None
 
-    def assert_shapes_correct(self, graph, allow_missing=False):
+    def assert_shapes_correct(self, graph, allow_missing=False, run_checker=True):
         model_proto = graph.make_model("test")
 
-        run_checker = not self.config.skip_onnx_checker
         if run_checker and not any(graph.get_shape(out) is None for out in graph.outputs + graph.input_names):
             onnx.checker.check_model(model_proto, full_check=True)
 
@@ -311,7 +310,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
 
             self.assert_results_equal(expected, actual, rtol, atol, check_value, check_shape, check_dtype)
-            self.assert_shapes_correct(g, self.config.allow_missing_shapes)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
@@ -341,7 +340,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             onnx_from_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port, postfix="_from_tflite")
 
             self.assert_results_equal(tfl_results, onnx_from_tfl_res, rtol, atol, check_value, check_shape, check_dtype)
-            self.assert_shapes_correct(g, self.config.allow_missing_shapes)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
