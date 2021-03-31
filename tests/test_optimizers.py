@@ -30,7 +30,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         origin_model_path = self.save_onnx_model(origin_proto, onnx_feed_dict, postfix="_origin")
 
-        new_proto = GraphUtil.optimize_model_proto(origin_proto)
+        new_proto = GraphUtil.optimize_model_proto(origin_proto, catch_errors=False)
 
         self.assertTrue(new_proto, msg="model proto after optimizer should not be None")
 
@@ -454,6 +454,38 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["Z1"], {"X": np.random.randn(*input_shape1).astype(np.float32),
                                             "non_const": np.random.randn(*input_shape2).astype(np.float32)},
                                    model_proto, remaining_transpose_num=1)
+
+    @parameterized.expand([
+        ((2, 3, 4, 5), (2, 4, 5, 3), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((2, 3, 4, 5, 6), (2, 4, 5, 6, 3), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    @check_opset_min_version(8, "Max in opset 10 supports broadcasting")
+    def test_transpose_max_no_cancel(self, input_shape1, input_shape2, perm_input, perm_output):
+        const_1_val = [2.0]
+        const_1 = helper.make_tensor("const_1", TensorProto.FLOAT, (1,), const_1_val)
+        const_1_node = helper.make_node("Constant", [], ["const_1"], value=const_1, name="const_1")
+
+        const_2_val = np.random.randn(*input_shape2).astype(np.float32)
+        const_2 = helper.make_tensor("const_2", TensorProto.FLOAT, input_shape2, const_2_val.flatten())
+        const_2_node = helper.make_node("Constant", [], ["const_2"], value=const_2, name="const_2")
+
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node2 = helper.make_node("Max", ["Y", "non_const", "const_2", "const_1"], ["Z"], name="max")
+
+        output_shape = [None] * len(input_shape1)
+
+        graph = helper.make_graph(
+            [const_1_node, const_2_node, node1, node2],
+            "Max-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape1),
+             helper.make_tensor_value_info("non_const", TensorProto.FLOAT, input_shape2)],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["Z"], {"X": np.random.randn(*input_shape1).astype(np.float32),
+                                           "non_const": np.random.randn(*input_shape2).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=2)
 
     @parameterized.expand([
         ((2, 3, 4, 5), (2, 4, 5, 3), [0, 2, 3, 1]),
@@ -1646,6 +1678,110 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                                 op_type="Log", remaining_op_num=3)
 
     # Merge Duplicated Nodes Optimizer Tests End
+
+    # Reshape Optimizer Tests Start
+
+    @parameterized.expand([
+        (["dims12", "dim0_unsq"], 0, 1, 3),  # Reshape [3, 7, 11] -> [7, 11, 3]
+        (["dim0_unsq", "dims12"], 2, 0, 2),  # Reshape [3, 7, 11] -> [11, 3, 77]
+    ])
+    def test_reshape_opt(self, concat_order, gather_i, starts, ends):
+        x_shape = [3, 7, 11]
+        node0 = helper.make_node("Shape", ["X"], ["S"])
+        g_indices_tensor = helper.make_tensor(name='g_indices_tensor', data_type=TensorProto.INT64, dims=[],
+                                              vals=np.array([gather_i], np.int64))
+        starts_tensor = helper.make_tensor(name='starts_tensor', data_type=TensorProto.INT64, dims=[1],
+                                           vals=np.array([starts], np.int64))
+        ends_tensor = helper.make_tensor(name='ends_tensor', data_type=TensorProto.INT64, dims=[1],
+                                         vals=np.array([ends], np.int64))
+        axes_tensor = helper.make_tensor(name='axes_tensor', data_type=TensorProto.INT64, dims=[1],
+                                         vals=np.array([0], np.int64))
+        node1 = helper.make_node("Constant", [], ["g_indices"], value=g_indices_tensor)
+        node2 = helper.make_node("Constant", [], ["starts"], value=starts_tensor)
+        node3 = helper.make_node("Constant", [], ["ends"], value=ends_tensor)
+        node4 = helper.make_node("Constant", [], ["axes"], value=axes_tensor)
+        node5 = helper.make_node("Gather", ["S", "g_indices"], ["dim0"])
+        if self.config.opset >= 10:
+            node6 = helper.make_node("Slice", ["S", "starts", "ends", "axes"], ["dims12"])
+        else:
+            node6 = helper.make_node("Slice", ["S"], ["dims12"], starts=[starts], ends=[ends], axes=[0])
+        if self.config.opset >= 13:
+            node7 = helper.make_node("Unsqueeze", ["dim0", "axes"], ["dim0_unsq"])
+        else:
+            node7 = helper.make_node("Unsqueeze", ["dim0"], ["dim0_unsq"], axes=[0])
+        node8 = helper.make_node("Concat", concat_order, ["dims120"], axis=0)
+        node9 = helper.make_node("Reshape", ["X", "dims120"], ["Y"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3, node4, node5, node6, node7, node8, node9],
+            "test_reshape_opt1",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [None, None, None])],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [None, None, None])],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["Y"], {"X": np.random.randn(*x_shape).astype(np.float32)},
+                             model_proto, op_type="Shape", remaining_op_num=0)
+
+
+    def test_reshape_opt_with_mul(self):
+        x_shape = [7, 10, 20, 30]
+        node0 = helper.make_node("Shape", ["X"], ["S"])
+
+        g_indices_tensor = helper.make_tensor(name='g_indices_tensor', data_type=TensorProto.INT64, dims=[2],
+                                              vals=np.array([1, 2], np.int64))
+        starts_tensor = helper.make_tensor(name='starts_tensor', data_type=TensorProto.INT64, dims=[1],
+                                           vals=np.array([0], np.int64))
+        ends_tensor = helper.make_tensor(name='ends_tensor', data_type=TensorProto.INT64, dims=[1],
+                                         vals=np.array([1], np.int64))
+        axes_tensor = helper.make_tensor(name='axes_tensor', data_type=TensorProto.INT64, dims=[1],
+                                         vals=np.array([0], np.int64))
+        five_tensor = helper.make_tensor(name='five_tensor', data_type=TensorProto.INT32, dims=[],
+                                         vals=np.array([5], np.int32))
+        six_tensor = helper.make_tensor(name='six_tensor', data_type=TensorProto.INT64, dims=[1],
+                                        vals=np.array([6], np.int64))
+        node1 = helper.make_node("Constant", [], ["g_indices"], value=g_indices_tensor)
+        node2 = helper.make_node("Constant", [], ["starts"], value=starts_tensor)
+        node3 = helper.make_node("Constant", [], ["ends"], value=ends_tensor)
+        node4 = helper.make_node("Constant", [], ["axes"], value=axes_tensor)
+        node5 = helper.make_node("Constant", [], ["five"], value=five_tensor)
+        node55 = helper.make_node("Constant", [], ["six"], value=six_tensor)
+
+        node6 = helper.make_node("Gather", ["S", "g_indices"], ["dims12"])
+        node7 = helper.make_node("ReduceProd", ["dims12"], ["dims12_prod"], axes=[0])
+        if self.config.opset >= 10:
+            node8 = helper.make_node("Slice", ["S", "starts", "ends", ""], ["dim0"])
+        else:
+            node8 = helper.make_node("Slice", ["S"], ["dim0"], starts=[0], ends=[1])
+        node9 = helper.make_node("Cast", ["dim0"], ["dim0_cast"], to=TensorProto.INT32)
+
+        if self.config.opset >= 13:
+            node10 = helper.make_node("Squeeze", ["dim0_cast", "axes"], ["dim0_sq"])
+        else:
+            node10 = helper.make_node("Squeeze", ["dim0_cast"], ["dim0_sq"], axes=[0])
+        node11 = helper.make_node("Mul", ["dim0_sq", "five"], ["five_dim0"])
+        if self.config.opset >= 13:
+            node12 = helper.make_node("Unsqueeze", ["five_dim0", "axes"], ["five_dim0_unsq"])
+        else:
+            node12 = helper.make_node("Unsqueeze", ["five_dim0"], ["five_dim0_unsq"], axes=[0])
+        node13 = helper.make_node("Cast", ["five_dim0_unsq"], ["five_dim0_cast"], to=TensorProto.INT64)
+
+        node14 = helper.make_node("Concat", ["five_dim0_cast", "dims12_prod", "six"], ["shape"], axis=0)
+        node15 = helper.make_node("Reshape", ["X", "shape"], ["Y"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3, node4, node5, node55, node6, node7, node8, node9, node10,
+             node11, node12, node13, node14, node15],
+            "test_reshape_opt1",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [None, 10, 20, 30])],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [None, None, None])],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["Y"], {"X": np.random.randn(*x_shape).astype(np.float32)},
+                             model_proto, op_type="Shape", remaining_op_num=0)
+
+    # Reshape Optimizer Tests End
 
     # Const Fold Optimizer Tests Start
 

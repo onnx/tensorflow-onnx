@@ -6,6 +6,7 @@ tf2onnx.rewriter - rewrite tensorflow subgraph to onnx random_uniform op
 """
 import numpy as np
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx import utils, handler
 
 
@@ -74,9 +75,15 @@ def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output, to_delete):
     shape = g.get_shape(output.output[0])
     if shape_node.is_const():
         # if the tensorflow input (aka the shape) is const we can use the RandomUniform op
+        needs_squeeze = False
+        if len(shape) == 0:
+            shape = [1]
+            needs_squeeze = True
         new_node = g.make_node("RandomUniform", [], name=op_name,
                                attr={"low": tmin, "high": tmax, "dtype": dtype, "shape": shape},
                                shapes=[shape], dtypes=[dtype])
+        if needs_squeeze:
+            new_node = GraphBuilder(g).make_squeeze({"data": new_node.output[0], "axes": [0]}, return_node=True)
     else:
         if shape_node.type == "Shape":
             # if shape is dynamic - in tensorflow shape comes as tensor VALUE,
