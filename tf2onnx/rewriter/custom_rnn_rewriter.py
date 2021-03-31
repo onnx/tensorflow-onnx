@@ -74,12 +74,16 @@ class CustomRnnRewriter(LoopRewriterBase):
                     state_inputs_initial_values.append(state_input)
 
             scan_inputs_initial_values = []
+            scan_length = -1
             for scan_input in scan_props.scan_inputs_initial_values:
                 if self.g.opset == 8:
                     nodes = self._adapt_scan_sequence_input_or_output("input", scan_input, False)
                     scan_inputs_initial_values.append(nodes[-1].output[0])
                 else:  # since opset 9
                     scan_inputs_initial_values.append(scan_input)
+                scan_shape = self.g.get_shape(scan_input)
+                if scan_shape is not None and len(scan_shape) > 0:
+                    scan_length = scan_shape[0]
 
             cell_g_info = context.cell_graph
             scan_body_g = LoopRewriterBase.construct_graph_from_nodes(self.g, cell_g_info.nodes, cell_g_info.outputs)
@@ -89,10 +93,9 @@ class CustomRnnRewriter(LoopRewriterBase):
             for input_tensor_info in scan_props.scan_inputs:
                 scan_body_g.add_graph_input(input_tensor_info.id, input_tensor_info.dtype, input_tensor_info.shape)
 
-            branches = {"body": scan_body_g}
             scan_node = self._create_scan_node(context, scan_props,
                                                state_inputs_initial_values + scan_inputs_initial_values,
-                                               branches=branches)
+                                               scan_body_g, scan_length)
             if not scan_node:
                 logger.error("failed to create scan node during rewrite")
                 return REWRITER_RESULT.FAIL
@@ -106,24 +109,23 @@ class CustomRnnRewriter(LoopRewriterBase):
             logger.error("custom rnn rewrite failed, due to exception: %s, details:%s", ex, tb)
             return REWRITER_RESULT.FAIL
 
-    def _create_scan_node(self, context, scan_props, init_values, branches=None):
+    def _create_scan_node(self, context, scan_props, init_values, body_g, scan_length):
         logger.debug("create scan node")
+        branches = {"body": body_g}
         # reuse original output connection id (e.g. Exit_XXX), so we don't need set shape.
         loop_outputs_shapes = []
         loop_outputs_dtypes = []
-        for tensor_value_info in scan_props.state_outputs_exits + scan_props.scan_outputs_exits:
-            if tensor_value_info.id:
-                # in opset 8, the first dim of scan output must be batch
-                if self.g.opset == 8:
-                    loop_outputs_shapes.append([1] + tensor_value_info.shape)
-                else:
-                    loop_outputs_shapes.append(tensor_value_info.shape)
-                loop_outputs_dtypes.append(tensor_value_info.dtype)
-                n = self.g.get_node_by_output(tensor_value_info.id)
-                self.g.remove_node(n.name)
+
+        for i, out in enumerate(body_g.outputs):
+            loop_outputs_dtypes.append(body_g.get_dtype(out))
+            shape = body_g.get_shape(out)
+            if i < len(scan_props.state_outputs):
+                loop_outputs_shapes.append(shape)
             else:
-                loop_outputs_shapes.append([-1])
-                loop_outputs_dtypes.append(None)
+                if shape is None:
+                    loop_outputs_shapes.append(None)
+                else:
+                    loop_outputs_shapes.append([scan_length] + shape)
 
         if self.g.opset == 8:
             # here we did not give the sequence_length, because

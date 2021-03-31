@@ -39,6 +39,16 @@ else:
 
 # TODO: as a workaround, set batch_size to 1 for now to bypass a onnxruntime bug, revert it when the bug is fixed
 class GRUTests(Tf2OnnxBackendTestBase):
+
+    def run_test_case(self, *args, **kwargs):
+        # TF GRU has an unknown dim
+        tmp = self.config.allow_missing_shapes
+        self.config.allow_missing_shapes = True
+        try:
+            super().run_test_case(*args, **kwargs)
+        finally:
+            self.config.allow_missing_shapes = tmp
+
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
     @skip_tf2()
     def test_single_dynamic_gru(self):

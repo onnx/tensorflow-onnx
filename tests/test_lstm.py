@@ -40,6 +40,16 @@ else:
 # pylint: enable=invalid-name
 
 class LSTMTests(Tf2OnnxBackendTestBase):
+
+    def run_test_case(self, *args, **kwargs):
+        # TF LSTM has an unknown dim
+        tmp = self.config.allow_missing_shapes
+        self.config.allow_missing_shapes = True
+        try:
+            super().run_test_case(*args, **kwargs)
+        finally:
+            self.config.allow_missing_shapes = tmp
+
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
     def test_test_single_dynamic_lstm_state_is_tuple(self):
         self.internal_test_single_dynamic_lstm(True)

@@ -32,6 +32,16 @@ else:
 
 
 class LSTMBlockTests(Tf2OnnxBackendTestBase):
+
+    def run_test_case(self, *args, **kwargs):
+        # TF LSTM has an unknown dim
+        tmp = self.config.allow_missing_shapes
+        self.config.allow_missing_shapes = True
+        try:
+            super().run_test_case(*args, **kwargs)
+        finally:
+            self.config.allow_missing_shapes = tmp
+
     @check_tf_max_version("1.15", "no LSTMBlockCell in tf-2.x")
     def test_single_dynamic_lstm(self):
         units = 5
