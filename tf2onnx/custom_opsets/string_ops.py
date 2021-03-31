@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """ tf2onnx mapping functions for string ops using contrib ops domain. """
+import io
+import json
 import logging
 import numpy as np
 from onnx.onnx_pb import TensorProto
-
+from onnx.helper import make_attribute
 from tf2onnx import constants, handler
 from tf2onnx.handler import tf_op
 from tf2onnx import utils
@@ -169,3 +171,41 @@ class SentencepieceTokenizeOp:
         node.type = "SentencepieceTokenizer"
         if ctx.is_safe_to_remove_nodes([input_node]):
             ctx.remove_node(input_node.name)
+
+@tf_op("RegexSplitWithOffsets", domain=constants.CONTRIB_OPS_DOMAIN)
+class RegexSplitWithOffsetsOp:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        node.type = "StringRegexSplitWithOffsets"
+
+@tf_op("WordpieceTokenizeWithOffsets", domain=constants.CONTRIB_OPS_DOMAIN)
+class WordpieceTokenizeWithOffsetsOp:
+    @classmethod
+    def version_1(cls, ctx, node, initialized_tables=None, **kwargs):
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        node.type = "WordpieceTokenizer"
+        utils.make_sure(len(node.input) == 2,
+                        "[WordpieceTokenizeWithOffsetsOp] Expecting 2 inputs not %r.", len(node.input))
+        utils.make_sure(initialized_tables is not None,
+                        "[WordpieceTokenizeWithOffsetsOp] initialized_tables cannot be None.", len(node.input))
+        parent = ctx.get_node_by_output(node.input[1])
+        while parent.type == 'Identity':
+            parent = ctx.get_node_by_output(parent.input[0])
+        utils.make_sure(parent is not None,
+                        "[WordpieceTokenizeWithOffsetsOp] Unable to extract the vocabulary")
+        ressource = parent.get_attr_value('shared_name')
+        table = initialized_tables[ressource]
+        if isinstance(table, tuple):
+            table = table[0]
+        mapping = {}
+        for i, word in enumerate(table):
+            if isinstance(word, bytes):
+                word = word.decode('utf-8')
+            mapping[word] = i
+        st = io.StringIO()
+        json.dump(mapping, st, separators=(',', ':'))
+        node.attr['vocab'] = make_attribute('vocab', st.getvalue())
+
+        positions = ctx.make_const(utils.make_name("empty"), np.array([], np.int64))
+        ctx.replace_inputs(node, [node.input[0], positions.output[0]])
