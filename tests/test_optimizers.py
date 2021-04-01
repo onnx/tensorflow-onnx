@@ -633,6 +633,33 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.check_transpose_perm(model_after_opt, expected_perm)
 
     @parameterized.expand([
+        ((1, 3, 4, 5), (1, 1, 4, 5, 1, 3, 1), [0, 2, 3, 1], [0, 1, 4, 5, 2, 3, 6]),
+        ((1, 3, 4, 5, 6), (1, 1, 4, 5, 1, 6, 1, 3), [0, 2, 3, 4, 1], [0, 1, 4, 5, 6, 7, 2, 3]),
+    ])
+    def test_transpose_with_unsqueeze(self, input_shape, output_shape, perm, expected_perm):
+        # unsqueeze the first dim
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
+        if self.config.opset <= 12:
+            node2 = helper.make_node("Unsqueeze", ["Y"], ["Z"], name="unsqueeze", axes=[0, 4, 6])
+            nodes = [node1, node2]
+        else:
+            axes = self._make_onnx_const(np.array([0, 4, 6], dtype=np.int64), "axes")
+            node2 = helper.make_node("Unsqueeze", ["Y", "axes"], ["Z"], name="unsqueeze")
+            nodes = [axes, node1, node2]
+
+        graph = helper.make_graph(
+            nodes,
+            "transpose_with_unsqueeze",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        model_after_opt = self.run_transpose_compare(["Z"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                                     model_proto, remaining_transpose_num=1)
+        self.check_transpose_perm(model_after_opt, expected_perm)
+
+    @parameterized.expand([
         ((1, 3, 4, 5), (4, 5, 3), [0, 2, 3, 1], [1, 2, 0]),
         ((1, 3, 4, 5, 6), (4, 5, 6, 3), [0, 2, 3, 4, 1], [1, 2, 3, 0]),
     ])
