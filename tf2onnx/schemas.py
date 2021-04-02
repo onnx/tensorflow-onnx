@@ -154,7 +154,11 @@ def infer_onnx_shape_dtype(node, opset_version, input_shapes, input_dtypes, init
 
     inferred_model = None
     try:
-        inferred_model = shape_inference.infer_shapes(model_proto)
+        try:
+            inferred_model = shape_inference.infer_shapes(model_proto, strict_mode=True)
+        except TypeError:
+            # strict_mode arg doesn't exist in old onnx packages
+            inferred_model = shape_inference.infer_shapes(model_proto)
     except Exception:  # pylint: disable=broad-except
         logger.warning(
             "ONNX Failed to infer shapes and dtypes for [%s, type: %s]",
@@ -170,10 +174,10 @@ def infer_onnx_shape_dtype(node, opset_version, input_shapes, input_dtypes, init
             dtypes[output.name] = tensor_type.elem_type
         else:
             dtypes[output.name] = TensorProto.UNDEFINED
-        # 0 in shapes of onnx means unknown which is -1 in our convertor
+        # Missing dim_value in shapes of onnx means unknown which is -1 in our convertor
         if tensor_type.HasField("shape"):
             shapes[output.name] = [
-                dim.dim_value if dim.dim_value != 0 else utils.ONNX_UNKNOWN_DIMENSION for dim in tensor_type.shape.dim
+                dim.dim_value if dim.HasField("dim_value") else -1 for dim in tensor_type.shape.dim
             ]
         else:
             shapes[output.name] = None

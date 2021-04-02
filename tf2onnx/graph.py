@@ -803,11 +803,8 @@ class Graph(object):
                 logger.debug("Inferred dtype for [%s, type: %s] is UNDEFINED, SKIP", node.name, node.type)
             else:
                 existing_dtype = self.get_dtype(output)
-                if existing_dtype is not None and existing_dtype != dtype:
-                    if override:
-                        logger.warning("Override dtype of %s from %s to %s", output, existing_dtype, dtype)
-                    else:
-                        dtype = existing_dtype
+                if existing_dtype is not None and existing_dtype != dtype and not override:
+                    dtype = existing_dtype
                 self.set_dtype(output, dtype)
                 logger.debug("Set dtype of [%s] to %s", output, dtype)
 
@@ -815,11 +812,8 @@ class Graph(object):
                 logger.debug("Inferred shape for [%s, type: %s] is None, SKIP", node.name, node.type)
             else:
                 existing_shape = self.get_shape(output)
-                if existing_shape is not None and not utils.are_shapes_equal(existing_shape, shape):
-                    if override:
-                        logger.warning("Override shape of %s from %s to %s", output, existing_shape, shape)
-                    else:
-                        shape = existing_shape
+                if existing_shape is not None and not utils.are_shapes_equal(existing_shape, shape) and not override:
+                    shape = existing_shape
                 self.set_shape(output, shape)
                 logger.debug("Set shape of [%s] to %s", output, shape)
 

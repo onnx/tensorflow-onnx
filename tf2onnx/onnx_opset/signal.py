@@ -216,8 +216,7 @@ class CommonFFTOp:
         perm = shapei[:-2] + [shapei[-1], shapei[-2]]
         last_node = ctx.make_node(
             "Transpose", inputs=[mult.output[0]], attr=dict(perm=perm),
-            name=utils.make_name('CPLX_' + node.name + 'rfft'),
-            shapes=[new_shape], dtypes=[res_onnx_dtype])
+            name=utils.make_name('CPLX_' + node.name + 'rfft'))
 
         ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
 

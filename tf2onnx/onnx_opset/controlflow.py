@@ -385,7 +385,7 @@ class While:
         loop_vars = [] # passed into the loop
         body_input_to_state_var = {} # Map from body input name to state var name
         cond_input_to_state_var = {}
-        to_remove = []
+        scan_outputs = []
         input_idx_to_remove = []
         # remove TensorListReserve
         for idx, name in enumerate(tf_while_inputs):
@@ -400,7 +400,10 @@ class While:
             n = node.inputs[idx]
             if n.type in ["TensorListReserve", "TensorListResize"]:
                 # there is no equivalent step in onnx and we should remove it.
-                to_remove.append((idx, n))
+                output_shape = None
+                if n.type == "TensorListReserve" and n.inputs[0].is_const() and not n.inputs[0].is_scalar():
+                    output_shape = [-1] + n.inputs[0].get_tensor_value(as_list=True)
+                scan_outputs.append((idx, n, output_shape))
                 continue
 
             # tensor arrays we read from can't be loop_vars and we fetch them from the outer context instead
@@ -420,7 +423,7 @@ class While:
 
         scan_output_names = []
         # remove tensor array that are passed in to the loop
-        for idx, n in reversed(to_remove):
+        for idx, n, output_shape in reversed(scan_outputs):
             ctx.remove_node(n.name)
             # make the node output bad
             ctx.replace_all_inputs(n.output[0], "@@ALLOC")  # ops=ctx.get_nodes()
@@ -429,7 +432,7 @@ class While:
             del tf_while_inputs[idx]
             scan_output_names.append(body.outputs[idx])
             del body.outputs[idx]
-            output_shapes.append(output_shapes[idx])
+            output_shapes.append(output_shape)
             output_dtypes.append(output_dtypes[idx])
             output_names.append(output_names[idx])
             del output_shapes[idx]
