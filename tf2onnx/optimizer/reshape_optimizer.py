@@ -91,13 +91,17 @@ class ReshapeOptimizer(GraphOptimizerBase):
         if new_shape.count(-1) > 1:
             return False
 
+        new_reshape_shape = None
         if shift > 0:
             new_shape = [1] * shift + new_shape
             squeeze_node = GraphBuilder(graph).make_squeeze(
                 {'data': node.output[0], 'axes': list(range(shift))},
                 return_node=True, shapes=node.output_shapes, dtypes=node.output_dtypes)
+            new_reshape_shape = [1] * shift + graph.get_shape(node.output[0])
             graph.insert_node_on_output(squeeze_node, node.output[0])
         const_shape = graph.make_const(utils.make_name(node.name + "_shape"), np.array(new_shape, np.int64)).output[0]
+        if new_reshape_shape is not None:
+            graph.set_shape(node.output[0], new_reshape_shape)
         graph.replace_inputs(node, [node.input[0], const_shape])
         if shift < 0:
             unsqueeze_node = GraphBuilder(graph).make_unsqueeze({'data': node.input[0], 'axes': list(range(-shift))})

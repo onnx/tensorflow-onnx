@@ -46,7 +46,7 @@ class LookupTableFind:
                         "Only lookup tables of type string->int64 are currently supported.")
 
         cats_strings, cats_int64s = initialized_tables[shared_name]
-        shape = ctx.get_shape(node.output[0])
+        shape = ctx.get_shape(node.input[1])
 
         node_name = node.name
         node_inputs = node.input

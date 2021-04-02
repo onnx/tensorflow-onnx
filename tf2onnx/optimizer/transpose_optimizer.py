@@ -124,8 +124,11 @@ class TransposeOptimizer(GraphOptimizerBase):
                 new_shape = _calculate_new_shape(self._g, op)
                 if new_shape is not None:
                     # replace transpose with reshape
+                    shapes = op.output_shapes
+                    dtypes = op.output_dtypes
                     self._g.remove_node(op.name)
-                    self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output)
+                    self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output,
+                                      shapes=shapes, dtypes=dtypes)
                     need_sort = True
         if need_sort:
             self._g.topological_sort(self._g.get_nodes())

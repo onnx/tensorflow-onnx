@@ -137,6 +137,7 @@ class StringLower:
         shape = ctx.get_shape(node.input[0])
         if rank != 1:
             ctx.insert_new_node_on_input(node, "Flatten", node.input[0], axis=0)
+            ctx.update_node_shape_dtype(node, override=True)
         node.set_attr("case_change_action", case_action)
         if rank != 1:
             if shape is None or -1 in shape:
