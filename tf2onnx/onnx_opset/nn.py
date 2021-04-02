@@ -357,11 +357,12 @@ class ConvOp:
         groups = int(1)
         data_format = str(node.attr["data_format"].s, encoding = "utf8")
         if data_format == "NHWC":
-            groups = int(ctx.get_shape(node.input[0])[3] * ctx.get_shape(node.output[0])[3] / ctx.get_shape(node.input[1])[2] / ctx.get_shape(node.input[1])[3])
+            groups = int(ctx.get_shape(node.input[0])[3]  / ctx.get_shape(node.input[1])[2])
         elif data_format == "NCHW":
-            groups = int(ctx.get_shape(node.input[0])[1] * ctx.get_shape(node.output[0])[1] / ctx.get_shape(node.input[1])[0] / ctx.get_shape(node.input[1])[1])
+            groups = int(ctx.get_shape(node.input[0])[1] / ctx.get_shape(node.input[1])[2])
         else:
             pass
+
         node.set_attr("group", groups)
 
         # Convert input and filters.
