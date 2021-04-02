@@ -353,7 +353,6 @@ class ConvOp:
         add_padding(
             ctx, node, kernel_shape, strides, dilations=dilations, spatial=spatial
         )
-        
         groups = int(1)
         data_format = str(node.attr["data_format"].s, encoding="utf8")
         if data_format == "NHWC":
