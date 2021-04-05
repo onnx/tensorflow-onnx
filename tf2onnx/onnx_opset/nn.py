@@ -353,6 +353,16 @@ class ConvOp:
         add_padding(
             ctx, node, kernel_shape, strides, dilations=dilations, spatial=spatial
         )
+        groups = int(1)
+        data_format = str(node.attr["data_format"].s, encoding="utf8")
+        if data_format == "NHWC":
+            groups = int(ctx.get_shape(node.input[0])[3]  / ctx.get_shape(node.input[1])[2])
+        elif data_format == "NCHW":
+            groups = int(ctx.get_shape(node.input[0])[1] / ctx.get_shape(node.input[1])[2])
+        else:
+            pass
+
+        node.set_attr("group", groups)
 
         # Convert input and filters.
         conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
