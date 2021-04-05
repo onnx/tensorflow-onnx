@@ -420,6 +420,12 @@ class ConvTranspose:
         # Note: inputs are reversed from what one would expect.
         conv_kernel_shape(ctx, node, 1, spatial=spatial)
         input_shape = ctx.get_shape(node.input[2])
+        input_batch_dim = input_shape[0]
+        output_c_dim = ctx.get_shape(node.input[1])[-2]
+        if is_channels_last(node):
+            input_dims = input_shape[1:1+spatial]
+        else:
+            input_dims = input_shape[2:2+spatial]
         output_shape_orig = node.output_shapes
 
         # ouput_shape is explicitly specified here, in this case pads values are auto generated/calculated.
@@ -428,16 +434,12 @@ class ConvTranspose:
             #output_shape = ctx.get_shape(node.output[0])
             if is_channels_last(node):
                 new_output_shape = [output_shape[1], output_shape[2]]
-                input_dims = [input_shape[1], input_shape[2]]
                 if spatial == 3:
                     new_output_shape.append(output_shape[3])
-                    input_dims.append(input_shape[3])
             else:
                 new_output_shape = [output_shape[2], output_shape[3]]
-                input_dims = [input_shape[2], input_shape[3]]
                 if spatial == 3:
                     new_output_shape.append(output_shape[4])
-                    input_dims.append(input_shape[4])
 
             utils.make_sure(new_output_shape.count(-1) <= 0, "output dims need to be known")
             utils.make_sure(all(new_output_shape[i] >= input_dims[i] for i in range(spatial)),
@@ -447,6 +449,20 @@ class ConvTranspose:
         else:
             utils.make_sure(ctx.opset >= 10, "Opset 10 needed for Conv Backprop Input with non-constant shape")
             strides = parse_dims_attr(node, node.get_attr('strides').ints, spatial)
+            if 'dilations' in node.attr:
+                dilations = parse_dims_attr(node, node.get_attr('dilations').ints, spatial)
+            else:
+                dilations = [1] * spatial
+            kernel_shape = parse_dims_attr(node, node.get_attr('kernel_shape').ints, spatial)
+            new_dims = [-1] * spatial
+            for i in range(spatial):
+                new_dims[i] = strides[i] * (input_dims[i] - 1) + ((kernel_shape[i] - 1) * dilations[i] + 1)
+            if is_channels_last(node):
+                new_shape = [input_batch_dim] + new_dims + [output_c_dim]
+            else:
+                new_shape = [input_batch_dim, output_c_dim] + new_dims
+            ctx.set_shape(node.output[0], new_shape)
+
             use_strides_workaround = any(d > 1 for d in strides)
             if use_strides_workaround and ctx.opset < 12:
                 # When strides > 1, ONNX and TF have an implementation difference in ConvTranspose. ONNX outputs a
@@ -1010,7 +1026,10 @@ class SampleDistortedBoundingBox:
             acceptable = ctx.make_node("And", [acceptable, any_ok]).output[0]
 
         acceptable_sq = GraphBuilder(ctx).make_squeeze({'data': acceptable, 'axes': [1]})
-        filtered = ctx.make_node("Compress", [all_boxes, acceptable_sq], attr={'axis': 0}).output[0]
+        boxes_shape = ctx.get_shape(all_boxes)
+        filtered_shape = [-1] + boxes_shape[1:] if boxes_shape is not None else None
+        filtered = ctx.make_node("Compress", [all_boxes, acceptable_sq], attr={'axis': 0},
+                                 dtypes=[ctx.get_dtype(all_boxes)], shapes=[filtered_shape]).output[0]
         default_box = np.array([0.0, 0.0, 1.0, 1.0], np.float32).reshape([1, 4])
         const_default_box = ctx.make_const(utils.make_name("default_box"), default_box).output[0]
         filtered_non_empty = ctx.make_node("Concat", [filtered, const_default_box], attr={'axis': 0}).output[0]
@@ -1085,7 +1104,7 @@ class CropAndResize:
                                                             cast_node.output[0]],
                                         attr={"output_height": output_height, "output_width": output_width,
                                               "spatial_scale": 1.0, "sampling_ratio": 1},
-                                        name=utils.make_name(node.name), dtypes=dtypes, shapes=shapes)
+                                        name=utils.make_name(node.name))
         ctx.remove_node(name)
         ctx.make_node("Transpose", crop_and_resize.output, {"perm": [0, 2, 3, 1]},
                       name=name, outputs=node.output, shapes=shapes, dtypes=dtypes)

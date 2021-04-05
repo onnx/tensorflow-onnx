@@ -124,8 +124,11 @@ class TransposeOptimizer(GraphOptimizerBase):
                 new_shape = _calculate_new_shape(self._g, op)
                 if new_shape is not None:
                     # replace transpose with reshape
+                    shapes = op.output_shapes
+                    dtypes = op.output_dtypes
                     self._g.remove_node(op.name)
-                    self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output)
+                    self._g.make_node("Reshape", [op.input[0], new_shape], name=op.name, outputs=op.output,
+                                      shapes=shapes, dtypes=dtypes)
                     need_sort = True
         if need_sort:
             self._g.topological_sort(self._g.get_nodes())
@@ -224,6 +227,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Sqrt": self._simple_through_handler,
             "Squeeze": self._squeeze_handler,
             "Sub": self._sub_handler,
+            "Unsqueeze": self._unsqueeze_handler,
             "Tanh": self._simple_through_handler,
             "Tile": self._tile_handler,
             "Transpose": self._transpose_handler,
@@ -349,7 +353,8 @@ class TransposeOptimizer(GraphOptimizerBase):
             if d == -1:
                 # Assume unknown dims are approx. 20
                 prod *= 20
-            prod *= d
+            else:
+                prod *= d
         return prod
 
     def _should_push_transpose(self, trans, node):
@@ -656,6 +661,62 @@ class TransposeOptimizer(GraphOptimizerBase):
             node.set_attr("axis", 1)
             return True
         return False
+
+    def _unsqueeze_handler(self, trans, node):
+        trans_rank = get_transpose_rank(trans)
+        perm = trans.get_attr_value("perm")
+        axes = None
+        if node.get_attr("axes"):
+            axes = node.get_attr("axes").ints
+        if len(node.input) > 1 and node.inputs[1].is_const():
+            axes = node.inputs[1].get_tensor_value(as_list=True)
+        if axes is None:
+            return False
+
+        new_rank = trans_rank + len(axes)
+        axes = sorted([a % new_rank for a in axes])
+        # We have a choice of where to put the new axes for unsqueeze after we push the transpose. We will try to keep
+        # them next to the axis they will be next to after transpose ex: a1bc -> ac1b not 1abc -> ac1b
+        partner_axes = [a - i for i, a in enumerate(axes)]
+        pre_perm_axes = [perm[a] if a < len(perm) else len(perm) for a in partner_axes]
+        pre_perm_sorted = sorted(pre_perm_axes)
+        new_axes = [a + pre_perm_sorted.index(a) for a in pre_perm_axes]
+
+        shift_map = []
+        for i in range(new_rank):
+            if i not in new_axes:
+                shift_map.append(i)
+
+        new_perm = []
+        perm_i = 0
+        axes_i = 0
+        for i in range(new_rank):
+            if i in axes:
+                new_perm.append(new_axes[axes_i])
+                axes_i += 1
+            else:
+                new_perm.append(shift_map[perm[perm_i]])
+                perm_i += 1
+
+        if not self._switch_transpose_and_node(node, trans, update_shape=False):
+            return False
+
+        new_axes_sorted = sorted(new_axes)
+        trans.set_attr("perm", new_perm)
+        new_perm_inv = invert_perm(new_perm)
+        if self._g.opset <= 12:
+            node.set_attr("axes", new_axes_sorted)
+        else:
+            new_axes_np = np.array(new_axes_sorted, dtype=np.int64)
+            new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
+            self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
+
+        shape = self._g.get_shape(node.output[0])
+        self._g.set_shape(trans.output[0], shape)
+        mid_shape = [shape[p] for p in new_perm_inv]
+        self._g.set_shape(node.output[0], mid_shape)
+
+        return True
 
     def _squeeze_handler(self, trans, node):
         trans_rank = get_transpose_rank(trans)

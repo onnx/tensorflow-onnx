@@ -253,8 +253,8 @@ class SquaredDifference:
     def version_1(cls, ctx, node, **kwargs):
         node.type = "Sub"
         op_name = utils.make_name(node.name)
-        mul = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
-        mul.input.append(node.output[0])
+        node_out = node.output[0]
+        ctx.insert_new_node_on_output("Mul", node_out, inputs=[node_out, node_out], name=op_name)
 
 
 @tf_op("Sign")
