@@ -248,21 +248,24 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if not info.type.tensor_type.HasField("shape"):
                 return None
             return [d.dim_value if d.HasField('dim_value') else -1 for d in info.type.tensor_type.shape.dim]
-        for info in model_shapes.graph.value_info:
-            onnx_shape = get_shape(info)
-            tf2onnx_shape = graph.get_shape(info.name)
-            if onnx_shape is None:
+        info_list = list(model_shapes.graph.value_info) + list(model_shapes.graph.input) + list(model_shapes.graph.output)
+        onnx_shapes = {info.name: get_shape(info) for info in info_list}
+        for node in graph.get_nodes():
+            if node.is_const():
                 continue
-            if allow_missing and tf2onnx_shape is None:
-                continue
-            self.assertTrue(tf2onnx_shape is not None)
-            if -1 in onnx_shape or (allow_missing and -1 in tf2onnx_shape):
-                self.assertEqual(len(onnx_shape), len(tf2onnx_shape))
-                for d1, d2 in zip(onnx_shape, tf2onnx_shape):
-                    if d1 != -1 and (d2 != -1 or not allow_missing):
-                        self.assertEqual(d1, d2)
-            else:
-                self.assertEqual(onnx_shape, tf2onnx_shape)
+            for out in node.output:
+                onnx_shape = onnx_shapes.get(out)
+                tf2onnx_shape = graph.get_shape(out)
+                if tf2onnx_shape is None:
+                    continue
+                self.assertTrue(onnx_shape is not None)
+                if -1 in tf2onnx_shape:
+                    self.assertEqual(len(onnx_shape), len(tf2onnx_shape))
+                    for d2, d1 in zip(onnx_shape, tf2onnx_shape):
+                        if d1 != -1:
+                            self.assertEqual(d1, d2)
+                else:
+                    self.assertEqual(onnx_shape, tf2onnx_shape)
 
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
