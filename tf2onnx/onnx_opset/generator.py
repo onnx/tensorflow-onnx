@@ -36,6 +36,8 @@ class RandomOp:
         dtype = ctx.get_dtype(rand_out)
         min_node = ctx.get_node_by_output(min_inp)
         max_node = ctx.get_node_by_output(max_inp)
+        ctx.set_dtype(rand_node.output[0], onnx_pb.TensorProto.FLOAT)
+        ctx.set_dtype(rand_out, onnx_pb.TensorProto.FLOAT)
         if min_node.is_const() and max_node.is_const():
             rand_node.set_attr('low', float(min_node.get_tensor_value()))
             rand_node.set_attr('high', float(max_node.get_tensor_value()))
