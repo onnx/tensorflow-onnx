@@ -183,6 +183,7 @@ class Reshape:
                                                         to=dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(node.output[0], output_cast.output[0])
+        ctx.set_dtype(node.output[0], onnx_pb.TensorProto.FLOAT)
 
 
 @tf_op("Squeeze")
