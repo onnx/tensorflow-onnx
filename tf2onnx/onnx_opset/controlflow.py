@@ -401,9 +401,10 @@ class While:
             if n.type in ["TensorListReserve", "TensorListResize"]:
                 # there is no equivalent step in onnx and we should remove it.
                 output_shape = None
+                output_dtype = n.get_attr_value("element_dtype")
                 if n.type == "TensorListReserve" and n.inputs[0].is_const() and not n.inputs[0].is_scalar():
                     output_shape = [-1] + n.inputs[0].get_tensor_value(as_list=True)
-                scan_outputs.append((idx, n, output_shape))
+                scan_outputs.append((idx, n, output_shape, output_dtype))
                 continue
 
             # tensor arrays we read from can't be loop_vars and we fetch them from the outer context instead
@@ -423,7 +424,7 @@ class While:
 
         scan_output_names = []
         # remove tensor array that are passed in to the loop
-        for idx, n, output_shape in reversed(scan_outputs):
+        for idx, n, output_shape, output_dtype in reversed(scan_outputs):
             ctx.remove_node(n.name)
             # make the node output bad
             ctx.replace_all_inputs(n.output[0], "@@ALLOC")  # ops=ctx.get_nodes()
@@ -433,7 +434,7 @@ class While:
             scan_output_names.append(body.outputs[idx])
             del body.outputs[idx]
             output_shapes.append(output_shape)
-            output_dtypes.append(output_dtypes[idx])
+            output_dtypes.append(output_dtype)
             output_names.append(output_names[idx])
             del output_shapes[idx]
             del output_dtypes[idx]

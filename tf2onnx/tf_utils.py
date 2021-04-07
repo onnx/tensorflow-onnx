@@ -351,7 +351,7 @@ def read_tf_node_attrs(node):
                     "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
                     "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
                     "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
-                    "T_threshold", "element_dtype", "shape_type", "_lower_using_switch_merge",
+                    "T_threshold", "shape_type", "_lower_using_switch_merge",
                     "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
                     "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
                     "Toutput_types", "dense_shapes", "Tdense", "Tsegmentids", "Tshift", "Tnumsegments", "SrcT",

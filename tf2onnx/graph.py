@@ -437,7 +437,7 @@ class Node(object):
                 shape = self.graph.get_shape(name)
                 cast_node = self.graph.insert_new_node_on_input(
                     self, "Cast", name, to=tdtype)
-                self.graph.set_dtype(cast_node.output[0], [tdtype])
+                self.graph.set_dtype(cast_node.output[0], tdtype)
                 self.graph.set_shape(cast_node.output[0], shape)
                 did_cast = True
         return did_cast

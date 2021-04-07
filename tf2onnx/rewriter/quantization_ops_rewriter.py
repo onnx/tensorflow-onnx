@@ -77,7 +77,6 @@ def create_qdq_nodes(g, match_results):
                                          y_zero_point.output[0]],
                                  shapes=[qdq_node_output_shape],
                                  attr=attrs,
-                                 dtypes=[qdq_node_output_dtype],
                                  name=utils.make_name("QuantLinearNode"))
 
         g.set_shape(quant_node.output[0], qdq_node_output_shape)

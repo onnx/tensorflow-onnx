@@ -56,6 +56,7 @@ def _wrap_concat_with_cast(ctx, node):
                                                         to=dtype)
             ctx.set_dtype(output_cast.output[0], dtype)
             ctx.copy_shape(output_name, output_cast.output[0])
+        ctx.set_dtype(node.output[0], onnx_pb.TensorProto.FLOAT)
 
 
 @tf_op("Size")
@@ -1170,6 +1171,7 @@ class TopKV2:
         cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
         ctx.set_dtype(cast_out.output[0], dtypes[1])
         ctx.copy_shape(node.output[1], cast_out.output[0])
+        ctx.set_dtype(node.output[1], onnx_pb.TensorProto.INT64)
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
