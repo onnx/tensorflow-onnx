@@ -138,8 +138,6 @@ def _convert_common(frozen_graph, name="unknown", large_model=False, output_path
                     output_frozen_graph=None, **kwargs):
     """Common processing for conversion."""
 
-    logging.basicConfig(level=logging.get_verbosity_level(None))
-
     model_proto = None
     external_tensor_storage = None
     const_node_values = None

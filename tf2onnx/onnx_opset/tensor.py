@@ -887,6 +887,7 @@ class StridedSlice:
                 ctx.set_dtype(cast_node.output[0], input_dtype)
                 ctx.copy_shape(node.output[0], cast_node.output[0])
                 nodes.append(cast_node)
+            ctx.set_dtype(node.output[0], onnx_pb.TensorProto.FLOAT)
 
     @classmethod
     def any_version_after10(cls, opset, ctx, node, **kwargs):

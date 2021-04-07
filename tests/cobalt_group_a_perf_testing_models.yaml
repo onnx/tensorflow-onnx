@@ -531,7 +531,7 @@ compare_gan-model_12_cifar10_resnet_cifar:
   signature_def: "discriminator"
 
 compare_gan-model_7_lsun_bedroom_resnet19:
-  disabled: false
+  disabled: true
   skip_conversion: false
   model: "D:/co_tfhubmodels/compare_gan-model_7_lsun_bedroom_resnet19"
   converted_model: "D:/co_tfhubmodels/compare_gan-model_7_lsun_bedroom_resnet19/model.onnx"

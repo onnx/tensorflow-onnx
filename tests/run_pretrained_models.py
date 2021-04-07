@@ -337,16 +337,13 @@ class Test(object):
             opt.register_custom_ops_library(get_library_path())
             m = rt.InferenceSession(model_path, opt)
         else:
-            opt = rt.SessionOptions()
-            opt.enable_profiling = True
-            m = rt.InferenceSession(model_path, opt)
+            m = rt.InferenceSession(model_path)
         results = m.run(outputs, inputs)
         if self.perf:
             start = time.time()
             for _ in range(PERFITER):
                 _ = m.run(outputs, inputs)
             self.onnx_runtime = time.time() - start
-        print(m.end_profiling())
         return results
 
     @staticmethod
@@ -435,7 +432,7 @@ class Test(object):
             inputs = {}
             for k in input_names:
                 v = self.input_names[k]
-                inputs["text"] = tf.constant(self.make_input(v))
+                inputs[k.split(":")[0]] = tf.constant(self.make_input(v))
             tf_func = tf.function(concrete_func)
             logger.info("Running TF")
             tf_results_d = tf_func(**inputs)
