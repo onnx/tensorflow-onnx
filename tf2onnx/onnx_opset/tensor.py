@@ -1380,6 +1380,7 @@ class Shape:
         op_name = utils.make_name(node.name)
         output_cast = ctx.insert_new_node_on_output("Cast", node.output[0], name=op_name, to=dtype)
         ctx.set_dtype(output_cast.output[0], dtype)
+        ctx.set_dtype(node.output[0], onnx_pb.TensorProto.INT64)
         ctx.copy_shape(node.output[0], output_cast.output[0])
 
 
