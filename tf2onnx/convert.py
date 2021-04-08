@@ -151,7 +151,7 @@ def _convert_common(frozen_graph, name="unknown", large_model=False, output_path
         if not kwargs.get("tflite_path"):
             tf.import_graph_def(frozen_graph, name='')
         g = process_tf_graph(tf_graph, const_node_values=const_node_values, **kwargs)
-        onnx_graph = optimizer.optimize_graph(g)
+        onnx_graph = optimizer.optimize_graph(g, catch_errors=not large_model)
         model_proto = onnx_graph.make_model("converted from {}".format(name),
                                             external_tensor_storage=external_tensor_storage)
     if output_path:
