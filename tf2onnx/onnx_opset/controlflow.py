@@ -322,9 +322,14 @@ class TensorListFromTensor:
 class TensorListStack:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
-        if node.inputs[0].is_while():
-            ctx.remove_node(node.name)
-            ctx.replace_all_inputs(node.output[0], node.input[0])  # ops=ctx.get_nodes()
+        inp_node = node.inputs[0]
+        inp = node.input[0]
+        while inp_node.type == "Identity":
+            inp = inp_node.input[0]
+            inp_node = inp_node.inputs[0]
+        utils.make_sure(inp_node.is_while(), "Can only convert TensorListStack that is part of a While loop")
+        ctx.remove_node(node.name)
+        ctx.replace_all_inputs(node.output[0], inp)
 
 
 @tf_op(["While", "StatelessWhile"])
@@ -463,7 +468,7 @@ class While:
         for k, v in output_map.items():
             ctx.replace_all_inputs(k, v)  # ops=ctx.get_nodes()
 
-        wire_while_body(ctx, body, loop_node.inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
+        wire_while_body(ctx, body, loop_node, body_input_to_state_var, cond_input_to_state_var, output_shapes,
                         output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, scan_output_names)
 
         # if there was a tensorflow variant type, bind in a real type here
@@ -473,7 +478,7 @@ class While:
                 body.set_dtype(n.output[0], ctx.get_dtype(loop_node.input[i]))
 
 
-def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond_input_to_state_var, output_shapes,
+def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_to_state_var, output_shapes,
                     output_dtypes, scope, parent, cond_graph, tf_while_inputs, scan_output_names):
     """Wire subgraph graph into main."""
     remove_parents = []
@@ -496,7 +501,7 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
     g.set_dtype(func_inputs[0], onnx_pb.TensorProto.INT64)
     g.inputs = [g.get_node_by_output(inp) for inp in func_inputs]
 
-    for p, c in zip(loop_node_inputs, func_inputs):
+    for p, c in zip(loop_node.inputs, func_inputs):
         shape = p.output_shapes[0]
         g.set_shape(c, shape)
 
@@ -534,6 +539,12 @@ def wire_while_body(parent_g, g, loop_node_inputs, body_input_to_state_var, cond
 
     # Reorder scan outputs
     scan_outputs = [names_to_scan_outputs[name] for name in scan_output_names]
+    for i in range(-len(scan_output_names), 0):
+        # Use shapes from subgraph if loop node shapes for scan outputs are missing
+        if loop_node.output_shapes[i] is None:
+            shape = g.get_shape(scan_outputs[i])
+            if shape is not None:
+                parent_g.set_shape(loop_node.output[i], [-1] + shape)
 
     # remove all nodes feeding to TensorListSetItem's reserved tensor
     while remove_parents:
