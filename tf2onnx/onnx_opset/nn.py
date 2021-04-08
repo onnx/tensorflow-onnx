@@ -654,6 +654,7 @@ class PoolOp:
             cast_back_node = ctx.make_node("Cast", [node.output[0]], dtypes=[origin_dtype], shapes=output_shapes,
                                            name=node.name + "_castback", attr={"to": origin_dtype})
             _ = ctx.insert_node_on_output(cast_back_node, node.output[0])
+            ctx.set_dtype(node.output[0], onnx_pb.TensorProto.FLOAT)
 
         if len(node.input) < 3:
             kernel_shape_tf = node.get_attr("ksize").ints
@@ -826,6 +827,7 @@ class BatchNorm:
                                                            to=x_dtype)
             ctx.set_dtype(cast_back_node.output[0], x_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
+            ctx.set_dtype(node.output[0], mean_type)
 
         consumers = [ctx.find_output_consumers(output_name) for output_name in node.output[1:]]
         if not any(consumers):

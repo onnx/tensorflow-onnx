@@ -263,6 +263,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                         self.assertEqual(d1, d2)
             else:
                 self.assertEqual(onnx_shape, tf2onnx_shape)
+            self.assertEqual(info.type.tensor_type.elem_type, graph.get_dtype(info.name))
 
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
                       convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,

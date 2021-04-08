@@ -114,7 +114,7 @@ def create_qdq_nodes(g, match_results):
                                  inputs=[qdq_node.input[0], scale, zero_point],
                                  shapes=[qdq_node_output_shape],
                                  attr=q_attrs,
-                                 dtypes=[TensorProto.FLOAT],
+                                 dtypes=[quantized_dtype],
                                  name=utils.make_name("QuantLinearNode"))
 
         g.set_shape(quant_node.output[0], qdq_node_output_shape)

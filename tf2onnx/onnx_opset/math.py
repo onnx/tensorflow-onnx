@@ -569,6 +569,7 @@ class BitShift:
                 to=dtypes[0])
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
+            ctx.copy_dtype(node.input[0], node.output[0])
 
 
 @tf_op("SquaredDistance", onnx_op="MeanSquaredDistance")
