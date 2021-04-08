@@ -903,6 +903,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_onnxruntime_incompatibility("Log")
+    def test_log_double(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float64).reshape((2, 2))
+        def func(x):
+            x_ = tf.math.log(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     def test_gather(self):
         x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
         idx = np.array([1, 0, 2], dtype=np.int32)
