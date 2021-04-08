@@ -51,8 +51,14 @@ class DirectOp:
         if node.type == "Log":
             # ORT doesn't implement Log on doubles
             double_to_float = {onnx_pb.TensorProto.DOUBLE: onnx_pb.TensorProto.FLOAT}
-            node.maybe_cast_input([[onnx_pb.TensorProto.FLOAT]], double_to_float)
-
+            dtypes = node.output_dtypes
+            if node.maybe_cast_input([[onnx_pb.TensorProto.FLOAT]], double_to_float):
+                cast_back_node = ctx.insert_new_node_on_output(
+                    "Cast", node.output[0], name=utils.make_name(node.name + "_castback"),
+                    to=dtypes[0])
+                ctx.set_dtype(cast_back_node.output[0], dtypes[0])
+                ctx.copy_shape(node.name, cast_back_node.output[0])
+                ctx.copy_dtype(node.input[0], node.output[0])
 
 @tf_op(["Acos", "Asin", "Atan", "Cos", "Sin", "Tan"])
 class TrigOpSinceOpset7:
