@@ -60,11 +60,6 @@ class DirectOp:
                 ctx.copy_shape(node.name, cast_back_node.output[0])
                 ctx.copy_dtype(node.input[0], node.output[0])
 
-    @classmethod
-    def version_13(cls, ctx, node, **kwargs):
-        # Latest ORT does implement Log on doubles
-        pass
-
 @tf_op(["Acos", "Asin", "Atan", "Cos", "Sin", "Tan"])
 class TrigOpSinceOpset7:
     @classmethod
