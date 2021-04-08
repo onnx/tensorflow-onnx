@@ -856,14 +856,14 @@ class StridedSlice:
             # insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None, domain=None, **kwargs)
             # ctx.insert_new_node_on_output("Squeeze", node.output[0], name)
             name = utils.make_name(node.name)
+            shape = ctx.get_shape(node.output[0])
+            dtype = ctx.get_dtype(node.output[0])
             squeeze_node = GraphBuilder(ctx).make_squeeze(
-                {"axes": needs_squeeze, 'data': node.output[0]}, name=name, return_node=True)
+                {"axes": needs_squeeze, 'data': node.output[0]}, name=name,
+                dtypes=[dtype], shapes=[shape], return_node=True)
             ctx.insert_node_on_output(squeeze_node)
 
             nodes.append(squeeze_node)
-            input_dtype = ctx.get_dtype(node.output[0])
-            ctx.set_dtype(squeeze_node.output[0], input_dtype)
-            ctx.copy_shape(node.output[0], squeeze_node.output[0])
             ctx.update_node_shape_dtype(node, override=True)
 
         # onnx slice as of opset 7 does only take float tensors ... cast if needed
