@@ -164,12 +164,12 @@ def get_conv_getdata(kind=1):
 
 def get_maxpoolwithargmax_getdata():
     data = [
-        ('SAME', [1, 3, 3, 1], [1, 3, 3, 1], [1, 2, 2, 1]),
-        ('SAME', [1, 5, 5, 1], [1, 4, 4, 1], [1, 2, 2, 1]),
-        ('SAME', [1, 10, 5, 1], [1, 2, 2, 1], [1, 2, 2, 1]),
-        ('SAME', [1, 10, 5, 1], [1, 4, 4, 1], [1, 1, 1, 1]),
-        ('VALID', [1, 3, 3, 1], [1, 3, 3, 1], [1, 2, 2, 1]),
-        ('VALID', [1, 5, 5, 1], [1, 4, 4, 1], [1, 2, 2, 1]),
+        ('SAME', [1, 3, 3, 2], [1, 3, 3, 1], [1, 2, 2, 1]),
+        ('SAME', [2, 5, 5, 3], [1, 4, 4, 1], [1, 2, 2, 1]),
+        ('SAME', [2, 10, 5, 1], [1, 2, 2, 1], [1, 2, 2, 1]),
+        ('SAME', [2, 10, 5, 3], [1, 4, 4, 1], [1, 1, 1, 1]),
+        ('VALID', [2, 3, 3, 3], [1, 3, 3, 1], [1, 2, 2, 1]),
+        ('VALID', [2, 5, 5, 3], [1, 4, 4, 1], [1, 2, 2, 1]),
     ]
     for idx, v in enumerate(data):
         yield (idx,) + v
@@ -3738,12 +3738,40 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_maxpoolwithargmax(self):
         for p in get_maxpoolwithargmax_getdata():
             _, padding, x_shape, ksize, strides = p
-            x_val = make_xval(x_shape)
+            x_val = np.random.uniform(0, 10, x_shape)
             def func(x):
                 mp = tf.nn.max_pool_with_argmax(x, ksize, strides, padding=padding)
                 return tf.identity(mp[0], name=_TFOUTPUT), tf.identity(mp[1], name=_TFOUTPUT1)
             self.logger.debug(str(p))
             self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+
+    @check_tf_min_version("1.13")
+    @check_opset_min_version(11, "MaxPoolWithArgmax")
+    def test_maxpoolwithargmax_batch_in_index(self):
+        padding = 'SAME'
+        x_shape = [2, 10, 5, 3]
+        ksize = [1, 4, 4, 1]
+        strides = [1, 1, 1, 1]
+        x_val = np.random.uniform(0, 10, x_shape)
+        def func(x):
+            mp = tf.nn.max_pool_with_argmax(x, ksize, strides, padding=padding, include_batch_in_index=True)
+            return tf.identity(mp[0], name=_TFOUTPUT), tf.identity(mp[1], name=_TFOUTPUT1)
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
+
+    @check_tf_min_version("1.13")
+    @check_opset_min_version(11, "MaxPoolWithArgmax")
+    def test_maxpoolwithargmax_unknown_c(self):
+        padding = 'SAME'
+        x_shape = [2, 10, 5, 1]
+        ksize = [1, 4, 4, 1]
+        strides = [1, 1, 1, 1]
+        x_val = np.random.uniform(0, 10, x_shape)
+        s_val = np.array([2, 10, 5, 4], np.int64)
+        def func(x, s):
+            x = tf.broadcast_to(x, s)
+            mp = tf.nn.max_pool_with_argmax(x, ksize, strides, padding=padding, include_batch_in_index=True)
+            return tf.identity(mp[0], name=_TFOUTPUT), tf.identity(mp[1], name=_TFOUTPUT1)
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val, _INPUT1: s_val})
 
     @check_opset_min_version(10, "Selu")
     def test_selu(self):
