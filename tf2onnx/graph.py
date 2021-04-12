@@ -1565,11 +1565,11 @@ class GraphUtil(object):
         return optimizer.optimize_graph(graph, catch_errors)
 
     @staticmethod
-    def optimize_model_proto(onnx_model_proto, catch_errors=True):
+    def optimize_model_proto(onnx_model_proto, catch_errors=True, return_graph=False):
         """Optimize the model proto, for example: eliminating all useless Transpose pairs.
 
         Returns:
-            model proto after optimization, if optimizer run successfully
+            model proto (and possibly graph) after optimization, if optimizer run successfully
             or onnx_model_proto, if exceptions happens
         """
         try:
@@ -1582,6 +1582,8 @@ class GraphUtil(object):
             if onnx_model_proto.metadata_props:
                 metadata_props = {p.key: p.value for p in onnx_model_proto.metadata_props}
                 helper.set_model_props(model_proto, metadata_props)
+            if return_graph:
+                return model_proto, graph
             return model_proto
         except Exception as e:
             if not catch_errors:
@@ -1589,6 +1591,8 @@ class GraphUtil(object):
             # sometimes, onnx shape inference will fail for some reason,
             # return onnx_model_proto for this case
             logger.warning("Failed to optimize model proto", exc_info=1)
+            if return_graph:
+                return onnx_model_proto, None
             return onnx_model_proto
 
     @staticmethod
