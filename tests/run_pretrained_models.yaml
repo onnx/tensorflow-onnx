@@ -552,7 +552,7 @@ mobilebert_tflite:
 
 palm_detection_tflite:
   tf_min_version: 2.1
-  disabled: false   # Converts but produces incorrect results. Working on fixing it.
+  disabled: false
   url: https://github.com/google/mediapipe/raw/master/mediapipe/modules/palm_detection/palm_detection.tflite
   model: "palm_detection.tflite"
   model_type: tflite
@@ -566,5 +566,23 @@ palm_detection_tflite:
   outputs:
     - regressors
     - classificators
+  rtol: 0.02
+  atol: 0.0005
+
+melgan_tflite:   # TFLite model with FlexOps and rank-3 transposes
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tulasiram58827/lite-model/melgan/dr/1?lite-format=tflite
+  model: "melgan.tflite"
+  model_type: tflite
+  input_get: get_random
+  opset_constraints:
+    "onnx":
+      "min": 11
+  dequantize: true
+  inputs:
+    "mels": [1, 100, 80]
+  outputs:
+    - Identity
   rtol: 0.02
   atol: 0.0005

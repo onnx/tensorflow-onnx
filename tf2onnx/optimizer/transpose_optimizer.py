@@ -17,9 +17,9 @@ from .optimizer_base import GraphOptimizerBase
 # FIXME:
 # pylint: disable=unused-variable
 
-def is_nhwc_transpose(transpose_node):
+def is_transpose(transpose_node):
     perm_attr = transpose_node.get_attr('perm')
-    return transpose_node.type == "Transpose" and perm_attr and perm_attr.ints in [NCHW_TO_NHWC, NCDHW_TO_NDHWC]
+    return transpose_node.type == "Transpose" and perm_attr
 
 
 def is_tranpose_of_type(node, perm):
@@ -167,7 +167,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             nodes = self.nodes
             self._force_stop = {}
             for n in nodes:
-                if is_nhwc_transpose(n):
+                if is_transpose(n):
                     if self._handle_nhwc_tranpose(n):
                         no_action = False
                         self.graph_been_opt = True
@@ -679,8 +679,8 @@ class TransposeOptimizer(GraphOptimizerBase):
         # them next to the axis they will be next to after transpose ex: a1bc -> ac1b not 1abc -> ac1b
         partner_axes = [a - i for i, a in enumerate(axes)]
         pre_perm_axes = [perm[a] if a < len(perm) else len(perm) for a in partner_axes]
-        pre_perm_sorted = sorted(pre_perm_axes)
-        new_axes = [a + pre_perm_sorted.index(a) for a in pre_perm_axes]
+        pre_perm_sorted = sorted((a, i) for i, a in enumerate(pre_perm_axes))
+        new_axes = [a + pre_perm_sorted.index((a, i)) for i, a in enumerate(pre_perm_axes)]
 
         shift_map = []
         for i in range(new_rank):
