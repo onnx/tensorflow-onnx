@@ -302,6 +302,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             perm_inv = invert_perm(trans.get_attr_value("perm"))
             new_shape = [shape[i] for i in perm_inv]
             self._g.set_shape(node.output[0], new_shape)
+            self._g.set_shape(trans.output[0], shape)
         return True
 
     # if return value is True, then it means Transpose is handled as designed
@@ -793,14 +794,12 @@ class TransposeOptimizer(GraphOptimizerBase):
 
         input1 = node.inputs[1]
         if input1.is_const():
-            if input1.data_format in ["NHWC", "unkown"]:
-                if not self._nodes_has_single_consumer_node([input1]):
-                    input1 = self._g.copy_const(input1)
-                    self._g.replace_input(node, node.input[1], input1.output[0], 1)
-                pads = input1.get_tensor_value()
-                new_pads = np.array(permute_pads(pads), np.int64)
-                input1.set_tensor_value(new_pads)
-                input1.data_format = "NCHW"
+            if not self._nodes_has_single_consumer_node([input1]):
+                input1 = self._g.copy_const(input1)
+                self._g.replace_input(node, node.input[1], input1.output[0], 1)
+            pads = input1.get_tensor_value()
+            new_pads = np.array(permute_pads(pads), np.int64)
+            input1.set_tensor_value(new_pads)
             return self._switch_transpose_and_node(node, trans)
         # when the second input is not a constant, let's shuffle it with Split followed by Concat
         # there are examples of models, where this non-constant input

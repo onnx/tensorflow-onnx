@@ -575,7 +575,7 @@ melgan_tflite:   # TFLite model with FlexOps and rank-3 transposes
   url: https://tfhub.dev/tulasiram58827/lite-model/melgan/dr/1?lite-format=tflite
   model: "melgan.tflite"
   model_type: tflite
-  input_get: get_random
+  input_get: get_zeros
   opset_constraints:
     "onnx":
       "min": 11
