@@ -30,7 +30,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         origin_model_path = self.save_onnx_model(origin_proto, onnx_feed_dict, postfix="_origin")
 
-        new_proto = GraphUtil.optimize_model_proto(origin_proto, catch_errors=False)
+        new_proto, new_graph = GraphUtil.optimize_model_proto(origin_proto, catch_errors=False, return_graph=True)
 
         self.assertTrue(new_proto, msg="model proto after optimizer should not be None")
 
@@ -51,6 +51,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=1e-5)
             self.assertEqual(expected_val.dtype, actual_val.dtype)
             self.assertEqual(expected_val.shape, actual_val.shape)
+
+        self.assert_shapes_correct(new_graph, allow_missing=False, run_checker=True)
 
         return new_proto
 
