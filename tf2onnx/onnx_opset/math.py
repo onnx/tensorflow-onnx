@@ -580,6 +580,43 @@ class Einsum:
     def version_12(cls, ctx, node, **kwargs):
         del node.attr["N"]
         node.attr["equation"].s = node.attr["equation"].s.lower()
+        def should_replace_with_matmul():
+            # True is 2nd inp is const and eqn is ...ik,kj->...ij (possibly transpose 2nd inp)
+            # When the 2nd input is const, ort pre-packs the Matmul but not Einsum so this is faster
+            eqn = node.get_attr_value("equation").decode()
+            parts = eqn.split('->')
+            lhs = parts[0]
+            terms = lhs.split(',')
+            if len(parts) >= 2:
+                rhs = parts[1]
+            else:
+                rhs = sorted(terms)
+            if len(terms) != 2:
+                return False, None
+            t1, t2 = terms
+            # No repeat vars and all terms have >= 2 vars
+            if any(len(set(t)) < len(t) or len(t) < 2 for t in [t1, t2, rhs]):
+                return False, None
+            if len(t2) != 2:
+                return False, None
+            i = rhs[-2]
+            j = rhs[-1]
+            if t2[0] == j:
+                k = t2[1]
+                transpose_t2 = True
+            elif t2[1] == j:
+                k = t2[0]
+                transpose_t2 = False
+            else:
+                return False, None
+            return t1.endswith(i + k) and t1[:-2] == rhs[:-2], transpose_t2
+        should_replace, transpose_t2 = should_replace_with_matmul()
+        if should_replace:
+            if transpose_t2:
+                inp_trans = ctx.make_node("Transpose", [node.input[1]], attr={'perm': [1, 0]}).output[0]
+                ctx.replace_inputs(node, [node.input[0], inp_trans])
+            node.type = "MatMul"
+            del node.attr["equation"]
 
 
 @tf_op("IsFinite")
