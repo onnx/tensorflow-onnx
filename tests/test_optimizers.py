@@ -49,7 +49,6 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.assertTrue(current[op_type] == remaining_op_num,
                         msg="Expect " + str(remaining_op_num) + " " + op_type + " ops left, but actually " + str(
                             current[op_type]) + " left")
-
         self.assert_shapes_correct(new_graph, allow_missing=False, run_checker=True)
 
         return new_proto

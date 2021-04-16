@@ -25,6 +25,15 @@ steps:
       pip install --index-url https://test.pypi.org/simple/ ort-nightly
     fi
 
+    if [[ $CI_PLATFORM == "windows" ]] ;
+    then
+      pip install -i https://test.pypi.org/simple/ onnxruntime-customops==0.0.1
+      if [[ $CI_TF_VERSION == 2.* ]] ;
+      then
+        pip install tensorflow-text
+      fi
+    fi
+
     python setup.py install
     pip freeze --all
   displayName: 'Setup Environment'
