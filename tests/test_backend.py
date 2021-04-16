@@ -438,6 +438,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
         self._conv_test(x_val, kernel_val, strides=strides, padding="VALID", rtol=1e-05)
 
+    @check_tf_min_version("1.14", "tf 1.14 needed for explicit padding")
     def test_conv2d_explicit_padding(self):
         x_shape = [1, 35, 35, 288]
         kernel_shape = [3, 3, 288, 384]
@@ -4679,6 +4680,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
         y_val = np.random.random([10]).astype(np.float32)
         def func(x, y):
             ret = tf.einsum("i,j->ij", x, y)
+            return tf.identity(ret, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.1")
+    def test_einsum_to_matmul(self):
+        x_val = np.random.random([4, 10, 20]).astype(np.float32)
+        y_val = np.random.random([20, 30]).astype(np.float32)
+        def func(x, y):
+            ret = tf.einsum("bik,kj->bij", x, y)
+            return tf.identity(ret, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(12)
+    @check_tf_min_version("2.1")
+    def test_einsum_to_matmul_transpose(self):
+        x_val = np.random.random([4, 10, 20]).astype(np.float32)
+        y_val = np.random.random([30, 20]).astype(np.float32)
+        def func(x, y):
+            ret = tf.einsum("bik,jk->bij", x, y)
             return tf.identity(ret, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
