@@ -1446,6 +1446,8 @@ class BatchToSpace:
                     else:
                         ends.append(np.iinfo(np.int32).max)
                 attr = {"axes": slice_axis, "ends": ends, "starts": starts}
+                if [top, bottom, left, right] == [0, 0, 0, 0]:
+                    attr = None
             else:
                 shape = ctx.make_const(name=utils.make_name("shape"), np_val=np.array([-1], dtype=np.int64))
                 reshape = ctx.make_node("Cast",
@@ -1473,21 +1475,21 @@ class BatchToSpace:
                 ends = ctx.make_node("Concat", [crop_to_end(crops[1]), crop_to_end(crops[3])], {'axis': 0})
                 axes = ctx.make_const(name=utils.make_name("axes"), np_val=np.array(slice_axis, dtype=np.int64))
                 attr = {"axes": axes.output[0], "ends": ends.output[0], "starts": starts.output[0]}
-            inputs_map = {"data": reorganize_node.output[0], **attr}
             dtypes = node.output_dtypes
             shapes = node.output_shapes
 
             ctx.remove_node(node.name)
+            if attr is None:
+                node_slice = reorganize_node.output[0]
+            else:
+                node_slice = GraphBuilder(ctx).make_slice({"data": reorganize_node.output[0], **attr})
             if len(input_shape) == 3:
-                # add a squeeze op to convert output into 3d
-                kwargs = {**inputs_map}
-                node_slice = GraphBuilder(ctx).make_slice(kwargs)
                 # CNHW TO NHWC
                 trans2 = ctx.make_node("Transpose", [node_slice], {"perm": [1, 2, 3, 0]})
+                # add a squeeze op to convert output into 3d
                 GraphBuilder(ctx).make_squeeze({"axes": [3], "data": trans2.output[0], "outputs": node.output},
                                                name=node.name, shapes=shapes, dtypes=dtypes)
             else:
-                node_slice = GraphBuilder(ctx).make_slice(inputs_map)
                 # CNHW TO NCHW
                 trans2 = ctx.make_node("Transpose", [node_slice], {"perm": [1, 0, 2, 3]})
                 ctx.make_node("Transpose", trans2.output, {"perm": NCHW_TO_NHWC},
