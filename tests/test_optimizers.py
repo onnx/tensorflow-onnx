@@ -27,30 +27,29 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                         remaining_op_num, debug=False, rtol=1e-07):
         utils.make_sure(op_type is not None, "op_type should be specified")
         utils.make_sure(remaining_op_num is not None, "remaining_op_num should be specified")
+        utils.make_sure(self.config.is_onnxruntime_backend, "only onnxruntime is supported to test transpose optimizer")
 
         origin_model_path = self.save_onnx_model(origin_proto, onnx_feed_dict, postfix="_origin")
+        expected = self.run_onnxruntime(origin_model_path, onnx_feed_dict, output_names_with_port)
 
-        new_proto = GraphUtil.optimize_model_proto(origin_proto, catch_errors=False)
+        new_proto, new_graph = GraphUtil.optimize_model_proto(origin_proto, catch_errors=False, return_graph=True)
 
         self.assertTrue(new_proto, msg="model proto after optimizer should not be None")
 
         new_model_path = self.save_onnx_model(new_proto, onnx_feed_dict, postfix="_opt")
         current = GraphUtil.get_node_count_from_onnx_graph(new_proto.graph)
 
-        self.assertTrue(current[op_type] == remaining_op_num,
-                        msg="Expect " + str(remaining_op_num) + " " + op_type + " ops left, but actually " + str(
-                            current[op_type]) + " left")
-
-        if self.config.is_onnxruntime_backend:
-            expected = self.run_onnxruntime(origin_model_path, onnx_feed_dict, output_names_with_port)
-            actual = self.run_onnxruntime(new_model_path, onnx_feed_dict, output_names_with_port)
-        else:
-            raise ValueError("only onnxruntime is supported to test transpose optimizer")
+        actual = self.run_onnxruntime(new_model_path, onnx_feed_dict, output_names_with_port)
 
         for expected_val, actual_val in zip(expected, actual):
             self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=1e-5)
             self.assertEqual(expected_val.dtype, actual_val.dtype)
             self.assertEqual(expected_val.shape, actual_val.shape)
+
+        self.assertTrue(current[op_type] == remaining_op_num,
+                        msg="Expect " + str(remaining_op_num) + " " + op_type + " ops left, but actually " + str(
+                            current[op_type]) + " left")
+        self.assert_shapes_correct(new_graph, allow_missing=False, run_checker=True)
 
         return new_proto
 
@@ -122,6 +121,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             self.run_transpose_compare(["res"], feed_dict, model_proto, remaining_transpose_num=1)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -174,6 +174,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["res"], feed_dict, model_proto, remaining_transpose_num=1)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -194,6 +195,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -214,6 +216,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -238,15 +241,16 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [0, 2, 1], [0, 2, 1]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
     @check_opset_min_version(13, "QuantizeLinear with axis")
     def test_transpose_quantize_with_axis(self, shape, perm_input, perm_output):
-        scale = numpy_helper.from_array(np.array([0.75, 0.1, 2.3, 0.3, 0.42], dtype=np.float32), name='scale')
-        zero_point = numpy_helper.from_array(np.array([2, 4, 6, 8, 10], dtype=np.uint8), name='zero_point')
+        scale = numpy_helper.from_array(np.array([0.75, 0.1, 2.3, 0.3], dtype=np.float32), name='scale')
+        zero_point = numpy_helper.from_array(np.array([2, 4, 6, 8], dtype=np.uint8), name='zero_point')
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
-        node2 = helper.make_node("QuantizeLinear", ["Y", "scale", "zero_point"], ["Z"], name="quantize", axis=2)
+        node2 = helper.make_node("QuantizeLinear", ["Y", "scale", "zero_point"], ["Z"], name="quantize", axis=1)
         node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=perm_output, name="trans_2")
 
         graph = helper.make_graph(
@@ -262,6 +266,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -286,15 +291,16 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [0, 2, 1], [0, 2, 1]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
     @check_opset_min_version(13, "DequantizeLinear with axis")
     def test_transpose_dequantize_with_axis(self, shape, perm_input, perm_output):
-        scale = numpy_helper.from_array(np.array([0.75, 0.1, 2.3, 0.3, 0.42], dtype=np.float32), name='scale')
-        zero_point = numpy_helper.from_array(np.array([2, 4, 6, 8, 10], dtype=np.uint8), name='zero_point')
+        scale = numpy_helper.from_array(np.array([0.75, 0.1, 2.3, 0.3], dtype=np.float32), name='scale')
+        zero_point = numpy_helper.from_array(np.array([2, 4, 6, 8], dtype=np.uint8), name='zero_point')
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
-        node2 = helper.make_node("DequantizeLinear", ["Y", "scale", "zero_point"], ["Z"], name="dequantize", axis=2)
+        node2 = helper.make_node("DequantizeLinear", ["Y", "scale", "zero_point"], ["Z"], name="dequantize", axis=1)
         node3 = helper.make_node("Transpose", ["Z"], ["Z1"], perm=perm_output, name="trans_2")
 
         graph = helper.make_graph(
@@ -310,6 +316,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ([2, 3, 4], [1, 2, 1], [1], [0, 2, 1], [0, 2, 1]),
         ([2, 3, 4, 5], [1, 2, 1, 2], [1], [0, 2, 3, 1], [0, 3, 1, 2]),
         ([2, 3, 4, 5], [1, 2, 1, 2], [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
         ([2, 3, 4, 5], [1, 2, 1, 2], [0, 1, 2, 3], [0, 2, 3, 1], [0, 3, 1, 2]),
@@ -349,6 +356,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ([2, 3, 4], [1, 2, 1], [1], [0, 2, 1], [0, 2, 1]),
         ([2, 3, 4, 5], [1, 2, 1, 2], [1], [0, 2, 3, 1], [0, 3, 1, 2]),
         ([2, 3, 4, 5], [1, 2, 1, 2], [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
         ([2, 3, 4, 5], [1, 2, 1, 2], [0, 1, 2, 3], [0, 2, 3, 1], [0, 3, 1, 2]),
@@ -388,6 +396,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), (4, 2, 3), (2, 0, 1), (1, 2, 0)),
         ((2, 3, 4, 5), (2, 4, 5, 3), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), (2, 4, 5, 6, 3), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -511,6 +520,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -531,6 +541,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -553,6 +564,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1]),
         ((2, 3, 4, 5), [0, 2, 3, 1]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1]),
     ])
@@ -572,6 +584,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), (4, 2, 3), [2, 0, 1]),
         ((2, 3, 4, 5), (2, 4, 5, 3), [0, 2, 3, 1]),
         ((2, 3, 4, 5, 6), (2, 4, 5, 6, 3), [0, 2, 3, 4, 1]),
     ])
@@ -591,6 +604,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=1)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -611,6 +625,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((1, 3, 4), [4, 3], [0, 2, 1], [1, 0]),
         ((1, 3, 4, 5), (4, 5, 3), [0, 2, 3, 1], [1, 2, 0]),
         ((1, 3, 4, 5, 6), (4, 5, 6, 3), [0, 2, 3, 4, 1], [1, 2, 3, 0]),
     ])
@@ -633,17 +648,18 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.check_transpose_perm(model_after_opt, expected_perm)
 
     @parameterized.expand([
-        ((1, 3, 4, 5), (1, 1, 4, 5, 1, 3, 1), [0, 2, 3, 1], [0, 1, 4, 5, 2, 3, 6]),
-        ((1, 3, 4, 5, 6), (1, 1, 4, 5, 1, 6, 1, 3), [0, 2, 3, 4, 1], [0, 1, 4, 5, 6, 7, 2, 3]),
+        ((1, 3, 4), (1, 4, 1, 3, 1, 1), [2, 0, 1], [0, 4, 5], [2, 3, 0, 1, 4, 5]),
+        ((1, 3, 4, 5), (1, 1, 4, 5, 1, 3, 1), [0, 2, 3, 1], [0, 4, 6], [0, 1, 4, 5, 2, 3, 6]),
+        ((1, 3, 4, 5, 6), (1, 1, 4, 5, 1, 6, 1, 3), [0, 2, 3, 4, 1], [0, 4, 6], [0, 1, 4, 5, 6, 7, 2, 3]),
     ])
-    def test_transpose_with_unsqueeze(self, input_shape, output_shape, perm, expected_perm):
+    def test_transpose_with_unsqueeze(self, input_shape, output_shape, perm, axes_val, expected_perm):
         # unsqueeze the first dim
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
         if self.config.opset <= 12:
-            node2 = helper.make_node("Unsqueeze", ["Y"], ["Z"], name="unsqueeze", axes=[0, 4, 6])
+            node2 = helper.make_node("Unsqueeze", ["Y"], ["Z"], name="unsqueeze", axes=axes_val)
             nodes = [node1, node2]
         else:
-            axes = self._make_onnx_const(np.array([0, 4, 6], dtype=np.int64), "axes")
+            axes = self._make_onnx_const(np.array(axes_val, dtype=np.int64), "axes")
             node2 = helper.make_node("Unsqueeze", ["Y", "axes"], ["Z"], name="unsqueeze")
             nodes = [axes, node1, node2]
 
@@ -660,6 +676,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.check_transpose_perm(model_after_opt, expected_perm)
 
     @parameterized.expand([
+        ((1, 3, 4), [4, 3], [0, 2, 1], [1, 0]),
         ((1, 3, 4, 5), (4, 5, 3), [0, 2, 3, 1], [1, 2, 0]),
         ((1, 3, 4, 5, 6), (4, 5, 6, 3), [0, 2, 3, 4, 1], [1, 2, 3, 0]),
     ])
@@ -814,6 +831,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((10, 3, 4), [0, 2, 1], [0, 2, 1]),
         ((10, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((10, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -878,6 +896,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [4, 2, 3], [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [2, 4, 5, 3], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [2, 4, 5, 6, 3], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -963,6 +982,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [4, 2, 3], [2, 0, 1], [1, 2, 0]),
         ((1, 1, 3, 3), (1, 3, 3, 1), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 1, 3, 3, 3), (1, 3, 3, 3, 1), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -1048,6 +1068,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((3, 4, 5), (8, 4, 6), [1, 3, 0, 0, 2, 0], [2, 0, 1], [1, 2, 0]),
         ((1, 3, 4, 5), (2, 6, 4, 8), [1, 0, 1, 3, 0, 0, 2, 0], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5, 6), (2, 5, 6, 8, 10), [1, 0, 1, 3, 1, 0, 2, 2, 1, 1], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -1069,6 +1090,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((3, 4, 5), (8, 4, 6), [1, 3, 0, 0, 2, 0], [2, 0, 1], [1, 2, 0]),
         ((1, 3, 4, 5), (2, 6, 4, 8), [1, 0, 1, 3, 0, 0, 2, 0], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5, 6), (2, 5, 6, 8, 10), [1, 0, 1, 3, 1, 0, 2, 2, 1, 1], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -1095,6 +1117,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((3, 4, 5), (8, 4, 6), [1, 3, 0, 0, 2, 0], [2, 0, 1], [1, 2, 0]),
         ((1, 3, 4, 5), (2, 6, 4, 8), [1, 0, 1, 3, 0, 0, 2, 0], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5, 6), (2, 5, 6, 8, 10), [1, 0, 1, 3, 1, 0, 2, 2, 1, 1], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -1123,6 +1146,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -1143,6 +1167,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((3, 4, 5), (3, 4, 1), [0, 2, 1], [0, 2, 1]),
         ((1, 3, 4, 5), (1, 3, 1, 1), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5, 6), (1, 3, 1, 1, 1), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -1164,6 +1189,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((3, 4, 5), (3, 4, 1), [1], [0, 2, 1], [0, 2, 1]),
         ((1, 3, 4, 5), (1, 3, 4, 1), [2], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5), (1, 3, 1, 1), [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5), (1, 1, 1, 1), [0, 1, 2, 3], [0, 2, 3, 1], [0, 3, 1, 2]),
@@ -1256,6 +1282,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((3, 4, 5), (3, 4, 1), [1], [0, 2, 1], [0, 2, 1]),
         ((1, 3, 4, 5), (1, 3, 4, 1), [2], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5), (1, 3, 1, 1), [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5), (1, 1, 1, 1), [0, 1, 2, 3], [0, 2, 3, 1], [0, 3, 1, 2]),
@@ -1284,6 +1311,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), (4, 2, 3), [2, 0, 1]),
         ((2, 3, 4, 5), (2, 4, 5, 3), [0, 2, 3, 1]),
         ((2, 3, 4, 5, 6), (2, 4, 5, 6, 3), [0, 2, 3, 4, 1]),
     ])
@@ -1360,6 +1388,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((1, 6, 8), [2, 0, 1], [1, 2, 0]),
         ((1, 6, 8, 9), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 6, 8, 9, 2), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
@@ -1386,6 +1415,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((1, 6, 8), (8, 1, 6), [2, 0, 1], [1, 2, 0]),
         ((1, 6, 8, 9), (1, 8, 9, 6), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 6, 8, 9, 2), (1, 8, 9, 2, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])

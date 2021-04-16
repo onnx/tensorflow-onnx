@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 @tf_op(["StringSplit", "StringSplitV2"], domain=constants.CONTRIB_OPS_DOMAIN)
 class StringOps:
     @classmethod
-    def any_version(cls, opset, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         if node.type == "StringSplit":
             skip_empty = node.get_attr_value('skip_empty', True)
         else:
@@ -32,15 +32,6 @@ class StringOps:
 
         skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], np.bool))
         ctx.replace_inputs(node, [node.input[0], unsqueeze_node.output[0], skip_empty_const.output[0]])
-
-    @classmethod
-    def version_1(cls, ctx, node, **kwargs):
-        cls.any_version(1, ctx, node, **kwargs)
-
-    @classmethod
-    def version_13(cls, ctx, node, **kwargs):
-        cls.any_version(13, ctx, node, **kwargs)
-
 
 @tf_op("StringToHashBucketFast", domain=constants.CONTRIB_OPS_DOMAIN)
 class StringToHashBucketFast:
@@ -72,7 +63,7 @@ class StaticRegexReplace:
 @tf_op("StringJoin", domain=constants.CONTRIB_OPS_DOMAIN)
 class StringJoin:
     @classmethod
-    def any_version(cls, opset, ctx, node, **kwargs):
+    def version_1(cls, ctx, node, **kwargs):
         node.domain = constants.CONTRIB_OPS_DOMAIN
         separator = node.get_attr_value("separator")
         if separator is None:
@@ -87,21 +78,13 @@ class StringJoin:
         unsqueezes = []
         for inp in node.input:
             if ctx.get_shape(inp) == [] and shape_node is not None:
+                utils.make_sure(ctx.opset >= 8, "Opset 8 required for Expand node for StringJoin")
                 expand_node = ctx.make_node("Expand", [inp, shape_node.output[0]])
                 inp = expand_node.output[0]
             unsqueeze_node = GraphBuilder(ctx).make_unsqueeze({'data': inp, 'axes': [0]})
             unsqueezes.append(unsqueeze_node)
         stack_node = ctx.make_node("Concat", unsqueezes, attr={'axis': 0})
         ctx.replace_inputs(node, [stack_node.output[0], separator_node.output[0], axis_node.output[0]])
-
-    @classmethod
-    def version_1(cls, ctx, node, **kwargs):
-        cls.any_version(1, ctx, node, **kwargs)
-
-    @classmethod
-    def version_13(cls, ctx, node, **kwargs):
-        cls.any_version(13, ctx, node, **kwargs)
-
 
 @tf_op(["Equal", "NotEqual"], domain=constants.CONTRIB_OPS_DOMAIN)
 class StringEqual:
