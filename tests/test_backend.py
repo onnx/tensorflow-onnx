@@ -3410,6 +3410,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
                     return batch_to_space_nd(x, y, z, name=_TFOUTPUT)
                 self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT2: z_val})
 
+    def test_depthwise_dilations_pattern(self):
+        x_val = np.random.random_sample([1, 33, 34, 960]).astype(np.float32)
+        kernel = np.random.random_sample([3, 3, 960, 1]).astype(np.float32)
+        block_size = np.array([3, 3], np.int64)
+        pad = np.array([[2, 4], [5, 3]])
+        crop = np.array([[0, 0], [0, 0]])
+        def func(x):
+            y = space_to_batch_nd(x, block_size, pad)
+            z = tf.nn.depthwise_conv2d(y, kernel, strides=[1, 1, 1, 1], padding='VALID')
+            return batch_to_space_nd(z, block_size, crop, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(11, "SpaceToBatchND")
     def test_space_to_batchnd_non_const_7d(self):
         x_type, y_type, z_type = np.float32, np.int64, np.int64
