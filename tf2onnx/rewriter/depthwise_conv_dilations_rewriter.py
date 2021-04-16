@@ -6,8 +6,6 @@ tf2onnx.rewriter.depthwise_conv_dilations_rewriter - Rewrites the patten used to
 pat = SpaceToBatchND->DepthwiseConv2dNative->BatchToSpaceND
 """
 
-from onnx import onnx_pb
-from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring, unused-variable
