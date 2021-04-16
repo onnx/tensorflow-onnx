@@ -3746,7 +3746,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_thresholded_relu(self):
         # tf.keras.layers.ThresholdedReLU only supports `float32` for x
         x_val = np.array([0.0, 1.0, -1.0, 2.0, -2.0, 0.5, -0.5, 1.5, -1.5], dtype=np.float32).reshape((3, 3))
-        theta_vals = [-1.0, -0.5, 0.0, 0.5, 1.0]
+        theta_vals = [0.0, 0.5, 1.0, 2.0]
         for theta_val in theta_vals:
             def func(x):
                 t = tf.keras.layers.ThresholdedReLU(theta=theta_val)
