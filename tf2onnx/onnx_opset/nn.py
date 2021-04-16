@@ -249,6 +249,15 @@ def add_padding(ctx, node, kernel_shape, strides, dilations=None, spatial=2):
         node.set_attr("pads", pads)
     elif padding == "VALID":
         pass
+    elif padding == "EXPLICIT":
+        pads = node.get_attr_value("explicit_paddings")
+        start_pads = []
+        end_pads = []
+        d = 1 if is_channels_last(node) else 2
+        for i in range(spatial):
+            start_pads.append(pads[(d + i) * 2])
+            end_pads.append(pads[(d + i) * 2 + 1])
+        node.set_attr("pads", start_pads + end_pads)
     else:
         raise ValueError("invalid padding value: {}".format(padding))
 
