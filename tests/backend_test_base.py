@@ -30,6 +30,7 @@ from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
 from tf2onnx.tf_loader import tf_optimize, is_tf2, get_hash_table_info
 from tf2onnx.tf_utils import compress_graph_def
 from tf2onnx.graph import ExternalTensorStorage
+from tf2onnx.tflite.Model import Model
 
 
 if is_tf2():
@@ -217,6 +218,22 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             except ConverterError:
                 return None
 
+    def tflite_has_supported_types(self, tflite_path):
+        try:
+            with open(tflite_path, 'rb') as f:
+                buf = f.read()
+            buf = bytearray(buf)
+            model = Model.GetRootAsModel(buf, 0)
+            tensor_cnt = model.Subgraphs(0).TensorsLength()
+            interpreter = tf.lite.Interpreter(tflite_path)
+            for i in range(tensor_cnt):
+                dtype = interpreter._get_tensor_details(i)['dtype']   # pylint: disable=protected-access
+                if np.dtype(dtype).kind == 'O':
+                    return False
+            return True
+        except (RuntimeError, ValueError):
+            return False
+
     def run_tflite(self, tflite_path, feed_dict):
         try:
             interpreter = tf.lite.Interpreter(tflite_path)
@@ -291,7 +308,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         if test_tflite:
             tflite_path = self.convert_to_tflite(graph_def, feed_dict, output_names_with_port)
-            test_tflite = tflite_path is not None
+            test_tflite = tflite_path is not None and self.tflite_has_supported_types(tflite_path)
 
         if test_tf:
             tf_reset_default_graph()

@@ -3328,6 +3328,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x, _INPUT1: input_y})
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x.astype(np.int32), _INPUT1: input_y})
+
+    @check_opset_min_version(8, "BroadcastTo")
+    def test_zeros_like_bool(self):
+        input_x = np.random.random_sample([10, 20]).astype(np.float32)
+        input_y = np.array([20, 10]).astype(np.int64)
+
+        def func(x, y):
+            z = tf.reshape(x, y)
+            return tf.zeros_like(z, name=_TFOUTPUT)
+
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x > 0.5, _INPUT1: input_y})
 
     @check_opset_min_version(9, "is_nan")

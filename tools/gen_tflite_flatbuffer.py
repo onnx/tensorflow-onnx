@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# WARNING: this script will overwrite all files in tf2onnx/tflite
-# Generates the files in tf2onnx/tflite used for parsing tflite flatbuffer
-# Before running, download the flatc executable from https://github.com/google/flatbuffers/releases and add it to PATH
-# This script only tested on Windows
+"""
+Generates the files in tf2onnx/tflite used for parsing tflite flatbuffer
+WARNING: this script will overwrite all files in tf2onnx/tflite
+Before running, download the flatc executable from https://github.com/google/flatbuffers/releases and add it to PATH
+This script only tested on Windows
+"""
 
-import tempfile
-import wget
 import os
 import subprocess
+import tempfile
+import wget
 
 SCHEMA_URL = "https://github.com/tensorflow/tensorflow/raw/master/tensorflow/lite/schema/schema.fbs"
 

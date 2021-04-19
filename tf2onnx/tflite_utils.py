@@ -38,6 +38,8 @@ TFLITE_TO_ONNX_DTYPE = {
     TFLiteTensorType.COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     TFLiteTensorType.UINT64: onnx_pb.TensorProto.UINT64,
     TFLiteTensorType.UINT32: onnx_pb.TensorProto.UINT32,
+    TFLiteTensorType.RESOURCE: onnx_pb.TensorProto.UNDEFINED,
+    TFLiteTensorType.VARIANT: onnx_pb.TensorProto.UNDEFINED,
 }
 
 
@@ -56,6 +58,8 @@ TFLITE_TO_TF_DTYPE = {
     TFLiteTensorType.COMPLEX128: types_pb2.DT_COMPLEX128,
     TFLiteTensorType.UINT64: types_pb2.DT_UINT64,
     TFLiteTensorType.UINT32: types_pb2.DT_UINT32,
+    TFLiteTensorType.RESOURCE: types_pb2.DT_RESOURCE,
+    TFLiteTensorType.VARIANT: types_pb2.DT_VARIANT,
 }
 
 
@@ -250,13 +254,14 @@ def op_has_scalar_output(input_shapes, optype, attr):
     TFLite uses [] to denote both scalars and unknown output shapes. Return True if an op can have scalar outputs
     despite having non-scalar inputs. Otherwise, we will replace [] with None
     """
-    if optype == "TFL_STRIDED_SLICE":
+    if optype in ["TFL_STRIDED_SLICE", "StridedSlice"]:
         inp_rank = len(input_shapes[0])
         return attr['shrink_axis_mask'] == 2 ** inp_rank - 1
     if (optype.startswith("TFL_REDUCE") or optype in ['All']) and len(input_shapes) == 2:
         inp_rank = len(input_shapes[0])
         keep_dims = attr.get('keep_dims', True)
-        num_axes = input_shapes[1][0]
+        # axes input can be a scalar for a single axis
+        num_axes = 1 if input_shapes[1] == [] else input_shapes[1][0]
         return not keep_dims and inp_rank == num_axes
     if optype == "TFL_RESHAPE":
         return input_shapes[1] == [0]

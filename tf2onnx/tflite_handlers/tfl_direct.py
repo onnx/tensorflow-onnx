@@ -12,6 +12,7 @@ from tf2onnx.handler import tfl_op
 
 
 @tfl_op("TFL_ABS", tf_op="Abs")
+@tfl_op("TFL_BROADCAST_TO", tf_op="BroadcastTo")
 @tfl_op("TFL_CEIL", tf_op="Ceil")
 @tfl_op("TFL_COS", tf_op="Cos")
 @tfl_op("TFL_ELU", tf_op="Elu")
