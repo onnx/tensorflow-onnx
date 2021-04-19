@@ -33,6 +33,14 @@ class GatherOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def GatherOptionsStart(builder): builder.StartObject(1)
+    # GatherOptions
+    def BatchDims(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
+        return 0
+
+def GatherOptionsStart(builder): builder.StartObject(2)
 def GatherOptionsAddAxis(builder, axis): builder.PrependInt32Slot(0, axis, 0)
+def GatherOptionsAddBatchDims(builder, batchDims): builder.PrependInt32Slot(1, batchDims, 0)
 def GatherOptionsEnd(builder): return builder.EndObject()

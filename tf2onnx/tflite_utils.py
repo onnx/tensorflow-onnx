@@ -37,6 +37,7 @@ TFLITE_TO_ONNX_DTYPE = {
     TFLiteTensorType.FLOAT64: onnx_pb.TensorProto.DOUBLE,
     TFLiteTensorType.COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     TFLiteTensorType.UINT64: onnx_pb.TensorProto.UINT64,
+    TFLiteTensorType.UINT32: onnx_pb.TensorProto.UINT32,
 }
 
 
@@ -54,6 +55,7 @@ TFLITE_TO_TF_DTYPE = {
     TFLiteTensorType.FLOAT64: types_pb2.DT_DOUBLE,
     TFLiteTensorType.COMPLEX128: types_pb2.DT_COMPLEX128,
     TFLiteTensorType.UINT64: types_pb2.DT_UINT64,
+    TFLiteTensorType.UINT32: types_pb2.DT_UINT32,
 }
 
 
