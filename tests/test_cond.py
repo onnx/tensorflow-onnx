@@ -233,6 +233,7 @@ class CondTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.8", "shape inference for Reshape op screws up")
     @check_opset_min_version(9, "ConstantOfShape")
+    @allow_missing_shapes("ONNX shape inference still determines if/else shape for unknown reason")
     def test_cond_with_different_output_shape(self):
         input_shape = (10, 5, 20)
         def func(inputs, shape):

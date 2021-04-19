@@ -250,6 +250,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 return None
             return [d.dim_value if d.HasField('dim_value') else -1 for d in info.type.tensor_type.shape.dim]
         for info in model_shapes.graph.value_info:
+            if info.name == "":
+                continue
             onnx_shape = get_shape(info)
             tf2onnx_shape = graph.get_shape(info.name)
             if onnx_shape is None:

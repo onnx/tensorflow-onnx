@@ -160,13 +160,16 @@ class AddN():
 class SegmentSum():
     @classmethod
     def any_version(cls, opset, ctx, node, **kwargs):
-        node_inputs = node.input
+        node_inputs = node.input.copy()
         num_segments_specified = False
+        num_segs_const = None
         if node.type.endswith("WithNumSegments") or node.type.startswith("Unsorted"):
             num_segments_specified = True
             num_segments = node_inputs.pop()
             node.type = node.type.replace("WithNumSegments", "")
             node.type = node.type.replace("Unsorted", "")
+            if node.inputs[-1].is_const():
+                num_segs_const = node.inputs[-1].get_tensor_value(as_list=True)
         if node.type.startswith("Sparse"):
             data_inp, indices_inp, segment_inp = node_inputs
             gather_node = ctx.make_node("Gather", [data_inp, indices_inp], attr={'axis': 0})
@@ -180,6 +183,10 @@ class SegmentSum():
         data_rank = len(data_shape) if data_shape is not None else None
         data_dtype = ctx.get_dtype(data_inp)
         seg_rank = ctx.get_rank(segment_inp)
+
+        if ctx.get_dtype(segment_inp) != onnx_pb.TensorProto.INT64:
+            segment_inp = ctx.make_node("Cast", [segment_inp], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
+
         utils.make_sure(seg_rank == 1, "Segment ops only supported for segments of rank 1, not %s", seg_rank)
         data_np_dtype = utils.map_onnx_to_numpy_type(data_dtype)
         seg_np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(segment_inp))
@@ -214,102 +221,94 @@ class SegmentSum():
             max_segment = ctx.make_node("ReduceMax", [segment_inp], attr={'axes': [0], 'keepdims': 0})
             one_const = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=seg_np_dtype))
             num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]]).output[0]
-        # ORT doesn't support bool for OneHot so we use float32 and cast to bool
-        onehot_values = ctx.make_const(utils.make_name("onehot_values"), np.array([0, 1], dtype=np.float32))
-        # one_hot_node has shape [s, n] (s is # segments)
-        one_hot_node = ctx.make_node("OneHot", [segment_inp, num_segments, onehot_values.output[0]],
-                                     attr={'axis': 0})
-        if node.type == "SegmentMean":
-            scaling_node_output = GraphBuilder(ctx).make_reduce_sum(
-                {"data": one_hot_node.output[0], "axes": [1], "keepdims": 0, "noop_with_empty_axes": 1})
-        elif node.type == "SegmentSqrtN":
-            seg_cnts_node_output = GraphBuilder(ctx).make_reduce_sum(
-                {"data": one_hot_node.output[0], "axes": [1], "keepdims": 0, "noop_with_empty_axes": 1})
-            scaling_node_output = ctx.make_node("Sqrt", [seg_cnts_node_output]).output[0]
-        else:
-            scaling_node_output = None
+        num_segments_unsq = GraphBuilder(ctx).make_unsqueeze({'data': num_segments, 'axes': [0]})
 
-        if scaling_node_output is not None and num_segments_specified:
+        seg_shape = ctx.make_node("Shape", [segment_inp]).output[0]
+        seg_shape_sq = GraphBuilder(ctx).make_squeeze({"data": seg_shape, "axes": [0]})
+        segs_sorted, indices = ctx.make_node(
+            "TopK", [segment_inp, seg_shape], attr={'axis': 0, 'largest': False, 'sorted': True},
+            output_count=2, op_name_scope=node.name).output
+        seg_unique_node = ctx.make_node(
+            "Unique", [segs_sorted], attr={'axis': 0, 'sorted': True}, output_count=4, op_name_scope=node.name)
+        seg_unique_node.output[1] = ""
+        seg_values, _, inv_indices, seg_cnts_sorted = seg_unique_node.output
+
+        max_cnt = ctx.make_node("ReduceMax", [seg_cnts_sorted], attr={'axes': [0], 'keepdims': True}).output[0]
+
+        if node.type in ["SegmentMean", "SegmentSqrtN"]:
+            zero_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[0])
+            if num_segs_const is not None:
+                zeros = ctx.make_const(utils.make_name("zeros"), np.zeros([num_segs_const], np.int64)).output[0]
+            else:
+                zeros = ctx.make_node("ConstantOfShape", [num_segments_unsq], attr={'value': zero_tensor}).output[0]
+            seg_cnts = ctx.make_node("ScatterElements", [zeros, seg_values, seg_cnts_sorted],
+                                     attr={'axis': 0}).output[0]
+            seg_cnts_float = ctx.make_node("Cast", [seg_cnts], attr={'to': onnx_pb.TensorProto.FLOAT}).output[0]
+        if node.type == "SegmentMean":
+            scaling_amt = seg_cnts_float
+        elif node.type == "SegmentSqrtN":
+            scaling_amt = ctx.make_node("Sqrt", [seg_cnts_float]).output[0]
+        else:
+            scaling_amt = None
+
+        if scaling_amt is not None and num_segments_specified:
             # If empty segments are possible, we must avoid division by zero
             const_one_float = ctx.make_const(utils.make_name("const_one_float"), np.array(1, dtype=np.float32))
-            scaling_node_output = ctx.make_node("Max", [scaling_node_output, const_one_float.output[0]]).output[0]
+            scaling_amt = ctx.make_node("Max", [scaling_amt, const_one_float.output[0]]).output[0]
 
 
+        zero_const_int64 = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.int64)).output[0]
+        one_const_int64 = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=np.int64)).output[0]
+        seg_range = ctx.make_node("Range", [zero_const_int64, seg_shape_sq, one_const_int64]).output[0]
+
+        id_to_cnt = ctx.make_node("Gather", [seg_cnts_sorted, inv_indices]).output[0]
+        range_mod = ctx.make_node("Mod", [seg_range, id_to_cnt]).output[0]
+
+        idx_grid_shape = ctx.make_node("Concat", [num_segments_unsq, max_cnt], {'axis': 0}).output[0]
+        neg_one_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[-1])
+        idx_grid = ctx.make_node("ConstantOfShape", [idx_grid_shape], {'value': neg_one_tensor}).output[0]
+
+        segs_sorted_unsq = GraphBuilder(ctx).make_unsqueeze({'data': segs_sorted, 'axes': [-1]})
+        range_mod_unsq = GraphBuilder(ctx).make_unsqueeze({'data': range_mod, 'axes': [-1]})
+        scatter_indices = ctx.make_node("Concat", [segs_sorted_unsq, range_mod_unsq], attr={'axis': 1}).output[0]
+        scatted_grid = ctx.make_node("ScatterND", [idx_grid, scatter_indices, indices]).output[0]
+
+        data_shape = ctx.make_node("Shape", [data_inp]).output[0]
+
+        max_int64 = int(utils.get_max_value(np.int64))
+        identity_shape = GraphBuilder(ctx).make_slice(
+            {'data': data_shape, 'starts': [1], 'ends': [max_int64], 'axes': [0]})
+        id_tensor = helper.make_tensor("value", ctx.get_dtype(data_inp), dims=[1], vals=[identity_value])
+        identity = ctx.make_node("ConstantOfShape", [identity_shape], {'value': id_tensor}).output[0]
+        id_unsq = GraphBuilder(ctx).make_unsqueeze({'data': identity, 'axes': [0]})
+        data_with_id = ctx.make_node("Concat", [data_inp, id_unsq], attr={'axis': 0}).output[0]
+        data_grid = ctx.make_node("Gather", [data_with_id, scatted_grid]).output[0]
         if onnx_op == "ReduceSum":
-            # If the op is a summation, we can use MatMul instead of Where, which is faster
+            reduction_result = GraphBuilder(ctx).make_reduce_sum(
+                {'data': data_grid, 'axes': [1], "keepdims": False}, op_name_scope=node.name)
+        else:
+            reduction_result = ctx.make_node(
+                onnx_op, [data_grid], attr={'axes': [1], 'keepdims': False}, op_name_scope=node.name).output[0]
+        if scaling_amt is not None:
+            if data_rank is None:
+                # Left pad scale to match data rank
+                data_slice_rank = ctx.make_node("Shape", [identity_shape]).output[0]
+                one_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1])
+                ones_of_shape = ctx.make_node("ConstantOfShape", [data_slice_rank], {'value': one_tensor}).output[0]
+                zero_unsq = ctx.make_const(utils.make_name('const_zero'), np.array([0], np.int64)).output[0]
+                scaling_shape = ctx.make_node("Concat", [zero_unsq, ones_of_shape], attr={'axis': 0}).output[0]
+                scaling_amt = ctx.make_node("Reshape", [scaling_amt, scaling_shape]).output[0]
+            elif data_rank != 1:
+                scaling_amt = GraphBuilder(ctx).make_unsqueeze(
+                    {'data': scaling_amt, 'axes': list(range(1, data_rank))})
+            reduction_result = ctx.make_node("Div", [reduction_result, scaling_amt]).output[0]
 
-            # Data shape is [n, a, b, ..., c]
-            data_shape_node = ctx.make_node("Shape", [data_inp])
-            new_shape = ctx.make_const(utils.make_name("reshape_const"), np.array([0, -1], dtype=np.int64))
-            # Reshape the data from [n, a, b, ..., c] to [n, P]
-            data_reshape = ctx.make_node("Reshape", [data_inp, new_shape.output[0]])
-
-            one_hot_cast = one_hot_node
-            if data_dtype != onnx_pb.TensorProto.FLOAT:
-                one_hot_cast = ctx.make_node("Cast", [one_hot_node.output[0]], attr={'to': data_dtype})
-
-            # Shapes [s, n] * [n, P] => [s, P]
-            product = ctx.make_node("MatMul", [one_hot_cast.output[0], data_reshape.output[0]], op_name_scope=node.name)
-            if scaling_node_output is not None:
-                scaling_node_unsqueeze = GraphBuilder(ctx).make_unsqueeze(
-                    {'data': scaling_node_output, 'axes': [1]}, return_node=True)
-                product = ctx.make_node("Div", [product.output[0], scaling_node_unsqueeze.output[0]])
-
-            # Create new shape [0, a, b, ..., c]
-            max_int64 = int(utils.get_max_value(np.int64))
-            new_shape_slice = GraphBuilder(ctx).make_slice(
-                {"data": data_shape_node.output[0], "ends": [max_int64], "starts": [1], "axes": [0]})
-            zero_const = ctx.make_const(utils.make_name("zero_const"), np.array([0], dtype=np.int64))
-            new_shape = ctx.make_node("Concat", [zero_const.output[0], new_shape_slice], attr={'axis': 0})
-
-            shapes = node.output_shapes
-            dtypes = node.output_dtypes
-            ctx.remove_node(node.name)
-            # Reshape result from [s, P] to [s, a, b, ..., c]
-            ctx.make_node("Reshape", [product.output[0], new_shape.output[0]],
-                          name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
-            return
-
-        identity_const = ctx.make_const(utils.make_name("const_identity"), identity_value)
-        one_hot_bool = ctx.make_node("Cast", [one_hot_node.output[0]], attr={"to": onnx_pb.TensorProto.BOOL})
-        one_hot_unsqueeze = one_hot_bool
-
-        # Make one_hot_unsqueeze have shape [s, n, 1, 1, ..., 1]
-        if data_rank is None:
-            # Unsqueeze requires known rank, but we can use Reshape if rank is unknown
-            shape_node = ctx.make_node("Shape", [data_inp])
-            rank_node = ctx.make_node("Shape", [shape_node.output[0]])
-            one_const_int64 = ctx.make_const(utils.make_name("const_one"), np.array([1], dtype=np.int64))
-            num_unsqueeze_dims = ctx.make_node("Sub", [rank_node.output[0], one_const_int64.output[0]])
-
-            one_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1])
-            unsqueeze_dims = ctx.make_node("ConstantOfShape", inputs=[num_unsqueeze_dims.output[0]],
-                                           attr={"value": one_tensor})
-            # Zero indicates a dimension should be unchanged
-            double_zero_const = ctx.make_const(utils.make_name("double_zero"), np.array([0, 0], dtype=np.int64))
-            expanded_shape = ctx.make_node("Concat", [double_zero_const.output[0], unsqueeze_dims.output[0]],
-                                           attr={'axis': 0})
-            one_hot_unsqueeze = ctx.make_node("Reshape", [one_hot_bool.output[0], expanded_shape.output[0]])
-        elif data_rank > 1:
-            new_dims = list(range(2, 2 + data_rank - 1))
-            one_hot_unsqueeze = GraphBuilder(ctx).make_unsqueeze(
-                {'data': one_hot_bool.output[0], 'axes': new_dims}, return_node=True)
-
-        # Shape of data:       [n, a, b, ..., c]
-        # Shape of one_hot: [s, n, 1, 1, ..., 1]
-        # Broadcast left-pads shape with 1s, so result is shape: [s, n, a, b, ..., c]
-        where_node = ctx.make_node("Where", [one_hot_unsqueeze.output[0], data_inp, identity_const.output[0]])
-
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
+        ctx.replace_all_inputs(node.output[0], reduction_result)
         ctx.remove_node(node.name)
-        # After reduction over axis 1, shape is: [s, a, b, ..., c]
-        ctx.make_node(onnx_op, [where_node.output[0]], attr={'axes': [1], 'keepdims': 0},
-                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
     @classmethod
-    def version_9(cls, ctx, node, **kwargs):
-        cls.any_version(9, ctx, node, **kwargs)
+    def version_11(cls, ctx, node, **kwargs):
+        cls.any_version(11, ctx, node, **kwargs)
 
     @classmethod
     def version_13(cls, ctx, node, **kwargs):

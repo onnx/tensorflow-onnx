@@ -217,6 +217,7 @@ class Where:
                                                        node.output[0], name=utils.make_name("where_op_added"))
         ctx.copy_shape(node.output[0], transpose_node.output[0])
         ctx.copy_dtype(node.output[0], transpose_node.output[0])
+        ctx.update_node_shape_dtype(node, override=True)
 
 
 @tf_op(["StatelessIf"])
