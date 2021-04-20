@@ -39,6 +39,18 @@ stages:
           - template: 'unit_test.yml'
         report_coverage: 'True'
   
+    - template: 'templates/job_generator.yml'
+      parameters:
+        platforms: ['linux', 'windows']
+        python_versions: [3.8']
+        tf_versions: ['2.5.0rc1']
+        onnx_opsets: ['']
+        onnx_backends: {onnxruntime: ['nightly']}
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+  
   - template: 'templates/combine_test_coverage.yml'
 
 schedules:

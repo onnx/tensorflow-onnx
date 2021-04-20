@@ -3328,6 +3328,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x, _INPUT1: input_y})
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x.astype(np.int32), _INPUT1: input_y})
+
+    @check_opset_min_version(8, "BroadcastTo")
+    def test_zeros_like_bool(self):
+        input_x = np.random.random_sample([10, 20]).astype(np.float32)
+        input_y = np.array([20, 10]).astype(np.int64)
+
+        def func(x, y):
+            z = tf.reshape(x, y)
+            return tf.zeros_like(z, name=_TFOUTPUT)
+
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x > 0.5, _INPUT1: input_y})
 
     @check_opset_min_version(9, "is_nan")
@@ -3746,7 +3756,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_thresholded_relu(self):
         # tf.keras.layers.ThresholdedReLU only supports `float32` for x
         x_val = np.array([0.0, 1.0, -1.0, 2.0, -2.0, 0.5, -0.5, 1.5, -1.5], dtype=np.float32).reshape((3, 3))
-        theta_vals = [-1.0, -0.5, 0.0, 0.5, 1.0]
+        theta_vals = [0.0, 0.5, 1.0, 2.0]
         for theta_val in theta_vals:
             def func(x):
                 t = tf.keras.layers.ThresholdedReLU(theta=theta_val)

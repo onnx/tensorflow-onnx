@@ -2065,11 +2065,13 @@ class ReverseSequence:
         batch_dim = node.get_attr_value("batch_dim", 0)
 
         ctx.remove_node(node.name)
+        shape = ctx.get_shape(node.input[0])
+        dtype = ctx.get_dtype(node.input[0])
         node = ctx.make_node(
             "ReverseSequence",
             node.input,
             outputs=node.output,
-            attr={"batch_axis": batch_dim, "time_axis": seq_dim})
+            attr={"batch_axis": batch_dim, "time_axis": seq_dim}, shapes=[shape], dtypes=[dtype])
 
         seq_len_dtype = ctx.get_dtype(node.input[1])
         utils.make_sure(seq_len_dtype is not None, "dtype of {} is None".format(node.input[1]))
