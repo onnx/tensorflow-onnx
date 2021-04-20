@@ -2191,7 +2191,10 @@ class ReverseV2:
                     ((i == len_axes - 1) and (curr_perm == orig_perm)) \
                     else None
 
-                rs_out_shapes = None if rs_out_name is None else rv2_output_shapes
+                if rs_out_name is not None:
+                    rs_out_shapes = rv2_output_shapes
+                else:
+                    rs_out_shapes = [ctx.get_shape(inputs[0])]
 
                 new_node = ctx.make_node(
                     "ReverseSequence",

@@ -1544,7 +1544,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
-    @check_opset_min_version(9, "OneHot")
+    @check_opset_min_version(11, "ScatterND")
     def test_segment_sum_data_vector(self):
         segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
         data_val = np.array([5, 1, 7, 2, 3, 4, 1, 3], dtype=np.float32)
@@ -1553,7 +1553,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
-    @check_opset_min_version(11, "Pad")
+    @check_opset_min_version(11, "ScatterND")
     def test_segment_sum_unknown_rank(self):
         segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
         data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
@@ -1568,7 +1568,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT],
                             {_INPUT: data_val, _INPUT1: segs_val, _INPUT2: data_shape_val, _INPUT3: shape_pad_val})
 
-    @check_opset_min_version(9, "OneHot")
+    @check_opset_min_version(11, "ScatterND")
     def test_segment_ops_data_tensor(self):
         for tf_op in [tf.math.segment_sum, tf.math.segment_prod, tf.math.segment_min, tf.math.segment_max]:
             segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
@@ -1578,7 +1578,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
-    @check_opset_min_version(11, "Pad")
+    @check_opset_min_version(11, "ScatterND")
     @skip_tflite("unknown rank")
     def test_segment_mean_unknown_rank(self):
         segs_val = np.array([0, 0, 0, 1, 2, 2, 3, 3], dtype=np.int32)
@@ -1594,7 +1594,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT],
                             {_INPUT: data_val, _INPUT1: segs_val, _INPUT2: data_shape_val, _INPUT3: shape_pad_val})
 
-    @check_opset_min_version(9, "OneHot")
+    @check_opset_min_version(11, "ScatterND")
     def test_sparse_segment_sum(self):
         data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
         indices_val = np.array([2, 0, 1, 3, 5, 4, 3, 5, 5], dtype=np.int32)
@@ -1604,7 +1604,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
 
-    @check_opset_min_version(9, "OneHot")
+    @check_opset_min_version(11, "ScatterND")
     def test_sparse_segment_mean(self):
         data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
         indices_val = np.array([2, 0, 1, 3, 5, 4, 3, 5, 5], dtype=np.int32)
@@ -1614,7 +1614,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
 
-    @check_opset_min_version(9, "OneHot")
+    @check_opset_min_version(11, "ScatterND")
     def test_sparse_segment_sqrtn(self):
         data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
         indices_val = np.array([2, 0, 1, 3, 5, 4, 3, 5, 5], dtype=np.int32)
@@ -1624,7 +1624,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
 
-    @check_opset_min_version(9, "OneHot")
+    @check_opset_min_version(11, "ScatterND")
     def test_sparse_segment_ops_with_num_segments(self):
         for tf_op in [tf.sparse.segment_sum, tf.sparse.segment_mean, tf.sparse.segment_sqrt_n]:
             data_val = np.arange(8 * 2 * 3, dtype=np.float32).reshape([8, 2, 3])
@@ -1635,7 +1635,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
 
-    @check_opset_min_version(9, "OneHot")
+    @check_opset_min_version(11, "ScatterND")
     @check_tf_min_version("2.3", "needs tf 2.3")
     def test_unsorted_segment_ops(self):
         tf_ops = [
@@ -1654,7 +1654,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
-    @check_opset_min_version(9, "OneHot")
+    @check_opset_min_version(11, "ScatterND")
     @check_tf_min_version("2.3", "num_segments can be int64 in tf 2.3")
     def test_segment_op_types(self):
         data_dtypes = [np.int32, np.float32]
