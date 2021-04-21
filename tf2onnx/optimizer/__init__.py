@@ -18,6 +18,7 @@ from .back_to_back_optimizer import BackToBackOptimizer
 from .upsample_optimizer import UpsampleOptimizer
 from .const_dequantize_optimizer import ConstDequantizeOptimizer
 from .reshape_optimizer import ReshapeOptimizer
+from .global_pool_optimizer import GlobalPoolOptimizer
 from .. import logging
 
 # optimizer sequence need to be considered carefully
@@ -33,6 +34,7 @@ _optimizers = OrderedDict([
     ("reshape_optimizer", ReshapeOptimizer),
     ("remove_identity", IdentityOptimizer),
     ("remove_back_to_back", BackToBackOptimizer),
+    ("global_pool_optimizer", GlobalPoolOptimizer),
 ])
 
 
