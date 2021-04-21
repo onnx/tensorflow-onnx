@@ -183,7 +183,15 @@ class Select:
         # T1 output = Where(bool condition, T1 x, T1 y)
         # NOTE: condition can be 1-dimension in tensorflow, while in onnx,
         # it should be broadcastable with other two inputs
-        if ctx.get_dtype(node.output[0]) != TensorProto.STRING:
+
+        # We can't use the mul/add trick if a NaN is involved. handles_nan is added earlier in the converter.
+        handles_nan = node.get_attr_value("handles_nan", False)
+        if ctx.get_dtype(node.output[0]) in [TensorProto.FLOAT, TensorProto.DOUBLE]:
+            for inp in node.inputs[1:]:
+                if inp.is_const() and np.any(np.isnan(inp.get_tensor_value(as_list=False))):
+                    handles_nan = True
+
+        if ctx.get_dtype(node.output[0]) != TensorProto.STRING and not handles_nan:
             # Due to bad ORT implementation, Mul/Add ops are faster than Where op
             cls.version_7(ctx, node, **kwargs)
             return

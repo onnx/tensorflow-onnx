@@ -36,11 +36,15 @@ class TflSplitV:
         node.attr['num_split'] = node.attr['num_splits']
         del node.attr['num_splits']
 
-@tfl_op(["TFL_GATHER"], onnx_op="Gather")
+@tfl_op(["TFL_GATHER"], tf_op="GatherV2")
 class TflGather:
     @classmethod
-    def version_1(cls, ctx, node, **kwargs):
-        pass
+    def to_tf(cls, ctx, node, **kwargs):
+        utils.make_sure(len(node.input) == 2, "TFL_GATHER must have 2 inputs")
+        axis = node.get_attr_value('axis')
+        del node.attr['axis']
+        axis_const = ctx.make_const(utils.make_name("gather_axis"), np.array(axis, np.int64)).output[0]
+        ctx.replace_inputs(node, node.input + [axis_const])
 
 @tfl_op(["TFL_RESHAPE"], tf_op="Reshape")
 class TflReshape:
