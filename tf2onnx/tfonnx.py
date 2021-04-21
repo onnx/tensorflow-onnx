@@ -605,7 +605,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         rewrite_random_uniform_fold_const,
         rewrite_random_normal,
         rewrite_dropout,
-        rewrite_depthwise_conv_dilations,
+        rewrite_conv_dilations,
         rewrite_eye,
         rewrite_leakyrelu,
         rewrite_thresholded_relu,
