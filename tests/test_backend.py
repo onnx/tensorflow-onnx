@@ -1790,6 +1790,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
 
+    def test_reducemax_global_max_pool(self):
+        for keepdims in [True, False]:
+            x_val = make_xval((2, 3, 4, 5, 6))
+            def func(x):
+                x_ = tf.reduce_max(x, axis=[2, 3, 4], keepdims=keepdims)
+                return tf.add(x_, 0, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @skip_caffe2_backend()
     def test_reduceprod(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
@@ -1804,6 +1812,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.reduce_mean(x)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    def test_reducemean_global_avg_pool(self):
+        for keepdims in [True, False]:
+            x_val = make_xval((2, 3, 4, 5))
+            def func(x):
+                x_ = tf.reduce_mean(x, axis=[2, 3], keepdims=keepdims)
+                return tf.add(x_, 0, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @skip_caffe2_backend()
     @check_onnxruntime_incompatibility("Pow")
