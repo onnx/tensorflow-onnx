@@ -691,6 +691,8 @@ class Graph(object):
             self.inputs.remove(node)
 
         for op_output in node.output:
+            if op_output == "":
+                continue
             del self._output_to_node_name[op_output]
 
             if op_output in self._output_shapes:
@@ -699,6 +701,8 @@ class Graph(object):
                 del self._dtypes[op_output]
 
         for op_input in node.input:
+            if op_input == "":
+                continue
             utils.make_sure(
                 op_input in self._output_to_consumers,
                 "Input %r of node %r not found.", op_input, node_name)

@@ -545,6 +545,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         if dequantize:
             tfl_rewriters.append(rewrite_tfl_qdq)
         tfl_rewriters.append(rewrite_tfl_scan_outputs)
+        tfl_rewriters.append(rewrite_tfl_select_zero_mul)
         run_rewriters(g, tfl_rewriters, continue_on_error)
         tfl_ops_mapping = handler.tfl_op.create_tfl_to_tf_mapping()
         _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True, dequantize=False)
@@ -604,6 +605,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         rewrite_random_uniform_fold_const,
         rewrite_random_normal,
         rewrite_dropout,
+        rewrite_conv_dilations,
         rewrite_eye,
         rewrite_leakyrelu,
         rewrite_thresholded_relu,

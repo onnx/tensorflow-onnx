@@ -13,7 +13,10 @@ from distutils.version import LooseVersion
 
 import tensorflow as tf
 import numpy as np
+from google.protobuf.message import DecodeError
+from tensorflow.core.protobuf import saved_model_pb2
 from tensorflow.python.ops import lookup_ops
+from tensorflow.python.util import compat
 
 from tf2onnx import utils
 from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx, get_hash_table_info, replace_placeholders_with_tables
@@ -194,6 +197,11 @@ def from_graphdef(model_path, input_names, output_names):
                     "Unable to load file '{}'.".format(model_path)) from e
             try:
                 graph_def.ParseFromString(content)
+            except DecodeError:
+                content_as_bytes = compat.as_bytes(content)
+                saved_model = saved_model_pb2.SavedModel()
+                saved_model.ParseFromString(content_as_bytes)
+                graph_def = saved_model.meta_graphs[0].graph_def
             except Exception as e:
                 raise RuntimeError(
                     "Unable to parse file '{}'.".format(model_path)) from e
