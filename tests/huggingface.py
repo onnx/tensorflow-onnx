@@ -193,7 +193,7 @@ class TestTransformers(unittest.TestCase):
 
     def test_TFFunnelSmallBase(self):
         self._test_TFFunnel("funnel-transformer/small-base")
- 
+
     def test_TFFunnelMedium(self):
         self._test_TFFunnel("funnel-transformer/medium")
 
