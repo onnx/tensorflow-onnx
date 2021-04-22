@@ -701,7 +701,6 @@ def load_tests_from_yaml(path):
 
 
 def main():
-    global PERFITER
     args = get_args()
     logging.basicConfig(level=logging.get_verbosity_level(args.verbose))
     if args.debug:
