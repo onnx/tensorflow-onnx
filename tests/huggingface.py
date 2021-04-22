@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for huggingface tensorflow transformers."""
+"""
+Unit tests for huggingface tensorflow transformers.
+
+tested with tf-2.4.1, transformers-4.5.1
+
+"""
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 # pylint: disable=bad-classmethod-argument,wrong-import-position
@@ -19,7 +24,9 @@ import onnxruntime as rt
 import tensorflow as tf
 import tf2onnx
 
-compare_perf = False
+compare_perf = True
+time_to_run = 10
+time_step = 10
 
 
 class TestTransformers(unittest.TestCase):
@@ -47,26 +54,31 @@ class TestTransformers(unittest.TestCase):
         m = rt.InferenceSession(model_path, sess_options=opt, providers=providers)
         results = m.run(output_names, input_dict)
         if compare_perf:
-            count = 10
+            n = 0
             time_start = time.time()
-            for _ in range(count):
-                _ = m.run(output_names, input_dict.keys())
+            time_stop = time_start + time_to_run
+            while time.time() < time_stop:
+                for _ in range(time_step):
+                    _ = m.run(output_names, input_dict)
+                n += time_step
             time_end = time.time()
-            val = str((time_end - time_start) / count)
-            print(f'==== avg ort name={self.name}, time={val}')
+            val = (time_end - time_start) / n
+            print(f'= avg ort name={self.name}, time={val}, n={n}')
         return results
 
     def run_keras(self, model, inputs):
-        print(f"==== {self.name}")
         pred = model(inputs)
         if compare_perf:
-            count = 10
+            n = 0
             time_start = time.time()
-            for _ in range(count):
-                _ = model(inputs)
-            time_end = time.time()
-            val = str((time_end - time_start) / count)
-            print(f'==== avg keras name={self.name}, time={val}')
+            time_stop = time_start + time_to_run
+            while time.time() < time_stop:
+                for _ in range(time_step):
+                    _ = model(inputs)
+                n += time_step
+            time_stop = time.time()
+            val = (time_stop - time_start) / n
+            print(f'= avg keras name={self.name}, time={val}, n={n}')
         return pred
 
     def run_test(self, model, input_dict, rtol=1e-2, atol=1e-4, input_signature=None,
@@ -96,8 +108,11 @@ class TestTransformers(unittest.TestCase):
         if not large:
             model_path = model_path + ".onnx"
         print("= convert")
+        time_start = time.time()
         _, _ = tf2onnx.convert.from_keras(model, input_signature=input_signature,
                                           opset=13, large_model=large, output_path=model_path)
+        time_stop = time.time()
+        print(f"= convertsion took {time_stop - time_start}")
 
         if large:
             # need to unpack the zip for run_onnxruntime()
@@ -163,18 +178,45 @@ class TestTransformers(unittest.TestCase):
 
     ## FUNNEL
 
-    def _test_TFFunnelSquad(self, size, large=False):
+    def _test_TFFunnel(self, size, large=False):
         from transformers import FunnelTokenizer, TFFunnelForQuestionAnswering
         tokenizer = FunnelTokenizer.from_pretrained(size)
         model = TFFunnelForQuestionAnswering.from_pretrained(size)
         question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
         input_dict = tokenizer(question, text, return_tensors='tf')
-        spec, input_dict = self.spec_and_pad(input_dict, max_length=model.config.max_length)
+        spec, input_dict = self.spec_and_pad(input_dict, 128)
         outputs = ["start_logits", "end_logits"]
         self.run_test(model, input_dict, input_signature=spec, outputs=outputs, rtol=1e-5)
 
-    def test_TFFunnelSquadSmall(self):
-        self._test_TFFunnelSquad("funnel-transformer/small")
+    def test_TFFunnelSmall(self):
+        self._test_TFFunnel("funnel-transformer/small")
+
+    def test_TFFunnelSmallBase(self):
+        self._test_TFFunnel("funnel-transformer/small-base")
+ 
+    def test_TFFunnelMedium(self):
+        self._test_TFFunnel("funnel-transformer/medium")
+
+    def test_TFFunnelMediumBase(self):
+        self._test_TFFunnel("funnel-transformer/medium-base")
+
+    def test_TFFunnelIntermediate(self):
+        self._test_TFFunnel("funnel-transformer/intermediate")
+
+    def test_TFFunnelIntermediateBase(self):
+        self._test_TFFunnel("funnel-transformer/intermediate-base")
+
+    def test_TFFunnelLarge(self):
+        self._test_TFFunnel("funnel-transformer/large")
+
+    def test_TFFunnelLargeBase(self):
+        self._test_TFFunnel("funnel-transformer/large-base")
+
+    def test_TFFunnelXLarge(self):
+        self._test_TFFunnel("funnel-transformer/xlarge")
+
+    def test_TFFunnelXLargeBase(self):
+        self._test_TFFunnel("funnel-transformer/xlarge-base")
 
     ## T5
 
@@ -352,12 +394,15 @@ class TestTransformers(unittest.TestCase):
         tokenizer = BartTokenizer.from_pretrained(size)
         model = TFBartModel.from_pretrained(size)
         input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
-        spec, input_dict = self.spec_and_pad(input_dict, max_length=model.config.max_length)
+        spec, input_dict = self.spec_and_pad(input_dict, max_length=128)
         outputs = ["last_hidden_state"]
         self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
 
     def test_TFBartBase(self):
         self._test_TFBart("facebook/bart-base", large=True)
+
+    def test_TFBartLarge(self):
+        self._test_TFBart("facebook/bart-large", large=True)
 
     def test_TFBartLargeCnn(self):
         self._test_TFBart("facebook/bart-large-cnn", large=True)
