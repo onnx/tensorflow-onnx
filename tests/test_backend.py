@@ -765,6 +765,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
     @check_tf_min_version("2.0")
+    @skip_tflite("TFlite adds ops that obscure pattern")
+    @allow_missing_shapes("Rewriting makes some shapes known")
+    def test_conv2d_dilations_rewriter_unknown_shape(self):
+        x_shape = [2, 32, 16, 3]
+        x_val = make_xval(x_shape)
+        def func():
+            x = tf_placeholder(tf.float32, [2, None, None, 3], name=_TFINPUT)
+            t = tf.keras.layers.Conv2D(filters=768, kernel_size=3, dilation_rate=3, padding="VALID")
+            t.build(x_shape)
+            y = t.call(x)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2,
+                            as_session=True, premade_placeholders=True,
+                            graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("2.0")
     def test_conv3d_dilations_rewriter(self):
         x_shape = [2, 32, 16, 8, 3]
         x_val = make_xval(x_shape)
@@ -787,6 +803,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(y, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @skip_tf2("Uses tf.layers")
+    def test_conv1d_tf1_dilations_rewriter_unknown_shape(self):
+        x_shape = [2, 32, 3]
+        x_val = make_xval(x_shape)
+        def func():
+            x = tf_placeholder(tf.float32, [2, None, 3], name=_TFINPUT)
+            y = tf.layers.conv1d(x, filters=768, kernel_size=3, dilation_rate=3, padding="VALID", name="conv1")
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2,
+                            as_session=True, premade_placeholders=True,
+                            graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
     def test_lrn_default(self):
         x_shape = [1, 3, 4, 3]
