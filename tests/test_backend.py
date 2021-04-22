@@ -730,6 +730,64 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             process_args={"inputs_as_nchw": [_INPUT]},
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
 
+    @skip_tflite("TFlite adds ops that obscure pattern")
+    @check_tf_min_version("2.0")
+    def test_conv1d_dilations_rewriter(self):
+        x_shape = [2, 32, 3]
+        x_val = make_xval(x_shape)
+        for p in ['SAME', 'VALID']:
+            def func(x):
+                t = tf.keras.layers.Conv1D(filters=768, kernel_size=3, dilation_rate=3, padding=p)
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("2.0")
+    def test_conv2d_dilations_rewriter(self):
+        x_shape = [2, 32, 16, 3]
+        x_val = make_xval(x_shape)
+        for p in ['SAME', 'VALID']:
+            def func(x):
+                t = tf.keras.layers.Conv2D(filters=768, kernel_size=3, dilation_rate=3, padding=p)
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+            def func(x):
+                t = tf.keras.layers.DepthwiseConv2D(kernel_size=3, dilation_rate=3, padding=p)
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("2.0")
+    def test_conv3d_dilations_rewriter(self):
+        x_shape = [2, 32, 16, 8, 3]
+        x_val = make_xval(x_shape)
+        for p in ['SAME', 'VALID']:
+            def func(x):
+                t = tf.keras.layers.Conv3D(filters=768, kernel_size=3, dilation_rate=3, padding=p)
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @skip_tf2("Uses tf.layers")
+    def test_conv1d_tf1_dilations_rewriter(self):
+        x_shape = [2, 32, 3]
+        x_val = make_xval(x_shape)
+        for p in ['SAME', 'VALID']:
+            def func(x):
+                y = tf.layers.conv1d(x, filters=768, kernel_size=3, dilation_rate=3, padding=p, name="conv1")
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
     def test_lrn_default(self):
         x_shape = [1, 3, 4, 3]
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
