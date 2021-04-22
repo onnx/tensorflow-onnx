@@ -82,7 +82,7 @@ class GraphBuilder(object):
             return node
         return node.output[0]
 
-    def make_reduce_sum(self, kwargs, name=None, shapes=None, dtypes=None):
+    def make_reduce_sum(self, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
         """
         ReduceSum changes its schema at opset 13: it treats some axes as dynamic input
         kwargs: key could be ["data", "axes", "keepdims", "noop_with_empty_axes", "outputs"].
@@ -115,7 +115,8 @@ class GraphBuilder(object):
         attr = new_attr
 
         return self.graph.make_node(op_type="ReduceSum", inputs=inputs, attr=attr, name=name,
-                                    outputs=outputs, shapes=shapes, dtypes=dtypes).output[0]
+                                    outputs=outputs, shapes=shapes, dtypes=dtypes,
+                                    op_name_scope=op_name_scope).output[0]
 
     def make_squeeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False, op_name_scope=None):
         """
