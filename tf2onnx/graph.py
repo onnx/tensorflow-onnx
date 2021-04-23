@@ -868,6 +868,12 @@ class Graph(object):
         for name in node.input:
             self._register_input_name(name, node)
 
+    def is_const(self, output):
+        return self.get_node_by_output(output).is_const()
+
+    def get_tensor_value(self, output, as_list=True):
+        return self.get_node_by_output(output).get_tensor_value(as_list)
+
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
         utils.make_sure(new_name not in self._nodes_by_name, "node %s not unique ", new_name)
