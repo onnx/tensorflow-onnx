@@ -1,6 +1,8 @@
-"""
-@brief      test log(time=6s)
-"""
+# SPDX-License-Identifier: Apache-2.0
+
+
+"""Unit Tests for einsum decomposition."""
+
 import unittest
 import io
 from contextlib import redirect_stdout
