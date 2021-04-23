@@ -53,8 +53,8 @@ from tf2onnx.graph import ExternalTensorStorage
 logger = logging.getLogger("run_pretrained")
 
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
-PERFITER = 1000
-
+PERF_STEP = 10
+PERF_TIME = 10
 
 def get_img(shape, path, dtype, should_scale=True):
     """Get image as input."""
@@ -292,10 +292,15 @@ class Test(object):
         result = sess.run(self.output_names, feed_dict=feed_dict)
         if self.perf:
             logger.info("Running TF perf")
+            n = 0
             start = time.time()
-            for _ in range(PERFITER):
-                _ = sess.run(self.output_names, feed_dict=feed_dict)
-            self.tf_runtime = time.time() - start
+            stop = start + PERF_TIME
+            while time.time() < stop:
+                for _ in range(PERF_STEP):
+                    _ = sess.run(self.output_names, feed_dict=feed_dict)
+                n += PERF_STEP
+            self.tf_runtime = 1000 * (time.time() - start) / n
+            logger.info("TF perf {:.2f}ms/inference, n={}".format(self.tf_runtime, n))
         return result
 
     def to_onnx(self, tf_graph, opset=None, extra_opset=None, shape_override=None, input_names=None,
@@ -311,18 +316,6 @@ class Test(object):
                                 const_node_values=const_node_values, initialized_tables=initialized_tables,
                                 tflite_path=tflite_path, dequantize=self.dequantize,
                                 tensors_to_rename=tensors_to_rename)
-
-    def run_caffe2(self, name, model_proto, inputs):
-        """Run test again caffe2 backend."""
-        import caffe2.python.onnx.backend
-        prepared_backend = caffe2.python.onnx.backend.prepare(model_proto)
-        results = prepared_backend.run(inputs)
-        if self.perf:
-            start = time.time()
-            for _ in range(PERFITER):
-                _ = prepared_backend.run(inputs)
-            self.onnx_runtime = time.time() - start
-        return results
 
     def run_onnxruntime(self, name, model_proto, inputs, outputs, external_tensor_storage=None):
         """Run test against onnxruntime backend."""
@@ -340,10 +333,15 @@ class Test(object):
             m = rt.InferenceSession(model_path)
         results = m.run(outputs, inputs)
         if self.perf:
+            n = 0
             start = time.time()
-            for _ in range(PERFITER):
-                _ = m.run(outputs, inputs)
-            self.onnx_runtime = time.time() - start
+            stop = start + PERF_TIME
+            while time.time() < stop:
+                for _ in range(PERF_STEP):
+                    _ = m.run(outputs, inputs)
+                n += PERF_STEP
+            self.onnx_runtime = 1000 * (time.time() - start) / n
+            logger.info("ORT perf {:.2f}ms/inference, n={}".format(self.onnx_runtime, n))
         return results
 
     @staticmethod
@@ -357,8 +355,7 @@ class Test(object):
             utils.save_onnx_zip(model_path, model_proto, external_tensor_storage)
         logger.info("Created %s", model_path)
 
-    def run_test(self, name, backend="caffe2", onnx_file=None, opset=None, extra_opset=None,
-                 perf=None, fold_const=None):
+    def run_test(self, name, backend="onnxruntime", onnx_file=None, opset=None, extra_opset=None, perf=None):
         """Run complete test against backend."""
         self.perf = perf
 
@@ -422,10 +419,15 @@ class Test(object):
             tf_results = run_tflite()
             if self.perf:
                 logger.info("Running TFLite perf")
+                n = 0
                 start = time.time()
-                for _ in range(PERFITER):
-                    _ = run_tflite()
-                self.tf_runtime = time.time() - start
+                stop = start + PERF_TIME
+                while time.time() < stop:
+                    for _ in range(PERF_STEP):
+                        _ = run_tflite()
+                    n += PERF_STEP
+                self.tf_runtime = 1000 * (time.time() - start) / n
+                logger.info("TFLite perf {:.2f}ms/inference, n={}".format(self.tf_runtime, n))
             logger.info("TFLite OK")
 
         if not self.run_tf_frozen:
@@ -444,10 +446,15 @@ class Test(object):
             tf_results = [tf_res.numpy() for tf_res in tf_results]
             if self.perf:
                 logger.info("Running TF perf")
+                n = 0
                 start = time.time()
-                for _ in range(PERFITER):
-                    _ = concrete_func(**inputs)
-                self.tf_runtime = time.time() - start
+                stop = start + PERF_TIME
+                while time.time() < stop:
+                    for _ in range(PERF_STEP):
+                        _ = concrete_func(**inputs)
+                    n += PERF_STEP
+                self.tf_runtime = 1000 * (time.time() - start) / n
+                logger.info("TF perf {:.2f}ms/inference, n={}".format(self.tf_runtime, n))
             logger.info("TensorFlow OK")
 
         shape_override = {}
@@ -533,9 +540,7 @@ class Test(object):
 
         try:
             onnx_results = None
-            if backend == "caffe2":
-                onnx_results = self.run_caffe2(name, model_proto, inputs)
-            elif backend == "onnxruntime":
+            if backend == "onnxruntime":
                 if to_rename is None:
                     struc_outputs = self.output_names
                 else:
@@ -614,7 +619,7 @@ def get_args():
     parser.add_argument("--tests", help="tests to run")
     parser.add_argument("--target", default="", help="target platform")
     parser.add_argument("--backend", default="onnxruntime",
-                        choices=["caffe2", "onnxruntime"], help="backend to use")
+                        choices=["onnxruntime"], help="backend to use")
     parser.add_argument("--opset", type=int, default=None, help="opset to use")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
@@ -625,9 +630,6 @@ def get_args():
     parser.add_argument("--list", help="list tests", action="store_true")
     parser.add_argument("--onnx-file", help="create onnx file in directory")
     parser.add_argument("--perf", help="capture performance numbers")
-    parser.add_argument("--perfiter", type=int, default=PERFITER, help="number of inferences for perf testing")
-    parser.add_argument("--fold_const", help="enable tf constant_folding transformation before conversion",
-                        action="store_true")
     parser.add_argument("--include-disabled", help="include disabled tests", action="store_true")
     args = parser.parse_args()
 
@@ -699,7 +701,6 @@ def load_tests_from_yaml(path):
 
 
 def main():
-    global PERFITER
     args = get_args()
     logging.basicConfig(level=logging.get_verbosity_level(args.verbose))
     if args.debug:
@@ -718,7 +719,6 @@ def main():
 
     failed = 0
     count = 0
-    PERFITER = args.perfiter
     for test in test_keys:
         logger.info("===================================")
 
@@ -749,8 +749,7 @@ def main():
         try:
             logger.info("Running %s", test)
             ret = t.run_test(test, backend=args.backend, onnx_file=args.onnx_file,
-                             opset=args.opset, extra_opset=args.extra_opset, perf=args.perf,
-                             fold_const=args.fold_const)
+                             opset=args.opset, extra_opset=args.extra_opset, perf=args.perf)
         except Exception:
             logger.error("Failed to run %s", test, exc_info=1)
             ret = None
@@ -770,7 +769,7 @@ def main():
                 t = tests[test]
                 if t.perf:
                     # Report perf in ms per inference
-                    f.write("{},{},{}\n".format(test, t.tf_runtime * 1000 / PERFITER, t.onnx_runtime * 1000 / PERFITER))
+                    f.write("{},{},{}\n".format(test, t.tf_runtime, t.onnx_runtime))
     return failed
 
 
