@@ -2540,6 +2540,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
         self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "Slice")
+    @skip_tflite("not supported in tflite")
+    def test_strided_slice_only_ellipsis(self):
+        def func1(x):
+            x_ = x[...]
+            return tf.identity(x_, name=_TFOUTPUT)
+        shape = [1, 8, 64]
+        x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(7, "batchnorm")
     def test_fused_batchnorm(self):
         x_shape = [1, 28, 28, 2]
