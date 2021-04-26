@@ -273,8 +273,7 @@ def main():
 
 def tensor_names_from_structed(concrete_func, input_names, output_names):
     tensors_to_rename = {}
-    args, kwargs = concrete_func.structured_input_signature
-    structured_inputs = [t.name for t in args if isinstance(t, tf.TensorSpec)] + sorted(kwargs.keys())
+    structured_inputs = [t.name for t in tf.nest.flatten(concrete_func.structured_input_signature)]
     tensors_to_rename.update(zip(input_names, structured_inputs))
     if isinstance(concrete_func.structured_outputs, dict):
         for k, v in concrete_func.structured_outputs.items():
@@ -306,17 +305,17 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     if LooseVersion(tf.__version__) < "2.0":
         raise NotImplementedError("from_keras requires tf-2.0 or newer")
 
-    if not input_signature:
-        raise ValueError("from_keras requires input_signature")
-
     from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
 
     # let tensorflow do the checking if model is a valid model
     function = _saving_utils.trace_model_call(model, input_signature)
-    concrete_func = function.get_concrete_function(*input_signature)
+    concrete_func = function.get_concrete_function()
 
+    # These inputs will be removed during freezing (includes resources, etc.)
+    graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
+    captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
     input_names = [input_tensor.name for input_tensor in concrete_func.inputs
-                   if input_tensor.dtype != tf.dtypes.resource]
+                   if input_tensor.name not in captured_inputs]
     output_names = [output_tensor.name for output_tensor in concrete_func.outputs
                     if output_tensor.dtype != tf.dtypes.resource]
 
