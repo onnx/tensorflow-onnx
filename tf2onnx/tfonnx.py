@@ -522,12 +522,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     check_io(input_names, output_names, output_shapes)
 
-    rename_tensors_in_nodes(onnx_nodes)
-    input_names = rename_tensors_in_list(input_names)
-    output_names = rename_tensors_in_list(output_names)
-    output_shapes = rename_tensors_in_dict(output_shapes)
-    dtypes = rename_tensors_in_dict(dtypes)
-    inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
+    if not is_subgraph:
+        rename_tensors_in_nodes(onnx_nodes)
+        input_names = rename_tensors_in_list(input_names)
+        output_names = rename_tensors_in_list(output_names)
+        output_shapes = rename_tensors_in_dict(output_shapes)
+        dtypes = rename_tensors_in_dict(dtypes)
+        inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, input_names, output_names, is_subgraph)
     g = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                              output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt)
