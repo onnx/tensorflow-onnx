@@ -407,6 +407,85 @@ class TestTransformers(unittest.TestCase):
     def test_TFBartLargeCnn(self):
         self._test_TFBart("facebook/bart-large-cnn", large=True)
 
+    # ELECTRA
+
+    def _test_Electra(self, size, large=False):
+        from transformers import ElectraTokenizer, TFElectraModel
+        tokenizer = ElectraTokenizer.from_pretrained(size)
+        model = TFElectraModel.from_pretrained(size)
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
+        outputs = ["last_hidden_state"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFElectraSmall(self):
+        self._test_Electra("google/electra-small-discriminator", large=True)
+
+    def _test_ElectraForPreTraining(self, size, large=False):
+        from transformers import ElectraTokenizer, TFElectraForPreTraining
+        tokenizer = ElectraTokenizer.from_pretrained(size)
+        model = TFElectraForPreTraining.from_pretrained(size)
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
+        outputs = ["logits"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFElectraForPreTrainingSmall(self):
+        self._test_ElectraForPreTraining("google/electra-small-discriminator", large=True)
+
+    def _test_ElectraForMaskedLM(self, size, large=False):
+        from transformers import ElectraTokenizer, TFElectraForMaskedLM
+        tokenizer = ElectraTokenizer.from_pretrained(size)
+        model = TFElectraForMaskedLM.from_pretrained(size)
+        input_dict = tokenizer("The capital of France is [MASK].", return_tensors="tf")
+        input_dict["labels"] = tokenizer("The capital of France is Paris.", return_tensors="tf")["input_ids"]
+        spec, input_dict = self.spec_and_pad(input_dict)
+        outputs = ["logits"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFElectraForMaskedLMSmall(self):
+        self._test_ElectraForMaskedLM("google/electra-small-discriminator", large=True)
+
+    def _test_ElectraForSequenceClassification(self, size, large=False):
+        from transformers import ElectraTokenizer, TFElectraForSequenceClassification
+        tokenizer = ElectraTokenizer.from_pretrained(size)
+        model = TFElectraForSequenceClassification.from_pretrained(size)
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        input_dict["labels"] = tf.reshape(tf.constant(1), (-1, 1)) # Batch size 1
+        spec, input_dict = self.spec_and_pad(input_dict)
+        outputs = ["logits"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFElectraForSequenceClassificationSmall(self):
+        self._test_ElectraForSequenceClassification("google/electra-small-discriminator", large=True)
+
+    def _test_ElectraForTokenClassification(self, size, large=False):
+        from transformers import ElectraTokenizer, TFElectraForTokenClassification
+        tokenizer = ElectraTokenizer.from_pretrained(size)
+        model = TFElectraForTokenClassification.from_pretrained(size)
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        # input_ids = input_dict["input_ids"]
+        # input_dict["labels"] = tf.reshape(tf.constant([1] * tf.size(input_ids).numpy()), (-1, tf.size(input_ids))) # Batch size 1
+        spec, input_dict = self.spec_and_pad(input_dict, max_length=128)
+        outputs = ["logits"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFElectraForTokenClassificationSmall(self):
+        self._test_ElectraForTokenClassification("google/electra-small-discriminator", large=True)
+
+    def _test_ElectraForQuestionAnswering(self, size, large=False):
+        from transformers import ElectraTokenizer, TFElectraForQuestionAnswering
+        tokenizer = ElectraTokenizer.from_pretrained(size)
+        model = TFElectraForQuestionAnswering.from_pretrained(size)
+        question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
+        input_dict = tokenizer(question, text, return_tensors='tf')
+        spec, input_dict = self.spec_and_pad(input_dict, max_length=128)
+        outputs = ["start_logits", "end_logits"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFElectraForQuestionAnsweringSmall(self):
+        self._test_ElectraForQuestionAnswering("google/electra-small-discriminator", large=True)
+
 
 if __name__ == "__main__":
     unittest.main()
