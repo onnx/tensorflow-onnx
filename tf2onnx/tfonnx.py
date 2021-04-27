@@ -511,8 +511,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         for func in ordered_func:
             f_inputs_names = [t.name for t in func.inputs]
             f_output_names = [t.name for t in func.outputs]
-            f_inputs_names = rename_tensors_in_list(f_inputs_names)
-            f_output_names = rename_tensors_in_list(f_output_names)
             fg = process_tf_graph(func, continue_on_error, False, target, opset,
                                   custom_op_handlers, custom_rewriter,
                                   extra_opset, shape_override, inputs_as_nchw,
