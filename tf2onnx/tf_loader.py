@@ -138,15 +138,39 @@ def convert_variables_to_constants_large_model(func):
     return frozen_graph_def
 
 
+def fix_freezing_errors(graph_def):
+    assign_var_ops = []
+    for i in reversed(range(len(graph_def.node))):
+        if graph_def.node[i].op == "AssignVariableOp":
+            assign_var_ops.append(graph_def.node.pop(i).name)
+            logger.warning("Removed AssignVariableOp %s", assign_var_ops[-1])
+    names_to_remove = set(assign_var_ops)
+    for n in graph_def.node:
+        for i in reversed(range(len(n.input))):
+            if n.input[i].startswith("^") and n.input[i][1:] in names_to_remove:
+                n.input.pop(i)
+    return graph_def
+
+
 def from_function(func, input_names, output_names, large_model=False):
     if large_model:
         return convert_variables_to_constants_large_model(func)
 
-    if get_tf_version() < LooseVersion("2.2"):
-        frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
+    try:
+        if get_tf_version() < LooseVersion("2.2"):
+            frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
+        else:
+            frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
+    except ValueError as e:
+        if "incompatible with expected resource" in str(e):
+            frozen_func = convert_variables_to_constants_large_model(func)
+            logger.warning("TF freezing failed. Attempting to fix freezing errors.")
+            graph_def = fix_freezing_errors(frozen_func)
+        else:
+            raise e
     else:
-        frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
-    graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
+        graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
+
     # output_names = [i.name for i in frozen_func.outputs]
     with tf.Graph().as_default() as tf_graph:
         with tf_session(graph=tf_graph) as sess:
