@@ -1962,6 +1962,44 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
 
+    def test_random_std_normal(self):
+        def func():
+            shape = tf.constant([20, 10, 50], name="shape")
+            x_ = tf.random.normal(shape)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        results = self.run_backend(g, g.outputs, {})[0]
+        self.assertTrue(-0.1 < np.mean(results) < 0.1)
+        self.assertTrue(0.9 < np.std(results) < 1.1)
+
+    def test_randomnormal(self):
+        def func():
+            shape = tf.constant([20, 10, 50], name="shape")
+            x_ = tf.random.normal(shape, mean=10, stddev=2)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        results = self.run_backend(g, g.outputs, {})[0]
+        self.assertTrue(9.8 < np.mean(results) < 10.2)
+        self.assertTrue(1.9 < np.std(results) < 2.1)
+
+    @check_opset_min_version(9, "RandomNormalLike")
+    def test_randomnormal_unknown_shape(self):
+        shape_val = np.array([20, 10, 50], np.int32)
+        def func(shape):
+            x_ = tf.random.normal(shape)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        feed_dict = {_INPUT: shape_val}
+        g = self._run_test_case(func, [_OUTPUT], feed_dict, check_value=False, check_shape=True)
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
+        results = self.run_backend(g, g.outputs, feed_dict)[0]
+        self.assertTrue(-0.1 < np.mean(results) < 0.1)
+        self.assertTrue(0.9 < np.std(results) < 1.1)
+
     def test_randomuniform_int(self):
         def func():
             shape = tf.constant([100, 3], name="shape")
