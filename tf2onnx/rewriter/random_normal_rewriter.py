@@ -39,6 +39,11 @@ def rewrite_random_normal(g, ops):
             else:
                 # pattern 2
                 mean = 0.0
+            input2 = match.get_op('input2')
+            if input2.type == 'Mul':
+                scale = input2.inputs[1].get_tensor_value()
+            else:
+                scale = 1.0
             dtype = g.get_dtype(output.output[0])
             op_name = utils.make_name("RandomNormal")
             out_name = utils.port_name(op_name)
@@ -46,16 +51,17 @@ def rewrite_random_normal(g, ops):
             rn_op = match.get_op('input1')
             seed = float(rn_op.get_attr('seed2').i)
 
+            attr = {"mean": mean, "scale": scale, "dtype": dtype, "seed": seed}
             if rn_op.inputs[0].type == "Shape":
                 shape_node = rn_op.inputs[0]
                 new_node = g.make_node("RandomNormalLike", [shape_node.input[0]], outputs=[out_name], name=op_name,
-                                       attr={"mean": mean, "scale": 1.0, "dtype": dtype, "seed": seed})
+                                       attr=attr)
             else:
                 shape = g.get_shape(output.output[0])
                 if shape is None or -1 in shape:
                     continue
-                new_node = g.make_node("RandomNormal", [], outputs=[out_name], name=op_name,
-                                       attr={"shape": shape, "mean": mean, "scale": 1.0, "dtype": dtype, "seed": seed})
+                attr['shape'] = shape
+                new_node = g.make_node("RandomNormal", [], outputs=[out_name], name=op_name, attr=attr)
 
             g.replace_all_inputs(output.output[0], new_node.output[0], ops=ops)
             g.safe_remove_nodes(match.get_nodes())
