@@ -374,7 +374,7 @@ class MatMul:
                 tmp = perm[-1]
                 perm[-1] = perm[-2]
                 perm[-2] = tmp
-                ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm)
+                ctx.insert_new_node_on_input(node, "Transpose", node.input[0], input_index=0, perm=perm)
 
         if transpose_b != 0:
             shape = ctx.get_shape(node.input[1])
@@ -383,7 +383,7 @@ class MatMul:
                 tmp = perm[-1]
                 perm[-1] = perm[-2]
                 perm[-2] = tmp
-                ctx.insert_new_node_on_input(node, "Transpose", node.input[1], perm=perm)
+                ctx.insert_new_node_on_input(node, "Transpose", node.input[1], input_index=1, perm=perm)
 
         unsupported = ["a_is_sparse", "b_is_sparse"]
         for i in unsupported:
