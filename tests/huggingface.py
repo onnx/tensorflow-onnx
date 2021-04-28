@@ -465,7 +465,7 @@ class TestTransformers(unittest.TestCase):
         model = TFElectraForTokenClassification.from_pretrained(size)
         input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
         # input_ids = input_dict["input_ids"]
-        # input_dict["labels"] = tf.reshape(tf.constant([1] * tf.size(input_ids).numpy()), (-1, tf.size(input_ids))) # Batch size 1
+        # input_dict["labels"] = tf.reshape(tf.constant([1] * tf.size(input_ids).numpy()), (-1, tf.size(input_ids)))
         spec, input_dict = self.spec_and_pad(input_dict, max_length=128)
         outputs = ["logits"]
         self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
