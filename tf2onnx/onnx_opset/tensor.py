@@ -1845,7 +1845,7 @@ class NonMaxSuppression:
 @tf_op(["CombinedNonMaxSuppression"])
 class CombinedNonMaxSuppression:
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def version_12(cls, ctx, node, **kwargs):
         # boxes.shape = [batch_size, num_boxes, (1 OR num_classes), 4]
         # scores.shape = [batch_size, num_boxes, num_classes]
         boxes, scores, max_per_class, max_total_size, iou_threshold, score_threshold = node.input
