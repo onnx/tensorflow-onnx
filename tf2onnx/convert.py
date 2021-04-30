@@ -273,7 +273,8 @@ def main():
 
 def tensor_names_from_structed(concrete_func, input_names, output_names):
     tensors_to_rename = {}
-    structured_inputs = [t.name for t in tf.nest.flatten(concrete_func.structured_input_signature)]
+    flat_structured_inp = tf.nest.flatten(concrete_func.structured_input_signature)
+    structured_inputs = [t.name for t in flat_structured_inp if isinstance(t, tf.TensorSpec)]
     tensors_to_rename.update(zip(input_names, structured_inputs))
     if isinstance(concrete_func.structured_outputs, dict):
         for k, v in concrete_func.structured_outputs.items():
