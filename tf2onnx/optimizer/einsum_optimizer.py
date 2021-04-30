@@ -100,20 +100,6 @@ class EinsumSubOp:
             self.__class__.__name__, self.name, inps, kw)
         return m
 
-    def dot_label(self):
-        """
-        Displays some informations useful to understand the operator.
-        """
-        if self.name == "matmul":
-            ndim = self.kwargs['ndim']
-            axes = self.kwargs['axes']
-            left = self.kwargs['left']
-            right = self.kwargs['right']
-            eq = _numpy_extended_dot_equation(ndim, ndim, axes, left, right)
-            eq = eq.replace(">", "\\\\>")
-            return "~" + eq
-        return None
-
     def _check_arg_(self, name, typ, empty=False):
         if name not in self.kwargs:
             raise RuntimeError(
@@ -619,7 +605,7 @@ class EinsumSubOp:
         :return: output
         """
         if opset is None:
-            opset = get_opset_number_from_onnx()
+            opset = onnx_opset_version()
         method_name = "_to_onnx_%s" % self.name
         meth = getattr(self, method_name, None)
         if meth is None:
@@ -769,21 +755,16 @@ class GraphEinsumSubOp:
                 lab = "input %d\\\\n%s\\\\n%s%s" % (
                     v, letters, str(self.metadata['mat0'][v]), dup)
                 sk = v
-                extended_lab = ""
             else:
                 lab = "%s\\\\n%s" % (v.name, d2s(v.kwargs))
                 sk = id(v)
-                extended_lab = v.dot_label()
-                if extended_lab:
-                    extended_lab = "\\\\n" + extended_lab
 
             if sk in self._mark and isinstance(self._mark[sk], int):
                 la = self._mark[sk]
                 lab = lab.replace("\\\\n", " - I%d\\\\n" % la)
-                s = ('%d [label="%s%s" style=filled '
-                     'fillcolor=red];' % (k, lab, extended_lab))
+                s = ('%d [label="%s" style=filled fillcolor=red];' % (k, lab))
             else:
-                s = '%d [label="%s%s"];' % (k, lab, extended_lab)
+                s = '%d [label="%s"];' % (k, lab)
             rows.append(s)
             if not hasattr(v, 'inputs'):
                 continue
