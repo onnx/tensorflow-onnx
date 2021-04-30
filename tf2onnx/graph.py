@@ -868,6 +868,12 @@ class Graph(object):
         for name in node.input:
             self._register_input_name(name, node)
 
+    def is_const(self, output):
+        return self.get_node_by_output(output).is_const()
+
+    def get_tensor_value(self, output, as_list=True):
+        return self.get_node_by_output(output).get_tensor_value(as_list)
+
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
         utils.make_sure(new_name not in self._nodes_by_name, "node %s not unique ", new_name)
@@ -1252,7 +1258,7 @@ class Graph(object):
 
         # don't remove output from parent since others might depend on it
 
-    def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, **kwargs):
+    def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, input_index=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             node: we want to replace the input for this node
@@ -1273,10 +1279,13 @@ class Graph(object):
             input_name = [input_name]
 
         new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
-        for i, n in enumerate(node.input):
-            if n == input_name[0]:
-                self.replace_input(node, node.input[i], new_output, i)
-                break
+        if input_index is None:
+            for i, n in enumerate(node.input):
+                if n == input_name[0]:
+                    self.replace_input(node, node.input[i], new_output, i)
+                    break
+        else:
+            self.replace_input(node, node.input[input_index], new_output, input_index)
         return new_node
 
     def insert_node_on_output(self, node, output_name=None):

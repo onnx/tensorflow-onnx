@@ -765,6 +765,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
     @check_tf_min_version("2.0")
+    @skip_tflite("TFlite adds ops that obscure pattern")
+    @allow_missing_shapes("Rewriting makes some shapes known")
+    def test_conv2d_dilations_rewriter_unknown_shape(self):
+        x_shape = [2, 32, 16, 3]
+        x_val = make_xval(x_shape)
+        def func():
+            x = tf_placeholder(tf.float32, [2, None, None, 3], name=_TFINPUT)
+            t = tf.keras.layers.Conv2D(filters=768, kernel_size=3, dilation_rate=3, padding="VALID")
+            t.build(x_shape)
+            y = t.call(x)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2,
+                            as_session=True, premade_placeholders=True,
+                            graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("2.0")
     def test_conv3d_dilations_rewriter(self):
         x_shape = [2, 32, 16, 8, 3]
         x_val = make_xval(x_shape)
@@ -787,6 +803,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(y, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @skip_tf2("Uses tf.layers")
+    def test_conv1d_tf1_dilations_rewriter_unknown_shape(self):
+        x_shape = [2, 32, 3]
+        x_val = make_xval(x_shape)
+        def func():
+            x = tf_placeholder(tf.float32, [2, None, 3], name=_TFINPUT)
+            y = tf.layers.conv1d(x, filters=768, kernel_size=3, dilation_rate=3, padding="VALID", name="conv1")
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2,
+                            as_session=True, premade_placeholders=True,
+                            graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
     def test_lrn_default(self):
         x_shape = [1, 3, 4, 3]
@@ -1934,6 +1962,44 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
 
+    def test_random_std_normal(self):
+        def func():
+            shape = tf.constant([20, 10, 50], name="shape")
+            x_ = tf.random.normal(shape)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        results = self.run_backend(g, g.outputs, {})[0]
+        self.assertTrue(-0.1 < np.mean(results) < 0.1)
+        self.assertTrue(0.9 < np.std(results) < 1.1)
+
+    def test_randomnormal(self):
+        def func():
+            shape = tf.constant([20, 10, 50], name="shape")
+            x_ = tf.random.normal(shape, mean=10, stddev=2)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
+        results = self.run_backend(g, g.outputs, {})[0]
+        self.assertTrue(9.8 < np.mean(results) < 10.2)
+        self.assertTrue(1.9 < np.std(results) < 2.1)
+
+    @check_opset_min_version(9, "RandomNormalLike")
+    def test_randomnormal_unknown_shape(self):
+        shape_val = np.array([20, 10, 50], np.int32)
+        def func(shape):
+            x_ = tf.random.normal(shape)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        feed_dict = {_INPUT: shape_val}
+        g = self._run_test_case(func, [_OUTPUT], feed_dict, check_value=False, check_shape=True)
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
+        results = self.run_backend(g, g.outputs, feed_dict)[0]
+        self.assertTrue(-0.1 < np.mean(results) < 0.1)
+        self.assertTrue(0.9 < np.std(results) < 1.1)
+
     def test_randomuniform_int(self):
         def func():
             shape = tf.constant([100, 3], name="shape")
@@ -2511,6 +2577,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         shape = [2, 3, 4, 5]
         x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
         self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    @skip_tflite("not supported in tflite")
+    def test_strided_slice_only_ellipsis(self):
+        def func1(x):
+            x_ = x[...]
+            return tf.identity(x_, name=_TFOUTPUT)
+        shape = [1, 8, 64]
+        x_val = np.arange(np.prod(shape)).astype("float32").reshape(shape)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(7, "batchnorm")
     def test_fused_batchnorm(self):
