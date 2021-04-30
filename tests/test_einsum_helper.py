@@ -13,6 +13,7 @@ from tf2onnx.optimizer.einsum_optimizer import (
 
 
 class TestEinsum(unittest.TestCase):
+    "unit tests for einsum optimizer"
 
     def assert_raise(self, fct, exc_type):
         try:
@@ -30,6 +31,7 @@ class TestEinsum(unittest.TestCase):
         return res[0]
 
     def test_analyse_einsum_equation(self):
+        "unit test"
         self.assert_raise(lambda: analyse_einsum_equation("abc"), NotImplementedError)
         self.assert_raise(lambda: analyse_einsum_equation("abc0,ch->ah"), ValueError)
         self.assert_raise(lambda: analyse_einsum_equation("abc,ch->a0"), ValueError)
@@ -284,6 +286,7 @@ class TestEinsum(unittest.TestCase):
 
     @unittest.skipIf(True, reason="diagonal still not converted into ONNX")
     def test_np_test_random_cases_difficult(self):
+        "unit test"
         self.optimize_compare('db,bc,cfc->d')
         self.optimize_compare('cac,c,h->h')
         self.optimize_compare('cfc,c,h->h')

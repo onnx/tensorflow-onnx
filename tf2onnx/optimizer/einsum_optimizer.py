@@ -116,7 +116,6 @@ class EinsumSubOp:
         """
         Checks input or output is valid.
         """
-        pass
 
     def _compute_output_row_id(self, row, row2=None, ab=False):
         if ab:
@@ -126,6 +125,7 @@ class EinsumSubOp:
         self._check_row_(row)
 
     def _compute_output_row_transpose(self, row, row2=None, ab=False):
+        "compute shape after operator transpose"
         if ab:
             self._compute_output_row_transpose(row2)
             return
@@ -193,6 +193,7 @@ class EinsumSubOp:
         self._check_row_(row)
 
     def _compute_output_row_diagonal(self, row, row2=None, ab=False):
+        "compute shape after operator diagonal"
         if ab:
             raise RuntimeError("ab option not allowed.")
         self._check_row_(row, True)
@@ -202,13 +203,13 @@ class EinsumSubOp:
             for ch in choices:
                 if ch != choice:
                     to_remove.append(ch)
-            for i in range(len(row)):
+            for i in range(len(row)):  # pylint: disable=C0200
                 if row[i] in choices:
                     if row[i] != choice:
                         row[i] = choice
         to_remove.sort()
         for r in to_remove:
-            for i in range(len(row)):
+            for i in range(len(row)):  # pylint: disable=C0200
                 if row[i] == r:
                     raise RuntimeError(
                         "Unexpected result r=%r row=%r to_remove=%r "
@@ -219,6 +220,7 @@ class EinsumSubOp:
         self._check_row_(row)
 
     def _compute_output_row_matmul(self, row, row2=None, ab=False):
+        "compute shape after operator matmul"
         if not ab:
             raise RuntimeError("ab must be True.")
         self._check_row_(row, True)
@@ -236,6 +238,7 @@ class EinsumSubOp:
         self._check_row_(row2)
 
     def _compute_output_row_batch_dot(self, row, row2=None, ab=False):
+        "compute shape after operator batch_dot"
         if not ab:
             raise RuntimeError("ab must be True.")
         self._check_row_(row, True)
@@ -327,7 +330,7 @@ class EinsumSubOp:
                 "Opset (%r) must be >= %r for operator %r."
                 "" % (opset, limit, self.name))
 
-    def _to_onnx_id(self, names, opset):
+    def _to_onnx_id(self, names, opset):  # pylint: disable=W0613
         self._check_inputs_(1)
         inp = self.inputs[0]
         name = self._get_data(names, inp)
@@ -357,7 +360,7 @@ class EinsumSubOp:
         yield helper.make_node(
             'Squeeze', [name, name_axes], [self._onnx_name()])
 
-    def _to_onnx_transpose(self, names, opset):
+    def _to_onnx_transpose(self, names, opset):  # pylint: disable=W0613
         self._check_inputs_(1)
         inp = self.inputs[0]
         name = self._get_data(names, inp)
@@ -377,7 +380,7 @@ class EinsumSubOp:
         yield helper.make_node(
             'ReduceSum', [name, name_axes], [self._onnx_name()], keepdims=1)
 
-    def _to_onnx_mul(self, data, **kwargs):
+    def _to_onnx_mul(self, data, opset):
         self._check_inputs_(2)
         inp1 = self.inputs[0]
         inp2 = self.inputs[1]
@@ -386,6 +389,7 @@ class EinsumSubOp:
         yield helper.make_node('Mul', [m1, m2], [self._onnx_name()])
 
     def _to_onnx_batch_dot(self, names, opset):
+        "convert the graph to dot"
         self._check_inputs_(2)
         self._check_onnx_opset_(opset, 13)
         inp1, inp2 = self.inputs[:2]
@@ -867,7 +871,7 @@ class GraphEinsumSubOp:
             output, proto_type, [None for i in range(lengths[-1])])
 
         # nodes
-        names = {i: name for i, name in enumerate(inputs)}
+        names = dict(enumerate(inputs))
         nodes = []
         inits = []
         for op in self:
@@ -1091,8 +1095,7 @@ def _apply_einsum_matmul(fd, op1, op2, axes, left, right, ndim,
     elif len(axes) == 0 and len(set(left) & set(right)) == 0:
         yield EinsumSubOp(fd, 'mul', op1, op2)
 
-    elif (len(set(axes) & set(left)) == 0 and
-            len(set(axes) & set(right)) == 0):
+    elif len(set(axes) & set(left)) == 0 and len(set(axes) & set(right)) == 0:
 
         # No intersection between axes and right: matrix multiplication
         all_axes = set(left) | set(right) | set(axes)
@@ -1104,16 +1107,14 @@ def _apply_einsum_matmul(fd, op1, op2, axes, left, right, ndim,
 
         # ReduceSum*
         has_dim = set(i for i in range(len(row1)) if row1[i] >= 0)
-        right_no_left = (set(right) & has_dim) - \
-            (set(right) & (set(left) | set(axes)))
+        right_no_left = (set(right) & has_dim) - (set(right) & (set(left) | set(axes)))
         if right_no_left:
             op1 = EinsumSubOp(fd, 'reduce_sum_mm', op1, op2,
                               axes=tuple(sorted(right_no_left)))
             yield op1
 
         has_dim = set(i for i in range(len(row2)) if row2[i] >= 0)
-        left_no_right = (set(left) & has_dim) - \
-            (set(left) & (set(right) | set(axes)))
+        left_no_right = (set(left) & has_dim) - (set(left) & (set(right) | set(axes)))
         if left_no_right:
             op2 = EinsumSubOp(fd, 'reduce_sum', op2,
                               axes=tuple(sorted(left_no_right)))
