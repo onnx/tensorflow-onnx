@@ -118,6 +118,7 @@ class EinsumSubOp:
         """
 
     def _compute_output_row_id(self, row, row2=None, ab=False):
+        "compute shape after operator id"
         if ab:
             raise RuntimeError("ab option not allowed.")
         self._check_row_(row, True)
@@ -142,6 +143,7 @@ class EinsumSubOp:
         self._check_row_(row)
 
     def _compute_output_row_transpose_mm(self, row, row2=None, ab=False):
+        "compute shape after operator transpose"
         if not ab:
             raise RuntimeError("ab must be True.")
         self._check_row_(row, True)
@@ -150,6 +152,7 @@ class EinsumSubOp:
         self._compute_output_row_transpose(row, row2=None)
 
     def _compute_output_row_expand_dims(self, row, row2=None, ab=False):
+        "compute shape after operator expand_dims"
         if ab:
             raise RuntimeError("ab option not allowed.")
         self._check_row_(row, True)
@@ -167,6 +170,7 @@ class EinsumSubOp:
         self._check_row_(row)
 
     def _compute_output_row_reduce_sum(self, row, row2=None, ab=False):
+        "compute shape after operator reduce_sum"
         if ab:
             raise RuntimeError("ab option not allowed.")
         self._check_row_(row, True)
@@ -176,6 +180,7 @@ class EinsumSubOp:
         self._check_row_(row)
 
     def _compute_output_row_reduce_sum_mm(self, row, row2=None, ab=False):
+        "compute shape after operator reduce_sum"
         if not ab:
             raise RuntimeError("ab must be true.")
         self._check_row_(row2, True)
@@ -184,6 +189,7 @@ class EinsumSubOp:
         self._compute_output_row_reduce_sum(row, row2=None)
 
     def _compute_output_row_squeeze(self, row, row2=None, ab=False):
+        "compute shape after operator squeeze"
         if ab:
             raise RuntimeError("ab option not allowed.")
         self._check_row_(row, True)
@@ -258,6 +264,7 @@ class EinsumSubOp:
         self._check_row_(row2)
 
     def _compute_output_row_mul(self, row, row2=None, ab=False):
+        "compute shape after operator mul"
         if not ab:
             raise RuntimeError("ab must be True.")
         self._check_row_(row, True)
@@ -382,6 +389,7 @@ class EinsumSubOp:
 
     def _to_onnx_mul(self, data, opset):
         self._check_inputs_(2)
+        self._check_onnx_opset_(opset, 1)
         inp1 = self.inputs[0]
         inp2 = self.inputs[1]
         m1 = self._get_data(data, inp1)
