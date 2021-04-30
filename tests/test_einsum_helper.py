@@ -4,8 +4,6 @@
 """Unit Tests for einsum decomposition."""
 
 import unittest
-import io
-from contextlib import redirect_stdout
 import itertools
 import numpy as np
 from numpy.testing import assert_almost_equal
@@ -16,10 +14,10 @@ from tf2onnx.optimizer.einsum_optimizer import (
 
 class TestEinsum(unittest.TestCase):
 
-    def assertRaise(self, fct, exc_type):
+    def assert_raise(self, fct, exc_type):
         try:
             fct()
-        except exc_type as e:
+        except exc_type:
             return
         raise AssertionError("%r was not raised." % exc_type)
 
@@ -32,21 +30,15 @@ class TestEinsum(unittest.TestCase):
         return res[0]
 
     def test_analyse_einsum_equation(self):
-        self.assertRaise(lambda: analyse_einsum_equation("abc"),
-                         NotImplementedError)
-        self.assertRaise(lambda: analyse_einsum_equation("abc0,ch->ah"),
-                         ValueError)
-        self.assertRaise(lambda: analyse_einsum_equation("abc,ch->a0"),
-                         ValueError)
+        self.assert_raise(lambda: analyse_einsum_equation("abc"), NotImplementedError)
+        self.assert_raise(lambda: analyse_einsum_equation("abc0,ch->ah"), ValueError)
+        self.assert_raise(lambda: analyse_einsum_equation("abc,ch->a0"), ValueError)
         res = analyse_einsum_equation("abc,ch->ah")
         self.assertEqual(len(res), 4)
         letters, mat, lengths, duplicates = res
         self.assertEqual(letters, "abch")
         assert_almost_equal(lengths, np.array([3, 2, 2]))
-        assert_almost_equal(
-            mat, np.array([[0, 1, 2, -1],
-                              [-1, -1, 0, 1],
-                              [0, -1, -1, 1]]))
+        assert_almost_equal(mat, np.array([[0, 1, 2, -1], [-1, -1, 0, 1], [0, -1, -1, 1]]))
         self.assertEqual(duplicates, [None, None, None])
 
     def test_analyse_einsum_equation_duplicates(self):
@@ -55,13 +47,8 @@ class TestEinsum(unittest.TestCase):
         letters, mat, lengths, duplicates = res
         self.assertEqual(letters, "ac")
         assert_almost_equal(lengths, np.array([3, 2, 2]))
-        self.assertEqual(duplicates, [{'a': [0, 1], 'c': [2]},
-                                      None,
-                                      {'a': [0, 1]}])
-        assert_almost_equal(
-            mat, np.array([[1, 2],
-                              [1, 0],
-                              [1, -1]]))
+        self.assertEqual(duplicates, [{'a': [0, 1], 'c': [2]}, None, {'a': [0, 1]}])
+        assert_almost_equal(mat, np.array([[1, 2], [1, 0], [1, -1]]))
 
     def test_decompose_einsum_equation(self):
         m1 = np.arange(0, 8).astype(np.float32).reshape((2, 2, 2))
@@ -110,10 +97,10 @@ class TestEinsum(unittest.TestCase):
         assert_almost_equal(exp, res)
 
     def test_einsum_sub_op(self):
-        self.assertRaise(lambda: EinsumSubOp(2, "er", (2, 2)), ValueError)
-        self.assertRaise(lambda: EinsumSubOp(2, "expand_dims"), RuntimeError)
-        self.assertRaise(lambda: EinsumSubOp(2, "matmul", (2, 2)), RuntimeError)
-        self.assertRaise(lambda: EinsumSubOp(2, "id", (2, 2)), TypeError)
+        self.assert_raise(lambda: EinsumSubOp(2, "er", (2, 2)), ValueError)
+        self.assert_raise(lambda: EinsumSubOp(2, "expand_dims"), RuntimeError)
+        self.assert_raise(lambda: EinsumSubOp(2, "matmul", (2, 2)), RuntimeError)
+        self.assert_raise(lambda: EinsumSubOp(2, "id", (2, 2)), TypeError)
 
     def common_test_case_2(self, equation):
         m1 = np.arange(2 * 2 * 2).reshape((2, 2, 2)) + 10
@@ -124,10 +111,11 @@ class TestEinsum(unittest.TestCase):
         res = self.apply_einsum_sequence(seq, m1, m2)
         assert_almost_equal(exp, res)
 
-    def test_case_2_A(self):
+    def test_case_2_a(self):
         self.common_test_case_2('abc,cd->abc')
 
     def test_many_2(self):
+        "test many equation with 2 inputs"
         m1 = np.arange(2 * 2 * 2).reshape((2, 2, 2)) + 10
         m2 = np.arange(4).reshape((2, 2)) + 100
 
@@ -158,6 +146,7 @@ class TestEinsum(unittest.TestCase):
                 assert_almost_equal(exp, res)
 
     def test_many_3(self):
+        "test many equation with 3 inputs"
         m1 = np.arange(2 * 2 * 2).reshape((2, 2, 2)) + 10
         m2 = np.arange(4).reshape((2, 2)) + 100
         m3 = np.arange(8).reshape((2, 2, 2)) + 1000
@@ -192,6 +181,7 @@ class TestEinsum(unittest.TestCase):
     # core/tests/test_einsum.py.
 
     def optimize_compare(self, equation, operands=None):
+        "Compares numpy einsum and ONNX."
         with self.subTest(equation=equation):
             if operands is not None:
                 inputs = operands
@@ -292,7 +282,7 @@ class TestEinsum(unittest.TestCase):
         self.optimize_compare('abc,bac')
         self.optimize_compare('abc,cba')
 
-    @unittest.skipIf(True, "diagonal still not converted into ONNX")
+    @unittest.skipIf(True, reason="diagonal still not converted into ONNX")
     def test_np_test_random_cases_difficult(self):
         self.optimize_compare('db,bc,cfc->d')
         self.optimize_compare('cac,c,h->h')

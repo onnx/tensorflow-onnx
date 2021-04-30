@@ -69,6 +69,7 @@ class EinsumSubOp:
         self._check_()
 
     def _check_(self):
+        "Checks for wrong values."
         if self.name == 'transpose':
             self._check_arg_('perm', tuple)
             perm = self.kwargs['perm']
@@ -201,13 +202,13 @@ class EinsumSubOp:
             for ch in choices:
                 if ch != choice:
                     to_remove.append(ch)
-            for i in range(len(row)):  # pylint: disable=C0200
+            for i in range(len(row)):
                 if row[i] in choices:
                     if row[i] != choice:
                         row[i] = choice
         to_remove.sort()
         for r in to_remove:
-            for i in range(len(row)):  # pylint: disable=C0200
+            for i in range(len(row)):
                 if row[i] == r:
                     raise RuntimeError(
                         "Unexpected result r=%r row=%r to_remove=%r "
@@ -301,6 +302,7 @@ class EinsumSubOp:
                 "%d." % (m.shape, self.full_dim))
 
     def _get_data(self, data, key):
+        "Returns data[key] or raises an exception if not here."
         if isinstance(key, int):
             if key not in data:
                 raise RuntimeError(
@@ -325,13 +327,13 @@ class EinsumSubOp:
                 "Opset (%r) must be >= %r for operator %r."
                 "" % (opset, limit, self.name))
 
-    def _to_onnx_id(self, names, opset, **kwargs):
+    def _to_onnx_id(self, names, opset):
         self._check_inputs_(1)
         inp = self.inputs[0]
         name = self._get_data(names, inp)
         yield helper.make_node('Identity', [name], [self._onnx_name()])
 
-    def _to_onnx_expand_dims(self, names, opset, **kwargs):
+    def _to_onnx_expand_dims(self, names, opset):
         self._check_inputs_(1)
         self._check_onnx_opset_(opset, 11)
         inp = self.inputs[0]
@@ -343,7 +345,7 @@ class EinsumSubOp:
         yield helper.make_node(
             'Unsqueeze', [name, name_axes], [self._onnx_name()])
 
-    def _to_onnx_squeeze(self, names, opset, **kwargs):
+    def _to_onnx_squeeze(self, names, opset):
         self._check_inputs_(1)
         self._check_onnx_opset_(opset, 11)
         inp = self.inputs[0]
@@ -355,7 +357,7 @@ class EinsumSubOp:
         yield helper.make_node(
             'Squeeze', [name, name_axes], [self._onnx_name()])
 
-    def _to_onnx_transpose(self, names, opset, **kwargs):
+    def _to_onnx_transpose(self, names, opset):
         self._check_inputs_(1)
         inp = self.inputs[0]
         name = self._get_data(names, inp)
@@ -363,7 +365,7 @@ class EinsumSubOp:
         yield helper.make_node(
             'Transpose', [name], [self._onnx_name()], perm=perm)
 
-    def _to_onnx_reduce_sum(self, names, opset, **kwargs):
+    def _to_onnx_reduce_sum(self, names, opset):
         self._check_inputs_(1)
         self._check_onnx_opset_(opset, 11)
         inp = self.inputs[0]
@@ -383,10 +385,10 @@ class EinsumSubOp:
         m2 = self._get_data(data, inp2)
         yield helper.make_node('Mul', [m1, m2], [self._onnx_name()])
 
-    def _to_onnx_batch_dot(self, names, opset, **kwargs):  # pylint: disable=R0914
+    def _to_onnx_batch_dot(self, names, opset):
         self._check_inputs_(2)
         self._check_onnx_opset_(opset, 13)
-        inp1, inp2 = self.inputs[:2]  # pylint: disable=W0632
+        inp1, inp2 = self.inputs[:2]
         name1 = self._get_data(names, inp1)
         name2 = self._get_data(names, inp2)
 
@@ -780,7 +782,7 @@ class GraphEinsumSubOp:
         Cleans nodes with unused outputs.
         """
 
-        def iteration(it):
+        def iteration(_):
             # Walks through all nodes.
             is_used = {}
             for node in self._ops:
@@ -1189,7 +1191,7 @@ def _decompose_einsum_equation(equation, *shapes, op_matmul='batch_dot'):
     rows = np.full((2, mat.shape[1]), -1)
     graph = GraphEinsumSubOp(letters, mat, lengths, duplicates)
     fd = mat.shape[1]
-    for i, sh in enumerate(shapes):
+    for i in range(len(shapes)):
         graph.append(i)
 
         # Input matrix aligned to the same dimensions.
