@@ -273,7 +273,8 @@ def main():
 
 def tensor_names_from_structed(concrete_func, input_names, output_names):
     tensors_to_rename = {}
-    structured_inputs = [t.name for t in tf.nest.flatten(concrete_func.structured_input_signature)]
+    flat_structured_inp = tf.nest.flatten(concrete_func.structured_input_signature)
+    structured_inputs = [t.name for t in flat_structured_inp if isinstance(t, tf.TensorSpec)]
     tensors_to_rename.update(zip(input_names, structured_inputs))
     if isinstance(concrete_func.structured_outputs, dict):
         for k, v in concrete_func.structured_outputs.items():
@@ -334,11 +335,14 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
 
     initialized_tables = None
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
+    reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
 
     if model.output_names:
         # model.output_names is an optional field of Keras models indicating output order. It is None if unused.
-        reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
         output_names = [reverse_lookup[out] for out in model.output_names]
+    elif isinstance(concrete_func.structured_outputs, dict):
+        # Other models specify output order using the key order of structured_outputs
+        output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
 
     with tf.device("/cpu:0"):
         frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names, large_model=large_model)
