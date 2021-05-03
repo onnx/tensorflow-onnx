@@ -851,6 +851,139 @@ class GraphEinsumSubOp:
                 op.name = op.name[:-3]
                 op.inputs = op.inputs[:1]
 
+    def _get_forward_nodes(self):
+        """
+        Returns the forward nodes.
+        """
+        forward = {}
+        for op in self:
+            if isinstance(op, int):
+                continue
+            for inp in op.inputs:
+                key = inp if isinstance(inp, int) else id(inp)
+                if key in forward:
+                    forward[key].append(op)
+                else:
+                    forward[key] = [op]
+        return forward
+
+    def _replace_node_sequence(self, added, deleted):
+        """
+        Removes a sequence of nodes. The method does not check
+        that the graph remains consistent.
+        """
+        forward = self._get_forward_nodes()
+        key = id(deleted[-1])
+        if key not in forward:
+            raise RuntimeError(
+                "key %r missing in all forward nodes." % key)
+
+        # deletion
+        mark_input = None
+        for d in deleted:
+            del self._nodes[id(d)]
+            if id(d) in self._mark:
+                del self._mark[id(d)]
+                dels = []
+                for k, v in self._mark.items():
+                    if id(v) == id(d):
+                        mark_input = k
+                        dels.append(k)
+                if len(dels) != 1:
+                    raise RuntimeError(
+                        "Input %d has more than one marked operator "
+                        "(%r)." % (id(d), dels))
+                del self._mark[dels[0]]
+
+        dels = set(id(o) for o in deleted)
+        rem = []
+        for i, op in enumerate(self._ops):
+            if id(op) in dels:
+                rem.append(i)
+        if len(rem) != len(deleted):
+            raise RuntimeError(
+                "Mismatched length %r, %r, len=%r." % (
+                    rem, dels, len(deleted)))
+        for i in reversed(rem):
+            del self._ops[i]
+        self.last_add_op = None
+
+        # insertion
+        if added is not None:
+            self._ops.insert(rem[0], added)
+            self._nodes[id(added)] = added
+            for op in forward[key]:
+                new_inputs = list(op.inputs)
+                for i in range(len(op.inputs)):
+                    if id(op.inputs[i]) == key:
+                        new_inputs[i] = added
+                op.inputs = tuple(new_inputs)
+            if mark_input is not None:
+                self.mark(mark_input, added)
+        else:
+            inps = deleted[0].inputs
+            if len(inps) != 1:
+                raise RuntimeError(
+                    "More than one input. Call another method.")
+            inp = inps[0]
+            for op in forward[key]:
+                new_inputs = list(op.inputs)
+                for i in range(len(op.inputs)):
+                    if id(op.inputs[i]) == key:
+                        new_inputs[i] = inp
+                op.inputs = tuple(new_inputs)
+            if mark_input is not None:
+                self.mark(mark_input, inp)
+
+    def remove_duplicate_transpose(self, verbose=False):
+        """
+        Removes consecutive transpose by merging them.
+        :param verbose: display intermediate information
+        """
+        modif = 1
+        while modif > 0:
+            modif = 0
+            candidates = []
+            forward = self._get_forward_nodes()
+            for op in self:
+                if op.name == "transpose":
+                    inp = op.inputs[0]
+                    if (isinstance(inp, EinsumSubOp) and
+                            inp.name == 'transpose' and
+                            len(forward[id(inp)]) == 1):
+                        candidates.append(op)
+
+            if len(candidates) > 0:
+                modif = 1
+                # Not efficient to take the first one and to
+                # start again but the graph should not be too big.
+                cand = candidates[0]
+                op2 = cand
+                op1 = cand.inputs[0]
+                perm1 = op1.kwargs['perm']
+                perm2 = op2.kwargs['perm']
+                if len(perm1) != len(perm2):
+                    raise RuntimeError(
+                        "Transposition should have the same length "
+                        "%r, %r." % (perm1, perm2))
+                perm = list(perm1)
+                for i in range(len(perm)):  # pylint: disable=C0200
+                    perm[i] = perm1[perm2[i]]
+                if list(range(len(perm))) == perm:
+                    # identity, everything needs to be removed
+                    new_op = None
+                else:
+                    new_op = op2.__class__(
+                        op2.full_dim, op2.name, op1.inputs[0],
+                        perm=tuple(perm))
+                self._replace_node_sequence(new_op, [op1, op2])
+                if verbose:
+                    print("[GraphEinsumSubOp.remove_duplicate_transpose] remove nodes %r"
+                          " - id=%d,%d + %d perm1=%r perm2=%r -> perm=%r" % (
+                              op2.name, id(op1), id(op2),
+                              id(new_op) if new_op is not None else -1,
+                              perm1, perm2, perm))
+
     def to_onnx(self, output, *inputs, proto_type=None, opset=None, **kwargs):
         """
         Converts the graph into ONNX.
@@ -860,7 +993,9 @@ class GraphEinsumSubOp:
         :param proto_type: type used for all operators
         :param opset: desired opset, None for the last one
         :param kwargs: additional parameter to use when building
-            the ONNX graph
+            the ONNX graph, list of supported parameters:
+            *name*, *ir_version*, *producer_name*,
+            *producer_version*, *initializer*
         :return: ONNX graph
         """
         # inputs
@@ -882,6 +1017,8 @@ class GraphEinsumSubOp:
         names = dict(enumerate(inputs))
         nodes = []
         inits = []
+        if "initializer" in kwargs:
+            inits.extend(kwargs['initializer'])
         for op in self:
             for onx_node in op.to_onnx(names, opset=opset):
                 if hasattr(onx_node, 'output'):
@@ -990,6 +1127,103 @@ def decompose_einsum_equation(equation, *shapes):
     Available operations: *expand_dims*, *transpose*, *matmul*, *reduce_sum*,
     *id*, *squeeze*, *diagonal*. It analyses an equation and produces a graph
     where node are instance of class *EinsumSubOp*.
+    One example:
+
+    ::
+
+        import onnx
+        from onnx import helper, numpy_helper
+        import numpy as np
+        import onnxruntime as ort
+        import time
+        from tf2onnx.optimizer.einsum_optimizer import decompose_einsum_equation
+
+
+        def make_model(op_name, initializer, attrs):
+            model = helper.make_model(
+                opset_imports=[helper.make_operatorsetid('', 13)],
+                ir_version=6,
+                producer_name='einsum_test',
+                producer_version='1.6.0',
+                graph=helper.make_graph(
+                    name='einsum_test',
+                    inputs=[helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, None)],
+                    outputs=[helper.make_tensor_value_info("Z", onnx.TensorProto.FLOAT, None)],
+                    initializer=[numpy_helper.from_array(initializer, name="Y")],
+                    nodes=[
+                        helper.make_node(op_name, ["X", "Y"], ["Z"], **attrs)
+                    ]
+                )
+            )
+            return model
+
+
+        def make_model2(equation, initializer):
+            initializer=[numpy_helper.from_array(initializer, name="Y")]
+            seq = decompose_einsum_equation(equation)
+            onx = seq.to_onnx("Z", "X", "Y", initializer=initializer)
+            return onx
+            
+
+        def main():
+            inp1 = np.random.uniform(size=[100, 20, 768]).astype(np.float32)
+            inp2 = np.random.uniform(size=[768, 32000]).astype(np.float32)
+            model_matmul = make_model("MatMul", inp2, {})
+            sess_matmul = ort.InferenceSession(model_matmul.SerializeToString())
+            
+            start = time.time()
+            for i in range(20):
+                res_matmul = sess_matmul.run(["Z"], {"X": inp1})[0]
+            print("matmul time:", time.time() - start)
+
+            # Both equations are equivalent but they don't produce
+            # the same graph as matrices are aligned the same dimensions
+            # ordered by alphabetical order. In the second equation,
+            # the last two dimensions are switched.
+            for eq in ['bid,nd->bin', 'bdn,in->bdi']:
+                eq_name = eq.replace(",", "_").replace("->", "_")
+                
+                model_einsum = make_model("Einsum", inp2.transpose(), {'equation': eq})
+                with open("model_einsum_%s.onnx" % eq_name, "wb") as f:
+                    f.write(model_einsum.SerializeToString())
+                
+                model_decompose = make_model2(eq, inp2.transpose())
+                with open("model_decompose_%s.onnx" % eq_name, "wb") as f:
+                    f.write(model_decompose.SerializeToString())
+
+                sess_einsum = ort.InferenceSession(model_einsum.SerializeToString())
+                sess_dec = ort.InferenceSession(model_decompose.SerializeToString())
+
+                start = time.time()
+                for i in range(20):
+                    res_einsum = sess_einsum.run(["Z"], {"X": inp1})[0]
+                print("%s einsum time:" % eq, time.time() - start)
+                np.testing.assert_allclose(res_matmul, res_einsum, 1e-5)
+                print("Results match")
+
+                start = time.time()
+                for i in range(20):
+                    res_dec = sess_dec.run(["Z"], {"X": inp1})[0]
+                print("%s decompose time:" % eq, time.time() - start)
+                np.testing.assert_allclose(res_matmul, res_dec, 1e-5)
+                print("Results match")
+
+
+        main()
+
+    It produces the following output:
+
+    ::
+
+        matmul time: 20.827451944351196
+        bid,nd->bin einsum time: 22.50755500793457
+        Results match
+        bid,nd->bin decompose time: 21.672495365142822
+        Results match
+        bdn,in->bdi einsum time: 22.701029539108276
+        Results match
+        bdn,in->bdi decompose time: 20.90113353729248
+        Results match    
     """
     graph = _decompose_einsum_equation(
         equation, *shapes, op_matmul='batch_dot')
@@ -998,8 +1232,8 @@ def decompose_einsum_equation(equation, *shapes):
     graph.mark_last_node()
     graph.simplify_mm_nodes()
     graph.clean_unused_nodes()
+    graph.remove_duplicate_transpose()
     return graph
-
 
 
 def is_transpose_identity(perm):

@@ -11,6 +11,7 @@ from onnxruntime import InferenceSession
 from tf2onnx.optimizer.einsum_optimizer import (
     analyse_einsum_equation, decompose_einsum_equation, EinsumSubOp)
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import check_opset_min_version
 
 
 class TestEinsum(Tf2OnnxBackendTestBase):
@@ -53,6 +54,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         self.assertEqual(duplicates, [{'a': [0, 1], 'c': [2]}, None, {'a': [0, 1]}])
         assert_almost_equal(mat, np.array([[1, 2], [1, 0], [1, -1]]))
 
+    @check_opset_min_version(13, "Squeeze")
     def test_decompose_einsum_equation(self):
         m1 = np.arange(0, 8).astype(np.float32).reshape((2, 2, 2))
         m2 = np.arange(0, 4).astype(np.float32).reshape((2, 2))
@@ -64,6 +66,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         res = self.apply_einsum_sequence(seq, m1, m2)
         assert_almost_equal(exp, res)
 
+    @check_opset_min_version(13, "Squeeze")
     def test_decompose_einsum_equation_deep_case(self):
         m1 = np.arange(0, 16).astype(np.float32).reshape((2, 2, 2, 2))
         m2 = np.arange(0, 16).astype(np.float32).reshape((2, 2, 2, 2))
@@ -72,6 +75,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         res = self.apply_einsum_sequence(seq, m1, m2)
         assert_almost_equal(exp, res)
 
+    @check_opset_min_version(13, "Squeeze")
     def test_decompose_einsum_equation_onnx(self):
         m1 = np.arange(0, 24).astype(np.float32).reshape((2, 3, 4))
         m2 = np.arange(0, 20).astype(np.float32).reshape((4, 5))
@@ -80,6 +84,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         res = self.apply_einsum_sequence(seq, m1, m2)
         assert_almost_equal(exp, res)
 
+    @check_opset_min_version(13, "Squeeze")
     def test_decompose_einsum_equation_noshape(self):
         m1 = np.arange(0, 24).astype(np.float32).reshape((2, 3, 4))
         m2 = np.arange(0, 20).astype(np.float32).reshape((4, 5))
@@ -88,6 +93,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         res = self.apply_einsum_sequence(seq, m1, m2)
         assert_almost_equal(exp, res)
 
+    @check_opset_min_version(13, "Squeeze")
     def test_decompose_einsum_equation_onnx2(self):
         m1 = np.arange(0, 24).astype(np.float32).reshape((2, 3, 4))
         m2 = np.arange(0, 20).astype(np.float32).reshape((4, 5))
@@ -114,9 +120,11 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         res = self.apply_einsum_sequence(seq, m1, m2)
         assert_almost_equal(exp, res)
 
+    @check_opset_min_version(13, "Squeeze")
     def test_case_2_a(self):
         self.common_test_case_2('abc,cd->abc')
 
+    @check_opset_min_version(13, "Squeeze")
     def test_many_2(self):
         "test many equation with 2 inputs"
         m1 = np.arange(2 * 2 * 2).reshape((2, 2, 2)) + 10
@@ -148,6 +156,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
                 exp = np.einsum(eq, m1, m2)
                 assert_almost_equal(exp, res)
 
+    @check_opset_min_version(13, "Squeeze")
     def test_many_3(self):
         "test many equation with 3 inputs"
         m1 = np.arange(2 * 2 * 2).reshape((2, 2, 2)) + 10
@@ -204,20 +213,24 @@ class TestEinsum(Tf2OnnxBackendTestBase):
             got = self.apply_einsum_sequence(seq, *inputs)
             assert_almost_equal(exp, got, decimal=5)
 
+    @check_opset_min_version(13, "Squeeze")
     def test_numpy_test_hadamard_like_products(self):
         self.optimize_compare('a,ab,abc->abc')
         self.optimize_compare('a,b,ab->ab')
 
+    @check_opset_min_version(13, "Squeeze")
     def test_np_test_np_test_collapse(self):
         self.optimize_compare('ab,ab,cd,cd->ac')
         self.optimize_compare('ab,ab,c->c')
         self.optimize_compare('ab,ab,cd,cd->cd')
 
+    @check_opset_min_version(13, "Squeeze")
     def test_np_test_index_transformations(self):
         self.optimize_compare('ea,fb,gc,hd,abcd->efgh')
         self.optimize_compare('ea,fb,abcd,gc,hd->efgh')
         self.optimize_compare('abcd,ea,fb,gc,hd->efgh')
 
+    @check_opset_min_version(13, "Squeeze")
     def test_np_test_expand(self):
         self.optimize_compare('ab,cd,ef->abcdef')
         self.optimize_compare('ab,cd,ef->acdf')
@@ -226,6 +239,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         self.optimize_compare('ab,bcd,cd->abcd')
         self.optimize_compare('ab,bcd,cd->abd')
 
+    @check_opset_min_version(13, "Squeeze")
     def test_np_test_edge_cases1(self):
         self.optimize_compare('efc,dbc,acf,fd->abe')
         self.optimize_compare(
@@ -234,6 +248,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         self.optimize_compare('bd,db,eac->ace')
         self.optimize_compare('ba,ac,da->bcd')
 
+    @check_opset_min_version(13, "Squeeze")
     def test_np_test_edge_cases2(self):
         self.optimize_compare(
             'eac->ace', operands=[np.arange(24).reshape((2, 3, 4))])
@@ -253,6 +268,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         b = np.einsum('bbcdc->d', a)
         assert_almost_equal(b, [12])
 
+    @check_opset_min_version(13, "Squeeze")
     def test_np_test_broadcasting_dot_cases1(self):
         a = np.random.rand(1, 5, 4)
         b = np.random.rand(4, 6)
@@ -263,6 +279,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         f = np.random.rand(7, 7)
         self.optimize_compare('abjk,kl,jl,ab->ab', operands=[e, b, c, f])
 
+    @check_opset_min_version(13, "Squeeze")
     def test_np_test_broadcasting_dot_cases2(self):
         f = np.arange(7 * 55).reshape(7, 11, 5)
         g = np.arange(30).reshape(2, 3, 5)
