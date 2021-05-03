@@ -1163,14 +1163,14 @@ def decompose_einsum_equation(equation, *shapes):
             seq = decompose_einsum_equation(equation)
             onx = seq.to_onnx("Z", "X", "Y", initializer=initializer)
             return onx
-            
+
 
         def main():
             inp1 = np.random.uniform(size=[100, 20, 768]).astype(np.float32)
             inp2 = np.random.uniform(size=[768, 32000]).astype(np.float32)
             model_matmul = make_model("MatMul", inp2, {})
             sess_matmul = ort.InferenceSession(model_matmul.SerializeToString())
-            
+
             start = time.time()
             for i in range(20):
                 res_matmul = sess_matmul.run(["Z"], {"X": inp1})[0]
@@ -1182,11 +1182,11 @@ def decompose_einsum_equation(equation, *shapes):
             # the last two dimensions are switched.
             for eq in ['bid,nd->bin', 'bdn,in->bdi']:
                 eq_name = eq.replace(",", "_").replace("->", "_")
-                
+
                 model_einsum = make_model("Einsum", inp2.transpose(), {'equation': eq})
                 with open("model_einsum_%s.onnx" % eq_name, "wb") as f:
                     f.write(model_einsum.SerializeToString())
-                
+
                 model_decompose = make_model2(eq, inp2.transpose())
                 with open("model_decompose_%s.onnx" % eq_name, "wb") as f:
                     f.write(model_decompose.SerializeToString())
@@ -1223,7 +1223,7 @@ def decompose_einsum_equation(equation, *shapes):
         bdn,in->bdi einsum time: 22.701029539108276
         Results match
         bdn,in->bdi decompose time: 20.90113353729248
-        Results match    
+        Results match
     """
     graph = _decompose_einsum_equation(
         equation, *shapes, op_matmul='batch_dot')

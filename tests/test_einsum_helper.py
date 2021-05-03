@@ -56,6 +56,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(13, "Squeeze")
     def test_decompose_einsum_equation(self):
+        "test decompose einsum"
         m1 = np.arange(0, 8).astype(np.float32).reshape((2, 2, 2))
         m2 = np.arange(0, 4).astype(np.float32).reshape((2, 2))
         exp = np.einsum("bac,ch->ah", m1, m2)
@@ -95,6 +96,7 @@ class TestEinsum(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(13, "Squeeze")
     def test_decompose_einsum_equation_onnx2(self):
+        "test bac,cd,def->ebc"
         m1 = np.arange(0, 24).astype(np.float32).reshape((2, 3, 4))
         m2 = np.arange(0, 20).astype(np.float32).reshape((4, 5))
         m3 = np.arange(0, 77 * 5).astype(np.float32).reshape((5, 7, 11))
