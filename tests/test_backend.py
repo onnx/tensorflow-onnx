@@ -1341,6 +1341,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_shape=True)
 
+    def test_reshape_reshape(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).reshape((2, 2))
+        def func(x):
+            shape = tf.constant([1, 4])
+            shape_2 = tf.constant([4, 1])
+            x_ = tf.reshape(x, shape)
+            x_ = tf.reshape(x_, shape_2)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val},
+                            graph_validator=lambda g: check_op_count(g, "Reshape", 1, disabled=False))
+
     @check_opset_min_version(6, "cast")
     def test_reshape_int(self):
         x_val = np.array([1, 2, 3, 4], dtype=np.int32).reshape((2, 2))
