@@ -10,9 +10,10 @@ from numpy.testing import assert_almost_equal
 from onnxruntime import InferenceSession
 from tf2onnx.optimizer.einsum_optimizer import (
     analyse_einsum_equation, decompose_einsum_equation, EinsumSubOp)
+from backend_test_base import Tf2OnnxBackendTestBase
 
 
-class TestEinsum(unittest.TestCase):
+class TestEinsum(Tf2OnnxBackendTestBase):
     "unit tests for einsum optimizer"
 
     def assert_raise(self, fct, exc_type):
@@ -24,7 +25,7 @@ class TestEinsum(unittest.TestCase):
 
     def apply_einsum_sequence(self, seq, *inputs):
         names = ["X%d" % i for i in range(len(inputs))]
-        onx = seq.to_onnx('Y', *names)
+        onx = seq.to_onnx('Y', *names, opset=self.config.opset)
         sess = InferenceSession(onx.SerializeToString())
         inps = {n: i.astype(np.float32) for n, i in zip(names, inputs)}
         res = sess.run(None, inps)
