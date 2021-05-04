@@ -2777,7 +2777,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, graph_validator=validate_graph)
 
     @check_tf_min_version("1.15")
-    @check_opset_min_version(10, "quantize_and_dequantize")
+    @check_opset_min_version(11, "ScatterND")
     def test_qdq_optimizer_scatter(self):
         x_val = np.array([10, 20, 30, 40], dtype=np.float32).reshape((4))
         y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
