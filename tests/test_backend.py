@@ -2725,6 +2725,71 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.15")
     @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_qdq_optimizer(self):
+        x_shape = [3, 3, 2]
+        x_val = np.arange(1, 1+np.prod(x_shape)).astype("float32").reshape(x_shape)
+        def func(x):
+            x_ = quantize_and_dequantize(x, 1.0, 6.0, signed_input=False, range_given=True)
+            x_ = tf.transpose(x_, [1, 2, 0])
+            x_ = tf.reshape(x_, tf.constant([9, 2]))
+            x_ = quantize_and_dequantize(x_, 1.0, 6.0, signed_input=False, range_given=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val},
+                                graph_validator=lambda g: check_op_count(g, "DequantizeLinear", 1, disabled=False))
+
+    @check_tf_min_version("1.15")
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_qdq_optimizer_split_concat(self):
+        x_shape = [7, 3, 5]
+        y_shape = [7, 2, 5]
+        x_val = np.arange(1, 1+np.prod(x_shape)).astype("float32").reshape(x_shape)
+        y_val = np.arange(1, 1+np.prod(y_shape)).astype("float32").reshape(y_shape)
+        def func(x, y):
+            x_ = quantize_and_dequantize(x, 1.0, 30.0, signed_input=False, range_given=True)
+            a, _, c = tf.unstack(x_, axis=1)
+            ac = tf.stack([a, c], axis=1)
+            y_ = quantize_and_dequantize(y, 1.0, 30.0, signed_input=False, range_given=True)
+            m = tf.matmul(ac, tf.transpose(y_, [0, 2, 1]))
+            m_ = m[2:, :, :]
+            m_ = quantize_and_dequantize(m_, 1.0, 30.0, signed_input=False, range_given=True)
+            return tf.identity(m_, name=_TFOUTPUT)
+        def validate_graph(g):
+            # MatMul should be wrapped in Dq/Q
+            for n in g.get_nodes():
+                if n.type == "MatMul":
+                    if not all(inp.type == "DequantizeLinear" for inp in n.inputs):
+                        return False
+                    if not all(c.type == "QuantizeLinear" for c in g.find_output_consumers(n.output[0])):
+                        return False
+            return True
+
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, graph_validator=validate_graph)
+
+    @check_tf_min_version("1.15")
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_qdq_optimizer_scatter(self):
+        x_val = np.array([10, 20, 30, 40], dtype=np.float32).reshape((4))
+        y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
+        z_val = np.array([8, 11], dtype=np.float32).reshape((2))
+
+        def func(x, y, z):
+            x_ = quantize_and_dequantize(x, 1.0, 30.0, signed_input=False, range_given=True)
+            z_ = quantize_and_dequantize(z, 1.0, 30.0, signed_input=False, range_given=True)
+            w = tf.tensor_scatter_nd_update(x_, y, z_)
+            w_ = quantize_and_dequantize(w, 1.0, 30.0, signed_input=False, range_given=True)
+            return tf.identity(w_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val},
+                            graph_validator=lambda g: check_op_count(g, "DequantizeLinear", 1, disabled=False))
+
+        def func(x, y, z):
+            x_ = quantize_and_dequantize(x, 1.0, 30.0, signed_input=False, range_given=True)
+            w = tf.tensor_scatter_nd_update(x_, y, z)
+            w_ = quantize_and_dequantize(w, 1.0, 30.0, signed_input=False, range_given=True)
+            return tf.identity(w_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_tf_min_version("1.15")
+    @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_dyn_range_unsigned_input(self):
         x_shape = [3, 3, 2]
         x_val = np.arange(1, 1+np.prod(x_shape)).astype("float32").reshape(x_shape) + 0.1
