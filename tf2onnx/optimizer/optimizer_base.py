@@ -17,6 +17,7 @@ class GraphOptimizerBase(object):
     def __init__(self):
         self._logger = logging.getLogger('.'.join(__name__.split('.')[:-1] + [self.__class__.__name__]))
         self._graph_been_opt = False
+        self.opt_iteration = 0
 
     @property
     def logger(self):
@@ -34,10 +35,11 @@ class GraphOptimizerBase(object):
     def graph_been_opt(self, value):
         self._graph_been_opt = value
 
-    def optimize(self, graph):
+    def optimize(self, graph, iteration):
         """ Optimize graph, return optimized graph. """
         before = graph.dump_node_statistics()
 
+        self.opt_iteration = iteration
         graph = self._optimize(graph)
         graph.update_proto()
         graph.delete_unused_nodes(graph.outputs)
