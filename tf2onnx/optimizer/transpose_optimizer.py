@@ -176,7 +176,8 @@ class TransposeOptimizer(GraphOptimizerBase):
                         # referencing already deleted elements
                         break
 
-                if is_useless_transpose(n):
+                # Make sure node wasn't already deleted in _handle_nhwc_tranpose
+                if graph.get_node_by_name(n.name) is not None and is_useless_transpose(n):
                     no_action = False
                     iteration_cnt += 1
                     self._remove_useless_tranpose(n)
