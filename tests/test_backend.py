@@ -991,7 +991,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x, y):
             x_ = tf.math.divide_no_nan(x, y)
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        # TFLite expresses infinity as a value > 1e38
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, mtol=1e38)
 
     @check_onnxruntime_incompatibility("Exp")
     def test_exp(self):
