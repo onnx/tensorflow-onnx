@@ -2,14 +2,14 @@
 
 
 """
-tf2onnx.tflite_rewriters.tfl_select_zero_mul_rewriter - TFLite has a pattern to remove NaN when multiplying by 0
+tf2onnx.tflite_rewriters.tfl_select_zero_rewriter - TFLite has a pattern to remove NaN when multiplying/dividing by 0
 """
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 
 # pylint: disable=missing-docstring,unused-argument
 
-def rewrite_tfl_select_zero_mul(g, ops):
+def rewrite_tfl_select_zero(g, ops):
     pattern0 = \
         OpTypePattern('TFL_SELECT_V2', name='select', inputs=[
             OpTypePattern('TFL_EQUAL', name='equal', inputs=[
@@ -17,7 +17,7 @@ def rewrite_tfl_select_zero_mul(g, ops):
                 OpTypePattern('*', name='term_eq'),
             ], allow_reorder=True),
             OpTypePattern('Const|ConstV2', name='const_select'),
-            OpTypePattern('TFL_MUL', name='mul', inputs=[
+            OpTypePattern('TFL_MUL|TFL_DIV', name='mul', inputs=[
                 OpTypePattern('*', name='term_mul1'),
                 OpTypePattern('*', name='term_mul2'),
             ]),

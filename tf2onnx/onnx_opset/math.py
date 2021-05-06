@@ -321,6 +321,18 @@ class Pow:
         pass
 
 
+@tf_op("DivNoNan")
+class DivNoNan:
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        node.type = "Div"
+        np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1]))
+        zero_const = ctx.make_const(utils.make_name("const_zero"), np.array(0, np_dtype)).output[0]
+        is_zero = ctx.make_node("Equal", [node.input[1], zero_const]).output[0]
+        where_node = ctx.make_node("Where", [is_zero, zero_const, node.output[0]])
+        ctx.insert_node_on_output(where_node, node.output[0])
+
+
 @tf_op("LRN")
 class LRN:
     @classmethod
