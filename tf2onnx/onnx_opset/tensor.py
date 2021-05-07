@@ -2584,6 +2584,63 @@ class RaggedGather:
         ctx.remove_node(node.name)
 
 
+@tf_op("RaggedTensorFromVariant")
+class RaggedTensorFromVariant:
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        inp = node.inputs[0]
+        if inp.is_while():
+            row_lengths = inp.ragged_scan_output_to_len.get(node.input[0])
+            utils.make_sure(row_lengths is not None, "Couldn't find lengths for %s node %s" % (node.type, node.name))
+            dense_values = ctx.make_node("ConcatFromSequence", [node.input[0]], attr={'axis': 0}).output[0]
+            const_zero = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.int64)).output[0]
+            const_zero_unsq = ctx.make_const(utils.make_name("const_zero"), np.array([0], np.int64)).output[0]
+            row_splits = ctx.make_node("CumSum", [row_lengths, const_zero]).output[0]
+            row_splits_w_zero = ctx.make_node("Concat", [const_zero_unsq, row_splits], attr={'axis': 0}).output[0]
+            idx_dtype = ctx.get_dtype(node.output[0])
+            if idx_dtype != TensorProto.INT64:
+                row_splits_w_zero = ctx.make_node("Cast", [row_splits_w_zero], attr={'to': idx_dtype}).output[0]
+            ctx.replace_all_inputs(node.output[0], row_splits_w_zero)
+            ctx.replace_all_inputs(node.output[1], dense_values)
+            ctx.remove_node(node.name)
+            return
+
+        utils.make_sure(inp.type == "Gather", "RaggedTensorFromVariant only supported after TensorListGetItem")
+        variant = inp.inputs[0]
+        err_msg = "RaggedTensorFromVariant only supported if variant is a graph input"
+        # Variant input will be found during loop conversion
+        utils.make_sure(variant.type == "Placeholder", err_msg)
+        ctx.ragged_variant_list_reads.append(node)
+
+
+@tf_op("RaggedTensorToVariant")
+class RaggedTensorToVariant:
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cons = ctx.find_output_consumers(node.output[0])
+        err_msg = "RaggedTensorToVariant only supported as input/output to loops"
+        utils.make_sure(len(cons) == 1, err_msg)
+        if cons[0].type == "TensorListFromTensor":
+            # Will be delt with in loop
+            cons = ctx.find_output_consumers(cons[0].output[0])
+            utils.make_sure(all(n.is_while() for n in cons), err_msg)
+            return
+        utils.make_sure(cons[0].type == "TensorListSetItem", err_msg)
+        tensor_set_item = cons[0]
+        list_output = tensor_set_item.output[0]
+        cons = ctx.find_output_consumers(list_output)
+        while len(cons) == 1 and cons[0].type == "Identity":
+            list_output = cons[0].output[0]
+            cons = ctx.find_output_consumers(list_output)
+        utils.make_sure(not cons, err_msg)
+        utils.make_sure(list_output in ctx.outputs, err_msg)
+        err_msg2 = "RaggedTensorToVariant within loop requires RAGGED_RANK=0"
+        err_msg3 = "RaggedTensorToVariant within loop requires batched_input=False"
+        utils.make_sure(node.get_attr_value("RAGGED_RANK") == 0, err_msg2)
+        utils.make_sure(not node.get_attr_value("batched_input"), err_msg3)
+        ctx.ragged_variant_list_writes.append((ctx.outputs.index(list_output), node))
+
+
 @tf_op("SparseReshape")
 class SparseReshape:
     @classmethod
