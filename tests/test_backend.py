@@ -983,6 +983,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "float equality")
+    def test_div_no_nan(self):
+        x_val = np.array([1.0, 2.0, -3.0, -4.0, 5.0, 0.0, float("nan"), float("-inf"), float("inf")], dtype=np.float32)
+        y_val = np.array([1.0, 0.5, 0.0, -4.0, 0.0, 0.0, 0.0, 2.0, 0.0], dtype=np.float32)
+        def func(x, y):
+            x_ = tf.math.divide_no_nan(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # TFLite expresses infinity as a value > 1e38
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, mtol=1e38)
+
     @check_onnxruntime_incompatibility("Exp")
     def test_exp(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
