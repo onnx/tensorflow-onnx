@@ -14,6 +14,7 @@ from __future__ import unicode_literals
 import argparse
 import os
 import re
+import shutil
 import sys
 import tarfile
 import tempfile
@@ -187,7 +188,8 @@ class Test(object):
                  check_only_shape=False, model_type="frozen", force_input_shape=False,
                  skip_tensorflow=False, opset_constraints=None, tf_min_version=None, tag=None,
                  skip_conversion=False, converted_model=None, signature_def=None, concrete_function=None,
-                 large_model=False, structured_outputs=None, run_tf_frozen=None, use_custom_ops=False):
+                 large_model=False, structured_outputs=None, run_tf_frozen=None, use_custom_ops=False,
+                 ort_profile=None, tf_profile=None):
         self.url = url
         self.input_func = input_func
         self.local = local
@@ -195,6 +197,8 @@ class Test(object):
         self.output_names = output_names
         self.disabled = disabled
         self.large_model = large_model
+        self.ort_profile = ort_profile
+        self.tf_profile = tf_profile
         self.use_custom_ops = use_custom_ops
         if run_tf_frozen is None:
             run_tf_frozen = not self.large_model
@@ -324,13 +328,14 @@ class Test(object):
                                            as_text=utils.is_debug_mode(),
                                            external_tensor_storage=external_tensor_storage)
         logger.info("Model saved to %s", model_path)
+        opt = rt.SessionOptions()
         if self.use_custom_ops:
             from ortcustomops import get_library_path
-            opt = rt.SessionOptions()
             opt.register_custom_ops_library(get_library_path())
             m = rt.InferenceSession(model_path, opt)
-        else:
-            m = rt.InferenceSession(model_path)
+        if self.ort_profile is not None:
+            opt.enable_profiling = True
+        m = rt.InferenceSession(model_path, opt)
         results = m.run(outputs, inputs)
         if self.perf:
             n = 0
@@ -342,6 +347,9 @@ class Test(object):
                 n += PERF_STEP
             self.onnx_runtime = 1000 * (time.time() - start) / n
             logger.info("ORT perf {:.2f}ms/inference, n={}".format(self.onnx_runtime, n))
+        if self.ort_profile is not None:
+            tmp_path = m.end_profiling()
+            shutil.move(tmp_path, self.ort_profile)
         return results
 
     @staticmethod
@@ -449,10 +457,14 @@ class Test(object):
                 n = 0
                 start = time.time()
                 stop = start + PERF_TIME
+                if self.tf_profile is not None:
+                    tf.profiler.experimental.start(self.tf_profile)
                 while time.time() < stop:
                     for _ in range(PERF_STEP):
                         _ = concrete_func(**inputs)
                     n += PERF_STEP
+                if self.tf_profile is not None:
+                    tf.profiler.experimental.stop()
                 self.tf_runtime = 1000 * (time.time() - start) / n
                 logger.info("TF perf {:.2f}ms/inference, n={}".format(self.tf_runtime, n))
             logger.info("TensorFlow OK")
@@ -497,7 +509,11 @@ class Test(object):
                 if self.skip_tensorflow:
                     logger.info("TensorFlow SKIPPED")
                 elif self.run_tf_frozen:
+                    if self.tf_profile is not None:
+                        tf.profiler.experimental.start(self.tf_profile)
                     tf_results = self.run_tensorflow(sess, inputs)
+                    if self.tf_profile is not None:
+                        tf.profiler.experimental.stop()
                     logger.info("TensorFlow OK")
                 tf_graph = sess.graph
 
@@ -690,7 +706,7 @@ def load_tests_from_yaml(path):
         for kw in ["rtol", "atol", "ptol", "disabled", "check_only_shape", "model_type", "concrete_function",
                    "skip_tensorflow", "force_input_shape", "tf_min_version", "tag", "skip_conversion",
                    "converted_model", "signature_def", "large_model", "structured_outputs", "run_tf_frozen",
-                   "use_custom_ops", "dequantize"]:
+                   "use_custom_ops", "dequantize", "ort_profile", "tf_profile"]:
             if settings.get(kw) is not None:
                 kwargs[kw] = settings[kw]
 
