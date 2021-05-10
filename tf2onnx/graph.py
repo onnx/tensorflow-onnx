@@ -469,6 +469,8 @@ class Graph(object):
         # Used by the tflite while loop handler
         self.scan_outputs = []
         self.func_inputs = []
+        self.ragged_variant_list_reads = []
+        self.ragged_variant_list_writes = []
 
         self._target = set(target)
         self._dtypes = dtypes

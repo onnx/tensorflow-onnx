@@ -4581,6 +4581,42 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: starts_val, _INPUT1: limits_val,
                                                         _INPUT2: deltas_val})
 
+    @check_tf_min_version("2.0", "ragged variant needs tf 2.0")
+    @check_opset_min_version(13, "Loop over tensor sequences")
+    def test_ragged_to_variant(self):
+        splits_val = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
+        dense_vals_val = np.arange(10 * 3 * 2, dtype=np.float32).reshape([10, 3, 2])
+
+        def fn(elem):
+            res = elem + elem * elem
+            return res
+
+        def func(splits, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits], validate=True)
+            y = tf.map_fn(fn, x)
+            return tf.identity(y.row_splits, name=_TFOUTPUT), tf.identity(y.flat_values, name=_TFOUTPUT1)
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: splits_val, _INPUT1: dense_vals_val})
+
+    @check_tf_min_version("2.0", "ragged variant needs tf 2.0")
+    @check_opset_min_version(13, "Loop over tensor sequences")
+    def test_ragged_to_variant_unknown_shape(self):
+        splits_val = np.array([0, 3, 3, 5, 9, 10], dtype=np.int64)
+        dense_vals_shape = np.array([10, 3, 2], dtype=np.int32)
+        splits_pads_val = np.array([[0, 0]], dtype=np.int32)
+
+        def fn(elem):
+            res = elem + elem * elem
+            return res
+
+        def func(splits, rt_dense_values_shape, splits_pads):
+            rt_dense_values = tf.ones(rt_dense_values_shape, dtype=tf.int32)
+            splits = tf.pad(splits, splits_pads)
+            x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits], validate=True)
+            y = tf.map_fn(fn, x)
+            return tf.identity(y.row_splits, name=_TFOUTPUT), tf.identity(y.flat_values, name=_TFOUTPUT1)
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1],
+                            {_INPUT: splits_val, _INPUT1: dense_vals_shape, _INPUT2: splits_pads_val})
+
     @check_opset_min_version(9, "Compress")
     def test_dynamic_partition_both_vector(self):
         data_val = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float32)
