@@ -474,8 +474,8 @@ class ConvTranspose:
                                     - new_output_shape[i])
                 start_i = i
                 end_i = i + spatial
-                pads[start_i] = int(total_padding[i] / 2);
-                pads[end_i] = total_padding[i] - pads[start_i];
+                pads[start_i] = int(total_padding[i] / 2)
+                pads[end_i] = total_padding[i] - pads[start_i]
             node.set_attr("pads", pads)
             node.set_attr("auto_pad", "NOTSET")
         else:
