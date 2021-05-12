@@ -37,6 +37,9 @@ TFLITE_TO_ONNX_DTYPE = {
     TFLiteTensorType.FLOAT64: onnx_pb.TensorProto.DOUBLE,
     TFLiteTensorType.COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     TFLiteTensorType.UINT64: onnx_pb.TensorProto.UINT64,
+    TFLiteTensorType.UINT32: onnx_pb.TensorProto.UINT32,
+    TFLiteTensorType.RESOURCE: onnx_pb.TensorProto.UNDEFINED,
+    TFLiteTensorType.VARIANT: onnx_pb.TensorProto.UNDEFINED,
 }
 
 
@@ -54,6 +57,9 @@ TFLITE_TO_TF_DTYPE = {
     TFLiteTensorType.FLOAT64: types_pb2.DT_DOUBLE,
     TFLiteTensorType.COMPLEX128: types_pb2.DT_COMPLEX128,
     TFLiteTensorType.UINT64: types_pb2.DT_UINT64,
+    TFLiteTensorType.UINT32: types_pb2.DT_UINT32,
+    TFLiteTensorType.RESOURCE: types_pb2.DT_RESOURCE,
+    TFLiteTensorType.VARIANT: types_pb2.DT_VARIANT,
 }
 
 
@@ -243,6 +249,28 @@ def parse_tflite_string_tensor(buffer_bytes, shape):
     return numpy_helper.from_array(np.array(string_list, dtype=np.object).reshape(shape))
 
 
+def op_has_scalar_output(input_shapes, optype, attr):
+    """
+    TFLite uses [] to denote both scalars and unknown output shapes. Return True if an op can have scalar outputs
+    despite having non-scalar inputs. Otherwise, we will replace [] with None
+    """
+    if optype in ["TFL_STRIDED_SLICE", "StridedSlice"]:
+        inp_rank = len(input_shapes[0])
+        return attr['shrink_axis_mask'] == 2 ** inp_rank - 1
+    if (optype.startswith("TFL_REDUCE") or optype in ['All']) and len(input_shapes) == 2:
+        inp_rank = len(input_shapes[0])
+        keep_dims = attr.get('keep_dims', True)
+        # axes input can be a scalar for a single axis
+        num_axes = 1 if input_shapes[1] == [] else input_shapes[1][0]
+        return not keep_dims and inp_rank == num_axes
+    if optype == "TFL_RESHAPE":
+        return input_shapes[1] == [0]
+    if optype == "Size":
+        # Op from TF
+        return True
+    return False
+
+
 def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_shapes_override=None):
     """
     Returns a Graph object along with some op count stats. All tflite op types are prefixed with "TFL_".
@@ -369,7 +397,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             tf_node_def.ParseFromString(data[1])
             input_tf_dtypes = [map_tflite_dtype_to_tf(name_to_tensor[inp].Type()) for inp in input_names]
             def shape_to_tf_shape(dims):
-                return [None if d < 0 else d for d in dims]
+                return [None if d < 0 else d for d in dims] if dims is not None else None
             input_shapes = [shape_to_tf_shape(output_shapes[inp]) for inp in input_names]
             tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes, input_shapes)
             attr.update(tf_attrs)
@@ -417,6 +445,15 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             for out, shape in zip(output_names, [[-1, -1, 4], [-1, -1], [-1, -1], [-1]]):
                 if len(output_shapes[out]) != len(shape):
                     output_shapes[out] = shape
+        if all(output_shapes[out] == [] for out in output_names):
+            # tflite uses [] to represent both scalars and completely unknown shapes
+            # If an op has non-scalar inputs and all scalar outputs, it is very likely the shapes are actually unknown.
+            inp_shapes = [output_shapes[inp] for inp in input_names]
+            if not all(s == [] for s in inp_shapes):
+                if any(s is None for s in inp_shapes) or not op_has_scalar_output(inp_shapes, optype, attr):
+                    for out in output_names:
+                        logger.warning("Replacing scalar output shape of %s with unknown shape", out)
+                        output_shapes[out] = None
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]
         onnx_node = helper.make_node(optype, input_names, output_names, name=output_names[0], **attr)

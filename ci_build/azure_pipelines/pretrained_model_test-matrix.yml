@@ -27,4 +27,12 @@ jobs:
     job:
       steps:
       - template: 'pretrained_model_test.yml'
-    
+
+- template: 'templates/job_generator.yml'
+  parameters:
+    platforms: ['linux', 'windows']
+    python_versions: ['3.8']
+    tf_versions: ['2.5.0rc1']
+    job:
+      steps:
+      - template: 'pretrained_model_test.yml'

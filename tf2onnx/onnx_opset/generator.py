@@ -29,13 +29,15 @@ class DirectOp:
         pass
 
 
-@tf_op(["RandomNormal", "RandomUniform", "RandomUniformInt"])
+@tf_op(["RandomNormal", "RandomUniform", "RandomUniformInt", "RandomStandardNormal"])
 class RandomOp:
     @classmethod
     def randuniform_int(cls, ctx, rand_node, rand_out, min_inp, max_inp):
         dtype = ctx.get_dtype(rand_out)
         min_node = ctx.get_node_by_output(min_inp)
         max_node = ctx.get_node_by_output(max_inp)
+        ctx.set_dtype(rand_node.output[0], onnx_pb.TensorProto.FLOAT)
+        ctx.set_dtype(rand_out, onnx_pb.TensorProto.FLOAT)
         if min_node.is_const() and max_node.is_const():
             rand_node.set_attr('low', float(min_node.get_tensor_value()))
             rand_node.set_attr('high', float(max_node.get_tensor_value()))
@@ -64,7 +66,7 @@ class RandomOp:
         # const we make it an attribute.
         seed = node.get_attr("seed")
         node.set_attr("seed", float(seed.f))
-        utils.make_sure(node.inputs[0].is_const(), "%s node with non-const shape requires opset >= 9")
+        utils.make_sure(node.inputs[0].is_const(), "%s node with non-const shape requires opset >= 9", node.type)
         shape = node.inputs[0].get_tensor_value()
         ctx.remove_input(node, node.input[0], 0)
         if len(shape) == 0:
@@ -82,6 +84,8 @@ class RandomOp:
             cls.randuniform_int(ctx, node, rand_out, node.input[0], node.input[1])
             node.type = "RandomUniform"
             ctx.replace_inputs(node, [])
+        elif node.type == "RandomStandardNormal":
+            node.type = "RandomNormal"
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
@@ -97,6 +101,8 @@ class RandomOp:
             if node.type == "RandomUniformInt":
                 cls.randuniform_int(ctx, node, node.output[0], inputs[1], inputs[2])
                 node.type = "RandomUniformLike"
+            elif node.type == "RandomStandardNormal":
+                node.type = "RandomNormalLike"
             else:
                 node.type = node.type + 'Like'
 

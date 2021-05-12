@@ -51,8 +51,14 @@ class DirectOp:
         if node.type == "Log":
             # ORT doesn't implement Log on doubles
             double_to_float = {onnx_pb.TensorProto.DOUBLE: onnx_pb.TensorProto.FLOAT}
-            node.maybe_cast_input([[onnx_pb.TensorProto.FLOAT]], double_to_float)
-
+            dtypes = node.output_dtypes
+            if node.maybe_cast_input([[onnx_pb.TensorProto.FLOAT]], double_to_float):
+                cast_back_node = ctx.insert_new_node_on_output(
+                    "Cast", node.output[0], name=utils.make_name(node.name + "_castback"),
+                    to=dtypes[0])
+                ctx.set_dtype(cast_back_node.output[0], dtypes[0])
+                ctx.copy_shape(node.name, cast_back_node.output[0])
+                ctx.copy_dtype(node.input[0], node.output[0])
 
 @tf_op(["Acos", "Asin", "Atan", "Cos", "Sin", "Tan"])
 class TrigOpSinceOpset7:
@@ -253,8 +259,8 @@ class SquaredDifference:
     def version_1(cls, ctx, node, **kwargs):
         node.type = "Sub"
         op_name = utils.make_name(node.name)
-        mul = ctx.insert_new_node_on_output("Mul", node.output[0], name=op_name)
-        mul.input.append(node.output[0])
+        node_out = node.output[0]
+        ctx.insert_new_node_on_output("Mul", node_out, inputs=[node_out, node_out], name=op_name)
 
 
 @tf_op("Sign")
@@ -315,6 +321,18 @@ class Pow:
         pass
 
 
+@tf_op("DivNoNan")
+class DivNoNan:
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        node.type = "Div"
+        np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1]))
+        zero_const = ctx.make_const(utils.make_name("const_zero"), np.array(0, np_dtype)).output[0]
+        is_zero = ctx.make_node("Equal", [node.input[1], zero_const]).output[0]
+        where_node = ctx.make_node("Where", [is_zero, zero_const, node.output[0]])
+        ctx.insert_node_on_output(where_node, node.output[0])
+
+
 @tf_op("LRN")
 class LRN:
     @classmethod
@@ -368,7 +386,7 @@ class MatMul:
                 tmp = perm[-1]
                 perm[-1] = perm[-2]
                 perm[-2] = tmp
-                ctx.insert_new_node_on_input(node, "Transpose", node.input[0], perm=perm)
+                ctx.insert_new_node_on_input(node, "Transpose", node.input[0], input_index=0, perm=perm)
 
         if transpose_b != 0:
             shape = ctx.get_shape(node.input[1])
@@ -377,7 +395,7 @@ class MatMul:
                 tmp = perm[-1]
                 perm[-1] = perm[-2]
                 perm[-2] = tmp
-                ctx.insert_new_node_on_input(node, "Transpose", node.input[1], perm=perm)
+                ctx.insert_new_node_on_input(node, "Transpose", node.input[1], input_index=1, perm=perm)
 
         unsupported = ["a_is_sparse", "b_is_sparse"]
         for i in unsupported:
@@ -558,6 +576,7 @@ class BitShift:
                 to=dtypes[0])
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
+            ctx.copy_dtype(node.input[0], node.output[0])
 
 
 @tf_op("SquaredDistance", onnx_op="MeanSquaredDistance")
@@ -573,6 +592,43 @@ class Einsum:
     def version_12(cls, ctx, node, **kwargs):
         del node.attr["N"]
         node.attr["equation"].s = node.attr["equation"].s.lower()
+        def should_replace_with_matmul():
+            # True is 2nd inp is const and eqn is ...ik,kj->...ij (possibly transpose 2nd inp)
+            # When the 2nd input is const, ort pre-packs the Matmul but not Einsum so this is faster
+            eqn = node.get_attr_value("equation").decode()
+            parts = eqn.split('->')
+            lhs = parts[0]
+            terms = lhs.split(',')
+            if len(parts) >= 2:
+                rhs = parts[1]
+            else:
+                rhs = sorted(terms)
+            if len(terms) != 2:
+                return False, None
+            t1, t2 = terms
+            # No repeat vars and all terms have >= 2 vars
+            if any(len(set(t)) < len(t) or len(t) < 2 for t in [t1, t2, rhs]):
+                return False, None
+            if len(t2) != 2:
+                return False, None
+            i = rhs[-2]
+            j = rhs[-1]
+            if t2[0] == j:
+                k = t2[1]
+                transpose_t2 = True
+            elif t2[1] == j:
+                k = t2[0]
+                transpose_t2 = False
+            else:
+                return False, None
+            return t1.endswith(i + k) and t1[:-2] == rhs[:-2], transpose_t2
+        should_replace, transpose_t2 = should_replace_with_matmul()
+        if should_replace:
+            if transpose_t2:
+                inp_trans = ctx.make_node("Transpose", [node.input[1]], attr={'perm': [1, 0]}).output[0]
+                ctx.replace_inputs(node, [node.input[0], inp_trans])
+            node.type = "MatMul"
+            del node.attr["equation"]
 
 
 @tf_op("IsFinite")

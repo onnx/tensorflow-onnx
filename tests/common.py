@@ -35,6 +35,8 @@ __all__ = [
     "check_opset_after_tf_version",
     "check_target",
     "skip_caffe2_backend",
+    "allow_missing_shapes",
+    "skip_onnx_checker",
     "skip_onnxruntime_backend",
     "skip_opset",
     "check_onnxruntime_incompatibility",
@@ -57,6 +59,8 @@ class TestConfig(object):
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.skip_tflite_tests = os.environ.get("TF2ONNX_SKIP_TFLITE_TESTS", "FALSE").upper() == "TRUE"
         self.skip_tf_tests = os.environ.get("TF2ONNX_SKIP_TF_TESTS", "FALSE").upper() == "TRUE"
+        self.skip_onnx_checker = False
+        self.allow_missing_shapes = False
         self.run_tfl_consistency_test = os.environ.get("TF2ONNX_RUN_TFL_CONSISTENCY_TEST", "FALSE").upper() == "TRUE"
         self.backend_version = self._get_backend_version()
         self.log_level = logging.WARNING
@@ -194,6 +198,37 @@ def skip_tflite(message=""):
                 config.skip_tflite_tests = tmp
         return test
     return decorator
+
+
+def skip_onnx_checker(message=""):
+    """ Skip running the onnx checker for this test """
+    config = get_test_config()
+    def decorator(func):
+        def test(self):
+            tmp = config.skip_onnx_checker
+            config.skip_onnx_checker = True
+            try:
+                func(self)
+            finally:
+                config.skip_onnx_checker = tmp
+        return test
+    return decorator
+
+
+def allow_missing_shapes(message=""):
+    """ Only check for incompatible, not missing shapes/dims """
+    config = get_test_config()
+    def decorator(func):
+        def test(self):
+            tmp = config.allow_missing_shapes
+            config.allow_missing_shapes = True
+            try:
+                func(self)
+            finally:
+                config.allow_missing_shapes = tmp
+        return test
+    return decorator
+
 
 
 def requires_tflite(message=""):

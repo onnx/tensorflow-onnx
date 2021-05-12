@@ -137,4 +137,13 @@ class BuiltinOperator(object):
     CALL_ONCE = 129
     BROADCAST_TO = 130
     RFFT2D = 131
+    CONV_3D = 132
+    IMAG = 133
+    REAL = 134
+    COMPLEX_ABS = 135
+    HASHTABLE = 136
+    HASHTABLE_FIND = 137
+    HASHTABLE_IMPORT = 138
+    HASHTABLE_SIZE = 139
+    REDUCE_ALL = 140
 

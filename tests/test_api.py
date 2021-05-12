@@ -100,6 +100,35 @@ class ApiTests(Tf2OnnxBackendTestBase):
         oy = self.run_onnxruntime(output_path, {"x": x, "y": y}, output_names)
         self.assertAllClose(ky, oy[0], rtol=0.3, atol=0.1)
 
+    @check_tf_min_version("2.0")
+    def test_function_non_tensor_inputs(self):
+        class Foo:
+            a = 42
+
+        @tf.function
+        def func(foo, a, x, b, w):
+            if a:
+                return x + foo.a + b / w
+            return x + b
+
+        output_path = os.path.join(self.test_data_directory, "model.onnx")
+        x = np.arange(20).reshape([2, 10]).astype(np.float32)
+        w = np.arange(10).reshape([10]).astype(np.float32)
+
+        res_tf = func(Foo(), True, x, 123, w)
+        spec = (
+            Foo(),
+            True,
+            tf.TensorSpec((2, None), tf.float32, name="x"),
+            123,
+            tf.TensorSpec((None), tf.float32, name="w")
+        )
+        model_proto, _ = tf2onnx.convert.from_function(func, input_signature=spec,
+                                                       opset=self.config.opset, output_path=output_path)
+        output_names = [n.name for n in model_proto.graph.output]
+        res_onnx = self.run_onnxruntime(output_path, {"x": x, "w": w}, output_names)
+        self.assertAllClose(res_tf, res_onnx[0], rtol=1e-5, atol=1e-5)
+
     @check_tf_min_version("1.15")
     def _test_graphdef(self):
         def func(x, y):
