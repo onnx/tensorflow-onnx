@@ -435,7 +435,6 @@ class ConvTranspose:
             input_dims = input_shape[1:1+spatial]
         else:
             input_dims = input_shape[2:2+spatial]
-        input_dims_known = -1 not in input_dims
         output_shape_orig = node.output_shapes
 
         # output_shape is explicitly specified here and then converted to explicit pads.
