@@ -333,7 +333,6 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     output_names = [output_tensor.name for output_tensor in concrete_func.outputs
                     if output_tensor.dtype != tf.dtypes.resource]
 
-    initialized_tables = None
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
     reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
 
@@ -345,7 +344,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
 
     with tf.device("/cpu:0"):
-        frozen_graph = tf_loader.from_function(concrete_func, input_names, output_names, large_model=large_model)
+        frozen_graph, initialized_tables = \
+            tf_loader.from_trackable(model, concrete_func, input_names, output_names, large_model)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=model.name,

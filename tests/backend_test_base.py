@@ -75,7 +75,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = prepared_backend.run(inputs)
         return results
 
-    def run_onnxruntime(self, model_path, inputs, output_names):
+    def run_onnxruntime(self, model_path, inputs, output_names, use_custom_ops=False):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
         providers = ['CPUExecutionProvider']
@@ -84,6 +84,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if gpus is None or len(gpus) > 1:
                 providers = ['CUDAExecutionProvider']
         opt = rt.SessionOptions()
+        if use_custom_ops:
+            from onnxruntime_customops import get_library_path
+            opt.register_custom_ops_library(get_library_path())
         # in case of issues with the runtime, one can enable more logging
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
