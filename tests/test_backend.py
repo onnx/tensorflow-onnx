@@ -4706,7 +4706,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def graph_validator(g):
             for n in g.get_nodes():
                 if n.type == 'ConvTranspose':
-                    return "pads" in n.attr
+                    return "pads" in n.attr or "output_shape" in n.attr
             return False
         self._run_test_case(func, [_OUTPUT], {_INPUT: filters_val, _INPUT1: out_backprop_val, _INPUT2: batch_dim_val},
                             graph_validator=graph_validator)
