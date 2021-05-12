@@ -4,10 +4,10 @@
 
 from tf2onnx.tflite_rewriters.tfl_scan_output_rewriter import rewrite_tfl_scan_outputs
 from tf2onnx.tflite_rewriters.tfl_qdq_rewriter import rewrite_tfl_qdq
-from tf2onnx.tflite_rewriters.tfl_select_zero_mul_rewriter import rewrite_tfl_select_zero_mul
+from tf2onnx.tflite_rewriters.tfl_select_zero_rewriter import rewrite_tfl_select_zero
 
 __all__ = [
     "rewrite_tfl_scan_outputs",
     "rewrite_tfl_qdq",
-    "rewrite_tfl_select_zero_mul",
+    "rewrite_tfl_select_zero",
 ]

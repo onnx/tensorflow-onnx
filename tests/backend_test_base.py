@@ -9,7 +9,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,import-outside-toplevel
-# pylint: disable=wrong-import-position
+# pylint: disable=wrong-import-position,invalid-unary-operand-type
 
 import logging
 import os
@@ -106,7 +106,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             raise ValueError("unknown backend")
         return y
 
-    def assert_results_equal(self, expected, actual, rtol, atol, check_value=True, check_shape=True, check_dtype=True):
+    def assert_results_equal(self, expected, actual, rtol, atol, mtol=None,
+                             check_value=True, check_shape=True, check_dtype=True):
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
                 if expected_val.dtype == np.object:
@@ -115,6 +116,11 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     expected_val_str = decode(expected_val)
                     self.assertAllEqual(expected_val_str, actual_val)
                 else:
+                    if mtol is not None:
+                        expected_val = np.minimum(expected_val, mtol)
+                        expected_val = np.maximum(expected_val, -mtol)
+                        actual_val = np.minimum(actual_val, mtol)
+                        actual_val = np.maximum(actual_val, -mtol)
                     self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
             if check_dtype:
                 self.assertEqual(expected_val.dtype, actual_val.dtype)
@@ -266,6 +272,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if not info.type.tensor_type.HasField("shape"):
                 return None
             return [d.dim_value if d.HasField('dim_value') else -1 for d in info.type.tensor_type.shape.dim]
+        def get_dtype(info):
+            tensor_type = info.type.tensor_type
+            is_seq = False
+            result = None
+            if info.type.HasField("sequence_type"):
+                tensor_type = info.type.sequence_type.elem_type.tensor_type
+                is_seq = True
+            if tensor_type.HasField("elem_type"):
+                result = tensor_type.elem_type
+            return utils.SeqType(result) if is_seq else result
         for info in model_shapes.graph.value_info:
             if info.name == "":
                 continue
@@ -283,12 +299,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                         self.assertEqual(d1, d2)
             else:
                 self.assertEqual(onnx_shape, tf2onnx_shape)
-            self.assertEqual(info.type.tensor_type.elem_type, graph.get_dtype(info.name))
+            self.assertEqual(get_dtype(info), graph.get_dtype(info.name))
 
-    def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-07, atol=1e-5,
-                      convert_var_to_const=True, constant_fold=True, check_value=True, check_shape=True,
-                      check_dtype=True, process_args=None, onnx_feed_dict=None, graph_validator=None, as_session=False,
-                      large_model=False, premade_placeholders=False):
+    def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port,
+                      rtol=1e-07, atol=1e-5, mtol=None, convert_var_to_const=True, constant_fold=True,
+                      check_value=True, check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
+                      graph_validator=None, as_session=False, large_model=False, premade_placeholders=False):
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
         run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
@@ -330,19 +346,19 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 g = optimizer.optimize_graph(g, catch_errors=False)
                 actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
 
-            self.assert_results_equal(expected, actual, rtol, atol, check_value, check_shape, check_dtype)
+            self.assert_results_equal(expected, actual, rtol, atol, mtol, check_value, check_shape, check_dtype)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
 
         if test_tflite:
-            tfl_results, tfl_outputs = self.run_tflite(tflite_path, feed_dict)
-            test_tflite = tfl_results is not None
+            tfl_res, tfl_outputs = self.run_tflite(tflite_path, feed_dict)
+            test_tflite = tfl_res is not None
 
         if test_tflite:
             if run_tfl_consistency_test:
-                self.assert_results_equal(expected, tfl_results, rtol, atol, check_value, check_shape, check_dtype)
+                self.assert_results_equal(expected, tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
 
             tfl_process_args = process_args.copy()
             if 'inputs_as_nchw' in tfl_process_args:
@@ -358,9 +374,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                  **tfl_process_args)
             g = optimizer.optimize_graph(g)
             onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
-            onnx_from_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port, postfix="_from_tflite")
+            onnx_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port, postfix="_from_tflite")
 
-            self.assert_results_equal(tfl_results, onnx_from_tfl_res, rtol, atol, check_value, check_shape, check_dtype)
+            self.assert_results_equal(tfl_res, onnx_tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
 
             if graph_validator:

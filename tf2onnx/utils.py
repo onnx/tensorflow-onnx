@@ -146,6 +146,18 @@ def port_name(name, nr=0):
     """Map node output number to name."""
     return name + ":" + str(nr)
 
+class SeqType:
+    """Wrap around TensorProto.* to signify a tensor sequence of a given type"""
+    def __init__(self, tensor_dtype):
+        self.dtype = tensor_dtype
+
+    def __eq__(self, other):
+        if isinstance(other, SeqType):
+            return self.dtype == other.dtype
+        return NotImplemented
+
+    def __repr__(self):
+        return "SeqType(%r)" % self.dtype
 
 def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
     """Wrapper for creating onnx graph inputs or outputs
@@ -155,6 +167,8 @@ def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
     """
     if elem_type is None:
         elem_type = onnx_pb.TensorProto.UNDEFINED
+    elif isinstance(elem_type, SeqType):
+        return helper.make_sequence_value_info(name, elem_type.dtype, make_onnx_shape(shape), **kwargs)
     return helper.make_tensor_value_info(
         name,
         elem_type,

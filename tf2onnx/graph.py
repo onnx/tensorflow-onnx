@@ -469,6 +469,8 @@ class Graph(object):
         # Used by the tflite while loop handler
         self.scan_outputs = []
         self.func_inputs = []
+        self.ragged_variant_list_reads = []
+        self.ragged_variant_list_writes = []
 
         self._target = set(target)
         self._dtypes = dtypes
@@ -1503,16 +1505,16 @@ class Graph(object):
             a list of nodes
         """
         res_set = set()
-        if not outputs_name:
-            return list(res_set)
 
-        for output in outputs_name:
+        outputs_to_keep = list(outputs_name)
+        if not remove_unused_inputs:
+            # add placeholder nodes even if they are not connected to outputs.
+            # placeholder nodes with defaults can have inputs themselves
+            outputs_to_keep += [inp.output[0] for inp in self.inputs]
+
+        for output in outputs_to_keep:
             node = self.get_node_by_output(output, search_in_parent_graphs=False)
             res_set = res_set.union(self._extract_sub_graph_nodes(node, input_checker))
-
-        if not remove_unused_inputs:
-            # add back placeholder nodes if they are not connected to outputs.
-            res_set = res_set.union(self.inputs)
 
         return list(res_set)
 
