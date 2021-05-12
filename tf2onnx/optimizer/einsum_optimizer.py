@@ -39,6 +39,10 @@ class EinsumSubOp:
     Operator suffixed by `_mm` (*transpose_mm*, *reduce_sum_mm*)
     are equivalent to the same operator without the suffix
     but takes two inputs and only changes the first one.
+
+    Attributes `_info` summarizes the known information
+    about dimensions. Many of them are empty because inserted.
+    Value `1` means it was the case, `2` means it is a plain dimension.
     """
     _allowed = {'expand_dims', 'transpose', 'reduce_sum', 'matmul', 'id',
                 'squeeze', 'diagonal', 'mul', 'batch_dot',
@@ -411,13 +415,12 @@ class EinsumSubOp:
         right = self.kwargs['right']
         root = self._onnx_name()
 
-        name_one = root + "_1"
-        name_zero = root + "_0"
-        yield numpy_helper.from_array(
-            np.array([1], dtype=np.int64), name=name_one)
-        yield numpy_helper.from_array(
-            np.array([0], dtype=np.int64), name=name_zero)
+        def return_name_one():
+            name_one = root + "_1"
+            return name_one, numpy_helper.from_array(
+                np.array([1], dtype=np.int64), name=name_one)
 
+        name_one = None
         name_shape1 = root + "_shape1"
         name_shape2 = root + "_shape2"
         concat_left = []
@@ -464,6 +467,9 @@ class EinsumSubOp:
             yield helper.make_node(
                 'Gather', [name_shape2, name_batch_axes], [name_dim0bg])
         else:
+            if name_one is None:
+                name_one, cst_init = return_name_one()
+                yield cst_init
             name_dim0 = name_one
             name_dim0b = name_one
             concat_left.append(name_dim0)
@@ -504,6 +510,9 @@ class EinsumSubOp:
         # dim2 = int(np.prod([m2.shape[i] for i in sum_axes]))
 
         if len(sum_axes) == 0:
+            if name_one is None:
+                name_one, cst_init = return_name_one()
+                yield cst_init
             name_dim1 = name_one
             name_dim2 = name_one
             concat_left.append(name_dim1)
@@ -535,29 +544,55 @@ class EinsumSubOp:
             yield helper.make_node(
                 'ReduceProd', [name_dim2g], [name_dim2], keepdims=1)
 
-        # *shape1, *shape2
-        name_agg_shape1 = root + "_resh1"
-        name_agg_shape2 = root + "_resh2"
-        yield helper.make_node(
-            'Concat', concat_left, [name_agg_shape1], axis=0)
-        yield helper.make_node(
-            'Concat', concat_right, [name_agg_shape2], axis=0)
+        batch_kind = self.get_dot_kind()
+        if batch_kind in ('11', 'N1', 'N1'):
+            # *shape1, *shape2
+            name_minus_one = root + "__01"
+            yield numpy_helper.from_array(
+                np.array([-1], dtype=np.int64), name=name_minus_one)
+            name_agg_shape1_2 = root + "_resh1_%s" % batch_kind
+            name_agg_shape2_2 = root + "_resh2_%s" % batch_kind
+            yield helper.make_node(
+                'Concat', [name_minus_one, name_dim1], [name_agg_shape1_2], axis=0)
+            yield helper.make_node(
+                'Concat', [name_minus_one, name_dim2], [name_agg_shape2_2], axis=0)
 
-        # m1sh = m1.reshape((dim0, dimb, dim1))
-        # m2sh = m2.reshape((dim0b, dimb, dim2))
-        name_agg1 = root + "_aresh1"
-        name_agg2 = root + "_aresh2"
-        yield helper.make_node('Reshape', [name1, name_agg_shape1], [name_agg1])
-        yield helper.make_node('Reshape', [name2, name_agg_shape2], [name_agg2])
+            # m1sh = m1.reshape((-1, dim1))
+            # m2sh = m2.reshape((-1, dim2))
+            name_agg1_2 = root + "_aresh1"
+            name_agg2_2 = root + "_aresh2"
+            yield helper.make_node('Reshape', [name1, name_agg_shape1_2], [name_agg1_2])
+            yield helper.make_node('Reshape', [name2, name_agg_shape2_2], [name_agg2_2])
 
-        # dot = m1sh @ np.transpose(m2sh, (0, 2, 1))
-        name_agg2_tr = root + "_aresh2_tr"
-        yield helper.make_node(
-            'Transpose', [name_agg2], [name_agg2_tr], perm=[0, 2, 1])
+            # dot = gemm(m1sh, m2sh, False, True)
+            name_dot = root + "_gemm"
+            yield helper.make_node(
+                'Gemm', [name_agg1_2, name_agg2_2], [name_dot],
+                alpha=1., beta=0., transA=0, transB=1)
+        else:
+            # *shape1, *shape2
+            name_agg_shape1 = root + "_resh1"
+            name_agg_shape2 = root + "_resh2"
+            yield helper.make_node(
+                'Concat', concat_left, [name_agg_shape1], axis=0)
+            yield helper.make_node(
+                'Concat', concat_right, [name_agg_shape2], axis=0)
 
-        name_dot = root + "_dot"
-        yield helper.make_node(
-            'MatMul', [name_agg1, name_agg2_tr], [name_dot])
+            # m1sh = m1.reshape((dim0, dimb, dim1))
+            # m2sh = m2.reshape((dim0b, dimb, dim2))
+            name_agg1 = root + "_aresh1"
+            name_agg2 = root + "_aresh2"
+            yield helper.make_node('Reshape', [name1, name_agg_shape1], [name_agg1])
+            yield helper.make_node('Reshape', [name2, name_agg_shape2], [name_agg2])
+
+            # dot = m1sh @ np.transpose(m2sh, (0, 2, 1))
+            name_agg2_tr = root + "_aresh2_tr"
+            yield helper.make_node(
+                'Transpose', [name_agg2], [name_agg2_tr], perm=[0, 2, 1])
+
+            name_dot = root + "_dot"
+            yield helper.make_node(
+                'MatMul', [name_agg1, name_agg2_tr], [name_dot])
 
         # new_shape = ([max(m1.shape[i], m2.shape[i]) for i in batch_axes] +
         #      [m1.shape[i] for i in left if i not in batch_axes] +
@@ -634,6 +669,30 @@ class EinsumSubOp:
             if hasattr(node, 'output'):
                 names[id(self)] = node.output[0]
             yield node
+
+    def get_dot_kind(self):
+        """
+        Every matrix multiplication can be either:
+        * a simple multiplication (`M`) (undetected)
+        * a 2D matrix multiplication (`11`)
+        * a broadcasted matrix multiplication (`N1` or `1N`)
+        * a batch matrix multiplication (`NN`)
+        This method returns which kind it is.
+        """
+        batch_axes = self.kwargs['batch_axes']
+        # keep_axes = self.kwargs['keep_axes']
+        # sum_axes = self.kwargs['sum_axes']
+        # left = self.kwargs['left']
+        # right = self.kwargs['right']
+        info = self._info
+        row_left = info['i_row']
+        row_right = info['i_row2']
+
+        batch_left = [row_left[k] for k in batch_axes]
+        batch_right = [row_right[k] for k in batch_axes]
+        n_left = len(batch_left) > 0 and max(batch_left) == 2
+        n_right = len(batch_right) > 0 and max(batch_right) == 2
+        return "%s%s" % ('N' if n_left else '1', 'N' if n_right else '1')
 
 
 class GraphEinsumSubOp:
