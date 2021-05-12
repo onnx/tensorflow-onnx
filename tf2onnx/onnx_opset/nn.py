@@ -430,8 +430,6 @@ class ConvTranspose:
         conv_kernel_shape(ctx, node, 1, spatial=spatial)
         input_shape = ctx.get_shape(node.input[2])
         input_batch_dim = input_shape[0]
-        print("\nstarting")
-        print(f"input_shape: {input_shape}")
         output_c_dim = ctx.get_shape(node.input[1])[-2]
         if is_channels_last(node):
             input_dims = input_shape[1:1+spatial]
@@ -442,7 +440,6 @@ class ConvTranspose:
 
         # output_shape is explicitly specified here and then converted to explicit pads.
         output_shape = get_shape_from_const_or_concat(ctx, node.inputs[0])
-        print(f"get_shape: {output_shape}")
         if output_shape is not None:
             if is_channels_last(node):
                 new_output_shape = [output_shape[1], output_shape[2]]
@@ -453,7 +450,6 @@ class ConvTranspose:
                 if spatial == 3:
                     new_output_shape.append(output_shape[4])
 
-            print(f"new_output_shape: {new_output_shape}")
             utils.make_sure(new_output_shape.count(-1) <= 0, "output dims need to be known")
             utils.make_sure(all(new_output_shape[i] >= input_dims[i] for i in range(spatial)),
                             "output dims cannot be smaller than input dims.")
@@ -464,20 +460,15 @@ class ConvTranspose:
                     strides = parse_dims_attr(node, node.get_attr("strides").ints, spatial)
                 else:
                     strides = [1] * spatial
-                print(f"strides: {strides}")
                 if "dilations" in node.attr:
                     dilations = parse_dims_attr(node, node.get_attr("dilations").ints, spatial)
                 else:
                     dilations = [1] * spatial
-                print(f"dilations: {dilations}")
                 if "output_padding" in node.attr:
                     output_padding = parse_dims_attr(node, node.get_attr("output_padding").ints, spatial)
                 else:
                     output_padding = [0] * spatial
-                print(f"output_padding: {output_padding}")
                 kernel_shape = parse_dims_attr(node, node.get_attr("kernel_shape").ints, spatial)
-                print(f"kernel_shape: {kernel_shape}")
-                print(f"input_dims: {input_dims}")
                 total_padding = [-1] * spatial
                 pads = [1] * (spatial * 2)
                 for i in range(spatial):
@@ -488,8 +479,6 @@ class ConvTranspose:
                     end_i = i + spatial
                     pads[start_i] = int(total_padding[i] / 2)
                     pads[end_i] = total_padding[i] - pads[start_i]
-                print(f"total_padding: {total_padding}")
-                print(f"pads: {pads}")
                 node.set_attr("pads", pads)
                 node.set_attr("auto_pad", "NOTSET")
         else:
