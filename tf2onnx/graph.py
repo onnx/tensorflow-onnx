@@ -1576,11 +1576,12 @@ class GraphUtil(object):
     """Utilities for Graph manipulation."""
 
     @staticmethod
-    def optimize_graph(graph, catch_errors=True):
-        return optimizer.optimize_graph(graph, catch_errors)
+    def optimize_graph(graph, catch_errors=True, optimizers=None):
+        return optimizer.optimize_graph(graph, catch_errors, optimizers=optimizers)
 
     @staticmethod
-    def optimize_model_proto(onnx_model_proto, catch_errors=True, return_graph=False):
+    def optimize_model_proto(onnx_model_proto, catch_errors=True, return_graph=False,
+                             optimizers=None):
         """Optimize the model proto, for example: eliminating all useless Transpose pairs.
 
         Returns:
@@ -1590,7 +1591,7 @@ class GraphUtil(object):
         try:
             kwargs = GraphUtil.get_onnx_model_properties(onnx_model_proto)
             graph = GraphUtil.create_graph_from_onnx_model(onnx_model_proto)
-            graph = GraphUtil.optimize_graph(graph, catch_errors)
+            graph = GraphUtil.optimize_graph(graph, catch_errors, optimizers=optimizers)
             model_proto = graph.make_model(onnx_model_proto.graph.doc_string,
                                            graph_name=onnx_model_proto.graph.name, **kwargs)
 

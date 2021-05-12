@@ -5,11 +5,12 @@
 
 from __future__ import unicode_literals
 import numpy as np
-from onnx import helper, numpy_helper
+from onnx import helper, numpy_helper, TensorProto
 from onnx.defs import onnx_opset_version
 from onnx.onnx_pb import TensorProto
 from ..constants import OPSET_TO_IR_VERSION
-
+from ..graph_builder import GraphBuilder
+from .optimizer_base import GraphOptimizerBase
 
 def single_axes(axes):
     """
@@ -648,7 +649,7 @@ class EinsumSubOp:
         which participate to the conversion. The last one
         is the final output.
 
-        :param names: dictionary where to find already converted name
+        :param names: dictionary where to find already converted operators
         :param opset: opset
         :param kwargs: additional parameter for the conversion
         :return: output
@@ -666,6 +667,36 @@ class EinsumSubOp:
             raise NotImplementedError(
                 "to_onnx not implemented for %r." % self.name)
         for node in meth(names, opset=opset, **kwargs):
+            if hasattr(node, 'output'):
+                names[id(self)] = node.output[0]
+            yield node
+
+    def to_tf2onnx(self, ctx, node, name, args, names, **kwargs):
+        """
+        Converts this node into ONNX. Enumerates all ONNX node
+        which participate to the conversion. The last one
+        is the final output.
+
+        :param ctx: context
+        :param node: einsum node to replace
+        :param name: ?
+        :param args: ?
+        :param names: dictionary where to find already converted operators
+        :param opset: opset
+        :param kwargs: additional parameter for the conversion
+        :return: output
+        """
+        method_name = "_to_tf2onnx_%s" % self.name
+        meth = getattr(self, method_name, None)
+        if meth is None:
+            if self.name.endswith("_mm"):
+                raise NotImplementedError(
+                    "to_onnx not implemented for %r."
+                    "You should call method simplify_mm_nodes "
+                    "to remove it." % self.name)
+            raise NotImplementedError(
+                "to_onnx not implemented for %r." % self.name)
+        for node in meth(ctx, node, name, args, names, **kwargs):
             if hasattr(node, 'output'):
                 names[id(self)] = node.output[0]
             yield node
@@ -1101,6 +1132,25 @@ class GraphEinsumSubOp:
                 inputs=onx_inputs, outputs=[onx_output],
                 initializer=inits, nodes=nodes))
         return model
+        
+    def to_tf2onnx(self, ctx, node, name, args):
+        """
+        Converts this node into ONNX. Enumerates all ONNX node
+        which participate to the conversion. The last one
+        is the final output.
+
+        :param ctx: context
+        :param node: einsum node to replace
+        :param name: ?
+        :param args: ?
+        :return: output
+        """
+        names = {}
+        nodes = []
+        inits = []
+        for op in self:
+            for onx_node in op.to_tf2onnx(ctx, node, name, args, names):
+                yield onx_node
 
 
 def analyse_einsum_equation(equation):
@@ -1584,3 +1634,57 @@ def _decompose_einsum_equation(equation, *shapes, op_matmul='batch_dot'):
             op.compute_output_row(rows[1, :])
             graph.append(op)
     return graph
+
+
+class EinsumOptimizer(GraphOptimizerBase):
+
+    def __init__(self):  # pylint: disable=useless-super-delegation
+        super(EinsumOptimizer, self).__init__()
+
+    def _optimize(self, graph):
+        return self._apply_optimization(graph, self._optimize_at_current_graph_level)
+
+    def _optimize_at_current_graph_level(self, graph):
+        graph_changed = True
+        while graph_changed:
+            graph_changed = False
+            ops = graph.get_nodes()
+            for op in ops:
+                if op.type == "Einsum" and self._optimize_einsum(op, graph):
+                    graph_changed = True
+                    self.graph_been_opt = True
+        return graph
+
+    def _optimize_einsum(self, node, graph):
+        if node.inputs[1].is_const():
+            return False
+        inp_shape = graph.get_shape(node.input[0])
+        if inp_shape is None:
+            # The rank must be known
+            return False
+
+        equation = node.attr['equation'].s.decode('ascii')
+        seq = decompose_einsum_equation(equation)
+        ctx = GraphBuilder(graph)
+        new_nodes = list(seq.to_tf2onnx(ctx, node, None, None))
+
+        """
+        new_reshape_shape = None
+        if shift > 0:
+            new_shape = [1] * shift + new_shape
+            squeeze_node = GraphBuilder(graph).make_squeeze(
+                {'data': node.output[0], 'axes': list(range(shift))},
+                return_node=True, shapes=node.output_shapes, dtypes=node.output_dtypes)
+            new_reshape_shape = [1] * shift + graph.get_shape(node.output[0])
+            graph.insert_node_on_output(squeeze_node, node.output[0])
+        const_shape = graph.make_const(utils.make_name(node.name + "_shape"), np.array(new_shape, np.int64)).output[0]
+        if new_reshape_shape is not None:
+            graph.set_shape(node.output[0], new_reshape_shape)
+        graph.replace_inputs(node, [node.input[0], const_shape])
+        if shift < 0:
+            unsqueeze_node = GraphBuilder(graph).make_unsqueeze({'data': node.input[0], 'axes': list(range(-shift))})
+            graph.replace_inputs(node, [unsqueeze_node, const_shape])
+
+        return True
+        """
+        
