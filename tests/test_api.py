@@ -14,8 +14,9 @@ import zipfile
 
 import numpy as np
 import tensorflow as tf
+from onnx import helper
 
-from common import check_tf_min_version, unittest_main, requires_custom_ops
+from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version
 from backend_test_base import Tf2OnnxBackendTestBase
 import tf2onnx
 
@@ -80,21 +81,24 @@ class ApiTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops()
     @check_tf_min_version("2.0")
+    @check_opset_min_version(11, "SparseToDense")
     def test_keras_hashtable(self):
 
-        featCols = [tf.feature_column.numeric_column("f_inp", dtype=tf.float32),
+        feature_cols = [
+            tf.feature_column.numeric_column("f_inp", dtype=tf.float32),
             tf.feature_column.indicator_column(
                 tf.feature_column.categorical_column_with_vocabulary_list("s_inp", ["a", "b", "z"], num_oov_buckets=1)
-            )]
-        featureLayer = tf.keras.layers.DenseFeatures(featCols)
+            )
+        ]
+        feature_layer = tf.keras.layers.DenseFeatures(feature_cols)
 
-        inputDict = {}
-        inputDict["f_inp"] = tf.keras.Input(name="f_inp", shape=(1,), dtype=tf.float32)
-        inputDict["s_inp"] = tf.keras.Input(name="s_inp", shape=(1,), dtype=tf.string)
+        input_dict = {}
+        input_dict["f_inp"] = tf.keras.Input(name="f_inp", shape=(1,), dtype=tf.float32)
+        input_dict["s_inp"] = tf.keras.Input(name="s_inp", shape=(1,), dtype=tf.string)
 
-        inputs = [input for input in inputDict.values()]
-        standardFeatures = featureLayer(inputDict)
-        hidden1 = tf.keras.layers.Dense(512, activation='relu')(standardFeatures)
+        inputs = list(input_dict.values())
+        standard_features = feature_layer(input_dict)
+        hidden1 = tf.keras.layers.Dense(512, activation='relu')(standard_features)
         output = tf.keras.layers.Dense(10, activation='softmax')(hidden1)
         model = tf.keras.Model(inputs=inputs, outputs=output)
         model.compile(optimizer='adam', loss=tf.keras.losses.mean_squared_error)
@@ -106,7 +110,6 @@ class ApiTests(Tf2OnnxBackendTestBase):
                 tf.TensorSpec((None, 1), tf.string, name="s_inp"))
         output_path = os.path.join(self.test_data_directory, "model.onnx")
 
-        from onnx import helper
         model_proto, _ = tf2onnx.convert.from_keras(
             model, input_signature=spec, opset=self.config.opset, output_path=output_path,
             extra_opset=[helper.make_opsetid("ai.onnx.contrib", 1)])
