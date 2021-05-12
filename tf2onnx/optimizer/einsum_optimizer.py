@@ -7,7 +7,6 @@ from __future__ import unicode_literals
 import numpy as np
 from onnx import helper, numpy_helper, TensorProto
 from onnx.defs import onnx_opset_version
-from onnx.onnx_pb import TensorProto
 from ..constants import OPSET_TO_IR_VERSION
 from ..graph_builder import GraphBuilder
 from .optimizer_base import GraphOptimizerBase
@@ -671,7 +670,51 @@ class EinsumSubOp:
                 names[id(self)] = node.output[0]
             yield node
 
-    def to_tf2onnx(self, ctx, node, name, args, names, **kwargs):
+    def get_dot_kind(self):
+        """
+        Every matrix multiplication can be either:
+        * a simple multiplication (`M`) (undetected)
+        * a 2D matrix multiplication (`11`)
+        * a broadcasted matrix multiplication (`N1` or `1N`)
+        * a batch matrix multiplication (`NN`)
+        This method returns which kind it is.
+        """
+        batch_axes = self.kwargs['batch_axes']
+        # keep_axes = self.kwargs['keep_axes']
+        # sum_axes = self.kwargs['sum_axes']
+        # left = self.kwargs['left']
+        # right = self.kwargs['right']
+        info = self._info
+        row_left = info['i_row']
+        row_right = info['i_row2']
+
+        batch_left = [row_left[k] for k in batch_axes]
+        batch_right = [row_right[k] for k in batch_axes]
+        n_left = len(batch_left) > 0 and max(batch_left) == 2
+        n_right = len(batch_right) > 0 and max(batch_right) == 2
+        return "%s%s" % ('N' if n_left else '1', 'N' if n_right else '1')
+
+    def _to_tf2onnx_id(self, names, ctx, node, name, args):  # pylint: disable=W0613
+        self._check_inputs_(1)
+        inp = self.inputs[0]
+        n = self._get_data(names, inp)
+        yield ctx.make_node('Identity', [n])
+
+    def _to_tf2onnx_expand_dims(self, names, ctx, node, name, args):
+        self._check_inputs_(1)
+        inp = self.inputs[0]
+        name = self._get_data(names, inp)
+        axes = self.kwargs['axes']
+        yield GraphBuilder(ctx).make_unsqueeze({'data': name, "axes": [a[1] for a in axes]})
+
+    def _to_tf2onnx_transpose(self, names, ctx, node, name, args):  # pylint: disable=W0613
+        self._check_inputs_(1)
+        inp = self.inputs[0]
+        name = self._get_data(names, inp)
+        perm = self.kwargs['perm']
+        yield ctx.make_node("Transpose", [name], attr={"perm": perm})
+
+    def to_tf2onnx(self, names, ctx, node, name, args, **kwargs):
         """
         Converts this node into ONNX. Enumerates all ONNX node
         which participate to the conversion. The last one
@@ -696,34 +739,13 @@ class EinsumSubOp:
                     "to remove it." % self.name)
             raise NotImplementedError(
                 "to_onnx not implemented for %r." % self.name)
-        for node in meth(ctx, node, name, args, names, **kwargs):
+        for node in meth(names, ctx, node, name, args, **kwargs):
             if hasattr(node, 'output'):
                 names[id(self)] = node.output[0]
+            elif isinstance(node, str):
+                names[id(self)] = node
             yield node
 
-    def get_dot_kind(self):
-        """
-        Every matrix multiplication can be either:
-        * a simple multiplication (`M`) (undetected)
-        * a 2D matrix multiplication (`11`)
-        * a broadcasted matrix multiplication (`N1` or `1N`)
-        * a batch matrix multiplication (`NN`)
-        This method returns which kind it is.
-        """
-        batch_axes = self.kwargs['batch_axes']
-        # keep_axes = self.kwargs['keep_axes']
-        # sum_axes = self.kwargs['sum_axes']
-        # left = self.kwargs['left']
-        # right = self.kwargs['right']
-        info = self._info
-        row_left = info['i_row']
-        row_right = info['i_row2']
-
-        batch_left = [row_left[k] for k in batch_axes]
-        batch_right = [row_right[k] for k in batch_axes]
-        n_left = len(batch_left) > 0 and max(batch_left) == 2
-        n_right = len(batch_right) > 0 and max(batch_right) == 2
-        return "%s%s" % ('N' if n_left else '1', 'N' if n_right else '1')
 
 
 class GraphEinsumSubOp:
@@ -1132,7 +1154,7 @@ class GraphEinsumSubOp:
                 inputs=onx_inputs, outputs=[onx_output],
                 initializer=inits, nodes=nodes))
         return model
-        
+
     def to_tf2onnx(self, ctx, node, name, args):
         """
         Converts this node into ONNX. Enumerates all ONNX node
@@ -1145,11 +1167,9 @@ class GraphEinsumSubOp:
         :param args: ?
         :return: output
         """
-        names = {}
-        nodes = []
-        inits = []
+        names = dict(enumerate(node.input))
         for op in self:
-            for onx_node in op.to_tf2onnx(ctx, node, name, args, names):
+            for onx_node in op.to_tf2onnx(names, ctx, node, name, args):
                 yield onx_node
 
 
@@ -1665,9 +1685,11 @@ class EinsumOptimizer(GraphOptimizerBase):
 
         equation = node.attr['equation'].s.decode('ascii')
         seq = decompose_einsum_equation(equation)
-        ctx = GraphBuilder(graph)
-        new_nodes = list(seq.to_tf2onnx(ctx, node, None, None))
-
+        new_nodes = list(seq.to_tf2onnx(graph, node, None, None))
+        if len(new_nodes) > 0:
+            # optimisation was made, node should be removed.
+            last_node = new_nodes[-1]
+            graph.replace_inputs(node, [node.output[0], last_node.output[0]])
         """
         new_reshape_shape = None
         if shift > 0:
@@ -1687,4 +1709,3 @@ class EinsumOptimizer(GraphOptimizerBase):
 
         return True
         """
-        

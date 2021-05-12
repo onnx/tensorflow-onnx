@@ -44,9 +44,9 @@ class EinsumOptimizerTests(Tf2OnnxBackendTestBase):
             origin_proto, catch_errors=False, return_graph=True, optimizers=optimizers)
         self.assertTrue(new_proto,
                         msg="model proto after optimizer should not be None")
-                        
+
         new_model_path = self.save_onnx_model(new_proto, onnx_feed_dict, postfix="_opt")
-        current = GraphUtil.get_node_count_from_onnx_graph(new_proto.graph)
+        # current = GraphUtil.get_node_count_from_onnx_graph(new_proto.graph)
         actual = self.run_onnxruntime(new_model_path, onnx_feed_dict, output_names_with_port)
 
         for expected_val, actual_val in zip(expected, actual):
@@ -103,7 +103,7 @@ class EinsumOptimizerTests(Tf2OnnxBackendTestBase):
         got1 = sess1.run(None, feed_dict)
         got2 = sess2.run(None, feed_dict)
         assert_almost_equal(got1, got2)
-        self.assertNotIn('Einsum', str(new_model_proto))        
+        self.assertNotIn('Einsum', str(new_model_proto))
 
     def test_np_test_broadcasting_dot_cases2(self):
         f = np.arange(7 * 55).reshape(7, 11, 5).astype(np.float32)
