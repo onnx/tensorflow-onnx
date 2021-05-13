@@ -8,9 +8,6 @@ Tool to find common patterns in onnx graphs.
 # don't want to rename the tool
 # pylint: disable=invalid-name,missing-docstring,too-many-nested-blocks
 
-from __future__ import division
-from __future__ import print_function
-
 import argparse
 import collections
 import csv

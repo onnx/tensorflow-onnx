@@ -3,9 +3,6 @@
 
 """ Tool for common tf graph operations. """
 
-from __future__ import division
-from __future__ import print_function
-
 import argparse
 from collections import Counter
 import logging

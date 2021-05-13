@@ -3,11 +3,6 @@
 
 """Tool to convert and test pre-trained tensorflow models."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 # pylint: disable=broad-except,logging-not-lazy,unused-argument,unnecessary-lambda,import-outside-toplevel
 # pylint: disable=wrong-import-position,too-many-nested-blocks
 

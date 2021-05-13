@@ -4,8 +4,6 @@
     Replace resize operations with all ones in scale with Identity nodes
 """
 
-from __future__ import unicode_literals
-
 import numpy as np
 
 from .optimizer_base import GraphOptimizerBase

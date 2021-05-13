@@ -3,10 +3,6 @@
 
 """Unit Tests for internal methods."""
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from collections import namedtuple
 
 import graphviz as gv

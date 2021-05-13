@@ -166,7 +166,6 @@ class TestTransformers(unittest.TestCase):
 
     def test_TFDisillBertModel(self):
         from transformers import DistilBertTokenizer, TFDistilBertForQuestionAnswering
-        name = 'distilbert-base-uncased'
         name = 'distilbert-base-uncased-distilled-squad'
         tokenizer = DistilBertTokenizer.from_pretrained(name)
         model = TFDistilBertForQuestionAnswering.from_pretrained(name)
@@ -306,6 +305,9 @@ class TestTransformers(unittest.TestCase):
 
     # GPT2
 
+    def test_TFDistilGpt2(self):
+        self._test_TFGpt2("distilgpt2")
+
     def test_TFGpt2(self):
         self._test_TFGpt2("gpt2")
 
@@ -317,6 +319,9 @@ class TestTransformers(unittest.TestCase):
 
     def test_TFDialoGPT(self):
         self._test_TFGpt2("microsoft/DialoGPT-large", large=True)
+
+    def test_TFDialoGPTSmall(self):
+        self._test_TFGpt2("microsoft/DialoGPT-small", large=True)
 
     # LONGFORMER
 
@@ -486,6 +491,75 @@ class TestTransformers(unittest.TestCase):
     def test_TFElectraForQuestionAnsweringSmall(self):
         self._test_ElectraForQuestionAnswering("google/electra-small-discriminator", large=True)
 
+    # XLNET
+
+    def _test_TFXLNET(self, size, large=False):
+        from transformers import XLNetTokenizer, TFXLNetModel
+        tokenizer = XLNetTokenizer.from_pretrained(size)
+        model = TFXLNetModel.from_pretrained(size)
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
+        outputs = ["last_hidden_state"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFXLNETBase(self):
+        self._test_TFXLNET("xlnet-base-cased", large=True)
+
+    def test_TFXLNETLarge(self):
+        self._test_TFXLNET("xlnet-large-cased", large=True)
+
+    # Roberta
+
+    def _test_TFRoberta(self, size, large=False):
+        from transformers import RobertaTokenizer, TFRobertaModel
+        tokenizer = RobertaTokenizer.from_pretrained(size)
+        model = TFRobertaModel.from_pretrained(size)
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
+        outputs = ["last_hidden_state"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFRobertaBase(self):
+        self._test_TFRoberta("roberta-base", large=True)
+
+    def test_TFDistilRobertaBase(self):
+        self._test_TFRoberta("distilroberta-base", large=True)
+
+    # LayoutLM
+
+    def _test_TFLayoutLM(self, size, large=False):
+        from transformers import LayoutLMTokenizer, TFLayoutLMModel
+        tokenizer = LayoutLMTokenizer.from_pretrained(size)
+        model = TFLayoutLMModel.from_pretrained(size)
+        words = ["Hello", "world"]
+        normalized_word_boxes = [637, 773, 693, 782], [698, 773, 733, 782]
+        token_boxes = []
+        for word, box in zip(words, normalized_word_boxes):
+            word_tokens = tokenizer.tokenize(word)
+            token_boxes.extend([box] * len(word_tokens))
+        # add bounding boxes of cls + sep tokens
+        token_boxes = [[0, 0, 0, 0]] + token_boxes + [[1000, 1000, 1000, 1000]]
+        input_dict = tokenizer(' '.join(words), return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict)
+        outputs = ["last_hidden_state"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large)
+
+    def test_TFLayoutLM(self):
+        self._test_TFLayoutLM("microsoft/layoutlm-base-uncased", large=True)
+
+    # MBart
+
+    def _test_TFMbart(self, size, large=False):
+        from transformers import MBartTokenizer, TFMBartModel
+        tokenizer = MBartTokenizer.from_pretrained(size)
+        model = TFMBartModel.from_pretrained(size)
+        input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")
+        spec, input_dict = self.spec_and_pad(input_dict, max_length=128)
+        outputs = ["last_hidden_state"]
+        self.run_test(model, input_dict, input_signature=spec, outputs=outputs, large=large, rtol=1.2)
+
+    def test_TFMBartLarge(self):
+        self._test_TFMbart("facebook/mbart-large-en-ro", large=True)
 
 if __name__ == "__main__":
     unittest.main()
