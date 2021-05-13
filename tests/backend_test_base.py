@@ -3,11 +3,6 @@
 
 """Unit Test Base."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,import-outside-toplevel
 # pylint: disable=wrong-import-position,invalid-unary-operand-type
 

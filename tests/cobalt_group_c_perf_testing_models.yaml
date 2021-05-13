@@ -1,0 +1,725 @@
+bit-m-r101x1:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/bit-m-r101x1"
+  converted_model: "D:/co_tfhubmodels_c/bit-m-r101x1/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bit-m-r101x1-ilsvrc2012_classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/bit-m-r101x1-ilsvrc2012_classification"
+  converted_model: "D:/co_tfhubmodels_c/bit-m-r101x1-ilsvrc2012_classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bit-m-r101x1-imagenet21k_classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/bit-m-r101x1-imagenet21k_classification"
+  converted_model: "D:/co_tfhubmodels_c/bit-m-r101x1-imagenet21k_classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bit-m-r50x3:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/bit-m-r50x3"
+  converted_model: "D:/co_tfhubmodels_c/bit-m-r50x3/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+bit-s-r101x1:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/bit-s-r101x1"
+  converted_model: "D:/co_tfhubmodels_c/bit-s-r101x1/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+cord-19-swivel-128d:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/cord-19-swivel-128d"
+  converted_model: "D:/co_tfhubmodels_c/cord-19-swivel-128d/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_ramp
+  inputs:
+    "sentences:0": [1]
+    "256:0": [1, 512]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+efficientnet-b3-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/efficientnet-b3-classification"
+  converted_model: "D:/co_tfhubmodels_c/efficientnet-b3-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "image_input:0": [1, 300, 300, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  tag: 'serve'
+  signature_def: 'serving_default'
+
+efficientnet-b3-feature-vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/efficientnet-b3-feature-vector"
+  converted_model: "D:/co_tfhubmodels_c/efficientnet-b3-feature-vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 300, 300, 3]
+  outputs:
+    - "efficientnet-b3/model/head/global_average_pooling2d/Mean:0"
+  rtol: 0.01
+  atol: 0.0001
+  tag: ''
+  signature_def: 'default'
+
+efficientnet-b7-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/efficientnet-b7-classification"
+  converted_model: "D:/co_tfhubmodels_c/efficientnet-b7-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "image_input:0": [1, 600, 600, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  tag: 'serve'
+  signature_def: 'serving_default'
+
+efficientnet-b7-feature-vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/efficientnet-b7-feature-vector"
+  converted_model: "D:/co_tfhubmodels_c/efficientnet-b7-feature-vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "image_input:0": [1, 600, 600, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  tag: 'serve'
+  signature_def: 'serving_default'
+
+nnlm-id-dim128:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/nnlm-id-dim128"
+  converted_model: "D:/co_tfhubmodels_c/nnlm-id-dim128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-id-dim50-with-normalization:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/nnlm-id-dim50-with-normalization"
+  converted_model: "D:/co_tfhubmodels_c/nnlm-id-dim50-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nnlm-zh-dim50:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/nnlm-zh-dim50"
+  converted_model: "D:/co_tfhubmodels_c/nnlm-zh-dim50/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+nq:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/nq"
+  converted_model: "D:/co_tfhubmodels_c/nq/model.zip"
+  model_type: saved_model
+  large_model: true
+  input_get: get_small_rand_int32
+  inputs:
+    "input_ids:0": [1, 512]
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+    "segment_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "unique_ids:0":
+      shape: [1, 1]
+      input_get: get_zeros_int64
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+  structured_outputs:
+    - answer_types
+    - tf_op_layer_end_logits
+    - tf_op_layer_start_logits
+    - unique_ids
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+universal-sentence-encoder-large:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/universal-sentence-encoder-large"
+  converted_model: "D:/co_tfhubmodels_c/universal-sentence-encoder-large/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "inputs:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+Wiki-words-500-with-normalization:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/Wiki-words-500-with-normalization"
+  converted_model: "D:/co_tfhubmodels_c/Wiki-words-500-with-normalization/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-inception_v1-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-inception_v1-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-inception_v1-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 0
+
+imagenet-mobilenet_v1_025_160-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v1_025_160-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v1_025_160-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 160, 160, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 2
+
+imagenet-mobilenet_v1_050_192-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v1_050_192-classification"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v1_050_192-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 192, 192, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 2
+
+imagenet-mobilenet_v1_050_224-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v1_050_224-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v1_050_224-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 3
+
+imagenet-mobilenet_v1_075_224-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v1_075_224-classification"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v1_075_224-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.01
+  atol: 0.0001
+  concrete_function: 2
+
+imagenet-mobilenet_v2_035_160-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_035_160-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_035_160-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 160, 160, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-mobilenet_v2_050_128-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_050_128-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_050_128-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 128, 128, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-mobilenet_v2_050_160-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_050_160-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_050_160-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 160, 160, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-mobilenet_v2_075_160-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_075_160-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_075_160-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 160, 160, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-mobilenet_v2_100_128-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_100_128-classification"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_100_128-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 128, 128, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 2
+
+imagenet-mobilenet_v2_140_224-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_140_224-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-mobilenet_v2_140_224-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-resnet_v2_101-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-resnet_v2_101-classification"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-resnet_v2_101-classification/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+imagenet-resnet_v2_50-feature_vector:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/imagenet-resnet_v2_50-feature_vector"
+  converted_model: "D:/co_tfhubmodels_c/imagenet-resnet_v2_50-feature_vector/model.onnx"
+  model_type: saved_model
+  input_get: get_beach
+  inputs:
+    "inputs:0": [1, 224, 224, 3]
+    "batch_norm_momentum:0":
+      value: 0.99
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  concrete_function: 0
+
+wiki40b-lm-de:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/wiki40b-lm-de"
+  converted_model: "D:/co_tfhubmodels_c/wiki40b-lm-de/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-el:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/wiki40b-lm-el"
+  converted_model: "D:/co_tfhubmodels_c/wiki40b-lm-el/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-es:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/wiki40b-lm-es"
+  converted_model: "D:/co_tfhubmodels_c/wiki40b-lm-es/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-fa:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/wiki40b-lm-fa"
+  converted_model: "D:/co_tfhubmodels_c/wiki40b-lm-fa/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+wiki40b-lm-zh-cn:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/wiki40b-lm-zh-cn"
+  converted_model: "D:/co_tfhubmodels_c/wiki40b-lm-zh-cn/model.onnx"
+  model_type: saved_model
+  large_model: false
+  run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "Reshape:0": [100]
+  outputs:
+    - "model/lm_loss/SparseSoftmaxCrossEntropyWithLogits/Reshape_2:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "neg_log_likelihood"
+
+experts-bit-r50x1-in21k-commodity:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-commodity"
+  converted_model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-commodity/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bit-r50x1-in21k-conveyance:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-conveyance"
+  converted_model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-conveyance/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bit-r50x1-in21k-instrument:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-instrument"
+  converted_model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-instrument/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bit-r50x1-in21k-living_thing:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-living_thing"
+  converted_model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-living_thing/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bit-r50x1-in21k-physical_entity:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-physical_entity"
+  converted_model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-physical_entity/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bit-r50x1-in21k-plant:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-plant"
+  converted_model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-plant/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bit-r50x1-in21k-tree:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-tree"
+  converted_model: "D:/co_tfhubmodels_c/experts-bit-r50x1-in21k-tree/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 200, 200, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"

@@ -3,9 +3,6 @@
 
 """Simple tool to guess inputs and outputs of a tensorflow model."""
 
-from __future__ import division
-from __future__ import print_function
-
 import argparse
 from collections import Counter
 

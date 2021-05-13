@@ -5,9 +5,6 @@
 tf2onnx.rewriter.custom_rnn_rewriter - custom rnn support
 """
 
-from __future__ import division
-from __future__ import print_function
-
 import logging
 import sys
 import traceback

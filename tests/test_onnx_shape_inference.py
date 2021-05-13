@@ -3,10 +3,6 @@
 
 """Unit Tests for shape inference."""
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import unittest
 import numpy as np
 from onnx import TensorProto

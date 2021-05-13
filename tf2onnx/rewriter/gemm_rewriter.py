@@ -80,10 +80,9 @@ def rewrite_gemm(g, ops):
                     continue
 
                 add_node = match.get_op('add')
-                input_c_node = match.get_op("C")
                 a_edge_name = matmul_node.input[0]
                 b_edge_name = matmul_node.input[1]
-                c_edge_name = input_c_node.output[0]
+                c_edge_name = match.get_tensor("C")
 
                 a_mul_b_shape = g.get_shape(matmul_node.output[0])
                 c_shape = g.get_shape(c_edge_name)

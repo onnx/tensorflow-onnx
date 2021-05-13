@@ -1560,7 +1560,7 @@ mil-nce-i3d:
   input_get: get_random
   inputs:
     "input_frames:0": [1, 10, 224, 224, 3]
-    "words:0": 
+    "words:0":
       shape: [1]
       input_get: get_sentences
   outputs:
@@ -1650,5 +1650,93 @@ densenet:
     "Placeholder": [1,224,224,3]
   outputs:
     - softmax_tensor
+  rtol: 0.05
+  atol: 0.0005
+
+biggan-256:
+  disabled: true
+  skip_conversion: false
+  run_tf_frozen: false  # Fails to run when frozen
+  model: "D:/co_tfhubmodels/biggan-256"
+  converted_model: "D:/co_tfhubmodels/biggan-256/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "truncation:0":
+      shape: []
+      input_get: get_ones
+    "z:0": [1, 140]
+    "y:0": [1, 1000]
+  outputs:
+    - "G_trunc_output:0"
+  rtol: 0.05
+  atol: 0.0005
+  ptol: 0.01   # Output is 1/-1, allow for 0.01% mismatch
+  tag: ""
+  signature_def: "default"
+
+biggan-512:
+  disabled: true
+  skip_conversion: false
+  run_tf_frozen: false  # Fails to run when frozen
+  model: "D:/co_tfhubmodels/biggan-512"
+  converted_model: "D:/co_tfhubmodels/biggan-512/model.onnx"
+  ort_profile: "D:/co_tfhubmodels/biggan-512/ort_profile.json"
+  tf_profile: "D:/co_tfhubmodels/biggan-512/tf_profile"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "truncation:0":
+      shape: []
+      input_get: get_ones
+    "z:0": [1, 128]
+    "y:0": [1, 1000]
+  outputs:
+    - "G_trunc_output:0"
+  rtol: 0.05
+  atol: 0.0005
+  ptol: 0.01   # Output is 1/-1, allow for 0.01% mismatch
+  tag: ""
+  signature_def: "default"
+
+bert_multi_cased_preprocess:
+  disabled: true
+  skip_conversion: true
+  skip_tensorflow: true   # TF Wordpiece is broken on Windows
+  model: "D:/co_tfhubmodels/bert_multi_cased_preprocess"
+  converted_model: "D:/co_tfhubmodels/bert_multi_cased_preprocess/model.onnx"
+  model_type: saved_model
+  large_model: false
+  #run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+  rtol: 0.05
+  atol: 0.0005
+
+bert_zh_preprocess:
+  disabled: false
+  skip_conversion: true
+  skip_tensorflow: true   # TF Wordpiece is broken on Windows
+  model: "D:/co_tfhubmodels/bert_zh_preprocess"
+  converted_model: "D:/co_tfhubmodels/bert_zh_preprocess/model.onnx"
+  model_type: saved_model
+  large_model: false
+  #run_tf_frozen: false
+  use_custom_ops: true
+  input_get: get_sentences
+  inputs:
+    "sentences:0": [100]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
   rtol: 0.05
   atol: 0.0005
