@@ -1004,10 +1004,6 @@ class Graph(object):
         def _push_stack(stack, node, in_stack):
             stack.append(node)
             if node in in_stack:
-                import pprint
-                pprint.pprint(in_stack)
-                pprint.pprint(stack)
-                pprint.pprint(ops)
                 raise ValueError('Graph has cycles, node.name=%r.' % ops[node].name)
             in_stack[node] = True
 

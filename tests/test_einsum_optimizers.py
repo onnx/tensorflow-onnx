@@ -3,16 +3,11 @@
 
 """Unit Tests for optimizers such as TransposeOptimizer."""
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from collections import OrderedDict
 import numpy as np
 from numpy.testing import assert_almost_equal
 from onnx import helper, TensorProto, OperatorSetIdProto
 from onnxruntime import InferenceSession
-from parameterized import parameterized
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main
