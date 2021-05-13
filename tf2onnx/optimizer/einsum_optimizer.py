@@ -1876,7 +1876,8 @@ class EinsumOptimizer(GraphOptimizerBase):
         new_equation_obj = optimize_einsum(
             equation, decompose=True, dtype=np.float32, opset=graph.opset)
         if equation != new_equation_obj.equation_:
-            self.logger.debug("replacing einsum equation %r by %r",
+            self.logger.debug(
+                "replacing einsum equation %r by %r",
                 equation, new_equation_obj.equation_)
 
         seq = decompose_einsum_equation(new_equation_obj.equation_)
