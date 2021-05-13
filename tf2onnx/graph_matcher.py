@@ -214,12 +214,12 @@ class GraphMatcher(object):
             pattern_inputs_list = [pattern.inputs]
 
         for possible_pattern_inputs in pattern_inputs_list:
-            pat = list(zip(op.inputs, possible_pattern_inputs))
+            pat = list(zip(op.input, op.inputs, possible_pattern_inputs))
             match_flag_of_inputs = []
             match_lists_of_inputs = []
-            for input_tensor, input_pattern in pat:
+            for input_tensor, input_op, input_pattern in pat:
                 # print("MATCHING", input_pattern.op_type, input_tensor.type)
-                flag, match_list_of_input = self._match_pattern(input_pattern, input_tensor, input_tensor)
+                flag, match_list_of_input = self._match_pattern(input_pattern, input_op, input_tensor)
                 match_flag_of_inputs.append(flag)
                 match_lists_of_inputs.extend(match_list_of_input)
 
