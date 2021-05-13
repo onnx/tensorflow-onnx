@@ -10,7 +10,7 @@ from onnx import helper, TensorProto, OperatorSetIdProto
 from onnxruntime import InferenceSession
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main
+from common import unittest_main, check_opset_min_version
 from tf2onnx import utils, constants
 from tf2onnx.graph import GraphUtil
 from tf2onnx.optimizer import EinsumOptimizer
@@ -102,6 +102,7 @@ class EinsumOptimizerTests(Tf2OnnxBackendTestBase):
         if not catch_errors:
             self.assertNotIn('Einsum', str(new_model_proto))
 
+    @check_opset_min_version(13, "Unsqueeze")
     def test_np_test_broadcasting_dot_cases2(self):
         f = np.arange(7 * 55).reshape(7, 11, 5).astype(np.float32)
         g = np.arange(30).reshape(2, 3, 5).astype(np.float32)

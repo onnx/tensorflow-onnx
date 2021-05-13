@@ -2,8 +2,9 @@
 
 """Rewrites operator einsum into simple ONNX operators.
 """
-
-from __future__ import unicode_literals
+import time
+import math
+from itertools import permutations
 import numpy as np
 from onnx import helper, numpy_helper, TensorProto
 from onnx.defs import onnx_opset_version
@@ -1622,11 +1623,224 @@ def _decompose_einsum_equation(equation, *shapes, op_matmul='batch_dot'):
     return graph
 
 
+class CachedEinsum:
+    """
+    Stores all the necessary information to cache the preprocessing
+    of a an einsum equation. The optimization only works it
+    the best permutation of letters is chosen.
+
+    :param equation: numpy equation
+    :param opset: ONNX opset
+    :param optimize: finds the best letter permutation
+    :param dtype: dtype
+    :param decompose: to decompose Einsum operator or to keep it as is
+    :param key: key used to cache this class
+
+    The class creates the following attributes:
+    * `equation_` corresponding to the best equivalent equation
+    * `graph_`: the corresponding graph returned by function
+        :func:`decompose_einsum_equation
+        <mlprodict.testing.einsum.einsum_impl.decompose_einsum_equation> `
+    * `onnx_`: if a conversion to onnx is used, stores the onnx graph
+    * `runtime_`: a function used by `__call__`, calls the runtime
+    """
+    _einsum_cache = {}
+
+
+    def __init__(self, equation, opset=None, optimize=False,
+                 dtype=np.float32, decompose=True, key=None):
+        self.equation = equation
+        self.opset = opset
+        self.optimize = optimize
+        self.dtype = dtype
+        self.decompose = decompose
+        self.key = key
+
+    def default_inputs(self, N=None):
+        """
+        Returns default inputs (reshaped np.arange + 0.7i).
+
+        :param N: dimension (all dimension have the same size)
+
+        If *N is None*, N is given a size depending on the number of letters
+        to avoid spending too much time on optimization.
+        """
+        if N is None:
+            letters = set(c for c in self.equation
+                          if "a" <= c <= "z" or "A" <= c <= "Z")
+            nn = math.factorial(len(letters))
+            N = max(int(2 ** 11 / nn), 4)
+            N = min(N, 15)
+        inps = self.equation.split('->')[0].split(',')
+        lens = [len(s) for s in inps]
+        inputs = [np.arange(N ** d).reshape((N,) * d) for d in lens]
+        inputs = [(i + 0.7 * ii).astype(self.dtype)
+                  for ii, i in enumerate(inputs)]
+        return inputs
+
+    def build(self):
+        """
+        Preprocesses the equation builds whatever is necessary
+        to compute the result of the einsum equation.
+        """
+        if not self.optimize and not hasattr(self, 'equation_'):
+            self.equation_ = self.equation
+        else:
+            # loops over all permutations
+            if self.equation.lower() != self.equation:
+                raise RuntimeError(
+                    "Only lower equation can be optimized, %r is not." % self.equation)
+            letters = list(
+                sorted(set(c for c in self.equation if "a" <= c <= "z")))
+            possible = list(permutations(letters))
+            possible.insert(0, letters)
+            subset = possible
+            best = []
+            confs = []
+            very_best = None
+            inputs = None
+            for perm in subset:
+                replace = {d: c for c, d in zip(letters, perm)}
+                eq = self.equation
+                for k, v in replace.items():
+                    eq = eq.replace(k, v.upper())
+                eq = eq.lower()
+                inst = CachedEinsum(eq, opset=self.opset, optimize=False, dtype=self.dtype,
+                                    decompose=self.decompose)
+                inst.build()
+                if inputs is None:
+                    inputs = inst.default_inputs()
+                    inst(*inputs)
+                ts = time.perf_counter()
+                for _ in range(0, 10):
+                    inst(*inputs)
+                delta = time.perf_counter() - ts
+                confs.append((delta, eq))
+                if len(best) < 10:
+                    best.append((delta, eq))
+                    best.sort()
+                elif delta < best[-1][0]:
+                    best[-1] = (delta, eq)
+                    best.sort()
+            self.optimized_ = best
+            self.timed_permutations_ = confs
+            self.equation_ = best[0][1]
+        self.build_runtime()
+
+    def build_onnx_einsum(self, input_names):
+        """
+        Builds an ONNX graph with a single einsum operator.
+        """
+        opset = (self.opset if self.opset is not None
+                 else get_opset_number_from_onnx())
+        ir_version = get_ir_version_from_onnx()
+        proto_type = guess_proto_dtype(
+            np.float32 if self.dtype is None else self.dtype)
+
+        model = helper.make_model(
+            opset_imports=[helper.make_operatorsetid('', opset)],
+            ir_version=ir_version,
+            producer_name='mlprodict',
+            producer_version='0.0.1',
+            graph=helper.make_graph(
+                name='einsum',
+                inputs=[helper.make_tensor_value_info(n, proto_type, None)
+                        for n in input_names],
+                outputs=[helper.make_tensor_value_info("Y", proto_type, None)],
+                nodes=[
+                    helper.make_node(
+                        'Einsum', input_names, ["Y"], equation=self.equation_)]))
+        return model
+
+    def build_runtime(self):
+        """
+        Builds the runtime associated to the
+        equation `self.equation_`. It requires onnxunruntime.
+        """
+        from onnxruntime import InferenceSession
+        if self.decompose:
+            self.graph_ = decompose_einsum_equation(self.equation_)
+
+            n_inputs = len(self.graph_.metadata['lengths']) - 1
+            input_names = ['X%d' % i for i in range(n_inputs)]
+            self.onnx_names_ = input_names
+            onx = self.graph_.to_onnx(
+                'Y', *input_names, opset=self.opset, dtype=self.dtype)
+            self.onnx_ = onx
+        else:
+            n_inputs = len(self.equation.split('->')[0].split(','))
+            input_names = ['X%d' % i for i in range(n_inputs)]
+            self.onnx_ = self.build_onnx_einsum(input_names)
+            self.onnx_names_ = input_names
+        self.sess_ = InferenceSession(self.onnx_.SerializeToString())
+        self.runtime_ = lambda *inputs: self.sess_.run(
+            None, {i: v for i, v in zip(self.onnx_names_, inputs)})[0]
+
+    def __call__(self, *inputs):
+        """
+        Calls the runtime `self.runtime_`.
+        """
+        if not hasattr(self, 'runtime_'):
+            raise RuntimeError(
+                "Method build_runtime was not called.")
+        return self.runtime_(*inputs)
+
+    @staticmethod
+    def build_einsum(equation, opset, optimize,
+                     dtype, decompose=True, key=None):
+        """
+        Creates an instance of *CachedEinsum*.
+        """
+        inst = CachedEinsum(equation, opset=opset,
+                            optimize=optimize, dtype=dtype,
+                            decompose=decompose, key=key)
+        inst.build()
+        return inst
+
+
+def optimize_einsum(equation, dtype, optimize=True,
+                    cache=True, opset=None, decompose=True):
+    """
+    This function returns an instance of CachedEinsum.
+    It has an attribute `equation_` which holds a new equation
+    equal to the first one but with permutated letter.
+    This new equation has a smaller computation time
+    when executed with onnxruntime (optimized on the machine CPU).
+    Attribute `equation_` returns an optimized equation,
+    `timed_permutations_` returns the execution time for
+    every permutation. Results are cached based on the function
+    arguments. It saves time if the same einsum equation
+    appears twice.
+    """
+    _einsum_cache = CachedEinsum._einsum_cache
+    cached = None
+    if cache:
+        key = equation, opset, optimize, dtype, decompose
+        cached = _einsum_cache.get(key, None)
+    if cached is None:
+        cached = CachedEinsum.build_einsum(
+            equation, opset, optimize,
+            dtype, decompose=decompose, key=key)
+    else:
+        cache = False
+    if cache:
+        _einsum_cache[key] = cached
+    return cached
+
+
 class EinsumOptimizer(GraphOptimizerBase):
     """Remove einsum operators and replace them by a combination of
     Transpose, ReduceSum, Reshape, MatMul, Gemm, Squeeze, Unsqueeze, Mul.
     It does not handle equation with `...`, square indices (`ii->i`),
-    and undefined output shape (`ab,bc`)."""
+    and undefined output shape (`ab,bc`).
+
+    The optimizer may change the einsum equation for an equivalent
+    one but more efficient for onnxruntime. All matrices are aligned
+    to the same dimensions ordered by alphabetical order of the letters
+    in the equation. Depending on that order, the transposing
+    and the matrix computation may be more or less efficient.
+    The worst order may be 4, 5 times slower than the best order.
+    """
 
     def __init__(self):  # pylint: disable=useless-super-delegation
         super(EinsumOptimizer, self).__init__()
@@ -1655,11 +1869,22 @@ class EinsumOptimizer(GraphOptimizerBase):
             return False
 
         equation = node.attr['equation'].s.decode('ascii')
-        seq = decompose_einsum_equation(equation)
+
+        # optimize the equation
+        new_equation_obj = optimize_einsum(
+            equation, decompose=True, dtype=np.float32, opset=graph.opset)
+        if equation != new_equation_obj.equation_:
+            self.logger.debug("replacing einsum equation %r by %r" % (
+                equation, new_equation_obj.equation_))
+
+        seq = decompose_einsum_equation(new_equation_obj.equation_)
         new_nodes = list(seq.to_tf2onnx(graph, node))
         if len(new_nodes) > 0:
             # optimisation was made, node should be removed.
             last_node = new_nodes[-1]
+            self.logger.debug(
+                "replacing einsum node %r by its decomposed version, name of the last "
+                "node %r." % (node.name, last_node.name))
             graph.replace_all_inputs(node.output[0], last_node.output[0])
             graph.safe_remove_nodes([node])
             return True
