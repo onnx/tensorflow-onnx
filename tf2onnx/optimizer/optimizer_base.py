@@ -3,8 +3,6 @@
 
 """Graph Optimizer Base"""
 
-from __future__ import unicode_literals
-
 import copy
 
 from .. import logging, utils

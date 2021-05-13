@@ -9,8 +9,6 @@
 tf2onnx.rewriter.lstm_rewriter_base
 """
 
-from __future__ import division
-from __future__ import print_function
 import logging
 
 from tf2onnx import utils

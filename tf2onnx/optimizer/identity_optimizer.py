@@ -5,8 +5,6 @@
    Remove useless Identity node in graphs including subgraphs, but does not hurt model output names.
 """
 
-from __future__ import unicode_literals
-
 from .optimizer_base import GraphOptimizerBase
 
 

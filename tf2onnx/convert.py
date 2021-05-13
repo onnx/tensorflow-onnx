@@ -5,10 +5,6 @@
 python -m tf2onnx.convert : api and commandline tool to convert a tensorflow model to onnx
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 # pylint: disable=unused-argument,unused-import,ungrouped-imports,wrong-import-position
 
 import argparse

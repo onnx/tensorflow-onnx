@@ -3,9 +3,6 @@
 
 """Unit tests using onnx constant folding rewriters."""
 
-from __future__ import division
-from __future__ import print_function
-
 import unittest
 
 import tensorflow as tf

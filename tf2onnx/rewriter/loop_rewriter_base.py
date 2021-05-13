@@ -5,9 +5,6 @@
 tf2onnx.rewriter.loop_rewriter_base
 """
 
-from __future__ import division
-from __future__ import print_function
-
 import logging
 from collections import OrderedDict
 from tf2onnx import utils

@@ -5,9 +5,6 @@
 tf2onnx.shape_inference - shape inference function for tf2onnx
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
 import logging
 from distutils.version import LooseVersion
 from collections import defaultdict

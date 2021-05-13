@@ -5,10 +5,6 @@
 tf2onnx.tf2onnx - rewrite tensorflow graph to onnx graph
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import collections
 import sys
 import traceback

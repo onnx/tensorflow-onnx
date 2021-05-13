@@ -5,10 +5,6 @@
 tf2onnx.tf_utils - misc utilities for tf2onnx that interface with tensorflow
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import collections
 from distutils.version import LooseVersion
 
