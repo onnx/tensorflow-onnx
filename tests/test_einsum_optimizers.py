@@ -109,7 +109,7 @@ class EinsumOptimizerTests(Tf2OnnxBackendTestBase):
         self.common_einsum('obk,ijk->ioj', operands=[f, g],
                            catch_errors=False)
 
-    @check_opset_min_version(11, "Einsum")
+    @check_opset_min_version(12, "Einsum")
     def test_np_test_exp(self):
         self.common_einsum('iij,jk->ik', catch_errors=True)
 
