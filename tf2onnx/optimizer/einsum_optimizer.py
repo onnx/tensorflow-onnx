@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 import numpy as np
 from onnx import helper, numpy_helper, TensorProto
 from onnx.defs import onnx_opset_version
+from .. import utils
 from ..constants import OPSET_TO_IR_VERSION
 from ..graph_builder import GraphBuilder
 from .optimizer_base import GraphOptimizerBase
@@ -315,22 +316,34 @@ class EinsumSubOp:
                 "Number of dimensions %r is different from expected value "
                 "%d." % (m.shape, self.full_dim))
 
-    def _get_data(self, data, key):
+    def _get_data(self, data, key, as_str=False):
         "Returns data[key] or raises an exception if not here."
         if isinstance(key, int):
             if key not in data:
                 raise RuntimeError(
                     "Unable to find key %d in %r." % (
                         key, list(sorted(data))))
-            return data[key]
-        if isinstance(key, EinsumSubOp):
+            value = data[key]
+        elif isinstance(key, EinsumSubOp):
             if id(key) not in data:
                 raise RuntimeError(
                     "Unable to find key %d in %r." % (
                         id(key), list(sorted(data))))
-            return data[id(key)]
-        raise TypeError(
-            "Unexpected input type %r." % type(key))
+            value = data[id(key)]
+        else:
+            raise TypeError(
+                "Unexpected input type %r." % type(key))
+        if as_str:
+            if isinstance(value, str):
+                return value
+            if hasattr(value, 'output') and len(value.output) == 1:
+                return value.output[0]
+            if hasattr(value, list) and len(value) == 1:
+                return value[0]
+            raise RuntimeError(
+                "Unable to guess what to return in that case %r - %r"
+                "." % (type(value), value))
+        return value
 
     def _onnx_name(self):
         return 'einsum%d_%s' % (id(self), self.name[:2])
@@ -693,59 +706,6 @@ class EinsumSubOp:
         n_left = len(batch_left) > 0 and max(batch_left) == 2
         n_right = len(batch_right) > 0 and max(batch_right) == 2
         return "%s%s" % ('N' if n_left else '1', 'N' if n_right else '1')
-
-    def _to_tf2onnx_id(self, names, ctx, node, name, args):  # pylint: disable=W0613
-        self._check_inputs_(1)
-        inp = self.inputs[0]
-        n = self._get_data(names, inp)
-        yield ctx.make_node('Identity', [n])
-
-    def _to_tf2onnx_expand_dims(self, names, ctx, node, name, args):
-        self._check_inputs_(1)
-        inp = self.inputs[0]
-        name = self._get_data(names, inp)
-        axes = self.kwargs['axes']
-        yield GraphBuilder(ctx).make_unsqueeze({'data': name, "axes": [a[1] for a in axes]})
-
-    def _to_tf2onnx_transpose(self, names, ctx, node, name, args):  # pylint: disable=W0613
-        self._check_inputs_(1)
-        inp = self.inputs[0]
-        name = self._get_data(names, inp)
-        perm = self.kwargs['perm']
-        yield ctx.make_node("Transpose", [name], attr={"perm": perm})
-
-    def to_tf2onnx(self, names, ctx, node, name, args, **kwargs):
-        """
-        Converts this node into ONNX. Enumerates all ONNX node
-        which participate to the conversion. The last one
-        is the final output.
-
-        :param ctx: context
-        :param node: einsum node to replace
-        :param name: ?
-        :param args: ?
-        :param names: dictionary where to find already converted operators
-        :param opset: opset
-        :param kwargs: additional parameter for the conversion
-        :return: output
-        """
-        method_name = "_to_tf2onnx_%s" % self.name
-        meth = getattr(self, method_name, None)
-        if meth is None:
-            if self.name.endswith("_mm"):
-                raise NotImplementedError(
-                    "to_onnx not implemented for %r."
-                    "You should call method simplify_mm_nodes "
-                    "to remove it." % self.name)
-            raise NotImplementedError(
-                "to_onnx not implemented for %r." % self.name)
-        for node in meth(names, ctx, node, name, args, **kwargs):
-            if hasattr(node, 'output'):
-                names[id(self)] = node.output[0]
-            elif isinstance(node, str):
-                names[id(self)] = node
-            yield node
-
 
 
 class GraphEinsumSubOp:
@@ -1167,10 +1127,19 @@ class GraphEinsumSubOp:
         :param args: ?
         :return: output
         """
-        names = dict(enumerate(node.input))
-        for op in self:
-            for onx_node in op.to_tf2onnx(names, ctx, node, name, args):
-                yield onx_node
+        onx = self.to_onnx(node.output[0], *node.input, dtype=np.float32)
+        new_names = {k.name: v for k, v in zip(onx.graph.input, node.input)}
+        for init in onx.graph.initializer:
+            np_val = numpy_helper.to_array(init)
+            new_init = ctx.make_const(utils.make_name(init.name), np_val)
+            new_names[init.name] = new_init.name
+            yield new_init
+        for op in onx.graph.node:
+            kwargs = {p.name: p for p in op.attribute}
+            node = ctx.make_node(
+                op.op_type, [new_names[i] for i in op.input], attr=kwargs)
+            yield node
+            new_names[op.output[0]] = node.output[0]
 
 
 def analyse_einsum_equation(equation):
@@ -1689,23 +1658,5 @@ class EinsumOptimizer(GraphOptimizerBase):
         if len(new_nodes) > 0:
             # optimisation was made, node should be removed.
             last_node = new_nodes[-1]
-            graph.replace_inputs(node, [node.output[0], last_node.output[0]])
-        """
-        new_reshape_shape = None
-        if shift > 0:
-            new_shape = [1] * shift + new_shape
-            squeeze_node = GraphBuilder(graph).make_squeeze(
-                {'data': node.output[0], 'axes': list(range(shift))},
-                return_node=True, shapes=node.output_shapes, dtypes=node.output_dtypes)
-            new_reshape_shape = [1] * shift + graph.get_shape(node.output[0])
-            graph.insert_node_on_output(squeeze_node, node.output[0])
-        const_shape = graph.make_const(utils.make_name(node.name + "_shape"), np.array(new_shape, np.int64)).output[0]
-        if new_reshape_shape is not None:
-            graph.set_shape(node.output[0], new_reshape_shape)
-        graph.replace_inputs(node, [node.input[0], const_shape])
-        if shift < 0:
-            unsqueeze_node = GraphBuilder(graph).make_unsqueeze({'data': node.input[0], 'axes': list(range(-shift))})
-            graph.replace_inputs(node, [unsqueeze_node, const_shape])
-
-        return True
-        """
+            graph.replace_all_inputs(node.output[0], last_node.output[0])
+            graph.safe_remove_nodes([node])
