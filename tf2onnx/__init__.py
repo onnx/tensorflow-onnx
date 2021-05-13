@@ -2,10 +2,6 @@
 
 """tf2onnx package."""
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 __all__ = ["utils", "graph_matcher", "graph", "graph_builder",
            "tfonnx", "shape_inference", "schemas", "tf_utils", "tf_loader", "convert"]
 

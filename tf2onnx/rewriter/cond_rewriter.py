@@ -5,8 +5,6 @@
 tf2onnx.rewriter.cond_rewriter
 """
 
-from __future__ import division
-from __future__ import print_function
 import logging
 import traceback
 from collections import OrderedDict

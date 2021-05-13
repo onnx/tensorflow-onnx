@@ -2,10 +2,6 @@
 
 """tf2onnx.rewriter module."""
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from tf2onnx.rewriter.cond_rewriter import rewrite_cond
 from tf2onnx.rewriter.conv2d_with_pad_rewriter import rewrite_conv2d_with_pad
 from tf2onnx.rewriter.conv_dilations_rewriter import rewrite_conv_dilations

@@ -5,10 +5,6 @@
 tf2onnx.utils - misc utilities for tf2onnx
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import os
 import re
 import shutil

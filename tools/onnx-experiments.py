@@ -9,10 +9,6 @@ so all graph, rewrite, matching and utility libaries do work which makes things 
 
 # pylint: disable=invalid-name,missing-docstring, unused-argument
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import argparse
 import logging
 import traceback
