@@ -1644,7 +1644,7 @@ class CachedEinsum:
     * `onnx_`: if a conversion to onnx is used, stores the onnx graph
     * `runtime_`: a function used by `__call__`, calls the runtime
     """
-    _einsum_cache = {}
+    einsum_cache = {}
 
 
     def __init__(self, equation, opset=None, optimize=False,
@@ -1656,24 +1656,24 @@ class CachedEinsum:
         self.decompose = decompose
         self.key = key
 
-    def default_inputs(self, N=None):
+    def default_inputs(self, n=None):
         """
         Returns default inputs (reshaped np.arange + 0.7i).
 
-        :param N: dimension (all dimension have the same size)
+        :param n: dimension (all dimension have the same size)
 
         If *N is None*, N is given a size depending on the number of letters
         to avoid spending too much time on optimization.
         """
-        if N is None:
+        if n is None:
             letters = set(c for c in self.equation
                           if "a" <= c <= "z" or "A" <= c <= "Z")
             nn = math.factorial(len(letters))
-            N = max(int(2 ** 11 / nn), 4)
-            N = min(N, 15)
+            n = max(int(2 ** 11 / nn), 4)
+            n = min(n, 15)
         inps = self.equation.split('->')[0].split(',')
         lens = [len(s) for s in inps]
-        inputs = [np.arange(N ** d).reshape((N,) * d) for d in lens]
+        inputs = [np.arange(n ** d).reshape((n,) * d) for d in lens]
         inputs = [(i + 0.7 * ii).astype(self.dtype)
                   for ii, i in enumerate(inputs)]
         return inputs
@@ -1757,7 +1757,9 @@ class CachedEinsum:
         Builds the runtime associated to the
         equation `self.equation_`. It requires onnxunruntime.
         """
-        from onnxruntime import InferenceSession
+        # The conversion should not fail if onnxruntime is not here.
+        # Delayed import.
+        from onnxruntime import InferenceSession  # pylint: disable=C0415
         if self.decompose:
             self.graph_ = decompose_einsum_equation(self.equation_)
 
@@ -1774,7 +1776,7 @@ class CachedEinsum:
             self.onnx_names_ = input_names
         self.sess_ = InferenceSession(self.onnx_.SerializeToString())
         self.runtime_ = lambda *inputs: self.sess_.run(
-            None, {i: v for i, v in zip(self.onnx_names_, inputs)})[0]
+            None, dict(zip(self.onnx_names_, inputs)))[0]
 
     def __call__(self, *inputs):
         """
@@ -1812,11 +1814,11 @@ def optimize_einsum(equation, dtype, optimize=True,
     arguments. It saves time if the same einsum equation
     appears twice.
     """
-    _einsum_cache = CachedEinsum._einsum_cache
+    einsum_cache = CachedEinsum.einsum_cache
     cached = None
     if cache:
         key = equation, opset, optimize, dtype, decompose
-        cached = _einsum_cache.get(key, None)
+        cached = einsum_cache.get(key, None)
     if cached is None:
         cached = CachedEinsum.build_einsum(
             equation, opset, optimize,
@@ -1824,7 +1826,7 @@ def optimize_einsum(equation, dtype, optimize=True,
     else:
         cache = False
     if cache:
-        _einsum_cache[key] = cached
+        einsum_cache[key] = cached
     return cached
 
 
@@ -1874,8 +1876,8 @@ class EinsumOptimizer(GraphOptimizerBase):
         new_equation_obj = optimize_einsum(
             equation, decompose=True, dtype=np.float32, opset=graph.opset)
         if equation != new_equation_obj.equation_:
-            self.logger.debug("replacing einsum equation %r by %r" % (
-                equation, new_equation_obj.equation_))
+            self.logger.debug("replacing einsum equation %r by %r",
+                equation, new_equation_obj.equation_)
 
         seq = decompose_einsum_equation(new_equation_obj.equation_)
         new_nodes = list(seq.to_tf2onnx(graph, node))
@@ -1884,7 +1886,7 @@ class EinsumOptimizer(GraphOptimizerBase):
             last_node = new_nodes[-1]
             self.logger.debug(
                 "replacing einsum node %r by its decomposed version, name of the last "
-                "node %r." % (node.name, last_node.name))
+                "node %r.", node.name, last_node.name)
             graph.replace_all_inputs(node.output[0], last_node.output[0])
             graph.safe_remove_nodes([node])
             return True
