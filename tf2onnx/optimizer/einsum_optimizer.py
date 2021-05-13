@@ -9,7 +9,6 @@ from onnx import helper, numpy_helper, TensorProto
 from onnx.defs import onnx_opset_version
 from .. import utils
 from ..constants import OPSET_TO_IR_VERSION
-from ..graph_builder import GraphBuilder
 from .optimizer_base import GraphOptimizerBase
 
 def single_axes(axes):
@@ -1115,7 +1114,7 @@ class GraphEinsumSubOp:
                 initializer=inits, nodes=nodes))
         return model
 
-    def to_tf2onnx(self, ctx, node, name, args):
+    def to_tf2onnx(self, ctx, node):
         """
         Converts this node into ONNX. Enumerates all ONNX node
         which participate to the conversion. The last one
@@ -1123,8 +1122,6 @@ class GraphEinsumSubOp:
 
         :param ctx: context
         :param node: einsum node to replace
-        :param name: ?
-        :param args: ?
         :return: output
         """
         onx = self.to_onnx(node.output[0], *node.input, dtype=np.float32)
@@ -1626,6 +1623,10 @@ def _decompose_einsum_equation(equation, *shapes, op_matmul='batch_dot'):
 
 
 class EinsumOptimizer(GraphOptimizerBase):
+    """Remove einsum operators and replace them by a combination of
+    Transpose, ReduceSum, Reshape, MatMul, Gemm, Squeeze, Unsqueeze, Mul.
+    It does not handle equation with `...`, square indices (`ii->i`),
+    and undefined output shape (`ab,bc`)."""
 
     def __init__(self):  # pylint: disable=useless-super-delegation
         super(EinsumOptimizer, self).__init__()
@@ -1645,6 +1646,7 @@ class EinsumOptimizer(GraphOptimizerBase):
         return graph
 
     def _optimize_einsum(self, node, graph):
+        """Apply the optimizer."""
         if node.inputs[1].is_const():
             return False
         inp_shape = graph.get_shape(node.input[0])
@@ -1654,9 +1656,11 @@ class EinsumOptimizer(GraphOptimizerBase):
 
         equation = node.attr['equation'].s.decode('ascii')
         seq = decompose_einsum_equation(equation)
-        new_nodes = list(seq.to_tf2onnx(graph, node, None, None))
+        new_nodes = list(seq.to_tf2onnx(graph, node))
         if len(new_nodes) > 0:
             # optimisation was made, node should be removed.
             last_node = new_nodes[-1]
             graph.replace_all_inputs(node.output[0], last_node.output[0])
             graph.safe_remove_nodes([node])
+            return True
+        return False
