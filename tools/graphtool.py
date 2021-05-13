@@ -5,9 +5,6 @@
 simple tool to convert .meta to .pb.
 """
 
-from __future__ import division
-from __future__ import print_function
-
 import argparse
 import os
 

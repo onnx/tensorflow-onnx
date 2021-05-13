@@ -5,7 +5,6 @@
 tf2onnx.rewriter.rnn_utils - rnn support
 """
 
-from __future__ import unicode_literals
 from collections import defaultdict
 from enum import Enum
 
