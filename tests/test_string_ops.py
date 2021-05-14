@@ -130,17 +130,8 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, func, output_names_with_port, feed_dict, **kwargs):
         extra_opset = [utils.make_opsetid(constants.CONTRIB_OPS_DOMAIN, 1)]
         process_args = {"extra_opset": extra_opset}
-        return self.run_test_case(func, feed_dict, [], output_names_with_port, process_args=process_args, **kwargs)
-
-    def run_onnxruntime(self, model_path, inputs, output_names):
-        """Run test against onnxruntime backend."""
-        from onnxruntime_customops import get_library_path
-        import onnxruntime as rt
-        opt = rt.SessionOptions()
-        opt.register_custom_ops_library(get_library_path())
-        m = rt.InferenceSession(model_path, opt)
-        results = m.run(output_names, inputs)
-        return results
+        return self.run_test_case(func, feed_dict, [], output_names_with_port,
+                                  use_custom_ops=True, process_args=process_args, **kwargs)
 
     @requires_custom_ops("WordpieceTokenizer")
     @check_tf_min_version("2.0", "tensorflow_text")
