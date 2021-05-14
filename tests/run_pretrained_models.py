@@ -325,7 +325,7 @@ class Test(object):
         logger.info("Model saved to %s", model_path)
         opt = rt.SessionOptions()
         if self.use_custom_ops:
-            from ortcustomops import get_library_path
+            from onnxruntime_extensions import get_library_path
             opt.register_custom_ops_library(get_library_path())
             m = rt.InferenceSession(model_path, opt)
         if self.ort_profile is not None:

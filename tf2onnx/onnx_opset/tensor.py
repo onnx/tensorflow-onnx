@@ -134,6 +134,13 @@ class IdentityN:
             ctx.replace_all_inputs(output_name, input_name)  # ops=ctx.get_nodes()
 
 
+@tf_op("EnsureShape")
+class EnsureShape:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        node.type = "Identity"
+
+
 @tf_op("Reshape")
 class Reshape:
     @classmethod
