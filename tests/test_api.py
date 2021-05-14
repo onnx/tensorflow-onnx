@@ -10,8 +10,9 @@ import zipfile
 
 import numpy as np
 import tensorflow as tf
+from onnx import helper
 
-from common import check_tf_min_version, unittest_main
+from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version
 from backend_test_base import Tf2OnnxBackendTestBase
 import tf2onnx
 
@@ -73,6 +74,48 @@ class ApiTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("2.2")
     def test_keras_api_large(self):
         self._test_keras_api(large_model=True)
+
+    @requires_custom_ops()
+    @check_tf_min_version("2.0")
+    @check_opset_min_version(11, "SparseToDense")
+    def test_keras_hashtable(self):
+
+        feature_cols = [
+            tf.feature_column.numeric_column("f_inp", dtype=tf.float32),
+            tf.feature_column.indicator_column(
+                tf.feature_column.categorical_column_with_vocabulary_list("s_inp", ["a", "b", "z"], num_oov_buckets=1)
+            )
+        ]
+        feature_layer = tf.keras.layers.DenseFeatures(feature_cols)
+
+        input_dict = {}
+        input_dict["f_inp"] = tf.keras.Input(name="f_inp", shape=(1,), dtype=tf.float32)
+        input_dict["s_inp"] = tf.keras.Input(name="s_inp", shape=(1,), dtype=tf.string)
+
+        inputs = list(input_dict.values())
+        standard_features = feature_layer(input_dict)
+        hidden1 = tf.keras.layers.Dense(512, activation='relu')(standard_features)
+        output = tf.keras.layers.Dense(10, activation='softmax')(hidden1)
+        model = tf.keras.Model(inputs=inputs, outputs=output)
+        model.compile(optimizer='adam', loss=tf.keras.losses.mean_squared_error)
+
+        inp1 = np.array([[2.], [3.]], dtype=np.float32)
+        inp2 = np.array([["a"], ["b"]], dtype=np.str)
+        k_res = model.predict([inp1, inp2])
+        spec = (tf.TensorSpec((None, 1), dtype=tf.float32, name="f_inp"),
+                tf.TensorSpec((None, 1), tf.string, name="s_inp"))
+        output_path = os.path.join(self.test_data_directory, "model.onnx")
+
+        model_proto, _ = tf2onnx.convert.from_keras(
+            model, input_signature=spec, opset=self.config.opset, output_path=output_path,
+            extra_opset=[helper.make_opsetid("ai.onnx.contrib", 1)])
+        output_names = [n.name for n in model_proto.graph.output]
+
+        o_res = self.run_onnxruntime(output_path, {"f_inp": inp1, "s_inp": inp2}, output_names, use_custom_ops=True)
+        self.assertAllClose(k_res, o_res[0], rtol=0.3, atol=0.1)
+        # make sure the original keras model wasn't trashed
+        k_res2 = model.predict([inp1, inp2])
+        self.assertAllClose(k_res2, o_res[0], rtol=0.3, atol=0.1)
 
     @check_tf_min_version("2.0")
     def test_function(self):

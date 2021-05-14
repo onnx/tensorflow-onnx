@@ -70,7 +70,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = prepared_backend.run(inputs)
         return results
 
-    def run_onnxruntime(self, model_path, inputs, output_names):
+    def run_onnxruntime(self, model_path, inputs, output_names, use_custom_ops=False):
         """Run test against onnxruntime backend."""
         import onnxruntime as rt
         providers = ['CPUExecutionProvider']
@@ -79,6 +79,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if gpus is None or len(gpus) > 1:
                 providers = ['CUDAExecutionProvider']
         opt = rt.SessionOptions()
+        if use_custom_ops:
+            from onnxruntime_customops import get_library_path
+            opt.register_custom_ops_library(get_library_path())
         # in case of issues with the runtime, one can enable more logging
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
@@ -87,14 +90,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         results = m.run(output_names, inputs)
         return results
 
-    def run_backend(self, g, outputs, input_dict, large_model=False, postfix=""):
+    def run_backend(self, g, outputs, input_dict, large_model=False, postfix="", use_custom_ops=False):
         tensor_storage = ExternalTensorStorage() if large_model else None
         model_proto = g.make_model("test", external_tensor_storage=tensor_storage)
         model_path = self.save_onnx_model(model_proto, input_dict, external_tensor_storage=tensor_storage,
                                           postfix=postfix)
 
         if self.config.backend == "onnxruntime":
-            y = self.run_onnxruntime(model_path, input_dict, outputs)
+            y = self.run_onnxruntime(model_path, input_dict, outputs, use_custom_ops)
         elif self.config.backend == "caffe2":
             y = self.run_onnxcaffe2(model_proto, input_dict)
         else:
@@ -299,7 +302,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port,
                       rtol=1e-07, atol=1e-5, mtol=None, convert_var_to_const=True, constant_fold=True,
                       check_value=True, check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
-                      graph_validator=None, as_session=False, large_model=False, premade_placeholders=False):
+                      graph_validator=None, as_session=False, large_model=False, premade_placeholders=False,
+                      use_custom_ops=False):
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
         run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
@@ -339,7 +343,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                      initialized_tables=initialized_tables,
                                      **process_args)
                 g = optimizer.optimize_graph(g, catch_errors=False)
-                actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model)
+                actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model,
+                                          use_custom_ops=use_custom_ops)
 
             self.assert_results_equal(expected, actual, rtol, atol, mtol, check_value, check_shape, check_dtype)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
@@ -369,7 +374,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                  **tfl_process_args)
             g = optimizer.optimize_graph(g)
             onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
-            onnx_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port, postfix="_from_tflite")
+            onnx_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port,
+                                            postfix="_from_tflite", use_custom_ops=use_custom_ops)
 
             self.assert_results_equal(tfl_res, onnx_tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
