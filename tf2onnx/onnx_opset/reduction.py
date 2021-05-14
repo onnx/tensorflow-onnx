@@ -239,7 +239,7 @@ class SegmentSum():
                 zeros = ctx.make_node("ConstantOfShape", [num_segments_unsq], attr={'value': zero_tensor}).output[0]
             seg_cnts = ctx.make_node("ScatterElements", [zeros, seg_values, seg_cnts_sorted],
                                      attr={'axis': 0}).output[0]
-            seg_cnts_float = ctx.make_node("Cast", [seg_cnts], attr={'to': onnx_pb.TensorProto.FLOAT}).output[0]
+            seg_cnts_float = ctx.make_node("Cast", [seg_cnts], attr={'to': data_dtype}).output[0]
         if node.type == "SegmentMean":
             scaling_amt = seg_cnts_float
         elif node.type == "SegmentSqrtN":
