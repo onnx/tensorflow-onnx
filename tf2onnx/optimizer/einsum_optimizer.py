@@ -1405,7 +1405,6 @@ def _apply_squeeze_transpose(op, row_last, row_output):
             continue
         new_perm[i] = perm[p][1]
         p += 1
-    perm = [p[1] for p in perm]
     if not is_transpose_identity(new_perm):
         op = EinsumSubOp(len(row_last), 'transpose', op,
                          perm=tuple(new_perm))
@@ -1697,7 +1696,6 @@ class CachedEinsum:
             subset = possible
             best = []
             confs = []
-            very_best = None
             inputs = None
             for perm in subset:
                 replace = {d: c for c, d in zip(letters, perm)}
