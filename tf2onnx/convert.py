@@ -75,6 +75,8 @@ def get_args():
     parser.add_argument("--custom-ops", help="comma-separated map of custom ops to domains in format OpName:domain")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
+    parser.add_argument("--load_op_libraries",
+                        help="comma-separated list of tf op library paths to register before loading model")
     parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=constants.POSSIBLE_TARGETS,
                         help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
