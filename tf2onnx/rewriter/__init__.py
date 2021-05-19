@@ -2,13 +2,9 @@
 
 """tf2onnx.rewriter module."""
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from tf2onnx.rewriter.cond_rewriter import rewrite_cond
 from tf2onnx.rewriter.conv2d_with_pad_rewriter import rewrite_conv2d_with_pad
-from tf2onnx.rewriter.depthwise_conv_dilations_rewriter import rewrite_depthwise_conv_dilations
+from tf2onnx.rewriter.conv_dilations_rewriter import rewrite_conv_dilations
 from tf2onnx.rewriter.dropout_rewriter import rewrite_dropout
 from tf2onnx.rewriter.eye_rewriter import rewrite_eye
 from tf2onnx.rewriter.flatten_rewriter import rewrite_flatten
@@ -24,6 +20,7 @@ from tf2onnx.rewriter.transpose_rewriter import rewrite_transpose
 from tf2onnx.rewriter.conv2d_with_add_rewriter import rewrite_biasadd_with_conv2d
 from tf2onnx.rewriter.quantization_ops_rewriter import rewrite_quantize_and_dequantize
 from tf2onnx.rewriter.layer_normalization_rewriter import rewrite_layer_normalization
+from tf2onnx.rewriter.ragged_variant_shape_rewriter import rewrite_ragged_variant_shape
 
 
 __all__ = [
@@ -48,5 +45,6 @@ __all__ = [
     "rewrite_biasadd_with_conv2d",
     "rewrite_quantize_and_dequantize",
     "rewrite_layer_normalization",
-    "rewrite_depthwise_conv_dilations"
+    "rewrite_conv_dilations",
+    "rewrite_ragged_variant_shape"
 ]

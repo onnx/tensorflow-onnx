@@ -2,10 +2,6 @@
 
 """tf2onnx.optimizer module"""
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from collections import OrderedDict
 import copy
 
@@ -18,6 +14,8 @@ from .back_to_back_optimizer import BackToBackOptimizer
 from .upsample_optimizer import UpsampleOptimizer
 from .const_dequantize_optimizer import ConstDequantizeOptimizer
 from .reshape_optimizer import ReshapeOptimizer
+from .global_pool_optimizer import GlobalPoolOptimizer
+from .q_dq_optimizer import QDQOptimizer
 from .. import logging
 
 # optimizer sequence need to be considered carefully
@@ -31,6 +29,8 @@ _optimizers = OrderedDict([
     # for optimize_transpose may have some trans nodes that can be merge
     ("merge_duplication", MergeDuplicatedNodesOptimizer),
     ("reshape_optimizer", ReshapeOptimizer),
+    ("global_pool_optimizer", GlobalPoolOptimizer),
+    ("q_dq_optimizer", QDQOptimizer),
     ("remove_identity", IdentityOptimizer),
     ("remove_back_to_back", BackToBackOptimizer),
 ])
@@ -48,6 +48,7 @@ def optimize_graph(graph, catch_errors=True):
     before = graph.dump_node_statistics()
     opts = _get_optimizers()
     continue_flag = True
+    iteration = 0
     while continue_flag:
         continue_flag = False
         for name, factory in opts.items():
@@ -56,15 +57,16 @@ def optimize_graph(graph, catch_errors=True):
                 try:
                     current = copy.deepcopy(graph)
                     opt = factory()
-                    graph = opt.optimize(current) or graph
+                    graph = opt.optimize(current, iteration) or graph
                     continue_flag = continue_flag or opt.graph_been_opt
                 except Exception:  # pylint: disable=broad-except
                     # if current optimizer fails, continue with other optimizers
                     logger.warning("Failed to apply %s", name, exc_info=1)
             else:
                 opt = factory()
-                graph = opt.optimize(graph)
+                graph = opt.optimize(graph, iteration)
                 continue_flag = continue_flag or opt.graph_been_opt
+        iteration += 1
 
     try:
         graph.topological_sort(graph.get_nodes())

@@ -5,10 +5,6 @@
 tf2onnx.graph - class to manage graph manipulation on top of onnx
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import collections
 import copy
 import logging
@@ -469,6 +465,8 @@ class Graph(object):
         # Used by the tflite while loop handler
         self.scan_outputs = []
         self.func_inputs = []
+        self.ragged_variant_list_reads = []
+        self.ragged_variant_list_writes = []
 
         self._target = set(target)
         self._dtypes = dtypes
@@ -691,6 +689,8 @@ class Graph(object):
             self.inputs.remove(node)
 
         for op_output in node.output:
+            if op_output == "":
+                continue
             del self._output_to_node_name[op_output]
 
             if op_output in self._output_shapes:
@@ -699,6 +699,8 @@ class Graph(object):
                 del self._dtypes[op_output]
 
         for op_input in node.input:
+            if op_input == "":
+                continue
             utils.make_sure(
                 op_input in self._output_to_consumers,
                 "Input %r of node %r not found.", op_input, node_name)
@@ -863,6 +865,12 @@ class Graph(object):
             self._output_to_node_name[op_output] = node.name
         for name in node.input:
             self._register_input_name(name, node)
+
+    def is_const(self, output):
+        return self.get_node_by_output(output).is_const()
+
+    def get_tensor_value(self, output, as_list=True):
+        return self.get_node_by_output(output).get_tensor_value(as_list)
 
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
@@ -1248,7 +1256,7 @@ class Graph(object):
 
         # don't remove output from parent since others might depend on it
 
-    def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, **kwargs):
+    def insert_new_node_on_input(self, node, op_type, input_name, name=None, domain=None, input_index=None, **kwargs):
         """Create and insert a new node into the graph.
         Args:
             node: we want to replace the input for this node
@@ -1269,10 +1277,13 @@ class Graph(object):
             input_name = [input_name]
 
         new_node = self.make_node(op_type, input_name, attr=kwargs, outputs=[new_output], name=name, domain=domain)
-        for i, n in enumerate(node.input):
-            if n == input_name[0]:
-                self.replace_input(node, node.input[i], new_output, i)
-                break
+        if input_index is None:
+            for i, n in enumerate(node.input):
+                if n == input_name[0]:
+                    self.replace_input(node, node.input[i], new_output, i)
+                    break
+        else:
+            self.replace_input(node, node.input[input_index], new_output, input_index)
         return new_node
 
     def insert_node_on_output(self, node, output_name=None):
@@ -1490,16 +1501,16 @@ class Graph(object):
             a list of nodes
         """
         res_set = set()
-        if not outputs_name:
-            return list(res_set)
 
-        for output in outputs_name:
+        outputs_to_keep = list(outputs_name)
+        if not remove_unused_inputs:
+            # add placeholder nodes even if they are not connected to outputs.
+            # placeholder nodes with defaults can have inputs themselves
+            outputs_to_keep += [inp.output[0] for inp in self.inputs]
+
+        for output in outputs_to_keep:
             node = self.get_node_by_output(output, search_in_parent_graphs=False)
             res_set = res_set.union(self._extract_sub_graph_nodes(node, input_checker))
-
-        if not remove_unused_inputs:
-            # add back placeholder nodes if they are not connected to outputs.
-            res_set = res_set.union(self.inputs)
 
         return list(res_set)
 

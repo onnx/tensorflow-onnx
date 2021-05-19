@@ -3,17 +3,15 @@
 
 """Methods to load tensorflow graph from graphdef, checkpoint or saved_model."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 from distutils.version import LooseVersion
 
 import tensorflow as tf
 import numpy as np
+from google.protobuf.message import DecodeError
+from tensorflow.core.protobuf import saved_model_pb2
 from tensorflow.python.ops import lookup_ops
+from tensorflow.python.util import compat
 
 from tf2onnx import utils
 from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx, get_hash_table_info, replace_placeholders_with_tables
@@ -49,13 +47,12 @@ except ImportError:
 try:
     # pylint: disable=protected-access
     from tensorflow.python.saved_model.load import _RestoredResource as TfRestoredResourceType
+    from tensorflow.python.ops.lookup_ops import StaticHashTable as TfStaticHashTableType
+    from tensorflow.python.training.tracking.base import Trackable as TfTrackableType
 except ImportError:
     TfRestoredResourceType = tuple()  # isinstance(x, tuple()) is always false
-
-try:
-    from tensorflow.python.training.tracking.tracking import AutoTrackable as TfAutoTrackableType
-except ImportError:
-    TfAutoTrackableType = tuple()
+    TfStaticHashTableType = tuple()
+    TfTrackableType = tuple()
 
 if is_tf2():
     convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
@@ -135,15 +132,79 @@ def convert_variables_to_constants_large_model(func):
     return frozen_graph_def
 
 
+def fix_freezing_errors(graph_def):
+    assign_var_ops = []
+    for i in reversed(range(len(graph_def.node))):
+        if graph_def.node[i].op == "AssignVariableOp":
+            assign_var_ops.append(graph_def.node.pop(i).name)
+            logger.warning("Removed AssignVariableOp %s", assign_var_ops[-1])
+    names_to_remove = set(assign_var_ops)
+    for n in graph_def.node:
+        for i in reversed(range(len(n.input))):
+            if n.input[i].startswith("^") and n.input[i][1:] in names_to_remove:
+                n.input.pop(i)
+    return graph_def
+
+
+def from_trackable(trackable, concrete_func, inputs, outputs, large_model):
+    err_large_model = "model exceeds maximum protobuf size of 2GB. Try setting large_model."
+
+    # Avoid errors due to bug in TF freezing
+    removed_resource_to_placeholder, graph_captures_copy, func_captures_copy = \
+        _remove_non_variable_resources_from_captures(concrete_func)
+
+    try:
+        frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
+    except ValueError as e:
+        if any(msg in str(e) for msg in ["exceeds maximum protobuf size of 2GB", "string too long"]):
+            raise ValueError(err_large_model)
+        raise e
+
+    # We might be returning the concrete_func so let's put it back in working order
+    _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy)
+
+    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
+    placeholder_to_table_info = {}
+    _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
+                                        removed_resource_to_placeholder, placeholder_to_table_info)
+
+    initialized_tables = {}
+    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
+        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+        try:
+            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+            initialized_tables[n] = (k.numpy(), v.numpy())
+        except Exception:  # pylint: disable=broad-except
+            logger.warning("Could not initialize table with shared_name = %r", n)
+
+    for placeholder in removed_resource_to_placeholder.values():
+        if placeholder not in placeholder_to_table_info:
+            logger.error("Could not find table resource to replace placeholder %s", placeholder)
+
+    replace_placeholders_with_tables(frozen_graph, placeholder_to_table_info)
+
+    return frozen_graph, initialized_tables
+
+
 def from_function(func, input_names, output_names, large_model=False):
     if large_model:
         return convert_variables_to_constants_large_model(func)
 
-    if get_tf_version() < LooseVersion("2.2"):
-        frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
+    try:
+        if get_tf_version() < LooseVersion("2.2"):
+            frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
+        else:
+            frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
+    except ValueError as e:
+        if "incompatible with expected resource" in str(e):
+            frozen_func = convert_variables_to_constants_large_model(func)
+            logger.warning("TF freezing failed. Attempting to fix freezing errors.")
+            graph_def = fix_freezing_errors(frozen_func)
+        else:
+            raise e
     else:
-        frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
-    graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
+        graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
+
     # output_names = [i.name for i in frozen_func.outputs]
     with tf.Graph().as_default() as tf_graph:
         with tf_session(graph=tf_graph) as sess:
@@ -194,6 +255,11 @@ def from_graphdef(model_path, input_names, output_names):
                     "Unable to load file '{}'.".format(model_path)) from e
             try:
                 graph_def.ParseFromString(content)
+            except DecodeError:
+                content_as_bytes = compat.as_bytes(content)
+                saved_model = saved_model_pb2.SavedModel()
+                saved_model.ParseFromString(content_as_bytes)
+                graph_def = saved_model.meta_graphs[0].graph_def
             except Exception as e:
                 raise RuntimeError(
                     "Unable to parse file '{}'.".format(model_path)) from e
@@ -300,7 +366,27 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
 def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
                                         removed_resource_to_placeholder, placeholder_to_table_info):
     # pylint: disable=protected-access
-    for r in trackable.__dict__.values():
+    stack = [trackable]
+    visited = set()
+    while stack:
+        r = stack.pop()
+        visited.add(id(r))
+        try:
+            for trackable_ref in r._checkpoint_dependencies:
+                if id(trackable_ref.ref) not in visited:
+                    if isinstance(trackable_ref.ref, TfTrackableType):
+                        stack.append(trackable_ref.ref)
+        except Exception:  # pylint: disable=broad-except
+            continue
+        for t in r.__dict__.values() if hasattr(r, '__dict__') else []:
+            if isinstance(t, TfStaticHashTableType) and hasattr(t, '_shared_name'):
+                table_names.append(t._shared_name.encode())
+                key_dtypes.append(t.key_dtype.as_datatype_enum)
+                value_dtypes.append(t.value_dtype.as_datatype_enum)
+                table_handle = id(t.resource_handle)
+                if table_handle in removed_resource_to_placeholder:
+                    table_info = (table_names[-1], key_dtypes[-1], value_dtypes[-1])
+                    placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
         if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource'):
             try:
                 table_handle = id(r.resource_handle)
@@ -314,9 +400,6 @@ def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, valu
             if table_handle in removed_resource_to_placeholder and len(new_names) == 1:
                 table_info = (new_names[0], new_k_dtypes[0], new_v_dtypes[0])
                 placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
-        if isinstance(r, TfAutoTrackableType):
-            _get_hash_table_info_from_trackable(r, table_names, key_dtypes, value_dtypes,
-                                                removed_resource_to_placeholder, placeholder_to_table_info)
 
 
 def _remove_non_variable_resources_from_captures(concrete_func):
@@ -372,7 +455,6 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     err_index = "Invalid concrete_function value: %i. Valid values are [0 to %i]"
     err_no_sig = "No signatures found in model. Try --concrete_function instead."
     err_sig_nomatch = "Specified signature not in model %s"
-    err_large_model = "model exceeds maximum protobuf size of 2GB. Try running with --large_model flag."
 
     if tag is None:
         tag = ['serve']
@@ -429,39 +511,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         outputs = output_names
         logger.info("Outputs not left as None; will use provided names not structured output names.")
 
-    # Avoid errors due to bug in TF freezing
-    removed_resource_to_placeholder, graph_captures_copy, func_captures_copy = \
-        _remove_non_variable_resources_from_captures(concrete_func)
-
-    try:
-        frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
-    except ValueError as e:
-        if any(msg in str(e) for msg in ["exceeds maximum protobuf size of 2GB", "string too long"]):
-            raise ValueError(err_large_model)
-        raise e
-
-    # We might be returning the concrete_func so let's put it back in working order
-    _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy)
-
-    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
-    placeholder_to_table_info = {}
-    _get_hash_table_info_from_trackable(imported, table_names, key_dtypes, value_dtypes,
-                                        removed_resource_to_placeholder, placeholder_to_table_info)
-
-    initialized_tables = {}
-    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
-        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
-        try:
-            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
-            initialized_tables[n] = (k.numpy(), v.numpy())
-        except Exception:  # pylint: disable=broad-except
-            logger.warning("Could not initialize table with shared_name = %r", n)
-
-    for placeholder in removed_resource_to_placeholder.values():
-        if placeholder not in placeholder_to_table_info:
-            logger.error("Could not find table resource to replace placeholder %s", placeholder)
-
-    replace_placeholders_with_tables(frozen_graph, placeholder_to_table_info)
+    frozen_graph, initialized_tables = from_trackable(imported, concrete_func, inputs, outputs, large_model)
 
     return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables, tensors_to_rename
 

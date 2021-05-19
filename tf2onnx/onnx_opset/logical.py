@@ -5,10 +5,6 @@
 logical
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 
 from onnx import TensorProto
@@ -74,6 +70,11 @@ class Equal:
     def version_7(cls, ctx, node, **kwargs):
         # T2 output = Equal(T1, x, T1 y), T1 \in {bool, int32, int64}
         need_not = node.type == "NotEqual"
+        if need_not and node.input[0] == node.input[1]:
+            # The only value not equal to itself is NaN
+            node.type = "IsNaN"
+            ctx.replace_inputs(node, [node.input[0]])
+            return
         supported_dtypes = [
             TensorProto.BOOL,
             TensorProto.INT32,

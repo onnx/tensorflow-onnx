@@ -5,10 +5,6 @@
 tensor
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 import sys
 
@@ -136,6 +132,13 @@ class IdentityN:
         ctx.remove_node(node.name)
         for input_name, output_name in zip(node.input, node.output):
             ctx.replace_all_inputs(output_name, input_name)  # ops=ctx.get_nodes()
+
+
+@tf_op("EnsureShape")
+class EnsureShape:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        node.type = "Identity"
 
 
 @tf_op("Reshape")
@@ -849,8 +852,11 @@ class StridedSlice:
         attr = {"starts": new_begin, "ends": new_end, "axes": axes}
         inputs_map = {"data": node.input[0], **attr}
         kwargs = {**inputs_map, "outputs": node.output}
-        node = GraphBuilder(ctx).make_slice(
-            kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes, return_node=True)
+        if len(axes) > 0:
+            node = GraphBuilder(ctx).make_slice(
+                kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes, return_node=True)
+        else:
+            node = ctx.make_node("Identity", [node.input[0]], name=node.name, dtypes=out_dtypes, shapes=out_shapes)
         nodes = [node]
         if needs_squeeze:
             # insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None, domain=None, **kwargs)
@@ -896,15 +902,15 @@ class StridedSlice:
         #                 @int shrink_axis_mask, @int new_axis_mask)
         # T output = Slice(T input, Tind starts, Tind ends, Tind axes, Tind steps)
         # "ends" are exclusive, "axes" and "steps" are optional, their default val are [0, ...] and 1
-        input_x = node.inputs[0]
-        begin = node.inputs[1]
-        end = node.inputs[2]
-        strides = node.inputs[3]
+        input_x = node.input[0]
+        begin = node.input[1]
+        end = node.input[2]
+        strides = node.input[3]
         new_axis_mask = node.get_attr("new_axis_mask")
         new_axis_mask = new_axis_mask.i if new_axis_mask is not None else 0
 
-        if begin.is_const() and end.is_const() and strides.is_const() \
-                and all(val == 1 for val in strides.get_tensor_value()) \
+        if ctx.is_const(begin) and ctx.is_const(end) and ctx.is_const(strides) \
+                and all(val == 1 for val in ctx.get_tensor_value(strides)) \
                 and new_axis_mask == 0:
             cls.version_1(ctx, node, **kwargs)
             return
@@ -945,7 +951,7 @@ class StridedSlice:
                 if (new_axis_mask >> bit) & 1 == 1:
                     num_new += 1
                 if (ellipsis_mask >> bit) & 1:
-                    input_shape = ctx.get_shape(input_x.output[0])
+                    input_shape = ctx.get_shape(input_x)
                     # calculate what rank for ellipsis: input rank - (being rank - all new_axis - 1)
                     ellipsis_gap = len(input_shape) - param_rank + num_new + 1
                 if (new_axis_mask >> bit) & 1 == 1:
@@ -954,7 +960,7 @@ class StridedSlice:
                     end_mask |= 1 << bit
 
             input_x = GraphBuilder(ctx).make_unsqueeze(
-                {'data': input_x.output[0], 'axes': unqueeze_at}, return_node=True)
+                {'data': input_x, 'axes': unqueeze_at})
 
 
         # use in onnx graph to mask begin
@@ -969,7 +975,7 @@ class StridedSlice:
         ellipsis_gap = 0
         for idx in range(param_rank):
             if (ellipsis_mask >> idx) & 1:
-                input_shape = ctx.get_shape(input_x.output[0])
+                input_shape = ctx.get_shape(input_x)
                 utils.make_sure(
                     input_shape is not None,
                     "StridedSlice op {} requires the shape of input".format(node.name)
@@ -1006,34 +1012,32 @@ class StridedSlice:
         # mask begin
         new_begin_mask = np.array(new_begin_mask, dtype=np_dtype)
         if not np.all(new_begin_mask == 1):
-            if begin.is_const() and strides.is_const():
-                new_begin_vals = np.copy(begin.get_tensor_value(as_list=False))
-                strides_vals = strides.get_tensor_value(as_list=False)
+            if ctx.is_const(begin) and ctx.is_const(strides):
+                new_begin_vals = np.copy(ctx.get_tensor_value(begin, as_list=False))
+                strides_vals = ctx.get_tensor_value(strides, as_list=False)
                 idx1 = np.where(new_begin_mask == 0)
                 idx2 = np.where(strides_vals < 0)
                 idx3 = np.intersect1d(idx1, idx2)
                 new_begin_vals[idx3] = max_size
-                begin = ctx.make_const(utils.make_name("begin_masked"), new_begin_vals)
+                begin = ctx.make_const(utils.make_name("begin_masked"), new_begin_vals).output[0]
             else:
                 begin_mask_const = ctx.make_const(utils.make_name("begin_mask"), np.equal(new_begin_mask, 0))
                 zero_const = ctx.make_const(utils.make_name("zero_const"), np.zeros(1, dtype=np_dtype))
                 max_const = ctx.make_const(utils.make_name("max_const"), np.array(max_size, dtype=np_dtype))
-                op1 = ctx.make_node("Less", [strides.output[0], zero_const.output[0]], op_name_scope=node.name)
+                op1 = ctx.make_node("Less", [strides, zero_const.output[0]], op_name_scope=node.name)
                 op2 = ctx.make_node("And", [op1.output[0], begin_mask_const.output[0]], op_name_scope=node.name)
-                begin = ctx.make_node("Where", [op2.output[0], max_const.output[0], begin.output[0]],
-                                      op_name_scope=node.name)
+                begin = ctx.make_node("Where", [op2.output[0], max_const.output[0], begin],
+                                      op_name_scope=node.name).output[0]
 
         # mask end
         new_end_mask = np.array(new_end_mask, dtype=np_dtype)
-        end_output = end.output[0]
         if not np.all(new_end_mask == min_size):
-            if end.is_const() and strides.is_const():
-                new_end_mask = np.maximum(end.get_tensor_value(as_list=False), new_end_mask)
+            if ctx.is_const(end) and ctx.is_const(strides):
+                new_end_mask = np.maximum(ctx.get_tensor_value(end, as_list=False), new_end_mask)
                 idx = np.where(new_end_mask == max_size)
-                sign = np.sign(strides.get_tensor_value(as_list=False))[idx]
+                sign = np.sign(ctx.get_tensor_value(strides, as_list=False))[idx]
                 new_end_mask[idx] = new_end_mask[idx] * sign
-                end = ctx.make_const(utils.make_name("end_masked"), new_end_mask)
-                end_output = end.output[0]
+                end = ctx.make_const(utils.make_name("end_masked"), new_end_mask).output[0]
             else:
                 # Overlay new_end_mask with specified end values.
                 # Adjust max_size to min_size if steps are < 0
@@ -1042,25 +1046,22 @@ class StridedSlice:
                 zero_const = ctx.make_const(utils.make_name("zero_const"), np.zeros(1, dtype=np_dtype))
                 end_mask_const = ctx.make_const(utils.make_name("end_mask"), np.array(new_end_mask, dtype=np_dtype))
                 outputname = utils.make_name("{}__newendmask".format(node.name))
-                new_end_mask = math.make_min_or_max_op(ctx, "Max", [end.output[0], end_mask_const.output[0]],
+                new_end_mask = math.make_min_or_max_op(ctx, "Max", [end, end_mask_const.output[0]],
                                                        [outputname])
-                op1 = ctx.make_node("Less", [strides.output[0], zero_const.output[0]], op_name_scope=node.name)
+                op1 = ctx.make_node("Less", [strides, zero_const.output[0]], op_name_scope=node.name)
                 op2 = ctx.make_node("Equal", [new_end_mask.output[0], max_const.output[0]], op_name_scope=node.name)
                 op3 = ctx.make_node("And", [op2.output[0], op1.output[0]], op_name_scope=node.name)
-                final_end = ctx.make_node("Where", [op3.output[0], min_const.output[0],
-                                                    new_end_mask.output[0]], op_name_scope=node.name)
-                end_output = final_end.output[0]
+                end = ctx.make_node("Where", [op3.output[0], min_const.output[0], new_end_mask.output[0]],
+                                    op_name_scope=node.name).output[0]
 
         # mask strides for shrink
         shrink_strided_mask = np.array(shrink_strided_mask, dtype=np_dtype)
-        strides_output = strides.output[0]
         if not np.all(shrink_strided_mask == min_size):
-            if strides.is_const():
+            if ctx.is_const(strides):
                 strides = ctx.make_const(
                     utils.make_name("strides_masked"),
-                    np.maximum(strides.get_tensor_value(as_list=False), shrink_strided_mask)
-                )
-                strides_output = strides.output[0]
+                    np.maximum(ctx.get_tensor_value(strides, as_list=False), shrink_strided_mask)
+                ).output[0]
             else:
                 shrink_strided_mask_const = ctx.make_const(
                     utils.make_name("strides_mask"),
@@ -1069,9 +1070,10 @@ class StridedSlice:
                 strides_output = utils.make_name("{}__strides".format(node.name))
                 math.make_min_or_max_op(
                     ctx, "Max",
-                    [strides.output[0], shrink_strided_mask_const.output[0]],
+                    [strides, shrink_strided_mask_const.output[0]],
                     [strides_output]
                 )
+                strides = strides_output
         # create axes input
         axes_const = ctx.make_const(
             utils.make_name("slice_axes"),
@@ -1080,10 +1082,10 @@ class StridedSlice:
         axes_output = axes_const.output[0]
 
         inputs_map = {
-            "data": input_x.output[0],
-            "starts": begin.output[0],
-            "ends": end_output,
-            "steps": strides_output,
+            "data": input_x,
+            "starts": begin,
+            "ends": end,
+            "steps": strides,
             "axes": axes_output
         }
         kwargs = {**inputs_map, "outputs": node.output}
@@ -1846,7 +1848,7 @@ class NonMaxSuppression:
 @tf_op(["CombinedNonMaxSuppression"])
 class CombinedNonMaxSuppression:
     @classmethod
-    def version_10(cls, ctx, node, **kwargs):
+    def version_12(cls, ctx, node, **kwargs):
         # boxes.shape = [batch_size, num_boxes, (1 OR num_classes), 4]
         # scores.shape = [batch_size, num_boxes, num_classes]
         boxes, scores, max_per_class, max_total_size, iou_threshold, score_threshold = node.input
@@ -2065,11 +2067,13 @@ class ReverseSequence:
         batch_dim = node.get_attr_value("batch_dim", 0)
 
         ctx.remove_node(node.name)
+        shape = ctx.get_shape(node.input[0])
+        dtype = ctx.get_dtype(node.input[0])
         node = ctx.make_node(
             "ReverseSequence",
             node.input,
             outputs=node.output,
-            attr={"batch_axis": batch_dim, "time_axis": seq_dim})
+            attr={"batch_axis": batch_dim, "time_axis": seq_dim}, shapes=[shape], dtypes=[dtype])
 
         seq_len_dtype = ctx.get_dtype(node.input[1])
         utils.make_sure(seq_len_dtype is not None, "dtype of {} is None".format(node.input[1]))
@@ -2191,7 +2195,10 @@ class ReverseV2:
                     ((i == len_axes - 1) and (curr_perm == orig_perm)) \
                     else None
 
-                rs_out_shapes = None if rs_out_name is None else rv2_output_shapes
+                if rs_out_name is not None:
+                    rs_out_shapes = rv2_output_shapes
+                else:
+                    rs_out_shapes = [ctx.get_shape(inputs[0])]
 
                 new_node = ctx.make_node(
                     "ReverseSequence",
@@ -2578,6 +2585,63 @@ class RaggedGather:
         ctx.replace_all_inputs(node.output[0], output_splits)
         ctx.replace_all_inputs(node.output[1], output_values)
         ctx.remove_node(node.name)
+
+
+@tf_op("RaggedTensorFromVariant")
+class RaggedTensorFromVariant:
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        inp = node.inputs[0]
+        if inp.is_while():
+            row_lengths = inp.ragged_scan_output_to_len.get(node.input[0])
+            utils.make_sure(row_lengths is not None, "Couldn't find lengths for %s node %s" % (node.type, node.name))
+            dense_values = ctx.make_node("ConcatFromSequence", [node.input[0]], attr={'axis': 0}).output[0]
+            const_zero = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.int64)).output[0]
+            const_zero_unsq = ctx.make_const(utils.make_name("const_zero"), np.array([0], np.int64)).output[0]
+            row_splits = ctx.make_node("CumSum", [row_lengths, const_zero]).output[0]
+            row_splits_w_zero = ctx.make_node("Concat", [const_zero_unsq, row_splits], attr={'axis': 0}).output[0]
+            idx_dtype = ctx.get_dtype(node.output[0])
+            if idx_dtype != TensorProto.INT64:
+                row_splits_w_zero = ctx.make_node("Cast", [row_splits_w_zero], attr={'to': idx_dtype}).output[0]
+            ctx.replace_all_inputs(node.output[0], row_splits_w_zero)
+            ctx.replace_all_inputs(node.output[1], dense_values)
+            ctx.remove_node(node.name)
+            return
+
+        utils.make_sure(inp.type == "Gather", "RaggedTensorFromVariant only supported after TensorListGetItem")
+        variant = inp.inputs[0]
+        err_msg = "RaggedTensorFromVariant only supported if variant is a graph input"
+        # Variant input will be found during loop conversion
+        utils.make_sure(variant.type == "Placeholder", err_msg)
+        ctx.ragged_variant_list_reads.append(node)
+
+
+@tf_op("RaggedTensorToVariant")
+class RaggedTensorToVariant:
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        cons = ctx.find_output_consumers(node.output[0])
+        err_msg = "RaggedTensorToVariant only supported as input/output to loops"
+        utils.make_sure(len(cons) == 1, err_msg)
+        if cons[0].type == "TensorListFromTensor":
+            # Will be delt with in loop
+            cons = ctx.find_output_consumers(cons[0].output[0])
+            utils.make_sure(all(n.is_while() for n in cons), err_msg)
+            return
+        utils.make_sure(cons[0].type == "TensorListSetItem", err_msg)
+        tensor_set_item = cons[0]
+        list_output = tensor_set_item.output[0]
+        cons = ctx.find_output_consumers(list_output)
+        while len(cons) == 1 and cons[0].type == "Identity":
+            list_output = cons[0].output[0]
+            cons = ctx.find_output_consumers(list_output)
+        utils.make_sure(not cons, err_msg)
+        utils.make_sure(list_output in ctx.outputs, err_msg)
+        err_msg2 = "RaggedTensorToVariant within loop requires RAGGED_RANK=0"
+        err_msg3 = "RaggedTensorToVariant within loop requires batched_input=False"
+        utils.make_sure(node.get_attr_value("RAGGED_RANK") == 0, err_msg2)
+        utils.make_sure(not node.get_attr_value("batched_input"), err_msg3)
+        ctx.ragged_variant_list_writes.append((ctx.outputs.index(list_output), node))
 
 
 @tf_op("SparseReshape")

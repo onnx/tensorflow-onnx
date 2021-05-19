@@ -5,10 +5,6 @@
 tf2onnx.rewriter.rnn - lstm support
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 
 from tf2onnx.rewriter.bilstm_rewriter import rewrite_bidirectional_lstms

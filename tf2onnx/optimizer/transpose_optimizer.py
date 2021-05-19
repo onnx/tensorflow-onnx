@@ -3,7 +3,6 @@
 
 """Transpose Optimizer."""
 
-from __future__ import unicode_literals
 from collections import defaultdict
 
 import numpy as np
@@ -176,7 +175,8 @@ class TransposeOptimizer(GraphOptimizerBase):
                         # referencing already deleted elements
                         break
 
-                if is_useless_transpose(n):
+                # Make sure node wasn't already deleted in _handle_nhwc_tranpose
+                if graph.get_node_by_name(n.name) is not None and is_useless_transpose(n):
                     no_action = False
                     iteration_cnt += 1
                     self._remove_useless_tranpose(n)
@@ -915,6 +915,13 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _quantize_handler(self, trans, node):
         # Used for QuantizeLinear and DequantizeLinear
+        if node.type == "DequantizeLinear":
+            # Only push through if we will be able to push through consumers too.
+            cons = self._g.find_output_consumers(node.output[0])
+            # If there is a false positive in the handler map, the q_dq and transpose optimizers might fight.
+            # Give up after 3 iterations. The q_dq optimizer should win so the dq hugs the op.
+            if not all(n.type in self._handler_map for n in cons) or self.opt_iteration >= 3:
+                return False
         if not self._switch_transpose_and_node(node, trans):
             return False
         if 'axis' in node.attr:

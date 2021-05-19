@@ -5,8 +5,6 @@
    Collapse consecutive nodes into 1 node if possible.
 """
 
-from __future__ import unicode_literals
-
 import numpy as np
 from tf2onnx.utils import ONNX_DTYPE_NAMES  # lgtm[py/unsafe-cyclic-import]
 from .optimizer_base import GraphOptimizerBase  # lgtm[py/unsafe-cyclic-import]
@@ -17,6 +15,8 @@ _func_map = {}
 
 
 def _register_func(op_type):
+    if not isinstance(op_type, tuple):
+        op_type = (op_type,)
     def _internal_fun(func):
         _func_map[op_type] = func
         return func
@@ -251,4 +251,19 @@ class BackToBackOptimizer(GraphOptimizerBase):
         node.output = node2_output
         g.set_shape(node2_output[0], node2_shape)
         g.set_dtype(node2_output[0], node2_dtype)
+        return []
+
+    @staticmethod
+    @_register_func('Reshape')
+    def _optimize_reshape_reshape(g, node, consumer_nodes):
+        """remove sequential reshape nodes"""
+        if node.type != 'Reshape' or len(consumer_nodes) != 1:
+            return []
+
+        node2 = consumer_nodes[0]
+        if node2.type != 'Reshape':
+            return []
+
+        g.replace_inputs(node2, [node.input[0], node2.input[1]])
+        g.remove_node(node.name)
         return []

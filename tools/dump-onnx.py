@@ -7,9 +7,6 @@ Dump onnx graph.
 # don't want to rename the tool
 # pylint: disable=invalid-name
 
-from __future__ import division
-from __future__ import print_function
-
 import argparse
 import collections
 import re

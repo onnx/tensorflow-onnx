@@ -5,10 +5,6 @@
 tf2onnx.tf2onnx - rewrite tensorflow graph to onnx graph
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import collections
 import sys
 import traceback
@@ -511,8 +507,6 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         for func in ordered_func:
             f_inputs_names = [t.name for t in func.inputs]
             f_output_names = [t.name for t in func.outputs]
-            f_inputs_names = rename_tensors_in_list(f_inputs_names)
-            f_output_names = rename_tensors_in_list(f_output_names)
             fg = process_tf_graph(func, continue_on_error, False, target, opset,
                                   custom_op_handlers, custom_rewriter,
                                   extra_opset, shape_override, inputs_as_nchw,
@@ -524,12 +518,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     check_io(input_names, output_names, output_shapes)
 
-    rename_tensors_in_nodes(onnx_nodes)
-    input_names = rename_tensors_in_list(input_names)
-    output_names = rename_tensors_in_list(output_names)
-    output_shapes = rename_tensors_in_dict(output_shapes)
-    dtypes = rename_tensors_in_dict(dtypes)
-    inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
+    if not is_subgraph:
+        rename_tensors_in_nodes(onnx_nodes)
+        input_names = rename_tensors_in_list(input_names)
+        output_names = rename_tensors_in_list(output_names)
+        output_shapes = rename_tensors_in_dict(output_shapes)
+        dtypes = rename_tensors_in_dict(dtypes)
+        inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, input_names, output_names, is_subgraph)
     g = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                              output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt)
@@ -545,6 +540,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         if dequantize:
             tfl_rewriters.append(rewrite_tfl_qdq)
         tfl_rewriters.append(rewrite_tfl_scan_outputs)
+        tfl_rewriters.append(rewrite_tfl_select_zero)
         run_rewriters(g, tfl_rewriters, continue_on_error)
         tfl_ops_mapping = handler.tfl_op.create_tfl_to_tf_mapping()
         _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True, dequantize=False)
@@ -604,7 +600,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         rewrite_random_uniform_fold_const,
         rewrite_random_normal,
         rewrite_dropout,
-        rewrite_depthwise_conv_dilations,
+        rewrite_conv_dilations,
         rewrite_eye,
         rewrite_leakyrelu,
         rewrite_thresholded_relu,
@@ -619,6 +615,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         rewrite_biasadd_with_conv2d,
         rewrite_layer_normalization,
         rewrite_gemm,
+        rewrite_ragged_variant_shape,
     ]
 
     if custom_rewriter is not None:

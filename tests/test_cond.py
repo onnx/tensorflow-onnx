@@ -3,10 +3,6 @@
 
 """Unit Tests for tf.cond and tf.case."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 import tensorflow as tf
 
@@ -233,6 +229,7 @@ class CondTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.8", "shape inference for Reshape op screws up")
     @check_opset_min_version(9, "ConstantOfShape")
+    @allow_missing_shapes("ONNX shape inference still determines if/else shape for unknown reason")
     def test_cond_with_different_output_shape(self):
         input_shape = (10, 5, 20)
         def func(inputs, shape):

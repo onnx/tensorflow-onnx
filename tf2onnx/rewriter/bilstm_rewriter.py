@@ -6,10 +6,6 @@ tf2onnx.rewriter.bilstm_rewriter - bilstm support.
 This rewriter depends on tf2onnx.rewriter.lstm_rewriter's results.
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 import numpy as np
 from tf2onnx import utils

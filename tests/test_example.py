@@ -19,7 +19,7 @@ class TestExample(unittest.TestCase):
             "..", "examples", name)
         if not os.path.exists(full):
             raise FileNotFoundError(full)
-        proc = subprocess.run(('python %s' % full).split(),
+        proc = subprocess.run(['python', full],
                               capture_output=True, check=True)
         self.assertEqual(0, proc.returncode)
         out = proc.stdout.decode('ascii')
@@ -50,6 +50,14 @@ class TestExample(unittest.TestCase):
             expected=["ONNX model is saved at efficientnetb0clas.onnx",
                       "Optimizing ONNX model",
                       "Using opset <onnx, 12>"])
+
+    @check_tf_min_version("2.3", "use tf.keras")
+    @check_opset_min_version(13)
+    @check_opset_max_version(13)
+    def test_getting_started(self):
+        self.run_example(
+            "getting_started.py",
+            expected=["Conversion succeeded"])
 
 
 if __name__ == '__main__':

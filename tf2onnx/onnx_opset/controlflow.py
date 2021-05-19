@@ -5,10 +5,6 @@
 controlflow
 """
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import copy
 import logging
 
@@ -19,6 +15,7 @@ from onnx.onnx_pb import TensorProto
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 from tf2onnx.tf_loader import find_function
+from tf2onnx.graph_builder import GraphBuilder
 
 
 logger = logging.getLogger(__name__)
@@ -183,7 +180,15 @@ class Select:
         # T1 output = Where(bool condition, T1 x, T1 y)
         # NOTE: condition can be 1-dimension in tensorflow, while in onnx,
         # it should be broadcastable with other two inputs
-        if ctx.get_dtype(node.output[0]) != TensorProto.STRING:
+
+        # We can't use the mul/add trick if a NaN is involved. handles_nan is added earlier in the converter.
+        handles_nan = node.get_attr_value("handles_nan", False)
+        if ctx.get_dtype(node.output[0]) in [TensorProto.FLOAT, TensorProto.DOUBLE]:
+            for inp in node.inputs[1:]:
+                if inp.is_const() and np.any(np.isnan(inp.get_tensor_value(as_list=False))):
+                    handles_nan = True
+
+        if ctx.get_dtype(node.output[0]) != TensorProto.STRING and not handles_nan:
             # Due to bad ORT implementation, Mul/Add ops are faster than Where op
             cls.version_7(ctx, node, **kwargs)
             return
@@ -217,6 +222,7 @@ class Where:
                                                        node.output[0], name=utils.make_name("where_op_added"))
         ctx.copy_shape(node.output[0], transpose_node.output[0])
         ctx.copy_dtype(node.output[0], transpose_node.output[0])
+        ctx.update_node_shape_dtype(node, override=True)
 
 
 @tf_op(["StatelessIf"])
@@ -392,6 +398,7 @@ class While:
         cond_input_to_state_var = {}
         scan_outputs = []
         input_idx_to_remove = []
+        idx_to_ragged_writes = dict(body.ragged_variant_list_writes)
         # remove TensorListReserve
         for idx, name in enumerate(tf_while_inputs):
             if idx == 1:
@@ -407,9 +414,15 @@ class While:
                 # there is no equivalent step in onnx and we should remove it.
                 output_shape = None
                 output_dtype = n.get_attr_value("element_dtype")
+                is_ragged = False
                 if n.type == "TensorListReserve" and n.inputs[0].is_const() and not n.inputs[0].is_scalar():
                     output_shape = [-1] + n.inputs[0].get_tensor_value(as_list=True)
-                scan_outputs.append((idx, n, output_shape, output_dtype))
+                if idx in idx_to_ragged_writes:
+                    output_shape = None
+                    output_dtype = body.get_dtype(idx_to_ragged_writes[idx].input[0])
+                    is_ragged = True
+                    loop_vars.append(name)
+                scan_outputs.append((idx, n, output_shape, output_dtype, is_ragged))
                 continue
 
             # tensor arrays we read from can't be loop_vars and we fetch them from the outer context instead
@@ -428,8 +441,29 @@ class While:
             del body.outputs[idx]
 
         scan_output_names = []
-        # remove tensor array that are passed in to the loop
-        for idx, n, output_shape, output_dtype in reversed(scan_outputs):
+        ragged_scan_output_names = []
+        ragged_scan_output_to_len = {}
+
+        # remove tensor arrays that are passed in to the loop
+        for idx, n, output_shape, output_dtype, is_ragged in reversed(scan_outputs):
+            if is_ragged:
+                out = n.output[0]
+                ctx.remove_node(n.name)
+                seq_empty = ctx.make_node("SequenceEmpty", [], attr={'dtype': output_dtype}, name=n.name,
+                                          outputs=[out], shapes=[None], dtypes=[utils.SeqType(output_dtype)])
+                ctx.replace_all_inputs(n.output[0], seq_empty.output[0])
+                # Ragged tensors also must track the length of each row
+                output_shapes.append([-1])
+                output_dtypes.append(TensorProto.INT64)
+                output_shapes[idx] = None
+                output_dtypes[idx] = utils.SeqType(output_dtype)
+                body_ragged_name = utils.make_name("ragged_scan_output")
+                external_ragged_name = utils.make_name("ragged_output")
+                scan_output_names.append(body_ragged_name)
+                output_names.append(external_ragged_name)
+                ragged_scan_output_names.append(body_ragged_name)
+                ragged_scan_output_to_len[output_names[idx]] = external_ragged_name
+                continue
             ctx.remove_node(n.name)
             # make the node output bad
             ctx.replace_all_inputs(n.output[0], "@@ALLOC")  # ops=ctx.get_nodes()
@@ -466,11 +500,16 @@ class While:
 
         # shift output consumers
         for k, v in output_map.items():
-            ctx.replace_all_inputs(k, v)  # ops=ctx.get_nodes()
+            if k not in ragged_scan_output_to_len.values():
+                ctx.replace_all_inputs(k, v)  # ops=ctx.get_nodes()
+
+        ragged_scan_output_to_len = {output_map[k]: output_map[v] for k, v in ragged_scan_output_to_len.items()}
 
         wire_while_body(ctx, body, loop_node, body_input_to_state_var, cond_input_to_state_var, output_shapes,
-                        output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, scan_output_names)
+                        output_dtypes, body_name, node.name, cond_graph, tf_while_inputs, scan_output_names,
+                        ragged_scan_output_names)
 
+        loop_node.ragged_scan_output_to_len = ragged_scan_output_to_len
         # if there was a tensorflow variant type, bind in a real type here
         # FIXME: I don't think this is needed anymore
         for i, n in enumerate(body.inputs):
@@ -479,7 +518,8 @@ class While:
 
 
 def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_to_state_var, output_shapes,
-                    output_dtypes, scope, parent, cond_graph, tf_while_inputs, scan_output_names):
+                    output_dtypes, scope, parent, cond_graph, tf_while_inputs, scan_output_names,
+                    ragged_scan_output_names):
     """Wire subgraph graph into main."""
     remove_parents = []
     to_remove = []
@@ -501,9 +541,8 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
     g.set_dtype(func_inputs[0], onnx_pb.TensorProto.INT64)
     g.inputs = [g.get_node_by_output(inp) for inp in func_inputs]
 
-    for p, c in zip(loop_node.inputs, func_inputs):
-        shape = p.output_shapes[0]
-        g.set_shape(c, shape)
+    for p, c in zip(loop_node.input, func_inputs):
+        g.copy_shape(p, c)
 
     for i, node in enumerate(g.inputs):
         if node.output[0] not in func_inputs:
@@ -511,8 +550,25 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
 
     # this is a tensor array write - make it an identity
     scan_outputs = []
+    ragged_scan_outputs_cnt = 0
+    names_to_scan_outputs = {}
+
     for node in g.get_nodes():
         if node.type == "TensorListSetItem":
+            if node.inputs[2].type == "RaggedTensorToVariant":
+                node.type = "SequenceInsert"
+                row_content = node.inputs[2].input[0]
+                g.replace_inputs(node, [node.input[0], row_content])
+                g.set_shape(node.output[0], g.get_shape(node.input[1]))
+                g.set_dtype(node.output[0], utils.SeqType(g.get_dtype(node.input[1])))
+                dense_shape = g.make_node("Shape", [row_content]).output[0]
+                zero_const = g.make_const(utils.make_name("zero_const"), np.array(0, np.int64)).output[0]
+                row_length = g.make_node("Gather", [dense_shape, zero_const]).output[0]
+                row_length_id = g.make_node("Identity", [row_length])
+                scan_outputs.append(row_length_id.output[0])
+                names_to_scan_outputs[ragged_scan_output_names[ragged_scan_outputs_cnt]] = row_length_id.output[0]
+                ragged_scan_outputs_cnt += 1
+                continue
             remove_parents.append(node.input[0])
             node.type = "Identity"
             g.set_shape(node.output[0], g.get_shape(node.input[2]))
@@ -523,8 +579,9 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
     if len(scan_outputs) != len(scan_output_names):
         raise ValueError("While loop couldn't find scan output index for nodes")
 
-    names_to_scan_outputs = {}
     for output in scan_outputs:
+        if output in names_to_scan_outputs.values():
+            continue
         last_output = output
         consumers = g.find_output_consumers(last_output)
         while consumers:
@@ -539,8 +596,9 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
 
     # Reorder scan outputs
     scan_outputs = [names_to_scan_outputs[name] for name in scan_output_names]
+
+    # Use shapes from subgraph if loop node shapes for scan outputs are missing
     for i in range(-len(scan_output_names), 0):
-        # Use shapes from subgraph if loop node shapes for scan outputs are missing
         if loop_node.output_shapes[i] is None:
             shape = g.get_shape(scan_outputs[i])
             if shape is not None:
@@ -571,6 +629,31 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
             node = g.get_node_by_output(o)
             if node.type in ["Identity"]:
                 g.set_dtype(o, node.inputs[0].output_dtypes[0])
+
+    for node in g.ragged_variant_list_reads:
+        # Requires opset 11
+        gather = node.inputs[0]
+        inp = gather.inputs[0]
+        while inp.type == "Identity":
+            inp = inp.inputs[0]
+        err_msg1 = "Could not find corresponding RaggedTensorToVariant for node %s" % node.name
+        err_msg2 = "Input to RaggedTensorToVariant for loop has batched_input=False for node %s" % inp.name
+        err_msg3 = "RAGGED_RANK != 1 for RaggedTensorToVariant node %s" % node.name
+        utils.make_sure(inp.type == "RaggedTensorToVariant", err_msg1)
+        utils.make_sure(inp.get_attr_value("batched_input"), err_msg2)
+        utils.make_sure(inp.get_attr_value("RAGGED_RANK") == 1, err_msg3)
+        idx = gather.input[1]
+        idx_unsq = GraphBuilder(g).make_unsqueeze({'data': idx, 'axes': [0]})
+        np_dtype = utils.map_onnx_to_numpy_type(g.get_dtype(idx_unsq))
+        const_one = g.make_const(utils.make_name("const_1"), np.array(1, np_dtype)).output[0]
+        idx_plus_1 = g.make_node("Add", [idx_unsq, const_one]).output[0]
+        splits, values = inp.input
+        start = g.make_node("Gather", [splits, idx_unsq]).output[0]
+        end = g.make_node("Gather", [splits, idx_plus_1]).output[0]
+        np_dtype2 = utils.map_onnx_to_numpy_type(g.get_dtype(splits))
+        axes = g.make_const(utils.make_name("const_zero"), np.array([0], np_dtype2)).output[0]
+        sliced_vals = g.make_node("Slice", [values, start, end, axes]).output[0]
+        g.replace_all_inputs(node.output[0], sliced_vals)
 
     return g
 
