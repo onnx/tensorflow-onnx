@@ -125,7 +125,8 @@ def get_args():
         if len(tokens) != 2:
             parser.error("invalid extra_opset argument")
         args.extra_opset = [utils.make_opsetid(tokens[0], int(tokens[1]))]
-
+    if args.load_op_libraries:
+        args.load_op_libraries = args.load_op_libraries.split(",")
     return args
 
 
@@ -203,6 +204,9 @@ def main():
     outputs = None
     model_path = None
 
+    if args.load_op_libraries:
+        for op_path in args.load_op_libraries:
+            tf.load_op_library(op_path)
     if args.graphdef:
         graph_def, inputs, outputs = tf_loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
         model_path = args.graphdef
