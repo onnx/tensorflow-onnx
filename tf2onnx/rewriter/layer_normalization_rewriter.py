@@ -86,10 +86,10 @@ def rewrite_layer_normalization(g, ops):
         match_results = list(matcher.match_ops(ops))
         if match_results:
             for match in match_results:
-                inp_node = match.get_op('input')
-                rank = g.get_rank(inp_node.output[0])
+                input_tensor = match.get_tensor('input')
+                rank = g.get_rank(input_tensor)
                 node = match.get_op('bias_add')
-                if inp_node.name != match.get_op('input_r2').name or inp_node.name != match.get_op('input_r3').name:
+                if input_tensor != match.get_tensor('input_r2') or input_tensor != match.get_tensor('input_r3'):
                     continue
                 if match.get_op('mean').name != match.get_op('mean_r2').name:
                     continue
@@ -105,8 +105,8 @@ def rewrite_layer_normalization(g, ops):
                 epsilon = match.get_op('epsilon').get_tensor_value(as_list=False).flatten().tolist()
                 if len(epsilon) != 1:
                     continue
-                scale = match.get_op('scale').output[0]
-                bias = match.get_op('bias').output[0]
+                scale = match.get_tensor('scale')
+                bias = match.get_tensor('bias')
                 shape = g.make_node("Shape", [inp]).output[0]
                 dim_2_shape = GraphBuilder(g).make_slice(
                     {"data": shape, "ends": [2], "starts": [1], "axes": [0]})

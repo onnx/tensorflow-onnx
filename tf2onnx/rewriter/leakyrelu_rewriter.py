@@ -28,12 +28,10 @@ def rewrite_leakyrelu(g, ops):
     match_results = list(matcher.match_ops(ops))
     for match in match_results:
         max_node = match.get_op('max')
-        max_input_node = match.get_op('max_input')
         mul_node = match.get_op("mul")
-        mul_input_node = match.get_op('mul_input')
 
-        max_input_edge_name = _find_edge_name_between_nodes(max_input_node, max_node)
-        mul_input_edge_name = _find_edge_name_between_nodes(mul_input_node, mul_node)
+        max_input_edge_name = match.get_tensor('max_input')
+        mul_input_edge_name = match.get_tensor('mul_input')
         if max_input_edge_name == mul_input_edge_name:
             alpha = match.get_op("alpha").get_tensor_value()
             if alpha >= 1:
@@ -46,12 +44,3 @@ def rewrite_leakyrelu(g, ops):
             g.safe_remove_nodes(to_delete)
 
     return ops
-
-
-def _find_edge_name_between_nodes(src_node, consumer_node):
-    # find the first edge connection between two nodes.
-    for consumer_end in consumer_node.input:
-        for src_end in src_node.output:
-            if consumer_end == src_end:
-                return consumer_end
-    return None
