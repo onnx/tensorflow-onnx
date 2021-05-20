@@ -90,11 +90,10 @@ cord-19-swivel-128d:
   converted_model: "D:/co_tfhubmodels_c/cord-19-swivel-128d/model.onnx"
   model_type: saved_model
   large_model: false
-  run_tf_frozen: false
-  use_custom_ops: true
-  input_get: get_sentences
+  input_get: get_ramp
   inputs:
     "sentences:0": [1]
+    "256:0": [1, 512]
   outputs:
     - Identity:0
   rtol: 0.05
@@ -912,6 +911,7 @@ unet-industrial-class_10:
     - "UNet_v1/sigmoid:0"
   rtol: 0.05
   atol: 0.0005
+  ptol: 1.0
   tag: ""
   signature_def: "default"
 
@@ -1336,6 +1336,31 @@ on_device_vision-classifier-landmarks_classifier_africa_V1:
   atol: 0.0005
   tag: ""
   signature_def: "default"
+
+tn_bert:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/tn_bert"
+  converted_model: "D:/co_tfhubmodels_c/tn_bert/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
 
 german-tacotron2:
   disabled: true
