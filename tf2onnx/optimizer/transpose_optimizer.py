@@ -560,7 +560,9 @@ class TransposeOptimizer(GraphOptimizerBase):
             t_p = trans.inputs[0]
             trans_rank = get_transpose_rank(trans)
             # make sure conv don't have bias set
-            if t_p.type == "Conv" and t_p.inputs[1].is_const() and len(t_p.input) == 2 and trans_rank == 4:
+            can_opt = t_p.type == "Conv" and t_p.inputs[1].is_const() and len(t_p.input) == 2 and trans_rank == 4
+            can_opt = can_opt and self._nodes_has_single_consumer_node([t_p])
+            if can_opt:
                 conv = t_p
                 numpy_val = conv.inputs[1].get_tensor_value(as_list=False)
                 transposed_val = np.transpose(numpy_val, (2, 3, 1, 0))

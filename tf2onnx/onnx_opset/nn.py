@@ -349,7 +349,7 @@ class ConvOp:
 
         # prefix with batch dim of [1] to satisfy rank requirements
         input_shape = ctx.get_shape(node.input[0])
-        if len(input_shape) == spatial + 1:
+        if input_shape is not None and len(input_shape) == spatial + 1:
             gb = GraphBuilder(ctx)
             usq_node = gb.make_unsqueeze({"axes": [0], 'data': node.input[0]}, return_node=True)
             ctx.replace_inputs(node, [usq_node.output[0]] + node.input[1:])

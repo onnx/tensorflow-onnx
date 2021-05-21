@@ -71,6 +71,8 @@ def get_args():
     parser.add_argument("--custom-ops", help="comma-separated map of custom ops to domains in format OpName:domain")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
+    parser.add_argument("--load_op_libraries",
+                        help="comma-separated list of tf op library paths to register before loading model")
     parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=constants.POSSIBLE_TARGETS,
                         help="target platform")
     parser.add_argument("--continue_on_error", help="continue_on_error", action="store_true")
@@ -119,7 +121,8 @@ def get_args():
         if len(tokens) != 2:
             parser.error("invalid extra_opset argument")
         args.extra_opset = [utils.make_opsetid(tokens[0], int(tokens[1]))]
-
+    if args.load_op_libraries:
+        args.load_op_libraries = args.load_op_libraries.split(",")
     return args
 
 
@@ -197,6 +200,9 @@ def main():
     outputs = None
     model_path = None
 
+    if args.load_op_libraries:
+        for op_path in args.load_op_libraries:
+            tf.load_op_library(op_path)
     if args.graphdef:
         graph_def, inputs, outputs = tf_loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
         model_path = args.graphdef

@@ -911,6 +911,7 @@ unet-industrial-class_10:
     - "UNet_v1/sigmoid:0"
   rtol: 0.05
   atol: 0.0005
+  ptol: 1.0
   tag: ""
   signature_def: "default"
 
@@ -1335,3 +1336,650 @@ on_device_vision-classifier-landmarks_classifier_africa_V1:
   atol: 0.0005
   tag: ""
   signature_def: "default"
+
+tn_bert:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/tn_bert"
+  converted_model: "D:/co_tfhubmodels_c/tn_bert/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+german-tacotron2:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/german-tacotron2"
+  converted_model: "D:/co_tfhubmodels_c/german-tacotron2/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "speaker_ids:0": [100]
+  outputs:
+    - "Identity:0"
+    - "Identity_1:0"
+    - "Identity_2:0"
+    - "Identity_3:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+german-mbmelgan:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/german-mbmelgan"
+  converted_model: "D:/co_tfhubmodels_c/german-mbmelgan/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "mels:0": [1, 10, 80]
+  outputs:
+    - "Identity:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+faster_rcnn-inception_resnet_v2_640x640:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/faster_rcnn-inception_resnet_v2_640x640"
+  converted_model: "D:/co_tfhubmodels_c/faster_rcnn-inception_resnet_v2_640x640/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [1, 128, 128, 3]
+  outputs:
+    - "Identity:0"
+    - "Identity_1:0"
+    - "Identity_2:0"
+    - "Identity_3:0"
+    - "Identity_4:0"
+    - "Identity_5:0"
+    - "Identity_6:0"
+    - "Identity_7:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+faster_rcnn-resnet101_v1_800x1333:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/faster_rcnn-resnet101_v1_800x1333"
+  converted_model: "D:/co_tfhubmodels_c/faster_rcnn-resnet101_v1_800x1333/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [1, 128, 128, 3]
+  outputs:
+    - "Identity:0"
+    - "Identity_1:0"
+    - "Identity_2:0"
+    - "Identity_3:0"
+    - "Identity_4:0"
+    - "Identity_5:0"
+    - "Identity_6:0"
+    - "Identity_7:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+efficientnet-lite4-classification:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/efficientnet-lite4-classification"
+  converted_model: "D:/co_tfhubmodels_c/efficientnet-lite4-classification/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "images:0": [1, 128, 128, 3]
+  outputs:
+    - "logits:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+exemplar:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/exemplar"
+  converted_model: "D:/co_tfhubmodels_c/exemplar/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "Placeholder:0": [1, 224, 224, 3]
+  outputs:
+    - "max_pooling2d/MaxPool:0"
+    - "add_2:0"
+    - "add_6:0"
+    - "add_12:0"
+    - "add_15:0"
+    - "Squeeze:0"
+    - "Squeeze_1:0"
+    - "Squeeze:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+experts-bert-pubmed-squad2:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bert-pubmed-squad2"
+  converted_model: "D:/co_tfhubmodels_c/experts-bert-pubmed-squad2/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+    - Identity_8:0
+    - Identity_9:0
+    - Identity_10:0
+    - Identity_11:0
+    - Identity_12:0
+    - Identity_13:0
+    - Identity_14:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+experts-bert-wiki_books-qnli:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/experts-bert-wiki_books-qnli"
+  converted_model: "D:/co_tfhubmodels_c/experts-bert-wiki_books-qnli/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+    - Identity_8:0
+    - Identity_9:0
+    - Identity_10:0
+    - Identity_11:0
+    - Identity_12:0
+    - Identity_13:0
+    - Identity_14:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+boundless-three_quarter:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/boundless-three_quarter"
+  converted_model: "D:/co_tfhubmodels_c/boundless-three_quarter/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "Placeholder:0": [1, 257, 257, 3]
+  outputs:
+    - mul_1:0
+    - mul_2:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "default"
+
+compare_gan-model_6_celebahq128_resnet19:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/compare_gan-model_6_celebahq128_resnet19"
+  converted_model: "D:/co_tfhubmodels_c/compare_gan-model_6_celebahq128_resnet19/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "discriminator_representation/input:0": [64, 128, 128, 3]
+  outputs:
+    - "discriminator_representation/result:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "discriminator"
+
+compare_gan-model_14_cifar10_resnet_cifar:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/compare_gan-model_14_cifar10_resnet_cifar"
+  converted_model: "D:/co_tfhubmodels_c/compare_gan-model_14_cifar10_resnet_cifar/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "generator_evaluation/input:0": [64, 128]
+  outputs:
+    - "generator_evaluation/result:0"
+  rtol: 0.05
+  atol: 0.0005
+  tag: ""
+  signature_def: "generator"
+
+aiy-vision-classifier-birds_V1:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/aiy-vision-classifier-birds_V1"
+  converted_model: "D:/co_tfhubmodels_c/aiy-vision-classifier-birds_V1/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "hub_input/images:0": [1, 224, 224, 3]
+  outputs:
+    - prediction:0
+  rtol: 0.05
+  atol: 0.0005
+  ptol: 0.2   # one bad element
+  tag: ""
+  signature_def: "default"
+
+albert_en_base:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/albert_en_base"
+  converted_model: "D:/co_tfhubmodels_c/albert_en_base/model.onnx"
+  model_type: saved_model
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+    - Identity_8:0
+    - Identity_9:0
+    - Identity_10:0
+    - Identity_11:0
+    - Identity_12:0
+    - Identity_13:0
+    - Identity_14:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+albert_en_xlarge:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/albert_en_xlarge"
+  converted_model: "D:/co_tfhubmodels_c/albert_en_xlarge/model.onnx"
+  model_type: saved_model
+  large_model: true
+  input_get: get_small_rand_int32
+  inputs:
+    "input_word_ids:0": [1, 512]
+    "input_type_ids:0":
+      shape: [1, 512]
+      input_get: get_zeros_then_ones
+    "input_mask:0":
+      shape: [1, 512]
+      input_get: get_ones_int32
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+    - Identity_8:0
+    - Identity_9:0
+    - Identity_10:0
+    - Identity_11:0
+    - Identity_12:0
+    - Identity_13:0
+    - Identity_14:0
+    - Identity_15:0
+    - Identity_16:0
+    - Identity_17:0
+    - Identity_18:0
+    - Identity_19:0
+    - Identity_20:0
+    - Identity_21:0
+    - Identity_22:0
+    - Identity_23:0
+    - Identity_24:0
+    - Identity_25:0
+    - Identity_26:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+biggan-deep-128:
+  disabled: true
+  skip_conversion: false
+  run_tf_frozen: false  # Fails to run when frozen
+  model: "D:/co_tfhubmodels_c/biggan-deep-128"
+  converted_model: "D:/co_tfhubmodels_c/biggan-deep-128/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "truncation:0":
+      shape: []
+      input_get: get_ones
+    "z:0": [1, 128]
+    "y:0": [1, 1000]
+  outputs:
+    - "G_trunc_output:0"
+  rtol: 0.05
+  atol: 0.0005
+  ptol: 0.1   # Output is 1/-1, allow for 0.1% mismatch
+  tag: ""
+  signature_def: "default"
+
+biggan-deep-512:
+  disabled: true
+  skip_conversion: false
+  run_tf_frozen: false  # Fails to run when frozen
+  model: "D:/co_tfhubmodels_c/biggan-deep-512"
+  converted_model: "D:/co_tfhubmodels_c/biggan-deep-512/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_random
+  inputs:
+    "truncation:0":
+      shape: []
+      input_get: get_ones
+    "z:0": [1, 128]
+    "y:0": [1, 1000]
+  outputs:
+    - "G_trunc_output:0"
+  rtol: 0.05
+  atol: 0.0005
+  ptol: 0.2   # Output is 1/-1, allow for 0.2% mismatch
+  tag: ""
+  signature_def: "default"
+
+deeplabv3-mobilenetv2_dm05-float16:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/deeplabv3-mobilenetv2_dm05-float16/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/deeplabv3-mobilenetv2_dm05-float16/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "sub_7": [1,513,513,3]
+  outputs:
+    - ResizeBilinear_2
+  rtol: 0.05
+  atol: 0.0005
+
+deeplabv3-mobilenetv2_dm05-int8:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/deeplabv3-mobilenetv2_dm05-int8/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/deeplabv3-mobilenetv2_dm05-int8/model.onnx"
+  model_type: tflite
+  large_model: false
+  dequantize: true
+  input_get: get_beach
+  inputs:
+    "sub_7": [1,513,513,3]
+  outputs:
+    - ResizeBilinear_2
+  rtol: 0.05
+  atol: 0.0005
+
+deeplabv3-mobilenetv3-cityscapes:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/deeplabv3-mobilenetv3-cityscapes/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/deeplabv3-mobilenetv3-cityscapes/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "sub_2": [1,1025,2049,3]
+  outputs:
+    - ResizeBilinear_2
+  rtol: 0.05
+  atol: 0.0005
+
+deeplabv3-xception65-cityscapes:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/deeplabv3-xception65-cityscapes/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/deeplabv3-xception65-cityscapes/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "sub_7": [1,1025,2049,3]
+  outputs:
+    - ResizeBilinear_2
+  rtol: 0.05
+  atol: 0.0005
+
+efficientdet-d1:
+  disabled: true
+  skip_conversion: true
+  model: "D:/co_tfhubmodels_c/efficientdet-d1"
+  converted_model: "D:/co_tfhubmodels_c/efficientdet-d1/model.onnx"
+  model_type: saved_model
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_tensor:0": [1,200,200,3]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+    - Identity_3:0
+    - Identity_4:0
+    - Identity_5:0
+    - Identity_6:0
+    - Identity_7:0
+  rtol: 0.05
+  atol: 0.0005
+  tag: "serve"
+  signature_def: "serving_default"
+
+mirnet-fixed:
+  disabled: true
+  skip_conversion: false
+  skip_tensorflow: true   # int8 takes forever on CPU
+  model: "D:/co_tfhubmodels_c/mirnet-fixed/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/mirnet-fixed/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input_1": [1, 400, 400, 3]
+  outputs:
+    - Identity
+  rtol: 0.05
+  atol: 0.0005
+
+mnasnet_1.0_128:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/mnasnet_1.0_128/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/mnasnet_1.0_128/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input": [1, 128, 128, 3]
+  outputs:
+    - output
+  rtol: 0.05
+  atol: 0.0005
+
+mnasnet_1.0_224:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/mnasnet_1.0_224/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/mnasnet_1.0_224/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input": [1, 224, 224, 3]
+  outputs:
+    - output
+  rtol: 0.05
+  atol: 0.0005
+
+mobilenet_v1_0.50_128:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/mobilenet_v1_0.50_128/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/mobilenet_v1_0.50_128/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input": [1, 128, 128, 3]
+  outputs:
+    - MobilenetV1/Predictions/Reshape_1
+  rtol: 0.05
+  atol: 0.0005
+
+mobilenet_v1_0.75_224_quantized:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/mobilenet_v1_0.75_224_quantized/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/mobilenet_v1_0.75_224_quantized/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_ade20k_uint8
+  inputs:
+    "input": [1, 224, 224, 3]
+  outputs:
+    - MobilenetV1/Predictions/Reshape_1
+  rtol: 0.05
+  atol: 4   # output is uint8
+
+mobilenet_v1_1.0_160_quantized:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/mobilenet_v1_1.0_160_quantized/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/mobilenet_v1_1.0_160_quantized/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_ade20k_uint8
+  inputs:
+    "input": [1, 160, 160, 3]
+  outputs:
+    - MobilenetV1/Predictions/Reshape_1
+  rtol: 0.05
+  atol: 4   # output is uint8
+
+nasnet-large:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/nasnet-large/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/nasnet-large/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input": [1, 331, 331, 3]
+  outputs:
+    - final_layer/predictions
+  rtol: 0.05
+  atol: 0.0005
+
+inception_v3:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/inception_v3/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/inception_v3/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input": [1, 299, 299, 3]
+  outputs:
+    - InceptionV3/Predictions/Reshape_1
+  rtol: 0.05
+  atol: 0.0005
+
+inception_v4:
+  disabled: true
+  skip_conversion: false
+  model: "D:/co_tfhubmodels_c/inception_v4/model.tflite"
+  converted_model: "D:/co_tfhubmodels_c/inception_v4/model.onnx"
+  model_type: tflite
+  large_model: false
+  input_get: get_beach
+  inputs:
+    "input": [1, 299, 299, 3]
+  outputs:
+    - InceptionV4/Logits/Predictions
+  rtol: 0.05
+  atol: 0.0005

@@ -419,19 +419,20 @@ class Test(object):
                 interpreter.invoke()
                 result = [interpreter.get_tensor(output['index']) for output in output_details]
                 return result
-            tf_results = run_tflite()
-            if self.perf:
-                logger.info("Running TFLite perf")
-                n = 0
-                start = time.time()
-                stop = start + PERF_TIME
-                while time.time() < stop:
-                    for _ in range(PERF_STEP):
-                        _ = run_tflite()
-                    n += PERF_STEP
-                self.tf_runtime = 1000 * (time.time() - start) / n
-                logger.info("TFLite perf {:.2f}ms/inference, n={}".format(self.tf_runtime, n))
-            logger.info("TFLite OK")
+            if not self.skip_tensorflow:
+                tf_results = run_tflite()
+                if self.perf:
+                    logger.info("Running TFLite perf")
+                    n = 0
+                    start = time.time()
+                    stop = start + PERF_TIME
+                    while time.time() < stop:
+                        for _ in range(PERF_STEP):
+                            _ = run_tflite()
+                        n += PERF_STEP
+                    self.tf_runtime = 1000 * (time.time() - start) / n
+                    logger.info("TFLite perf {:.2f}ms/inference, n={}".format(self.tf_runtime, n))
+                logger.info("TFLite OK")
 
         if not self.run_tf_frozen:
             inputs = {}
