@@ -214,7 +214,7 @@ def from_function(func, input_names, output_names, large_model=False):
     return graph_def
 
 
-def freeze_session(sess, input_names=None, output_names=None):
+def freeze_session(sess, input_names=None, output_names=None, get_tables=False):
     """Freezes the state of a session into a pruned computation graph."""
     output_node_names = [i.split(':')[:-1][0] for i in output_names]
     keep_var_names = [i.split(':')[:-1][0] for i in input_names]
@@ -226,6 +226,19 @@ def freeze_session(sess, input_names=None, output_names=None):
         for node in graph_def.node:
             node.device = ""
         graph_def = convert_variables_to_constants(sess, graph_def, output_node_names)
+        table_names, key_dtypes, value_dtypes = get_hash_table_info(graph_def)
+        if get_tables:
+            initialized_tables = {}
+            tf.tables_initializer().run(session=sess)
+            for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
+                h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+                try:
+                    k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+                    k, v = sess.run([k, v])
+                    initialized_tables[n] = (k, v)
+                except Exception:  # pylint: disable=broad-except
+                    logger.warning("Could not initialize table with shared_name = %r", n)
+            return graph_def, initialized_tables
     return graph_def
 
 
@@ -348,18 +361,8 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
                 if output_tensor.name not in output_names:
                     output_names.append(output_tensor.name)
                     tensors_to_rename[output_tensor.name] = structured_name
-    frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
-    initialized_tables = {}
-    tf.tables_initializer().run()
-    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
-        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
-        try:
-            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
-            k, v = sess.run([k, v])
-            initialized_tables[n] = (k, v)
-        except Exception:  # pylint: disable=broad-except
-            logger.warning("Could not initialize table with shared_name = %r", n)
+    frozen_graph, initialized_tables = \
+        freeze_session(sess, input_names=input_names, output_names=output_names, get_tables=True)
     return frozen_graph, input_names, output_names, initialized_tables, tensors_to_rename
 
 
