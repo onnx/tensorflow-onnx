@@ -287,11 +287,13 @@ def tensor_names_from_structed(concrete_func, input_names, output_names):
 def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
                     custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
                     target=None, large_model=False, output_path=None):
+    """from_keras for tf 1.15"""
 
     input_names = [t.name for t in model.inputs]
     output_names = [t.name for t in model.outputs]
     tensors_to_rename = dict(zip(input_names, model.input_names))
     if len(set(model.output_names)) == len(model.output_names):
+        # In very rare cases, keras has a bug where it will give multiple outputs the same name
         tensors_to_rename.update(zip(output_names, model.output_names))
 
     sess = tf.keras.backend.get_session(model.outputs)
