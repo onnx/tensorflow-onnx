@@ -13,6 +13,7 @@ import tensorflow as tf
 from onnx import helper
 
 from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version
+from tf2onnx.tf_loader import is_tf2
 from backend_test_base import Tf2OnnxBackendTestBase
 import tf2onnx
 
@@ -67,16 +68,16 @@ class ApiTests(Tf2OnnxBackendTestBase):
         ky1 = model.predict([x, n])
         self.assertAllClose(ky1, oy[0], rtol=0.3, atol=0.1)
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
     def test_keras_api(self):
         self._test_keras_api(large_model=False)
 
-    @check_tf_min_version("2.2")
+    @check_tf_min_version("1.15")
     def test_keras_api_large(self):
         self._test_keras_api(large_model=True)
 
     @requires_custom_ops()
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
     @check_opset_min_version(11, "SparseToDense")
     def test_keras_hashtable(self):
 
@@ -101,6 +102,8 @@ class ApiTests(Tf2OnnxBackendTestBase):
 
         inp1 = np.array([[2.], [3.]], dtype=np.float32)
         inp2 = np.array([["a"], ["b"]], dtype=np.str)
+        if not is_tf2():
+            tf.keras.backend.get_session().run(tf.tables_initializer(name='init_all_tables'))
         k_res = model.predict([inp1, inp2])
         spec = (tf.TensorSpec((None, 1), dtype=tf.float32, name="f_inp"),
                 tf.TensorSpec((None, 1), tf.string, name="s_inp"))
