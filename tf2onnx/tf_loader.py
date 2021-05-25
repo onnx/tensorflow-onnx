@@ -497,11 +497,11 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
         inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
         graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
         captured_inputs = [t_name.name for _, t_name in graph_captures.values()]
-        inputs = [inp for inp in inputs if inp in captured_inputs]
+        inputs = [inp for inp in inputs if inp not in captured_inputs]
         if concrete_func.structured_input_signature is not None and not use_graph_names:
             flat_structured_inp = tf.nest.flatten(concrete_func.structured_input_signature)
             structured_inputs = [t.name for t in flat_structured_inp if isinstance(t, tf.TensorSpec)]
-            tensors_to_rename.update(zip(input_names, structured_inputs))
+            tensors_to_rename.update(zip(inputs, structured_inputs))
     else:
         inputs = input_names
 
@@ -525,7 +525,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
 def from_saved_model(model_path, input_names, output_names, tag=None,
                      signatures=None, concrete_function=None, large_model=False,
                      return_concrete_func=False, return_initialized_tables=False,
-                     return_tensors_to_rename=False, use_graph_names=True):
+                     return_tensors_to_rename=False, use_graph_names=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []

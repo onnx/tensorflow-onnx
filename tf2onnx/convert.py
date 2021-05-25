@@ -65,7 +65,8 @@ def get_args():
                                               "change into Identity ops using their default value")
     parser.add_argument("--rename-inputs", help="input names to use in final model (optional)")
     parser.add_argument("--rename-outputs", help="output names to use in final model (optional)")
-    parser.add_argument("--use-graph-names", help="skip renaming io using concrete names if loading a saved model")
+    parser.add_argument("--use-graph-names", help="(saved model only) skip renaming io using signature names",
+                        action="store_true")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
     parser.add_argument("--dequantize", help="Remove quantization from model. Only supported for tflite currently.",
                         action="store_true")
