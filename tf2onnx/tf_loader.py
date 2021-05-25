@@ -498,6 +498,9 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
             structured_inputs = set(inp + ":0" for inp in structured_inputs)
             if any(inp in structured_inputs for inp in inputs):
                 inputs = [inp for inp in inputs if inp in structured_inputs]
+            graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
+            captured_inputs = [t_name.name for _, t_name in graph_captures.values()]
+            inputs = [inp for inp in inputs if inp in captured_inputs]
     else:
         inputs = input_names
 
