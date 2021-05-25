@@ -492,6 +492,9 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     tensors_to_rename = {}
     if input_names is None:
         inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
+        graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
+        captured_inputs = [t_name.name for _, t_name in graph_captures.values()]
+        inputs = [inp for inp in inputs if inp not in captured_inputs]
         if concrete_func.structured_input_signature is not None:
             args, kwargs = concrete_func.structured_input_signature
             structured_inputs = [t.name for t in args if isinstance(t, tf.TensorSpec)] + sorted(kwargs.keys())
