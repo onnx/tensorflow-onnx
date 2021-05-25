@@ -65,6 +65,7 @@ def get_args():
                                               "change into Identity ops using their default value")
     parser.add_argument("--rename-inputs", help="input names to use in final model (optional)")
     parser.add_argument("--rename-outputs", help="output names to use in final model (optional)")
+    parser.add_argument("--use-graph-names", help="skip renaming io using concrete names if loading a saved model")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
     parser.add_argument("--dequantize", help="Remove quantization from model. Only supported for tflite currently.",
                         action="store_true")
@@ -212,7 +213,8 @@ def main():
     if args.saved_model:
         graph_def, inputs, outputs, initialized_tables, tensors_to_rename = tf_loader.from_saved_model(
             args.saved_model, args.inputs, args.outputs, args.tag, args.signature_def, args.concrete_function,
-            args.large_model, return_initialized_tables=True, return_tensors_to_rename=True)
+            args.large_model, return_initialized_tables=True, return_tensors_to_rename=True,
+            use_graph_names=args.use_graph_names)
         model_path = args.saved_model
     if args.keras:
         graph_def, inputs, outputs = tf_loader.from_keras(
