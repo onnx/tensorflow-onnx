@@ -11,14 +11,12 @@ so all graph, rewrite, matching and utility libaries do work which makes things 
 
 import argparse
 import logging
-import traceback
 
-import numpy as np
 import onnx
 from onnx import helper
 
 from tf2onnx.graph import GraphUtil
-from tf2onnx import logging, optimizer, utils
+from tf2onnx import logging, optimizer
 
 
 logging.basicConfig(level=logging.INFO)
