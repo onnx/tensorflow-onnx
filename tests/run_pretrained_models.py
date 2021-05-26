@@ -375,7 +375,7 @@ class Test(object):
         initialized_tables = {}
         outputs = self.output_names
         tflite_path = None
-        to_rename = None
+        to_rename = {}
         if self.model_type in ["checkpoint"]:
             graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
         elif self.model_type in ["saved_model"]:
@@ -438,7 +438,7 @@ class Test(object):
             inputs = {}
             for k in input_names:
                 v = self.input_names[k]
-                inputs[k.split(":")[0]] = tf.constant(self.make_input(v))
+                inputs[to_rename.get(k, k)] = tf.constant(self.make_input(v))
             tf_func = tf.function(concrete_func)
             logger.info("Running TF")
             tf_results_d = tf_func(**inputs)
@@ -553,11 +553,10 @@ class Test(object):
         try:
             onnx_results = None
             if backend == "onnxruntime":
-                if to_rename is None:
-                    struc_outputs = self.output_names
-                else:
-                    struc_outputs = [to_rename.get(k, k) for k in self.output_names]
-                onnx_results = self.run_onnxruntime(name, model_proto, inputs, struc_outputs, external_tensor_storage)
+                struc_outputs = [to_rename.get(k, k) for k in self.output_names]
+                struc_inputs = {to_rename.get(k, k): v for k, v in inputs.items()}
+                onnx_results = self.run_onnxruntime(
+                    name, model_proto, struc_inputs, struc_outputs, external_tensor_storage)
             else:
                 raise ValueError("unknown backend")
             logger.info("Run_ONNX OK")
