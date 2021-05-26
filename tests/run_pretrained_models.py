@@ -400,7 +400,6 @@ class Test(object):
         if utils.is_debug_mode():
             utils.save_protobuf(os.path.join(TEMP_DIR, name + "_after_tf_optimize.pb"), graph_def)
 
-        logger.info("Input names %s", input_names)
         if tflite_path is not None:
             inputs = {}
             for k in input_names:
@@ -508,7 +507,6 @@ class Test(object):
                 elif self.run_tf_frozen:
                     if self.tf_profile is not None:
                         tf.profiler.experimental.start(self.tf_profile)
-                    logger.info("TF inputs %s", list(inputs.keys()))
                     tf_results = self.run_tensorflow(sess, inputs)
                     if self.tf_profile is not None:
                         tf.profiler.experimental.stop()
@@ -557,7 +555,6 @@ class Test(object):
             if backend == "onnxruntime":
                 struc_outputs = [to_rename.get(k, k) for k in self.output_names]
                 struc_inputs = {to_rename.get(k, k): v for k, v in inputs.items()}
-                logger.info("ORT inputs %s", list(struc_inputs.keys()))
                 onnx_results = self.run_onnxruntime(
                     name, model_proto, struc_inputs, struc_outputs, external_tensor_storage)
             else:
