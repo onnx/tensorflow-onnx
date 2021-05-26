@@ -38,7 +38,7 @@ imgs = generate_random_images()
 # Download model from https://tfhub.dev/captain-pool/esrgan-tf2/1
 # python -m tf2onnx.convert --saved-model esrgan --output "esrgan-tf2.onnx" --opset 12
 ort = ort.InferenceSession('esrgan-tf2.onnx')
-fct_ort = lambda img: ort.run(None, {'input_0:0': img})
+fct_ort = lambda img: ort.run(None, {'input_0': img})
 results_ort, duration_ort = measure_time(fct_ort, imgs)
 print(len(imgs), duration_ort)
 

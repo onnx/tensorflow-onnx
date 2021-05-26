@@ -62,7 +62,7 @@ print(proc.stderr.decode('ascii'))
 ########################################
 # Runs onnxruntime.
 session = InferenceSession("efficientnetb0clas.onnx")
-got = session.run(None, {'input_1:0': input})
+got = session.run(None, {'input_1': input})
 print(got[0])
 
 ########################################
@@ -73,5 +73,5 @@ print(np.abs(got[0] - expected).max())
 # Measures processing time.
 print('tf:', timeit.timeit('model.predict(input)',
                            number=10, globals=globals()))
-print('ort:', timeit.timeit("session.run(None, {'input_1:0': input})",
+print('ort:', timeit.timeit("session.run(None, {'input_1': input})",
                             number=10, globals=globals()))

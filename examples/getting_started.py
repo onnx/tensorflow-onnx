@@ -58,7 +58,7 @@ os.system("python -m tf2onnx.convert --saved-model savedmodel --output model.onn
 
 print("ORT result")
 sess = ort.InferenceSession("model.onnx")
-res = sess.run(None, {'dense_input:0': x_val})
+res = sess.run(None, {'dense_input': x_val})
 print(res[0])
 
 print("Conversion succeeded")
