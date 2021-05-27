@@ -9,7 +9,7 @@ import numpy as np
 from onnx import helper, numpy_helper, TensorProto
 from onnx.defs import onnx_opset_version
 from .. import utils
-from ..constants import OPSET_TO_IR_VERSION
+from ..constants import OPSET_TO_IR_VERSION, PREFERRED_OPSET
 from .optimizer_base import GraphOptimizerBase
 
 def single_axes(axes):
@@ -1730,10 +1730,9 @@ class CachedEinsum:
         Builds an ONNX graph with a single einsum operator.
         """
         opset = (self.opset if self.opset is not None
-                 else get_opset_number_from_onnx())
-        ir_version = get_ir_version_from_onnx()
-        proto_type = guess_proto_dtype(
-            np.float32 if self.dtype is None else self.dtype)
+                 else PREFERRED_OPSET)
+        ir_version = OPSET_TO_IR_VERSION.get(opset, max(OPSET_TO_IR_VERSION.values()))
+        proto_type = TensorProto.FLOAT
 
         model = helper.make_model(
             opset_imports=[helper.make_operatorsetid('', opset)],
@@ -1870,23 +1869,26 @@ class EinsumOptimizer(GraphOptimizerBase):
 
         equation = node.attr['equation'].s.decode('ascii')
 
-        # optimize the equation
+        # optimize the equation? decompose=True, False
+        decompose = True
         new_equation_obj = optimize_einsum(
-            equation, decompose=True, dtype=np.float32, opset=graph.opset)
-        if equation != new_equation_obj.equation_:
-            self.logger.debug(
+            equation, decompose=decompose, dtype=np.float32, opset=graph.opset)
+        if decompose:
+            seq = decompose_einsum_equation(new_equation_obj.equation_)
+            new_nodes = list(seq.to_tf2onnx(graph, node))
+            if len(new_nodes) > 0:
+                # optimisation was made, node should be removed.
+                last_node = new_nodes[-1]
+                self.logger.info(
+                    "replacing einsum node %r by its decomposed version, name of the last "
+                    "node %r.", node.name, last_node.name)
+                graph.replace_all_inputs(node.output[0], last_node.output[0])
+                graph.safe_remove_nodes([node])
+                return True
+        elif equation != new_equation_obj.equation_:
+            node.attr['equation'].s = new_equation_obj.equation_.encode('ascii')
+            self.logger.info(
                 "replacing einsum equation %r by %r",
                 equation, new_equation_obj.equation_)
-
-        seq = decompose_einsum_equation(new_equation_obj.equation_)
-        new_nodes = list(seq.to_tf2onnx(graph, node))
-        if len(new_nodes) > 0:
-            # optimisation was made, node should be removed.
-            last_node = new_nodes[-1]
-            self.logger.debug(
-                "replacing einsum node %r by its decomposed version, name of the last "
-                "node %r.", node.name, last_node.name)
-            graph.replace_all_inputs(node.output[0], last_node.output[0])
-            graph.safe_remove_nodes([node])
             return True
         return False

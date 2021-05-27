@@ -34,6 +34,7 @@ _optimizers = OrderedDict([
     ("q_dq_optimizer", QDQOptimizer),
     ("remove_identity", IdentityOptimizer),
     ("remove_back_to_back", BackToBackOptimizer),
+    ("einsum_optimizer", EinsumOptimizer),
 ])
 
 
