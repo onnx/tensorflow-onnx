@@ -4085,6 +4085,32 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "Range")
+    def test_ctc_greedy_decoder(self):
+        x_val = np.random.uniform(size=(3, 4, 5)).astype(np.float32)
+        s_val = np.array([3, 3, 2, 3], np.int32)
+        def func(x, s):
+            [decoded], logits = tf.nn.ctc_greedy_decoder(x, s, merge_repeated=False)
+            r1 = tf.identity(decoded.indices, name=_TFOUTPUT)
+            r2 = tf.identity(decoded.values, name=_TFOUTPUT1)
+            r3 = tf.identity(decoded.dense_shape, name=_TFOUTPUT2)
+            r4 = tf.identity(logits, name=_TFOUTPUT3)
+            return r1, r2, r3, r4
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3], {_INPUT: x_val, _INPUT1: s_val})
+
+    @check_opset_min_version(11, "Range")
+    def test_ctc_greedy_decoder_merge_repeated(self):
+        x_val = np.random.uniform(size=(6, 4, 5)).astype(np.float32)
+        s_val = np.array([5, 6, 4, 6], np.int32)
+        def func(x, s):
+            [decoded], logits = tf.nn.ctc_greedy_decoder(x, s, merge_repeated=True)
+            r1 = tf.identity(decoded.indices, name=_TFOUTPUT)
+            r2 = tf.identity(decoded.values, name=_TFOUTPUT1)
+            r3 = tf.identity(decoded.dense_shape, name=_TFOUTPUT2)
+            r4 = tf.identity(logits, name=_TFOUTPUT3)
+            return r1, r2, r3, r4
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3], {_INPUT: x_val, _INPUT1: s_val})
+
     # test for gemm pattern0: alpha*A*B + beta*C
     def test_gemm_pattern0(self):
         max_number = 10

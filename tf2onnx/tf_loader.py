@@ -214,7 +214,7 @@ def from_function(func, input_names, output_names, large_model=False):
     return graph_def
 
 
-def freeze_session(sess, input_names=None, output_names=None):
+def freeze_session(sess, input_names=None, output_names=None, get_tables=False):
     """Freezes the state of a session into a pruned computation graph."""
     output_node_names = [i.split(':')[:-1][0] for i in output_names]
     keep_var_names = [i.split(':')[:-1][0] for i in input_names]
@@ -226,6 +226,19 @@ def freeze_session(sess, input_names=None, output_names=None):
         for node in graph_def.node:
             node.device = ""
         graph_def = convert_variables_to_constants(sess, graph_def, output_node_names)
+        table_names, key_dtypes, value_dtypes = get_hash_table_info(graph_def)
+        if get_tables:
+            initialized_tables = {}
+            tf.tables_initializer().run(session=sess)
+            for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
+                h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+                try:
+                    k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+                    k, v = sess.run([k, v])
+                    initialized_tables[n] = (k, v)
+                except Exception:  # pylint: disable=broad-except
+                    logger.warning("Could not initialize table with shared_name = %r", n)
+            return graph_def, initialized_tables
     return graph_def
 
 
@@ -297,7 +310,7 @@ def from_checkpoint(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signature_names):
+def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signature_names, use_graph_names):
     """Load tensorflow graph from saved_model."""
 
     wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
@@ -332,14 +345,16 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
         # TF1.12 changed the api
         get_signature_def = lambda meta_graph_def, k: meta_graph_def.signature_def[k]
 
+    tensors_to_rename = {}
     if input_names is None:
         input_names = []
         for k in signatures:
             inputs_tensor_info = get_signature_def(imported, k).inputs
-            for _, input_tensor in inputs_tensor_info.items():
+            for structured_name, input_tensor in inputs_tensor_info.items():
                 if input_tensor.name not in input_names:
                     input_names.append(input_tensor.name)
-    tensors_to_rename = {}
+                    if not use_graph_names:
+                        tensors_to_rename[input_tensor.name] = structured_name
     if output_names is None:
         output_names = []
         for k in signatures:
@@ -347,19 +362,10 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
             for structured_name, output_tensor in outputs_tensor_info.items():
                 if output_tensor.name not in output_names:
                     output_names.append(output_tensor.name)
-                    tensors_to_rename[output_tensor.name] = structured_name
-    frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
-    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
-    initialized_tables = {}
-    tf.tables_initializer().run()
-    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
-        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
-        try:
-            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
-            k, v = sess.run([k, v])
-            initialized_tables[n] = (k, v)
-        except Exception:  # pylint: disable=broad-except
-            logger.warning("Could not initialize table with shared_name = %r", n)
+                    if not use_graph_names:
+                        tensors_to_rename[output_tensor.name] = structured_name
+    frozen_graph, initialized_tables = \
+        freeze_session(sess, input_names=input_names, output_names=output_names, get_tables=True)
     return frozen_graph, input_names, output_names, initialized_tables, tensors_to_rename
 
 
@@ -444,7 +450,7 @@ def _restore_captured_resources(concrete_func, graph_captures_copy, func_capture
 
 
 def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def,
-                         concrete_function_index, large_model):
+                         concrete_function_index, large_model, use_graph_names):
     """Load tensorflow graph from saved_model."""
 
     wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
@@ -489,18 +495,19 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     tensors_to_rename = {}
     if input_names is None:
         inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
-        if concrete_func.structured_input_signature is not None:
-            args, kwargs = concrete_func.structured_input_signature
-            structured_inputs = [t.name for t in args if isinstance(t, tf.TensorSpec)] + sorted(kwargs.keys())
-            structured_inputs = set(inp + ":0" for inp in structured_inputs)
-            if any(inp in structured_inputs for inp in inputs):
-                inputs = [inp for inp in inputs if inp in structured_inputs]
+        graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
+        captured_inputs = [t_name.name for _, t_name in graph_captures.values()]
+        inputs = [inp for inp in inputs if inp not in captured_inputs]
+        if concrete_func.structured_input_signature is not None and not use_graph_names:
+            flat_structured_inp = tf.nest.flatten(concrete_func.structured_input_signature)
+            structured_inputs = [t.name for t in flat_structured_inp if isinstance(t, tf.TensorSpec)]
+            tensors_to_rename.update(zip(inputs, structured_inputs))
     else:
         inputs = input_names
 
     if output_names is None:
         outputs = [tensor.name for tensor in concrete_func.outputs if tensor.dtype != tf.dtypes.resource]
-        if isinstance(concrete_func.structured_outputs, dict):
+        if isinstance(concrete_func.structured_outputs, dict) and not use_graph_names:
             # outputs are sorted, sort structured_outputs the same way
             structured_outputs = sorted(concrete_func.structured_outputs.keys())
             tensors_to_rename.update(zip(outputs, structured_outputs))
@@ -509,7 +516,6 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
             logger.info("Output names: %r", outputs)
     else:
         outputs = output_names
-        logger.info("Outputs not left as None; will use provided names not structured output names.")
 
     frozen_graph, initialized_tables = from_trackable(imported, concrete_func, inputs, outputs, large_model)
 
@@ -518,7 +524,8 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
 
 def from_saved_model(model_path, input_names, output_names, tag=None,
                      signatures=None, concrete_function=None, large_model=False,
-                     return_concrete_func=False, return_initialized_tables=False, return_tensors_to_rename=False):
+                     return_concrete_func=False, return_initialized_tables=False,
+                     return_tensors_to_rename=False, use_graph_names=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
@@ -527,7 +534,7 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
         if is_tf2():
             frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables, tensors_to_rename = \
                 _from_saved_model_v2(model_path, input_names, output_names,
-                                     tag, signatures, concrete_function, large_model)
+                                     tag, signatures, concrete_function, large_model, use_graph_names)
             result = [frozen_graph, input_names, output_names]
             if return_concrete_func:
                 result += [concrete_func, imported]
@@ -538,7 +545,7 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
         else:
             with tf_session() as sess:
                 frozen_graph, input_names, output_names, initialized_tables, tensors_to_rename = \
-                    _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures)
+                    _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signatures, use_graph_names)
                 result = [frozen_graph, input_names, output_names]
                 if return_initialized_tables:
                     result += [initialized_tables]

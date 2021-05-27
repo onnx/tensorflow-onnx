@@ -65,6 +65,8 @@ def get_args():
                                               "change into Identity ops using their default value")
     parser.add_argument("--rename-inputs", help="input names to use in final model (optional)")
     parser.add_argument("--rename-outputs", help="output names to use in final model (optional)")
+    parser.add_argument("--use-graph-names", help="(saved model only) skip renaming io using signature names",
+                        action="store_true")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
     parser.add_argument("--dequantize", help="Remove quantization from model. Only supported for tflite currently.",
                         action="store_true")
@@ -212,7 +214,8 @@ def main():
     if args.saved_model:
         graph_def, inputs, outputs, initialized_tables, tensors_to_rename = tf_loader.from_saved_model(
             args.saved_model, args.inputs, args.outputs, args.tag, args.signature_def, args.concrete_function,
-            args.large_model, return_initialized_tables=True, return_tensors_to_rename=True)
+            args.large_model, return_initialized_tables=True, return_tensors_to_rename=True,
+            use_graph_names=args.use_graph_names)
         model_path = args.saved_model
     if args.keras:
         graph_def, inputs, outputs = tf_loader.from_keras(
@@ -284,6 +287,42 @@ def tensor_names_from_structed(concrete_func, input_names, output_names):
     return tensors_to_rename
 
 
+def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
+                    custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
+                    target=None, large_model=False, output_path=None):
+    """from_keras for tf 1.15"""
+
+    input_names = [t.name for t in model.inputs]
+    output_names = [t.name for t in model.outputs]
+    tensors_to_rename = dict(zip(input_names, model.input_names))
+    if len(set(model.output_names)) == len(model.output_names):
+        # In very rare cases, keras has a bug where it will give multiple outputs the same name
+        tensors_to_rename.update(zip(output_names, model.output_names))
+
+    sess = tf.keras.backend.get_session(model.outputs)
+
+    with tf.device("/cpu:0"):
+        frozen_graph, initialized_tables = tf_loader.freeze_session(sess, input_names, output_names, get_tables=True)
+        model_proto, external_tensor_storage = _convert_common(
+            frozen_graph,
+            name=model.name,
+            continue_on_error=True,
+            target=target,
+            opset=opset,
+            custom_op_handlers=custom_ops,
+            extra_opset=extra_opset,
+            shape_override=shape_override,
+            input_names=input_names,
+            output_names=output_names,
+            inputs_as_nchw=inputs_as_nchw,
+            large_model=large_model,
+            tensors_to_rename=tensors_to_rename,
+            initialized_tables=initialized_tables,
+            output_path=output_path)
+
+        return model_proto, external_tensor_storage
+
+
 def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
                custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
                target=None, large_model=False, output_path=None):
@@ -306,7 +345,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         An ONNX model_proto and an external_tensor_storage dict.
     """
     if LooseVersion(tf.__version__) < "2.0":
-        raise NotImplementedError("from_keras requires tf-2.0 or newer")
+        return _from_keras_tf1(model, input_signature, opset, custom_ops, custom_op_handlers, custom_rewriter,
+                               inputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
 
     from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
 
