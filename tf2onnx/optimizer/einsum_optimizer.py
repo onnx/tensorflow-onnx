@@ -1849,10 +1849,14 @@ class EinsumOptimizer(GraphOptimizerBase):
     in the equation. Depending on that order, the transposing
     and the matrix computation may be more or less efficient.
     The worst order may be 4, 5 times slower than the best order.
+
+    :param decompose: keep the operator einsum or replace it
+        by a graph combining operators listed above
     """
 
-    def __init__(self):  # pylint: disable=useless-super-delegation
+    def __init__(self, decompose=True):  # pylint: disable=useless-super-delegation
         super(EinsumOptimizer, self).__init__()
+        self._decompose = True
 
     def _optimize(self, graph):
         return self._apply_optimization(graph, self._optimize_at_current_graph_level)
@@ -1880,10 +1884,9 @@ class EinsumOptimizer(GraphOptimizerBase):
         equation = node.attr['equation'].s.decode('ascii')
 
         # optimize the equation? decompose=True, False
-        decompose = True
         new_equation_obj = optimize_einsum(
-            equation, decompose=decompose, dtype=np.float32, opset=graph.opset)
-        if decompose:
+            equation, decompose=self._decompose, dtype=np.float32, opset=graph.opset)
+        if self._decompose:
             seq = decompose_einsum_equation(new_equation_obj.equation_)
             new_nodes = list(seq.to_tf2onnx(graph, node))
 
