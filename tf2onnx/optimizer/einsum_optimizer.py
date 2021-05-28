@@ -7,7 +7,6 @@ import math
 from itertools import permutations
 import numpy as np
 from onnx import helper, numpy_helper, TensorProto
-from onnx.defs import onnx_opset_version
 from .. import utils
 from ..constants import OPSET_TO_IR_VERSION, PREFERRED_OPSET
 from .optimizer_base import GraphOptimizerBase
@@ -361,6 +360,7 @@ class EinsumSubOp:
         yield helper.make_node('Identity', [name], [self._onnx_name()])
 
     def _to_onnx_expand_dims(self, names, opset):
+        "insert node unsqueeze"
         self._check_inputs_(1)
         self._check_onnx_opset_(opset, 11)
         inp = self.inputs[0]
@@ -377,6 +377,7 @@ class EinsumSubOp:
                 'Unsqueeze', [name], [self._onnx_name()], axes=[a[1] for a in axes])
 
     def _to_onnx_squeeze(self, names, opset):
+        "insert node squeeze"
         self._check_inputs_(1)
         self._check_onnx_opset_(opset, 11)
         inp = self.inputs[0]
@@ -1141,7 +1142,7 @@ class GraphEinsumSubOp:
             new_init = ctx.make_const(utils.make_name(init.name), np_val)
             new_names[init.name] = new_init.name
             yield new_init
-        for ind, op in enumerate(onx.graph.node):
+        for op in onx.graph.node:
             kwargs = {p.name: p for p in op.attribute}
             new_node = ctx.make_node(
                 op.op_type, [new_names[i] for i in op.input], attr=kwargs)
@@ -1885,14 +1886,14 @@ class EinsumOptimizer(GraphOptimizerBase):
         if decompose:
             seq = decompose_einsum_equation(new_equation_obj.equation_)
             new_nodes = list(seq.to_tf2onnx(graph, node))
-            
+
             if len(new_nodes) > 0:
                 # optimisation was made, node should be removed.
                 last_node = new_nodes[-1]
                 self.logger.info(
                     "replacing einsum node %r by its decomposed version, name of the last "
                     "node %r.", node.name, last_node.name)
-                graph.replace_all_inputs(node.output[0], last_node.output[0])                
+                graph.replace_all_inputs(node.output[0], last_node.output[0])
                 graph.safe_remove_nodes([node])
                 if node.output[0] in graph.outputs:
                     graph.make_node(
