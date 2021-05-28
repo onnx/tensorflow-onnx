@@ -367,10 +367,14 @@ class EinsumSubOp:
         name = self._get_data(names, inp)
         axes = self.kwargs['axes']
         name_axes = name + '_axes'
-        yield numpy_helper.from_array(
-            np.array([a[1] for a in axes], dtype=np.int64), name=name_axes)
-        yield helper.make_node(
-            'Unsqueeze', [name, name_axes], [self._onnx_name()])
+        if opset >= 13:
+            yield numpy_helper.from_array(
+                np.array([a[1] for a in axes], dtype=np.int64), name=name_axes)
+            yield helper.make_node(
+                'Unsqueeze', [name, name_axes], [self._onnx_name()])
+        else:
+            yield helper.make_node(
+                'Unsqueeze', [name], [self._onnx_name()], axes=[a[1] for a in axes])
 
     def _to_onnx_squeeze(self, names, opset):
         self._check_inputs_(1)
@@ -379,10 +383,14 @@ class EinsumSubOp:
         name = self._get_data(names, inp)
         axes = self.kwargs['axes']
         name_axes = name + '_axes'
-        yield numpy_helper.from_array(
-            np.array(axes, dtype=np.int64), name=name_axes)
-        yield helper.make_node(
-            'Squeeze', [name, name_axes], [self._onnx_name()])
+        if opset >= 13:
+            yield numpy_helper.from_array(
+                np.array(axes, dtype=np.int64), name=name_axes)
+            yield helper.make_node(
+                'Squeeze', [name, name_axes], [self._onnx_name()])
+        else:
+            yield helper.make_node(
+                'Squeeze', [name], [self._onnx_name()], axes=axes)
 
     def _to_onnx_transpose(self, names, opset):  # pylint: disable=W0613
         self._check_inputs_(1)
@@ -667,7 +675,7 @@ class EinsumSubOp:
         :return: output
         """
         if opset is None:
-            opset = onnx_opset_version()
+            opset = PREFERRED_OPSET
         method_name = "_to_onnx_%s" % self.name
         meth = getattr(self, method_name, None)
         if meth is None:
@@ -678,9 +686,10 @@ class EinsumSubOp:
                     "to remove it." % self.name)
             raise NotImplementedError(
                 "to_onnx not implemented for %r." % self.name)
-        for node in meth(names, opset=opset, **kwargs):
+        for ni, node in enumerate(meth(names, opset=opset, **kwargs)):
             if hasattr(node, 'output'):
                 names[id(self)] = node.output[0]
+                node.name = "OPT%s_%d_%d" % (method_name, ni, id(self))
             yield node
 
     def get_dot_kind(self):
@@ -1072,7 +1081,7 @@ class GraphEinsumSubOp:
         """
         # inputs
         if opset is None:
-            opset = onnx_opset_version()
+            opset = PREFERRED_OPSET
         onx_inputs = []
         if proto_type is None:
             proto_type = TensorProto.FLOAT
@@ -1125,19 +1134,19 @@ class GraphEinsumSubOp:
         :param node: einsum node to replace
         :return: output
         """
-        onx = self.to_onnx(node.output[0], *node.input, dtype=np.float32)
+        onx = self.to_onnx(node.output[0], *node.input, dtype=np.float32, opset=ctx.opset)
         new_names = {k.name: v for k, v in zip(onx.graph.input, node.input)}
         for init in onx.graph.initializer:
             np_val = numpy_helper.to_array(init)
             new_init = ctx.make_const(utils.make_name(init.name), np_val)
             new_names[init.name] = new_init.name
             yield new_init
-        for op in onx.graph.node:
+        for ind, op in enumerate(onx.graph.node):
             kwargs = {p.name: p for p in op.attribute}
-            node = ctx.make_node(
+            new_node = ctx.make_node(
                 op.op_type, [new_names[i] for i in op.input], attr=kwargs)
-            yield node
-            new_names[op.output[0]] = node.output[0]
+            yield new_node
+            new_names[op.output[0]] = new_node.output[0]
 
 
 def analyse_einsum_equation(equation):
@@ -1876,14 +1885,19 @@ class EinsumOptimizer(GraphOptimizerBase):
         if decompose:
             seq = decompose_einsum_equation(new_equation_obj.equation_)
             new_nodes = list(seq.to_tf2onnx(graph, node))
+            
             if len(new_nodes) > 0:
                 # optimisation was made, node should be removed.
                 last_node = new_nodes[-1]
                 self.logger.info(
                     "replacing einsum node %r by its decomposed version, name of the last "
                     "node %r.", node.name, last_node.name)
-                graph.replace_all_inputs(node.output[0], last_node.output[0])
+                graph.replace_all_inputs(node.output[0], last_node.output[0])                
                 graph.safe_remove_nodes([node])
+                if node.output[0] in graph.outputs:
+                    graph.make_node(
+                        'Identity', [last_node.output[0]], outputs=[node.output[0]],
+                        name="%s_final" % node.name)
                 return True
         elif equation != new_equation_obj.equation_:
             node.attr['equation'].s = new_equation_obj.equation_.encode('ascii')
