@@ -1856,7 +1856,7 @@ class EinsumOptimizer(GraphOptimizerBase):
 
     def __init__(self, decompose=True):  # pylint: disable=useless-super-delegation
         super(EinsumOptimizer, self).__init__()
-        self._decompose = True
+        self._decompose = decompose
 
     def _optimize(self, graph):
         return self._apply_optimization(graph, self._optimize_at_current_graph_level)
