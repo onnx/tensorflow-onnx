@@ -263,8 +263,9 @@ def parse_dims_attr(node, dims, spatial):
         if len(dims) != spatial:
             dims = dims[1:-1]
     else:
-        # We have (N, C, ...).
-        dims = dims[2:]
+        # We have (N, C, ...) or (...).
+        if len(dims) != spatial:
+            dims = dims[2:]
     return dims
 
 def conv_dims_attr(node, name, new_name=None, spatial=2):
@@ -459,15 +460,11 @@ class ConvTranspose:
                     dilations = parse_dims_attr(node, node.get_attr("dilations").ints, spatial)
                 else:
                     dilations = [1] * spatial
-                if "output_padding" in node.attr:
-                    output_padding = parse_dims_attr(node, node.get_attr("output_padding").ints, spatial)
-                else:
-                    output_padding = [0] * spatial
                 kernel_shape = parse_dims_attr(node, node.get_attr("kernel_shape").ints, spatial)
                 total_padding = [-1] * spatial
                 pads = [1] * (spatial * 2)
                 for i in range(spatial):
-                    total_padding[i] = (strides[i] * (input_dims[i] - 1) + output_padding[i]
+                    total_padding[i] = (strides[i] * (input_dims[i] - 1)
                                         + ((kernel_shape[i] - 1) * dilations[i] + 1)
                                         - new_output_shape[i])
                     start_i = i
