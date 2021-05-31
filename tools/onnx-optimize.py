@@ -50,10 +50,7 @@ def main():
 
     onnx_graph = g.make_graph(org_model_proto.graph.doc_string + " (+tf2onnx/onnx-optimize)")
 
-    kwargs = {"producer_name": org_model_proto.producer_name,
-              "producer_version": org_model_proto.producer_version,
-              "opset_imports": org_model_proto.opset_import,
-              "ir_version": org_model_proto.ir_version}
+    kwargs = GraphUtil.get_onnx_model_properties(org_model_proto)
 
     model_proto = helper.make_model(onnx_graph, **kwargs)
 
