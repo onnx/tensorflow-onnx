@@ -25,13 +25,10 @@ steps:
       pip install --index-url https://test.pypi.org/simple/ ort-nightly
     fi
 
-    if [[ $CI_PLATFORM == "windows" ]] ;
+    pip install onnxruntime-extensions
+    if [[ $CI_TF_VERSION == 2.* ]] ;
     then
-      pip install onnxruntime-extensions
-      if [[ $CI_TF_VERSION == 2.* ]] ;
-      then
-        pip install tensorflow-text
-      fi
+      pip install tensorflow-text
     fi
 
     python setup.py install
