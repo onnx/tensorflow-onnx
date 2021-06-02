@@ -80,7 +80,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 providers = ['CUDAExecutionProvider']
         opt = rt.SessionOptions()
         if use_custom_ops:
-            from onnxruntime_customops import get_library_path
+            from onnxruntime_extensions import get_library_path
             opt.register_custom_ops_library(get_library_path())
         # in case of issues with the runtime, one can enable more logging
         # opt.log_severity_level = 0

@@ -27,7 +27,7 @@ steps:
 
     if [[ $CI_PLATFORM == "windows" ]] ;
     then
-      pip install -i https://test.pypi.org/simple/ onnxruntime-customops==0.0.1
+      pip install onnxruntime-extensions
       if [[ $CI_TF_VERSION == 2.* ]] ;
       then
         pip install tensorflow-text
