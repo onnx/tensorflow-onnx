@@ -322,6 +322,7 @@ model_proto, external_tensor_storage = tf2onnx.convert.from_function(function,
         function: the tf.function we want to convert
         input_signature: a tf.TensorSpec or a numpy array defining the shape/dtype of the input
         opset: the opset to be used for the ONNX model, default is the latest
+        custom_ops: ...
         target: list of workarounds applied to help certain platforms
         custom_op_handlers: dictionary of custom ops handlers
         custom_rewriter: list of custom graph rewriters
