@@ -1898,6 +1898,28 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["res"], {},
                                    model_proto, remaining_transpose_num=0)
 
+    def test_const_fold_concat(self):
+        shape = (6, 4)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(*shape).flatten().astype(np.float32))
+        const_tensor2 = helper.make_tensor(name='const_tensor2', data_type=TensorProto.FLOAT, dims=shape,
+                                           vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Constant", [], ["const2"], value=const_tensor2)
+        node3 = helper.make_node("Concat", ["const", "const2", "const"], ["value1"], axis=1)
+        node4 = helper.make_node("Add", ["value1", "inp"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3, node4],
+            "test_const_fold_trans_with_const2",
+            [helper.make_tensor_value_info("inp", TensorProto.FLOAT, [6, 12])],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, [6, 12])],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"inp": np.random.randn(6, 12).astype(np.float32)}, model_proto,
+                             "Concat", 0)
+
     @check_opset_max_version(12, "Squeeze/Unsqueeze changed in opset 13")
     def test_const_fold_unsqueeze_with_const(self):
         shape = (6, 6)
