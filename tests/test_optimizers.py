@@ -1980,6 +1980,87 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.int64)}, model_proto,
                              "Cast", 0)
 
+    def test_const_fold_split(self):
+        shape = (2, 6, 1)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(2, 6, 1).flatten().astype(np.float32))
+        node0 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node1 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1)
+        node2 = helper.make_node("Sum", ["inp", "out1", "out2", "out3"], ["out4"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "test_const_fold_split",
+            [helper.make_tensor_value_info("inp", TensorProto.FLOAT, (2, 2, 1))],
+            [helper.make_tensor_value_info("out4", TensorProto.FLOAT, (2, 2, 1))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["out4"], {"inp": np.random.randn(2, 2, 1).astype(np.float32)}, model_proto,
+                             "Split", 0)
+
+    def test_const_fold_split_one(self):
+        shape = (2, 6, 1)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(2, 6, 1).flatten().astype(np.float32))
+        node0 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node1 = helper.make_node("Split", ["const"], ["out1"], axis=1)
+        node2 = helper.make_node("Sum", ["inp", "out1"], ["out4"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "test_const_fold_split",
+            [helper.make_tensor_value_info("inp", TensorProto.FLOAT, (2, 6, 1))],
+            [helper.make_tensor_value_info("out4", TensorProto.FLOAT, (2, 6, 1))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["out4"], {"inp": np.random.randn(2, 6, 1).astype(np.float32)}, model_proto,
+                             "Split", 0)
+
+    @check_opset_min_version(13, "Split changed in opset 13")
+    def test_const_fold_split_const_splits_13(self):
+        shape = (2, 6, 1)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(2, 6, 1).flatten().astype(np.float32))
+        node0 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        const_splits = helper.make_tensor(name='const_tensor', data_type=TensorProto.INT64, dims=[3],
+                                          vals=np.array([1, 3, 2], np.int64))
+        node1 = helper.make_node("Constant", [], ["splits"], value=const_splits)
+        node2 = helper.make_node("Split", ["const", "splits"], ["out1", "out2", "out3"], axis=1)
+        node3 = helper.make_node("Sum", ["inp", "out2"], ["out4"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3],
+            "test_const_fold_split",
+            [helper.make_tensor_value_info("inp", TensorProto.FLOAT, (2, 3, 1))],
+            [helper.make_tensor_value_info("out4", TensorProto.FLOAT, (2, 3, 1))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["out4"], {"inp": np.random.randn(2, 3, 1).astype(np.float32)}, model_proto,
+                             "Split", 0)
+
+    @check_opset_max_version(12, "Split changed in opset 13")
+    def test_const_fold_split_const_splits(self):
+        shape = (2, 6, 1)
+        const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                          vals=np.random.randn(2, 6, 1).flatten().astype(np.float32))
+        node0 = helper.make_node("Constant", [], ["const"], value=const_tensor)
+        node2 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1, split=[1, 3, 2])
+        node3 = helper.make_node("Sum", ["inp", "out2"], ["out4"])
+
+        graph = helper.make_graph(
+            [node0, node2, node3],
+            "test_const_fold_split",
+            [helper.make_tensor_value_info("inp", TensorProto.FLOAT, (2, 3, 1))],
+            [helper.make_tensor_value_info("out4", TensorProto.FLOAT, (2, 3, 1))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["out4"], {"inp": np.random.randn(2, 3, 1).astype(np.float32)}, model_proto,
+                             "Split", 0)
+
     # Const Fold Optimizer Tests End
 
     # Const Dequantize Optimizer Tests Start
