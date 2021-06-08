@@ -6,6 +6,7 @@ from collections import OrderedDict
 import copy
 
 from .const_fold_optimizer import ConstFoldOptimizer
+from .einsum_optimizer import EinsumOptimizer
 from .identity_optimizer import IdentityOptimizer
 from .merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
 from .transpose_optimizer import TransposeOptimizer
@@ -33,6 +34,7 @@ _optimizers = OrderedDict([
     ("q_dq_optimizer", QDQOptimizer),
     ("remove_identity", IdentityOptimizer),
     ("remove_back_to_back", BackToBackOptimizer),
+    ("einsum_optimizer", EinsumOptimizer),
 ])
 
 
@@ -40,13 +42,13 @@ def _get_optimizers():
     return _optimizers
 
 
-def optimize_graph(graph, catch_errors=True):
+def optimize_graph(graph, catch_errors=True, optimizers=None):
     """ Optimize graph, return optimized graph. No throw if catch_errors is true"""
     logger = logging.getLogger(__name__)
     logger.info("Optimizing ONNX model")
 
     before = graph.dump_node_statistics()
-    opts = _get_optimizers()
+    opts = _get_optimizers() if optimizers is None else optimizers
     continue_flag = True
     iteration = 0
     while continue_flag:
