@@ -22,6 +22,12 @@ from tf2onnx.tflite.CustomOptionsFormat import CustomOptionsFormat
 
 # pylint: disable=missing-docstring
 
+def endvector(builder, length):
+    try:
+        return builder.EndVector(length)
+    except TypeError:
+        # flatbuffers 2.0 changes the API
+        return builder.EndVector()
 
 class TFLiteDetectionPostProcessTests(Tf2OnnxBackendTestBase):
 
@@ -90,7 +96,7 @@ class TFLiteDetectionPostProcessTests(Tf2OnnxBackendTestBase):
         # op_codes
         Model.ModelStartOperatorCodesVector(builder, 1)
         builder.PrependUOffsetTRelative(op_code)
-        op_codes = builder.EndVector(1)
+        op_codes = endvector(builder, 1)
 
         # Make tensors
         # [names, shape, type tensors]
@@ -118,19 +124,19 @@ class TFLiteDetectionPostProcessTests(Tf2OnnxBackendTestBase):
         SubGraph.SubGraphStartTensorsVector(builder, len(ts))
         for tensor in reversed(ts):
             builder.PrependUOffsetTRelative(tensor)
-        tensors = builder.EndVector(len(ts))
+        tensors = endvector(builder, len(ts))
 
         # inputs
         SubGraph.SubGraphStartInputsVector(builder, 3)
         for inp in reversed([0, 1, 2]):
             builder.PrependInt32(inp)
-        inputs = builder.EndVector(3)
+        inputs = endvector(builder, 3)
 
         # outputs
         SubGraph.SubGraphStartOutputsVector(builder, 4)
         for out in reversed([3, 4, 5, 6]):
             builder.PrependInt32(out)
-        outputs = builder.EndVector(4)
+        outputs = endvector(builder, 4)
 
         flexbuffer = \
             b'y_scale\x00nms_score_threshold\x00max_detections\x00x_scale\x00w_scale\x00nms_iou_threshold' \
@@ -164,7 +170,7 @@ class TFLiteDetectionPostProcessTests(Tf2OnnxBackendTestBase):
         # operators
         SubGraph.SubGraphStartOperatorsVector(builder, 1)
         builder.PrependUOffsetTRelative(operator)
-        operators = builder.EndVector(1)
+        operators = endvector(builder, 1)
 
         # subgraph
         graph_name = builder.CreateString("TFLite graph")
@@ -179,12 +185,12 @@ class TFLiteDetectionPostProcessTests(Tf2OnnxBackendTestBase):
         # subgraphs
         Model.ModelStartSubgraphsVector(builder, 1)
         builder.PrependUOffsetTRelative(subgraph)
-        subgraphs = builder.EndVector(1)
+        subgraphs = endvector(builder, 1)
 
         description = builder.CreateString("Model for tflite testing")
 
         Buffer.BufferStartDataVector(builder, 0)
-        data = builder.EndVector(0)
+        data = endvector(builder, 0)
 
         Buffer.BufferStart(builder)
         Buffer.BufferAddData(builder, data)
@@ -192,7 +198,7 @@ class TFLiteDetectionPostProcessTests(Tf2OnnxBackendTestBase):
 
         Model.ModelStartBuffersVector(builder, 1)
         builder.PrependUOffsetTRelative(buffer)
-        buffers = builder.EndVector(1)
+        buffers = endvector(builder, 1)
 
         # model
         Model.ModelStart(builder)

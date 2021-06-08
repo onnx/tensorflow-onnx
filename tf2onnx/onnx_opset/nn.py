@@ -361,12 +361,13 @@ class ConvOp:
         )
         groups = int(1)
         data_format = str(node.attr["data_format"].s, encoding="utf8")
+        shape_dim = -1
         if data_format == "NHWC":
-            groups = int(ctx.get_shape(node.input[0])[3]  / ctx.get_shape(node.input[1])[2])
+            shape_dim = ctx.get_shape(node.input[0])[3]
         elif data_format == "NCHW":
-            groups = int(ctx.get_shape(node.input[0])[1] / ctx.get_shape(node.input[1])[2])
-        else:
-            pass
+            shape_dim = ctx.get_shape(node.input[0])[1]
+        if shape_dim != -1:
+            groups = int(shape_dim / ctx.get_shape(node.input[1])[2])
 
         node.set_attr("group", groups)
 
