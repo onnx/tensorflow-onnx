@@ -1772,6 +1772,49 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: indices_val, _INPUT2: segs_val})
 
+    @check_opset_min_version(11, "CumSum")
+    @check_tf_min_version("1.14")
+    def test_set_union(self):
+        a_val = np.array([[10, 2, 30, 2, 5], [10, 9, 1, 9, 3]], np.int32)
+        b_val = np.array([[4, 5, 10, 8, 9], [1, 4, 1, 1, 5]], np.int32)
+        def func(a, b):
+            s = tf.sets.union(a, b)
+            indices, values, shape = s.indices, s.values, s.dense_shape
+            indices = tf.identity(indices, name=_TFOUTPUT)
+            values = tf.identity(values, name=_TFOUTPUT1)
+            shape = tf.identity(shape, name=_TFOUTPUT2)
+            return indices, values, shape
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: a_val, _INPUT1: b_val})
+
+    @check_opset_min_version(11, "CumSum")
+    @check_tf_min_version("1.14")
+    def test_set_intersection(self):
+        a_val = np.array([[10, 2, 30, 2, 5], [10, 9, 1, 9, 3]], np.int32)
+        b_val = np.array([[4, 5, 10, 8, 9], [1, 4, 1, 1, 5]], np.int32)
+        def func(a, b):
+            s = tf.sets.intersection(a, b)
+            indices, values, shape = s.indices, s.values, s.dense_shape
+            indices = tf.identity(indices, name=_TFOUTPUT)
+            values = tf.identity(values, name=_TFOUTPUT1)
+            shape = tf.identity(shape, name=_TFOUTPUT2)
+            return indices, values, shape
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: a_val, _INPUT1: b_val})
+
+    @check_opset_min_version(11, "CumSum")
+    @check_tf_min_version("1.14")
+    def test_set_difference(self):
+        a_val = np.array([[10, 2, 30, 2, 5], [10, 9, 1, 9, 3]], np.int32)
+        b_val = np.array([[4, 5, 10, 8, 9], [1, 4, 1, 1, 5]], np.int32)
+        for aminusb in [True, False]:
+            def func(a, b):
+                s = tf.sets.difference(a, b, aminusb)
+                indices, values, shape = s.indices, s.values, s.dense_shape
+                indices = tf.identity(indices, name=_TFOUTPUT)
+                values = tf.identity(values, name=_TFOUTPUT1)
+                shape = tf.identity(shape, name=_TFOUTPUT2)
+                return indices, values, shape
+            self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: a_val, _INPUT1: b_val})
+
     @check_onnxruntime_incompatibility("Sqrt")
     def test_sqrt(self):
         x_val = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32).reshape((2, 2))
