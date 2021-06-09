@@ -9,6 +9,7 @@ from distutils.version import LooseVersion
 import tensorflow as tf
 import numpy as np
 from google.protobuf.message import DecodeError
+from tensorflow.core.framework import tensor_pb2
 from tensorflow.core.protobuf import saved_model_pb2
 from tensorflow.python.ops import lookup_ops
 from tensorflow.python.util import compat
@@ -127,8 +128,28 @@ def convert_variables_to_constants_large_model(func):
             _FunctionConverterData, _replace_variables_by_constants # pylint: disable=protected-access
     except ImportError:
         _not_implemented_tf_placeholder("_replace_variables_by_constants")()
-    converter_data = _FunctionConverterData(func=func, lower_control_flow=False, aggressive_inlining=True)
-    frozen_graph_def, _ = _replace_variables_by_constants(converter_data=converter_data)
+
+    from tensorflow.python.framework import tensor_util, tensor_shape
+    make_tensor_proto_original = tensor_util.make_tensor_proto
+    # Hack to avoid 2GB check
+    def make_tensor_proto_wrapped(values, dtype=None, shape=None, verify_shape=False, allow_broadcast=False):
+        try:
+            return make_tensor_proto_original(values, dtype, shape, verify_shape, allow_broadcast)
+        except ValueError:
+            if dtype is None:
+                dtype = tf.dtypes.as_dtype(values.dtype).as_datatype_enum
+            tensor_proto = tensor_pb2.TensorProto(
+                dtype=dtype,
+                tensor_shape=tensor_shape.as_shape(values.shape).as_proto())
+            tensor_proto.tensor_content = values.tobytes()
+            return tensor_proto
+    tensor_util.make_tensor_proto = make_tensor_proto_wrapped
+
+    try:
+        converter_data = _FunctionConverterData(func=func, lower_control_flow=False, aggressive_inlining=True)
+        frozen_graph_def, _ = _replace_variables_by_constants(converter_data=converter_data)
+    finally:
+        tensor_util.make_tensor_proto = make_tensor_proto_original
     return frozen_graph_def
 
 
