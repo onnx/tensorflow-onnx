@@ -2768,6 +2768,95 @@ class SparseFillEmptyRows:
         # Parameters moved to inputs for operator Squeeze, Unsqueeze.
         cls.any_version(13, ctx, node, **kwargs)
 
+@tf_op("DenseToDenseSetOperation")
+class DenseToDenseSetOperation:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        inp_a, inp_b = node.input
+        dtype = ctx.get_dtype(node.output[1])
+        if dtype != TensorProto.INT64:
+            inp_a = ctx.make_node("Cast", [inp_a], attr={'to': TensorProto.INT64}).output[0]
+            inp_b = ctx.make_node("Cast", [inp_b], attr={'to': TensorProto.INT64}).output[0]
+        set_op = node.get_attr_value('set_operation')
+        if set_op == b'b-a':
+            set_op = b'a-b'
+            inp_a, inp_b = inp_b, inp_a
+
+        one_tensor = helper.make_tensor("value", TensorProto.INT64, dims=[1], vals=[1])
+        const_one = ctx.make_const(utils.make_name("const_one"), np.array(1, np.int64)).output[0]
+        const_zero = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.int64)).output[0]
+        const_zero_unsq = ctx.make_const(utils.make_name("const_zero"), np.array([0], np.int64)).output[0]
+        const_neg_one_unsq = ctx.make_const(utils.make_name("const_neg_one"), np.array([-1], np.int64)).output[0]
+        max_int64 = int(utils.get_max_value(np.int64))
+        const_two = ctx.make_const(utils.make_name("const_two"), np.array(2, np.int64)).output[0]
+
+        def concat_indices(tensor):
+            shape = ctx.make_node("Shape", [tensor]).output[0]
+            tensor_flat = ctx.make_node("Reshape", [tensor, const_neg_one_unsq]).output[0]
+            tensor_flat_unsq = GraphBuilder(ctx).make_unsqueeze({'data': tensor_flat, 'axes': [1]})
+            ones_of_shape = ctx.make_node("ConstantOfShape", [shape], attr={'value': one_tensor}).output[0]
+            indices = ctx.make_node("NonZero", [ones_of_shape]).output[0]
+            sliced_indices = GraphBuilder(ctx).make_slice({'data': indices, 'starts': [0], 'ends': [-1], 'axes': [0]})
+            sliced_indices_trans = ctx.make_node("Transpose", [sliced_indices], attr={'perm': [1, 0]}).output[0]
+            return ctx.make_node("Concat", [sliced_indices_trans, tensor_flat_unsq], attr={'axis': 1}).output[0]
+
+        if set_op == b'union':
+            combined = ctx.make_node("Concat", [inp_a, inp_b], attr={'axis': -1}).output[0]
+            shape = ctx.make_node("Shape", [combined]).output[0]
+            shape_prefix = GraphBuilder(ctx).make_slice({'data': shape, 'starts': [0], 'ends': [-1], 'axes': [0]})
+            indices_and_vals = concat_indices(combined)
+            res_idx_and_vals = ctx.make_node("Unique", [indices_and_vals], attr={'axis': 0}).output[0]
+        else:
+            shape = ctx.make_node("Shape", [inp_a]).output[0]
+            shape_prefix = GraphBuilder(ctx).make_slice({'data': shape, 'starts': [0], 'ends': [-1], 'axes': [0]})
+            a_idx_and_vals = concat_indices(inp_a)
+            b_idx_and_vals = concat_indices(inp_b)
+            a_unique = ctx.make_node("Unique", [a_idx_and_vals], attr={'axis': 0}).output[0]
+            b_unique = ctx.make_node("Unique", [b_idx_and_vals], attr={'axis': 0}).output[0]
+            if set_op == b'intersection':
+                combined = ctx.make_node("Concat", [a_unique, b_unique], attr={'axis': 0}).output[0]
+                desired_cnt = const_two
+            else:
+                utils.make_sure(set_op == b'a-b', "Unsupported set operation: %s", set_op)
+                combined = ctx.make_node("Concat", [a_unique, b_unique, b_unique], attr={'axis': 0}).output[0]
+                # cnt will be 1 if and only if element is in only set A
+                desired_cnt = const_one
+            unique_rows, _, _, row_cnts = ctx.make_node("Unique", [combined], attr={'axis': 0}, output_count=4).output
+            keep = ctx.make_node("Equal", [row_cnts, desired_cnt]).output[0]
+            compress_shape = None
+            rows_shape = ctx.get_shape(unique_rows)
+            if rows_shape is not None:
+                compress_shape = rows_shape.copy()
+                compress_shape[0] = -1
+            res_idx_and_vals = ctx.make_node("Compress", [unique_rows, keep], attr={'axis': 0},
+                                             shapes=[compress_shape]).output[0]
+
+        merged_indices = GraphBuilder(ctx).make_slice(
+            {'data': res_idx_and_vals, 'starts': [0], 'ends': [-1], 'axes': [1]})
+        merged_values = GraphBuilder(ctx).make_slice(
+            {'data': res_idx_and_vals, 'starts': [-1], 'ends': [max_int64], 'axes': [1]})
+        merged_values_sq = GraphBuilder(ctx).make_squeeze({'data': merged_values, 'axes': [1]})
+        merged_values_sq_cast = ctx.make_node("Cast", [merged_values_sq], attr={'to': dtype}).output[0]
+
+        _, idx_loc, _, idx_cnts, = ctx.make_node("Unique", [merged_indices], attr={'axis': 0},
+                                                 output_count=4, op_name_scope=node.name).output
+
+        max_cnt = ctx.make_node("ReduceMax", [idx_cnts], attr={'axes': [0], 'keepdims': True}).output[0]
+        final_shape = ctx.make_node("Concat", [shape_prefix, max_cnt], attr={'axis': 0}).output[0]
+        one_minus_cnts = ctx.make_node("Sub", [const_one, idx_cnts]).output[0]
+        cnts_sliced = GraphBuilder(ctx).make_slice(
+            {"data": one_minus_cnts, "starts": [0], "ends": [-1], "axes": [0]})
+        cnts_shifted = ctx.make_node("Concat", [const_zero_unsq, cnts_sliced], attr={'axis': 0}).output[0]
+        values_shape = ctx.make_node("Shape", [merged_values_sq_cast]).output[0]
+        ones_of_shape = ctx.make_node("ConstantOfShape", [values_shape], attr={'value': one_tensor}).output[0]
+        idx_deltas = ctx.make_node("ScatterElements", [ones_of_shape, idx_loc, cnts_shifted]).output[0]
+        last_dim_idx = ctx.make_node("CumSum", [idx_deltas, const_zero]).output[0]
+        last_dim_idx_unsq = GraphBuilder(ctx).make_unsqueeze({"data": last_dim_idx, "axes": [1]})
+        full_indices = ctx.make_node("Concat", [merged_indices, last_dim_idx_unsq], attr={'axis': 1}).output[0]
+
+        ctx.replace_all_inputs(node.output[0], full_indices)
+        ctx.replace_all_inputs(node.output[1], merged_values_sq_cast)
+        ctx.replace_all_inputs(node.output[2], final_shape)
 
 @tf_op("DynamicPartition")
 class DynamicPartition:
