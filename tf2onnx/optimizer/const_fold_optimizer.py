@@ -129,6 +129,13 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         return [const_val_after_trans]
 
     @staticmethod
+    @_register_func("Concat")
+    def _fold_concat(node, graph):
+        axis = node.get_attr_value('axis')
+        res = np.concatenate([inp.get_tensor_value(as_list=False) for inp in node.inputs], axis)
+        return [res]
+
+    @staticmethod
     @_register_func("Unsqueeze")
     def _fold_unsqueeze(node, graph):
         """
