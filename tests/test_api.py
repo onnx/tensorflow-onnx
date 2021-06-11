@@ -12,7 +12,7 @@ import numpy as np
 import tensorflow as tf
 from onnx import helper
 
-from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version
+from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version, skip_tf_versions
 from tf2onnx.tf_loader import is_tf2
 from backend_test_base import Tf2OnnxBackendTestBase
 import tf2onnx
@@ -73,12 +73,14 @@ class ApiTests(Tf2OnnxBackendTestBase):
         self._test_keras_api(large_model=False)
 
     @check_tf_min_version("1.15")
+    @skip_tf_versions(["2.0", "2.1"], "TF 2 requires 2.2 for large model freezing")
     def test_keras_api_large(self):
         self._test_keras_api(large_model=True)
 
     @requires_custom_ops()
     @check_tf_min_version("1.15")
     @check_opset_min_version(11, "SparseToDense")
+    @skip_tf_versions(["2.1"], "TF 2.1 keras model doesn't work; table not initialized")
     def test_keras_hashtable(self):
 
         feature_cols = [
