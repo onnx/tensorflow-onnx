@@ -101,8 +101,8 @@ def test_keras_lambda(runner):
 @pytest.mark.parametrize("data_format", ["NCHW", "NHWC"])
 @pytest.mark.parametrize("input_shape", [(4, 6, 8), (None, None, 8)])
 def test_keras_lambda_depth_to_space(runner, data_format, input_shape):
-    if data_format == "NCHW" and is_tensorflow_older_than("2.2.0"):
-        pytest.skip("tf.nn.depth_to_space with NCHW not supported for Tensorflow older than 2.2.0")
+    if data_format == "NCHW" and (is_tensorflow_older_than("2.2.0") or is_tensorflow_later_than("2.4.0")):
+        pytest.skip("tf.nn.depth_to_space with NCHW only supported for Tensorflow 2.2 and 2.3")
     model = Sequential()
     model.add(Lambda(
         lambda x: tf.nn.depth_to_space(x, block_size=2, data_format=data_format),

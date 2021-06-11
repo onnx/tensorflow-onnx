@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-import keras2onnx
+import mock_keras2onnx
 import numpy as np
 import tensorflow as tf
-from keras2onnx.proto import is_tensorflow_older_than
+from tf2onnx.keras2onnx_api import convert_keras
+from mock_keras2onnx.proto import is_tensorflow_older_than
 
-if (not keras2onnx.proto.is_tf_keras) or (not keras2onnx.proto.tfcompat.is_tf2):
+if (not mock_keras2onnx.proto.is_tf_keras) or (not mock_keras2onnx.proto.tfcompat.is_tf2):
     pytest.skip("Tensorflow 2.0 only tests.", allow_module_level=True)
 
 
@@ -63,7 +64,7 @@ def test_lenet(runner):
     data = np.random.rand(2 * 416 * 416 * 3).astype(np.float32).reshape(2, 416, 416, 3)
     expected = lenet(data)
     lenet._set_inputs(data)
-    oxml = keras2onnx.convert_keras(lenet)
+    oxml = convert_keras(lenet)
     assert runner('lenet', oxml, data, expected)
 
 
@@ -72,7 +73,7 @@ def test_mlf(runner):
     mlf = MLP()
     np_input = tf.random.normal((2, 20))
     expected = mlf.predict(np_input)
-    oxml = keras2onnx.convert_keras(mlf)
+    oxml = convert_keras(mlf)
     assert runner('mlf', oxml, np_input.numpy(), expected)
 
 
@@ -89,7 +90,7 @@ def test_tf_ops(runner):
     dm = SimpleWrapperModel(op_func)
     inputs = [tf.random.normal((3, 2, 20)), tf.random.normal((3, 2, 20))]
     expected = dm.predict(inputs)
-    oxml = keras2onnx.convert_keras(dm)
+    oxml = convert_keras(dm)
     assert runner('op_model', oxml, [i_.numpy() for i_ in inputs], expected)
 
 
@@ -179,7 +180,7 @@ def test_auto_encoder(runner):
     vae = VariationalAutoEncoder(original_dim, 64, 32)
     x = tf.random.normal((7, original_dim))
     expected = vae.predict(x)
-    oxml = keras2onnx.convert_keras(vae)
+    oxml = convert_keras(vae)
     # assert runner('variational_auto_encoder', oxml, [x.numpy()], expected)
     # The random generator is not same between different engines.
     import onnx
@@ -198,7 +199,7 @@ def test_tf_where(runner):
     const_in = [np.array([2, 4, 6, 8, 10]).astype(np.int32)]
     expected = swm(const_in)
     swm._set_inputs(const_in)
-    oxml = keras2onnx.convert_keras(swm)
+    oxml = convert_keras(swm)
     assert runner('where_test', oxml, const_in, expected)
 
 
@@ -227,9 +228,9 @@ def test_optional_inputs(runner):
     test_model = OptionalInputs()
     exp0 = test_model(input_ids)
     exp1 = test_model(input_ids, np.array([1, 2]).astype(np.int32))
-    oxml = keras2onnx.convert_keras(test_model)
+    oxml = convert_keras(test_model)
     assert runner('opt_inputs_0', oxml, [input_ids], exp0)
 
     from onnxconverter_common.onnx_fx import GraphFunctionType as _Ty
-    oxml1 = keras2onnx.convert_keras(test_model, initial_types=(_Ty.I32(['N']), _Ty.I32(['N'])))
+    oxml1 = convert_keras(test_model, initial_types=(_Ty.I32(['N']), _Ty.I32(['N'])))
     assert runner('opt_inputs_1', oxml1, [input_ids, np.array([1, 2]).astype(np.int32)], exp1)

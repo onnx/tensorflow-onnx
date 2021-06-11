@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tf2onnx
 from tf2onnx.constants import OPSET_TO_IR_VERSION
-from onnx import mapping
+from onnx import mapping, defs
 
 def to_tf_tensor_spec(onnx_type, name=None, unknown_dim=1):
     shp = [unknown_dim if isinstance(n_, str) else n_ for n_ in onnx_type.shape]
@@ -27,7 +27,7 @@ def _process_initial_types(initial_types, unknown_dim=1):
     return input_specs
 
 def get_maximum_opset_supported():
-    return max(OPSET_TO_IR_VERSION.keys())
+    return min(max(OPSET_TO_IR_VERSION.keys()), defs.onnx_opset_version())
 
 def convert_keras(model, name=None, doc_string='', target_opset=None, initial_types=None,
                   channel_first_inputs=None, debug_mode=False, custom_op_conversions=None):

@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-import onnx
 import tensorflow
 from distutils.version import StrictVersion
 

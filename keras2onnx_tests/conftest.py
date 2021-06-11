@@ -14,9 +14,6 @@ def runner():
     model_files = []
 
     def runner_func(*args, **kwargs):
-        with open("stop.txt", "rt") as f:
-            if f.read() == "stop":
-                breakpoint()
         return run_onnx_runtime(*args, model_files, **kwargs)
 
     # Ensure Keras layer naming is reset for each function

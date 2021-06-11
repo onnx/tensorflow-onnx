@@ -2,9 +2,10 @@
 
 import pytest
 import tensorflow as tf
-import keras2onnx
+import mock_keras2onnx
 import numpy as np
-from keras2onnx.proto import keras, is_tf_keras
+from mock_keras2onnx.proto import keras, is_tf_keras
+from tf2onnx.keras2onnx_api import convert_keras
 from distutils.version import StrictVersion
 
 Activation = keras.layers.Activation
@@ -114,7 +115,7 @@ class CGAN():
         return Model([img, label], validity)
 
 
-@pytest.mark.skipif(keras2onnx.proto.tfcompat.is_tf2 and is_tf_keras, reason="Tensorflow 1.x only tests.")
+@pytest.mark.skipif(mock_keras2onnx.proto.tfcompat.is_tf2 and is_tf_keras, reason="Tensorflow 1.x only tests.")
 @pytest.mark.skipif(is_tf_keras and StrictVersion(tf.__version__.split('-')[0]) < StrictVersion("1.14.0"),
                     reason="Not supported before tensorflow 1.14.0 for tf_keras")
 def test_CGAN(runner):
@@ -123,6 +124,6 @@ def test_CGAN(runner):
     x = np.random.rand(batch, 100).astype(np.float32)
     y = np.random.rand(batch, 1).astype(np.float32)
     expected = keras_model.predict([x, y])
-    onnx_model = keras2onnx.convert_keras(keras_model, keras_model.name)
+    onnx_model = convert_keras(keras_model, keras_model.name)
     assert runner(onnx_model.graph.name, onnx_model,
                   {keras_model.input_names[0]: x, keras_model.input_names[1]: y}, expected)
