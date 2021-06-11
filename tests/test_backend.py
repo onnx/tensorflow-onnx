@@ -4646,7 +4646,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: starts_val, _INPUT1: limits_val,
                                                         _INPUT2: deltas_val})
 
-    @check_tf_min_version("2.0", "ragged variant needs tf 2.0")
+    @check_tf_min_version("2.2", "ragged variant needs tf 2.2")
     @check_opset_min_version(13, "Loop over tensor sequences")
     def test_ragged_to_variant(self):
         splits_val = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
@@ -4662,7 +4662,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(y.row_splits, name=_TFOUTPUT), tf.identity(y.flat_values, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: splits_val, _INPUT1: dense_vals_val})
 
-    @check_tf_min_version("2.0", "ragged variant needs tf 2.0")
+    @check_tf_min_version("2.2", "ragged variant needs tf 2.2")
     @check_opset_min_version(13, "Loop over tensor sequences")
     def test_ragged_to_variant_unknown_shape(self):
         splits_val = np.array([0, 3, 3, 5, 9, 10], dtype=np.int64)

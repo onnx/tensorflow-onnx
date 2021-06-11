@@ -111,7 +111,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
     @requires_custom_ops("RegexSplitWithOffsets")
-    @check_tf_min_version("2.0", "tensorflow_text")
+    @check_tf_min_version("2.3", "tensorflow_text")
     def test_regex_split_with_offsets(self):
         from tensorflow_text.python.ops.regex_split_ops import (
             gen_regex_split_ops as lib_gen_regex_split_ops)
@@ -134,7 +134,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
                                   use_custom_ops=True, process_args=process_args, **kwargs)
 
     @requires_custom_ops("WordpieceTokenizer")
-    @check_tf_min_version("2.0", "tensorflow_text")
+    @check_tf_min_version("2.3", "tensorflow_text")
     @unittest.skip("Not fixed yet")
     def test_wordpiece_tokenizer(self):
         from tensorflow_text.python.ops.wordpiece_tokenizer import (
