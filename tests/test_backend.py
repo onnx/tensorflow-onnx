@@ -4053,7 +4053,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.logger.debug(str(p))
             self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
-    @check_tf_min_version("1.13")
+    @check_tf_min_version("1.15")
     @check_opset_min_version(11, "MaxPoolWithArgmax")
     def test_maxpoolwithargmax_batch_in_index(self):
         padding = 'SAME'
