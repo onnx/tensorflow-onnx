@@ -747,7 +747,8 @@ class MaxPoolWithArgmaxOp:
             c_range = ctx.make_node("Range", [const_zero, c_sq, const_one]).output[0]
         xyc = ctx.make_node("Add", [xy_scale_c, c_range]).output[0]
         single_batch = input_shape_guess is not None and input_shape_guess[0] == 1
-        if node.get_attr_value('include_batch_in_index', False) and not single_batch:
+        # Documentation says include_batch_in_index has default False, but tf 1.13 excludes it and assumes True
+        if node.get_attr_value('include_batch_in_index', True) and not single_batch:
             utils.make_sure(ctx.opset >= 11, "opset 11 required for MaxPoolWithArgmax with include_batch_in_index")
             n_sq = GraphBuilder(ctx).make_squeeze({'data': n, 'axes': [0]})
             n_range = ctx.make_node("Range", [const_zero, n_sq, const_one]).output[0]
