@@ -77,7 +77,7 @@ def _asarray(*a):
     return np.array([a], dtype='f')
 
 ########################
-from tf2onnx.compat import convert_keras
+from tf2onnx.keras2onnx_api import convert_keras
 ##########################
 
 def test_keras_lambda(runner):
