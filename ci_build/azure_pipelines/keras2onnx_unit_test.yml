@@ -7,12 +7,6 @@ jobs:
     vmImage: 'Ubuntu-16.04'
   strategy:
     matrix:
-      # No python 2.x since tf2onnx does not support it
-      Python36-tf1.11:
-        python.version: '3.6'
-        ONNX_PATH: onnx==1.2.3
-        TENSORFLOW_PATH: tensorflow==1.11.0
-        INSTALL_ORT: pip install onnxruntime==1.8.0
 
       Python36-tf1.15:
         python.version: '3.6'
@@ -43,8 +37,6 @@ jobs:
         ONNX_PATH: onnx==1.8.0
         TENSORFLOW_PATH: tensorflow-cpu==2.5.0
         INSTALL_ORT: pip install onnxruntime==1.8.0
-
-    maxParallel: 3
 
   steps:
   - script: sudo install -d -m 0777 /home/vsts/.conda/envs
