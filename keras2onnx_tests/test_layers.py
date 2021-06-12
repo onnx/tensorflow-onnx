@@ -1982,6 +1982,7 @@ def test_LSTM_with_initializer(runner):
 
 @pytest.mark.skipif(get_maximum_opset_supported() < 5,
                     reason="None seq_length LSTM is not supported before opset 5.")
+@pytest.mark.skipif(is_tensorflow_older_than('2.1'), reason='require 2.1 to fix freezing')
 def test_LSTM_seqlen_none(runner):
     lstm_dim = 2
     data = np.random.rand(1, 5, 1).astype(np.float32)
@@ -2108,7 +2109,6 @@ def test_bidirectional_with_initial_states(runner, rnn_class):
 @pytest.mark.skipif(get_maximum_opset_supported() < 5,
                     reason="None seq_length Bidirectional LSTM is not supported before opset 5.")
 @pytest.mark.parametrize("rnn_class", RNN_CLASSES)
-@pytest.mark.skipif(is_tensorflow_older_than('2.1'), reason='require 2.1 to fix freezing')
 def test_bidirectional_seqlen_none(runner, rnn_class):
     model = Sequential()
     model.add(Embedding(39, 128))
