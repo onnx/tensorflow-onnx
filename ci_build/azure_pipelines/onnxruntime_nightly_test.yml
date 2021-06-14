@@ -42,7 +42,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         platforms: ['linux', 'windows']
-        python_versions: ['3.7']  # Change this to 3.8 if/when we fix Windows speed issue
+        python_versions: ['3.9']
         tf_versions: ['2.5.0']
         onnx_opsets: ['']
         onnx_backends: {onnxruntime: ['nightly']}
