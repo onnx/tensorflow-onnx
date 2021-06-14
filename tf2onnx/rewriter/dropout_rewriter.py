@@ -62,10 +62,10 @@ def rewrite_dropout(g, ops):
             ratio = input3.get_tensor_value()
 
             if input2.inputs[0].is_scalar():
-                data = input2.inputs[1]
+                data_output = input2.input[1]
                 scaling_constant = input2.inputs[0].get_tensor_value()
             elif input2.inputs[1].is_scalar():
-                data = input2.inputs[0]
+                data_output = input2.input[0]
                 scaling_constant = input2.inputs[1].get_tensor_value()
             else:
                 logger.warning("Could not find scaling constant for dropout pattern rooted at %s. "
@@ -89,12 +89,12 @@ def rewrite_dropout(g, ops):
             out_name = utils.port_name(op_name)
             new_node = g.make_node(
                 "Dropout",
-                inputs=[data.output[0]],
+                inputs=[data_output],
                 outputs=[out_name],
                 name=op_name,
                 attr={"ratio": ratio},
-                shapes=[g.get_shape(data.output[0])],
-                dtypes=[g.get_dtype(data.output[0])]
+                shapes=[g.get_shape(data_output)],
+                dtypes=[g.get_dtype(data_output)]
             )
             g.replace_all_inputs(outputs.output[0], new_node.output[0], ops=ops)
             for n in nodes_to_remove:
