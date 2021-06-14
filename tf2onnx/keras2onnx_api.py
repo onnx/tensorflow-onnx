@@ -1,7 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+tf2onnx.keras2onnx_api - Ease migration from keras2onnx to tf2onnx.
+Use tf2onnx.keras2onnx_api.convert_keras instead of deprecated keras2onnx.convert_keras
+"""
+
+# pylint: disable=unused-argument,missing-docstring
+
+from onnx import mapping, defs
 import tensorflow as tf
 import tf2onnx
 from tf2onnx.constants import OPSET_TO_IR_VERSION
-from onnx import mapping, defs
 
 def to_tf_tensor_spec(onnx_type, name=None, unknown_dim=1):
     shp = [unknown_dim if isinstance(n_, str) else n_ for n_ in onnx_type.shape]
@@ -31,11 +40,25 @@ def get_maximum_opset_supported():
 
 def convert_keras(model, name=None, doc_string='', target_opset=None, initial_types=None,
                   channel_first_inputs=None, debug_mode=False, custom_op_conversions=None):
+    """
+    :param model: keras model
+    :param name: the converted onnx model internal name
+    :param doc_string: doc string
+    :param target_opset: the targeted onnx model opset
+    :param initial_types: the overridden input type for the target ONNX model.
+    :param channel_first_inputs: A list of channel first input
+    :param debug_mode: ignored
+    :param custom_op_conversions: ignored
+    :return an ONNX ModelProto
+    """
     if target_opset is None:
         target_opset = get_maximum_opset_supported()
     input_signature = _process_initial_types(initial_types, unknown_dim=None)
+    name = name or model.name
 
     model, _ = tf2onnx.convert.from_keras(model, input_signature, opset=target_opset,
                                           inputs_as_nchw=channel_first_inputs)
+    model.graph.name = name
+    model.graph.doc_string = doc_string
 
     return model
