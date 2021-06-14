@@ -856,7 +856,8 @@ class StridedSlice:
             node = GraphBuilder(ctx).make_slice(
                 kwargs, name=node.name, dtypes=out_dtypes, shapes=out_shapes, return_node=True)
         else:
-            node = ctx.make_node("Identity", [node.input[0]], name=node.name, dtypes=out_dtypes, shapes=out_shapes)
+            node = ctx.make_node("Identity", [node.input[0]], name=node.name, outputs=node.output,
+                                 dtypes=out_dtypes, shapes=out_shapes)
         nodes = [node]
         if needs_squeeze:
             # insert_new_node_on_output(self, op_type, output_name=None, name=None, inputs=None, domain=None, **kwargs)

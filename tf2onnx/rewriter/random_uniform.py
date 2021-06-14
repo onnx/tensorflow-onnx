@@ -72,6 +72,7 @@ def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output, to_delete):
     dtype = g.get_dtype(output.output[0])
     op_name = utils.make_name("RandomUniform")
     shape_node = ru_op.inputs[0]
+    shape_node_output = ru_op.input[0]
     shape = g.get_shape(output.output[0])
     if shape_node.is_const():
         # if the tensorflow input (aka the shape) is const we can use the RandomUniform op
@@ -103,7 +104,7 @@ def create_onnx_random_uniform_op(g, tmax, tmin, ru_op, output, to_delete):
             to_delete.remove(shape_node)
             # create a fill op with the shape of the value of the input tensor
             zero = g.make_const(utils.make_name("zero"), np.zeros((), dtype=np.float32))
-            fill_node = g.make_node("Fill", inputs=[shape_node.output[0], zero.name],
+            fill_node = g.make_node("Fill", inputs=[shape_node_output, zero.name],
                                     shapes=[shape], dtypes=[dtype])
             func, _ = handler.tf_op.find_effective_op("Fill")
             func(g, fill_node)

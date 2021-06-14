@@ -120,6 +120,9 @@ class AllAny:
             reduce_dim = [reduce_dim]
 
         if ctx.opset < 11:
+            inp_rank = ctx.get_rank(node.input[0])
+            if inp_rank is not None:
+                reduce_dim = [d + inp_rank if d < 0 else d for d in reduce_dim]
             utils.make_sure(all(i >= 0 for i in reduce_dim), "negative reduce axis is not supported in onnx for now")
 
         cast = ctx.make_node(op_type="Cast", inputs=[node.input[0]], attr={"to": onnx_pb.TensorProto.FLOAT})
