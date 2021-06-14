@@ -89,10 +89,11 @@ class CondRewriter:
                 continue
 
             self._cut_off_connection(cond_context)
-            self._create_if_node(cond_context)
+            if_node = self._create_if_node(cond_context)
             # remove nodes in If branches explicitly
-            for n in list(cond_context.true_branch_context.nodes) + list(cond_context.false_branch_context.nodes):
-                self.g.remove_node(n.name)
+            if if_node is not None:
+                for n in list(cond_context.true_branch_context.nodes) + list(cond_context.false_branch_context.nodes):
+                    self.g.remove_node(n.name)
         logger.debug("cond pre rewrite done")
 
         return self.g.get_nodes()
@@ -136,6 +137,19 @@ class CondRewriter:
 
     def _create_if_node(self, cond_context):
         output_shapes, output_dtypes = self._get_output_shape_dtype(cond_context)
+        pred_node = self.g.get_node_by_output(cond_context.pred_input)
+        while pred_node.type == "Identity":
+            pred_node = pred_node.inputs[0]
+        if pred_node.is_const():
+            # Constant folding for if node
+            if pred_node.get_tensor_value():
+                branch_outputs = cond_context.true_branch_context.output
+            else:
+                branch_outputs = cond_context.false_branch_context.output
+            for merge, out in zip(cond_context.merges, branch_outputs):
+                self.g.replace_all_inputs(merge.output[0], out)
+            return None
+
         true_graph = utils.construct_graph_from_nodes(
             self.g,
             list(cond_context.true_branch_context.nodes),

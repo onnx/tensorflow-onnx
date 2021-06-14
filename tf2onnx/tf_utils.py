@@ -438,6 +438,10 @@ def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=Non
                 input_names = []
             elif use_default and node.name in use_default:
                 node_type = 'Identity'
+            elif node.name.endswith('keras_learning_phase'):
+                logger.warning("Removing optional input %s that appears to be a keras learning phase parameter. "
+                               "Use --ignore_default to force this into an input.", node.name)
+                node_type = 'Identity'
 
         if takeit:
             try:
