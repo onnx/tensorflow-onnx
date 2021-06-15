@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import tempfile
+import types
 import zipfile
 import logging
 
@@ -228,6 +229,10 @@ def save_onnx_zip(target_path, model_proto, external_tensor_storage):
 def make_sure(bool_val, error_msg, *args):
     if not bool_val:
         raise ValueError("make_sure failure: " + error_msg % args)
+
+
+def is_cpp_protobuf():
+    return isinstance(ModelProto().ParseFromString, types.BuiltinFunctionType)
 
 
 def construct_graph_from_nodes(parent_g, nodes, outputs, shapes, dtypes):

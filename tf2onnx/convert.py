@@ -202,6 +202,10 @@ def main():
     outputs = None
     model_path = None
 
+    if not utils.is_cpp_protobuf():
+        logger.warning("***IMPORTANT*** Installed protobuf is not cpp accelerated. Conversion will be extremely slow. "
+                       "See https://github.com/onnx/tensorflow-onnx/issues/1557")
+
     if args.load_op_libraries:
         for op_path in args.load_op_libraries:
             tf.load_op_library(op_path)
