@@ -903,6 +903,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val}, as_session=True,
                             premade_placeholders=True, process_args={'ignore_default': [_TFINPUT2]})
 
+    def test_fold_cond_keras_learning_phase(self):
+        # keras_learning_phase can slip into frozen graphs and cause huge inefficiencies with If nodes.
+        # Should be removed and Ifs folded.
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        def func():
+            x = tf_placeholder(tf.float32, [None, None], name=_TFINPUT)
+            learning_phase = tf_placeholder_with_default(False, [], name="keras_learning_phase")
+            y = tf.cond(learning_phase, lambda: x * 2, lambda: x * 3)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, as_session=True, premade_placeholders=True,
+                            graph_validator=lambda g: check_op_count(g, "If", 0, disabled=False))
+
     @check_onnxruntime_incompatibility("Add")
     def test_add_bcast(self):
         x1_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
