@@ -4042,7 +4042,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                 graph_validator=lambda g: check_op_count(g, "ThresholdedRelu", 1))
 
     @check_tf_min_version("1.13")
-    @check_opset_min_version(8, "MaxPoolWithArgmax")
+    @check_opset_min_version(11, "MaxPoolWithArgmax")
     def test_maxpoolwithargmax(self):
         for p in get_maxpoolwithargmax_getdata():
             _, padding, x_shape, ksize, strides = p
@@ -4066,7 +4066,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(mp[0], name=_TFOUTPUT), tf.identity(mp[1], name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
-    @check_tf_min_version("1.13")
+    @check_tf_min_version("1.15")
     @check_opset_min_version(11, "MaxPoolWithArgmax")
     def test_maxpoolwithargmax_unknown_c(self):
         padding = 'SAME'
