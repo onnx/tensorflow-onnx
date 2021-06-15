@@ -3,6 +3,8 @@
 import os
 import pytest
 
+import numpy as np
+
 from mock_keras2onnx.proto import keras
 from test_utils import run_onnx_runtime
 
@@ -11,6 +13,7 @@ K = keras.backend
 
 @pytest.fixture(scope='function')
 def runner():
+    np.random.seed(42)
     model_files = []
 
     def runner_func(*args, **kwargs):
@@ -23,7 +26,6 @@ def runner():
 
     # Provide wrapped run_onnx_runtime function
     yield runner_func
-
     # Remove model files
     for fl in model_files:
         os.remove(fl)

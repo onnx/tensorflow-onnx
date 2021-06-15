@@ -1030,7 +1030,7 @@ def test_dense_add(runner):
 def test_conv_add(runner):
     input1 = Input(shape=(10, 10, 1))
     x1 = Conv2D(32, strides=(2, 2), kernel_size=3,
-                bias_initializer=keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=None))(input1)
+                bias_initializer=keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=42))(input1)
     input2 = Input(tensor=tf.constant(np.random.rand(1, 32).astype(np.float32)))
     added = Add()([x1, input2])
     model = keras.models.Model(inputs=[input1, input2], outputs=added)
