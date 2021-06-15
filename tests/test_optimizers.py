@@ -59,7 +59,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                 name=output_name,
                 data_type=utils.map_numpy_to_onnx_dtype(np_val.dtype),
                 dims=np_val.shape,
-                vals=np_val.flatten().astype(np_val.dtype),
+                vals=np_val.flatten().astype(np_val.dtype).tolist(),
             ),
         )
         return node
@@ -1514,7 +1514,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                 name='iterate_num_value',
                 data_type=TensorProto.INT64,
                 dims=iter_num_value.shape,
-                vals=iter_num_value.flatten().astype(np.int64),
+                vals=iter_num_value.flatten().astype(np.int64).tolist(),
             ),
         )
 
@@ -1527,7 +1527,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                 name='cond_value',
                 data_type=TensorProto.BOOL,
                 dims=iter_num_value.shape,
-                vals=cond_value.flatten().astype(np.bool),
+                vals=cond_value.flatten().astype(np.bool).tolist(),
             ),
         )
 
