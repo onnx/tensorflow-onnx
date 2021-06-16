@@ -8,6 +8,7 @@ jobs:
   strategy:
     matrix:
 
+      ############ TF Keras Unit Tests ############
       Python36-tf1.15:
         python.version: '3.6'
         ONNX_PATH: onnx==1.5.0
@@ -38,6 +39,36 @@ jobs:
         TENSORFLOW_PATH: tensorflow-cpu==2.5.0
         INSTALL_ORT: pip install onnxruntime==1.8.0
 
+      ############ Pure Keras Unit Tests ############
+      Keras-Py36-tf1.15.0:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        KERAS: keras==2.2.5
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Keras-Py37-tf1.15.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        KERAS: keras==2.4.3
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      # UT for keras 2.3 need tensorflow <= 2.0.0
+      Keras-Py37-tf2.0.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.6.0
+        KERAS: keras==2.3.1
+        TENSORFLOW_PATH: tensorflow==2.0.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Keras-Py38-tf2.2.0:
+        python.version: '3.8'
+        ONNX_PATH: onnx==1.7.0
+        KERAS: keras==2.4.3
+        TENSORFLOW_PATH: tensorflow==2.2.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
   steps:
   - script: sudo install -d -m 0777 /home/vsts/.conda/envs
     displayName: Fix Conda permissions
@@ -55,6 +86,10 @@ jobs:
       pip install h5py==2.9.0
       pip install numpy==1.19
       pip install $(TENSORFLOW_PATH)
+      if [[ ! -z $KERAS ]];
+      then
+        pip install $(KERAS)
+      fi
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install -r requirements.txt
       pip install -r requirements-dev.txt
@@ -66,6 +101,10 @@ jobs:
       pip install -e .
       python -c "import onnxruntime"
       python -c "import onnxconverter_common"
+      if [[ ! -z $KERAS ]];
+      then
+        export TF_KERAS=0
+      fi
       pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
     displayName: 'pytest'
 

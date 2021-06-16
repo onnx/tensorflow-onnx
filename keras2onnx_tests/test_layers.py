@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from onnxconverter_common.onnx_ex import get_maximum_opset_supported
+from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,

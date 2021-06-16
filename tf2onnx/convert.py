@@ -295,7 +295,7 @@ def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, cu
                     custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
                     target=None, large_model=False, output_path=None):
     """from_keras for tf 1.15"""
-
+    logger = logging.getLogger(constants.TF2ONNX_PACKAGE_NAME)
     input_names = [t.name for t in model.inputs]
     output_names = [t.name for t in model.outputs]
     tensors_to_rename = dict(zip(input_names, model.input_names))
@@ -303,7 +303,24 @@ def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, cu
         # In very rare cases, keras has a bug where it will give multiple outputs the same name
         tensors_to_rename.update(zip(output_names, model.output_names))
 
-    sess = tf.keras.backend.get_session(model.outputs)
+    model_type = None
+    unknown_type_err = "model is not instance of tf.keras.Model or keras.Model"
+    if isinstance(model, tf.keras.Model):
+        model_type = "tf"
+    else:
+        try:
+            import keras
+            if isinstance(model, keras.Model):
+                model_type = "keras"
+            else:
+                logger.warning(unknown_type_err)
+        except ImportError:
+            logger.warning(unknown_type_err)
+
+    if model_type == "keras":
+        sess = keras.backend.get_session()
+    else:
+        sess = tf.keras.backend.get_session(model.outputs)
 
     with tf.device("/cpu:0"):
         frozen_graph, initialized_tables = tf_loader.freeze_session(sess, input_names, output_names, get_tables=True)
@@ -351,6 +368,20 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
+    old_out_names = None
+    if model.output_names and len(set(model.output_names)) != len(model.output_names):
+        old_out_names = model.output_names
+        used_names = set()
+        new_out_names = []
+        for name in model.output_names:
+            new_name = name
+            i = 0
+            while new_name in used_names:
+                i += 1
+                new_name = name + "_" + str(i)
+            used_names.add(new_name)
+            new_out_names.append(new_name)
+        model.output_names = new_out_names
     if LooseVersion(tf.__version__) < "2.0":
         return _from_keras_tf1(model, input_signature, opset, custom_ops, custom_op_handlers, custom_rewriter,
                                inputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
@@ -370,6 +401,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
             return model_call(*args, **kwargs)
         model.call = wrap_call
         function = _saving_utils.trace_model_call(model, input_signature)
+        import tensorflow_core
+        tensorflow_core.python.keras.backend.learning_phase = tensorflow_core.python.keras.backend.symbolic_learning_phase
         concrete_func = function.get_concrete_function()
         # Put it back
         model.call = model_call
@@ -391,6 +424,9 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     elif isinstance(concrete_func.structured_outputs, dict):
         # Other models specify output order using the key order of structured_outputs
         output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
+
+    if old_out_names is not None:
+        model.output_names = old_out_names
 
     with tf.device("/cpu:0"):
         frozen_graph, initialized_tables = \
