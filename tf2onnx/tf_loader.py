@@ -115,14 +115,15 @@ def convert_variables_to_constants_large_model(func):
 
     if tf.__version__.startswith("2.1.") or tf.__version__.startswith("2.0."):
         from tensorflow.python.framework import convert_to_constants
-        orig_fn = convert_to_constants._construct_concrete_function
+        orig_fn = convert_to_constants._construct_concrete_function  # pylint: disable=protected-access
         def fake_construct_fn(func, output_graph_def, converted_input_indices):
+            # Return graph_def without loading it to avoid crash. Will fix errors in graph_def later.
             return output_graph_def
-        convert_to_constants._construct_concrete_function = fake_construct_fn
+        convert_to_constants._construct_concrete_function = fake_construct_fn  # pylint: disable=protected-access
         try:
             frozen_graph_def = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=False)
         finally:
-            convert_to_constants._construct_concrete_function = orig_fn
+            convert_to_constants._construct_concrete_function = orig_fn  # pylint: disable=protected-access
         return frozen_graph_def
 
     if tf.__version__.startswith("2.2."):

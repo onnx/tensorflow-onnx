@@ -291,33 +291,62 @@ def tensor_names_from_structed(concrete_func, input_names, output_names):
     return tensors_to_rename
 
 
+def _rename_duplicate_keras_model_names(model):
+    """
+    In very rare cases, keras has a bug where it will give multiple outputs the same name.
+    We must edit the model or the TF trace will fail. Returns old_out_names (or None if no edit was made).
+    IMPORTANT: model may be edited. Assign model.output_names to old_out_names to restore.
+    """
+    old_out_names = None
+    if model.output_names and len(set(model.output_names)) != len(model.output_names):
+        # In very rare cases, keras has a bug where it will give multiple outputs the same name
+        # We must edit the model or the TF trace will fail
+        old_out_names = model.output_names
+        used_names = set()
+        new_out_names = []
+        for name in model.output_names:
+            new_name = name
+            i = 0
+            while new_name in used_names:
+                i += 1
+                new_name = name + "_" + str(i)
+            used_names.add(new_name)
+            new_out_names.append(new_name)
+        model.output_names = new_out_names
+    return old_out_names
+
+
+def _is_legacy_keras_model(model):
+    """Inspects model class to determine if it is from tf or legacy keras"""
+
+    logger = logging.getLogger(constants.TF2ONNX_PACKAGE_NAME)
+    unknown_type_err = "model is not instance of tf.keras.Model or keras.Model"
+    if isinstance(model, tf.keras.Model):
+        return False
+    try:
+        import keras  # pylint: disable=import-outside-toplevel
+        if isinstance(model, keras.Model):
+            return True
+        logger.warning(unknown_type_err)
+    except ImportError:
+        logger.warning(unknown_type_err)
+    return False
+
+
 def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
                     custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
                     target=None, large_model=False, output_path=None):
     """from_keras for tf 1.15"""
-    logger = logging.getLogger(constants.TF2ONNX_PACKAGE_NAME)
     input_names = [t.name for t in model.inputs]
     output_names = [t.name for t in model.outputs]
+    old_out_names = _rename_duplicate_keras_model_names(model)
     tensors_to_rename = dict(zip(input_names, model.input_names))
-    if len(set(model.output_names)) == len(model.output_names):
-        # In very rare cases, keras has a bug where it will give multiple outputs the same name
-        tensors_to_rename.update(zip(output_names, model.output_names))
+    tensors_to_rename.update(zip(output_names, model.output_names))
+    if old_out_names is not None:
+        model.output_names = old_out_names
 
-    model_type = None
-    unknown_type_err = "model is not instance of tf.keras.Model or keras.Model"
-    if isinstance(model, tf.keras.Model):
-        model_type = "tf"
-    else:
-        try:
-            import keras
-            if isinstance(model, keras.Model):
-                model_type = "keras"
-            else:
-                logger.warning(unknown_type_err)
-        except ImportError:
-            logger.warning(unknown_type_err)
-
-    if model_type == "keras":
+    if _is_legacy_keras_model(model):
+        import keras  # pylint: disable=import-outside-toplevel
         sess = keras.backend.get_session()
     else:
         sess = tf.keras.backend.get_session(model.outputs)
@@ -368,20 +397,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    old_out_names = None
-    if model.output_names and len(set(model.output_names)) != len(model.output_names):
-        old_out_names = model.output_names
-        used_names = set()
-        new_out_names = []
-        for name in model.output_names:
-            new_name = name
-            i = 0
-            while new_name in used_names:
-                i += 1
-                new_name = name + "_" + str(i)
-            used_names.add(new_name)
-            new_out_names.append(new_name)
-        model.output_names = new_out_names
+    old_out_names = _rename_duplicate_keras_model_names(model)
     if LooseVersion(tf.__version__) < "2.0":
         return _from_keras_tf1(model, input_signature, opset, custom_ops, custom_op_handlers, custom_rewriter,
                                inputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
@@ -401,11 +417,21 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
             return model_call(*args, **kwargs)
         model.call = wrap_call
         function = _saving_utils.trace_model_call(model, input_signature)
-        import tensorflow_core
-        tensorflow_core.python.keras.backend.learning_phase = tensorflow_core.python.keras.backend.symbolic_learning_phase
-        concrete_func = function.get_concrete_function()
-        # Put it back
-        model.call = model_call
+        try:
+            # Legacy keras get make TF erroneously enter eager mode when it should be making symbolic tensors
+            import tensorflow_core  # pylint: disable=import-outside-toplevel
+            old_get_learning_phase = tensorflow_core.python.keras.backend.learning_phase
+            tensorflow_core.python.keras.backend.learning_phase = \
+                tensorflow_core.python.keras.backend.symbolic_learning_phase
+        except ImportError:
+            old_get_learning_phase = None
+        try:
+            concrete_func = function.get_concrete_function()
+        finally:
+            # Put everything back
+            model.call = model_call
+            if old_get_learning_phase is not None:
+                tensorflow_core.python.keras.backend.learning_phase = old_get_learning_phase
 
     # These inputs will be removed during freezing (includes resources, etc.)
     graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access

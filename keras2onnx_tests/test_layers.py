@@ -1634,7 +1634,7 @@ def test_padding(misc_conv_runner):
 
 
 @pytest.mark.skipif(is_tf2 and is_tensorflow_older_than('2.2'),
-                    reason="Variable freezing fails to replace GatherResource op")
+                    reason="Variable freezing fails to replace ResourceGather op")
 def test_embedding(runner):
     model = keras.Sequential()
     model.add(Embedding(1000, 64, input_length=10))
