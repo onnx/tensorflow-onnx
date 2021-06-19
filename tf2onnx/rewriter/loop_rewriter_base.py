@@ -256,7 +256,8 @@ class LoopRewriterBase(object):
                     fake_var.aliased_var = state_var
                     break
             else:
-                raise ValueError("Couldn't find state variable for scan output last entry")
+                pass
+                #raise ValueError("Couldn't find state variable for scan output last entry")
 
     def _parse_input_ta(self, context):
         graph_inputs = [v.switch_true_identity_output.id for v in context.loop_properties.all_variables.values()

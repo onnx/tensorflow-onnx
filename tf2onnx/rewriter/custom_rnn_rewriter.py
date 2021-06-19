@@ -164,6 +164,7 @@ class CustomRnnRewriter(LoopRewriterBase):
                 self.g.replace_all_inputs(out_tensor_value_info.id, new_output)
                 for fake_variable in context.loop_properties.fake_variables.values():
                     if state_variable.next_iteration_input.id == fake_variable.next_iteration_input.id:
+                        breakpoint()
                         self.g.replace_all_inputs(fake_variable.exit_output.id, new_output)
             index += 1
 
