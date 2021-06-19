@@ -152,16 +152,19 @@ class CustomRnnRewriter(LoopRewriterBase):
         logger.debug("connect scan output with the graph")
 
         index = 0
-        for out_tensor_value_info in context.loop_properties.state_outputs_exits:
+        for state_variable in context.loop_properties.state_variables.values():
+            out_tensor_value_info = state_variable.exit_output
             if out_tensor_value_info.id:
                 if self.g.opset == 8:
                     nodes = self._adapt_scan_sequence_input_or_output("state_output_reshape",
                                                                       scan_node.output[index], True)
-                    self.g.replace_all_inputs(
-                        out_tensor_value_info.id, nodes[-1].output[0])  # ops=self.g.get_nodes()
+                    new_output = nodes[-1].output[0]
                 else:  # since opset 9
-                    self.g.replace_all_inputs(
-                        out_tensor_value_info.id, scan_node.output[index])  # ops=self.g.get_nodes()
+                    new_output = scan_node.output[index]
+                self.g.replace_all_inputs(out_tensor_value_info.id, new_output)
+                for fake_variable in context.loop_properties.fake_variables.values():
+                    if state_variable.next_iteration_input.id == fake_variable.next_iteration_input.id:
+                        self.g.replace_all_inputs(fake_variable.exit_output.id, new_output)
             index += 1
 
         for out_tensor_value_info in context.loop_properties.scan_outputs_exits:

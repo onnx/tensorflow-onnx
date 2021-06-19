@@ -1872,7 +1872,8 @@ def test_LSTM(runner, return_sequences):
     inputs1 = keras.Input(shape=(3, 5))
     data = np.random.rand(3, 5).astype(np.float32).reshape((1, 3, 5))
     for use_bias in [True, False]:
-        for return_sequences in [True, False]:
+        for return_sequences in [False, False]:
+            breakpoint()
             cls = LSTM(units=2, return_state=True, return_sequences=return_sequences, use_bias=use_bias)
             lstm1, state_h, state_c = cls(inputs1)
             model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c])
@@ -2003,6 +2004,7 @@ def test_LSTM_seqlen_none(runner):
 @pytest.mark.parametrize("return_sequences", [True, False])
 @pytest.mark.parametrize("rnn_class", RNN_CLASSES)
 def test_bidirectional(runner, rnn_class, return_sequences):
+    breakpoint()
     input_dim = 10
     sequence_len = 5
     op_version = get_maximum_opset_supported()

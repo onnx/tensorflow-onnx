@@ -309,6 +309,7 @@ def parse_rnn_loop(graph, loop_properties, rnn_scope, while_context_scope):
     1. iteration counter does not exist in tf1.4 or earlier versions
     2. if dynamic_rnn's first input is not consumed, output ta does not exist.
     """
+    from tf2onnx.rewriter.loop_rewriter_base import TensorArrayVariableType
     time_name = rnn_scope + "time"
     ta_array_name_prefix = rnn_scope + "dynamic_rnn/output_"
     iteration_counter_name = while_context_scope + "iteration_counter"
@@ -319,7 +320,7 @@ def parse_rnn_loop(graph, loop_properties, rnn_scope, while_context_scope):
     iteration_var = None
     for val in loop_properties.all_variables.values():
         enter_input_node = graph.get_node_by_output(val.enter_input_id)
-        if val.is_tensor_array:
+        if val.tensor_array_type == TensorArrayVariableType.GATHER_ALL:
             ta_name = enter_input_node.get_attr("tensor_array_name").s.decode("utf-8")
             if not ta_name.startswith(ta_array_name_prefix):
                 is_rnn_out_ta = False

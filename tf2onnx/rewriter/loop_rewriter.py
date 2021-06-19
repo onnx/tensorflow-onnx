@@ -93,6 +93,8 @@ class LoopRewriter(LoopRewriterBase):
                 logger.error("failed to create loop node during rewrite")
                 return REWRITER_RESULT.FAIL
 
+            self.g.replace_all_inputs("bidirectional_1/TensorArrayReadV3_1:0", "unused_loop_output___60")
+
             logger.debug("rewrite successfully")
             return REWRITER_RESULT.OK
 

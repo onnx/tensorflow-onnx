@@ -501,6 +501,9 @@ def is_tf_tensor_array_gather_op(op):
 def is_tf_tensor_array_write_op(op):
     return op.type in ("TensorArrayWriteV2", "TensorArrayWriteV3")
 
+def is_tf_tensor_array_read_op(op):
+    return op.type in ("TensorArrayReadV2", "TensorArrayReadV3")
+
 
 def is_tf_tensor_array_op(op):
     return op.type in ("TensorArrayV2", "TensorArrayV3")
