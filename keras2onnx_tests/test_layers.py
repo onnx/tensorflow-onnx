@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from onnxconverter_common.onnx_ex import get_maximum_opset_supported
+from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
@@ -1633,6 +1633,8 @@ def test_padding(misc_conv_runner):
     misc_conv_runner(layer, ishape)
 
 
+@pytest.mark.skipif(is_tf2 and is_tensorflow_older_than('2.2'),
+                    reason="Variable freezing fails to replace ResourceGather op")
 def test_embedding(runner):
     model = keras.Sequential()
     model.add(Embedding(1000, 64, input_length=10))
@@ -1853,6 +1855,8 @@ def test_GRU(runner):
         assert runner(onnx_model.graph.name, onnx_model, [data, init_state_onnx], expected)
 
 
+@pytest.mark.skipif(not is_tf_keras and is_tf2 and is_tensorflow_older_than('2.2'),
+                    reason="Fails due to some reason involving bad graph captures. Works in new versions and tf_keras")
 def test_GRU_2(runner):
     model = keras.Sequential(name='TestGRU')
     model.add(keras.layers.GRU(400, reset_after=True, input_shape=(1, 257)))
@@ -2109,6 +2113,8 @@ def test_bidirectional_with_initial_states(runner, rnn_class):
 @pytest.mark.skipif(get_maximum_opset_supported() < 5,
                     reason="None seq_length Bidirectional LSTM is not supported before opset 5.")
 @pytest.mark.parametrize("rnn_class", RNN_CLASSES)
+@pytest.mark.skipif(is_tf2 and is_tensorflow_older_than('2.2'),
+                    reason="Variable freezing fails to replace GatherResource op")
 def test_bidirectional_seqlen_none(runner, rnn_class):
     model = Sequential()
     model.add(Embedding(39, 128))
@@ -2199,6 +2205,8 @@ def test_separable_convolution(runner):
     assert runner('separable_convolution_2', onnx_model, x, expected)
 
 
+@pytest.mark.skipif(is_tf2 and is_tensorflow_older_than('2.2'),
+                    reason="Variable freezing fails to replace GatherResource op")
 def test_shared_embed(runner):
     max_cont_length = 5
     max_ques_length = 7

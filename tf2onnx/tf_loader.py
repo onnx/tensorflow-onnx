@@ -113,6 +113,19 @@ def inputs_without_resource(sess, input_names):
 def convert_variables_to_constants_large_model(func):
     # For large models we use internal tf methods as a hack
 
+    if tf.__version__.startswith("2.1.") or tf.__version__.startswith("2.0."):
+        from tensorflow.python.framework import convert_to_constants
+        orig_fn = convert_to_constants._construct_concrete_function  # pylint: disable=protected-access
+        def fake_construct_fn(func, output_graph_def, converted_input_indices):
+            # Return graph_def without loading it to avoid crash. Will fix errors in graph_def later.
+            return output_graph_def
+        convert_to_constants._construct_concrete_function = fake_construct_fn  # pylint: disable=protected-access
+        try:
+            frozen_graph_def = convert_to_constants.convert_variables_to_constants_v2(func, lower_control_flow=False)
+        finally:
+            convert_to_constants._construct_concrete_function = orig_fn  # pylint: disable=protected-access
+        return frozen_graph_def
+
     if tf.__version__.startswith("2.2."):
         try:
             from tensorflow.python.framework.convert_to_constants import \
@@ -156,9 +169,9 @@ def convert_variables_to_constants_large_model(func):
 def fix_freezing_errors(graph_def):
     assign_var_ops = []
     for i in reversed(range(len(graph_def.node))):
-        if graph_def.node[i].op == "AssignVariableOp":
+        if graph_def.node[i].op in ["AssignVariableOp", "AssignSubVariableOp"]:
             assign_var_ops.append(graph_def.node.pop(i).name)
-            logger.warning("Removed AssignVariableOp %s", assign_var_ops[-1])
+            logger.warning("Removed %s %s", graph_def.node[i].op, assign_var_ops[-1])
     names_to_remove = set(assign_var_ops)
     for n in graph_def.node:
         for i in reversed(range(len(n.input))):
@@ -218,9 +231,9 @@ def from_function(func, input_names, output_names, large_model=False):
             frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
     except ValueError as e:
         if "incompatible with expected resource" in str(e):
-            frozen_func = convert_variables_to_constants_large_model(func)
+            bad_graph_def = convert_variables_to_constants_large_model(func)
             logger.warning("TF freezing failed. Attempting to fix freezing errors.")
-            graph_def = fix_freezing_errors(frozen_func)
+            graph_def = fix_freezing_errors(bad_graph_def)
         else:
             raise e
     else:
