@@ -40,12 +40,12 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.8.0
 
       ############ Pure Keras Unit Tests ############
-      # Keras-Py36-tf1.15.0:  # Failing, will enable soon.
-      #   python.version: '3.6'
-      #   ONNX_PATH: onnx==1.5.0
-      #   KERAS: keras==2.2.5
-      #   TENSORFLOW_PATH: tensorflow==1.15.0
-      #   INSTALL_ORT: pip install onnxruntime==1.8.0
+      Keras-Py36-tf1.15.0:  # Failing, will enable soon.
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        KERAS: keras==2.2.5
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
 
       Keras-Py37-tf1.15.0:
         python.version: '3.7'
