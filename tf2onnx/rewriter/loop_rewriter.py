@@ -30,7 +30,7 @@ class LoopRewriter(LoopRewriterBase):
 
     def run(self):
         logger.debug("enter loop rewriter")
-        return self.run_internal()
+        return self.run_internal(allow_ta_read_last=True)
 
     def need_rewrite(self, context):
         return True
@@ -93,6 +93,10 @@ class LoopRewriter(LoopRewriterBase):
                 logger.error("failed to create loop node during rewrite")
                 return REWRITER_RESULT.FAIL
 
+            for unneeded_scan_variable in loop_props.unneeded_scan_variables.values():
+                self.g.replace_all_inputs(unneeded_scan_variable.exit_output.id,
+                                          unneeded_scan_variable.equivalent_state_variable.exit_output.id)
+
             logger.debug("rewrite successfully")
             return REWRITER_RESULT.OK
 
@@ -152,7 +156,9 @@ class LoopRewriter(LoopRewriterBase):
                 n = self.g.get_node_by_output(tensor_value_info.id)
                 self.g.remove_node(n.name)
             else:
-                loop_outputs.append(utils.make_name("unused_loop_output_"))
+                output_name = utils.make_name("unused_loop_output_")
+                tensor_value_info.id = output_name
+                loop_outputs.append(output_name)
                 loop_output_shapes.append([-1])
                 loop_output_dtypes.append(None)
 
