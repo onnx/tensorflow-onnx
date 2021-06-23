@@ -377,7 +377,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
                      input_names=None, output_names=None, ignore_default=None, use_default=None,
                      is_subgraph=False, const_node_values=None, tensors_to_rename=None,
-                     initialized_tables=None, tflite_path=None, dequantize=False):
+                     initialized_tables=None, tflite_path=None, dequantize=False, fold_constant=False):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -484,7 +484,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             dtypes = rename_tensors_in_dict(dtypes)
             g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, g_inputs, g_outputs, is_subgraph)
             fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
-                                      g_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True, dequantize=dequantize)
+                                      g_outputs, {}, {}, {}, op_cnt, attr_cnt, is_tflite=True, dequantize=dequantize, fold_constant=fold_const)
             fg.graph_name = graph_name
             if is_main_g:
                 main_g = fg
@@ -527,13 +527,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         inputs_as_nchw = rename_tensors_in_list(inputs_as_nchw)
     g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, input_names, output_names, is_subgraph)
     g = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
-                             output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt)
+                             output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt, False, False, fold_constant)
     return g
 
 
 def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
                          output_names, initialized_tables, outputs_to_values, outputs_to_dtypes, op_cnt, attr_cnt,
-                         is_tflite=False, dequantize=False):
+                         is_tflite=False, dequantize=False, fold_constant=False):
 
     if is_tflite:
         tfl_rewriters = []
@@ -586,7 +586,8 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
     if inputs_as_nchw:
         transpose_inputs(g, inputs_as_nchw)
 
-    fold_constants_using_tf(g, outputs_to_values, outputs_to_dtypes)
+    if fold_constant:
+        fold_constants_using_tf(g, outputs_to_values, outputs_to_dtypes)
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer

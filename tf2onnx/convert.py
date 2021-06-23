@@ -219,7 +219,7 @@ def main():
         graph_def, inputs, outputs, initialized_tables, tensors_to_rename = tf_loader.from_saved_model(
             args.saved_model, args.inputs, args.outputs, args.tag, args.signature_def, args.concrete_function,
             args.large_model, return_initialized_tables=True, return_tensors_to_rename=True,
-            use_graph_names=args.use_graph_names)
+            use_graph_names=args.use_graph_names, fold_constant=args.fold_const)
         model_path = args.saved_model
     if args.keras:
         graph_def, inputs, outputs = tf_loader.from_keras(
@@ -262,7 +262,8 @@ def main():
             dequantize=args.dequantize,
             initialized_tables=initialized_tables,
             output_frozen_graph=args.output_frozen_graph,
-            output_path=args.output)
+            output_path=args.output,
+            fold_constant=args.fold_const)
 
 
     # write onnx graph

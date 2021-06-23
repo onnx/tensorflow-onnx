@@ -180,7 +180,7 @@ def fix_freezing_errors(graph_def):
     return graph_def
 
 
-def from_trackable(trackable, concrete_func, inputs, outputs, large_model):
+def from_trackable(trackable, concrete_func, inputs, outputs, large_model, fold_const):
     err_large_model = "model exceeds maximum protobuf size of 2GB. Try setting large_model."
 
     # Avoid errors due to bug in TF freezing
@@ -188,7 +188,7 @@ def from_trackable(trackable, concrete_func, inputs, outputs, large_model):
         _remove_non_variable_resources_from_captures(concrete_func)
 
     try:
-        frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
+        frozen_graph = from_function(concrete_func, inputs, outputs, large_model, fold_const)
     except ValueError as e:
         if any(msg in str(e) for msg in ["exceeds maximum protobuf size of 2GB", "string too long"]):
             raise ValueError(err_large_model)
@@ -220,7 +220,7 @@ def from_trackable(trackable, concrete_func, inputs, outputs, large_model):
     return frozen_graph, initialized_tables
 
 
-def from_function(func, input_names, output_names, large_model=False):
+def from_function(func, input_names, output_names, large_model=False, fold_const=False):
     if large_model:
         return convert_variables_to_constants_large_model(func)
 
@@ -244,7 +244,7 @@ def from_function(func, input_names, output_names, large_model=False):
         with tf_session(graph=tf_graph) as sess:
             tf.import_graph_def(graph_def, name='')
             input_names = inputs_without_resource(sess, input_names)
-            graph_def = tf_optimize(input_names, output_names, graph_def)
+            graph_def = tf_optimize(input_names, output_names, graph_def, fold_const)
     return graph_def
 
 
@@ -484,7 +484,7 @@ def _restore_captured_resources(concrete_func, graph_captures_copy, func_capture
 
 
 def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def,
-                         concrete_function_index, large_model, use_graph_names):
+                         concrete_function_index, large_model, use_graph_names, fold_const=False):
     """Load tensorflow graph from saved_model."""
 
     wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
@@ -551,7 +551,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     else:
         outputs = output_names
 
-    frozen_graph, initialized_tables = from_trackable(imported, concrete_func, inputs, outputs, large_model)
+    frozen_graph, initialized_tables = from_trackable(imported, concrete_func, inputs, outputs, large_model, fold_const)
 
     return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables, tensors_to_rename
 
@@ -559,16 +559,17 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
 def from_saved_model(model_path, input_names, output_names, tag=None,
                      signatures=None, concrete_function=None, large_model=False,
                      return_concrete_func=False, return_initialized_tables=False,
-                     return_tensors_to_rename=False, use_graph_names=False):
+                     return_tensors_to_rename=False, use_graph_names=False, fold_constant=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
     tf_reset_default_graph()
     with tf.device("/cpu:0"):
         if is_tf2():
+
             frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables, tensors_to_rename = \
                 _from_saved_model_v2(model_path, input_names, output_names,
-                                     tag, signatures, concrete_function, large_model, use_graph_names)
+                                     tag, signatures, concrete_function, large_model, use_graph_names, fold_constant)
             result = [frozen_graph, input_names, output_names]
             if return_concrete_func:
                 result += [concrete_func, imported]
@@ -629,19 +630,24 @@ def from_keras(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=None):
+def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=False):
     from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
 
     config = config_pb2.ConfigProto()
     rewrite_options = config.graph_options.rewrite_options
     config.graph_options.infer_shapes = True
+
     # TODO: if we turn on pruning, grappler removes some identities that the tf-1.x lstm rewriter
     #   depends on so for now don't turn this on.
-    rewrite_options.optimizers[:] = [
-        # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
-        'constfold', 'function'
-    ]
+    optimizers=['function']
+    if is_tf2():
+        optimizers.extend('dependency')
+    if fold_constant:
+        optimizers.extend('constfold')
+    # ['pruning', 'constfold', 'arithmetic', 'dependency', 'function']
+    rewrite_options.optimizers[:] = optimizers
+
     meta_graph = tf.compat.v1.train.export_meta_graph(graph_def=graph_def)
     fetch_collection = meta_graph_pb2.CollectionDef()
     for t in input_names + output_names:
