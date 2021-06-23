@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite errors="0" failures="1" hostname="MININT-44293CS" name="pytest" skipped="1" tests="2" time="8.953" timestamp="2021-06-23T16:45:01.105680"><testcase classname="keras2onnx_applications.nightly_build.test_efn.TestEfn" name="test_custom" time="0.003"><skipped message="TODO: model discrepancy" type="pytest.skip">C:\Users\tomwi\OneDrive - Microsoft\ONNX\tensorflow-onnx\keras2onnx_applications\nightly_build\test_efn.py:25: TODO: model discrepancy</skipped></testcase><testcase classname="keras2onnx_applications.nightly_build.test_efn.TestEfn" name="test_efn" time="0.003"><failure message="ModuleNotFoundError: No module named 'efficientnet'">self = &lt;test_efn.TestEfn testMethod=test_efn&gt;
+
+    def test_efn(self):
+&gt;       from efficientnet import tfkeras as efn
+E       ModuleNotFoundError: No module named 'efficientnet'
+
+test_efn.py:36: ModuleNotFoundError</failure></testcase></testsuite></testsuites>

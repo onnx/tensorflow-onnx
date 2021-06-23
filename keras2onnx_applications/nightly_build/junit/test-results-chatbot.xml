@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite errors="0" failures="0" hostname="MININT-44293CS" name="pytest" skipped="0" tests="1" time="33.121" timestamp="2021-06-23T16:44:26.094569"><testcase classname="keras2onnx_applications.nightly_build.test_chatbot.TestChatBot" name="test_chatbot" time="19.180" /></testsuite></testsuites>
