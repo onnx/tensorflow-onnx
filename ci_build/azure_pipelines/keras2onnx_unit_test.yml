@@ -2,7 +2,7 @@
 
 jobs:
 
-- job: 'Test'
+- job: 'Linux'
   pool:
     vmImage: 'Ubuntu-16.04'
   strategy:
@@ -105,6 +105,90 @@ jobs:
       then
         export TF_KERAS=0
       fi
+      pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
+    displayName: 'pytest'
+
+  - task: PublishTestResults@2
+    inputs:
+      testResultsFiles: '**/test-results.xml'
+      testRunTitle: 'Python $(python.version)'
+    condition: succeededOrFailed()
+
+- job: 'Win'
+  pool:
+    vmImage: 'vs2017-win2016'
+  strategy:
+    matrix:
+      # No python 2.x since no available ONNX package for Windows
+      Python36-onnx1.2:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.2.3
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python36-onnx1.5:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python37-tf2.1:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.6.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.1.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python37-tf2.2:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.7.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.2.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python37-tf2.3:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.3.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python37-tf2.5:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.5.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+    maxParallel: 3
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+      architecture: 'x64'
+
+  - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
+    displayName: Add conda to PATH
+
+  - script: conda create --yes --quiet --name py$(python.version) -c conda-forge python=$(python.version) numpy protobuf
+    displayName: Create Anaconda environment
+
+  - script: |
+      call activate py$(python.version)
+      python -m pip install --upgrade pip numpy==1.19
+      echo Test numpy installation... && python -c "import numpy"
+      pip install %ONNX_PATH%
+      pip uninstall -y protobuf
+      pip install protobuf
+      pip install h5py==2.9.0
+      pip install %TENSORFLOW_PATH%
+      pip install git+https://github.com/microsoft/onnxconverter-common
+      pip install pytest pytest-cov pytest-runner
+      %INSTALL_ORT%
+    displayName: 'Install dependencies'
+
+  - script: |
+      call activate py$(python.version)
+      pip install -e .
+      echo Test onnxruntime installation... && python -c "import onnxruntime"
+      python -c "import onnxconverter_common"
       pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
     displayName: 'pytest'
 
