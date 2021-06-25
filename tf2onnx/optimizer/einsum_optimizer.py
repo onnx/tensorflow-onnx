@@ -2,7 +2,6 @@
 
 """Rewrites operator einsum into simple ONNX operators.
 """
-import time
 import math
 from itertools import permutations
 import numpy as np
@@ -42,10 +41,10 @@ class OnnxMicroRuntime:
             if onnx_type == 7:
                 return np.int64
             raise ValueError("Unable to guess dtype from ONNX type %r." % onnx_type)
-        
+
         def _extract_numpy_array(v):
             return np.frombuffer(v.raw_data, dtype=_get_dtype(v.data_type))
-    
+
         if not isinstance(inputs, dict):
             raise TypeError(
                 "inputs must be a dictionary not %r." % type(inputs))
@@ -90,7 +89,7 @@ class OnnxMicroRuntime:
         targs = tuple(_preprocess(a, axis) for a in args)
         return (np.concatenate(targs, axis),)
 
-    def _op_gemm(self, a, b, c=None, alpha=None, beta=None,
+    def _op_gemm(self, a, b, c=None, alpha=None, beta=None,  # pylint: disable=C0103
                  transA=False, transB=False):  # pylint: disable=C0103
         "Runtime for operator."
         if alpha is not None:
@@ -148,7 +147,7 @@ class OnnxMicroRuntime:
 
     def _op_max(self, *x):
         "Runtime for operator."
-        return (np.maximum(*x),)
+        return (np.maximum(*x),)  #pylint: disable=E1120
 
     def _op_reducesum(self, data, axes, keepdims=None, noop_with_empty_axes=None):
         "Runtime for operator."
@@ -1853,16 +1852,17 @@ _ml_transpose_coefs = {
     'size': 2.8663794075460607e-06}
 
 
-def _edit_distance(mot1, mot2):
+def _edit_distance(seq1, seq2):
+    "Computes the edit distance between two sequences."
     dist = {(-1, -1): 0}
-    if len(mot1) == 0:
-        for j, d in enumerate(mot2):
+    if len(seq1) == 0:
+        for j, d in enumerate(seq2):
             dist[-1, j] = dist[-1, j - 1] + 1
             dist[j, -1] = dist[j - 1, -1] + 1
-    for i, c in enumerate(mot1):
+    for i, c in enumerate(seq1):
         dist[i, -1] = dist[i - 1, -1] + 1
         dist[-1, i] = dist[-1, i - 1] + 1
-        for j, d in enumerate(mot2):
+        for j, d in enumerate(seq2):
             opt = []
             if (i - 1, j) in dist:
                 x = dist[i - 1, j] + 1
@@ -1876,7 +1876,7 @@ def _edit_distance(mot1, mot2):
             mi = min(opt)
             dist[i, j] = mi[0]
 
-    return dist[len(mot1) - 1, len(mot2) - 1]
+    return dist[len(seq1) - 1, len(seq2) - 1]
 
 
 def _is_rotation(perm):
@@ -2073,7 +2073,6 @@ class CachedEinsum:
         subset.insert(0, letters)
         best = []
         confs = []
-        very_best = None
         inputs = None
         for perm in subset:
             replace = {d: c for c, d in zip(letters, perm)}
