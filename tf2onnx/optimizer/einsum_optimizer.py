@@ -12,104 +12,6 @@ from ..constants import OPSET_TO_IR_VERSION, PREFERRED_OPSET
 from .optimizer_base import GraphOptimizerBase
 
 
-def _var_as_dict(var):
-    """
-    Converts a protobuf object into something readable.
-    """
-    if hasattr(var, 'type') and str(var.type) != '':
-        # variable
-        if var.type is not None:
-            if hasattr(var.type, 'tensor_type') and var.type.tensor_type.elem_type > 0:
-                t = var.type.tensor_type
-                elem_type = t.elem_type
-                shape = t.shape
-                dim = shape.dim
-                dims = [d.dim_value for d in dim]
-                if len(dims) == 0:
-                    dims = '?'
-                dtype = dict(kind='tensor', elem=elem_type,
-                             shape=tuple(dims))
-            elif hasattr(var.type, 'real') and var.type.real == 5 and hasattr(var, 'g'):
-                dtype = dict(kind='graph', elem=var.type.real)
-            elif hasattr(var.type, 'real') and var.type.real == 4 and hasattr(var, 't'):
-                dtype = dict(kind='tensor', elem=var.type.real)
-            elif hasattr(var.type, 'real'):
-                dtype = dict(kind='real', elem=var.type.real)
-            elif (hasattr(var.type, "sequence_type") and var.type.sequence_type is not None and
-                    str(var.type.sequence_type.elem_type) != ''):
-                t = var.type.sequence_type
-                elem_type = t.elem_type
-                dtype = dict(kind='sequence', elem=elem_type)
-            elif (hasattr(var.type, "map_type") and var.type.map_type is not None and
-                    str(var.type.map_type.key_type) != '' and
-                    str(var.type.map_type.value_type) != ''):
-                t = var.type.map_type
-                key_type = t.key_type
-                value_type = t.value_type
-                dtype = dict(kind='map', key=key_type, value=value_type)
-            elif hasattr(var.type, 'tensor_type') and var.type.tensor_type.elem_type == 0:
-                t = var.type.tensor_type
-                elem_type = t.elem_type
-                shape = t.shape
-                dim = shape.dim
-                dims = [d.dim_value for d in dim]
-                if len(dims) == 0:
-                    dims = '?'
-                dtype = dict(kind='tensor', elem=elem_type,
-                             shape=tuple(dims))
-            else:
-                raise NotImplementedError(  # pragma: no cover
-                    "Unable to convert a type into a dictionary for '{}'. "
-                    "Available fields: {}.".format(
-                        var.type, pprint.pformat(dir(var.type))))
-        else:
-            raise NotImplementedError(  # pragma: no cover
-                "Unable to convert variable into a dictionary for '{}'. "
-                "Available fields: {}.".format(
-                    var, pprint.pformat(dir(var.type))))
-
-        res = dict(name=var.name, type=dtype)
-
-        if hasattr(var, 'floats') and dtype.get('elem', None) == 6:
-            res['value'] = np.array(list(var.floats), dtype=np.float32, copy=copy)
-        elif hasattr(var, 'strings') and dtype.get('elem', None) == 8:
-            res['value'] = np.array(list(var.strings), dtype=np.str, copy=copy)
-        elif hasattr(var, 'ints') and dtype.get('elem', None) == 7:
-            res['value'] = np.array(list(var.ints), dtype=np.int64)
-        elif hasattr(var, 'f') and dtype.get('elem', None) == 1:
-            res['value'] = var.f
-        elif hasattr(var, 's') and dtype.get('elem', None) == 3:
-            res['value'] = var.s
-        elif hasattr(var, 'i') and dtype.get('elem', None) == 2:
-            res['value'] = var.i
-        elif hasattr(var, 'g') and dtype.get('elem', None) == 5:
-            res['value'] = var.g
-        elif hasattr(var, 't') and dtype.get('elem', None) == 4:
-            ts = _var_as_dict(var.t)
-            res['value'] = ts['value']
-        elif hasattr(var, 'sparse_tensor') and dtype.get('elem', None) == 11:
-            ts = _var_as_dict(var.sparse_tensor)
-            res['value'] = ts['value']
-        elif "'value'" in str(var):
-            warnings.warn("No value: {} -- {}".format(  # pragma: no cover
-                dtype, str(var).replace("\n", "").replace(" ", "")))
-        return res
-
-    if hasattr(var, 'op_type'):
-        if hasattr(var, 'attribute'):
-            atts = {}
-            for att in var.attribute:
-                atts[att.name] = _var_as_dict(att)
-        return dict(name=var.name, op_type=var.op_type,
-                    domain=var.domain, atts=atts)
-    if hasattr(var, 'dims') and len(var.dims) > 0:
-        # initializer
-        data = np.array(list(var.dims), dtype=np.int64)
-        return dict(name=var.name, value=data)
-    raise NotImplementedError(  # pragma: no cover
-        "Unable to guess which object it is.\n{}\n---".format(var))
-
-
 class OnnxMicroRuntime:
     """
     Implements a micro runtime for ONNX graphs.
@@ -134,6 +36,16 @@ class OnnxMicroRuntime:
         :param inputs: dictionary
         :return: all intermediates results and output as a dictionary
         """
+        def _get_dtype(onnx_type):
+            if onnx_type == 1:
+                return np.float32
+            if onnx_type == 7:
+                return np.int64
+            raise ValueError("Unable to guess dtype from ONNX type %r." % onnx_type)
+        
+        def _extract_numpy_array(v):
+            return np.frombuffer(v.raw_data, dtype=_get_dtype(v.data_type))
+    
         if not isinstance(inputs, dict):
             raise TypeError(
                 "inputs must be a dictionary not %r." % type(inputs))
@@ -141,7 +53,7 @@ class OnnxMicroRuntime:
 
         for init in self.model_onnx.graph.initializer:
             name = init.name
-            mat = _var_as_dict(init)['value']
+            mat = _extract_numpy_array(init)
             results[name] = mat
 
         for node in self.model_onnx.graph.node:
@@ -153,8 +65,7 @@ class OnnxMicroRuntime:
                     "OnnxMicroRuntime does not implement operator %r." % op_type)
             kwargs = {}
             for at in node.attribute:
-                var = _var_as_dict(at)
-                kwargs[at.name] = var['value']
+                kwargs[at.name] = at
             out = getattr(self, meth_name)(*inp, **kwargs)
             for n, o in zip(node.output, out):
                 results[n] = o
@@ -162,23 +73,30 @@ class OnnxMicroRuntime:
         return results
 
     def _op_add(self, x, y):
-        "Runtime for operator :epkg:`Op:Add`."
-        return (x + y, )
+        "Runtime for operator."
+        return (x + y,)
 
     def _op_concat(self, *args, axis=None):
-        "Runtime for operator :epkg:`Op:Concat`."
+        "Runtime for operator."
+        if axis is not None:
+            axis = axis.i
+
         def _preprocess(a, axis):
             if axis >= len(a.shape):
-                new_shape = a.shape + (1, ) * (axis + 1 - len(a.shape))
+                new_shape = a.shape + (1,) * (axis + 1 - len(a.shape))
                 return a.reshape(new_shape)
             return a
 
         targs = tuple(_preprocess(a, axis) for a in args)
-        return (np.concatenate(targs, axis), )
+        return (np.concatenate(targs, axis),)
 
     def _op_gemm(self, a, b, c=None, alpha=None, beta=None,
-                 transA=False, transB=False):
-        "Runtime for operator :epkg:`Op:Gemm`."
+                 transA=False, transB=False):  # pylint: disable=C0103
+        "Runtime for operator."
+        if alpha is not None:
+            alpha = alpha.f
+        if beta is not None:
+            beta = beta.f
 
         def _gemm00(a, b, c, alpha, beta):
             o = np.dot(a, b) * alpha
@@ -208,51 +126,74 @@ class OnnxMicroRuntime:
             fct = _gemm11 if transB else _gemm10
         else:
             fct = _gemm01 if transB else _gemm00
-        return (fct(a, b, c, alpha=alpha, beta=beta), )
+        return (fct(a, b, c, alpha=alpha, beta=beta),)
 
     def _op_gather(self, x, indices, axis=None):
-        "Runtime for operator :epkg:`Op:Gather`."
+        "Runtime for operator."
         if not x.flags['C_CONTIGUOUS']:
             x = np.ascontiguousarray(x)
         if not indices.flags['C_CONTIGUOUS']:
             indices = indices.ascontiguousarray()
-        return (np.take(x, indices, axis=axis), )
+        if axis is not None:
+            axis = axis.i
+        return (np.take(x, indices, axis=axis),)
 
     def _op_identity(self, x):
-        "Runtime for operator :epkg:`Op:Identity`."
-        return (x, )
+        "Runtime for operator."
+        return (x,)
 
     def _op_matmul(self, x, y):
-        "Runtime for operator :epkg:`Op:MatMul`."
-        return (np.matmul(x, y), )
+        "Runtime for operator."
+        return (np.matmul(x, y),)
+
+    def _op_max(self, *x):
+        "Runtime for operator."
+        return (np.maximum(*x),)
+
+    def _op_reducesum(self, data, axes, keepdims=None, noop_with_empty_axes=None):
+        "Runtime for operator."
+        if keepdims is not None:
+            keepdims = keepdims.i
+        if noop_with_empty_axes is not None:
+            noop_with_empty_axes = noop_with_empty_axes.i
+        if axes is None and self.noop_with_empty_axes is not None:
+            return (data,)
+        if axes is not None and not isinstance(axes, int):
+            if isinstance(axes, np.ndarray) and len(axes.shape) == 0:
+                axes = int(axes)
+            else:
+                axes = tuple(axes) if len(axes) > 0 else None
+        return (np.sum(data, axis=axes, keepdims=keepdims, dtype=data.dtype),)
 
     def _op_reshape(self, x, shape):
-        "Runtime for operator :epkg:`Op:Reshape`."
-        return (x.reshape(shape), )
+        "Runtime for operator."
+        return (x.reshape(shape),)
 
     def _op_shape(self, x):
-        "Runtime for operator :epkg:`Op:Shape`."
-        return (np.array(list(x.shape), dtype=np.int64), )
+        "Runtime for operator."
+        return (np.array(list(x.shape), dtype=np.int64),)
 
     def _op_squeeze(self, x, axes=None):
-        "Runtime for operator :epkg:`Op:Squeeze`."
+        "Runtime for operator."
         if axes is None:
-            return (x, )
+            return (x,)
         if hasattr(axes, '__iter__'):
-            return (np.squeeze(x, axis=tuple(axes)), )
-        return (np.squeeze(x, axis=axes), )
+            return (np.squeeze(x, axis=tuple(axes)),)
+        return (np.squeeze(x, axis=axes),)
 
     def _op_transpose(self, x, perm=None):
-        "Runtime for operator :epkg:`Op:Transpose`."
-        return (np.transpose(x, perm), )
+        "Runtime for operator."
+        if perm is not None:
+            perm = tuple(perm.ints)
+        return (np.transpose(x, perm),)
 
     def _op_unsqueeze(self, x, axes=None):
-        "Runtime for operator :epkg:`Op:Unsqueeze`."
+        "Runtime for operator."
         if axes is None:
-            return (x, )
+            return (x,)
         if hasattr(axes, '__iter__'):
-            return (np.expand_dims(x, axis=tuple(axes)), )
-        return (np.expand_dims(x, axis=axes), )
+            return (np.expand_dims(x, axis=tuple(axes)),)
+        return (np.expand_dims(x, axis=axes),)
 
 
 def single_axes(axes):
@@ -1045,7 +986,7 @@ class GraphEinsumSubOp:
 
     def to_dot(self, **kwargs):
         """
-        Produces a graph in :epkg:`dot`.
+        Produces a graph in *dot*.
 
         :param kwargs: additional graph option
         :return: string
@@ -1398,7 +1339,7 @@ def analyse_einsum_equation(equation):
     """
     Analyses an einsum equation.
 
-    :param equation: :epkg:`numpy:einsum` equation
+    :param equation: `numpy.einsum` equation
     :return: three results, list of letters,
         a matrix (see below), lengths of each components,
         duplicates
@@ -1466,7 +1407,7 @@ def analyse_einsum_equation(equation):
 
 def decompose_einsum_equation(equation, *shapes):
     """
-    Decomposes an equation used in :epkg:`numpy:einsum` knowing
+    Decomposes an equation used in `numpy.einsum` knowing
     the input shapes. It returns a sequence of operations
     to do to compute the results.
 
@@ -2057,7 +1998,7 @@ class CachedEinsum:
     :param optimize: finds the best letter permutation
     :param dtype: dtype
     :param decompose: to decompose Einsum operator or to keep it as is
-    :param strategy: optimization strategy (None or ml)
+    :param strategy: optimization strategy (only `ml` is implemented)
     :param key: key used to cache this class
 
     The class creates the following attributes:
@@ -2110,8 +2051,6 @@ class CachedEinsum:
         """
         if not self.optimize and not hasattr(self, 'equation_'):
             self.equation_ = self.equation
-        elif self.strategy is None:
-            self.equation_ = self._build_optimize()
         elif self.strategy == 'ml':
             self.equation_ = self._build_optimize_ml()
         else:
@@ -2119,64 +2058,19 @@ class CachedEinsum:
                 "Unknown strategy %r." % self.strategy)
         self.build_runtime()
 
-    def _build_optimize(self):
-        """
-        Preprocesses the equation builds whatever is necessary
-        to compute the result of the einsum equation.
-        """
-        # loops over all permutations
-        if self.equation.lower() != self.equation:
-            raise RuntimeError(
-                "Only lower equation can be optimized, %r is not." % self.equation)
-        letters = list(
-            sorted(set(c for c in self.equation if "a" <= c <= "z")))
-        possible = list(permutations(letters))
-        possible.insert(0, letters)
-        subset = possible
-        best = []
-        confs = []
-        inputs = None
-        for perm in subset:
-            replace = {d: c for c, d in zip(letters, perm)}
-            eq = self.equation
-            for k, v in replace.items():
-                eq = eq.replace(k, v.upper())
-            eq = eq.lower()
-            inst = CachedEinsum(eq, opset=self.opset, optimize=False, dtype=self.dtype,
-                                decompose=self.decompose, strategy=self.strategy)
-            inst.build()
-            if inputs is None:
-                inputs = inst.default_inputs()
-                inst(*inputs)
-            ts = time.perf_counter()
-            for _ in range(0, 10):
-                inst(*inputs)
-            delta = time.perf_counter() - ts
-            confs.append((delta, eq))
-            if len(best) < 10:
-                best.append((delta, eq))
-                best.sort()
-            elif delta < best[-1][0]:
-                best[-1] = (delta, eq)
-                best.sort()
-        self.optimized_ = best
-        self.timed_permutations_ = confs
-        return best[0][1]
-
     def _build_optimize_ml(self):
+        """
+        Selection the best equation by evaluation the sum of of the cost
+        of all permutations involved in the replacement of einsum operator.
+        """
         # loops over all permutations
         if self.equation.lower() != self.equation:
             raise RuntimeError(
                 "Only lower equation can be optimized, %r is not." % self.equation)
         letters = list(
             sorted(set(c for c in self.equation if "a" <= c <= "z")))
-        possible = list(permutations(letters))
-        possible.insert(0, letters)
-        if self.verbose:
-            from tqdm import tqdm
-            subset = tqdm(possible)
-        else:
-            subset = possible
+        subset = list(permutations(letters))
+        subset.insert(0, letters)
         best = []
         confs = []
         very_best = None
@@ -2187,7 +2081,7 @@ class CachedEinsum:
             for k, v in replace.items():
                 eq = eq.replace(k, v.upper())
             eq = eq.lower()
-            inst = CachedEinsum(eq, runtime=self.runtime, opset=self.opset,
+            inst = CachedEinsum(eq, opset=self.opset,
                                 optimize=False, dtype=self.dtype,
                                 decompose=self.decompose)
             inst.build()
@@ -2223,10 +2117,6 @@ class CachedEinsum:
             elif delta < best[-1][0]:
                 best[-1] = (delta, eq)
                 best.sort()
-            if self.verbose and (
-                    very_best is None or very_best != best[0][0]):
-                very_best = best[0][0]
-                subset.set_description("%1.2g mlbest=%r" % best[0])
         self.optimized_ = best
         self.timed_permutations_ = confs
         return best[0][1]
@@ -2262,7 +2152,7 @@ class CachedEinsum:
         """
         # The conversion should not fail if onnxruntime is not here.
         # Delayed import.
-        from onnxruntime import InferenceSession  # pylint: disable=C0415
+        # from onnxruntime import InferenceSession  # pylint: disable=C0415
         if self.decompose:
             self.graph_ = decompose_einsum_equation(self.equation_)
 
@@ -2277,9 +2167,9 @@ class CachedEinsum:
             input_names = ['X%d' % i for i in range(n_inputs)]
             self.onnx_ = self.build_onnx_einsum(input_names)
             self.onnx_names_ = input_names
-        self.sess_ = InferenceSession(self.onnx_.SerializeToString())
-        self.runtime_ = lambda *inputs: self.sess_.run(
-            None, dict(zip(self.onnx_names_, inputs)))[0]
+        # self.sess_ = InferenceSession(self.onnx_.SerializeToString())
+        # self.runtime_ = lambda *inputs: self.sess_.run(
+        #     None, dict(zip(self.onnx_names_, inputs)))[0]
 
     def __call__(self, *inputs):
         """

@@ -20,8 +20,8 @@ class TestEinsumMl(Tf2OnnxBackendTestBase):
     "unit tests for einsum optimizer"
 
     def test_onnx_micro_runtime(self):
+        "test OnnxMicroRuntime"
         opset = self.config.opset
-        dtype = np.float32
         x = np.array([1, 2, 4, 5, 5, 4]).astype(
             np.float32).reshape((3, 2))
 
@@ -47,12 +47,13 @@ class TestEinsumMl(Tf2OnnxBackendTestBase):
         self.assertEqual(len(out), 3)
 
     def test_onnx_micro_runtime_exc1(self):
+        "test OnnxMicroRuntime"
         with self.assertRaises(TypeError):
             OnnxMicroRuntime(None)
 
     def test_onnx_micro_runtime_exc2(self):
+        "test OnnxMicroRuntime"
         opset = self.config.opset
-        dtype = np.float32
         x = np.array([1, 2, 4, 5, 5, 4]).astype(
             np.float32).reshape((3, 2))
 
@@ -81,6 +82,7 @@ class TestEinsumMl(Tf2OnnxBackendTestBase):
             rt.run(x)
 
     def test_onnx_micro_runtime_shape(self):
+        "test OnnxMicroRuntime"
         opset = self.config.opset
         x = np.array([1, 2, 4, 5, 5, 4]).astype(
             np.float32).reshape((3, 2))
@@ -102,7 +104,33 @@ class TestEinsumMl(Tf2OnnxBackendTestBase):
         out = rt.run({'X': x})
         assert_almost_equal(np.array(x.shape, dtype=np.int64), out['Y'])
 
+    def test_onnx_micro_runtime_unsqueeze(self):
+        "test OnnxMicroRuntime"
+        opset = self.config.opset
+        x = np.array([1, 2, 4, 5, 5, 4]).astype(
+            np.float32).reshape((3, 2))
+        i = np.array([1]).astype(np.int64)
+
+        model_def = helper.make_model(
+            opset_imports=[helper.make_operatorsetid('', opset)],
+            ir_version=constants.OPSET_TO_IR_VERSION[opset],
+            producer_name='tf2onnx',
+            producer_version='0.0.1',
+            graph=helper.make_graph(
+                name='einsum',
+                inputs=[helper.make_tensor_value_info('X', TensorProto.FLOAT, None),
+                        helper.make_tensor_value_info('I', TensorProto.INT64, None)],
+                outputs=[helper.make_tensor_value_info("Y", TensorProto.INT64, None)],
+                nodes=[
+                    helper.make_node('Unsqueeze', ["X", "I"], ["Y"]),
+                ]))
+
+        rt = OnnxMicroRuntime(model_def)
+        out = rt.run({'X': x, 'I': i})
+        assert_almost_equal(np.array(x.reshape((3, 1, 2))), out['Y'])
+
     def test_onnx_micro_runtime_transpose(self):
+        "test OnnxMicroRuntime"
         opset = self.config.opset
         x = np.array([1, 2, 4, 5, 5, 4]).astype(
             np.float32).reshape((3, 2))
@@ -125,6 +153,7 @@ class TestEinsumMl(Tf2OnnxBackendTestBase):
         assert_almost_equal(x.T, out['Y'])
 
     def test_onnx_micro_runtime_matmul(self):
+        "test OnnxMicroRuntime"
         opset = self.config.opset
         x = np.array([1, 2, 4, 5]).astype(
             np.float32).reshape((2, 2))
