@@ -5,7 +5,7 @@
 import math
 from itertools import permutations
 import numpy as np
-from onnx import helper, numpy_helper, TensorProto
+from onnx import helper, numpy_helper, TensorProto, AttributeProto
 from .. import utils
 from ..constants import OPSET_TO_IR_VERSION, PREFERRED_OPSET
 from .optimizer_base import GraphOptimizerBase
@@ -153,6 +153,19 @@ class OnnxMicroRuntime:
         "Runtime for operator."
         return (x * y,)
 
+    def _op_reduceprod(self, data, axes=None, keepdims=None):
+        "Runtime for operator :epkg:`Op:ReduceProd`."
+        if keepdims is not None:
+            keepdims = keepdims.i
+        if axes is not None and not isinstance(axes, int):
+            if isinstance(axes, np.ndarray) and len(axes.shape) == 0:
+                axes = int(axes)
+            else:
+                axes = tuple(axes) if len(axes) > 0 else None
+        return (np.prod(data, axis=axes,
+                        keepdims=keepdims,
+                        dtype=data.dtype), )
+
     def _op_reducesum(self, data, axes, keepdims=None, noop_with_empty_axes=None):
         "Runtime for operator."
         if keepdims is not None:
@@ -180,6 +193,8 @@ class OnnxMicroRuntime:
         "Runtime for operator."
         if axes is None:
             return (x,)
+        if isinstance(axes, AttributeProto):
+            axes = list(axes.ints)
         if hasattr(axes, '__iter__'):
             return (np.squeeze(x, axis=tuple(axes)),)
         return (np.squeeze(x, axis=axes),)
@@ -194,6 +209,8 @@ class OnnxMicroRuntime:
         "Runtime for operator."
         if axes is None:
             return (x,)
+        if isinstance(axes, AttributeProto):
+            axes = list(axes.ints)
         if hasattr(axes, '__iter__'):
             return (np.expand_dims(x, axis=tuple(axes)),)
         return (np.expand_dims(x, axis=axes),)
