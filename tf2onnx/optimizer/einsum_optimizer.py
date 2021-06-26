@@ -149,6 +149,10 @@ class OnnxMicroRuntime:
         "Runtime for operator."
         return (np.maximum(*x),)  #pylint: disable=E1120
 
+    def _op_mul(self, x, y):
+        "Runtime for operator."
+        return (x * y,)
+
     def _op_reducesum(self, data, axes, keepdims=None, noop_with_empty_axes=None):
         "Runtime for operator."
         if keepdims is not None:
