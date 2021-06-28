@@ -2,14 +2,217 @@
 
 """Rewrites operator einsum into simple ONNX operators.
 """
-import time
 import math
 from itertools import permutations
 import numpy as np
-from onnx import helper, numpy_helper, TensorProto
+from onnx import helper, numpy_helper, TensorProto, AttributeProto
 from .. import utils
 from ..constants import OPSET_TO_IR_VERSION, PREFERRED_OPSET
 from .optimizer_base import GraphOptimizerBase
+
+
+class OnnxMicroRuntime:
+    """
+    Implements a micro runtime for ONNX graphs.
+    It does not implements all the operator types.
+    This runtime is used to infer shape. `shape_inference`
+    from `onnx` does not return all shapes when the onnx graph
+    includes an operator *Reshape*.
+
+    :param model_onnx: ONNX model
+    """
+
+    def __init__(self, model_onnx):
+        if not hasattr(model_onnx, 'graph'):
+            raise TypeError(
+                "model_onnx is not an ONNX graph but %r." % type(model_onnx))
+        self.model_onnx = model_onnx
+
+    def run(self, inputs):
+        """
+        Computes the outputs of the graph.
+
+        :param inputs: dictionary
+        :return: all intermediates results and output as a dictionary
+        """
+        def _get_dtype(onnx_type):
+            if onnx_type == 1:
+                return np.float32
+            if onnx_type == 7:
+                return np.int64
+            raise ValueError("Unable to guess dtype from ONNX type %r." % onnx_type)
+
+        def _extract_numpy_array(v):
+            return np.frombuffer(v.raw_data, dtype=_get_dtype(v.data_type))
+
+        if not isinstance(inputs, dict):
+            raise TypeError(
+                "inputs must be a dictionary not %r." % type(inputs))
+        results = inputs.copy()
+
+        for init in self.model_onnx.graph.initializer:
+            name = init.name
+            mat = _extract_numpy_array(init)
+            results[name] = mat
+
+        for node in self.model_onnx.graph.node:
+            op_type = node.op_type
+            inp = [results[n] for n in node.input]
+            meth_name = "_op_%s" % op_type.lower()
+            if not hasattr(self, meth_name):
+                raise NotImplementedError(
+                    "OnnxMicroRuntime does not implement operator %r." % op_type)
+            kwargs = {}
+            for at in node.attribute:
+                kwargs[at.name] = at
+            out = getattr(self, meth_name)(*inp, **kwargs)
+            for n, o in zip(node.output, out):
+                results[n] = o
+
+        return results
+
+    def _op_add(self, x, y):
+        "Runtime for operator."
+        return (x + y,)
+
+    def _op_concat(self, *args, axis=None):
+        "Runtime for operator."
+        if axis is not None:
+            axis = axis.i
+
+        def _preprocess(a, axis):
+            if axis >= len(a.shape):
+                new_shape = a.shape + (1,) * (axis + 1 - len(a.shape))
+                return a.reshape(new_shape)
+            return a
+
+        targs = tuple(_preprocess(a, axis) for a in args)
+        return (np.concatenate(targs, axis),)
+
+    def _op_gemm(self, a, b, c=None, alpha=None, beta=None,  # pylint: disable=C0103
+                 transA=False, transB=False):  # pylint: disable=C0103
+        "Runtime for operator."
+        if alpha is not None:
+            alpha = alpha.f
+        if beta is not None:
+            beta = beta.f
+
+        def _gemm00(a, b, c, alpha, beta):
+            o = np.dot(a, b) * alpha
+            if beta != 0:
+                o += c * beta
+            return o
+
+        def _gemm01(a, b, c, alpha, beta):
+            o = np.dot(a, b.T) * alpha
+            if beta != 0:
+                o += c * beta
+            return o
+
+        def _gemm10(a, b, c, alpha, beta):
+            o = np.dot(a.T, b) * alpha
+            if beta != 0:
+                o += c * beta
+            return o
+
+        def _gemm11(a, b, c, alpha, beta):
+            o = np.dot(a.T, b.T) * alpha
+            if beta != 0:
+                o += c * beta
+            return o
+
+        if transA:
+            fct = _gemm11 if transB else _gemm10
+        else:
+            fct = _gemm01 if transB else _gemm00
+        return (fct(a, b, c, alpha=alpha, beta=beta),)
+
+    def _op_gather(self, x, indices, axis=None):
+        "Runtime for operator."
+        if not x.flags['C_CONTIGUOUS']:
+            x = np.ascontiguousarray(x)
+        if not indices.flags['C_CONTIGUOUS']:
+            indices = indices.ascontiguousarray()
+        if axis is not None:
+            axis = axis.i
+        return (np.take(x, indices, axis=axis),)
+
+    def _op_identity(self, x):
+        "Runtime for operator."
+        return (x,)
+
+    def _op_matmul(self, x, y):
+        "Runtime for operator."
+        return (np.matmul(x, y),)
+
+    def _op_max(self, *x):
+        "Runtime for operator."
+        return (np.maximum(*x),)  #pylint: disable=E1120
+
+    def _op_mul(self, x, y):
+        "Runtime for operator."
+        return (x * y,)
+
+    def _op_reduceprod(self, data, axes=None, keepdims=None):
+        "Runtime for operator :epkg:`Op:ReduceProd`."
+        if keepdims is not None:
+            keepdims = keepdims.i
+        if axes is not None and not isinstance(axes, int):
+            if isinstance(axes, np.ndarray) and len(axes.shape) == 0:
+                axes = int(axes)
+            else:
+                axes = tuple(axes) if len(axes) > 0 else None
+        return (np.prod(data, axis=axes, keepdims=keepdims, dtype=data.dtype),)
+
+    def _op_reducesum(self, data, axes, keepdims=None, noop_with_empty_axes=None):
+        "Runtime for operator."
+        if keepdims is not None:
+            keepdims = keepdims.i
+        if noop_with_empty_axes is not None:
+            noop_with_empty_axes = noop_with_empty_axes.i
+        if axes is None and self.noop_with_empty_axes is not None:
+            return (data,)
+        if axes is not None and not isinstance(axes, int):
+            if isinstance(axes, np.ndarray) and len(axes.shape) == 0:
+                axes = int(axes)
+            else:
+                axes = tuple(axes) if len(axes) > 0 else None
+        return (np.sum(data, axis=axes, keepdims=keepdims, dtype=data.dtype),)
+
+    def _op_reshape(self, x, shape):
+        "Runtime for operator."
+        return (x.reshape(shape),)
+
+    def _op_shape(self, x):
+        "Runtime for operator."
+        return (np.array(list(x.shape), dtype=np.int64),)
+
+    def _op_squeeze(self, x, axes=None):
+        "Runtime for operator."
+        if axes is None:
+            return (x,)
+        if isinstance(axes, AttributeProto):
+            axes = list(axes.ints)
+        if hasattr(axes, '__iter__'):
+            return (np.squeeze(x, axis=tuple(axes)),)
+        return (np.squeeze(x, axis=axes),)
+
+    def _op_transpose(self, x, perm=None):
+        "Runtime for operator."
+        if perm is not None:
+            perm = tuple(perm.ints)
+        return (np.transpose(x, perm),)
+
+    def _op_unsqueeze(self, x, axes=None):
+        "Runtime for operator."
+        if axes is None:
+            return (x,)
+        if isinstance(axes, AttributeProto):
+            axes = list(axes.ints)
+        if hasattr(axes, '__iter__'):
+            return (np.expand_dims(x, axis=tuple(axes)),)
+        return (np.expand_dims(x, axis=axes),)
+
 
 def single_axes(axes):
     """
@@ -801,7 +1004,7 @@ class GraphEinsumSubOp:
 
     def to_dot(self, **kwargs):
         """
-        Produces a graph in :epkg:`dot`.
+        Produces a graph in *dot*.
 
         :param kwargs: additional graph option
         :return: string
@@ -1154,7 +1357,7 @@ def analyse_einsum_equation(equation):
     """
     Analyses an einsum equation.
 
-    :param equation: :epkg:`numpy:einsum` equation
+    :param equation: `numpy.einsum` equation
     :return: three results, list of letters,
         a matrix (see below), lengths of each components,
         duplicates
@@ -1222,7 +1425,7 @@ def analyse_einsum_equation(equation):
 
 def decompose_einsum_equation(equation, *shapes):
     """
-    Decomposes an equation used in :epkg:`numpy:einsum` knowing
+    Decomposes an equation used in `numpy.einsum` knowing
     the input shapes. It returns a sequence of operations
     to do to compute the results.
 
@@ -1335,6 +1538,8 @@ def decompose_einsum_equation(equation, *shapes):
         equation, *shapes, op_matmul='batch_dot')
 
     # Last step: clean unused nodes.
+    last_node = graph.last_added_op
+    graph.append(EinsumSubOp(last_node.full_dim, 'id', last_node))
     graph.mark_last_node()
     graph.simplify_mm_nodes()
     graph.clean_unused_nodes()
@@ -1632,6 +1837,177 @@ def _decompose_einsum_equation(equation, *shapes, op_matmul='batch_dot'):
     return graph
 
 
+_ml_transpose_coefs = {
+    'CST_': 0.4720163707200312,
+    'begin': 0.0,
+    'dbegin': 0.0,
+    'dend': 0.0,
+    'dim': 0.0,
+    'discont': 0.0180766756730043,
+    'edit': 0.06940318842803926,
+    'end': 0.0,
+    'end16': 0.0,
+    'end32': 0.0,
+    'ibegin16': 0.0,
+    'ibegin2': 0.0,
+    'ibegin32': 0.0,
+    'ibegin4': 0.0,
+    'ibegin64': 0.0,
+    'ibegin8': 0.04389296884016416,
+    'iend16': 0.5316238365817172,
+    'iend2': 0.16287259236456927,
+    'iend32': 0.0,
+    'iend4': 0.0,
+    'iend64': 0.0,
+    'iend8': 0.0,
+    'middle': 1.3381940773605624e-06,
+    'rbegin': 0.0,
+    'rdiscont': 0.0,
+    'redit': 0.18604684802855143,
+    'rend': 0.0,
+    'rend16': 0.0,
+    'rend32': 0.0,
+    'rev': 0.42909943168149206,
+    'rmiddle': 0.0,
+    'rot': 0.22272566615803094,
+    'size': 2.8663794075460607e-06}
+
+
+def _edit_distance(seq1, seq2):
+    "Computes the edit distance between two sequences."
+    dist = {(-1, -1): 0}
+    if len(seq1) == 0:
+        for j, d in enumerate(seq2):
+            dist[-1, j] = dist[-1, j - 1] + 1
+            dist[j, -1] = dist[j - 1, -1] + 1
+    for i, c in enumerate(seq1):
+        dist[i, -1] = dist[i - 1, -1] + 1
+        dist[-1, i] = dist[-1, i - 1] + 1
+        for j, d in enumerate(seq2):
+            opt = []
+            if (i - 1, j) in dist:
+                x = dist[i - 1, j] + 1
+                opt.append((x, (i - 1, j)))
+            if (i, j - 1) in dist:
+                x = dist[i, j - 1] + 1
+                opt.append((x, (i, j - 1)))
+            if (i - 1, j - 1) in dist:
+                x = dist[i - 1, j - 1] + (1 if c != d else 0)
+                opt.append((x, (i - 1, j - 1)))
+            mi = min(opt)
+            dist[i, j] = mi[0]
+
+    return dist[len(seq1) - 1, len(seq2) - 1]
+
+
+def _is_rotation(perm):
+    t = tuple(perm)
+    c = list(range(len(perm)))
+    for i in range(len(c)):
+        for k in range(len(c)):  # pylint: disable=C0200
+            c[k] = (k + i) % len(c)
+        if t == tuple(c):
+            return True
+    return False
+
+
+def _relu(x, origin=0):
+    return origin if x < origin else x
+
+
+def compute_transposition_features(shape, perm):
+    """
+    Given a shape and a permutation, computes many features
+    used to predict the cost of the transposition.
+
+    :param shape: shape
+    :param perm: permutation
+    :return: dictionary of features
+    """
+    total = np.prod(np.array(shape, dtype=np.int64))
+
+    begin = 1
+    dbegin = 0
+    for i, p in enumerate(perm):
+        if p != i:
+            break
+        dbegin += 1
+        begin *= shape[i]
+
+    end = 1
+    dend = 0
+    for i in range(len(perm) - 1, -1, -1):
+        if perm[i] != i:
+            break
+        dend += 1
+        end *= shape[i]
+
+    dis_cont = 0
+    for i in range(1, len(shape)):
+        if perm[i] != perm[i - 1] + 1:
+            dis_cont += 1
+
+    middle = max(1, int(total / (end * begin)))
+    feat = dict(size=total, begin=begin, end=end, middle=middle,
+                dim=len(shape), discont=dis_cont)
+
+    for c in [16, 32]:
+        feat["end%d" % c] = _relu(end, c)
+
+    keys = list(feat)
+    for k in keys:
+        if k in {'dim', 'cpu', 'size'}:
+            continue
+        feat['r%s' % k] = float(feat[k] / total)
+
+    for c in [2, 4, 8, 16, 32, 64]:
+        feat["iend%d" % c] = float(end >= c)
+        feat["ibegin%d" % c] = float(begin >= c)
+
+    # feat['CST'] = 1
+    feat['CST_'] = -1
+    feat['dbegin'] = - dbegin
+    feat['dend'] = - dend
+
+    keys = list(feat)
+    for k in keys:
+        if k.startswith('end') or k.startswith('begin'):
+            feat[k] = - feat[k]
+        elif k.startswith('rend') or k.startswith('rbegin'):
+            feat[k] = - feat[k]
+        elif k.startswith('iend') or k.startswith('ibegin'):
+            feat[k] = - feat[k]
+        elif k == "rdiscont":
+            feat[k] = - feat[k]
+
+    idp = list(range(len(perm)))
+    feat["rot"] = -1 if _is_rotation(perm) else 0
+    feat["rev"] = 1 if perm == tuple(idp[::-1]) else 0
+    feat["edit"] = _edit_distance(idp, perm)
+    feat["redit"] = feat["edit"] / len(idp)
+    return feat
+
+
+def predict_transposition_cost(shape, perm, coefs=None):
+    """
+    Given a shape and a permutation, predicts the cost of the
+    transposition.
+
+    :param shape: shape
+    :param perm: permutation
+    :param coefs: trained coefficients or None to get
+        the default ones
+    :return: dictionary of features
+    """
+    if coefs is None:
+        coefs = _ml_transpose_coefs
+    feat = compute_transposition_features(shape, perm)
+    res = 0
+    for k, v in feat.items():
+        res += v * coefs[k]
+    return max(0., res / 1000)
+
+
 class CachedEinsum:
     """
     Stores all the necessary information to cache the preprocessing
@@ -1643,6 +2019,7 @@ class CachedEinsum:
     :param optimize: finds the best letter permutation
     :param dtype: dtype
     :param decompose: to decompose Einsum operator or to keep it as is
+    :param strategy: optimization strategy (only `ml` is implemented)
     :param key: key used to cache this class
 
     The class creates the following attributes:
@@ -1657,12 +2034,13 @@ class CachedEinsum:
 
 
     def __init__(self, equation, opset=None, optimize=False,
-                 dtype=np.float32, decompose=True, key=None):
+                 dtype=np.float32, decompose=True, strategy="ml", key=None):
         self.equation = equation
         self.opset = opset
         self.optimize = optimize
         self.dtype = dtype
         self.decompose = decompose
+        self.strategy = strategy
         self.key = key
 
     def default_inputs(self, n=None):
@@ -1694,46 +2072,74 @@ class CachedEinsum:
         """
         if not self.optimize and not hasattr(self, 'equation_'):
             self.equation_ = self.equation
+        elif self.strategy == 'ml':
+            self.equation_ = self._build_optimize_ml()
         else:
-            # loops over all permutations
-            if self.equation.lower() != self.equation:
-                raise RuntimeError(
-                    "Only lower equation can be optimized, %r is not." % self.equation)
-            letters = list(
-                sorted(set(c for c in self.equation if "a" <= c <= "z")))
-            possible = list(permutations(letters))
-            possible.insert(0, letters)
-            subset = possible
-            best = []
-            confs = []
-            inputs = None
-            for perm in subset:
-                replace = {d: c for c, d in zip(letters, perm)}
-                eq = self.equation
-                for k, v in replace.items():
-                    eq = eq.replace(k, v.upper())
-                eq = eq.lower()
-                inst = CachedEinsum(eq, opset=self.opset, optimize=False, dtype=self.dtype,
-                                    decompose=self.decompose)
-                inst.build()
-                if inputs is None:
-                    inputs = inst.default_inputs()
-                    inst(*inputs)
-                ts = time.perf_counter()
-                for _ in range(0, 10):
-                    inst(*inputs)
-                delta = time.perf_counter() - ts
-                confs.append((delta, eq))
-                if len(best) < 10:
-                    best.append((delta, eq))
-                    best.sort()
-                elif delta < best[-1][0]:
-                    best[-1] = (delta, eq)
-                    best.sort()
-            self.optimized_ = best
-            self.timed_permutations_ = confs
-            self.equation_ = best[0][1]
+            raise ValueError(  # pragma error
+                "Unknown strategy %r." % self.strategy)
         self.build_runtime()
+
+    def _build_optimize_ml(self):
+        """
+        Selection the best equation by evaluation the sum of of the cost
+        of all permutations involved in the replacement of einsum operator.
+        """
+        # loops over all permutations
+        if self.equation.lower() != self.equation:
+            raise RuntimeError(
+                "Only lower equation can be optimized, %r is not." % self.equation)
+        letters = list(
+            sorted(set(c for c in self.equation if "a" <= c <= "z")))
+        subset = list(permutations(letters))
+        subset.insert(0, letters)
+        best = []
+        confs = []
+        inputs = None
+        for perm in subset:
+            replace = {d: c for c, d in zip(letters, perm)}
+            eq = self.equation
+            for k, v in replace.items():
+                eq = eq.replace(k, v.upper())
+            eq = eq.lower()
+            inst = CachedEinsum(eq, opset=self.opset,
+                                optimize=False, dtype=self.dtype,
+                                decompose=self.decompose)
+            inst.build()
+            if inputs is None:
+                inputs = inst.default_inputs()
+            if hasattr(inst, 'onnx_'):
+                onx = inst.onnx_
+            else:
+                inits = [
+                    ('X%d' % i, FloatTensorType(list(inputs[i].shape)))
+                    for i in range(len(inputs))]
+                onx = inst.graph_.to_onnx('Y', *inits, opset=self.opset)
+
+            rt = OnnxMicroRuntime(onx)
+            dict_inputs = {'X%d' % i: inp for i, inp in enumerate(inputs)}
+            out = rt.run(dict_inputs)
+
+            transposes = []
+            for node in onx.graph.node:  # pylint: disable=E1101
+                if node.op_type == 'Transpose':
+                    shape = [(d * 10 if d > 1 else d)
+                             for d in out[node.input[0]].shape]
+                    transposes.append(
+                        [shape, list(node.attribute[0].ints)])
+
+            delta = sum(max(0, predict_transposition_cost(*v))
+                        for v in transposes)
+
+            confs.append((delta, eq))
+            if len(best) < 10:
+                best.append((delta, eq))
+                best.sort()
+            elif delta < best[-1][0]:
+                best[-1] = (delta, eq)
+                best.sort()
+        self.optimized_ = best
+        self.timed_permutations_ = confs
+        return best[0][1]
 
     def build_onnx_einsum(self, input_names):
         """
@@ -1766,7 +2172,7 @@ class CachedEinsum:
         """
         # The conversion should not fail if onnxruntime is not here.
         # Delayed import.
-        from onnxruntime import InferenceSession  # pylint: disable=C0415
+        # from onnxruntime import InferenceSession  # pylint: disable=C0415
         if self.decompose:
             self.graph_ = decompose_einsum_equation(self.equation_)
 
@@ -1781,9 +2187,9 @@ class CachedEinsum:
             input_names = ['X%d' % i for i in range(n_inputs)]
             self.onnx_ = self.build_onnx_einsum(input_names)
             self.onnx_names_ = input_names
-        self.sess_ = InferenceSession(self.onnx_.SerializeToString())
-        self.runtime_ = lambda *inputs: self.sess_.run(
-            None, dict(zip(self.onnx_names_, inputs)))[0]
+        # self.sess_ = InferenceSession(self.onnx_.SerializeToString())
+        # self.runtime_ = lambda *inputs: self.sess_.run(
+        #     None, dict(zip(self.onnx_names_, inputs)))[0]
 
     def __call__(self, *inputs):
         """
@@ -1795,20 +2201,22 @@ class CachedEinsum:
         return self.runtime_(*inputs)
 
     @staticmethod
-    def build_einsum(equation, opset, optimize,
-                     dtype, decompose=True, key=None):
+    def build_einsum(equation, opset, optimize, dtype,
+                     decompose=True, strategy='ml', key=None):
         """
         Creates an instance of *CachedEinsum*.
         """
         inst = CachedEinsum(equation, opset=opset,
                             optimize=optimize, dtype=dtype,
-                            decompose=decompose, key=key)
+                            decompose=decompose, strategy=strategy,
+                            key=key)
         inst.build()
         return inst
 
 
 def optimize_einsum(equation, dtype, optimize=True,
-                    cache=True, opset=None, decompose=True):
+                    cache=True, opset=None, decompose=True,
+                    strategy='ml'):
     """
     This function returns an instance of CachedEinsum.
     It has an attribute `equation_` which holds a new equation
@@ -1828,8 +2236,8 @@ def optimize_einsum(equation, dtype, optimize=True,
         cached = einsum_cache.get(key, None)
     if cached is None:
         cached = CachedEinsum.build_einsum(
-            equation, opset, optimize,
-            dtype, decompose=decompose, key=key)
+            equation, opset, optimize, dtype, decompose=decompose,
+            key=key, strategy=strategy)
     else:
         cache = False
     if cache:
@@ -1857,6 +2265,7 @@ class EinsumOptimizer(GraphOptimizerBase):
     def __init__(self, decompose=True):  # pylint: disable=useless-super-delegation
         super(EinsumOptimizer, self).__init__()
         self._decompose = decompose
+        self._strategy = 'ml'
 
     def _optimize(self, graph):
         return self._apply_optimization(graph, self._optimize_at_current_graph_level)
@@ -1885,7 +2294,8 @@ class EinsumOptimizer(GraphOptimizerBase):
 
         # optimize the equation? decompose=True, False
         new_equation_obj = optimize_einsum(
-            equation, decompose=self._decompose, dtype=np.float32, opset=graph.opset)
+            equation, decompose=self._decompose, dtype=np.float32, opset=graph.opset,
+            strategy=self._strategy)
         if self._decompose:
             seq = decompose_einsum_equation(new_equation_obj.equation_)
             new_nodes = list(seq.to_tf2onnx(graph, node))
