@@ -162,9 +162,7 @@ class OnnxMicroRuntime:
                 axes = int(axes)
             else:
                 axes = tuple(axes) if len(axes) > 0 else None
-        return (np.prod(data, axis=axes,
-                        keepdims=keepdims,
-                        dtype=data.dtype), )
+        return (np.prod(data, axis=axes, keepdims=keepdims, dtype=data.dtype),)
 
     def _op_reducesum(self, data, axes, keepdims=None, noop_with_empty_axes=None):
         "Runtime for operator."
@@ -1540,6 +1538,8 @@ def decompose_einsum_equation(equation, *shapes):
         equation, *shapes, op_matmul='batch_dot')
 
     # Last step: clean unused nodes.
+    last_node = graph.last_added_op
+    graph.append(EinsumSubOp(last_node.full_dim, 'id', last_node))
     graph.mark_last_node()
     graph.simplify_mm_nodes()
     graph.clean_unused_nodes()
@@ -2127,7 +2127,7 @@ class CachedEinsum:
                     transposes.append(
                         [shape, list(node.attribute[0].ints)])
 
-            delta = sum(predict_transposition_cost(*v)
+            delta = sum(max(0, predict_transposition_cost(*v))
                         for v in transposes)
 
             confs.append((delta, eq))
