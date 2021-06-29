@@ -119,7 +119,7 @@ jobs:
     vmImage: 'vs2017-win2016'
   strategy:
     matrix:
-      # No python 2.x since no available ONNX package for Windows
+      ############ TF Keras Unit Tests ############
       Python36-onnx1.2:
         python.version: '3.6'
         ONNX_PATH: onnx==1.2.3
@@ -156,7 +156,27 @@ jobs:
         TENSORFLOW_PATH: tensorflow-cpu==2.5.0
         INSTALL_ORT: pip install onnxruntime==1.8.0
 
-    maxParallel: 3
+      ############ Pure Keras Unit Tests ############
+      Keras-Py36-tf1.15.0:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        KERAS: keras==2.2.5
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Keras-Py37-tf2.0.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.7.0
+        KERAS: keras==2.3.1
+        TENSORFLOW_PATH: tensorflow==2.0.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Keras-Py37-tf2.2.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        KERAS: keras==2.4.3
+        TENSORFLOW_PATH: tensorflow==2.2.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
 
   steps:
   - task: UsePythonVersion@0
@@ -179,6 +199,7 @@ jobs:
       pip install protobuf
       pip install h5py==2.9.0
       pip install %TENSORFLOW_PATH%
+      IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install pytest pytest-cov pytest-runner
       %INSTALL_ORT%
@@ -189,6 +210,7 @@ jobs:
       pip install -e .
       echo Test onnxruntime installation... && python -c "import onnxruntime"
       python -c "import onnxconverter_common"
+      IF NOT "%KERAS%"=="" (set TF_KERAS=0)
       pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
     displayName: 'pytest'
 
