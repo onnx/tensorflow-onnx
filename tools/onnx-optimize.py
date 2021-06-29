@@ -16,7 +16,8 @@ import onnx
 from onnx import helper
 
 from tf2onnx.graph import GraphUtil
-from tf2onnx import logging, optimizer
+from tf2onnx import logging, optimizer, constants
+from tf2onnx.late_rewriters import rewrite_channels_first, rewrite_channels_last
 
 
 logging.basicConfig(level=logging.INFO)
@@ -28,23 +29,32 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, help="onnx input model file")
     parser.add_argument("--output", help="output model file")
+    target_options = [constants.TARGET_CHANNELS_LAST, constants.TARGET_CHANNELS_FIRST]
+    parser.add_argument("--target", default=",".join(constants.DEFAULT_TARGET), choices=target_options,
+                        help="target platform")
     args = parser.parse_args()
+    args.target = args.target.split(",")
     return args
 
 
-def load_graph(fname):
+def load_graph(fname, target):
     model_proto = onnx.ModelProto()
     with open(fname, "rb") as f:
         data = f.read()
         model_proto.ParseFromString(data)
-    g = GraphUtil.create_graph_from_onnx_model(model_proto)
+    g = GraphUtil.create_graph_from_onnx_model(model_proto, target)
     return g, model_proto
 
 
 def main():
     args = get_args()
 
-    g, org_model_proto = load_graph(args.input)
+    g, org_model_proto = load_graph(args.input, args.target)
+
+    if g.is_target(constants.TARGET_CHANNELS_FIRST):
+        g.reset_nodes(rewrite_channels_first(g, g.get_nodes()))
+    if g.is_target(constants.TARGET_CHANNELS_LAST):
+        g.reset_nodes(rewrite_channels_last(g, g.get_nodes()))
 
     g = optimizer.optimize_graph(g)
 
