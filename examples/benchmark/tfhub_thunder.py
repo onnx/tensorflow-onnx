@@ -7,7 +7,7 @@ url = "https://tfhub.dev/google/movenet/singlepose/thunder/3?tf-hub-format=compr
 dest = "tf-thunder"
 name = "thunder"
 opset = 13
-onnx_name = os.path.join(dest, "esrgan-tf2-%d.onnx" % opset)
+onnx_name = os.path.join(dest, "%s-%d.onnx" % (name, opset))
 
 imgs = generate_random_images(shape=(1, 256, 256, 3), dtype=numpy.int32)
 

@@ -8,14 +8,13 @@ import os
 import sys
 import time
 import tarfile
-import zipfile
 import subprocess
 import datetime
 import numpy
 from tqdm import tqdm
 import tensorflow_hub as hub
 import onnxruntime as ort
-from tf2onnx import utils, convert
+from tf2onnx import utils
 
 
 def generate_random_images(shape=(100, 100), n=10):
@@ -80,14 +79,14 @@ def convert_model(model_name, output_path, opset=13, verbose=True):
     """
     if not os.path.exists(output_path):
         begin = datetime.datetime.now()
-        cmd = [sys.executable.replace("pythonw", "python"),
-               '-m', 'tf2onnx.convert', '--saved-model',
-               '"%s"' % model_name.replace("\\", "/"),
-               '--output', '"%s"' % output_path.replace("\\", "/"),
-               '--opset', "%d" % opset]
+        cmdl = ['-m', 'tf2onnx.convert', '--saved-model',
+                '"%s"' % model_name.replace("\\", "/"),
+                '--output', '"%s"' % output_path.replace("\\", "/"),
+                '--opset', "%d" % opset]
         if verbose:
-            print("cmd: %s" % " ".join(cmd))
-        pproc = subprocess.Popen(cmdl, shell=True, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            print("cmd: python %s" % " ".join(cmdl))
+        pproc = subprocess.Popen(cmdl, shell=True, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 executable=sys.executable.replace("pythonw", "python"))
         stdoutdata, stderrdata = pproc.communicate()
         if verbose:
             print('--OUT--')
@@ -99,7 +98,7 @@ def convert_model(model_name, output_path, opset=13, verbose=True):
 
 # Downloads the model
 url = "https://tfhub.dev/captain-pool/esrgan-tf2/1?tf-hub-format=compressed"
-dest = "tf-esrgan-tf2"
+dest = os.path.abspath("tf-esrgan-tf2")
 name = "esrgan-tf2"
 opset = 13
 onnx_name = os.path.join(dest, "esrgan-tf2-%d.onnx" % opset)
@@ -126,4 +125,6 @@ model = hub.load("https://tfhub.dev/captain-pool/esrgan-tf2/1")
 results_tf, duration_tf = measure_time(model, imgs)
 print("TF", len(imgs), duration_tf)
 
-print("ratio ORT / TF", sum(duration_ort) / sum(duration_tf))
+mean_ort = sum(duration_ort) / len(duration_ort)
+mean_tf = sum(duration_tf) / len(duration_tf)
+print("ratio ORT=%r / TF=%r = %r" % (mean_ort, mean_tf, mean_ort / mean_tf))

@@ -84,7 +84,7 @@ def convert_model(model_name, output_path, opset=13, verbose=True):
                 '--output', '"%s"' % os.path.abspath(output_path).replace("\\", "/"),
                 '--opset', "%d" % opset]
         if verbose:
-            print("cmd: %s" % " ".join(cmdl))
+            print("cmd: python %s" % " ".join(cmdl))
         pproc = subprocess.Popen(
             cmdl, shell=True, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             executable=sys.executable.replace("pythonw", "python"))
@@ -139,12 +139,14 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         for a in ort.get_outputs():
             print("  {}: {}, {}".format(a.name, a.type, a.shape))
 
+    # onnxruntime
     input_name = ort.get_inputs()[0].name
     fct_ort = lambda img: ort.run(None, {input_name: img})[0]
     results_ort, duration_ort = measure_time(fct_ort, imgs)
     if verbose:
         print("ORT", len(imgs), duration_ort)
 
+    # tensorflow
     import tensorflow_hub as hub
     from tensorflow import convert_to_tensor
     model = hub.load(url.split("?")[0])
@@ -159,6 +161,7 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         mean_tf = sum(duration_tf) / len(duration_tf)
         print("ratio ORT=%r / TF=%r = %r" % (mean_ort, mean_tf, mean_ort / mean_tf))
 
+    # checks discrepencies
     res = model(imgs_tf[0])
     if isinstance(res, dict):
         if len(res) != 1:
