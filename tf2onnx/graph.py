@@ -464,6 +464,8 @@ class Graph(object):
         # A list of index, output tuples of potential scan outputs in this graph
         # Used by the tflite while loop handler
         self.scan_outputs = []
+        # Used by lstm_tf2_rewriter to indicate this subgraph is an LSTM cell
+        self.lstm_rewriter_context = None
         self.func_inputs = []
         self.ragged_variant_list_reads = []
         self.ragged_variant_list_writes = []
