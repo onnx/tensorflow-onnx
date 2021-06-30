@@ -15,4 +15,5 @@ def main(opset=13):
     benchmark(url, dest, onnx_name, opset, imgs)
 
 
-main()
+if __name__ == "__main__":
+    main()
