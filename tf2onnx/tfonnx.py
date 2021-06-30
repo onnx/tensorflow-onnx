@@ -19,6 +19,7 @@ import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
 from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.tflite_rewriters import *  # pylint: disable=wildcard-import
+from tf2onnx.late_rewriters import rewrite_channels_last
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.tf_loader import is_function, resolve_functions, set_function
 from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
@@ -605,6 +606,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         rewrite_leakyrelu,
         rewrite_thresholded_relu,
         rewrite_conv2d_with_pad,
+        rewriter_lstm_tf2,
         rewrite_single_direction_lstm,
         # bi-directional
         rewrite_bi_direction_lstm,
@@ -640,6 +642,8 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         late_rewriters.append(rewrite_incomplete_type_support_rs5)
     if constants.TARGET_RS6 in target:
         late_rewriters.append(rewrite_incomplete_type_support_rs6)
+    if constants.TARGET_CHANNELS_LAST in target:
+        late_rewriters.append(rewrite_channels_last)
     if late_rewriters:
         run_rewriters(g, late_rewriters, continue_on_error)
 
