@@ -184,6 +184,35 @@ def find_opset(opset):
     return opset
 
 
+def get_subgraphs_from_onnx(model_proto):
+    """Returns an iterator over the graphs/subgraphs of a model (using dfs)"""
+    stack = [model_proto.graph]
+    while stack:
+        g = stack.pop()
+        yield g
+        for node in g.node:
+            for attr in node.attribute:
+                if hasattr(attr, "g"):
+                    stack.append(attr.g)
+                if hasattr(attr, "graphs"):
+                    stack.extend(attr.graphs)
+
+
+def initialize_name_counter(model_proto):
+    """Avoid name conflicts by initializing the counter used by make_name based on the provided model"""
+    suffix_regex = re.compile(r"__(\d+)(:\d+)?$")
+    def avoid_name(name):
+        global INTERNAL_NAME
+        suffix = suffix_regex.search(name)
+        if suffix:
+            INTERNAL_NAME = max(INTERNAL_NAME, int(suffix.group(1)) + 1)
+    for g in get_subgraphs_from_onnx(model_proto):
+        for n in g.node:
+            avoid_name(n.name)
+            for out in n.output:
+                avoid_name(out)
+
+
 def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False,
                     external_tensor_storage=None):
     """Save onnx model as file. Save a pbtxt file as well if as_text is True"""
