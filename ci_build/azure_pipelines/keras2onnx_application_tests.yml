@@ -11,17 +11,6 @@ jobs:
     vmImage: 'Ubuntu-16.04'
   strategy:
     matrix:
-      Python36-onnx1.2:
-        python.version: '3.6'
-        ONNX_PATH: onnx==1.5.0
-        INSTALL_KERAS: pip install keras==2.1.6
-        UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.8.0
-        INSTALL_KERAS_RESNET:
-        INSTALL_TRANSFORMERS:
-        NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py"
-
       Python36-onnx1.5:
         python.version: '3.6'
         ONNX_PATH: onnx==1.5.0
@@ -114,14 +103,6 @@ jobs:
       cd keras2onnx_applications/nightly_build
       $(NIGHTLY_BUILD_TEST)
     displayName: 'pytest'
-
-  - script: |
-      pip install -e .
-      python -c "import onnxruntime"
-      coverage run --include=keras2onnx/* -m pytest keras2onnx_tests/test_layers.py
-      coverage report -m
-      coverage html
-    displayName: 'coverage'
 
   - task: PublishTestResults@2
     inputs:
