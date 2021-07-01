@@ -86,6 +86,7 @@ jobs:
       $(INSTALL_KERAS)
       pip install git+https://github.com/microsoft/onnxconverter-common
       $(INSTALL_ORT)
+      pip install Pillow==8.2.0
       pip install opencv-python
       pip install tqdm
       pip install keras-segmentation==0.2.0
