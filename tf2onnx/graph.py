@@ -464,6 +464,8 @@ class Graph(object):
         # A list of index, output tuples of potential scan outputs in this graph
         # Used by the tflite while loop handler
         self.scan_outputs = []
+        # Used by lstm_tf2_rewriter to indicate this subgraph is an LSTM cell
+        self.lstm_rewriter_context = None
         self.func_inputs = []
         self.ragged_variant_list_reads = []
         self.ragged_variant_list_writes = []
@@ -1124,13 +1126,29 @@ class Graph(object):
         # create output_tensor_values
         output_tensor_values = self.make_onnx_graph_io(self.outputs)
 
+        tensor_value_info = []
+
+        for op in ops:
+            if op.domain in [constants.ONNX_DOMAIN, constants.AI_ONNX_ML_DOMAIN]:
+                continue
+            # We still don't 100% trust the accuracy of all the shapes in graph.py, but for custom ops they are
+            # almost certainly accurate and onnx has no other way of knowing them.
+            for out in op.output:
+                if out == '' or out in self.outputs:
+                    continue
+                dtype = self.get_dtype(out)
+                shape = self.get_shape(out)
+                v = utils.make_onnx_inputs_outputs(out, dtype, shape)
+                tensor_value_info.append(v)
+
         # create graph proto
         graph = helper.make_graph([op.op for op in ops],
                                   graph_name,
                                   input_tensor_values,
                                   output_tensor_values,
                                   initializer=initializers,
-                                  doc_string=doc)
+                                  doc_string=doc,
+                                  value_info=tensor_value_info)
 
         return graph
 
@@ -1628,10 +1646,11 @@ class GraphUtil(object):
         return kwargs
 
     @staticmethod
-    def create_graph_from_onnx_model(onnx_model_proto):
+    def create_graph_from_onnx_model(onnx_model_proto, target=None):
         """Create Graph loading onnx model proto."""
         # apply shape inference on the model
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
+        utils.initialize_name_counter(inferred_model)
         graph_proto = inferred_model.graph
 
         opset_version = None
@@ -1644,11 +1663,11 @@ class GraphUtil(object):
                 extra_opset.append(opset)
 
         utils.make_sure(opset_version is not None, "opset version is not specified for onnx domain")
-        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version, extra_opset)
+        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version, extra_opset, target)
         return main_graph
 
     @staticmethod
-    def create_graph_from_onnx_graph(graph_proto, opset_version=None, extra_opset=None):
+    def create_graph_from_onnx_graph(graph_proto, opset_version=None, extra_opset=None, target=None):
         """Create Graph loading onnx graph proto."""
         output_shapes = {}
         output_dtypes = {}
@@ -1675,7 +1694,7 @@ class GraphUtil(object):
         for n in graph_proto.output:
             output_names.append(n.name)
 
-        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, extra_opset, None, output_names)
+        g = Graph(nodes_to_append, output_shapes, output_dtypes, target, opset_version, extra_opset, None, output_names)
         const_nodes = GraphUtil._parse_graph_initializer(g, graph_proto)
         GraphUtil._parse_graph_input(g, graph_proto, [n.name for n in const_nodes])
 
@@ -1702,6 +1721,10 @@ class GraphUtil(object):
         for shape_info in value_infos:
             type_proto = shape_info.type
             elem_type = type_proto.tensor_type.elem_type
+            output_dtypes[shape_info.name] = elem_type
+            if not type_proto.tensor_type.HasField("shape"):
+                output_shapes[shape_info.name] = None
+                continue
             shape = type_proto.tensor_type.shape
             tuned_shape = []
             for d in shape.dim:
@@ -1713,7 +1736,6 @@ class GraphUtil(object):
                     # it is found, some unknown dims is missing after inference.
                     tuned_shape.append(-1)
             output_shapes[shape_info.name] = tuned_shape
-            output_dtypes[shape_info.name] = elem_type
 
         return output_shapes, output_dtypes
 

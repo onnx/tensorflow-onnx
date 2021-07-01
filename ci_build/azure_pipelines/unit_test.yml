@@ -6,7 +6,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         python_versions: ['3.8']
-        tf_versions: ['2.5.0rc1']
+        tf_versions: ['2.5.0']
         onnx_opsets: ['']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'True'
@@ -30,7 +30,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         python_versions: ['3.8']
-        tf_versions: ['2.5.0rc1']
+        tf_versions: ['2.5.0']
         onnx_opsets: ['']
         job:
           steps:

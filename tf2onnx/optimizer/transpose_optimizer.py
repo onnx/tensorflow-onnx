@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import numpy as np
 import onnx
-from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW, NCDHW_TO_NDHWC, NDHWC_TO_NCDHW
+from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW, NCDHW_TO_NDHWC, NDHWC_TO_NCDHW, TARGET_CHANNELS_LAST
 from .. import utils
 from .optimizer_base import GraphOptimizerBase
 
@@ -362,14 +362,19 @@ class TransposeOptimizer(GraphOptimizerBase):
         perm = trans.get_attr_value("perm")
         optimization_gains = 0
         removed_nchws = 0
+        perm_to_push_down = [NCHW_TO_NHWC, NCDHW_TO_NDHWC]
+        perm_to_push_up = [NHWC_TO_NCHW, NDHWC_TO_NCDHW]
+        if self._g.is_target(TARGET_CHANNELS_LAST):
+            perm_to_push_down, perm_to_push_up = perm_to_push_up, perm_to_push_down
+
         for n, inp_id in zip(node.inputs, node.input):
             if is_tranpose_of_type(n, perm):
                 optimization_gains += self._cost_to_transpose(n.inputs[0], n.input[0])
-                if perm in [NCHW_TO_NHWC, NCDHW_TO_NDHWC]:
+                if perm in perm_to_push_down:
                     removed_nchws += 1
             else:
                 optimization_gains -= self._cost_to_transpose(n, inp_id)
-                if perm in [NHWC_TO_NCHW, NDHWC_TO_NCDHW]:
+                if perm in perm_to_push_up:
                     removed_nchws -= 1
         if removed_nchws != 0:
             # Always push nchw transposes if possible

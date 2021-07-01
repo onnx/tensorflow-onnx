@@ -106,8 +106,23 @@ class EinsumOptimizerTests(Tf2OnnxBackendTestBase):
     def test_np_test_broadcasting_dot_cases2(self):
         f = np.arange(7 * 55).reshape(7, 11, 5).astype(np.float32)
         g = np.arange(30).reshape(2, 3, 5).astype(np.float32)
-        self.common_einsum('obk,ijk->ioj', operands=[f, g],
-                           catch_errors=False)
+        self.common_einsum('obk,ijk->ioj', operands=[f, g], catch_errors=True)
+
+    @check_opset_min_version(13, "Unsqueeze")
+    def test_np_test_broadcasting_double_transpose(self):
+        f = np.arange(10).reshape(2, 5).astype(np.float32)
+        g = np.arange(5).astype(np.float32)
+        self.common_einsum('ab,b->ab', operands=[f, g], catch_errors=True)
+        self.common_einsum('ab,b->ba', operands=[f, g], catch_errors=True)
+
+    @check_opset_min_version(13, "Unsqueeze")
+    def test_np_test_broadcasting_dot_cases3(self):
+        f = np.arange(12).reshape(2, 3, 2).astype(np.float32)
+        g = np.arange(6).reshape(2, 3).astype(np.float32)
+        self.common_einsum('abi,ab->ab', operands=[f, g], catch_errors=True)
+        f = np.arange(12).reshape(2, 3, 2).astype(np.float32)
+        g = np.arange(12).reshape(2, 3, 2).astype(np.float32)
+        self.common_einsum('abi,abq->abq', operands=[f, g], catch_errors=True)
 
     @check_opset_min_version(12, "Einsum")
     def test_np_test_exp(self):

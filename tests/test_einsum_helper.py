@@ -328,6 +328,9 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         self.optimize_compare('baa,dcf,af,cde->be')
         self.optimize_compare('fff,fae,bef,def->abd')
 
+    def test_abbba(self):
+        decompose_einsum_equation("ab,b->ba")
+
 
 if __name__ == "__main__":
     unittest.main()
