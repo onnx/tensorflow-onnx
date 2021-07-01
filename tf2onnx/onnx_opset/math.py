@@ -536,6 +536,15 @@ class CumSum:
 @tf_op("Round")
 class Round:
     @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        # Not exactly nearest even but close enough
+        np_dtype = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0]))
+        const_half = ctx.make_const(utils.make_name("const_half"), np.array(0.5, np_dtype)).output[0]
+        add_node = ctx.make_node("Add", [node.input[0], const_half], op_name_scope=node.name).output[0]
+        node.type = "Floor"
+        ctx.replace_inputs(node, [add_node])
+
+    @classmethod
     def version_11(cls, ctx, node, **kwargs):
         pass
 

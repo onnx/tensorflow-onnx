@@ -4337,6 +4337,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    def test_round_approx(self):
+        # In lower opsets there is no Round, but we can approximate it forgoing nearest even
+        x_val = np.array([-0.7, -0.5, -0.0, 0.0, +0.0, 0.3, 1.5, 0.7, float('nan')], dtype=np.float32)
+        def func(x):
+            x_ = tf.round(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(11, "Det")
     @unittest.skip("unclear how this is called in tf-2, fix later")
     def test_determinant(self):
