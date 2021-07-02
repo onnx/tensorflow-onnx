@@ -11,16 +11,17 @@ import tarfile
 import zipfile
 import subprocess
 import datetime
+from collections import OrderedDict
 import numpy
 from tqdm import tqdm
 import onnxruntime
 
 
-def generate_random_images(shape=(1, 100, 100, 3), n=10, dtype=numpy.float32):
+def generate_random_images(shape=(1, 100, 100, 3), n=10, dtype=numpy.float32, scale=255):
     imgs = []
     for i in range(n):
         sh = shape
-        img = numpy.clip(numpy.abs(numpy.random.randn(*sh)), 0, 1) * 255
+        img = numpy.clip(numpy.abs(numpy.random.randn(*sh)), 0, 1) * scale
         img = img.astype(dtype)
         imgs.append(img)
     return imgs
@@ -180,8 +181,11 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
             print("  {}: {}, {}".format(a.name, a.type, a.shape))
 
     # onnxruntime
-    input_name = ort.get_inputs()[0].name
-    fct_ort = lambda img: ort.run(None, {input_name: img})[0]
+    if isinstance(imgs[0], dict):
+        fct_ort = lambda img: ort.run(None, img)[0]
+    else:
+        input_name = ort.get_inputs()[0].name
+        fct_ort = lambda img: ort.run(None, {input_name: img})[0]
     results_ort, duration_ort = measure_time(fct_ort, imgs)
     if verbose:
         print("ORT", len(imgs), duration_ort)
@@ -189,10 +193,15 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
     # tensorflow
     import tensorflow_hub as hub
     from tensorflow import convert_to_tensor
+    if isinstance(imgs[0], OrderedDict):
+        imgs_tf = [
+            OrderedDict((k, convert_to_tensor(v)) for k, v in img.items())
+            for img in imgs]
+    else:
+        imgs_tf = [convert_to_tensor(img) for img in imgs]
     model = hub.load(url.split("?")[0])
     if signature is not None:
         model = model.signatures['serving_default']
-    imgs_tf = [convert_to_tensor(img) for img in imgs]
     results_tf, duration_tf = measure_time(model, imgs_tf)
 
     if verbose:
@@ -205,7 +214,9 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
     res = model(imgs_tf[0])
     if isinstance(res, dict):
         if len(res) != 1:
-            raise NotImplementedError("TF output contains more than one output: %r." % res)
+            raise NotImplementedError(
+                "TF output contains more than one output=%r and output names=%r." % (
+                    res, [o.name for o in ort.get_outputs()]))
         output_name = ort.get_outputs()[0].name
         if output_name not in res:
             raise AssertionError("Unable to find output %r in %r." % (output_name, list(sorted(res))))
@@ -252,10 +263,15 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
     # tensorflow
     import tensorflow_hub as hub
     from tensorflow import convert_to_tensor
+    if isinstance(imgs[0], OrderedDict):
+        imgs_tf = [
+            OrderedDict((k, convert_to_tensor(v)) for k, v in img.items())
+            for img in imgs]
+    else:
+        imgs_tf = [convert_to_tensor(img) for img in imgs]
     model = hub.load(url.split("?")[0])
     if signature is not None:
         model = model.signatures['serving_default']
-    imgs_tf = [convert_to_tensor(img) for img in imgs]
     results_tf, duration_tf = measure_time(model, imgs_tf)
 
     if verbose:
