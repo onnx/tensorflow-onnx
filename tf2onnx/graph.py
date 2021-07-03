@@ -503,35 +503,34 @@ class Graph(object):
 
         self.reset_nodes(ops)
 
-        if not is_subgraph:
-            # add identity node after each output, in case it is renamed during conversion.
-            for o in self.outputs:
-                n = self.get_node_by_output_in_current_graph(o)
-                if n.is_graph_input():
-                    # Don't add identity if the node is also an input. We want to keep input names the same.
-                    continue
-                new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
-                n_shapes = n.output_shapes
-                n_dtypes = n.output_dtypes
-                body_graphs = n.graph.contained_graphs.pop(n.name, None)
-                self.remove_node(n.name)
+        # add identity node after each output, in case it is renamed during conversion.
+        for o in self.outputs:
+            n = self.get_node_by_output_in_current_graph(o)
+            if n.is_graph_input():
+                # Don't add identity if the node is also an input. We want to keep input names the same.
+                continue
+            new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
+            n_shapes = n.output_shapes
+            n_dtypes = n.output_dtypes
+            body_graphs = n.graph.contained_graphs.pop(n.name, None)
+            self.remove_node(n.name)
 
-                new_outputs = [output if output != o else new_output_name for output in n.output]
-                # domain should be passed to new node
-                branches = {}
-                if body_graphs:
-                    for attr_name, body_graph in body_graphs.items():
-                        body_graph.parent_graph = self
-                        branches[attr_name] = body_graph
+            new_outputs = [output if output != o else new_output_name for output in n.output]
+            # domain should be passed to new node
+            branches = {}
+            if body_graphs:
+                for attr_name, body_graph in body_graphs.items():
+                    body_graph.parent_graph = self
+                    branches[attr_name] = body_graph
 
-                _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
-                                   skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
-                                   domain=n.domain, branches=branches)
+            _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
+                                skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
+                                domain=n.domain, branches=branches)
 
-                self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
-                self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
-                self.copy_shape(new_output_name, o)
-                self.copy_dtype(new_output_name, o)
+            self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
+            self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
+            self.copy_shape(new_output_name, o)
+            self.copy_dtype(new_output_name, o)
 
     def create_new_graph_with_same_config(self):
         """Create a clean graph inheriting current graph's configuration."""
