@@ -85,6 +85,7 @@ jobs:
       pip install $(ONNX_PATH)
       pip install h5py==2.9.0
       pip install numpy==1.19
+      pip install parameterized
       pip install $(TENSORFLOW_PATH)
       if [[ ! -z $KERAS ]];
       then
@@ -105,7 +106,7 @@ jobs:
       then
         export TF_KERAS=0
       fi
-      pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
+      pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
     displayName: 'pytest'
 
   - task: PublishTestResults@2
@@ -198,6 +199,7 @@ jobs:
       pip uninstall -y protobuf
       pip install protobuf
       pip install h5py==2.9.0
+      pip install parameterized
       pip install %TENSORFLOW_PATH%
       IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install git+https://github.com/microsoft/onnxconverter-common
@@ -211,7 +213,7 @@ jobs:
       echo Test onnxruntime installation... && python -c "import onnxruntime"
       python -c "import onnxconverter_common"
       IF NOT "%KERAS%"=="" (set TF_KERAS=0)
-      pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
+      pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
     displayName: 'pytest'
 
   - task: PublishTestResults@2
