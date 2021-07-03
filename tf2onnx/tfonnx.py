@@ -471,23 +471,22 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                            target, {}, tensors_to_rename, is_tflite=True, dequantize=dequantize)
         return g
 
-    if not is_subgraph:
-        # make tf2onnx internal subgraphs from the tensorflow subgraphs
-        ordered_func = resolve_functions(tf_graph)
-        subgraphs = []
-        for func in ordered_func:
-            f_inputs_names = [t.name for t in func.inputs]
-            f_output_names = [t.name for t in func.outputs]
+    # make tf2onnx internal subgraphs from the tensorflow subgraphs
+    ordered_func = resolve_functions(tf_graph)
+    subgraphs = []
+    for func in ordered_func:
+        f_inputs_names = [t.name for t in func.inputs]
+        f_output_names = [t.name for t in func.outputs]
 
-            outputs_to_values, _ = compute_const_folding_using_tf(func, const_node_values, output_names)
+        outputs_to_values, _ = compute_const_folding_using_tf(func, const_node_values, output_names)
 
-            onnx_nodes, _, _, output_shapes, dtypes, _ = \
-                tensorflow_to_onnx(func, shape_override, const_node_values, ignore_default, use_default)
+        onnx_nodes, _, _, output_shapes, dtypes, _ = \
+            tensorflow_to_onnx(func, shape_override, const_node_values, ignore_default, use_default)
 
-            fg = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_inputs_names, f_output_names,
-                       is_subgraph=True, graph_name=func.name)
-            fold_constants_using_tf(fg, outputs_to_values)
-            subgraphs.append(fg)
+        fg = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_inputs_names, f_output_names,
+                   is_subgraph=True, graph_name=func.name)
+        fold_constants_using_tf(fg, outputs_to_values)
+        subgraphs.append(fg)
 
     is_func = is_function(tf_graph)
     if not is_func:
