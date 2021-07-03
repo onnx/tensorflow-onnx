@@ -2,7 +2,7 @@
 
 import os
 os.environ["PYTHONPATH"] = \
-    os.environ.get("PYTHONPATH", "") + os.pathsep + "../../keras2onnx_tests" + os.pathsep + "../../"
+    os.environ.get("PYTHONPATH", "") + os.pathsep + "../../keras2onnx_unit_tests" + os.pathsep + "../../../"
 
 files = ['test_keras_applications_v2.py', 'test_transformers.py', 'test_chatbot.py', 'test_efn.py', \
          'test_resnext.py']

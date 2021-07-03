@@ -100,7 +100,7 @@ jobs:
       pip install -e .
       python -c "import onnxruntime"
       pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
-      cd keras2onnx_applications/nightly_build
+      cd tests/keras2onnx_applications/nightly_build
       $(NIGHTLY_BUILD_TEST)
     displayName: 'pytest'
 
