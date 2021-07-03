@@ -20,7 +20,7 @@ from onnxconverter_common.onnx_fx import Graph
 from onnxconverter_common.onnx_fx import GraphFunctionType as _Ty
 
 from os.path import dirname, abspath
-yolo3_dir = os.path.join(os.path.dirname(__file__), '../../keras-yolo3')
+yolo3_dir = os.path.join(os.path.dirname(__file__), '../../../keras-yolo3')
 if os.path.exists(yolo3_dir):
     sys.path.insert(0, yolo3_dir)
 

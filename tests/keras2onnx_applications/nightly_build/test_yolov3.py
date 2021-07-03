@@ -16,7 +16,7 @@ model_file_name = 'yolov3.h5'
 YOLOV3_TINY_WEIGHTS_PATH = r'https://lotus.blob.core.windows.net/converter-models/yolov3-tiny.h5'
 tiny_model_file_name = 'yolov3-tiny.h5'
 
-sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../yolov3'))
+sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../yolov3'))
 from yolov3 import YOLO, convert_model
 
 from distutils.version import StrictVersion
@@ -47,7 +47,7 @@ class TestYoloV3(unittest.TestCase):
                      "NonMaxSuppression op is not supported for onnx < 1.5.0.")
     def test_yolov3(self):
         img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
-        yolo3_yolo3_dir = os.path.join(os.path.dirname(__file__), '../../keras-yolo3/yolo3')
+        yolo3_yolo3_dir = os.path.join(os.path.dirname(__file__), '../../../keras-yolo3/yolo3')
         try:
             import onnxruntime
         except ImportError:
