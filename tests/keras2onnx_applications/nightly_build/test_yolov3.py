@@ -16,7 +16,7 @@ model_file_name = 'yolov3.h5'
 YOLOV3_TINY_WEIGHTS_PATH = r'https://lotus.blob.core.windows.net/converter-models/yolov3-tiny.h5'
 tiny_model_file_name = 'yolov3-tiny.h5'
 
-sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../yolov3'))
+sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../yolov3'))
 from yolov3 import YOLO, convert_model
 
 from distutils.version import StrictVersion

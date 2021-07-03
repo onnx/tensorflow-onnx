@@ -22,9 +22,9 @@ jobs:
         INSTALL_TRANSFORMERS:
         NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py"
 
-      Python37:
+      Python37-onnx1.6:
         python.version: '3.7.3'
-        ONNX_PATH: onnx==1.9.0
+        ONNX_PATH: onnx==1.6.0
         INSTALL_KERAS: pip install keras==2.3.1
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
@@ -33,9 +33,9 @@ jobs:
         INSTALL_TRANSFORMERS:
         NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py"
 
-      Python37-official-ort:
+      Python37-onnx1.9:
         python.version: '3.7.3'
-        ONNX_PATH: onnx==1.6.0
+        ONNX_PATH: onnx==1.9.0
         INSTALL_KERAS: pip install keras==2.3.1
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
@@ -71,6 +71,7 @@ jobs:
       pip install $(ONNX_PATH)
       pip install h5py==2.9.0
       pip install numpy==1.19
+      pip install parameterized
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
       pip install git+https://github.com/microsoft/onnxconverter-common
@@ -99,7 +100,7 @@ jobs:
   - script: |
       pip install -e .
       python -c "import onnxruntime"
-      pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
+      pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
       cd tests/keras2onnx_applications/nightly_build
       $(NIGHTLY_BUILD_TEST)
     displayName: 'pytest'
