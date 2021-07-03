@@ -874,6 +874,23 @@ class Graph(object):
     def get_tensor_value(self, output, as_list=True):
         return self.get_node_by_output(output).get_tensor_value(as_list)
 
+    def rename_tensors(self, tensors_to_rename):
+        """Replace tensor names within nodes and graph inputs/outputs"""
+        def rename_list(l):
+            return [tensors_to_rename.get(t, t) for t in l]
+
+        def rename_keys(d):
+            return {tensors_to_rename.get(k, k): v for k, v in d.items()}
+
+        self._output_to_node_name = rename_keys(self._output_to_node_name)
+        self._output_to_consumers = rename_keys(self._output_to_consumers)
+        self._dtypes = rename_keys(self._dtypes)
+        self._output_shapes = rename_keys(self._output_shapes)
+        self.outputs = rename_list(self.outputs)
+        for node in self._nodes:
+            node._input = rename_list(node._input)
+            node._output = rename_list(node._output)
+
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
         utils.make_sure(new_name not in self._nodes_by_name, "node %s not unique ", new_name)
@@ -1232,15 +1249,23 @@ class Graph(object):
             return []
         return val
 
-    def dump_node_statistics(self):
+    def dump_node_statistics(self, include_attrs=False, include_subgraphs=True):
+        """Return a counter of op types (and optionally attribute names) within the graph"""
         op_cnt = collections.Counter()
+        attr_cnt = collections.Counter()
         for n in self.get_nodes():
             op_cnt[n.type] += 1
+            for k in n.attr.keys():
+                attr_cnt[k] += 1
             body_graphs = n.get_body_graphs()
-            if body_graphs:
+            if body_graphs and include_subgraphs:
                 for b_g in body_graphs.values():
-                    op_cnt += b_g.dump_node_statistics()
+                    g_op_cnt, g_attr_cnt = b_g.dump_node_statistics(include_attrs=True, include_subgraphs=True)
+                    op_cnt += g_op_cnt
+                    attr_cnt += g_attr_cnt
 
+        if include_attrs:
+            return op_cnt, attr_cnt
         return op_cnt
 
     def remove_input(self, node, to_be_removed, input_index=None):
