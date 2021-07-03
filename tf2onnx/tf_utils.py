@@ -45,6 +45,12 @@ TF_TO_ONNX_DTYPE = {
 }
 
 
+ONNX_TO_TF_DTYPE = {}
+for k, v in TF_TO_ONNX_DTYPE.items():
+    if v not in ONNX_TO_TF_DTYPE:
+        ONNX_TO_TF_DTYPE[v] = k
+
+
 def tf_to_onnx_tensor(tensor, name=""):
     """Convert tensorflow tensor to onnx tensor."""
     np_data = get_tf_tensor_data(tensor)
@@ -338,30 +344,35 @@ def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
             return read_tf_node_attrs(node)
 
 
+# ignore the following attributes
+TF_IGNORED_NODE_ATTRS = {
+    "T", "unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
+    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
+    "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
+    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
+    "T_threshold", "shape_type", "_lower_using_switch_merge",
+    "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
+    "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
+    "Toutput_types", "dense_shapes", "Tdense", "Tsegmentids", "Tshift", "Tnumsegments", "SrcT",
+    "Tcomplex", "Treal",  # For RFFT, Tcomplex is ignored because
+                            # onnx.helper.make_node fails,
+                            # TODO: it should be added back.
+}
+
+TF_SUBGRAPH_ATTRS = {
+    "body", "cond", "then_branch", "else_branch", "f"
+}
+
+
 def read_tf_node_attrs(node):
     """Given a tf Node, returns a dict of attribute names to values"""
     attr = {}
     attr_cnt = collections.Counter()
 
-    # ignore the following attributes
-    ignored_attr = {"T", "unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
-                    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
-                    "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
-                    "T_threshold", "shape_type", "_lower_using_switch_merge",
-                    "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
-                    "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
-                    "Toutput_types", "dense_shapes", "Tdense", "Tsegmentids", "Tshift", "Tnumsegments", "SrcT",
-                    "body", "cond", "then_branch", "else_branch", "f",
-                    "Tcomplex", "Treal",  # For RFFT, Tcomplex is ignored because
-                                          # onnx.helper.make_node fails,
-                                          # TODO: it should be added back.
-                    }
-
     for a in node.node_def.attr:
         attr_cnt[a] += 1
         value = get_tf_node_attr(node, a)
-        if a in ignored_attr or isinstance(value, tensor_pb2.TensorProto):
+        if a in TF_IGNORED_NODE_ATTRS or a in TF_SUBGRAPH_ATTRS or isinstance(value, tensor_pb2.TensorProto):
             pass
         elif a == "shape":
             shape = get_tf_shape_attr(node)
@@ -417,7 +428,7 @@ def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=Non
             if a == "T":
                 if value and not isinstance(value, list):
                     dtypes[node.name] = map_tf_dtype(value)
-            elif a in {"body", "cond", "then_branch", "else_branch", "f"}:
+            elif a in TF_SUBGRAPH_ATTRS:
                 input_shapes = [inp.get_shape() for inp in node.inputs]
                 nattr = get_tf_node_attr(node, a)
                 attr[a] = nattr.name
