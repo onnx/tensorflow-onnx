@@ -5369,6 +5369,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
+    @skip_tflite("FlexRFFT2D")
+    def test_rfft2d_ops(self):
+
+        x_val = make_xval([3, 4]).astype(np.float32)
+        print(tf.signal.rfft2d(x_val))
+        
+        def func1(x):
+            op_ = tf.signal.rfft2d(x)
+            return tf.abs(op_, name=_TFOUTPUT)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+
+        def func2(x):
+            op_ = tf.signal.rfft2d(x)
+            return tf.cos(op_, name=_TFOUTPUT)
+        with self.assertRaises(ValueError):
+            self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
+
+        def func3(x):
+            op_ = tf.signal.rfft2d(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+        with self.assertRaises(ValueError):
+            self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
     @check_opset_min_version(11, "range")
     def test_fft_ops(self):
         x_val = make_xval([3, 4]).astype(np.float32)
@@ -5394,4 +5418,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
+    cl = BackendTests()
+    cl.setUp()
+    cl.test_rfft2d_ops()
     unittest_main()
