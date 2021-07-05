@@ -36,7 +36,7 @@ class CommonFFTOp:
         onnx_pb.TensorProto.DOUBLE,
         onnx_pb.TensorProto.COMPLEX64,
         onnx_pb.TensorProto.COMPLEX128,
-    ]    
+    ]
 
     @classmethod
     def any_version(cls, const_length, opset, ctx, node, axis=None, **kwargs):
@@ -66,7 +66,6 @@ class CommonFFTOp:
                 cst = _DFT_cst(x.shape[0], fft_length)
                 size = fft_length // 2 + 1
                 return np.dot(cst[:, :fft_length], x[:fft_length]).T[:, :size]
-    
 
         Real version, first axis is (real, imag) part:
 
@@ -225,9 +224,12 @@ class CommonFFTOp:
                 new_shape = list(shape)
                 new_shape[-2] = size
                 if opset >= 10:
-                    cst_axis = ctx.make_const(name=utils.make_name('CPLX_csta'), np_val=np.array([-2], dtype=np.int64))
-                    cst_zero = ctx.make_const(name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
-                    cst_length = ctx.make_const(name=utils.make_name('CPLX_cstl'), np_val=np.array([size], dtype=np.int64))
+                    cst_axis = ctx.make_const(
+                        name=utils.make_name('CPLX_csta'), np_val=np.array([-2], dtype=np.int64))
+                    cst_zero = ctx.make_const(
+                        name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
+                    cst_length = ctx.make_const(
+                        name=utils.make_name('CPLX_cstl'), np_val=np.array([size], dtype=np.int64))
                     mult = ctx.make_node(
                         "Slice", inputs=[mult.output[0], cst_zero.name, cst_length.name, cst_axis.name],
                         name=utils.make_name('CPLX_S_' + node.name + 'rfft'))
@@ -262,7 +264,7 @@ class RFFTOp(CommonFFTOp):
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
-        # Slice changed in opset 10. 
+        # Slice changed in opset 10.
         return cls.any_version(True, 10, ctx, node, **kwargs)
 
     @classmethod
@@ -326,11 +328,11 @@ class CommonFFT2DOp(CommonFFTOp):
             consumer_types == {'ComplexAbs'},
             "Current implementation of RFFT2D only allows ComplexAbs as consumer not %r",
             consumer_types)
-        
+
         # First FFT
         last_node0 = cls.any_version(const_length, opset, ctx, node, axis=1, **kwargs)
         last_node_name = last_node0.output[0]
-       
+
         ind0 = ctx.make_const(name=utils.make_name('cst0'), np_val=np.array([0], dtype=np.int64))
         ind1 = ctx.make_const(name=utils.make_name('cst1'), np_val=np.array([1], dtype=np.int64))
         real_part = ctx.make_node(
@@ -339,10 +341,10 @@ class CommonFFT2DOp(CommonFFTOp):
         imag_part = ctx.make_node(
             'Gather', inputs=[last_node_name, ind1.name], attr=dict(axis=0),
             name=utils.make_name('FFT2D_Imag_' + node.name))
-        
+
         real_node = cls.any_version(const_length, opset, ctx, real_part, axis=0, **kwargs)
         imag_node = cls.any_version(const_length, opset, ctx, imag_part, axis=0, **kwargs)
-        
+
         # Extract real and imaginary parts, then applies the FFT in the other dimensions on each side.
         real_real_part = ctx.make_node(
             'Gather', inputs=[real_node.output[0], ind0.name], attr=dict(axis=0),
@@ -357,7 +359,7 @@ class CommonFFT2DOp(CommonFFTOp):
         imag_imag_part = ctx.make_node(
             'Gather', inputs=[imag_node.output[0], ind1.name], attr=dict(axis=0),
             name=utils.make_name('FFT2D_I_Imag_' + node.name))
-        
+
         # Assemble all parts
         # w = a + ib
         # y1 = RFFT(a) = c + id, y2 = RFFT(b) = e + if
@@ -365,7 +367,6 @@ class CommonFFT2DOp(CommonFFTOp):
 
         new_real_node = ctx.make_node('Sub', inputs=[real_real_part.output[0], imag_imag_part.output[0]])
         new_imag_node = ctx.make_node('Add', inputs=[real_imag_part.output[0], imag_real_part.output[0]])
-        
         if opset >= 13:
             angle_2d_real = ctx.make_node("Unsqueeze", inputs=[new_real_node.output[0], ind0.name],
                                           name=utils.make_name('CPLX_' + node.name + 'angles2d'))
@@ -378,7 +379,7 @@ class CommonFFT2DOp(CommonFFTOp):
             angle_2d_imag = ctx.make_node("Unsqueeze", inputs=[new_imag_node.output[0]],
                                           name=utils.make_name('CPLX_' + node.name + 'angles2d'),
                                           attr={'axes': [0]})
-        
+
         last_node = ctx.make_node("Concat", inputs=[angle_2d_real.output[0], angle_2d_imag.output[0]],
                                   name=utils.make_name('CPLX_' + node.name + '_cst_fft2d'),
                                   attr={'axis': 0})
@@ -396,7 +397,7 @@ class RFFT2DOp(CommonFFT2DOp):
 
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
-        # Slice changed in opset 10. 
+        # Slice changed in opset 10.
         return cls.any_version_2d(True, 10, ctx, node, **kwargs)
 
     @classmethod
@@ -425,7 +426,9 @@ class ComplexAbsOp:
         and imaginary part (1, :, :...).
         """
         onnx_dtype = ctx.get_dtype(node.input[0])
-        utils.make_sure(onnx_dtype in ComplexAbsOp.supported_dtypes, "Unsupported input type (node.name=%r, type=%r).", node.input[0], onnx_dtype)
+        utils.make_sure(
+            onnx_dtype in ComplexAbsOp.supported_dtypes, "Unsupported input type (node.name=%r, type=%r).",
+            node.input[0], onnx_dtype)
         shape = ctx.get_shape(node.input[0])
         np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
         utils.make_sure(shape[0] == 2, "ComplexAbs expected the first dimension to be 2 but shape is %r", shape)

@@ -5392,7 +5392,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_rfft2d_ops(self):
 
         x_val = make_xval([3, 4]).astype(np.float32)
-        
+
         def func1(x):
             op_ = tf.signal.rfft2d(x)
             return tf.abs(op_, name=_TFOUTPUT)
@@ -5437,7 +5437,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = make_xval([3, 4]).astype(np.float32)
         def func1(x):
             xc = tf.cast(x, tf.complex64)
-            op_ = tf.signal.fft(xc, fft_length=3)
+            op_ = tf.signal.fft(xc, np.array([3], dtype=np.int32))
             return tf.abs(op_, name=_TFOUTPUT)
         self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
 
