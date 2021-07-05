@@ -140,10 +140,13 @@ class CommonFFTOp:
             value = node_fft_length.get_attr("value")
             value_array = to_array(value.t)
             if axis is None:
-                utils.make_sure(value_array.shape == (1,), "Unexpected shape for fft_length (%r)", value_array.shape)
+                utils.make_sure(
+                    value_array.shape == (1,), "Unexpected shape for fft_length (%r)", value_array.shape)
                 fft_length = value_array[0]
             else:
-                utils.make_sure(axis < len(value_array), "Inconsistent axis %r incompatible with fft_length=%r", axis, value_array)
+                utils.make_sure(
+                    axis < len(value_array), "Inconsistent axis %r incompatible with fft_length=%r",
+                    axis, value_array)
                 fft_length = value_array[axis]
             utils.make_sure(shape is None or fft_length <= shape[1], "Case fft_length > shape[1] is not implemented.")
 
