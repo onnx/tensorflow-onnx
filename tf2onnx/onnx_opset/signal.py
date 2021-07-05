@@ -22,8 +22,7 @@ logger = logging.getLogger(__name__)
 def make_dft_constant(length, dtype, fft_length):
     n = np.arange(length)
     k = n.reshape((length, 1)).astype(np.float64)
-    mat = np.exp(-2j * np.pi * k * n / length)
-    mat = mat[:fft_length // 2 + 1]
+    mat = np.exp(-2j * np.pi * k * n / fft_length)
     both = np.empty((2,) + mat.shape, dtype=dtype)
     both[0, :, :] = np.real(mat)
     both[1, :, :] = np.imag(mat)
@@ -31,8 +30,16 @@ def make_dft_constant(length, dtype, fft_length):
 
 
 class CommonFFTOp:
+    supported_dtypes = [
+        onnx_pb.TensorProto.FLOAT,
+        onnx_pb.TensorProto.FLOAT16,
+        onnx_pb.TensorProto.DOUBLE,
+        onnx_pb.TensorProto.COMPLEX64,
+        onnx_pb.TensorProto.COMPLEX128,
+    ]    
+
     @classmethod
-    def any_version(cls, const_length, opset, ctx, node, **kwargs):
+    def any_version(cls, const_length, opset, ctx, node, axis=None, **kwargs):
         """
         Inspired from `Python implementation of RFFT
         <https://jakevdp.github.io/blog/2013/08/28/understanding-the-fft/>`_.
@@ -46,8 +53,8 @@ class CommonFFTOp:
             def _DFT_cst(N, fft_length):
                 n = np.arange(N)
                 k = n.reshape((N, 1)).astype(np.float64)
-                M = np.exp(-2j * np.pi * k * n / N)
-                return M[:fft_length // 2 + 1]
+                M = np.exp(-2j * np.pi * k * n / fft_length)
+                return M
 
             def DFT(x, fft_length=None):
                 if len(x.shape) == 1:
@@ -57,19 +64,18 @@ class CommonFFTOp:
                 if fft_length is None:
                     fft_length = x.shape[0]
                 cst = _DFT_cst(x.shape[0], fft_length)
-                return np.dot(cst, x).T
+                size = fft_length // 2 + 1
+                return np.dot(cst[:, :fft_length], x[:fft_length]).T[:, :size]
+    
 
         Real version, first axis is (real, imag) part:
 
         ::
 
-            import numpy as np
-
             def _DFT_real_cst(N, fft_length):
                 n = np.arange(N)
                 k = n.reshape((N, 1)).astype(np.float64)
-                M = np.exp(-2j * np.pi * k * n / N)
-                M = M[:fft_length // 2 + 1]
+                M = np.exp(-2j * np.pi * k * n / fft_length)
                 both = np.empty((2,) + M.shape)
                 both[0, :, :] = np.real(M)
                 both[1, :, :] = np.imag(M)
@@ -82,27 +88,21 @@ class CommonFFTOp:
                     x = x.T
                 if fft_length is None:
                     fft_length = x.shape[0]
+                size = fft_length // 2 + 1
                 cst = _DFT_real_cst(x.shape[0], fft_length)
-                res = np.dot(cst, x)
+                res = np.dot(cst[:, :, :fft_length], x[:fft_length])[:, :size, :]
                 return np.transpose(res, (0, 2, 1))
         """
-        supported_dtypes = [
-            onnx_pb.TensorProto.FLOAT,
-            onnx_pb.TensorProto.FLOAT16,
-            onnx_pb.TensorProto.DOUBLE,
-            onnx_pb.TensorProto.COMPLEX64,
-            onnx_pb.TensorProto.COMPLEX128,
-        ]
         consumers = ctx.find_output_consumers(node.output[0])
         consumer_types = set(op.type for op in consumers)
         utils.make_sure(
-            consumer_types == {'ComplexAbs'},
+            axis == 0 or consumer_types == {'ComplexAbs'},
             "Current implementation of RFFT or FFT only allows ComplexAbs as consumer not %r",
             consumer_types)
 
         input_name = node.input[0]
         onnx_dtype = ctx.get_dtype(input_name)
-        utils.make_sure(onnx_dtype in supported_dtypes, "Unsupported input type.")
+        utils.make_sure(onnx_dtype in CommonFFTOp.supported_dtypes, "Unsupported input type.")
         shape = ctx.get_shape(node.input[0])
         shape_n = shape[-1]
 
@@ -140,20 +140,31 @@ class CommonFFTOp:
                             "fft_length should be a constant, the other case is not implemented yet.")
             value = node_fft_length.get_attr("value")
             value_array = to_array(value.t)
-            utils.make_sure(value_array.shape == (1,), "Unexpected shape for fft_length (%r)", value_array.shape)
-            fft_length = value_array[0]
+            if axis is None:
+                utils.make_sure(value_array.shape == (1,), "Unexpected shape for fft_length (%r)", value_array.shape)
+                fft_length = value_array[0]
+            else:
+                utils.make_sure(axis < len(value_array), "Inconsistent axis %r incompatible with fft_length=%r", axis, value_array)
+                fft_length = value_array[axis]
+            utils.make_sure(shape is None or fft_length <= shape[1], "Case fft_length > shape[1] is not implemented.")
 
             # TODO: handle this parameter when onnx.helper.make_node is fixed.
             # Tcomplex = node.get_attr("Tcomplex")
 
-            real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)
+            if fft_length < shape[1]:
+                real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)[:, :, :fft_length]
+            else:
+                size = fft_length // 2 + 1
+                real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)[:, :size, :fft_length]
+
             onx_real_imag_part = ctx.make_const(
                 name=utils.make_name('cst_rfft_%d' % shape_n), np_val=real_imag_part)
             onx_real_imag_part_name = onx_real_imag_part.name
         else:
-            # FFT: length of FFT is unknown, the matrix
+            # FFT: length of FFT is unknown at conversion time, the matrix
             # created by function make_dft_constant must be
             # done in ONNX.
+            utils.make_sure(axis is None, "Dynamic version of FFT is not implemented when axis != None.")
             dyn_shape_all = ctx.make_node("Shape", inputs=[input_name],
                                           name=utils.make_name('CPLX_' + node.name + 'shape'))
             m1_cst = ctx.make_const(name=utils.make_name('CPLX_m1'), np_val=np.array([-1], dtype=np.int64))
@@ -202,19 +213,43 @@ class CommonFFTOp:
             "Transpose", inputs=[input_name], attr=dict(perm=perm),
             name=utils.make_name(node.name + 'tr'))
 
-        ctx.remove_node(node.name)
+        if axis != 0:
+            ctx.remove_node(node.name)
         mult = ctx.make_node(
             "MatMul", inputs=[onx_real_imag_part_name, trx.output[0]],
-            name=utils.make_name('CPLX_' + node.name + 'rfft'))
+            name=utils.make_name('CPLX_M_' + node.name + 'rfft'))
 
-        new_shape = [2] + list(shape)
-        shapei = list(np.arange(len(new_shape)))
-        perm = shapei[:-2] + [shapei[-1], shapei[-2]]
-        last_node = ctx.make_node(
-            "Transpose", inputs=[mult.output[0]], attr=dict(perm=perm),
-            name=utils.make_name('CPLX_' + node.name + 'rfft'))
+        if const_length:
+            if fft_length < shape[1]:
+                size = fft_length // 2 + 1
+                new_shape = list(shape)
+                new_shape[-2] = size
+                if opset >= 10:
+                    cst_axis = ctx.make_const(name=utils.make_name('CPLX_csta'), np_val=np.array([-2], dtype=np.int64))
+                    cst_zero = ctx.make_const(name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
+                    cst_length = ctx.make_const(name=utils.make_name('CPLX_cstl'), np_val=np.array([size], dtype=np.int64))
+                    mult = ctx.make_node(
+                        "Slice", inputs=[mult.output[0], cst_zero.name, cst_length.name, cst_axis.name],
+                        name=utils.make_name('CPLX_S_' + node.name + 'rfft'))
+                else:
+                    mult = ctx.make_node(
+                        "Slice", inputs=[mult.output[0]], attr=dict(starts=[0], ends=[size], axes=[-2]),
+                        name=utils.make_name('CPLX_S_' + node.name + 'rfft'))
+        else:
+            utils.make_sure(False, "Not fully implemented for dynamic fft_length or dynamic shape.")
 
-        ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+        if axis in (None, 1):
+            new_shape = [2] + list(shape)
+            shapei = list(np.arange(len(new_shape)))
+            perm = shapei[:-2] + [shapei[-1], shapei[-2]]
+            last_node = ctx.make_node(
+                "Transpose", inputs=[mult.output[0]], attr=dict(perm=perm),
+                name=utils.make_name('CPLX_' + node.name + 'rfft'))
+        else:
+            last_node = mult
+        if axis != 0:
+            ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+        return last_node
 
 
 @tf_op("RFFT")
@@ -224,6 +259,16 @@ class RFFTOp(CommonFFTOp):
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         return cls.any_version(True, 1, ctx, node, **kwargs)
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # Slice changed in opset 10. 
+        return cls.any_version(True, 10, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Unsqueeze changed in opset 13.
+        return cls.any_version(True, 13, ctx, node, **kwargs)
 
 
 @tf_op("FFT")
@@ -239,9 +284,137 @@ class FFTOp(CommonFFTOp):
         return cls.any_version(False, 13, ctx, node, **kwargs)
 
 
+class CommonFFT2DOp(CommonFFTOp):
+
+    @classmethod
+    def any_version_2d(cls, const_length, opset, ctx, node, **kwargs):
+        """
+        Python code equivalent to FF2D (assuming fft_length[i] < input.shape[i] for all i).
+
+        ::
+
+            import numpy as np
+
+            def _DFT_cst(N, fft_length, trunc=True):
+                n = np.arange(N)
+                k = n.reshape((N, 1)).astype(np.float64)
+                M = np.exp(-2j * np.pi * k * n / fft_length)
+                return M[:fft_length // 2 + 1] if trunc else M
+
+            def DFT(x, fft_length=None, axis=1):
+                if axis == 1:
+                    x = x.T
+                if fft_length is None:
+                    fft_length = x.shape[0]
+                cst = _DFT_cst(x.shape[0], fft_length, trunc=axis==1)
+                if axis == 1:
+                    return np.dot(cst, x).T
+                else:
+                    return np.dot(cst, x)
+
+            def fft2d(mat, fft_length):
+                mat = mat[:fft_length[0], :fft_length[1]]
+                res = mat.copy()
+                res = DFT(res, fft_length[1], axis=1)
+                res = DFT(res, fft_length[0], axis=0)
+                return res[:fft_length[0], :fft_length[1]//2 + 1]
+
+        """
+        consumers = ctx.find_output_consumers(node.output[0])
+        consumer_types = set(op.type for op in consumers)
+        utils.make_sure(
+            consumer_types == {'ComplexAbs'},
+            "Current implementation of RFFT2D only allows ComplexAbs as consumer not %r",
+            consumer_types)
+        
+        # First FFT
+        last_node0 = cls.any_version(const_length, opset, ctx, node, axis=1, **kwargs)
+        last_node_name = last_node0.output[0]
+       
+        ind0 = ctx.make_const(name=utils.make_name('cst0'), np_val=np.array([0], dtype=np.int64))
+        ind1 = ctx.make_const(name=utils.make_name('cst1'), np_val=np.array([1], dtype=np.int64))
+        real_part = ctx.make_node(
+            'Gather', inputs=[last_node_name, ind0.name], attr=dict(axis=0),
+            name=utils.make_name('FFT2D_Real_' + node.name))
+        imag_part = ctx.make_node(
+            'Gather', inputs=[last_node_name, ind1.name], attr=dict(axis=0),
+            name=utils.make_name('FFT2D_Imag_' + node.name))
+        
+        real_node = cls.any_version(const_length, opset, ctx, real_part, axis=0, **kwargs)
+        imag_node = cls.any_version(const_length, opset, ctx, imag_part, axis=0, **kwargs)
+        
+        # Extract real and imaginary parts, then applies the FFT in the other dimensions on each side.
+        real_real_part = ctx.make_node(
+            'Gather', inputs=[real_node.output[0], ind0.name], attr=dict(axis=0),
+            name=utils.make_name('FFT2D_R_Real_' + node.name))
+        real_imag_part = ctx.make_node(
+            'Gather', inputs=[real_node.output[0], ind1.name], attr=dict(axis=0),
+            name=utils.make_name('FFT2D_R_Imag_' + node.name))
+
+        imag_real_part = ctx.make_node(
+            'Gather', inputs=[imag_node.output[0], ind0.name], attr=dict(axis=0),
+            name=utils.make_name('FFT2D_I_Real_' + node.name))
+        imag_imag_part = ctx.make_node(
+            'Gather', inputs=[imag_node.output[0], ind1.name], attr=dict(axis=0),
+            name=utils.make_name('FFT2D_I_Imag_' + node.name))
+        
+        # Assemble all parts
+        # w = a + ib
+        # y1 = RFFT(a) = c + id, y2 = RFFT(b) = e + if
+        # RFFT2D(a + ib)  -> c - f + i (d + e)
+
+        new_real_node = ctx.make_node('Sub', inputs=[real_real_part.output[0], imag_imag_part.output[0]])
+        new_imag_node = ctx.make_node('Add', inputs=[real_imag_part.output[0], imag_real_part.output[0]])
+        
+        if opset >= 13:
+            angle_2d_real = ctx.make_node("Unsqueeze", inputs=[new_real_node.output[0], ind0.name],
+                                          name=utils.make_name('CPLX_' + node.name + 'angles2d'))
+            angle_2d_imag = ctx.make_node("Unsqueeze", inputs=[new_imag_node.output[0], ind0.name],
+                                          name=utils.make_name('CPLX_' + node.name + 'angles2d'))
+        else:
+            angle_2d_real = ctx.make_node("Unsqueeze", inputs=[new_real_node.output[0]],
+                                          name=utils.make_name('CPLX_' + node.name + 'angles2d'),
+                                          attr={'axes': [0]})
+            angle_2d_imag = ctx.make_node("Unsqueeze", inputs=[new_imag_node.output[0]],
+                                          name=utils.make_name('CPLX_' + node.name + 'angles2d'),
+                                          attr={'axes': [0]})
+        
+        last_node = ctx.make_node("Concat", inputs=[angle_2d_real.output[0], angle_2d_imag.output[0]],
+                                  name=utils.make_name('CPLX_' + node.name + '_cst_fft2d'),
+                                  attr={'axis': 0})
+        ctx.replace_all_inputs(last_node0.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+        return last_node
+
+
+@tf_op("RFFT2D")
+class RFFT2DOp(CommonFFT2DOp):
+    # support more dtype
+
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        return cls.any_version_2d(True, 1, ctx, node, **kwargs)
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # Slice changed in opset 10. 
+        return cls.any_version_2d(True, 10, ctx, node, **kwargs)
+
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        # Unsqueeze changed in opset 13.
+        return cls.any_version_2d(True, opset, ctx, node, **kwargs)
+
+
 @tf_op("ComplexAbs")
 class ComplexAbsOp:
     # support more dtype
+    supported_dtypes = [
+        onnx_pb.TensorProto.FLOAT,
+        onnx_pb.TensorProto.FLOAT16,
+        onnx_pb.TensorProto.DOUBLE,
+        onnx_pb.TensorProto.COMPLEX64,
+        onnx_pb.TensorProto.COMPLEX128,
+    ]
 
     @classmethod
     def any_version(cls, opset, ctx, node, **kwargs):
@@ -251,15 +424,8 @@ class ComplexAbsOp:
         it assumes the first dimension means real part (0)
         and imaginary part (1, :, :...).
         """
-        supported_dtypes = [
-            onnx_pb.TensorProto.FLOAT,
-            onnx_pb.TensorProto.FLOAT16,
-            onnx_pb.TensorProto.DOUBLE,
-            onnx_pb.TensorProto.COMPLEX64,
-            onnx_pb.TensorProto.COMPLEX128,
-        ]
         onnx_dtype = ctx.get_dtype(node.input[0])
-        utils.make_sure(onnx_dtype in supported_dtypes, "Unsupported input type.")
+        utils.make_sure(onnx_dtype in ComplexAbsOp.supported_dtypes, "Unsupported input type (node.name=%r, type=%r).", node.input[0], onnx_dtype)
         shape = ctx.get_shape(node.input[0])
         np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
         utils.make_sure(shape[0] == 2, "ComplexAbs expected the first dimension to be 2 but shape is %r", shape)
