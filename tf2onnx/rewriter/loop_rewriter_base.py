@@ -261,9 +261,24 @@ class LoopRewriterBase(object):
             loop_var = self._get_loop_var_from_switch(s)
             context.loop_properties.add_variable(loop_var)
 
+        def inputs_equal(inp1, inp2):
+            # Checks input equality with an exception for a Select pattern in some LSTM nodes
+            if inp1 == inp2:
+                return True
+            node1 = self.g.get_node_by_output(inp1)
+            node2 = self.g.get_node_by_output(inp2)
+            if node1.type != "Select" or node2.type != "Select":
+                return False
+            if node1.inputs[0].type != "Tile" or node2.inputs[0].type != "Tile":
+                return False
+            if node1.inputs[0].input[0] != node2.inputs[0].input[0]:
+                return False
+            # Ignore the tile input. It gets its shape from different nodes but is actually the same.
+            return node1.input[1:] == node2.input[1:]
+
         for unneeded_scan_variable in context.loop_properties.unneeded_scan_variables.values():
             for state_variable in context.loop_properties.state_variables.values():
-                if unneeded_scan_variable.next_iteration_input.id == state_variable.next_iteration_input.id:
+                if inputs_equal(unneeded_scan_variable.next_iteration_input.id, state_variable.next_iteration_input.id):
                     unneeded_scan_variable.equivalent_state_variable = state_variable
                     break
 
