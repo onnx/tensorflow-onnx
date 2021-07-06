@@ -90,7 +90,7 @@ def download_tflite(url, dest, verbose=True):
     return fpath
 
 
-def convert_model(model_name, output_path, opset=13, verbose=True):
+def convert_model(model_name, output_path, opset=13, tag=None, verbose=True):
     """
     Converts the downloaded model into ONNX.
     """
@@ -100,6 +100,8 @@ def convert_model(model_name, output_path, opset=13, verbose=True):
                 '"%s"' % os.path.abspath(model_name).replace("\\", "/"),
                 '--output', '"%s"' % os.path.abspath(output_path).replace("\\", "/"),
                 '--opset', "%d" % opset]
+        if tag is not None:
+            cmdl.append('--tag="%s"' % tag)
         if verbose:
             print("cmd: python %s" % " ".join(cmdl))
         pproc = subprocess.Popen(
@@ -152,7 +154,7 @@ def check_discrepencies(out1, out2, threshold=1e-3):
 
 
 def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
-              signature=None):
+              signature=None, tag=None):
     """
     Runs a simple benchmark.
     Goes through every steps (download, convert).
@@ -165,7 +167,7 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
     # Converts the model.
     if verbose:
         print("Convert model in %r." % dest)
-    convert_model(tname, onnx_name, opset)
+    convert_model(tname, onnx_name, opset, tag=tag)
     if verbose:
         print("Created %r." % onnx_name)
 
@@ -201,7 +203,7 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         imgs_tf = [convert_to_tensor(img) for img in imgs]
     model = hub.load(url.split("?")[0])
     if signature is not None:
-        model = model.signatures['serving_default']
+        model = model.signatures[signature]
     results_tf, duration_tf = measure_time(model, imgs_tf)
 
     if verbose:

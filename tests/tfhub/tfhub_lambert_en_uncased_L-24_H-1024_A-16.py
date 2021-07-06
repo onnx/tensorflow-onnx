@@ -7,9 +7,9 @@ from _tools import generate_random_images, benchmark
 
 
 def main(opset=13):
-    url = "https://tfhub.dev/tensorflow/mobilebert_en_uncased_L-24_H-128_B-512_A-4_F-4_OPT/1?tf-hub-format=compressed"
-    dest = "tf-mobilebert_en_uncased_L-24_H-128_B-512_A-4_F-4_OPT"
-    name = "mobilebert_en_uncased_L-24_H-128_B-512_A-4_F-4_OPT"
+    url = "https://tfhub.dev/tensorflow/lambert_en_uncased_L-24_H-1024_A-16/2?tf-hub-format=compressed"
+    dest = "tf-lambert_en_uncased_L-24_H-1024_A-16"
+    name = "lambert_en_uncased_L-24_H-1024_A-16"
     onnx_name = os.path.join(dest, "%s-%d.onnx" % (name, opset))
 
     inputs = [OrderedDict([
