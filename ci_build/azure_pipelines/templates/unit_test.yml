@@ -13,7 +13,7 @@ steps:
       export TF2ONNX_SKIP_TFLITE_TESTS=$CI_SKIP_TFLITE_TESTS
       export TF2ONNX_SKIP_TF_TESTS=$CI_SKIP_TF_TESTS
       python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append \
-        --ignore tests/keras2onnx_unit_tests
+        --ignore tests/keras2onnx_unit_tests --ignore tests/keras2onnx_applications
     timeoutInMinutes: 15
     displayName: ${{ format('Run UnitTest - Opset{0}', onnx_opset) }}
     condition: succeededOrFailed()
