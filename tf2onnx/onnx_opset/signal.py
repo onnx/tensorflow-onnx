@@ -241,7 +241,10 @@ class CommonFFTOp:
                         "Slice", inputs=[mult.output[0]], attr=dict(starts=[0], ends=[size], axes=[-2]),
                         name=utils.make_name('CPLX_S_' + node.name + 'rfft'))
         else:
-            utils.make_sure(False, "Not fully implemented for dynamic fft_length or dynamic shape.")
+            utils.make_sure(
+                False,
+                "Dynamic length not fully implemented for dynamic fft_length or dynamic shape, fft_length=%r.",
+                fft_length)
 
         if axis in (None, 1):
             new_shape = [2] + list(shape)
@@ -406,7 +409,7 @@ class RFFT2DOp(CommonFFT2DOp):
     @classmethod
     def version_13(cls, ctx, node, **kwargs):
         # Unsqueeze changed in opset 13.
-        return cls.any_version_2d(True, opset, ctx, node, **kwargs)
+        return cls.any_version_2d(True, 13, ctx, node, **kwargs)
 
 
 @tf_op("ComplexAbs")

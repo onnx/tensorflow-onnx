@@ -5378,7 +5378,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14")
     @skip_tflite("FlexRFFT2D")
-    # @unittest.skipIf(True, reason="Shape inference fails but onnxruntime succeeds.")
     def test_rfft_ops_fft_length(self):
 
         x_val = make_xval([3, 4]).astype(np.float32)
@@ -5412,12 +5411,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14")
     @skip_tflite("FlexRFFT2D")
-    # @unittest.skipIf(True, reason="Shape inference fails but onnxruntime succeeds.")
     def test_rfft_ops_fft2d_length(self):
 
         x_val = make_xval([4, 4]).astype(np.float32)
         def func1_length(x):
-            op_ = tf.signal.rfft(x, np.array([3, 3], dtype=np.int32))
+            op_ = tf.signal.rfft2d(x, np.array([3, 3], dtype=np.int32))
             return tf.abs(op_, name=_TFOUTPUT)
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
