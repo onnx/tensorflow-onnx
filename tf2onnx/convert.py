@@ -397,11 +397,11 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    old_out_names = _rename_duplicate_keras_model_names(model)
     if LooseVersion(tf.__version__) < "2.0":
         return _from_keras_tf1(model, input_signature, opset, custom_ops, custom_op_handlers, custom_rewriter,
                                inputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
 
+    old_out_names = _rename_duplicate_keras_model_names(model)
     from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
 
     # let tensorflow do the checking if model is a valid model
