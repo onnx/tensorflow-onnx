@@ -470,15 +470,10 @@ class Graph(object):
         self.ragged_variant_list_reads = []
         self.ragged_variant_list_writes = []
 
-        self._target = set(target)
         self._dtypes = dtypes
-
         self._output_shapes = output_shapes
-        self._opset = find_opset(opset)
 
-        if extra_opset is not None:
-            utils.make_sure(isinstance(extra_opset, list), "invalid extra_opset")
-        self._extra_opset = extra_opset
+        self.set_config(target, opset, extra_opset)
 
         self.outputs = output_names if output_names is not None else []
 
@@ -536,6 +531,18 @@ class Graph(object):
         """Create a clean graph inheriting current graph's configuration."""
         return Graph([], output_shapes={}, dtypes={}, target=self._target, opset=self._opset,
                      extra_opset=self.extra_opset, output_names=[])
+
+    def set_config(self, target=None, opset=None, extra_opset=None):
+        """Set graph fields containing conversion options"""
+        if target is None:
+            target = constants.DEFAULT_TARGET
+
+        self._opset = find_opset(opset)
+        self._target = set(target)
+
+        if extra_opset is not None:
+            utils.make_sure(isinstance(extra_opset, list), "invalid extra_opset")
+        self._extra_opset = extra_opset
 
     @property
     def input_names(self):
