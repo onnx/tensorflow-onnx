@@ -23,7 +23,7 @@ from tf2onnx.late_rewriters import rewrite_channels_last
 from tf2onnx.shape_inference import infer_shape
 from tf2onnx.tf_loader import is_function, resolve_functions, set_function
 from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
-from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph
+from tf2onnx.tflite_utils import graphs_from_tflite
 
 from . import constants, logging, schemas, utils, handler
 
@@ -417,61 +417,28 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                        "please upgrade onnx package to avoid potential conversion issue.",
                        utils.get_onnx_version(), opset)
 
-    if shape_override is None:
-        shape_override = {}
     if inputs_as_nchw is None:
         inputs_as_nchw = []
-    if target is None:
-        target = constants.DEFAULT_TARGET
 
-    def check_io(input_names, output_names, output_shapes):
-        io_to_check = []
-        if input_names:
-            io_to_check.extend(input_names)
-        if output_names:
-            io_to_check.extend(output_names)
-        if io_to_check:
-            # check output existence in case user passed in wrong output ids
-            non_exists = set(io_to_check) - set(output_shapes.keys())
-            if non_exists:
-                logger.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed"
-                             "in format: input/output_node_name:port_id. Problematic inputs/outputs are: %s \n",
-                             non_exists)
-                raise ValueError("Inputs/Outputs Not Found")
-
+    is_tflite = False
     if tflite_path is not None:
-        tflite_graphs, opcodes, model, tensor_shapes = read_tflite_model(tflite_path)
-        main_g = None
-        subgraphs = []
-        for i, tfl_graph in enumerate(tflite_graphs):
-            is_main_g = i == len(tflite_graphs) - 1
-            prefix = '' if is_main_g else tfl_graph.Name().decode() + '_'
-            tensor_shapes_from_interpreter = None
-            if is_main_g:
-                tensor_shapes_from_interpreter = tensor_shapes
-            onnx_nodes, _, _, output_shapes, dtypes, f_inputs, f_outputs, graph_name = \
-                parse_tflite_graph(tfl_graph, opcodes, model, prefix, tensor_shapes_from_interpreter)
-            g_inputs = f_inputs
-            g_outputs = f_outputs
-            if is_main_g:
-                # Override IO in main graph
-                check_io(input_names, output_names, output_shapes)
-                if input_names is not None:
-                    g_inputs = input_names
-                if output_names is not None:
-                    g_outputs = output_names
-            g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, g_inputs, g_outputs,
-                      not is_main_g, graph_name)
-            if is_main_g:
-                main_g = g
-            else:
-                subgraphs.append(g)
+        main_g, subgraphs = graphs_from_tflite(tflite_path, input_names, output_names)
+        is_tflite = True
+    else:
+        main_g, subgraphs = graphs_from_tf(tf_graph, input_names, output_names, shape_override)
 
-        g = process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
-                           target, {}, tensors_to_rename, is_tflite=True, dequantize=dequantize)
-        return g
+    for g in [main_g] + subgraphs:
+        g.set_config(target, opset, extra_opset)
+    g = process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
+                       initialized_tables, tensors_to_rename, is_tflite)
+    return g
 
-    # make tf2onnx internal subgraphs from the tensorflow subgraphs
+
+def graphs_from_tf(tf_graph, input_names, output_names, shape_override=None, const_node_values=None,
+                   ignore_default=None, use_default=None):
+    """make tf2onnx internal subgraphs from the tensorflow subgraphs"""
+    if shape_override is None:
+        shape_override = {}
     ordered_func = resolve_functions(tf_graph)
     subgraphs = []
     for func in ordered_func:
@@ -483,7 +450,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         onnx_nodes, _, _, output_shapes, dtypes, _ = \
             tensorflow_to_onnx(func, shape_override, const_node_values, ignore_default, use_default)
 
-        fg = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, f_inputs_names, f_output_names,
+        fg = Graph(onnx_nodes, output_shapes, dtypes, input_names=f_inputs_names, output_names=f_output_names,
                    is_subgraph=True, graph_name=func.name)
         fold_constants_using_tf(fg, outputs_to_values)
         subgraphs.append(fg)
@@ -497,16 +464,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     onnx_nodes, _, _, output_shapes, dtypes, _ = \
         tensorflow_to_onnx(tf_graph, shape_override, const_node_values, ignore_default, use_default)
 
-    check_io(input_names, output_names, output_shapes)
-    main_g = Graph(onnx_nodes, output_shapes, dtypes, target, opset, extra_opset, input_names, output_names,
-                   is_subgraph)
+    utils.check_io(input_names, output_names, output_shapes.keys())
+    main_g = Graph(onnx_nodes, output_shapes, dtypes, input_names=input_names, output_names=output_names)
     fold_constants_using_tf(main_g, outputs_to_values)
-    g = process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
-                       target, initialized_tables, tensors_to_rename)
-    return g
+    return main_g, subgraphs
 
 
-def process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
+def process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
                    initialized_tables, tensors_to_rename, is_tflite=False, dequantize=False):
 
     if tensors_to_rename is not None:
@@ -514,16 +478,16 @@ def process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, contin
         inputs_as_nchw = [tensors_to_rename.get(t, t) for t in inputs_as_nchw]
 
     for g in subgraphs:
-        fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
+        fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
                                   initialized_tables, is_tflite, dequantize)
         set_function(fg.graph_name, fg)
-    g = process_parsed_graph(main_g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
+    g = process_parsed_graph(main_g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
                              initialized_tables, is_tflite,
                              dequantize)
     return g
 
 
-def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter, target,
+def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
                          initialized_tables, is_tflite=False, dequantize=False):
 
     op_cnt, attr_cnt = g.dump_node_statistics(include_attrs=True, include_subgraphs=False)
@@ -628,11 +592,11 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
 
     # post-processing rewriters
     late_rewriters = []
-    if constants.TARGET_RS5 in target:
+    if g.is_target(constants.TARGET_RS5):
         late_rewriters.append(rewrite_incomplete_type_support_rs5)
-    if constants.TARGET_RS6 in target:
+    if g.is_target(constants.TARGET_RS6):
         late_rewriters.append(rewrite_incomplete_type_support_rs6)
-    if constants.TARGET_CHANNELS_LAST in target:
+    if g.is_target(constants.TARGET_CHANNELS_LAST):
         late_rewriters.append(rewrite_channels_last)
     if late_rewriters:
         run_rewriters(g, late_rewriters, continue_on_error)

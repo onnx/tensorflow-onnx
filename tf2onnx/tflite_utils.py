@@ -19,6 +19,7 @@ from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
 from tf2onnx.flexbuffers import read_flexbuffer
 from tf2onnx.tf_utils import read_tf_node_def_attrs
+from tf2onnx.graph import Graph
 from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
@@ -127,6 +128,39 @@ def get_options_class(name):
         return None
     module = importlib.import_module('tf2onnx.tflite.' + name)
     return getattr(module, name)
+
+
+def graphs_from_tflite(tflite_path, input_names, output_names):
+    """
+    Given the path to a tflite model, returns a tuple (main_graph, subgraphs) of graph.py Graph objects
+    """
+    tflite_graphs, opcodes, model, tensor_shapes = read_tflite_model(tflite_path)
+    main_g = None
+    subgraphs = []
+    for i, tfl_graph in enumerate(tflite_graphs):
+        is_main_g = i == len(tflite_graphs) - 1
+        prefix = '' if is_main_g else tfl_graph.Name().decode() + '_'
+        tensor_shapes_from_interpreter = None
+        if is_main_g:
+            tensor_shapes_from_interpreter = tensor_shapes
+        onnx_nodes, _, _, output_shapes, dtypes, f_inputs, f_outputs, graph_name = \
+            parse_tflite_graph(tfl_graph, opcodes, model, prefix, tensor_shapes_from_interpreter)
+        g_inputs = f_inputs
+        g_outputs = f_outputs
+        if is_main_g:
+            # Override IO in main graph
+            utils.check_io(input_names, output_names, output_shapes.keys())
+            if input_names is not None:
+                g_inputs = input_names
+            if output_names is not None:
+                g_outputs = output_names
+        g = Graph(onnx_nodes, output_shapes, dtypes, input_names=g_inputs, output_names=g_outputs,
+                  is_subgraph=not is_main_g, graph_name=graph_name)
+        if is_main_g:
+            main_g = g
+        else:
+            subgraphs.append(g)
+    return main_g, subgraphs
 
 
 def read_tflite_model(tflite_path):
