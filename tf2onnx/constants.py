@@ -43,6 +43,7 @@ NCHW_TO_HWCN = [2, 3, 1, 0]
 
 # Environment variables
 ENV_TF2ONNX_DEBUG_MODE = "TF2ONNX_DEBUG_MODE"
+ENV_TF2ONNX_CATCH_ERRORS = "TF2ONNX_CATCH_ERRORS"
 
 # Mapping opset to IR version.
 # Note: opset 7 and opset 8 came out with IR3 but we need IR4 because of PlaceholderWithDefault
