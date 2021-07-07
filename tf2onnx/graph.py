@@ -503,35 +503,34 @@ class Graph(object):
 
         self.reset_nodes(ops)
 
-        if not is_subgraph:
-            # add identity node after each output, in case it is renamed during conversion.
-            for o in self.outputs:
-                n = self.get_node_by_output_in_current_graph(o)
-                if n.is_graph_input():
-                    # Don't add identity if the node is also an input. We want to keep input names the same.
-                    continue
-                new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
-                n_shapes = n.output_shapes
-                n_dtypes = n.output_dtypes
-                body_graphs = n.graph.contained_graphs.pop(n.name, None)
-                self.remove_node(n.name)
+        # add identity node after each output, in case it is renamed during conversion.
+        for o in self.outputs:
+            n = self.get_node_by_output_in_current_graph(o)
+            if n.is_graph_input():
+                # Don't add identity if the node is also an input. We want to keep input names the same.
+                continue
+            new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
+            n_shapes = n.output_shapes
+            n_dtypes = n.output_dtypes
+            body_graphs = n.graph.contained_graphs.pop(n.name, None)
+            self.remove_node(n.name)
 
-                new_outputs = [output if output != o else new_output_name for output in n.output]
-                # domain should be passed to new node
-                branches = {}
-                if body_graphs:
-                    for attr_name, body_graph in body_graphs.items():
-                        body_graph.parent_graph = self
-                        branches[attr_name] = body_graph
+            new_outputs = [output if output != o else new_output_name for output in n.output]
+            # domain should be passed to new node
+            branches = {}
+            if body_graphs:
+                for attr_name, body_graph in body_graphs.items():
+                    body_graph.parent_graph = self
+                    branches[attr_name] = body_graph
 
-                _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
-                                   skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
-                                   domain=n.domain, branches=branches)
+            _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
+                               skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
+                               domain=n.domain, branches=branches)
 
-                self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
-                self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
-                self.copy_shape(new_output_name, o)
-                self.copy_dtype(new_output_name, o)
+            self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
+            self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
+            self.copy_shape(new_output_name, o)
+            self.copy_dtype(new_output_name, o)
 
     def create_new_graph_with_same_config(self):
         """Create a clean graph inheriting current graph's configuration."""
@@ -873,6 +872,23 @@ class Graph(object):
 
     def get_tensor_value(self, output, as_list=True):
         return self.get_node_by_output(output).get_tensor_value(as_list)
+
+    def rename_tensors(self, tensors_to_rename):
+        """Replace tensor names within nodes and graph inputs/outputs"""
+        def rename_list(l):
+            return [tensors_to_rename.get(t, t) for t in l]
+
+        def rename_keys(d):
+            return {tensors_to_rename.get(k, k): v for k, v in d.items()}
+
+        self._output_to_node_name = rename_keys(self._output_to_node_name)
+        self._output_to_consumers = rename_keys(self._output_to_consumers)
+        self._dtypes = rename_keys(self._dtypes)
+        self._output_shapes = rename_keys(self._output_shapes)
+        self.outputs = rename_list(self.outputs)
+        for node in self._nodes:
+            node._input = rename_list(node._input)
+            node._output = rename_list(node._output)
 
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
@@ -1232,15 +1248,23 @@ class Graph(object):
             return []
         return val
 
-    def dump_node_statistics(self):
+    def dump_node_statistics(self, include_attrs=False, include_subgraphs=True):
+        """Return a counter of op types (and optionally attribute names) within the graph"""
         op_cnt = collections.Counter()
+        attr_cnt = collections.Counter()
         for n in self.get_nodes():
             op_cnt[n.type] += 1
+            for k in n.attr.keys():
+                attr_cnt[k] += 1
             body_graphs = n.get_body_graphs()
-            if body_graphs:
+            if body_graphs and include_subgraphs:
                 for b_g in body_graphs.values():
-                    op_cnt += b_g.dump_node_statistics()
+                    g_op_cnt, g_attr_cnt = b_g.dump_node_statistics(include_attrs=True, include_subgraphs=True)
+                    op_cnt += g_op_cnt
+                    attr_cnt += g_attr_cnt
 
+        if include_attrs:
+            return op_cnt, attr_cnt
         return op_cnt
 
     def remove_input(self, node, to_be_removed, input_index=None):
