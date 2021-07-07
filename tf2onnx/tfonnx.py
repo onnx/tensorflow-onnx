@@ -425,12 +425,13 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         main_g, subgraphs = graphs_from_tflite(tflite_path, input_names, output_names)
         is_tflite = True
     else:
-        main_g, subgraphs = graphs_from_tf(tf_graph, input_names, output_names, shape_override)
+        main_g, subgraphs = graphs_from_tf(tf_graph, input_names, output_names, shape_override, const_node_values,
+                                           ignore_default, use_default)
 
     for g in [main_g] + subgraphs:
         g.set_config(target, opset, extra_opset)
     g = process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
-                       initialized_tables, tensors_to_rename, is_tflite)
+                       initialized_tables, tensors_to_rename, is_tflite, dequantize)
     return g
 
 

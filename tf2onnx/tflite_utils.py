@@ -130,9 +130,10 @@ def get_options_class(name):
     return getattr(module, name)
 
 
-def graphs_from_tflite(tflite_path, input_names, output_names):
+def graphs_from_tflite(tflite_path, input_names=None, output_names=None):
     """
     Given the path to a tflite model, returns a tuple (main_graph, subgraphs) of graph.py Graph objects
+    inputs/outputs will be taken from main graph in model if not overridden
     """
     tflite_graphs, opcodes, model, tensor_shapes = read_tflite_model(tflite_path)
     main_g = None
