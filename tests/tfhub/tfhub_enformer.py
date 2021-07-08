@@ -8,7 +8,7 @@ def main(opset=13):
     url = "https://tfhub.dev/deepmind/enformer/1?tf-hub-format=compressed"
     dest = "tf-enformer"
     name = "enformer"
-    onnx_name = os.path.join(dest, "%s-%d.onnx" % (name, opset))
+    onnx_name = os.path.join(dest, "%s-%d.zip" % (name, opset))
 
     imgs = generate_random_images(shape=(1, 224, 224, 3))
 

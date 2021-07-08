@@ -18,7 +18,7 @@ def main(opset=13):
         ('input_type_ids', numpy.array([i//5 for i in range(0, 32)], dtype=numpy.int32).reshape((1, -1)))
     ]) for i in range(0, 10)]
 
-    benchmark(url, dest, onnx_name, opset, inputs)
+    benchmark(url, dest, onnx_name, opset, inputs, output_name="pooled_output")
 
 
 if __name__ == "__main__":
