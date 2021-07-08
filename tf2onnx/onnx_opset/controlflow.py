@@ -623,12 +623,13 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
 
     g.outputs = [cond_outputs[0]] + g.outputs[2:] + scan_outputs
 
-    # FIXME: onnx does not have a variant type so we try to fish for the dtype in a prior TensorListSetItem.
+    # onnx does not have a variant type so we try to fish for the dtype in a prior TensorListSetItem.
     for o in g.outputs:
         if g.get_dtype(o) == onnx_pb.TensorProto.UNDEFINED:
-            node = g.get_node_by_output(o)
-            if node.type in ["Identity"]:
-                g.set_dtype(o, node.inputs[0].output_dtypes[0])
+            curr_o = o
+            while g.get_node_by_output(curr_o).type == "Identity":
+                curr_o = g.get_node_by_output(curr_o).input[0]
+            g.copy_dtype(curr_o, o)
 
     for node in g.ragged_variant_list_reads:
         # Requires opset 11
