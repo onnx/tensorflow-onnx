@@ -5,7 +5,7 @@
 
 jobs:
 
-- job: 'Test'
+- job: 'Linux'
   timeoutInMinutes: 180
   pool:
     vmImage: 'Ubuntu-16.04'
@@ -103,6 +103,102 @@ jobs:
       pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
       cd tests/keras2onnx_applications/nightly_build
       $(NIGHTLY_BUILD_TEST)
+    displayName: 'pytest'
+
+  - task: PublishTestResults@2
+    inputs:
+      testResultsFiles: '**/test-results-*.xml'
+      testRunTitle: 'Python $(python.version)'
+    condition: succeededOrFailed()
+
+- job: 'Win'
+  timeoutInMinutes: 180
+  pool:
+    vmImage: 'vs2017-win2016'
+  strategy:
+    matrix:
+      Python36-onnx1.5:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        INSTALL_KERAS: pip install keras==2.2.4
+        UNINSTALL_KERAS:
+        INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+        INSTALL_KERAS_RESNET: pip install keras-resnet
+        INSTALL_TRANSFORMERS:
+        NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
+
+      Python37-onnx1.6:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.6.0
+        INSTALL_KERAS: pip install keras==2.3.1
+        UNINSTALL_KERAS:
+        INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+        INSTALL_KERAS_RESNET: pip install keras-resnet
+        INSTALL_TRANSFORMERS:
+        NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
+
+      Python37-onnx1.9:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        INSTALL_KERAS: pip install keras==2.3.1
+        UNINSTALL_KERAS:
+        INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+        INSTALL_KERAS_RESNET: pip install keras-resnet
+        INSTALL_TRANSFORMERS:
+        NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+      architecture: 'x64'
+
+  - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
+    displayName: Add conda to PATH
+
+  - script: conda create --yes --quiet --name py$(python.version) -c conda-forge python=$(python.version) numpy protobuf
+    displayName: Create Anaconda environment
+
+  - script: |
+      call activate py$(python.version)
+      python -m pip install --upgrade pip numpy
+      echo Test numpy installation... && python -c "import numpy"
+      pip install %ONNX_PATH%
+      pip uninstall -y protobuf
+      pip install protobuf
+      pip install h5py==2.9.0
+      pip install numpy==1.19
+      pip install parameterized
+      %INSTALL_TENSORFLOW%
+      %INSTALL_KERAS%
+      pip install git+https://github.com/microsoft/onnxconverter-common
+      %INSTALL_ORT%
+      pip install Pillow==8.2.0
+      pip install opencv-python
+      pip install tqdm
+      pip install keras-segmentation==0.2.0
+      pip install matplotlib
+      git clone https://github.com/qqwweee/keras-yolo3
+      %INSTALL_KERAS_RESNET%
+      pip install git+https://www.github.com/keras-team/keras-contrib.git
+      pip install keras-tcn==2.8.3
+      %UNINSTALL_KERAS%
+      pip install git+https://github.com/qubvel/efficientnet
+      %INSTALL_TRANSFORMERS%
+      pip install keras-self-attention
+      pip install pytest pytest-cov pytest-runner
+    displayName: 'Install dependencies'
+
+  - script: |
+      call activate py$(python.version)
+      pip install -e .
+      echo Test onnxruntime installation... && python -c "import onnxruntime"
+      pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
+      cd tests/keras2onnx_applications/nightly_build
+      %NIGHTLY_BUILD_TEST%
     displayName: 'pytest'
 
   - task: PublishTestResults@2

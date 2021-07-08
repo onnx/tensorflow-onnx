@@ -43,7 +43,7 @@ def _get_optimizers():
 
 
 def optimize_graph(graph, catch_errors=True, optimizers=None):
-    """ Optimize graph, return optimized graph. No throw if catch_errors is true"""
+    """ Optimize graph, return optimized graph. Catch errors and restore old graph if catch_errors is True"""
     logger = logging.getLogger(__name__)
     logger.info("Optimizing ONNX model")
 
