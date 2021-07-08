@@ -208,6 +208,7 @@ class CommonFFTOp:
                                                name=utils.make_name('CPLX_' + node.name + '_cst_fft'),
                                                attr={'axis': 0})
             onx_real_imag_part_name = onx_real_imag_part.output[0]
+            fft_length = None
 
         shapei = list(np.arange(len(shape)))
         perm = shapei[:-2] + [shapei[-1], shapei[-2]]
