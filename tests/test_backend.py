@@ -5388,6 +5388,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14")
     @skip_tflite("FlexRFFT2D")
+    @check_opset_min_version(11, "range")
     def test_rfft2d_ops(self):
 
         x_val = make_xval([3, 4]).astype(np.float32)
@@ -5411,6 +5412,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14")
     @skip_tflite("FlexRFFT2D")
+    @check_opset_min_version(11, "range")
     def test_rfft_ops_fft2d_length(self):
 
         x_val = make_xval([4, 4]).astype(np.float32)
@@ -5421,6 +5423,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14")
     @check_opset_min_version(11, "range")
+    @unittest.skipIf(True, reason="Not fully implemented for dynamic shape.")
     def test_fft_ops(self):
         x_val = make_xval([3, 4]).astype(np.float32)
         def func1(x):
