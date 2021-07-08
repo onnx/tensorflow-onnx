@@ -465,7 +465,9 @@ def graphs_from_tf(tf_graph, input_names, output_names, shape_override=None, con
     onnx_nodes, _, _, output_shapes, dtypes, _ = \
         tensorflow_to_onnx(tf_graph, shape_override, const_node_values, ignore_default, use_default)
 
-    utils.check_io(input_names, output_names, output_shapes.keys())
+    utils.check_io(input_names, output_names, output_shapes.keys(),
+                msg="This test fails for large models, you may add option "
+                "--large_model when converting the model.")
     main_g = Graph(onnx_nodes, output_shapes, dtypes, input_names=input_names, output_names=output_names)
     fold_constants_using_tf(main_g, outputs_to_values)
     return main_g, subgraphs

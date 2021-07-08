@@ -260,7 +260,7 @@ def make_sure(bool_val, error_msg, *args):
         raise ValueError("make_sure failure: " + error_msg % args)
 
 
-def check_io(input_names, output_names, valid_outputs):
+def check_io(input_names, output_names, valid_outputs, msg=None):
     """Asserts that input_names and output_names are contained within valid_outputs else raises an error"""
     io_to_check = []
     if input_names:
@@ -274,7 +274,9 @@ def check_io(input_names, output_names, valid_outputs):
             logger.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed"
                          "in format: input/output_node_name:port_id. Problematic inputs/outputs are: %s \n",
                          non_exists)
-            raise ValueError("Inputs/Outputs Not Found")
+            if msg is None:
+                raise ValueError("Inputs/Outputs Not Found")
+            raise ValueError("Inputs/Outputs Not Found. %s" % msg)
 
 
 def is_cpp_protobuf():
