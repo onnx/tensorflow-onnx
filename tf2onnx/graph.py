@@ -523,7 +523,8 @@ class Graph(object):
                                domain=n.domain, branches=branches)
 
             self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
-            self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
+            self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs",
+                           dtypes=n_dtypes, shapes=n_shapes)
             self.copy_shape(new_output_name, o)
             self.copy_dtype(new_output_name, o)
 

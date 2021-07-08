@@ -55,6 +55,7 @@ def get_args():
     parser.add_argument("--checkpoint", help="input from checkpoint")
     parser.add_argument("--keras", help="input from keras model")
     parser.add_argument("--tflite", help="input from tflite model")
+    parser.add_argument("--tfjs", help="input from tfjs model")
     parser.add_argument("--large_model", help="use the large model format (for models > 2GB)", action="store_true")
     parser.add_argument("--output", help="output model file")
     parser.add_argument("--inputs", help="model input_names (optional for saved_model, keras, and tflite)")
@@ -94,7 +95,7 @@ def get_args():
     if args.graphdef or args.checkpoint:
         if not args.inputs or not args.outputs:
             parser.error("graphdef and checkpoint models need to provide inputs and outputs")
-    if not any([args.graphdef, args.checkpoint, args.saved_model, args.keras, args.tflite]):
+    if not any([args.graphdef, args.checkpoint, args.saved_model, args.keras, args.tflite, args.tfjs]):
         parser.print_help()
         sys.exit(1)
     if args.inputs:
@@ -149,7 +150,7 @@ def _convert_common(frozen_graph, name="unknown", large_model=False, output_path
             external_tensor_storage = ExternalTensorStorage()
         if output_frozen_graph:
             utils.save_protobuf(output_frozen_graph, frozen_graph)
-        if not kwargs.get("tflite_path"):
+        if not kwargs.get("tflite_path") and not kwargs.get("tfjs_path"):
             tf.import_graph_def(frozen_graph, name='')
         g = process_tf_graph(tf_graph, const_node_values=const_node_values, **kwargs)
         onnx_graph = optimizer.optimize_graph(g, catch_errors=not large_model)
@@ -174,6 +175,7 @@ def main():
 
     extra_opset = args.extra_opset or []
     tflite_path = None
+    tfjs_path = None
     custom_ops = {}
     initialized_tables = None
     tensors_to_rename = {}
@@ -231,6 +233,11 @@ def main():
         outputs = args.outputs
         tflite_path = args.tflite
         model_path = tflite_path
+    if args.tfjs:
+        inputs = args.inputs
+        outputs = args.outputs
+        tfjs_path = args.tfjs
+        model_path = tfjs_path
 
     if args.verbose:
         logger.info("inputs: %s", inputs)
@@ -260,6 +267,7 @@ def main():
             use_default=args.use_default,
             tflite_path=tflite_path,
             dequantize=args.dequantize,
+            tfjs_path=tfjs_path,
             initialized_tables=initialized_tables,
             output_frozen_graph=args.output_frozen_graph,
             output_path=args.output)
