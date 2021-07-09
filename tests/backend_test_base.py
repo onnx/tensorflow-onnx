@@ -9,6 +9,7 @@
 import logging
 import os
 import unittest
+import subprocess
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -189,10 +190,20 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 tf.import_graph_def(graph_def, name='')
                 graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def, fold_constant=constant_fold)
 
-        model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
-        utils.save_protobuf(model_path, graph_def)
-        self.logger.debug("created file  %s", model_path)
         return result, graph_def, initialized_tables
+
+    def convert_to_tfjs(self, graph_def_path, output_names):
+        from tensorflowjs.converters import converter
+        tfjs_path = os.path.join(self.test_data_directory, self._testMethodName + "_tfjs")
+        converter.convert([graph_def_path, tfjs_path, '--input_format', 'tf_frozen_model',
+                          '--output_node_names', ','.join(output_names)])
+        return os.path.join(tfjs_path, 'model.json')
+
+    def run_tfjs(self, tfjs_path, inputs):
+        script_path = os.path.join(os.path.dirname(__file__), 'run_tfjs.js')
+
+        subprocess.run(['node', script_path, ])
+        pass
 
     def convert_to_tflite(self, graph_def, feed_dict, outputs):
         if not feed_dict:
@@ -323,6 +334,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             self.freeze_and_run_tf(func, feed_dict, output_names_with_port, as_session,
                                    premade_placeholders, large_model, constant_fold)
 
+        graph_def_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
+        utils.save_protobuf(graph_def_path, graph_def)
+        self.logger.debug("created file  %s", graph_def_path)
+
+        test_tfjs = True
+        if test_tfjs:
+            tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
+            from tfjs_helper import run_tfjs
+            tfjs_res = run_tfjs(tfjs_path, feed_dict)
+
         if test_tflite:
             tflite_path = self.convert_to_tflite(graph_def, feed_dict, output_names_with_port)
             test_tflite = tflite_path is not None and self.tflite_has_supported_types(tflite_path)
@@ -382,6 +403,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
+
+        if test_tfjs:
+            g = process_tf_graph(None, opset=self.config.opset,
+                                 input_names=input_names_without_port,
+                                 output_names=tfl_outputs,
+                                 target=self.config.target,
+                                 tfjs_path=tfjs_path,
+                                 **process_args)
+            g = optimizer.optimize_graph(g)
+
 
         if g is None:
             raise unittest.SkipTest("Both tf and tflite marked to skip")
