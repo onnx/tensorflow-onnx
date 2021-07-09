@@ -315,6 +315,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                       check_value=True, check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
                       graph_validator=None, as_session=False, large_model=False, premade_placeholders=False,
                       use_custom_ops=False):
+        print("************", self._testMethodName, " *****************")
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
         run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
@@ -340,8 +341,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         test_tfjs = True
         if test_tfjs:
-            tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
-            from tfjs_helper import run_tfjs
+            try:
+                tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
+                from tfjs_helper import run_tfjs
+            except Exception:
+                test_tfjs = False
+
+        if test_tfjs:
             tfjs_res = run_tfjs(tfjs_path, feed_dict)
 
         if test_tflite:
@@ -406,12 +412,20 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         if test_tfjs:
             g = process_tf_graph(None, opset=self.config.opset,
-                                 input_names=input_names_without_port,
-                                 output_names=tfl_outputs,
+                                 input_names=list(feed_dict.keys()),
+                                 output_names=None,
                                  target=self.config.target,
                                  tfjs_path=tfjs_path,
                                  **process_args)
             g = optimizer.optimize_graph(g)
+            onnx_tfjs_res = self.run_backend(g, None, onnx_feed_dict, large_model,
+                                             postfix="_from_tfjs", use_custom_ops=use_custom_ops)
+
+            self.assert_results_equal(tfjs_res, onnx_tfjs_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
+
+            if graph_validator:
+                self.assertTrue(graph_validator(g))
 
 
         if g is None:

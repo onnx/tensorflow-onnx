@@ -507,6 +507,8 @@ class Graph(object):
             new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
             n_shapes = n.output_shapes
             n_dtypes = n.output_dtypes
+            o_shape = self.get_shape(o)
+            o_dtype = self.get_dtype(o)
             body_graphs = n.graph.contained_graphs.pop(n.name, None)
             self.remove_node(n.name)
 
@@ -524,7 +526,7 @@ class Graph(object):
 
             self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
             self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs",
-                           dtypes=n_dtypes, shapes=n_shapes)
+                           dtypes=[o_dtype], shapes=[o_shape])
             self.copy_shape(new_output_name, o)
             self.copy_dtype(new_output_name, o)
 
