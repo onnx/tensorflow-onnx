@@ -36,3 +36,11 @@ jobs:
     job:
       steps:
       - template: 'pretrained_model_test.yml'
+
+schedules:
+- cron: "0 10 * * *"
+  displayName: pre-trained model test, full matrix
+  branches:
+    include:
+    - master
+  always: true

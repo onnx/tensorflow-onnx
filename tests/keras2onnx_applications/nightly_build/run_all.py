@@ -12,6 +12,7 @@ exclude_set = set(args.exclude.split()) if args.exclude is not None else set()
 
 os.environ["PYTHONPATH"] = \
     os.environ.get("PYTHONPATH", "") + os.pathsep + "../../keras2onnx_unit_tests" + os.pathsep + "../../../"
+os.environ["TF2ONNX_CATCH_ERRORS"] = "FALSE"
 
 mypath = '.'
 files = [f for f in listdir(mypath) if isfile(join(mypath, f)) and f.find("test_") == 0]
