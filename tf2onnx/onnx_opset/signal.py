@@ -167,21 +167,22 @@ class CommonFFTOp:
             if axis is not None or fft_length < shape_n:
                 real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)[:, :, :fft_length]
 
-                if opset >= 10:
-                    cst_axis = ctx.make_const(
-                        name=utils.make_name('CPLX_csta'), np_val=np.array([-1], dtype=np.int64))
-                    cst_zero = ctx.make_const(
-                        name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
-                    cst_length = ctx.make_const(
-                        name=utils.make_name('CPLX_cstl'), np_val=np.array([fft_length], dtype=np.int64))
-                    sliced_input = ctx.make_node(
-                        "Slice", inputs=[input_name, cst_zero.name, cst_length.name, cst_axis.name],
-                        name=utils.make_name('CPLX_S_' + node_name + 'rfft'))
-                else:
-                    sliced_input = ctx.make_node(
-                        "Slice", inputs=[input_name], attr=dict(starts=[0], ends=[fft_length], axes=[-1]),
-                        name=utils.make_name('CPLX_S_' + node_name + 'rfft'))
-                input_name = sliced_input.output[0]
+                if axis != 0:
+                    if opset >= 10:
+                        cst_axis = ctx.make_const(
+                            name=utils.make_name('CPLX_csta'), np_val=np.array([-1], dtype=np.int64))
+                        cst_zero = ctx.make_const(
+                            name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
+                        cst_length = ctx.make_const(
+                            name=utils.make_name('CPLX_cstl'), np_val=np.array([fft_length], dtype=np.int64))
+                        sliced_input = ctx.make_node(
+                            "Slice", inputs=[input_name, cst_zero.name, cst_length.name, cst_axis.name],
+                            name=utils.make_name('CPLX_S1_' + node_name + 'rfft'))
+                    else:
+                        sliced_input = ctx.make_node(
+                            "Slice", inputs=[input_name], attr=dict(starts=[0], ends=[fft_length], axes=[-1]),
+                            name=utils.make_name('CPLX_S1_' + node_name + 'rfft'))
+                    input_name = sliced_input.output[0]
             else:
                 size = fft_length // 2 + 1
                 real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)[:, :size, :fft_length]
@@ -267,11 +268,11 @@ class CommonFFTOp:
                         name=utils.make_name('CPLX_cstl'), np_val=np.array([size], dtype=np.int64))
                     sliced_mult = ctx.make_node(
                         "Slice", inputs=[mult.output[0], cst_zero.name, cst_length.name, cst_axis.name],
-                        name=utils.make_name('CPLX_S_' + node_name + 'rfft'))
+                        name=utils.make_name('CPLX_S2_' + node_name + 'rfft'))
                 else:
                     sliced_mult = ctx.make_node(
                         "Slice", inputs=[mult.output[0]], attr=dict(starts=[0], ends=[size], axes=[-2]),
-                        name=utils.make_name('CPLX_S_' + node_name + 'rfft'))
+                        name=utils.make_name('CPLX_S2_' + node_name + 'rfft'))
             else:
                 sliced_mult = mult
         else:
@@ -473,10 +474,25 @@ class CommonFFT2DOp(CommonFFTOp):
                                   name=utils.make_name('CPLX_' + node.name + '_cst_fft2dc'),
                                   attr={'axis': 0})
 
-        # FFT2D is different on tensorflow than on numpy.
-        # shape may be different based on fft_length.
+        # Final slice
+        size = value_array[-1] // 2 + 1
+        dim0 = value_array[-2]
+        if opset >= 10:
+            cst_axis = ctx.make_const(
+                name=utils.make_name('CPLX_csta'), np_val=np.array([-2, -1], dtype=np.int64))
+            cst_zero = ctx.make_const(
+                name=utils.make_name('CPLX_cstz'), np_val=np.array([0, 0], dtype=np.int64))
+            cst_length = ctx.make_const(
+                name=utils.make_name('CPLX_cstl'), np_val=np.array([dim0, size], dtype=np.int64))
+            sliced_last_node = ctx.make_node(
+                "Slice", inputs=[last_node.output[0], cst_zero.name, cst_length.name, cst_axis.name],
+                name=utils.make_name('CPLX_SF_' + node.name + 'rfft2d'))
+        else:
+            sliced_last_node = ctx.make_node(
+                "Slice", inputs=[last_node.output[0]], attr=dict(starts=[0, 0], ends=[dim0, size], axes=[-2, -1]),
+                name=utils.make_name('CPLX_SF_' + node.name + 'rfft2d'))
 
-        ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+        ctx.replace_all_inputs(node.output[0], sliced_last_node.output[0])  # ops=ctx.get_nodes()
         ctx.remove_node(node.name)
         return last_node
 

@@ -82,17 +82,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         if use_custom_ops:
             from onnxruntime_extensions import get_library_path
             opt.register_custom_ops_library(get_library_path())
+
         # in case of issues with the runtime, one can enable more logging
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
 
-        # TODO: remove
-        # from mlprodict.onnxrt import OnnxInference
-        # oinf = OnnxInference(model_path)
-        # print(oinf.obj)
-        # oinf.run(inputs, verbose=1, fLOG=print)
-            
         m = rt.InferenceSession(model_path, opt, providers=providers)
         results = m.run(output_names, inputs)
         return results

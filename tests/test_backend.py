@@ -5389,7 +5389,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.14")
     @skip_tflite("FlexRFFT2D")
     def test_rfft_ops_fft_length_many(self):
-
         for i in range(4, 7):
             for j in range(4, 7):
                 for m in range(0, 3):
@@ -5438,6 +5437,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
+    @skip_tflite("FlexRFFT2D")
+    @check_opset_min_version(11, "range")
+    def test_rfft2d_ops_fft_length_many(self):
+        for i in range(7, 4, -1):
+            for j in range(7, 4, -1):
+                for m in range(0, 3):
+                    for n in range(0, 3):
+                        with self.subTest(shape=(i, j), fft_length=(m, n)):
+                            x_val = make_xval([i, j]).astype(np.float32) / 100
+                            def func1_length(x):
+                                op_ = tf.signal.rfft2d(x, np.array([i-m, j-n], dtype=np.int32))
+                                return tf.abs(op_, name=_TFOUTPUT)
+                            self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
     @check_opset_min_version(11, "range")
     @unittest.skipIf(True, reason="Not fully implemented for dynamic shape.")
     def test_fft_ops(self):
@@ -5464,12 +5478,4 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
-    # cl = BackendTests()
-    # cl.setUp()
-    # cl.test_rfft_ops_fft_length_many()
-    # cl.test_rfft_ops_fft_length()
-    # cl.test_rfft2d_ops()
-    # cl.test_rfft2d_ops_fft_length()
-    # cl.test_fft_ops()
-    # stop
     unittest_main()
