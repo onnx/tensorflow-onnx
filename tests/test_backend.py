@@ -5380,9 +5380,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @skip_tflite("FlexRFFT2D")
     def test_rfft_ops_fft_length(self):
 
-        x_val = make_xval([3, 4]).astype(np.float32)
+        x_val = make_xval([3, 9]).astype(np.float32)
         def func1_length(x):
-            op_ = tf.signal.rfft(x, np.array([3], dtype=np.int32))
+            op_ = tf.signal.rfft(x, np.array([8], dtype=np.int32))
             return tf.abs(op_, name=_TFOUTPUT)
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
@@ -5396,6 +5396,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func1(x):
             op_ = tf.signal.rfft2d(x)
             return tf.abs(op_, name=_TFOUTPUT)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=False)
         self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
 
         def func2(x):
@@ -5413,12 +5414,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.14")
     @skip_tflite("FlexRFFT2D")
     @check_opset_min_version(11, "range")
-    def test_rfft_ops_fft2d_length(self):
+    def test_rfft2d_ops_fft_length(self):
 
-        x_val = make_xval([4, 4]).astype(np.float32)
+        x_val = make_xval([3, 4]).astype(np.float32)
         def func1_length(x):
             op_ = tf.signal.rfft2d(x, np.array([3, 3], dtype=np.int32))
             return tf.abs(op_, name=_TFOUTPUT)
+        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=False)
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
@@ -5448,4 +5450,12 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
+    # cl = BackendTests()
+    # cl.setUp()
+    # cl.test_rfft_ops()
+    # cl.test_rfft_ops_fft_length()
+    # cl.test_rfft2d_ops()
+    # cl.test_rfft2d_ops_fft_length()
+    # cl.test_fft_ops()
+    # stop
     unittest_main()

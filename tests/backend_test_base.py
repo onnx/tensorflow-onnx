@@ -86,6 +86,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
+
+        # TODO: remove
+        # from mlprodict.onnxrt import OnnxInference
+        # oinf = OnnxInference(model_path)
+        # print(oinf.obj)
+        oinf.run(inputs, verbose=1, fLOG=print)
+            
         m = rt.InferenceSession(model_path, opt, providers=providers)
         results = m.run(output_names, inputs)
         return results
@@ -303,7 +310,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                       rtol=1e-07, atol=1e-5, mtol=None, convert_var_to_const=True, constant_fold=True,
                       check_value=True, check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
                       graph_validator=None, as_session=False, large_model=False, premade_placeholders=False,
-                      use_custom_ops=False):
+                      use_custom_ops=False, optimize=True):
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
         run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
@@ -342,7 +349,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                      const_node_values=const_node_values,
                                      initialized_tables=initialized_tables,
                                      **process_args)
-                g = optimizer.optimize_graph(g, catch_errors=False)
+                if optimize:
+                    g = optimizer.optimize_graph(g, catch_errors=False)
                 actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model,
                                           use_custom_ops=use_custom_ops)
 
@@ -372,7 +380,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                                  target=self.config.target,
                                  tflite_path=tflite_path,
                                  **tfl_process_args)
-            g = optimizer.optimize_graph(g)
+            if optimize:
+                g = optimizer.optimize_graph(g)
             onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
             onnx_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port,
                                             postfix="_from_tflite", use_custom_ops=use_custom_ops)
