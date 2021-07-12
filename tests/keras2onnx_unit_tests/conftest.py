@@ -16,8 +16,10 @@ K = keras.backend
 @pytest.fixture(scope='function')
 def runner():
     np.random.seed(42)
-    if is_tf_keras and is_tf2:
+    if is_tf2:
         tf.random.set_seed(42)
+    else:
+        tf.random.set_random_seed(42)
     model_files = []
 
     def runner_func(*args, **kwargs):
