@@ -136,7 +136,7 @@ class CommonFFTOp:
         else:
             res_onnx_dtype = utils.map_numpy_to_onnx_dtype(np.float64)
             np_dtype = np.float64
-            
+
         if const_length:
             # RFFT: length of FFT is known, some computation
             # (see function make_dft_constant)
@@ -161,11 +161,12 @@ class CommonFFTOp:
                         axis < len(value_array), "Inconsistent axis %r incompatible with fft_length=%r",
                         axis, value_array)
                     fft_length = value_array[axis]
-                utils.make_sure(shape is None or fft_length <= shape[1], "Case fft_length > shape[1] is not implemented.")
+                utils.make_sure(shape is None or fft_length <= shape[1],
+                                "Case fft_length > shape[1] is not implemented.")
 
             if axis is not None or fft_length < shape_n:
                 real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)[:, :, :fft_length]
-                
+
                 if opset >= 10:
                     cst_axis = ctx.make_const(
                         name=utils.make_name('CPLX_csta'), np_val=np.array([-1], dtype=np.int64))
@@ -178,7 +179,7 @@ class CommonFFTOp:
                         name=utils.make_name('CPLX_S_' + node_name + 'rfft'))
                 else:
                     sliced_input = ctx.make_node(
-                        "Slice", inputs=[mult.output[0]], attr=dict(starts=[0], ends=[fft_length], axes=[-1]),
+                        "Slice", inputs=[input_name], attr=dict(starts=[0], ends=[fft_length], axes=[-1]),
                         name=utils.make_name('CPLX_S_' + node_name + 'rfft'))
                 input_name = sliced_input.output[0]
             else:
@@ -372,7 +373,6 @@ class CommonFFT2DOp(CommonFFTOp):
         onnx_dtype = ctx.get_dtype(input_name)
         utils.make_sure(onnx_dtype in CommonFFTOp.supported_dtypes, "Unsupported input type.")
         shape = ctx.get_shape(input_name)
-        shape_n = shape[-1]
 
         if const_length:
             # RFFT: length of FFT is known, some computation
@@ -388,7 +388,8 @@ class CommonFFT2DOp(CommonFFTOp):
             value = node_fft_length.get_attr("value")
             value_array = to_array(value.t)
             utils.make_sure(value_array.shape == (2,),
-                            "fft_length must be an array with two values not %r.", value_array) 
+                            "fft_length must be an array with two values not %r.", value_array)g181
+                            
         else:
             raise NotImplementedError(
                 "FFT2D with dynamic shape (known at execution) is not implemented yet.")
