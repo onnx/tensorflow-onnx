@@ -388,7 +388,7 @@ class CommonFFT2DOp(CommonFFTOp):
             value = node_fft_length.get_attr("value")
             value_array = to_array(value.t)
             utils.make_sure(value_array.shape == (2,),
-                            "fft_length must be an array with two values not %r.", value_array)g181
+                            "fft_length must be an array with two values not %r.", value_array)
                             
         else:
             raise NotImplementedError(

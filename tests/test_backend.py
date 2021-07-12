@@ -5388,6 +5388,20 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.14")
     @skip_tflite("FlexRFFT2D")
+    def test_rfft_ops_fft_length_many(self):
+
+        for i in range(4, 7):
+            for j in range(4, 7):
+                for m in range(0, 3):
+                    with self.subTest(shape=(i, j), fft_length=m):
+                        x_val = make_xval([i, j]).astype(np.float32)
+                        def func1_length(x):
+                            op_ = tf.signal.rfft(x, np.array([j-m], dtype=np.int32))
+                            return tf.abs(op_, name=_TFOUTPUT)
+                        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    @skip_tflite("FlexRFFT2D")
     @check_opset_min_version(11, "range")
     def test_rfft2d_ops(self):
 
@@ -5452,7 +5466,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 if __name__ == '__main__':
     # cl = BackendTests()
     # cl.setUp()
-    # cl.test_rfft_ops()
+    # cl.test_rfft_ops_fft_length_many()
     # cl.test_rfft_ops_fft_length()
     # cl.test_rfft2d_ops()
     # cl.test_rfft2d_ops_fft_length()
