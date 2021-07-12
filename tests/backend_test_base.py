@@ -343,12 +343,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         if test_tfjs:
             try:
                 tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
-                from tfjs_helper import run_tfjs
             except Exception:
                 test_tfjs = False
-
-        if test_tfjs:
-            tfjs_res = run_tfjs(tfjs_path, feed_dict)
 
         if test_tflite:
             tflite_path = self.convert_to_tflite(graph_def, feed_dict, output_names_with_port)
@@ -411,6 +407,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 self.assertTrue(graph_validator(g))
 
         if test_tfjs:
+            from tfjs_helper import run_tfjs
+            # from tf2onnx.tfjs_utils import get_model_inputs
+            # tfjs_inps, tfjs_inp_dtypes, _ = get_model_inputs(tfjs_path)
+            # tfjs_inp_to_dtype = {k + ':0': t for k, t in zip(tfjs_inps, tfjs_inp_dtypes)}
+            # tfjs_feed_dict = {k: v.astype(tfjs_inp_to_dtype[k]) for k, v in feed_dict.items()}
+            tfjs_res = run_tfjs(tfjs_path, feed_dict)
+
+        if test_tfjs:
             g = process_tf_graph(None, opset=self.config.opset,
                                  input_names=list(feed_dict.keys()),
                                  output_names=None,
@@ -421,7 +425,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             onnx_tfjs_res = self.run_backend(g, None, onnx_feed_dict, large_model,
                                              postfix="_from_tfjs", use_custom_ops=use_custom_ops)
 
-            self.assert_results_equal(tfjs_res, onnx_tfjs_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
+            self.assert_results_equal(tfjs_res, onnx_tfjs_res, rtol, atol, mtol, check_value, check_shape,
+                                      check_dtype=False)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
 
             if graph_validator:

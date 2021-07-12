@@ -234,22 +234,7 @@ def get_model_subgraphs(model):
         utils.make_sure(main_g not in ds, "Main graph %s is a dependency of subgraph %s", main_g, i)
         dependencies[i] = ds
 
-    ordered = []
-    visited = set()
-    visiting = set()
-    def visit(g):
-        utils.make_sure(g not in visiting, "Subgraphs have cyclic dependencies: %r", dependencies)
-        if g in visited:
-            return
-        visiting.add(g)
-        for d in dependencies[g]:
-            visit(d)
-        visited.add(g)
-        ordered.append(g)
-        visiting.remove(g)
-
-    for g in reversed(range(model.SubgraphsLength())):
-        visit(g)
+    ordered = utils.topological_sort(dependencies)
 
     return [idx_to_graph[i] for i in ordered]
 

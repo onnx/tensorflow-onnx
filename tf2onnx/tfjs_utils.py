@@ -16,7 +16,7 @@ from tf2onnx import tf_utils
 tf_api_def_map = c_api_util.ApiDefMap()
 
 
-def read_tfjs_attr_helper(k, v, tf_dtypes):
+def read_tfjs_attr_helper(k, v, tf_dtypes=False):
     utils.make_sure(k in ['func', 'shape', 'type', 'list', 's', 'i', 'f', 'b'], "TODO")
     if k == 'list':
         if len(v) == 0:
@@ -122,7 +122,7 @@ def get_output_shapes(node_def, input_dtypes, input_shapes, inp_consts):
             return outputs_shapes
 
 
-def graphs_from_tfjs(model_path, input_names=None, output_names=None):
+def read_model_json(model_path):
     zip_compressed = False
     with open(model_path, "rb") as f:
         magic_number = f.read(2)
@@ -133,6 +133,29 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None):
             zip_compressed = True
         else:
             model = json.load(f)
+    return model, zip_compressed
+
+
+def get_model_inputs(model_path):
+    model, _ = read_model_json(model_path)
+    input_nodes = [node for node in model['modelTopology']['node'] if node['op'] == "Placeholder"]
+    input_names = []
+    input_dtypes = []
+    input_shapes = []
+
+    for node in input_nodes:
+        input_names.append(node['name'])
+        input_shapes.append(read_tfjs_attr(node['attr']['shape']))
+        dtype = node['attr']['dtype']['type']
+        tf_dtype = getattr(types_pb2, dtype)
+        onnx_dtype = tf_utils.map_tf_dtype(tf_dtype)
+        input_dtypes.append(onnx_dtype)
+
+    return input_names, input_dtypes, input_shapes
+
+
+def graphs_from_tfjs(model_path, input_names=None, output_names=None):
+    model, zip_compressed = read_model_json(model_path)
 
     weightsManifest = model['weightsManifest'][0]
 
@@ -172,11 +195,32 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None):
 
     main_g = read_tfjs_graph(topology['node'], weights, None, input_names, output_names)
     subgraphs = []
-    for func in topology.get('library', {}).get('function', []):
+    funcs = sort_tfjs_functions(topology.get('library', {}).get('function', []))
+    for func in funcs:
         sub_g = read_tfjs_graph(func.get('nodeDef', []), weights, func)
         subgraphs.append(sub_g)
 
     return main_g, subgraphs
+
+
+def sort_tfjs_functions(funcs):
+    dependencies = {}
+    name_to_func = {}
+    for f in funcs:
+        name = f['signature']['name']
+        dependencies[name] = get_tfjs_func_dependencies(f)
+        name_to_func[name] = f
+    ordered = utils.topological_sort(dependencies)
+    return [name_to_func[n] for n in ordered]
+    
+
+def get_tfjs_func_dependencies(func):
+    dependencies = set()
+    for node in func.get('nodeDef', []):
+        for v in node.get('attr', {}).values():
+            if list(v.keys())[0] == 'func':
+                dependencies.add(read_tfjs_attr(v))
+    return list(dependencies)
 
 
 def read_tfjs_function(func):
@@ -191,11 +235,13 @@ def read_tfjs_function(func):
         out_shapes_attr = func.get('argAttr', {}).get(str(i), {}).get('attr', {}).get('_output_shapes')
         if out_shapes_attr is not None:
             output_shapes[inp_name] = read_tfjs_attr(out_shapes_attr)[0]
+        else:
+            output_shapes[inp_name] = None
     ret_map = func['ret']
     outputs = [ret_map[out['name']] for out in signature['outputArg']]
     name = signature['name']
     return tf_dtypes, output_shapes, inputs, outputs, name
-            
+
 
 def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=None):
     onnx_nodes = []
@@ -211,7 +257,7 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
 
     # TODO: Placeholder with default, etc.
     if graph_inputs is None:
-        graph_inputs = [n['name'] + ':0' for n in nodes if n['op'] == 'Placeholder']
+        graph_inputs = [n['name'] + ':0' for n in nodes if n['op'] == "Placeholder"]
 
     unused_outputs = set()
 
@@ -221,11 +267,15 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         if op_type == "Const":
             np_arr = weights[node_name]
             out_name = node_name + ':0'
-            onnx_tensor = numpy_helper.from_array(np_arr, out_name)
+            tf_dtype = read_tfjs_attr(node['attr']['dtype'], tf_dtypes=True)
+            onnx_dtype = tf_utils.map_tf_dtype(tf_dtype)
+            # The dtype of a Const in tfjs can differ from that of the weight used to get its value
+            np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
+            onnx_tensor = numpy_helper.from_array(np_arr.astype(np_dtype), out_name)
             onnx_node = helper.make_node("Const", [], outputs=[out_name], name=node_name, value=onnx_tensor)
             onnx_nodes.append(onnx_node)
-            output_shapes[out_name] = np_arr.shape
-            tf_dtypes[out_name] = read_tfjs_attr(node['attr']['dtype'], tf_dtypes=True)
+            output_shapes[out_name] = list(np_arr.shape)
+            tf_dtypes[out_name] = tf_dtype
             op_info[node_name] = (op_type, {'dtype': tf_dtypes[out_name]})
             continue
         tf_attr = {}
@@ -235,10 +285,12 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
             tf_attr[k] = read_tfjs_attr(v, tf_dtypes=True)
             if k in tf_utils.TF_IGNORED_NODE_ATTRS:
                 continue
+            if k == 'DstT':
+                k = 'to'
             onnx_attr[k] = read_tfjs_attr(v)
         op_info[node_name] = (op_type, tf_attr)
 
-        input_names = [resolve_output(inp, op_info) for inp in node.get('input', [])]
+        input_names = [resolve_output(inp, op_info) for inp in node.get('input', []) if not inp.startswith('^')]
         unused_outputs.difference_update(input_names)
         inp_dtypes = [tf_dtypes[inp] for inp in input_names]
         inp_shapes = [output_shapes[inp] for inp in input_names]

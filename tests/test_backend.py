@@ -442,7 +442,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         strides = [1, 1, 1, 1]
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
-        self._conv_test(x_val, kernel_val, strides=strides, padding=pads, rtol=1e-05)
+        self._conv_test(x_val, kernel_val, strides=strides, padding=pads, rtol=1.1e-05)
 
     def test_conv2d_dilation_same(self):
         x_shape = [1, 35, 35, 288]  # NHWC
