@@ -20,9 +20,10 @@ logger = logging.getLogger(__name__)
 # pylint: disable=unused-argument,missing-docstring
 
 def make_dft_constant(length, dtype, fft_length):
-    n = np.arange(length)
-    k = n.reshape((length, 1)).astype(np.float64)
     utils.make_sure(fft_length > 0, "fft_length must be strictly positive but is %r.", fft_length)
+    new_length = max(length, fft_length // 2 + 1)
+    n = np.arange(new_length)
+    k = n.reshape((new_length, 1)).astype(np.float64)
     mat = np.exp(-2j * np.pi * k * n / fft_length)
     both = np.empty((2,) + mat.shape, dtype=dtype)
     both[0, :, :] = np.real(mat)
@@ -94,6 +95,11 @@ class CommonFFTOp:
                 cst = _DFT_real_cst(x.shape[0], fft_length)
                 res = np.dot(cst[:, :, :fft_length], x[:fft_length])[:, :size, :]
                 return np.transpose(res, (0, 2, 1))
+
+        `tf.signal.rfft` also works for tensors with 3+ dimensions.
+        The strategy here is to reshape the matrix into a 2D matrix
+        then apply FFT, then reshape the matrix into dimension (2, ...).
+        The first dimension is still real/imaginary part.
         """
         if input_name is None:
             input_name = node.input[0]
@@ -111,21 +117,23 @@ class CommonFFTOp:
             onnx_dtype = ctx.get_dtype(input_name)
             utils.make_sure(onnx_dtype in CommonFFTOp.supported_dtypes, "Unsupported input type.")
             shape = ctx.get_shape(node.input[0])
-            shape_n = shape[-1] if dim is None else dim
+            if shape is None or len(shape) > 2:
+                utils.make_sure(False, "needs reshape %r." % shape)
+            shape_n = shape[-1]
+            
+            if onnx_dtype in (onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128):
+                parent = ctx.get_node_by_output_in_current_graph(input_name)
+                utils.make_sure(
+                    parent.type == 'Cast' and parent.get_attr_value('to') == onnx_dtype,
+                    "Current implementation of FFT or RFFT assumes the input is real or complex produced "
+                    "by a node Cast just before this one.")
+                input_name = parent.input[0]
+                onnx_dtype = ctx.get_dtype(input_name)
+
+            np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
         else:
             shape_n = dim
             utils.make_sure(shape is not None, "shape must be known.")
-
-        if onnx_dtype in (onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128):
-            parent = ctx.get_node_by_output_in_current_graph(input_name)
-            utils.make_sure(
-                parent.type == 'Cast' and parent.get_attr_value('to') == onnx_dtype,
-                "Current implementation of FFT or RFFT assumes the input is real or complex produced "
-                "by a node Cast just before this one.")
-            input_name = parent.input[0]
-            onnx_dtype = ctx.get_dtype(input_name)
-
-        np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
 
         if np_dtype == np.float16:
             res_onnx_dtype = utils.map_numpy_to_onnx_dtype(np.float16)
@@ -161,8 +169,9 @@ class CommonFFTOp:
                         axis < len(value_array), "Inconsistent axis %r incompatible with fft_length=%r",
                         axis, value_array)
                     fft_length = value_array[axis]
-                utils.make_sure(shape is None or fft_length <= shape[1],
-                                "Case fft_length > shape[1] is not implemented.")
+                utils.make_sure(shape is None or fft_length <= shape[-1],
+                                "Case fft_length=%r > shape[1]=%r (shape=%r) is not implemented.",
+                                fft_length, shape[-1], shape)
 
             if axis is not None or fft_length < shape_n:
                 real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)[:, :, :fft_length]
@@ -254,36 +263,27 @@ class CommonFFTOp:
             "MatMul", inputs=[onx_real_imag_part_name, trx],
             name=utils.make_name('CPLX_M_' + node_name + 'rfft'))
 
-        if const_length:
-            if axis == 1 or (fft_length < shape[1] and axis != 0):
-                size = fft_length // 2 + 1
-                new_shape = list(shape)
-                new_shape[-2] = size
-                if opset >= 10:
-                    cst_axis = ctx.make_const(
-                        name=utils.make_name('CPLX_csta'), np_val=np.array([-2], dtype=np.int64))
-                    cst_zero = ctx.make_const(
-                        name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
-                    cst_length = ctx.make_const(
-                        name=utils.make_name('CPLX_cstl'), np_val=np.array([size], dtype=np.int64))
-                    sliced_mult = ctx.make_node(
-                        "Slice", inputs=[mult.output[0], cst_zero.name, cst_length.name, cst_axis.name],
-                        name=utils.make_name('CPLX_S2_' + node_name + 'rfft'))
-                else:
-                    sliced_mult = ctx.make_node(
-                        "Slice", inputs=[mult.output[0]], attr=dict(starts=[0], ends=[size], axes=[-2]),
-                        name=utils.make_name('CPLX_S2_' + node_name + 'rfft'))
+        if not const_length or (axis == 1 or (fft_length < shape[1] and axis != 0)):
+            size = fft_length // 2 + 1
+            if opset >= 10:
+                cst_axis = ctx.make_const(
+                    name=utils.make_name('CPLX_csta'), np_val=np.array([-2], dtype=np.int64))
+                cst_zero = ctx.make_const(
+                    name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
+                cst_length = ctx.make_const(
+                    name=utils.make_name('CPLX_cstl'), np_val=np.array([size], dtype=np.int64))
+                sliced_mult = ctx.make_node(
+                    "Slice", inputs=[mult.output[0], cst_zero.name, cst_length.name, cst_axis.name],
+                    name=utils.make_name('CPLX_S2_' + node_name + 'rfft'))
             else:
-                sliced_mult = mult
+                sliced_mult = ctx.make_node(
+                    "Slice", inputs=[mult.output[0]], attr=dict(starts=[0], ends=[size], axes=[-2]),
+                    name=utils.make_name('CPLX_S2_' + node_name + 'rfft'))
         else:
-            utils.make_sure(
-                False,
-                "Dynamic length not fully implemented for dynamic fft_length or dynamic shape, fft_length=%r.",
-                fft_length)
+            sliced_mult = mult
 
         if axis in (None, 1):
-            new_shape = [2] + list(shape)
-            shapei = list(np.arange(len(new_shape)))
+            shapei = [0, 1, 2]
             perm = shapei[:-2] + [shapei[-1], shapei[-2]]
             last_node = ctx.make_node(
                 "Transpose", inputs=[sliced_mult.output[0]], attr=dict(perm=perm),
@@ -390,7 +390,6 @@ class CommonFFT2DOp(CommonFFTOp):
             value_array = to_array(value.t)
             utils.make_sure(value_array.shape == (2,),
                             "fft_length must be an array with two values not %r.", value_array)
-
         else:
             raise NotImplementedError(
                 "FFT2D with dynamic shape (known at execution) is not implemented yet.")

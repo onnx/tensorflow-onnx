@@ -196,7 +196,8 @@ def check_discrepencies(out1, out2, threshold=1e-3):
 
 
 def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
-              signature=None, tag=None, output_name=None, ort_name=None):
+              signature=None, tag=None, output_name=None, ort_name=None,
+              optimize=True):
     """
     Runs a simple benchmark.
     Goes through every steps (download, convert).
@@ -225,7 +226,12 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         onnx_name = onnx_name_unzipped
 
     # Benchmarks both models.
-    ort = onnxruntime.InferenceSession(onnx_name)
+    if optimize:
+        ort = onnxruntime.InferenceSession(onnx_name)
+    else:
+        so = onnxruntime.SessionOptions()
+        so.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
+        ort = onnxruntime.InferenceSession(onnx_name)
 
     if verbose:
         print("ONNX inputs:")
