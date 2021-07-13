@@ -106,6 +106,12 @@ class CommonFFTOp:
             node_name = node.name
         else:
             node_name = input_name.split(':')[0]
+
+        minus_one = ctx.make_const(name=utils.make_name('FFT_minus_one'),
+                                   np_val=np.array([-1], dtype=np.int64))
+        zero = ctx.make_const(name=utils.make_name('FFT_zero'),
+                                   np_val=np.array([0], dtype=np.int64))
+
         if axis is None:
             consumers = ctx.find_output_consumers(node.output[0])
             consumer_types = set(op.type for op in consumers)
@@ -118,9 +124,46 @@ class CommonFFTOp:
             utils.make_sure(onnx_dtype in CommonFFTOp.supported_dtypes, "Unsupported input type.")
             shape = ctx.get_shape(node.input[0])
             if shape is None or len(shape) > 2:
-                utils.make_sure(False, "needs reshape %r." % shape)
-            shape_n = shape[-1]
-            
+                if shape is None or min(shape) <= 0:
+                    two = ctx.make_const(name=utils.make_name('FFT_two'),
+                                         np_val=np.array([2], dtype=np.int64))
+                    current_shape = ctx.make_node(
+                        'Shape', [input_name], name=utils.make_name('FFT_' + node_name + '_shape'))
+                    last_dim = ctx.make_node('Gather', [current_shape.output[0], minus_one.name],
+                                             name=utils.make_name('FFT_' + node_name + '_shape'))
+                    new_shape = ctx.make_node('Concat', [minus_one.name, last_dim.output[0]],
+                                              name=utils.make_name('FFT_' + node_name + '_concat'),
+                                              attr={'axis': 0}).output[0]
+                    if opset >= 10:
+                        belly = ctx.make_node(
+                            "Slice", inputs=[current_shape.output[0], zero.name, minus_one.name, zero.name],
+                            name=utils.make_name('FFT_fshape_' + node_name + 'rfft'))
+                    else:
+                        belly = ctx.make_node(
+                            "Slice", inputs=[current_shape.output[0]], attr=dict(starts=[0], ends=[-1], axes=[0]),
+                            name=utils.make_name('FFT_fshape_' + node_name + 'rfft'))
+                    reshape_final = ctx.make_node('Concat', [two.name, belly.output[0], minus_one.name],
+                                              name=utils.make_name('FFT_' + node_name + '_concatshape'),
+                                              attr={'axis': 0}).output[0]
+                    if shape is not None and shape[-1] > 0:
+                        shape_n = shape[-1]
+                    else:
+                        shape_n = None
+                else:
+                    new_shape = ctx.make_const(name=utils.make_name('FFT_new_shape'),
+                                              np_val=np.array([-1, shape[-1]], dtype=np.int64)).name
+                    reshape_final = ctx.make_const(
+                        name=utils.make_name('FFT_final_shape'),
+                        np_val=np.array([2] + list(shape[:-1]) + [-1], dtype=np.int64)).name
+                    shape_n = shape[-1]
+                reshaped_input = ctx.make_node('Reshape', [input_name, new_shape],
+                                               name=utils.make_name('FFT_' + node_name + '_reshape'))
+                input_name = reshaped_input.output[0]
+                shape = None
+            else:
+                reshape_final = None
+                shape_n = shape[-1]
+
             if onnx_dtype in (onnx_pb.TensorProto.COMPLEX64, onnx_pb.TensorProto.COMPLEX128):
                 parent = ctx.get_node_by_output_in_current_graph(input_name)
                 utils.make_sure(
@@ -169,23 +212,19 @@ class CommonFFTOp:
                         axis < len(value_array), "Inconsistent axis %r incompatible with fft_length=%r",
                         axis, value_array)
                     fft_length = value_array[axis]
-                utils.make_sure(shape is None or fft_length <= shape[-1],
+                utils.make_sure(shape_n is None or fft_length <= shape_n,
                                 "Case fft_length=%r > shape[1]=%r (shape=%r) is not implemented.",
-                                fft_length, shape[-1], shape)
+                                fft_length, shape_n, shape)
 
-            if axis is not None or fft_length < shape_n:
+            if axis is not None or (shape_n is not None and fft_length < shape_n):
                 real_imag_part = make_dft_constant(shape_n, np_dtype, fft_length)[:, :, :fft_length]
 
                 if axis != 0:
                     if opset >= 10:
-                        cst_axis = ctx.make_const(
-                            name=utils.make_name('CPLX_csta'), np_val=np.array([-1], dtype=np.int64))
-                        cst_zero = ctx.make_const(
-                            name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
                         cst_length = ctx.make_const(
                             name=utils.make_name('CPLX_cstl'), np_val=np.array([fft_length], dtype=np.int64))
                         sliced_input = ctx.make_node(
-                            "Slice", inputs=[input_name, cst_zero.name, cst_length.name, cst_axis.name],
+                            "Slice", inputs=[input_name, zero.name, cst_length.name, minus_one.name],
                             name=utils.make_name('CPLX_S1_' + node_name + 'rfft'))
                     else:
                         sliced_input = ctx.make_node(
@@ -248,9 +287,7 @@ class CommonFFTOp:
             fft_length = None
 
         if axis != 0:
-            shapei = list(np.arange(len(shape)))
-            perm = shapei[:-2] + [shapei[-1], shapei[-2]]
-            utils.make_sure(len(perm) >= 2, "perm cannot be empty.")
+            perm = [1, 0]
             trx = ctx.make_node(
                 "Transpose", inputs=[input_name], attr=dict(perm=perm),
                 name=utils.make_name(node_name + '_T_')).output[0]
@@ -263,17 +300,15 @@ class CommonFFTOp:
             "MatMul", inputs=[onx_real_imag_part_name, trx],
             name=utils.make_name('CPLX_M_' + node_name + 'rfft'))
 
-        if not const_length or (axis == 1 or (fft_length < shape[1] and axis != 0)):
+        if not const_length or (axis == 1 or (fft_length < shape_n and axis != 0)):
             size = fft_length // 2 + 1
             if opset >= 10:
                 cst_axis = ctx.make_const(
                     name=utils.make_name('CPLX_csta'), np_val=np.array([-2], dtype=np.int64))
-                cst_zero = ctx.make_const(
-                    name=utils.make_name('CPLX_cstz'), np_val=np.array([0], dtype=np.int64))
                 cst_length = ctx.make_const(
                     name=utils.make_name('CPLX_cstl'), np_val=np.array([size], dtype=np.int64))
                 sliced_mult = ctx.make_node(
-                    "Slice", inputs=[mult.output[0], cst_zero.name, cst_length.name, cst_axis.name],
+                    "Slice", inputs=[mult.output[0], zero.name, cst_length.name, cst_axis.name],
                     name=utils.make_name('CPLX_S2_' + node_name + 'rfft'))
             else:
                 sliced_mult = ctx.make_node(
@@ -283,15 +318,22 @@ class CommonFFTOp:
             sliced_mult = mult
 
         if axis in (None, 1):
-            shapei = [0, 1, 2]
-            perm = shapei[:-2] + [shapei[-1], shapei[-2]]
+            perm = [0, 2, 1]
             last_node = ctx.make_node(
                 "Transpose", inputs=[sliced_mult.output[0]], attr=dict(perm=perm),
                 name=utils.make_name('CPLX_T_' + node_name + 'rfft'))
         else:
             last_node = sliced_mult
+
+        if reshape_final is not None:
+            reshaped_last_node = ctx.make_node(
+                    "Reshape", inputs=[last_node.output[0], reshape_final],
+                    name=utils.make_name('CPLX_Reshape_' + node_name + 'rfft'))
+        else:
+            reshaped_last_node = last_node
+
         if axis is None:
-            ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+            ctx.replace_all_inputs(node.output[0], reshaped_last_node.output[0])  # ops=ctx.get_nodes()
         return last_node
 
 
