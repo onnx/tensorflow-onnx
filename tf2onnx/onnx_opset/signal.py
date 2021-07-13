@@ -110,7 +110,7 @@ class CommonFFTOp:
         minus_one = ctx.make_const(name=utils.make_name('FFT_minus_one'),
                                    np_val=np.array([-1], dtype=np.int64))
         zero = ctx.make_const(name=utils.make_name('FFT_zero'),
-                                   np_val=np.array([0], dtype=np.int64))
+                              np_val=np.array([0], dtype=np.int64))
 
         if axis is None:
             consumers = ctx.find_output_consumers(node.output[0])
@@ -142,16 +142,17 @@ class CommonFFTOp:
                         belly = ctx.make_node(
                             "Slice", inputs=[current_shape.output[0]], attr=dict(starts=[0], ends=[-1], axes=[0]),
                             name=utils.make_name('FFT_fshape_' + node_name + 'rfft'))
-                    reshape_final = ctx.make_node('Concat', [two.name, belly.output[0], minus_one.name],
-                                              name=utils.make_name('FFT_' + node_name + '_concatshape'),
-                                              attr={'axis': 0}).output[0]
+                    reshape_final = ctx.make_node(
+                        'Concat', [two.name, belly.output[0], minus_one.name],
+                        name=utils.make_name('FFT_' + node_name + '_concatshape'),
+                        attr={'axis': 0}).output[0]
                     if shape is not None and shape[-1] > 0:
                         shape_n = shape[-1]
                     else:
                         shape_n = None
                 else:
                     new_shape = ctx.make_const(name=utils.make_name('FFT_new_shape'),
-                                              np_val=np.array([-1, shape[-1]], dtype=np.int64)).name
+                                               np_val=np.array([-1, shape[-1]], dtype=np.int64)).name
                     reshape_final = ctx.make_const(
                         name=utils.make_name('FFT_final_shape'),
                         np_val=np.array([2] + list(shape[:-1]) + [-1], dtype=np.int64)).name
@@ -327,8 +328,8 @@ class CommonFFTOp:
 
         if reshape_final is not None:
             reshaped_last_node = ctx.make_node(
-                    "Reshape", inputs=[last_node.output[0], reshape_final],
-                    name=utils.make_name('CPLX_Reshape_' + node_name + 'rfft'))
+                "Reshape", inputs=[last_node.output[0], reshape_final],
+                name=utils.make_name('CPLX_Reshape_' + node_name + 'rfft'))
         else:
             reshaped_last_node = last_node
 
