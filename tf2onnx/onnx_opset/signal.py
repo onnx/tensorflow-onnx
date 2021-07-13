@@ -390,7 +390,7 @@ class CommonFFT2DOp(CommonFFTOp):
             value_array = to_array(value.t)
             utils.make_sure(value_array.shape == (2,),
                             "fft_length must be an array with two values not %r.", value_array)
-                            
+
         else:
             raise NotImplementedError(
                 "FFT2D with dynamic shape (known at execution) is not implemented yet.")
