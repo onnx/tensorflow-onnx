@@ -427,7 +427,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
         main_g, subgraphs = graphs_from_tflite(tflite_path, input_names, output_names)
         is_tflite = True
     elif tfjs_path is not None:
-        main_g, subgraphs = graphs_from_tfjs(tfjs_path, input_names, output_names)
+        main_g, subgraphs = graphs_from_tfjs(tfjs_path, input_names, output_names, ignore_default, use_default)
     else:
         main_g, subgraphs = graphs_from_tf(tf_graph, input_names, output_names, shape_override, const_node_values,
                                            ignore_default, use_default)

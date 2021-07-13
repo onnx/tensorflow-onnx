@@ -11,6 +11,9 @@ from tensorflow.core.framework import types_pb2, node_def_pb2
 from google.protobuf.json_format import ParseDict
 import tensorflow as tf
 from tf2onnx import tf_utils
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 tf_api_def_map = c_api_util.ApiDefMap()
@@ -53,7 +56,7 @@ def tfjs_node_to_tf_node_def(node):
     return node_def
 
 
-def resolve_output(output, op_info):
+def resolve_output(output, op_info, func_name=None):
     cnt = output.count(':')
     if cnt == 0:
         if output in op_info:
@@ -62,6 +65,10 @@ def resolve_output(output, op_info):
     if cnt == 1:
         return output
     node, output_arg_name, port = output.split(':')
+    if node not in op_info and func_name is not None:
+        long_node_name = func_name + "/" + node
+        if long_node_name in op_info:
+            node = long_node_name
     op_type, attr = op_info[node]
     names, _ = get_output_names_and_dtypes(op_type, attr)
     idx = names.index(output_arg_name) + int(port)
@@ -154,7 +161,7 @@ def get_model_inputs(model_path):
     return input_names, input_dtypes, input_shapes
 
 
-def graphs_from_tfjs(model_path, input_names=None, output_names=None):
+def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_default=None, use_default=None):
     model, zip_compressed = read_model_json(model_path)
 
     weightsManifest = model['weightsManifest'][0]
@@ -193,11 +200,11 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None):
     if output_names is None and 'signature' in model:
         output_names = [out for out in model['signature']['outputs'].keys()]
 
-    main_g = read_tfjs_graph(topology['node'], weights, None, input_names, output_names)
+    main_g = read_tfjs_graph(topology['node'], weights, None, input_names, output_names, ignore_default, use_default)
     subgraphs = []
     funcs = sort_tfjs_functions(topology.get('library', {}).get('function', []))
     for func in funcs:
-        sub_g = read_tfjs_graph(func.get('nodeDef', []), weights, func)
+        sub_g = read_tfjs_graph(func.get('nodeDef', []), weights, func, None, None, ignore_default, use_default)
         subgraphs.append(sub_g)
 
     return main_g, subgraphs
@@ -243,21 +250,25 @@ def read_tfjs_function(func):
     return tf_dtypes, output_shapes, inputs, outputs, name
 
 
-def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=None):
+def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=None,
+                    ignore_default=None, use_default=None):
     onnx_nodes = []
     output_shapes = {}
     tf_dtypes = {}
     op_info = {}
     graph_name = 'tfjs_model'
+    func_name = None
 
     if func is not None:
-        tf_dtypes, output_shapes, graph_inputs, graph_outputs, graph_name = read_tfjs_function(func)
+        tf_dtypes, output_shapes, graph_inputs, graph_outputs, func_name = read_tfjs_function(func)
+        graph_name = func_name
         for inp in graph_inputs:
             onnx_nodes.append(helper.make_node("Placeholder", [], outputs=[inp], name=inp))
 
     # TODO: Placeholder with default, etc.
     if graph_inputs is None:
-        graph_inputs = [n['name'] + ':0' for n in nodes if n['op'] == "Placeholder"]
+        placeholder_ops = ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
+        graph_inputs = [n['name'] + ':0' for n in nodes if n['op'] in placeholder_ops]
 
     unused_outputs = set()
 
@@ -290,7 +301,7 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
             onnx_attr[k] = read_tfjs_attr(v)
         op_info[node_name] = (op_type, tf_attr)
 
-        input_names = [resolve_output(inp, op_info) for inp in node.get('input', []) if not inp.startswith('^')]
+        input_names = [resolve_output(inp, op_info, func_name) for inp in node.get('input', []) if not inp.startswith('^')]
         unused_outputs.difference_update(input_names)
         inp_dtypes = [tf_dtypes[inp] for inp in input_names]
         inp_shapes = [output_shapes[inp] for inp in input_names]
@@ -303,13 +314,28 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         output_shapes.update(zip(output_names, out_shapes))
         unused_outputs.update(output_names)
 
+        if op_type == "PlaceholderWithDefault":
+            remove = False
+            if ignore_default and node_name in ignore_default:
+                op_type = 'Placeholder'
+                input_names = []
+            elif use_default and node_name in use_default:
+                remove = True
+            elif node_name.endswith('keras_learning_phase'):
+                logger.warning("Removing optional input %s that appears to be a keras learning phase parameter. "
+                               "Use --ignore_default to force this into an input.", node_name)
+                remove = True
+            if remove:
+                op_type = 'Identity'
+                graph_inputs = [inp for inp in graph_inputs if inp != node_name + ":0"]
+
         onnx_node = helper.make_node(op_type, input_names, output_names, name=node_name, **onnx_attr)
         onnx_nodes.append(onnx_node)
 
     dtypes = {k: tf_utils.map_tf_dtype(v) for k, v in tf_dtypes.items()}
     if graph_outputs is None:
         graph_outputs = list(unused_outputs)
-    graph_outputs_mapped = [resolve_output(out, op_info) for out in graph_outputs]
+    graph_outputs_mapped = [resolve_output(out, op_info, func_name) for out in graph_outputs]
 
     g = Graph(onnx_nodes, output_shapes, dtypes, input_names=graph_inputs, output_names=graph_outputs_mapped,
               is_subgraph=func is not None, graph_name=graph_name)

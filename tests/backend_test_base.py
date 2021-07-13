@@ -318,6 +318,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         print("************", self._testMethodName, " *****************")
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
+        test_tfjs = not self.config.skip_tfjs_tests
         run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
         # optional - passed to process_tf_graph
         if process_args is None:
@@ -339,7 +340,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         utils.save_protobuf(graph_def_path, graph_def)
         self.logger.debug("created file  %s", graph_def_path)
 
-        test_tfjs = True
         if test_tfjs:
             try:
                 tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
@@ -412,7 +412,16 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # tfjs_inps, tfjs_inp_dtypes, _ = get_model_inputs(tfjs_path)
             # tfjs_inp_to_dtype = {k + ':0': t for k, t in zip(tfjs_inps, tfjs_inp_dtypes)}
             # tfjs_feed_dict = {k: v.astype(tfjs_inp_to_dtype[k]) for k, v in feed_dict.items()}
-            tfjs_res = run_tfjs(tfjs_path, feed_dict)
+            try:
+                tfjs_res = run_tfjs(tfjs_path, feed_dict)
+            except RuntimeError as e:
+                ignored_errors = ["is not yet supported", "Operands could not be broadcast together",
+                                  "unknown dtype null", "must be [NaN", "Cannot read property 'name' of undefined",
+                                  "Either strides or dilations must be 1", "does not support"]
+                if any(err in str(e) for err in ignored_errors):
+                    test_tfjs = False
+                else:
+                    raise e
 
         if test_tfjs:
             g = process_tf_graph(None, opset=self.config.opset,
