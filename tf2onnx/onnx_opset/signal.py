@@ -178,6 +178,8 @@ class CommonFFTOp:
         else:
             shape_n = dim
             utils.make_sure(shape is not None, "shape must be known.")
+            np_dtype = utils.map_onnx_to_numpy_type(onnx_dtype)
+            reshape_final = None
 
         if np_dtype == np.float16:
             res_onnx_dtype = utils.map_numpy_to_onnx_dtype(np.float16)
