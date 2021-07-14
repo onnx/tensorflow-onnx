@@ -18,6 +18,7 @@ from tensorflow.python.ops import variables as variables_lib
 from tensorflow.python.ops import lookup_ops
 import onnx
 from common import get_test_config
+from tfjs_runner import run_tfjs
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
@@ -113,6 +114,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     decode = np.vectorize(lambda x: x.replace(b'\x00', b'').decode('UTF-8'))
                     expected_val_str = decode(expected_val)
                     self.assertAllEqual(expected_val_str, actual_val)
+                elif expected_val.dtype.kind == 'U':
+                    self.assertAllEqual(expected_val, actual_val)
                 else:
                     if mtol is not None:
                         expected_val = np.minimum(expected_val, mtol)
@@ -189,10 +192,20 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 tf.import_graph_def(graph_def, name='')
                 graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def, fold_constant=constant_fold)
 
-        model_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
-        utils.save_protobuf(model_path, graph_def)
-        self.logger.debug("created file  %s", model_path)
         return result, graph_def, initialized_tables
+
+    def convert_to_tfjs(self, graph_def_path, output_names):
+        from tensorflowjs.converters import converter
+        tfjs_path = os.path.join(self.test_data_directory, self._testMethodName + "_tfjs")
+        try:
+            converter.convert([graph_def_path, tfjs_path, '--input_format', 'tf_frozen_model',
+                               '--output_node_names', ','.join(output_names)])
+        except ValueError:
+            return None
+        model_path = os.path.join(tfjs_path, 'model.json')
+        if not os.path.exists(model_path):
+            return None
+        return model_path
 
     def convert_to_tflite(self, graph_def, feed_dict, outputs):
         if not feed_dict:
@@ -306,6 +319,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                       use_custom_ops=False):
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
+        test_tfjs = not self.config.skip_tfjs_tests
         run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
         # optional - passed to process_tf_graph
         if process_args is None:
@@ -322,6 +336,15 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         expected, graph_def, initialized_tables = \
             self.freeze_and_run_tf(func, feed_dict, output_names_with_port, as_session,
                                    premade_placeholders, large_model, constant_fold)
+
+        graph_def_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
+        utils.save_protobuf(graph_def_path, graph_def)
+        self.logger.debug("created file  %s", graph_def_path)
+
+        if test_tfjs:
+            tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
+            if tfjs_path is None:
+                test_tfjs = False
 
         if test_tflite:
             tflite_path = self.convert_to_tflite(graph_def, feed_dict, output_names_with_port)
@@ -382,6 +405,37 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
+
+        if test_tfjs:
+            try:
+                tfjs_res = run_tfjs(tfjs_path, feed_dict)
+            except RuntimeError as e:
+                ignored_errors = ["is not yet supported", "Operands could not be broadcast together",
+                                  "unknown dtype null", "must be [NaN", "Cannot read property 'name' of undefined",
+                                  "Either strides or dilations must be 1", "does not support"]
+                if any(err in str(e) for err in ignored_errors):
+                    test_tfjs = False
+                else:
+                    raise e
+
+        if test_tfjs:
+            g = process_tf_graph(None, opset=self.config.opset,
+                                 input_names=list(feed_dict.keys()),
+                                 output_names=None,
+                                 target=self.config.target,
+                                 tfjs_path=tfjs_path,
+                                 **process_args)
+            g = optimizer.optimize_graph(g)
+            onnx_tfjs_res = self.run_backend(g, None, onnx_feed_dict, large_model,
+                                             postfix="_from_tfjs", use_custom_ops=use_custom_ops)
+
+            self.assert_results_equal(tfjs_res, onnx_tfjs_res, rtol, atol, mtol, check_value, check_shape,
+                                      check_dtype=False)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
+
+            if graph_validator:
+                self.assertTrue(graph_validator(g))
+
 
         if g is None:
             raise unittest.SkipTest("Both tf and tflite marked to skip")

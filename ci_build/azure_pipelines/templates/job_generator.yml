@@ -12,6 +12,7 @@ parameters:
   report_coverage: 'False'
   artifact_name: 'single_test_coverage'
   skip_tflite_tests: 'True'
+  skip_tfjs_tests: 'True'
   skip_tf_tests: 'False'
 
 jobs:
@@ -46,6 +47,7 @@ jobs:
                         CI_ONNX_BACKEND_VERSION: '${{ onnx_backend_version }}'
                         CI_SKIP_TF_TESTS: '${{ parameters.skip_tf_tests }}'
                         CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tflite_tests }}'
+                        CI_SKIP_TFJS_TESTS: '${{ parameters.skip_tfjs_tests }}'
 
                         ${{ if eq(tf_version, '') }}:
                           CI_PIP_TF_NAME: 'tensorflow'
