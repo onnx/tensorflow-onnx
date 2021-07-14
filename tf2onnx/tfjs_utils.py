@@ -1,18 +1,20 @@
 import json
 import os
+import base64
+import gzip
+import struct
+import logging
+
 from onnx import numpy_helper, helper
 import numpy as np
-from tf2onnx import utils
-import base64
-from tf2onnx.graph import Graph
-import gzip
-from tensorflow.python.framework import c_api_util
-from tensorflow.core.framework import types_pb2, node_def_pb2
 from google.protobuf.json_format import ParseDict
 import tensorflow as tf
+from tensorflow.python.framework import c_api_util
+from tensorflow.core.framework import types_pb2, node_def_pb2
+
+from tf2onnx import utils
+from tf2onnx.graph import Graph
 from tf2onnx import tf_utils
-import logging
-import struct
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,21 @@ logger = logging.getLogger(__name__)
 tf_api_def_map = c_api_util.ApiDefMap()
 
 
+def read_tfjs_attr(attr, tf_dtypes=False):
+    """
+    Reads the value of a single tfjs node attribute. If tf_dtypes is True, tensorflow dtypes are returned instead of
+    onnx dtypes
+    """
+    k = list(attr.keys())[0]
+    return read_tfjs_attr_helper(k, attr[k], tf_dtypes)
+
+
 def read_tfjs_attr_helper(k, v, tf_dtypes=False):
+    """
+    A tfjs attribute value is itself a dict with a single key specifying the type and a value with the actual data
+    like { axis: { i: -1 }} or { pads: { list: { i: [1, 2, 3, 4] } } }. This helper takes the key specifying the
+    type (like 'i' or 'list') and the value and decodes the attribute value.
+    """
     utils.make_sure(k in ['func', 'shape', 'type', 'list', 's', 'i', 'f', 'b'], "TODO")
     if k == 'list':
         if len(v) == 0:
@@ -45,65 +61,77 @@ def read_tfjs_attr_helper(k, v, tf_dtypes=False):
     return v
 
 
-def read_tfjs_attr(attr, tf_dtypes=False):
-    utils.make_sure(len(attr) == 1, "TODO")
-    k = list(attr.keys())[0]
-    return read_tfjs_attr_helper(k, attr[k], tf_dtypes)
-
-
 def tfjs_node_to_tf_node_def(node):
+    """Converts a tfjs node to a tf node_def for use in tf shape inferencing"""
     node_def = node_def_pb2.NodeDef()
     ParseDict(node, node_def)
     return node_def
 
 
 def resolve_output(output, op_info, func_name=None):
+    """
+    Given an output name from a tfjs model and an op_info dict containing info about the nodes available, (and the
+    function name if this is a subgraph), returns the canonical name to use as the output name in the onnx model.
+    The resulting string is always "node_name:port_number"
+    """
     cnt = output.count(':')
+    # outputs in the tfjs model can use one of 3 different formats interchangably.
     if cnt == 0:
+        # If no port is specified, it is referring to port 0
         if output in op_info:
             return output + ':0'
         return output
     if cnt == 1:
+        # Already in our standard format
         return output
-    node, output_arg_name, port = output.split(':')
+    # Format is node_name:output_name:subindex
+    node, output_arg_name, index = output.split(':')
     if node not in op_info and func_name is not None:
+        # In very rare cases, tfjs prepends the func_name to a node but forgets to fix the outputs
         long_node_name = func_name + "/" + node
         if long_node_name in op_info:
             node = long_node_name
-    op_type, attr = op_info[node]
-    names, _ = get_output_names_and_dtypes(op_type, attr)
-    idx = names.index(output_arg_name) + int(port)
+    op_type, tf_attr = op_info[node]
+    names, _ = get_output_names_and_dtypes(op_type, tf_attr)
+    idx = names.index(output_arg_name) + int(index)
     return node + ':' + str(idx)
 
 
-def get_output_names_and_dtypes(op_type, attr):
+def get_output_names_and_dtypes(op_type, tf_attr):
+    """Parses the tf documentation to determine the names and dtypes of the outputs of the op"""
     try:
         tf_op_def = tf_api_def_map.get_op_def(op_type)
     except ValueError:
-        # TODO: fill this
-        pass
+        raise ValueError("Failed to determine dtypes for op type %s. May be an unsupported op type." % op_type)
     dtypes = []
     names = []
     for arg in tf_op_def.output_arg:
         num_copies = 1
         if arg.type_list_attr:
-            dtypes += attr[arg.type_list_attr]
-            num_copies = len(attr[arg.type_list_attr])
+            dtypes += tf_attr[arg.type_list_attr]
+            num_copies = len(tf_attr[arg.type_list_attr])
         else:
             if arg.type_attr:
-                dtype = attr[arg.type_attr]
+                dtype = tf_attr[arg.type_attr]
             else:
                 dtype = arg.type
             if arg.number_attr:
-                dtypes += [dtype] * attr[arg.number_attr]
-                num_copies = attr[arg.number_attr]
+                dtypes += [dtype] * tf_attr[arg.number_attr]
+                num_copies = tf_attr[arg.number_attr]
             else:
                 dtypes.append(dtype)
         names += [arg.name] * num_copies
     return names, dtypes
 
 
+def get_output_dtypes(op_type, tf_attr):
+    """Returns a list of the tf dtypes for the op's outputs"""
+    _, out_dtypes = get_output_names_and_dtypes(op_type, tf_attr)
+    return out_dtypes
+
+
 def get_output_shapes(node_def, input_dtypes, input_shapes, inp_consts):
+    """Returns a list of the output shapes of an op. input_dtypes should be tf dtypes."""
     from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
     del node_def.input[:]
     node_def.name = "node"
@@ -136,6 +164,7 @@ def read_model_json(model_path):
         magic_number = f.read(2)
         f.seek(0)
         if magic_number == b'\x1f\x8b':
+            # Sometimes models from tfhub look normal but are gzip compressed without warning
             unziped_bytes = gzip.decompress(f.read())
             model = json.loads(unziped_bytes)
             zip_compressed = True
@@ -144,55 +173,24 @@ def read_model_json(model_path):
     return model, zip_compressed
 
 
-def get_model_inputs(model_path):
-    model, _ = read_model_json(model_path)
-    input_nodes = [node for node in model['modelTopology']['node'] if node['op'] == "Placeholder"]
-    input_names = []
-    input_dtypes = []
-    input_shapes = []
-
-    for node in input_nodes:
-        input_names.append(node['name'])
-        input_shapes.append(read_tfjs_attr(node['attr']['shape']))
-        dtype = node['attr']['dtype']['type']
-        tf_dtype = getattr(types_pb2, dtype)
-        onnx_dtype = tf_utils.map_tf_dtype(tf_dtype)
-        input_dtypes.append(onnx_dtype)
-
-    return input_names, input_dtypes, input_shapes
+def sort_tfjs_functions(funcs):
+    dependencies = {}
+    name_to_func = {}
+    for f in funcs:
+        name = f['signature']['name']
+        dependencies[name] = get_tfjs_func_dependencies(f)
+        name_to_func[name] = f
+    ordered = utils.topological_sort(dependencies)
+    return [name_to_func[n] for n in ordered]
 
 
-def read_string_weight(weights_data, offset, num_strings):
-    string_list = []
-    j = offset
-    for i in range(num_strings):
-        length = struct.unpack('<I', weights_data[j:j + 4])[0]
-        j += 4
-        string_list.append(weights_data[j:j + length])
-        j += length
-    return string_list, j - offset
-
-
-def read_tfjs_weight(weight, weights_data, offset):
-    name = weight['name']
-    count = np.product(weight['shape'], dtype=np.int64)
-    if weight['dtype'] == 'string':
-        num_strings = np.product(weight['shape'])
-        string_list, num_bytes = read_string_weight(weights_data, offset, num_strings)
-        np_arr = np.array(string_list).reshape(weight['shape'])
-        return name, np_arr, num_bytes
-    np_dtype = np.dtype(weight['dtype'])
-    if 'quantization' in weight:
-        q_info = weight['quantization']
-        q_dtype = np.dtype(q_info['dtype'])
-        np_arr = np.frombuffer(weights_data, dtype=q_dtype, count=count, offset=i)
-        num_bytes = np_arr.nbytes
-        np_arr = np_arr.astype(np_dtype) * q_info['scale'] + q_info['min']
-    else:
-        np_arr = np.frombuffer(weights_data, dtype=np_dtype, count=count, offset=offset)
-        num_bytes = np_arr.nbytes
-    np_arr = np_arr.reshape(weight['shape'])
-    return name, np_arr, num_bytes
+def get_tfjs_func_dependencies(func):
+    dependencies = set()
+    for node in func.get('nodeDef', []):
+        for v in node.get('attr', {}).values():
+            if list(v.keys())[0] == 'func':
+                dependencies.add(read_tfjs_attr(v))
+    return list(dependencies)
 
 
 def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_default=None, use_default=None):
@@ -233,24 +231,37 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_def
     return main_g, subgraphs
 
 
-def sort_tfjs_functions(funcs):
-    dependencies = {}
-    name_to_func = {}
-    for f in funcs:
-        name = f['signature']['name']
-        dependencies[name] = get_tfjs_func_dependencies(f)
-        name_to_func[name] = f
-    ordered = utils.topological_sort(dependencies)
-    return [name_to_func[n] for n in ordered]
+def read_tfjs_weight(weight, weights_data, offset):
+    name = weight['name']
+    count = np.product(weight['shape'], dtype=np.int64)
+    if weight['dtype'] == 'string':
+        num_strings = np.product(weight['shape'])
+        string_list, num_bytes = read_string_weight(weights_data, offset, num_strings)
+        np_arr = np.array(string_list).reshape(weight['shape'])
+        return name, np_arr, num_bytes
+    np_dtype = np.dtype(weight['dtype'])
+    if 'quantization' in weight:
+        q_info = weight['quantization']
+        q_dtype = np.dtype(q_info['dtype'])
+        np_arr = np.frombuffer(weights_data, dtype=q_dtype, count=count, offset=i)
+        num_bytes = np_arr.nbytes
+        np_arr = np_arr.astype(np_dtype) * q_info['scale'] + q_info['min']
+    else:
+        np_arr = np.frombuffer(weights_data, dtype=np_dtype, count=count, offset=offset)
+        num_bytes = np_arr.nbytes
+    np_arr = np_arr.reshape(weight['shape'])
+    return name, np_arr, num_bytes
 
 
-def get_tfjs_func_dependencies(func):
-    dependencies = set()
-    for node in func.get('nodeDef', []):
-        for v in node.get('attr', {}).values():
-            if list(v.keys())[0] == 'func':
-                dependencies.add(read_tfjs_attr(v))
-    return list(dependencies)
+def read_string_weight(weights_data, offset, num_strings):
+    string_list = []
+    j = offset
+    for i in range(num_strings):
+        length = struct.unpack('<I', weights_data[j:j + 4])[0]
+        j += 4
+        string_list.append(weights_data[j:j + length])
+        j += length
+    return string_list, j - offset
 
 
 def read_tfjs_function(func):
@@ -329,7 +340,7 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         inp_dtypes = [tf_dtypes[inp] for inp in input_names]
         inp_shapes = [output_shapes[inp] for inp in input_names]
         inp_consts = [weights.get(inp.split(':')[0]) for inp in input_names]
-        _, out_dtypes = get_output_names_and_dtypes(op_type, tf_attr)
+        out_dtypes = get_output_dtypes(op_type, tf_attr)
         out_shapes = get_output_shapes(node_def, inp_dtypes, inp_shapes, inp_consts)
 
         output_names = [node_name + ":" + str(i) for i in range(len(out_dtypes))]

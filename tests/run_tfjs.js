@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 
+/* Helper script to run tfjs models. Uses custom .json representation to encode tensors for inputs/outputs
+ * Example usage:
+ * 
+ *     node run_tfjs.js mymodel/model.json input.json output.json
+ */
+
 const tf = require('@tensorflow/tfjs');
 
 const fs = require('fs');
@@ -10,9 +16,11 @@ const { exit } = require('process');
 
 const [, , modelPath, inputPath, outputPath] = process.argv;
 
+// Hide tfjs first use message complaining about lack of GPU
+tf.backend().firstUse = false;
+
 if (process.argv[2] == '--test') {
-    // 'float32'|'int32'|'bool'|'complex64'|'string'
-    // tf.util.getTypedArrayFromDType
+    // dtype = 'float32'|'int32'|'bool'|'complex64'|'string'
 
     const floatTensor = tf.tensor([1.1, 2.2, 3.3, 4.4], [2, 2], 'float32');
     const intTensor = tf.tensor([1, 2, 3, 4], [2, 2], 'int32');
@@ -20,20 +28,27 @@ if (process.argv[2] == '--test') {
     const complexTensor = tf.complex([1.1, 2.2, 3.3, 4.4], [10., 20., 30., 40.]).reshape([2, 2]);
     const stringTensor = tf.tensor(['Hello world', '♦♥♠♣', '', 'Tensors'], [2, 2], 'string');
 
-    const floatEnc = Buffer.from(new Uint8Array(floatTensor.dataSync().buffer)).toString('base64');
-    const floatDec = new Float32Array(new Uint8Array(Buffer.from(floatEnc, 'base64')).buffer);
-
-    const failures = [];
     const tensors = [floatTensor, intTensor, boolTensor, complexTensor, stringTensor];
     tensors.forEach(function (tensor) {
         const tensorEnc = tensorToJson(tensor);
         const tensorDec = tensorFromJson(tensorEnc);
+        if (tensor.toString() != tensorDec.toString()) {
+            console.log("Tensor:")
+            tensor.print()
+            console.log("Decoded tensor:")
+            tensorDec.print()
+            throw "Test failure"
+        }
     });
+
+    console.log("All tests pass.")
+    exit(0)
 }
 
 const modelDir = path.dirname(modelPath);
 const modelName = path.basename(modelPath);
 
+// tf.loadGraphModel expects a url not a local file, so we serve it on localhost 
 http.createServer(function (req, res) {
     fs.readFile(modelDir + req.url, function (err, data) {
         if (err) {
@@ -86,6 +101,7 @@ function tensorFromJson(json) {
 }
 
 function inputFromJson(json) {
+    // Input can be a tensor, list of tensors, or mapping of input names to tensors.
     if (Array.isArray(json)) {
         return json.map(tensorFromJson);
     }
@@ -99,6 +115,7 @@ function inputFromJson(json) {
 }
 
 function outputToJson(out) {
+    // Output can be a tensor, list of tensors, or mapping of output names to tensors.
     if (Array.isArray(out)) {
         return out.map(tensorToJson);
     }
@@ -111,12 +128,13 @@ function outputToJson(out) {
 }
 
 async function main() {
-    tf.backend().firstUse = false;
     const model = await tf.loadGraphModel('http://localhost:8080/' + modelName);
     const inputString = fs.readFileSync(inputPath, 'utf8');
     const inputJson = JSON.parse(inputString);
     const input = inputFromJson(inputJson);
+
     const output = await model.executeAsync(input);
+
     const outputJson = outputToJson(output);
     const outputString = JSON.stringify(outputJson);
     fs.writeFileSync(outputPath, outputString, 'utf8');

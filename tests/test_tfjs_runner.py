@@ -10,9 +10,11 @@ import numpy as np
 
 from tfjs_runner import numpy_to_json, json_to_numpy
 
+# pylint: disable=missing-docstring
+
+
 class TestTfjsRunner(unittest.TestCase):
     def test_tfjs_runner(self):
-        """Function for offline testing/debugging"""
         float_array = np.array([[1.1, 2.2], [3.3, 4.4]], np.float32)
         int_array = np.array([[1, 2], [3, 4]], np.int32)
         bool_array = np.array([[True, False], [True, True]], np.bool)
@@ -25,6 +27,7 @@ class TestTfjsRunner(unittest.TestCase):
             print(array_enc)
             array_dec = json_to_numpy(json.loads(array_enc))
             np.testing.assert_equal(arr, array_dec)
+
 
 if __name__ == '__main__':
     unittest.main()

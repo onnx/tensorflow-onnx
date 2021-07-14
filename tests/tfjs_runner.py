@@ -83,7 +83,7 @@ def run_tfjs(tfjs_path, inputs, working_dir):
         json.dump(inputs_to_json(inputs), f)
 
     with open(stderr_path, 'wb') as f:
-        result = subprocess.run(['node', script_path, tfjs_path, input_path, output_path], stderr=f)
+        result = subprocess.run(['node', script_path, tfjs_path, input_path, output_path], stderr=f, check=False)
     if result.returncode != 0:
         with open(stderr_path, 'rt') as f:
             err = f.read()
