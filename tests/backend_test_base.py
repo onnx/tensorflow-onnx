@@ -114,6 +114,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     decode = np.vectorize(lambda x: x.replace(b'\x00', b'').decode('UTF-8'))
                     expected_val_str = decode(expected_val)
                     self.assertAllEqual(expected_val_str, actual_val)
+                elif expected_val.dtype.kind == 'U':
+                    self.assertAllEqual(expected_val, actual_val)
                 else:
                     if mtol is not None:
                         expected_val = np.minimum(expected_val, mtol)

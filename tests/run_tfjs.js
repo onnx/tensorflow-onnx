@@ -16,7 +16,7 @@ if (process.argv[2] == '--test') {
     const intTensor = tf.tensor([1, 2, 3, 4], [2, 2], 'int32');
     const boolTensor = tf.tensor([true, false, true, true], [2, 2], 'bool');
     const complexTensor = tf.complex([1.1, 2.2, 3.3, 4.4], [10., 20., 30., 40.]).reshape([2, 2]);
-    const stringTensor = tf.tensor(['Hello world', 'test', '', 'Tensors'], [2, 2], 'string');
+    const stringTensor = tf.tensor(['Hello world', '♦♥♠♣', '', 'Tensors'], [2, 2], 'string');
 
     const floatEnc = Buffer.from(new Uint8Array(floatTensor.dataSync().buffer)).toString('base64');
     const floatDec = new Float32Array(new Uint8Array(Buffer.from(floatEnc, 'base64')).buffer);

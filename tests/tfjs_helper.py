@@ -84,7 +84,7 @@ def run_tfjs(tfjs_path, inputs):
             err = f.read()
         raise RuntimeError("Failed to run tfjs model: " + err)
 
-    with open(output_path, 'rt') as f:
+    with open(output_path, 'rt', encoding='utf8') as f:
         result = json_to_output(json.load(f))
     
     return result

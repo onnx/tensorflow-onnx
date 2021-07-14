@@ -1,5 +1,6 @@
 import json
 import os
+from numpy.core.fromnumeric import product
 from onnx import numpy_helper, helper
 import numpy as np
 from tf2onnx import utils
@@ -12,6 +13,7 @@ from google.protobuf.json_format import ParseDict
 import tensorflow as tf
 from tf2onnx import tf_utils
 import logging
+import struct
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +163,39 @@ def get_model_inputs(model_path):
     return input_names, input_dtypes, input_shapes
 
 
+def read_string_weight(weights_data, offset, num_strings):
+    string_list = []
+    j = offset
+    for i in range(num_strings):
+        length = struct.unpack('<I', weights_data[j:j + 4])[0]
+        j += 4
+        string_list.append(weights_data[j:j + length])
+        j += length
+    return string_list, j - offset
+
+
+def read_tfjs_weight(weight, weights_data, offset):
+    name = weight['name']
+    count = np.product(weight['shape'], dtype=np.int64)
+    if weight['dtype'] == 'string':
+        num_strings = np.product(weight['shape'])
+        string_list, num_bytes = read_string_weight(weights_data, offset, num_strings)
+        np_arr = np.array(string_list).reshape(weight['shape'])
+        return name, np_arr, num_bytes
+    np_dtype = np.dtype(weight['dtype'])
+    if 'quantization' in weight:
+        q_info = weight['quantization']
+        q_dtype = np.dtype(q_info['dtype'])
+        np_arr = np.frombuffer(weights_data, dtype=q_dtype, count=count, offset=i)
+        num_bytes = np_arr.nbytes
+        np_arr = np_arr.astype(np_dtype) * q_info['scale'] + q_info['min']
+    else:
+        np_arr = np.frombuffer(weights_data, dtype=np_dtype, count=count, offset=offset)
+        num_bytes = np_arr.nbytes
+    np_arr = np_arr.reshape(weight['shape'])
+    return name, np_arr, num_bytes
+
+
 def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_default=None, use_default=None):
     model, zip_compressed = read_model_json(model_path)
 
@@ -174,27 +209,16 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_def
                 shard_bytes = gzip.decompress(shard_bytes)
             sharded_data.append(shard_bytes)
 
-    tensor_data = b''.join(sharded_data)
+    weights_data = b''.join(sharded_data)
     weights = {}
 
     i = 0
     for weight in weightsManifest['weights']:
-        tensor_name = weight['name']
-        count = np.product(weight['shape'], dtype=np.int64)
-        np_dtype = np.dtype(weight['dtype'])
-        if 'quantization' in weight:
-            q_info = weight['quantization']
-            q_dtype = np.dtype(q_info['dtype'])
-            np_arr = np.frombuffer(tensor_data, dtype=q_dtype, count=count, offset=i)
-            i += np_arr.nbytes
-            np_arr = np_arr.astype(np_dtype) * q_info['scale'] + q_info['min']
-        else:
-            np_arr = np.frombuffer(tensor_data, dtype=np_dtype, count=count, offset=i)
-            i += np_arr.nbytes
-        np_arr = np_arr.reshape(weight['shape'])
-        weights[tensor_name] = np_arr
+        weight_name, np_arr, num_bytes = read_tfjs_weight(weight, weights_data, offset=i)
+        weights[weight_name] = np_arr
+        i += num_bytes
 
-    utils.make_sure(len(tensor_data) == i, "Total weight bytes %d doesn't match read bytes %d", len(tensor_data), i)
+    utils.make_sure(len(weights_data) == i, "Total weight bytes %d doesn't match read bytes %d", len(weights_data), i)
     topology = model['modelTopology']
 
     if output_names is None and 'signature' in model:

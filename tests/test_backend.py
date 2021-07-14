@@ -452,7 +452,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         dilations = [1, 3, 1, 1]  # NHWC
         x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
         kernel_val = np.arange(1, 1 + np.prod(kernel_shape)).astype("float32").reshape(kernel_shape)
-        self._conv_test(x_val, kernel_val, strides=strides, padding="SAME", dilations=dilations, rtol=1e-05)
+        self._conv_test(x_val, kernel_val, strides=strides, padding="SAME", dilations=dilations, rtol=1.1e-05)
 
     def test_conv2d_dilation_strides_same(self):
         x_shape = [1, 35, 35, 288]  # NHWC
@@ -1521,6 +1521,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, "input3:0": x_val3})
 
+    def test_concat_const_string(self):
+        x_val1 = np.array([["Hello world", "abc"], ["def", "♦♥♠♣"]], dtype=np.str)
+        const_val = np.array([["Hello there", "wxyz"], ["", "π"]], dtype=np.str)
+        def func(x1):
+            x_ = tf.concat([x1, const_val], 0)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1})
+
     @check_onnxruntime_incompatibility("Pow")
     def test_pow(self):
         x_val = np.array([4.0, 16.0, 4.0, 1.6], dtype=np.float32)
@@ -1540,6 +1548,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1})
 
     @skip_tflite("Advanced constant shape folding not implemented for tflite")
+    @skip_tfjs("Advanced constant folding not implemented for tfjs")
     def test_slice_from_shape_const_fold(self):
         x_val = np.array([4, 3], dtype=np.int64)
         x_shape = np.array([-1, 3], dtype=np.int64)
@@ -4967,6 +4976,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         os.remove(filnm)
 
     @check_opset_min_version(8, "CategoryMapper")
+    @skip_tfjs("TFJS does not initialize table")
     def test_hashtable_lookup_const(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry ♥", "grape"]

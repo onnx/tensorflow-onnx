@@ -473,6 +473,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                 if any(s is None for s in inp_shapes) or not op_has_scalar_output(inp_shapes, optype, attr):
                     for out in output_names:
                         logger.warning("Replacing scalar output shape of %s with unknown shape", out)
+                        breakpoint()
                         output_shapes[out] = None
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]

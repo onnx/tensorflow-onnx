@@ -189,7 +189,7 @@ def skip_tfjs(message=""):
     config = get_test_config()
     reason = _append_message("test disabled for tfjs", message)
     if config.skip_tf_tests and config.skip_tflite_tests:
-        # If we are skipping tf and tfjs also, there is no reason to run this test
+        # If we are skipping tf and tflite also, there is no reason to run this test
         return unittest.skip(reason)
     def decorator(func):
         def test(self):
