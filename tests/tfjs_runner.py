@@ -48,13 +48,13 @@ def json_to_numpy(obj):
     return np.frombuffer(data_bytes, dtype).reshape(obj['shape'])
 
 
-def input_to_json(input):
+def inputs_to_json(inputs):
     """Encodes a dict, list or single numpy array into a corresponding json representation understood by run_tfjs.js"""
-    if isinstance(input, list):
-        return [numpy_to_json(arr) for arr in input]
-    if isinstance(input, dict):
-        return {k: numpy_to_json(v) for k, v in input.items()}
-    return numpy_to_json(input)
+    if isinstance(inputs, list):
+        return [numpy_to_json(arr) for arr in inputs]
+    if isinstance(inputs, dict):
+        return {k: numpy_to_json(v) for k, v in inputs.items()}
+    return numpy_to_json(inputs)
 
 
 def json_to_output(obj):
@@ -67,7 +67,12 @@ def json_to_output(obj):
     return [json_to_numpy(obj)]
 
 
-def run_tfjs(tfjs_path, inputs):
+def run_tfjs(tfjs_path, inputs, working_dir):
+    """
+    Given the path to the model.json of a tfjs model, a dict mapping input names to numpy arrays, and a working
+    directory, runs the model on the inputs and returns the resulting arrays or raises a RuntimeException. Calls
+    run_tfjs.js using nodejs.
+    """
     script_path = os.path.join(os.path.dirname(__file__), 'run_tfjs.js')
     working_dir = os.path.dirname(os.path.dirname(tfjs_path))
     input_path = os.path.join(working_dir, 'input.json')
@@ -75,7 +80,7 @@ def run_tfjs(tfjs_path, inputs):
     stderr_path = os.path.join(working_dir, 'stderr.txt')
 
     with open(input_path, 'wt') as f:
-        json.dump(input_to_json(inputs), f)
+        json.dump(inputs_to_json(inputs), f)
 
     with open(stderr_path, 'wb') as f:
         result = subprocess.run(['node', script_path, tfjs_path, input_path, output_path], stderr=f)

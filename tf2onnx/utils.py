@@ -272,7 +272,7 @@ def topological_sort(dependencies):
     while stack:
         x = stack.pop()
         if x in visited:
-             continue
+            continue
         if x in visiting:
             visiting.remove(x)
             visited.add(x)

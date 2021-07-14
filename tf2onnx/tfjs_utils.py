@@ -1,6 +1,5 @@
 import json
 import os
-from numpy.core.fromnumeric import product
 from onnx import numpy_helper, helper
 import numpy as np
 from tf2onnx import utils

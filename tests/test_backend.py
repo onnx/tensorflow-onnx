@@ -4,7 +4,6 @@
 """Unit tests using onnx backends."""
 
 import os
-from tests.common import skip_tfjs
 import unittest
 from distutils.version import LooseVersion
 from itertools import product

@@ -408,7 +408,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         if test_tfjs:
             try:
-                tfjs_res = run_tfjs(tfjs_path, feed_dict)
+                tfjs_res = run_tfjs(tfjs_path, feed_dict, self.test_data_directory)
             except RuntimeError as e:
                 ignored_errors = ["is not yet supported", "Operands could not be broadcast together",
                                   "unknown dtype null", "must be [NaN", "Cannot read property 'name' of undefined",
@@ -438,7 +438,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
 
         if g is None:
-            raise unittest.SkipTest("Both tf and tflite marked to skip")
+            raise unittest.SkipTest("tf, tflite, and tfjs marked to skip")
         return g
 
     def save_onnx_model(self, model_proto, feed_dict, postfix="", external_tensor_storage=None):
