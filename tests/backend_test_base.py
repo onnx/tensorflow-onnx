@@ -9,7 +9,6 @@
 import logging
 import os
 import unittest
-import subprocess
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -200,7 +199,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         tfjs_path = os.path.join(self.test_data_directory, self._testMethodName + "_tfjs")
         try:
             converter.convert([graph_def_path, tfjs_path, '--input_format', 'tf_frozen_model',
-                            '--output_node_names', ','.join(output_names)])
+                               '--output_node_names', ','.join(output_names)])
         except ValueError:
             return None
         model_path = os.path.join(tfjs_path, 'model.json')

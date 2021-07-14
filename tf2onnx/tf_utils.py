@@ -348,7 +348,7 @@ TF_IGNORED_NODE_ATTRS = {
     "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
     "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
     "Toutput_types", "dense_shapes", "Tdense", "Tsegmentids", "Tshift", "Tnumsegments", "SrcT",
-    "Tcomplex", "Treal",  # For RFFT, Tcomplex is ignored because
+    "Tcomplex", "Treal",    # For RFFT, Tcomplex is ignored because
                             # onnx.helper.make_node fails,
                             # TODO: it should be added back.
 }

@@ -243,7 +243,7 @@ def sort_tfjs_functions(funcs):
         name_to_func[name] = f
     ordered = utils.topological_sort(dependencies)
     return [name_to_func[n] for n in ordered]
-    
+
 
 def get_tfjs_func_dependencies(func):
     dependencies = set()

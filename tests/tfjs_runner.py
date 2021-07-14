@@ -86,5 +86,5 @@ def run_tfjs(tfjs_path, inputs):
 
     with open(output_path, 'rt', encoding='utf8') as f:
         result = json_to_output(json.load(f))
-    
+
     return result
