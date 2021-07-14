@@ -25,6 +25,12 @@ steps:
       pip install --index-url https://test.pypi.org/simple/ ort-nightly
     fi
 
+    if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
+    then
+      pip install tensorflowjs
+      npm install @tensorflow/tfjs
+    fi
+
     if [[ $CI_TF_VERSION == 2.* ]] ;
     then
       pip install onnxruntime-extensions
