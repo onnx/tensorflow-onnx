@@ -88,5 +88,3 @@ def run_tfjs(tfjs_path, inputs):
         result = json_to_output(json.load(f))
     
     return result
-
-#test()

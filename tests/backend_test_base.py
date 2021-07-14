@@ -19,6 +19,7 @@ from tensorflow.python.ops import variables as variables_lib
 from tensorflow.python.ops import lookup_ops
 import onnx
 from common import get_test_config
+from tfjs_runner import run_tfjs
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
@@ -197,15 +198,15 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
     def convert_to_tfjs(self, graph_def_path, output_names):
         from tensorflowjs.converters import converter
         tfjs_path = os.path.join(self.test_data_directory, self._testMethodName + "_tfjs")
-        converter.convert([graph_def_path, tfjs_path, '--input_format', 'tf_frozen_model',
-                          '--output_node_names', ','.join(output_names)])
-        return os.path.join(tfjs_path, 'model.json')
-
-    def run_tfjs(self, tfjs_path, inputs):
-        script_path = os.path.join(os.path.dirname(__file__), 'run_tfjs.js')
-
-        subprocess.run(['node', script_path, ])
-        pass
+        try:
+            converter.convert([graph_def_path, tfjs_path, '--input_format', 'tf_frozen_model',
+                            '--output_node_names', ','.join(output_names)])
+        except ValueError:
+            return None
+        model_path = os.path.join(tfjs_path, 'model.json')
+        if not os.path.exists(model_path):
+            return None
+        return model_path
 
     def convert_to_tflite(self, graph_def, feed_dict, outputs):
         if not feed_dict:
@@ -317,7 +318,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                       check_value=True, check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
                       graph_validator=None, as_session=False, large_model=False, premade_placeholders=False,
                       use_custom_ops=False):
-        print("************", self._testMethodName, " *****************")
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
         test_tfjs = not self.config.skip_tfjs_tests
@@ -343,9 +343,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         self.logger.debug("created file  %s", graph_def_path)
 
         if test_tfjs:
-            try:
-                tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
-            except Exception:
+            tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
+            if tfjs_path is None:
                 test_tfjs = False
 
         if test_tflite:
@@ -409,11 +408,6 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 self.assertTrue(graph_validator(g))
 
         if test_tfjs:
-            from tfjs_helper import run_tfjs
-            # from tf2onnx.tfjs_utils import get_model_inputs
-            # tfjs_inps, tfjs_inp_dtypes, _ = get_model_inputs(tfjs_path)
-            # tfjs_inp_to_dtype = {k + ':0': t for k, t in zip(tfjs_inps, tfjs_inp_dtypes)}
-            # tfjs_feed_dict = {k: v.astype(tfjs_inp_to_dtype[k]) for k, v in feed_dict.items()}
             try:
                 tfjs_res = run_tfjs(tfjs_path, feed_dict)
             except RuntimeError as e:

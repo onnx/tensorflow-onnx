@@ -45,12 +45,6 @@ TF_TO_ONNX_DTYPE = {
 }
 
 
-ONNX_TO_TF_DTYPE = {}
-for k, v in TF_TO_ONNX_DTYPE.items():
-    if v not in ONNX_TO_TF_DTYPE:
-        ONNX_TO_TF_DTYPE[v] = k
-
-
 def tf_to_onnx_tensor(tensor, name=""):
     """Convert tensorflow tensor to onnx tensor."""
     np_data = get_tf_tensor_data(tensor)
