@@ -306,6 +306,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                       check_value=True, check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
                       graph_validator=None, as_session=False, large_model=False, premade_placeholders=False,
                       use_custom_ops=False, optimize=True):
+        """
+        This function tests all scenarios available through the command line.
+        The command line always runs the optimizers.
+        However, they may modify the final graph into something different than the
+        tested converter implements. Set `optimize=False` to keep the original
+        set of nodes and helps debugging. However, the same function should
+        be called with `optimize=True` to test what the user would actually get.
+        """
         test_tf = not self.config.skip_tf_tests
         test_tflite = not self.config.skip_tflite_tests
         run_tfl_consistency_test = test_tf and test_tflite and self.config.run_tfl_consistency_test
