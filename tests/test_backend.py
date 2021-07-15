@@ -2760,6 +2760,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: mean_val, _INPUT2: offset_val, _INPUT3: var_val})
 
     @check_opset_min_version(7, "batchnorm")
+    @skip_tfjs("Unsupported _FusedConv2D op")   # TODO: implement this
     def test_conv2d_batchnorm_fusion(self):
         x_shape = [1, 28, 28, 2]
         x_val = np.random.random_sample(x_shape).astype(np.float32)
@@ -4261,6 +4262,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
     # test for gemm pattern4: A*B + C [addbias] - 1D bias!
+    @skip_tfjs("Unsupported _FusedMatMul op")   # TODO: implement this
     def test_gemm_pattern4(self):
         max_number = 10
         m = np.random.randint(max_number)
