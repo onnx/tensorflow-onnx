@@ -260,6 +260,34 @@ def make_sure(bool_val, error_msg, *args):
         raise ValueError("make_sure failure: " + error_msg % args)
 
 
+def topological_sort(dependencies):
+    """
+    Given a dictionary mapping items to lists of dependencies, returns a topological ordering of the items.
+    Raises a ValueError for cyclic dependencies.
+    """
+    stack = list(dependencies.keys())
+    visiting = set()
+    visited = set()
+    ordered = []
+    while stack:
+        x = stack.pop()
+        if x in visited:
+            continue
+        if x in visiting:
+            visiting.remove(x)
+            visited.add(x)
+            ordered.append(x)
+            continue
+        stack.append(x)
+        visiting.add(x)
+        for y in dependencies[x]:
+            if y in visiting:
+                raise ValueError("Cyclic dependencies present: %r" % dependencies)
+            if y not in visited:
+                stack.append(y)
+    return ordered
+
+
 def check_io(input_names, output_names, valid_outputs):
     """Asserts that input_names and output_names are contained within valid_outputs else raises an error"""
     io_to_check = []
