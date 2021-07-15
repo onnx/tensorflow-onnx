@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+
+
+"""
+tf2onnx.tfjs_utils - utilities for parsing tfjs files into onnx graphs
+
+Main functions of interest are graphs_from_tfjs and read_tfjs_graph
+"""
+
 import json
 import os
 import base64
@@ -37,14 +46,13 @@ def read_tfjs_attr_helper(k, v, tf_dtypes=False):
     like { axis: { i: -1 }} or { pads: { list: { i: [1, 2, 3, 4] } } }. This helper takes the key specifying the
     type (like 'i' or 'list') and the value and decodes the attribute value.
     """
-    utils.make_sure(k in ['func', 'shape', 'type', 'list', 's', 'i', 'f', 'b'], "TODO")
+    supported_types = ['func', 'shape', 'type', 'list', 's', 'i', 'f', 'b']
+    utils.make_sure(k in supported_types, "Unrecognized tfjs attribute type %s", k)
     if k == 'list':
         if len(v) == 0:
             return []
-        else:
-            utils.make_sure(len(v) == 1, "TODO")
-            k2 = list(v.keys())[0]
-            return [read_tfjs_attr_helper(k2, v2, tf_dtypes) for v2 in v[k2]]
+        k2 = list(v.keys())[0]
+        return [read_tfjs_attr_helper(k2, v2, tf_dtypes) for v2 in v[k2]]
     if k == 'type':
         dtype = getattr(types_pb2, v)
         if not tf_dtypes:
@@ -57,6 +65,7 @@ def read_tfjs_attr_helper(k, v, tf_dtypes=False):
     if k == 's':
         return base64.decodebytes(v.encode())
     if k == 'i':
+        # ints are stored in the tfjs json as strings
         return int(v)
     return v
 
@@ -158,7 +167,31 @@ def get_output_shapes(node_def, input_dtypes, input_shapes, inp_consts):
             return outputs_shapes
 
 
+def sort_tfjs_functions(funcs):
+    """Topologically sorts a list of tfjs functions"""
+    dependencies = {}
+    name_to_func = {}
+    for f in funcs:
+        name = f['signature']['name']
+        dependencies[name] = get_tfjs_func_dependencies(f)
+        name_to_func[name] = f
+    ordered = utils.topological_sort(dependencies)
+    return [name_to_func[n] for n in ordered]
+
+
+def get_tfjs_func_dependencies(func):
+    """Returns a list of names of functions the provided tfjs func depends on"""
+    dependencies = set()
+    for node in func.get('nodeDef', []):
+        for v in node.get('attr', {}).values():
+            if list(v.keys())[0] == 'func':
+                dependencies.add(read_tfjs_attr(v))
+    return list(dependencies)
+
+
 def read_model_json(model_path):
+    """Given the path to a model.json file, parses the json and returns a dict (and flag indicating if the weights are
+    compressed)"""
     zip_compressed = False
     with open(model_path, "rb") as f:
         magic_number = f.read(2)
@@ -173,33 +206,15 @@ def read_model_json(model_path):
     return model, zip_compressed
 
 
-def sort_tfjs_functions(funcs):
-    dependencies = {}
-    name_to_func = {}
-    for f in funcs:
-        name = f['signature']['name']
-        dependencies[name] = get_tfjs_func_dependencies(f)
-        name_to_func[name] = f
-    ordered = utils.topological_sort(dependencies)
-    return [name_to_func[n] for n in ordered]
-
-
-def get_tfjs_func_dependencies(func):
-    dependencies = set()
-    for node in func.get('nodeDef', []):
-        for v in node.get('attr', {}).values():
-            if list(v.keys())[0] == 'func':
-                dependencies.add(read_tfjs_attr(v))
-    return list(dependencies)
-
-
 def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_default=None, use_default=None):
+    """Given the path to a model.json file, parses the model into onnx graphs and returns the main graph and a
+    topologically sorted list of subgraphs."""
     model, zip_compressed = read_model_json(model_path)
 
-    weightsManifest = model['weightsManifest'][0]
+    weights_manifest = model['weightsManifest'][0]
 
     sharded_data = []
-    for path in weightsManifest["paths"]:
+    for path in weights_manifest["paths"]:
         with open(os.path.join(os.path.dirname(model_path), path), "rb") as f:
             shard_bytes = f.read()
             if zip_compressed:
@@ -210,7 +225,7 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_def
     weights = {}
 
     i = 0
-    for weight in weightsManifest['weights']:
+    for weight in weights_manifest['weights']:
         weight_name, np_arr, num_bytes = read_tfjs_weight(weight, weights_data, offset=i)
         weights[weight_name] = np_arr
         i += num_bytes
@@ -219,7 +234,7 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_def
     topology = model['modelTopology']
 
     if output_names is None and 'signature' in model:
-        output_names = [out for out in model['signature']['outputs'].keys()]
+        output_names = list(model['signature']['outputs'].keys())
 
     main_g = read_tfjs_graph(topology['node'], weights, None, input_names, output_names, ignore_default, use_default)
     subgraphs = []
@@ -232,6 +247,7 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_def
 
 
 def read_tfjs_weight(weight, weights_data, offset):
+    """Returns the name, numpy array, and number of bytes for a tfjs weight"""
     name = weight['name']
     count = np.product(weight['shape'], dtype=np.int64)
     if weight['dtype'] == 'string':
@@ -254,9 +270,11 @@ def read_tfjs_weight(weight, weights_data, offset):
 
 
 def read_string_weight(weights_data, offset, num_strings):
+    """Decodes binary weight data for a tfjs string"""
     string_list = []
     j = offset
-    for i in range(num_strings):
+    for _ in range(num_strings):
+        # TFJS strings start with a 4 byte unsigned int indicating their length, followed by the bytes of the string
         length = struct.unpack('<I', weights_data[j:j + 4])[0]
         j += 4
         string_list.append(weights_data[j:j + length])
@@ -265,6 +283,7 @@ def read_string_weight(weights_data, offset, num_strings):
 
 
 def read_tfjs_function(func):
+    """Parses properties of a tfjs function."""
     tf_dtypes = {}
     output_shapes = {}
     signature = func['signature']
@@ -286,6 +305,7 @@ def read_tfjs_function(func):
 
 def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=None,
                     ignore_default=None, use_default=None):
+    """Creates an onnx graph from the provided tfjs nodes"""
     onnx_nodes = []
     output_shapes = {}
     tf_dtypes = {}
@@ -299,7 +319,6 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         for inp in graph_inputs:
             onnx_nodes.append(helper.make_node("Placeholder", [], outputs=[inp], name=inp))
 
-    # TODO: Placeholder with default, etc.
     if graph_inputs is None:
         placeholder_ops = ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
         graph_inputs = [n['name'] + ':0' for n in nodes if n['op'] in placeholder_ops]
@@ -335,7 +354,8 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
             onnx_attr[k] = read_tfjs_attr(v)
         op_info[node_name] = (op_type, tf_attr)
 
-        input_names = [resolve_output(inp, op_info, func_name) for inp in node.get('input', []) if not inp.startswith('^')]
+        input_names = [inp for inp in node.get('input', []) if not inp.startswith('^')]
+        input_names = [resolve_output(inp, op_info, func_name) for inp in input_names]
         unused_outputs.difference_update(input_names)
         inp_dtypes = [tf_dtypes[inp] for inp in input_names]
         inp_shapes = [output_shapes[inp] for inp in input_names]
