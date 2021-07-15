@@ -21,9 +21,10 @@ from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.tflite_rewriters import *  # pylint: disable=wildcard-import
 from tf2onnx.late_rewriters import rewrite_channels_last
 from tf2onnx.shape_inference import infer_shape
-from tf2onnx.tf_loader import is_function, resolve_functions, set_function
+from tf2onnx.tf_loader import is_function, resolve_functions, set_function, clear_functions
 from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
 from tf2onnx.tflite_utils import graphs_from_tflite
+from tf2onnx.tfjs_utils import graphs_from_tfjs
 
 from . import constants, logging, schemas, utils, handler
 
@@ -378,7 +379,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
                      input_names=None, output_names=None, ignore_default=None, use_default=None,
                      is_subgraph=False, const_node_values=None, tensors_to_rename=None,
-                     initialized_tables=None, tflite_path=None, dequantize=False):
+                     initialized_tables=None, tflite_path=None, dequantize=False, tfjs_path=None):
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
@@ -417,6 +418,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                        "please upgrade onnx package to avoid potential conversion issue.",
                        utils.get_onnx_version(), opset)
 
+    clear_functions()
     if inputs_as_nchw is None:
         inputs_as_nchw = []
 
@@ -424,6 +426,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     if tflite_path is not None:
         main_g, subgraphs = graphs_from_tflite(tflite_path, input_names, output_names)
         is_tflite = True
+    elif tfjs_path is not None:
+        main_g, subgraphs = graphs_from_tfjs(tfjs_path, input_names, output_names, ignore_default, use_default)
     else:
         main_g, subgraphs = graphs_from_tf(tf_graph, input_names, output_names, shape_override, const_node_values,
                                            ignore_default, use_default)
