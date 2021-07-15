@@ -234,6 +234,7 @@ class StatelessIfOp:
 
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
+        outputs = node.output
         ctx.remove_node(node.name)
 
         # replace the original node
@@ -245,7 +246,7 @@ class StatelessIfOp:
             wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
             branches[branch] = g
 
-        _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+        _ = ctx.make_node("If", node.input[:1], name=node.name, outputs=outputs,
                           shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
 
 

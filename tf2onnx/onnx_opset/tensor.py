@@ -369,10 +369,11 @@ class Roll:
     def any_version(cls, opset, ctx, node, **kwargs):
         utils.make_sure(node.inputs[2].is_const(), "Can only convert Roll is axis is const")
         axes = node.inputs[2].get_tensor_value()
-        if axes == -1:
-            axes = len(ctx.get_shape(node.input[0])) + axes
         if not isinstance(axes, list):
             axes = [axes]
+        rank = ctx.get_rank(node.input[0])
+        axes = [a if a >= 0 else a + rank for a in axes]
+
         shifts_dtype = ctx.get_dtype(node.input[1])
         if shifts_dtype != TensorProto.INT64:
             shifts_casted = ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64).output[0]
@@ -395,7 +396,8 @@ class Roll:
         for axis, shift in zip(axes, shifts_split):
             len_along_axis = GraphBuilder(ctx).make_slice(
                 {"data": shape_node.output[0], "ends": [axis + 1], "starts": [axis]})
-            remaining_len = ctx.make_node("Sub", [len_along_axis, shift], op_name_scope=node.name).output[0]
+            shift_mod = ctx.make_node("Mod", [shift, len_along_axis]).output[0]
+            remaining_len = ctx.make_node("Sub", [len_along_axis, shift_mod], op_name_scope=node.name).output[0]
             axes_const = ctx.make_const(utils.make_name("axes_const"), np.array([axis], np.int64)).output[0]
             slice_one = ctx.make_node("Slice", [data, zero_const, remaining_len, axes_const], op_name_scope=node.name)
             slice_two = ctx.make_node("Slice", [data, remaining_len, len_along_axis, axes_const],

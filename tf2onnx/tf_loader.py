@@ -742,3 +742,7 @@ def set_function(name, func):
 
 def find_function(name):
     return _FUNCTIONS.get(name)
+
+
+def clear_functions():
+    _FUNCTIONS.clear()

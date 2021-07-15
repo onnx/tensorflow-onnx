@@ -1,4 +1,4 @@
-# Tests copied from keras2onnx
+# Nightly keras2onnx unit tests
 
 jobs:
 
