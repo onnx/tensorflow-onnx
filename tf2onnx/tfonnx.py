@@ -555,6 +555,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         # single directional
         rewrite_constant_fold,
         rewrite_quantize_and_dequantize,
+        rewrite_fused_ops,
         rewrite_transpose,
         rewrite_flatten,
         rewrite_random_uniform,
