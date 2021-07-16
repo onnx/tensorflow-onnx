@@ -5369,7 +5369,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    #@skip_tflite("FlexRFFT2D")
     def test_rfft_ops(self):
 
         def dft_slow(x, M, fft_length):
@@ -5411,7 +5411,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    #@skip_tflite("FlexRFFT2D")
+    @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length(self):
 
@@ -5422,7 +5423,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    #@skip_tflite("FlexRFFT2D")
+    @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many(self):
         for i in range(4, 7):
@@ -5436,7 +5438,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    #@skip_tflite("FlexRFFT2D")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many_bigger(self):
         for i in range(4, 7):
@@ -5450,7 +5452,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    @skip_tflite("Slight accuracy issues with some shapes")
+    @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many_larger(self):
         for i in range(4, 7):
@@ -5465,7 +5468,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    #@skip_tflite("FlexRFFT2D")
     @check_opset_min_version(10, "Slice")
     def test_rfft2d_ops(self):
 
@@ -5490,7 +5493,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    #@skip_tflite("FlexRFFT2D")
     @check_opset_min_version(10, "Slice")
     def test_rfft2d_ops_fft_length(self):
 
@@ -5502,7 +5505,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    #@skip_tflite("FlexRFFT2D")
     @check_opset_min_version(10, "Slice")
     def test_rfft2d_ops_fft_length_many(self):
         for i in range(7, 4, -1):
