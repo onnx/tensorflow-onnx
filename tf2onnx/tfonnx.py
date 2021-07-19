@@ -503,6 +503,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
             tfl_rewriters.append(rewrite_tfl_qdq)
         tfl_rewriters.append(rewrite_tfl_scan_outputs)
         tfl_rewriters.append(rewrite_tfl_select_zero)
+        tfl_rewriters.append(rewrite_tfl_rfft)
         run_rewriters(g, tfl_rewriters, continue_on_error)
         tfl_ops_mapping = handler.tfl_op.create_tfl_to_tf_mapping()
         _, _, exceptions = tensorflow_onnx_mapping(g, tfl_ops_mapping, is_tflite=True, dequantize=False)

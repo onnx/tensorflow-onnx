@@ -5367,18 +5367,26 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
-    @skip_tflite("FlexRFFT2D")
+    #@skip_tflite("FlexRFFT2D")
     def test_rfft_ops(self):
 
-        def dft_slow(x, M):
-            xt = x.T
-            res = np.dot(M, xt)
+        def dft_slow(x, M, fft_length):
+            xt = x[:, :fft_length].T
+            size = fft_length // 2 + 1
+            res = np.dot(M[:, :, :fft_length], xt)[:, :size, :]
             return np.transpose(res, (0, 2, 1))
 
         x_val = make_xval([2, 4]).astype(np.float32)
         M_both = make_dft_constant(x_val.shape[1], x_val.dtype, x_val.shape[1])
-        fft = dft_slow(x_val, M_both)
+        fft = dft_slow(x_val, M_both, x_val.shape[1])
         fft_npy = np.fft.rfft(x_val)
+        assert_almost_equal(fft[0, :, :], np.real(fft_npy))
+        assert_almost_equal(fft[1, :, :], np.imag(fft_npy))
+
+        x_val = make_xval([2, 4]).astype(np.float32)
+        M_both = make_dft_constant(x_val.shape[1], x_val.dtype, x_val.shape[1]-1)
+        fft = dft_slow(x_val, M_both, x_val.shape[1]-1)
+        fft_npy = np.fft.rfft(x_val, x_val.shape[1]-1)
         assert_almost_equal(fft[0, :, :], np.real(fft_npy))
         assert_almost_equal(fft[1, :, :], np.imag(fft_npy))
 
@@ -5401,7 +5409,117 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @check_opset_min_version(11, "range")
+    #@skip_tflite("FlexRFFT2D")
+    @skip_tfjs("TFJS executes rfft with poor accuracy")
+    @check_opset_min_version(10, "Slice")
+    def test_rfft_ops_fft_length(self):
+
+        x_val = make_xval([3, 9]).astype(np.float32)
+        def func1_length(x):
+            op_ = tf.signal.rfft(x, np.array([8], dtype=np.int32))
+            return tf.abs(op_, name=_TFOUTPUT)
+        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    #@skip_tflite("FlexRFFT2D")
+    @skip_tfjs("TFJS executes rfft with poor accuracy")
+    @check_opset_min_version(10, "Slice")
+    def test_rfft_ops_fft_length_many(self):
+        for i in range(4, 7):
+            for j in range(4, 7):
+                for m in range(0, 3):
+                    with self.subTest(shape=(i, j), fft_length=j-m):
+                        x_val = make_xval([i, j]).astype(np.float32)
+                        def func1_length(x):
+                            op_ = tf.signal.rfft(x, np.array([j-m], dtype=np.int32))
+                            return tf.abs(op_, name=_TFOUTPUT)
+                        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    #@skip_tflite("FlexRFFT2D")
+    @check_opset_min_version(10, "Slice")
+    def test_rfft_ops_fft_length_many_bigger(self):
+        for i in range(4, 7):
+            for j in range(4, 7):
+                for m in range(0, 3):
+                    with self.subTest(shape=(i, j), fft_length=j+m):
+                        x_val = make_xval([i, j]).astype(np.float32) / 10
+                        def func1_length(x):
+                            op_ = tf.signal.rfft(x, np.array([j+m], dtype=np.int32))
+                            return tf.abs(op_, name=_TFOUTPUT)
+                        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    @skip_tflite("Slight accuracy issues with some shapes")
+    @skip_tfjs("TFJS executes rfft with poor accuracy")
+    @check_opset_min_version(10, "Slice")
+    def test_rfft_ops_fft_length_many_larger(self):
+        for i in range(4, 7):
+            for j in range(4, 7):
+                for m in range(-3, 3):
+                    with self.subTest(shape=(3, i, j), fft_length=j+m):
+                        x_val = make_xval([3, i, j]).astype(np.float32) / 10
+                        def func1_length(x):
+                            op_ = tf.signal.rfft(x, np.array([j+m], dtype=np.int32))
+                            return tf.abs(op_, name=_TFOUTPUT)
+                        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=False)
+                        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    #@skip_tflite("FlexRFFT2D")
+    @check_opset_min_version(10, "Slice")
+    def test_rfft2d_ops(self):
+
+        x_val = make_xval([3, 4]).astype(np.float32)
+
+        def func1(x):
+            op_ = tf.signal.rfft2d(x)
+            return tf.abs(op_, name=_TFOUTPUT)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=False)
+        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+
+        def func2(x):
+            op_ = tf.signal.rfft2d(x)
+            return tf.cos(op_, name=_TFOUTPUT)
+        with self.assertRaises(ValueError):
+            self._run_test_case(func2, [_OUTPUT], {_INPUT: x_val})
+
+        def func3(x):
+            op_ = tf.signal.rfft2d(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+        with self.assertRaises(ValueError):
+            self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    #@skip_tflite("FlexRFFT2D")
+    @check_opset_min_version(10, "Slice")
+    def test_rfft2d_ops_fft_length(self):
+
+        x_val = make_xval([3, 4]).astype(np.float32)
+        def func1_length(x):
+            op_ = tf.signal.rfft2d(x, np.array([3, 3], dtype=np.int32))
+            return tf.abs(op_, name=_TFOUTPUT)
+        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=False)
+        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    #@skip_tflite("FlexRFFT2D")
+    @check_opset_min_version(10, "Slice")
+    def test_rfft2d_ops_fft_length_many(self):
+        for i in range(7, 4, -1):
+            for j in range(7, 4, -1):
+                for m in range(0, 3):
+                    for n in range(0, 3):
+                        with self.subTest(shape=(i, j), fft_length=(m, n)):
+                            x_val = make_xval([i, j]).astype(np.float32) / 100
+                            def func1_length(x):
+                                op_ = tf.signal.rfft2d(x, np.array([i-m, j-n], dtype=np.int32))
+                                return tf.abs(op_, name=_TFOUTPUT)
+                            self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(10, "Slice")
+    @unittest.skipIf(True, reason="Not fully implemented for dynamic shape.")
     def test_fft_ops(self):
         x_val = make_xval([3, 4]).astype(np.float32)
         def func1(x):

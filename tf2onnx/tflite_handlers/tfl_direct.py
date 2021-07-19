@@ -80,6 +80,8 @@ from tf2onnx.handler import tfl_op
 @tfl_op("TFL_REVERSE_SEQUENCE", tf_op="ReverseSequence")
 @tfl_op("TFL_SPARSE_TO_DENSE", tf_op="SparseToDense")
 @tfl_op("TFL_CUMSUM", tf_op="Cumsum")
+@tfl_op("TFL_RFFT2D", tf_op="RFFT2D")
+@tfl_op("TFL_COMPLEX_ABS", tf_op="ComplexAbs")
 class TflDirectOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
