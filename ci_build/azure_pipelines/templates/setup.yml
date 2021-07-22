@@ -12,11 +12,8 @@ steps:
     then
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
-    if [[ $ONNX_TEST ==  "true" ]] ;
-    then
-      pip uninstall -y onnx
-      pip install --index-url https://test.pypi.org/simple/ onnx
-    fi
+    pip uninstall -y onnx
+    pip install -i https://test.pypi.org/simple/ onnx==1.9.100
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
     then
       pip uninstall -y onnxruntime
