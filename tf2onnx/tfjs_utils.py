@@ -108,6 +108,7 @@ def resolve_output(output, op_info, func_name=None):
 
 def get_output_names_and_dtypes(op_type, tf_attr):
     """Parses the tf documentation to determine the names and dtypes of the outputs of the op"""
+    # TODO: ['Prelu', 'Conv1D', 'DepthwiseConv2d', 'FusedDepthwiseConv2dNative', 'Ones', 'Zeros']
     try:
         tf_op_def = tf_api_def_map.get_op_def(op_type)
     except ValueError:
@@ -264,7 +265,10 @@ def read_tfjs_weight(weight, weights_data, offset):
         q_dtype = np.dtype(q_info['dtype'])
         np_arr = np.frombuffer(weights_data, dtype=q_dtype, count=count, offset=offset)
         num_bytes = np_arr.nbytes
-        np_arr = np_arr.astype(np_dtype) * q_info['scale'] + q_info['min']
+        if 'scale' in q_info:
+            np_arr = np_arr.astype(np_dtype) * q_info['scale'] + q_info['min']
+        else:
+            np_arr = np_arr.astype(np_dtype)
     else:
         np_arr = np.frombuffer(weights_data, dtype=np_dtype, count=count, offset=offset)
         num_bytes = np_arr.nbytes
