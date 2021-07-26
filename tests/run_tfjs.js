@@ -8,6 +8,7 @@
  */
 
 const tf = require('@tensorflow/tfjs');
+const zlib = require("zlib");
 
 const fs = require('fs');
 const http = require('http');
@@ -48,9 +49,16 @@ if (process.argv[2] == '--test') {
 const modelDir = path.dirname(modelPath);
 const modelName = path.basename(modelPath);
 
+const fd = fs.openSync(modelPath, 'r');
+const buffer = Buffer.alloc(2);
+fs.readSync(fd, buffer, 0, 2);
+fs.closeSync(fd);
+// Check for gzip magic number
+const needsUnzip = buffer[0] == 31 && buffer[1] == 139
+
 // tf.loadGraphModel expects a url not a local file, so we serve it on localhost 
 http.createServer(function (req, res) {
-    fs.readFile(modelDir + req.url, function (err, data) {
+    const callback = function (err, data) {
         if (err) {
             res.writeHead(404);
             res.end(JSON.stringify(err));
@@ -58,6 +66,13 @@ http.createServer(function (req, res) {
         }
         res.writeHead(200);
         res.end(data);
+    }
+    fs.readFile(modelDir + req.url, function (err, data) {
+        if (err || !needsUnzip) {
+            callback(err, data);
+        } else {
+            zlib.gunzip(data, callback);
+        }
     });
 }).listen(8080);
 
