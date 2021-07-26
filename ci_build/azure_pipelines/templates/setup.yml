@@ -13,7 +13,7 @@ steps:
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
     pip uninstall -y onnx
-    pip install -i https://test.pypi.org/simple/ onnx==1.9.100
+    pip install -i https://test.pypi.org/simple/ onnx==1.9.101
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
     then
       pip uninstall -y onnxruntime
