@@ -301,7 +301,7 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
             "Unable to check discrepencies for res=%r." % res) from e
     except AssertionError as e:
         output_names = [o.name for o in ort.get_outputs()]
-        res = ort.run(None, imgs[0])
+        res = fct_ort(imgs[0])
         for i, r in enumerate(res):
             print("ORT %d: %s: %r: %r" % (i, output_names[i], r.dtype, r.shape))
         raise e

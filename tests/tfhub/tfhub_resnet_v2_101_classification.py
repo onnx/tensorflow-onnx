@@ -10,7 +10,7 @@ def main(opset=13):
     name = "resnet_v2_101_classification"
     onnx_name = os.path.join(dest, "%s-%d.onnx" % (name, opset))
 
-    imgs = generate_random_images(shape=(1, 224, 224, 3))
+    imgs = generate_random_images(shape=(1, 224, 224, 3), scale=1.)
 
     benchmark(url, dest, onnx_name, opset, imgs)
 
