@@ -6,6 +6,7 @@ jobs:
     python_versions: ['3.7']
     tf_versions: ['2.4.1']
     skip_tflite_tests: 'False'
+    skip_tfjs_tests: 'False'
     skip_tf_tests: 'True'
     job:
       steps:
