@@ -21,12 +21,14 @@ def rewrite_fused_ops(g, ops):
             shape = g.get_shape(node.output[0])
             first_node = None
             for op in op_types:
-                new_node = g.make_node(op, [last_output] + extra_inputs, skip_conversion=False,
+                num_inputs = {"BiasAdd": 2, "FusedBatchNorm": 5}.get(op, 1 + len(extra_inputs))
+                my_inputs = [last_output] + extra_inputs[:num_inputs - 1]
+                new_node = g.make_node(op, my_inputs, skip_conversion=False,
                                        op_name_scope=node.name, dtypes=[dtype], shapes=[shape])
                 last_output = new_node.output[0]
+                extra_inputs = extra_inputs[num_inputs - 1:]
                 if first_node is None:
                     first_node = new_node
-                extra_inputs = []
 
             consumers = [n for n in g.find_output_consumers(node.output[0]) if n != first_node]
             g.replace_all_inputs(node.output[0], last_output, consumers)

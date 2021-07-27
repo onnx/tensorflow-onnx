@@ -420,7 +420,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         if test_tfjs:
             try:
-                tfjs_res = run_tfjs(tfjs_path, feed_dict, self.test_data_directory)
+                tfjs_res = run_tfjs(tfjs_path, feed_dict)
             except RuntimeError as e:
                 ignored_errors = ["is not yet supported", "Operands could not be broadcast together",
                                   "unknown dtype null", "must be [NaN", "Cannot read property 'name' of undefined",

@@ -15,7 +15,7 @@ const http = require('http');
 const path = require('path');
 const { exit } = require('process');
 
-const [, , modelPath, inputPath, outputPath] = process.argv;
+const [, , modelPath, inputPath, outputPath, ...args] = process.argv;
 
 // Hide tfjs first use message complaining about lack of GPU
 tf.backend().firstUse = false;
@@ -147,8 +147,11 @@ async function main() {
     const inputString = fs.readFileSync(inputPath, 'utf8');
     const inputJson = JSON.parse(inputString);
     const input = inputFromJson(inputJson);
-
-    const output = await model.executeAsync(input);
+    let outputs = null;
+    if (args && args[0] == '--outputs') {
+        outputs = args[1].split(',');
+    }
+    const output = await model.executeAsync(input, outputs);
 
     const outputJson = outputToJson(output);
     const outputString = JSON.stringify(outputJson);

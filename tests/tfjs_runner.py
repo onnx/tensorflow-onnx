@@ -67,7 +67,7 @@ def json_to_output(obj):
     return [json_to_numpy(obj)]
 
 
-def run_tfjs(tfjs_path, inputs, working_dir):
+def run_tfjs(tfjs_path, inputs, outputs=None):
     """
     Given the path to the model.json of a tfjs model, a dict mapping input names to numpy arrays, and a working
     directory, runs the model on the inputs and returns the resulting arrays or raises a RuntimeException. Calls
@@ -79,11 +79,15 @@ def run_tfjs(tfjs_path, inputs, working_dir):
     output_path = os.path.join(working_dir, 'output.json')
     stderr_path = os.path.join(working_dir, 'stderr.txt')
 
+    command = ['node', script_path, tfjs_path, input_path, output_path]
+    if outputs is not None:
+        command.extend(['--outputs', ','.join(outputs)])
+
     with open(input_path, 'wt') as f:
         json.dump(inputs_to_json(inputs), f)
 
     with open(stderr_path, 'wb') as f:
-        result = subprocess.run(['node', script_path, tfjs_path, input_path, output_path], stderr=f, check=False)
+        result = subprocess.run(command, stderr=f, check=False)
     if result.returncode != 0:
         with open(stderr_path, 'rt') as f:
             err = f.read()

@@ -642,6 +642,9 @@ blazeposedetector_tfjs:
   disabled: false
   url: https://tfhub.dev/mediapipe/tfjs-model/blazeposedetector/1/default/1?tfjs-format=compressed
   model: "model.json"
+  opset_constraints:
+    "onnx":
+      "min": 10
   model_type: tfjs
   input_get: get_beach
   #force_input_shape: True  # ORT doesn't implement autopadding for convs with dilations
@@ -649,6 +652,21 @@ blazeposedetector_tfjs:
     "input:0": [1, 224, 224, 3]
   outputs:
     - Identity:0
-  rtol: 0.1
-  ptol: 0.2
-  atol: 0.005
+  rtol: 0.05
+  atol: 0.0005
+
+facemesh_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/mediapipe/tfjs-model/facemesh/1/default/1?tfjs-format=compressed
+  model: "model.json"
+  model_type: tfjs
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 192, 192, 3]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+  rtol: 0.05
+  atol: 0.0005

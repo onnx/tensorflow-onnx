@@ -70,6 +70,13 @@ class TrigOpSinceOpset9:
         pass
 
 
+@tf_op(["Prelu"], onnx_op="PRelu")
+class Prelu:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        pass
+
+
 def make_min_or_max_op(ctx, op_type, inputs, outputs,
                        output_shapes=None, output_dtypes=None):
     # support more dtype
