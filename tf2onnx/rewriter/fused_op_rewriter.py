@@ -11,7 +11,7 @@ tf2onnx.rewriter.fused_op_rewriter - rewrite tensorflow _Fused ops from grappler
 
 def rewrite_fused_ops(g, ops):
     for node in ops:
-        if node.type in ["_FusedConv2D", "_FusedMatMul"]:
+        if node.type in ["_FusedConv2D", "_FusedMatMul", "_FusedDepthwiseConv2dNative"]:
             op_types = [op.decode() for op in node.get_attr_value("fused_ops")]
             extra_inputs = node.input[2:]
             g.replace_inputs(node, node.input[:2])

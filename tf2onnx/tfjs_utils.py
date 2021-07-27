@@ -213,6 +213,16 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, shape_over
     topologically sorted list of subgraphs."""
     model, zip_compressed = read_model_json(model_path)
 
+    model_format = model['modelTopology'].get('format')
+    if model_format is None:
+        if 'keras_version' in model['modelTopology']:
+            model_format = 'layers-model'
+        else:
+            model_format = 'graph-model'
+    utils.make_sure(model_format == 'graph-model', "tf2onnx only supports conversion from tfjs graph models, "
+                    "not format %s. Use Google's tfjs converter to convert to a graph model, then try again.",
+                    model_format)
+
     weights_manifest = model['weightsManifest'][0]
 
     sharded_data = []
@@ -368,6 +378,15 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
             if k == 'DstT':
                 k = 'to'
             onnx_attr[k] = read_tfjs_attr(v)
+        if op_type == "FusedDepthwiseConv2dNative":
+            # This op isn't in tensorflow but can be converted to a TF op
+            op_type = "_FusedDepthwiseConv2dNative"
+            err_msg = "explicit_paddings for supported for _FusedDepthwiseConv2dNative"
+            utils.make_sure(len(tf_attr['explicit_paddings']) == 0, err_msg)
+            del tf_attr['explicit_paddings']
+            del onnx_attr['explicit_paddings']
+            del node_def.attr['explicit_paddings']
+            node_def.op = op_type
         op_info[node_name] = (op_type, tf_attr)
 
         input_names = [inp for inp in node.get('input', []) if not inp.startswith('^')]
