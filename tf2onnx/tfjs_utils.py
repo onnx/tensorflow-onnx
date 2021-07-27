@@ -108,6 +108,7 @@ def resolve_output(output, op_info, func_name=None):
 
 def get_output_names_and_dtypes(op_type, tf_attr):
     """Parses the tf documentation to determine the names and dtypes of the outputs of the op"""
+    # TODO: ['Prelu', 'Conv1D', 'DepthwiseConv2d', 'FusedDepthwiseConv2dNative', 'Ones', 'Zeros']
     try:
         tf_op_def = tf_api_def_map.get_op_def(op_type)
     except ValueError:
@@ -206,7 +207,8 @@ def read_model_json(model_path):
     return model, zip_compressed
 
 
-def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_default=None, use_default=None):
+def graphs_from_tfjs(model_path, input_names=None, output_names=None, shape_override=None,
+                     ignore_default=None, use_default=None):
     """Given the path to a model.json file, parses the model into onnx graphs and returns the main graph and a
     topologically sorted list of subgraphs."""
     model, zip_compressed = read_model_json(model_path)
@@ -236,11 +238,13 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, ignore_def
     if output_names is None and 'signature' in model:
         output_names = list(model['signature']['outputs'].keys())
 
-    main_g = read_tfjs_graph(topology['node'], weights, None, input_names, output_names, ignore_default, use_default)
+    main_g = read_tfjs_graph(topology['node'], weights, None, input_names, output_names, shape_override,
+                             ignore_default, use_default)
     subgraphs = []
     funcs = sort_tfjs_functions(topology.get('library', {}).get('function', []))
     for func in funcs:
-        sub_g = read_tfjs_graph(func.get('nodeDef', []), weights, func, None, None, ignore_default, use_default)
+        sub_g = read_tfjs_graph(func.get('nodeDef', []), weights, func, None, None, shape_override,
+                                ignore_default, use_default)
         subgraphs.append(sub_g)
 
     return main_g, subgraphs
@@ -259,9 +263,12 @@ def read_tfjs_weight(weight, weights_data, offset):
     if 'quantization' in weight:
         q_info = weight['quantization']
         q_dtype = np.dtype(q_info['dtype'])
-        np_arr = np.frombuffer(weights_data, dtype=q_dtype, count=count, offset=i)
+        np_arr = np.frombuffer(weights_data, dtype=q_dtype, count=count, offset=offset)
         num_bytes = np_arr.nbytes
-        np_arr = np_arr.astype(np_dtype) * q_info['scale'] + q_info['min']
+        if 'scale' in q_info:
+            np_arr = np_arr.astype(np_dtype) * q_info['scale'] + q_info['min']
+        else:
+            np_arr = np_arr.astype(np_dtype)
     else:
         np_arr = np.frombuffer(weights_data, dtype=np_dtype, count=count, offset=offset)
         num_bytes = np_arr.nbytes
@@ -303,9 +310,11 @@ def read_tfjs_function(func):
     return tf_dtypes, output_shapes, inputs, outputs, name
 
 
-def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=None,
+def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=None, shape_override=None,
                     ignore_default=None, use_default=None):
     """Creates an onnx graph from the provided tfjs nodes"""
+    if shape_override is None:
+        shape_override = {}
     onnx_nodes = []
     output_shapes = {}
     tf_dtypes = {}
@@ -313,8 +322,15 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
     graph_name = 'tfjs_model'
     func_name = None
 
+    def update_shapes(new_shapes):
+        if isinstance(new_shapes, dict):
+            new_shapes = new_shapes.items()
+        for k, v in new_shapes:
+            output_shapes[k] = shape_override.get(k, v)
+
     if func is not None:
-        tf_dtypes, output_shapes, graph_inputs, graph_outputs, func_name = read_tfjs_function(func)
+        tf_dtypes, fn_input_shapes, graph_inputs, graph_outputs, func_name = read_tfjs_function(func)
+        update_shapes(fn_input_shapes)
         graph_name = func_name
         for inp in graph_inputs:
             onnx_nodes.append(helper.make_node("Placeholder", [], outputs=[inp], name=inp))
@@ -338,7 +354,7 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
             onnx_tensor = numpy_helper.from_array(np_arr.astype(np_dtype), out_name)
             onnx_node = helper.make_node("Const", [], outputs=[out_name], name=node_name, value=onnx_tensor)
             onnx_nodes.append(onnx_node)
-            output_shapes[out_name] = list(np_arr.shape)
+            output_shapes[out_name] = shape_override.get(out_name, list(np_arr.shape))
             tf_dtypes[out_name] = tf_dtype
             op_info[node_name] = (op_type, {'dtype': tf_dtypes[out_name]})
             continue
@@ -365,7 +381,7 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
 
         output_names = [node_name + ":" + str(i) for i in range(len(out_dtypes))]
         tf_dtypes.update(zip(output_names, out_dtypes))
-        output_shapes.update(zip(output_names, out_shapes))
+        update_shapes(zip(output_names, out_shapes))
         unused_outputs.update(output_names)
 
         if op_type == "PlaceholderWithDefault":

@@ -586,3 +586,53 @@ melgan_tflite:   # TFLite model with FlexOps and rank-3 transposes
     - Identity
   rtol: 0.02
   atol: 0.0005
+
+handdetector_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tensorflow/tfjs-model/handdetector/1/default/1?tfjs-format=compressed
+  model: "model.json"
+  model_type: tfjs
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 256, 256, 3]
+  outputs:
+    - Identity:0
+  atol: 0.0005
+
+posenet_mobilenet_float_100_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tensorflow/tfjs-model/posenet/mobilenet/float/100/1/default/1?tfjs-format=compressed
+  model: "model-stride8.json"
+  model_type: tfjs
+  input_get: get_beach
+  force_input_shape: True  # ORT doesn't implement autopadding for convs with dilations
+  inputs:
+    "sub_2:0": [1, 256, 256, 3]
+  outputs:
+    - MobilenetV1/offset_2/BiasAdd:0
+    - MobilenetV1/heatmap_2/BiasAdd:0
+    - MobilenetV1/displacement_fwd_2/BiasAdd:0
+    - MobilenetV1/displacement_bwd_2/BiasAdd:0
+  rtol: 0.02
+  atol: 0.0005
+
+posenet_mobilenet_quantized_2_075_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tensorflow/tfjs-model/posenet/mobilenet/quantized/2/075/1/default/1?tfjs-format=compressed
+  model: "model-stride16.json"
+  model_type: tfjs
+  input_get: get_beach
+  force_input_shape: True  # ORT doesn't implement autopadding for convs with dilations
+  inputs:
+    "sub_2:0": [1, 256, 256, 3]
+  outputs:
+    - MobilenetV1/offset_2/BiasAdd:0
+    - MobilenetV1/heatmap_2/BiasAdd:0
+    - MobilenetV1/displacement_fwd_2/BiasAdd:0
+    - MobilenetV1/displacement_bwd_2/BiasAdd:0
+  rtol: 0.1
+  ptol: 0.2
+  atol: 0.005
