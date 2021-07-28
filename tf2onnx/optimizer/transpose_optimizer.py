@@ -778,8 +778,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             if input_shape is not None:
                 new_squeeze_output_shape = [input_shape[i] for i in range(trans_rank) if i not in new_squeeze_axes]
             else:
-                new_squeeze_output_shape = [-1] * trans_rank
-                self.logger.warning("%s's shape is unknown, which may interfere further optimization", node.input[0])
+                new_squeeze_output_shape = [-1] * (trans_rank - len(new_squeeze_axes))
             self._g.set_shape(node.output[0], new_squeeze_output_shape)
             return True
         return False

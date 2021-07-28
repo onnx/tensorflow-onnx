@@ -670,3 +670,21 @@ facemesh_tfjs:
     - Identity_2:0
   rtol: 0.05
   atol: 0.0005
+
+ssd_mobilenet_v1_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tensorflow/tfjs-model/ssd_mobilenet_v1/1/default/1?tfjs-format=compressed
+  model: "model.json"
+  opset_constraints:
+    "onnx":
+      "min": 9
+  model_type: tfjs
+  input_get: get_beach_uint8
+  inputs:
+    "image_tensor:0": [1, 200, 200, 3]
+  outputs:
+    - Postprocessor/Slice:0
+    - Postprocessor/ExpandDims_1:0
+  rtol: 0.05
+  atol: 0.0005
