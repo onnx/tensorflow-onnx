@@ -464,8 +464,8 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
 
     dtypes = {k: tf_utils.map_tf_dtype(v) for k, v in tf_dtypes.items()}
     if graph_outputs is None:
-        output_to_node = { out: node.name for node in onnx_nodes for out in node.output }
-        node_to_outputs = { node.name: list(node.output) for node in onnx_nodes }
+        output_to_node = {out: node.name for node in onnx_nodes for out in node.output}
+        node_to_outputs = {node.name: list(node.output) for node in onnx_nodes}
         used_nodes = set(output_to_node[out] for node in onnx_nodes for out in node.input)
         unused_nodes = [node for node in onnx_nodes if node.name not in used_nodes]
         graph_outputs = [out for node in unused_nodes for out in node_to_outputs[node.name]]

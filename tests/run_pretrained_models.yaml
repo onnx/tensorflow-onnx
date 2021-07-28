@@ -676,6 +676,9 @@ ssd_mobilenet_v1_tfjs:
   disabled: false
   url: https://tfhub.dev/tensorflow/tfjs-model/ssd_mobilenet_v1/1/default/1?tfjs-format=compressed
   model: "model.json"
+  opset_constraints:
+    "onnx":
+      "min": 9
   model_type: tfjs
   input_get: get_beach_uint8
   inputs:
