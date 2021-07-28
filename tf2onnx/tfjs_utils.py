@@ -100,15 +100,17 @@ def resolve_output(output, op_info, func_name=None):
         long_node_name = func_name + "/" + node
         if long_node_name in op_info:
             node = long_node_name
-    op_type, tf_attr = op_info[node]
-    names, _ = get_output_names_and_dtypes(op_type, tf_attr)
+    op_type, tf_attr, inp_dtypes = op_info[node]
+    names, _ = get_output_names_and_dtypes(op_type, tf_attr, inp_dtypes)
     idx = names.index(output_arg_name) + int(index)
     return node + ':' + str(idx)
 
 
-def get_output_names_and_dtypes(op_type, tf_attr):
+def get_output_names_and_dtypes(op_type, tf_attr, inp_dtypes):
     """Parses the tf documentation to determine the names and dtypes of the outputs of the op"""
     # TODO: ['Prelu', 'Conv1D', 'DepthwiseConv2d', 'FusedDepthwiseConv2dNative', 'Ones', 'Zeros']
+    if op_type == 'Prelu':
+        return ['activations'], [inp_dtypes[0]]
     try:
         tf_op_def = tf_api_def_map.get_op_def(op_type)
     except ValueError:
@@ -134,15 +136,19 @@ def get_output_names_and_dtypes(op_type, tf_attr):
     return names, dtypes
 
 
-def get_output_dtypes(op_type, tf_attr):
+def get_output_dtypes(op_type, tf_attr, inp_dtypes):
     """Returns a list of the tf dtypes for the op's outputs"""
-    _, out_dtypes = get_output_names_and_dtypes(op_type, tf_attr)
+    _, out_dtypes = get_output_names_and_dtypes(op_type, tf_attr, inp_dtypes)
     return out_dtypes
 
 
 def get_output_shapes(node_def, input_dtypes, input_shapes, inp_consts):
     """Returns a list of the output shapes of an op. input_dtypes should be tf dtypes."""
     from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
+
+    if node_def.op == "Prelu":
+        return [input_shapes[0]]
+
     del node_def.input[:]
     node_def.name = "node"
 
@@ -212,6 +218,16 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, shape_over
     """Given the path to a model.json file, parses the model into onnx graphs and returns the main graph and a
     topologically sorted list of subgraphs."""
     model, zip_compressed = read_model_json(model_path)
+
+    model_format = model['modelTopology'].get('format')
+    if model_format is None:
+        if 'keras_version' in model['modelTopology']:
+            model_format = 'layers-model'
+        else:
+            model_format = 'graph-model'
+    utils.make_sure(model_format == 'graph-model', "tf2onnx only supports conversion from tfjs graph models, "
+                    "not format %s. Use Google's tfjs converter to convert to a graph model, then try again.",
+                    model_format)
 
     weights_manifest = model['weightsManifest'][0]
 
@@ -356,7 +372,7 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
             onnx_nodes.append(onnx_node)
             output_shapes[out_name] = shape_override.get(out_name, list(np_arr.shape))
             tf_dtypes[out_name] = tf_dtype
-            op_info[node_name] = (op_type, {'dtype': tf_dtypes[out_name]})
+            op_info[node_name] = (op_type, {'dtype': tf_dtypes[out_name]}, [])
             continue
         tf_attr = {}
         onnx_attr = {}
@@ -368,7 +384,15 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
             if k == 'DstT':
                 k = 'to'
             onnx_attr[k] = read_tfjs_attr(v)
-        op_info[node_name] = (op_type, tf_attr)
+        if op_type == "FusedDepthwiseConv2dNative":
+            # This op isn't in tensorflow but can be converted to a TF op
+            op_type = "_FusedDepthwiseConv2dNative"
+            err_msg = "explicit_paddings for supported for _FusedDepthwiseConv2dNative"
+            utils.make_sure(len(tf_attr['explicit_paddings']) == 0, err_msg)
+            del tf_attr['explicit_paddings']
+            del onnx_attr['explicit_paddings']
+            del node_def.attr['explicit_paddings']
+            node_def.op = op_type
 
         input_names = [inp for inp in node.get('input', []) if not inp.startswith('^')]
         input_names = [resolve_output(inp, op_info, func_name) for inp in input_names]
@@ -376,8 +400,9 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         inp_dtypes = [tf_dtypes[inp] for inp in input_names]
         inp_shapes = [output_shapes[inp] for inp in input_names]
         inp_consts = [weights.get(inp.split(':')[0]) for inp in input_names]
-        out_dtypes = get_output_dtypes(op_type, tf_attr)
+        out_dtypes = get_output_dtypes(op_type, tf_attr, inp_dtypes)
         out_shapes = get_output_shapes(node_def, inp_dtypes, inp_shapes, inp_consts)
+        op_info[node_name] = (op_type, tf_attr, inp_dtypes)
 
         output_names = [node_name + ":" + str(i) for i in range(len(out_dtypes))]
         tf_dtypes.update(zip(output_names, out_dtypes))

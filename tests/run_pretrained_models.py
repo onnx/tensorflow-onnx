@@ -451,7 +451,7 @@ class Test(object):
                 inputs[k] = self.make_input(v)
             if not self.skip_tensorflow:
                 logger.info("Running TFJS")
-                tf_results = run_tfjs(tfjs_path, inputs, dir_name)
+                tf_results = run_tfjs(tfjs_path, inputs, outputs)
                 logger.info("TFJS OK")
 
         if not self.run_tf_frozen:
