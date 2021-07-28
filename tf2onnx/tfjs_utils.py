@@ -384,8 +384,6 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         placeholder_ops = ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
         graph_inputs = [n['name'] + ':0' for n in nodes if n['op'] in placeholder_ops]
 
-    unused_outputs = set()
-
     for node in nodes:
         if node['op'] == "NextIteration":
             # NextIteration nodes can violate the topological sort with cyclic dependencies, so we do them first.
@@ -435,7 +433,6 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
 
         input_names = [inp for inp in node.get('input', []) if not inp.startswith('^')]
         input_names = [resolve_output(inp, op_info, func_name) for inp in input_names]
-        unused_outputs.difference_update(input_names)
         inp_dtypes = [tf_dtypes[inp] for inp in input_names]
         inp_shapes = [output_shapes[inp] for inp in input_names]
         inp_consts = [weights.get(inp.split(':')[0]) for inp in input_names]
@@ -446,7 +443,6 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         output_names = [node_name + ":" + str(i) for i in range(len(out_dtypes))]
         tf_dtypes.update(zip(output_names, out_dtypes))
         update_shapes(zip(output_names, out_shapes))
-        unused_outputs.update(output_names)
 
         if op_type == "PlaceholderWithDefault":
             remove = False
