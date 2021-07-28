@@ -40,6 +40,25 @@ def read_tfjs_attr(attr, tf_dtypes=False):
     return read_tfjs_attr_helper(k, attr[k], tf_dtypes)
 
 
+def fix_string_attr(tfjs_node):
+    """
+    Older tfjs models store strings as lists of ints (representing byte values). This function finds and replaces
+    those strings, so protobuf can correctly decode the json.
+    """
+    def fix(v):
+        if isinstance(v, list):
+            return base64.encodebytes(bytes(v)).decode()
+        return v
+    if 'attr' not in tfjs_node:
+        return
+    for v in tfjs_node['attr'].values():
+        if 's' in v:
+            v['s'] = fix(v['s'])
+        if 'list' in v and 's' in v['list']:
+            for i, x in enumerate(v['list']['s']):
+                v['list']['s'][i] = fix(x)
+
+
 def read_tfjs_attr_helper(k, v, tf_dtypes=False):
     """
     A tfjs attribute value is itself a dict with a single key specifying the type and a value with the actual data
@@ -49,12 +68,15 @@ def read_tfjs_attr_helper(k, v, tf_dtypes=False):
     supported_types = ['func', 'shape', 'type', 'list', 's', 'i', 'f', 'b']
     utils.make_sure(k in supported_types, "Unrecognized tfjs attribute type %s", k)
     if k == 'list':
-        if len(v) == 0:
+        non_empty_keys = [k2 for k2, v2 in v.items() if len(v2) > 0]
+        if len(non_empty_keys) == 0:
             return []
-        k2 = list(v.keys())[0]
+        k2 = non_empty_keys[0]
         return [read_tfjs_attr_helper(k2, v2, tf_dtypes) for v2 in v[k2]]
     if k == 'type':
-        dtype = getattr(types_pb2, v)
+        dtype = v
+        if not isinstance(dtype, int):
+            dtype = getattr(types_pb2, dtype)
         if not tf_dtypes:
             dtype = tf_utils.map_tf_dtype(dtype)
         return dtype
@@ -89,6 +111,7 @@ def resolve_output(output, op_info, func_name=None):
         # If no port is specified, it is referring to port 0
         if output in op_info:
             return output + ':0'
+        # Output isn't from an op and may be an input (no port number)
         return output
     if cnt == 1:
         # Already in our standard format
@@ -146,8 +169,14 @@ def get_output_shapes(node_def, input_dtypes, input_shapes, inp_consts):
     """Returns a list of the output shapes of an op. input_dtypes should be tf dtypes."""
     from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
 
-    if node_def.op == "Prelu":
+    if node_def.op in ["Prelu", "Enter"]:
         return [input_shapes[0]]
+
+    if node_def.op == "Merge":
+        # Find the first non-None shape (if it exists) and return it
+        non_none = ([t for t in input_shapes if t is not None] + [None])[0]
+        # The second output of merge is a scalar int indicating which input was selected
+        return [non_none, []]
 
     del node_def.input[:]
     node_def.name = "node"
@@ -355,7 +384,14 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         placeholder_ops = ["Placeholder", "PlaceholderWithDefault", "PlaceholderV2"]
         graph_inputs = [n['name'] + ':0' for n in nodes if n['op'] in placeholder_ops]
 
-    unused_outputs = set()
+    for node in nodes:
+        if node['op'] == "NextIteration":
+            # NextIteration nodes can violate the topological sort with cyclic dependencies, so we do them first.
+            node_name = node['name']
+            output_name = node_name + ':0'
+            output_shapes[output_name] = None
+            tf_dtypes[output_name] = read_tfjs_attr(node['attr']['T'], tf_dtypes=True)
+            op_info[node_name] = (node['op'], {'dtype': tf_dtypes[output_name]}, [tf_dtypes[output_name]])
 
     for node in nodes:
         op_type = node['op']
@@ -376,6 +412,7 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
             continue
         tf_attr = {}
         onnx_attr = {}
+        fix_string_attr(node)
         node_def = tfjs_node_to_tf_node_def(node)
         for k, v in node.get('attr', {}).items():
             tf_attr[k] = read_tfjs_attr(v, tf_dtypes=True)
@@ -396,7 +433,6 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
 
         input_names = [inp for inp in node.get('input', []) if not inp.startswith('^')]
         input_names = [resolve_output(inp, op_info, func_name) for inp in input_names]
-        unused_outputs.difference_update(input_names)
         inp_dtypes = [tf_dtypes[inp] for inp in input_names]
         inp_shapes = [output_shapes[inp] for inp in input_names]
         inp_consts = [weights.get(inp.split(':')[0]) for inp in input_names]
@@ -407,7 +443,6 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
         output_names = [node_name + ":" + str(i) for i in range(len(out_dtypes))]
         tf_dtypes.update(zip(output_names, out_dtypes))
         update_shapes(zip(output_names, out_shapes))
-        unused_outputs.update(output_names)
 
         if op_type == "PlaceholderWithDefault":
             remove = False
@@ -429,7 +464,11 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
 
     dtypes = {k: tf_utils.map_tf_dtype(v) for k, v in tf_dtypes.items()}
     if graph_outputs is None:
-        graph_outputs = list(unused_outputs)
+        output_to_node = {out: node.name for node in onnx_nodes for out in node.output}
+        node_to_outputs = {node.name: list(node.output) for node in onnx_nodes}
+        used_nodes = set(output_to_node[out] for node in onnx_nodes for out in node.input)
+        unused_nodes = [node for node in onnx_nodes if node.name not in used_nodes]
+        graph_outputs = [out for node in unused_nodes for out in node_to_outputs[node.name]]
     graph_outputs_mapped = [resolve_output(out, op_info, func_name) for out in graph_outputs]
 
     g = Graph(onnx_nodes, output_shapes, dtypes, input_names=graph_inputs, output_names=graph_outputs_mapped,
