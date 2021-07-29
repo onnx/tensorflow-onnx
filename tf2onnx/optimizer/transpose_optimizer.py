@@ -208,6 +208,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Min": self._maxmin_handler,
             "Mul": self._mul_handler,
             "Pad": self._pad_handler,
+            "PRelu": self._prelu_handler,
             "Reciprocal": self._simple_through_handler,
             "ReduceLogSum": self._reduce_handler,
             "ReduceLogSumExp": self._reduce_handler,
@@ -815,6 +816,9 @@ class TransposeOptimizer(GraphOptimizerBase):
         new_pads = self._g.make_node("Concat", permute_pads(pads), {'axis': 0})
         self._g.replace_input(node, node.input[1], new_pads.output[0], 1)
         return self._switch_transpose_and_node(node, trans)
+
+    def _prelu_handler(self, trans, node):
+        return self._handle_node_having_branches(trans, node)
 
     def _arg_min_max_handler(self, trans, node):
         axis = node.get_attr_value("axis", 0)
