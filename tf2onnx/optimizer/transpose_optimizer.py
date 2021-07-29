@@ -237,14 +237,14 @@ class TransposeOptimizer(GraphOptimizerBase):
         }
 
     def _handle_node_having_branches(self, trans, node):
-        if not self._should_push_transpose(trans, node):
+        if not self._should_push_transpose(trans, node) or len(node.output) != 1:
             return False
         # create transpose pairs if some input are not.
         if not self._create_transpose_pairs_before_node(trans, node):
             return False
         # make sure node's all input transpose all have only 1 consumer node,
         # otherwise, it would impact their other output nodes
-        if self._nodes_has_single_consumer_node(node.inputs) and len(node.output) == 1:
+        if self._nodes_has_single_consumer_node(node.inputs):
             self._create_transpose_pairs_after_node(trans, node)
             input_transposes = set(node.inputs)
             for n in input_transposes:
