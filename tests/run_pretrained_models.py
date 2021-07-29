@@ -71,6 +71,11 @@ def get_beach(shape):
     return get_img(shape, "beach.jpg", np.float32, should_scale=True)
 
 
+def get_beach_uint8(shape):
+    """Get beach image as uint8."""
+    return get_img(shape, "ade20k.jpg", np.uint8, should_scale=False)
+
+
 def get_car(shape):
     """Get car image as input."""
     return get_img(shape, "car.JPEG", np.float32, should_scale=True)
@@ -152,6 +157,7 @@ def get_sentences(shape):
 
 _INPUT_FUNC_MAPPING = {
     "get_beach": get_beach,
+    "get_beach_uint8": get_beach_uint8,
     "get_car": get_car,
     "get_ade20k": get_ade20k,
     "get_ade20k_uint8": get_ade20k_uint8,
