@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version, check_tf_max_version, check_onnxruntime_min_version
+from common import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -26,6 +26,15 @@ _TFOUTPUT1 = "output1"
 _OUTPUT1 = "output1:0"
 
 class LoopTests(Tf2OnnxBackendTestBase):
+
+    def run_test_case(self, *args, **kwargs):  #pylint: disable=arguments-differ
+        # onnx checker verifies number of subgraph inputs incorrectly in IR 3
+        tmp = self.config.skip_onnx_checker
+        self.config.skip_onnx_checker = True
+        try:
+            super().run_test_case(*args, **kwargs)
+        finally:
+            self.config.skip_onnx_checker = tmp
 
     def test_simple_while_loop(self):
         def func(i):

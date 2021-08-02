@@ -40,6 +40,9 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         # TF LSTM has an unknown dim
         tmp = self.config.allow_missing_shapes
         self.config.allow_missing_shapes = True
+        # onnx checker verifies number of subgraph inputs incorrectly in IR 3
+        tmp2 = self.config.skip_onnx_checker
+        self.config.skip_onnx_checker = True
         def graph_validator(g):
             good = True
             if "graph_validator" in kwargs:
@@ -54,6 +57,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             super().run_test_case(*args, graph_validator=graph_validator, **kwargs)
         finally:
             self.config.allow_missing_shapes = tmp
+            self.config.skip_onnx_checker = tmp2
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
     def test_test_single_dynamic_lstm_state_is_tuple(self):

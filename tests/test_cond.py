@@ -76,6 +76,7 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
+    @skip_onnx_checker("onnx checker verifies number of subgraph inputs incorrectly in IR 3")
     def test_nest_cond(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
@@ -97,6 +98,7 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
+    @skip_onnx_checker("onnx checker verifies number of subgraph inputs incorrectly in IR 3")
     def test_while_loop_in_cond(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
