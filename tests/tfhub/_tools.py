@@ -128,7 +128,7 @@ def download_tflite(url, dest, verbose=True):
     return fpath
 
 
-def convert_model(model_name, output_path, opset=13, tag=None, verbose=True):
+def convert_model(model_name, output_path, opset=13, tag=None, signature=None, verbose=True):
     """
     Converts the downloaded model into ONNX.
     """
@@ -136,19 +136,21 @@ def convert_model(model_name, output_path, opset=13, tag=None, verbose=True):
     large_model = ext == ".zip"
     if not os.path.exists(output_path):
         begin = datetime.datetime.now()
-        cmdl = ['-m', 'tf2onnx.convert', '--saved-model',
-                '"%s"' % os.path.abspath(model_name).replace("\\", "/"),
-                '--output', '"%s"' % os.path.abspath(output_path).replace("\\", "/"),
+        cmdl = ['python', '-m', 'tf2onnx.convert', '--saved-model',
+                '%s' % os.path.abspath(model_name).replace("\\", "/"),
+                '--output', '%s' % os.path.abspath(output_path).replace("\\", "/"),
                 '--opset', "%d" % opset]
+        if signature is not None:
+            cmdl.append('--signature_def=%s' % signature)
         if tag is not None:
-            cmdl.append('--tag="%s"' % tag)
+            cmdl.append('--tag=%s' % tag)
         if large_model:
             cmdl.append('--large_model')
         if verbose:
-            print("cmd: python %s" % " ".join(cmdl))
+            print("cmd: %s" % " ".join(cmdl))
         pproc = subprocess.Popen(
-            cmdl, shell=True, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            executable=sys.executable.replace("pythonw", "python"))
+            cmdl, shell=False, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            executable=None)
         stdoutdata, stderrdata = pproc.communicate()
         if verbose:
             print('--OUT--')
@@ -164,15 +166,15 @@ def convert_tflite(model_name, output_path, opset=13, verbose=True):
     """
     if not os.path.exists(output_path):
         begin = datetime.datetime.now()
-        cmdl = ['-m', 'tf2onnx.convert', '--tflite',
+        cmdl = ['python', '-m', 'tf2onnx.convert', '--tflite',
                 '"%s"' % os.path.abspath(model_name).replace("\\", "/"),
                 '--output', '"%s"' % os.path.abspath(output_path).replace("\\", "/"),
                 '--opset', "%d" % opset]
         if verbose:
             print("cmd: python %s" % " ".join(cmdl))
         pproc = subprocess.Popen(
-            cmdl, shell=True, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            executable=sys.executable.replace("pythonw", "python"))
+            cmdl, shell=False, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            executable=None)
         stdoutdata, stderrdata = pproc.communicate()
         if verbose:
             print('--OUT--')
@@ -210,7 +212,7 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
     # Converts the model.
     if verbose:
         print("Convert model in %r." % dest)
-    convert_model(tname, onnx_name, opset, tag=tag)
+    convert_model(tname, onnx_name, opset, tag=tag, signature=signature)
     if verbose:
         print("Created %r." % onnx_name)
 
