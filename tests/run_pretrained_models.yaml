@@ -145,7 +145,7 @@ inception_v3_slim:
   atol: 0.00001
 
 inception_v4:
-  disabled: true
+  disabled: true # works, keeping down to limit ci time
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v4_2016_09_09_frozen.pb.tar.gz
   model: inception_v4_2016_09_09_frozen.pb
   input_get: get_beach
@@ -348,7 +348,7 @@ ssd_mobilenet_v1_coco:
 
 ssd_mobilenet_v2_coco:
   # works with opset-10
-  disabled: true
+  disabled: true   # works, keeping down to limit ci time
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
   model: ssd_mobilenet_v2_coco_2018_03_29/frozen_inference_graph.pb
   opset_constraints:
@@ -365,7 +365,7 @@ ssd_mobilenet_v2_coco:
 
 ssdlite_mobilenet_v2_coco:
   # works with opset-10
-  disabled: true
+  disabled: true   # works, keeping down to limit ci time
   url: http://download.tensorflow.org/models/object_detection/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
   model: ssdlite_mobilenet_v2_coco_2018_05_09/frozen_inference_graph.pb
   opset_constraints:
@@ -381,7 +381,7 @@ ssdlite_mobilenet_v2_coco:
     - detection_classes:0
 
 ssd_inception_v2_coco:
-  disabled: true
+  disabled: true   # works, keeping down to limit ci time
   url: http://download.tensorflow.org/models/object_detection/ssd_inception_v2_coco_2017_11_17.tar.gz
   model: ssd_inception_v2_coco_2017_11_17/frozen_inference_graph.pb
   opset_constraints:
@@ -396,19 +396,21 @@ ssd_inception_v2_coco:
     - num_detections:0
     - detection_classes:0
 
-#
-# models that will not work
-#
-style-transfer:
-  # quantitized model
-  disabled: true
-  url: https://storage.googleapis.com/download.tensorflow.org/models/stylize_v1.zip
-  model: stylize_quantized.pb
+faster_rcnn_resnet101:
+  disabled: true  # works, keeping down to limit ci time
+  url:  http://download.tensorflow.org/models/object_detection/faster_rcnn_resnet101_coco_2018_01_28.tar.gz
+  model: faster_rcnn_resnet101_coco_2018_01_28/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 11
   input_get: get_beach
   inputs:
-    "input:0": [1, 416, 416, 3]
+    "image_tensor:0": [1, 224, 224, 3]
   outputs:
-    - output:0
+    - detection_boxes:0
+    - detection_classes:0
+    - detection_scores:0
+    - num_detections:0
 
 faster_rcnn_inception_v2_coco:
   url: http://download.tensorflow.org/models/object_detection/faster_rcnn_inception_v2_coco_2018_01_28.tar.gz
@@ -700,3 +702,17 @@ ssd_mobilenet_v1_tfjs:
     - Postprocessor/ExpandDims_1:0
   rtol: 0.05
   atol: 0.0005
+
+#
+# models that will not work
+#
+style-transfer:
+  # quantitized model
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/stylize_v1.zip
+  model: stylize_quantized.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 416, 416, 3]
+  outputs:
+    - output:0
