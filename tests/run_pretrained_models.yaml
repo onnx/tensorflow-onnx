@@ -144,6 +144,18 @@ inception_v3_slim:
   rtol: 0.02
   atol: 0.00001
 
+inception_v4:
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v4_2016_09_09_frozen.pb.tar.gz
+  model: inception_v4_2016_09_09_frozen.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 299, 299, 3]
+  outputs:
+    - InceptionV4/Logits/Predictions:0
+  rtol: 0.02
+  atol: 0.00001
+
 googlenet_v1_nonslim:
   disabled: true
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception5h.zip
