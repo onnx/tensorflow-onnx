@@ -9,6 +9,7 @@
 import logging
 import os
 import unittest
+import re
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -278,7 +279,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         model_proto = graph.make_model("test")
 
         if run_checker and not any(graph.get_shape(out) is None for out in graph.outputs + graph.input_names):
-            onnx.checker.check_model(model_proto, full_check=True)
+            try:
+                onnx.checker.check_model(model_proto, full_check=True)
+            except onnx.shape_inference.InferenceError as e:
+                # onnx checker verifies number of subgraph inputs incorrectly in IR 3
+                if re.search(r"Graph has \d* inputs but \d* were provided", str(e)):
+                    run_checker = False
+                else:
+                    raise e
 
         model_shapes = onnx.shape_inference.infer_shapes(model_proto)
         def get_shape(info):
