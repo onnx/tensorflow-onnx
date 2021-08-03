@@ -171,7 +171,7 @@ def convert_tflite(model_name, output_path, opset=13, verbose=True):
                 '--output', '"%s"' % os.path.abspath(output_path).replace("\\", "/"),
                 '--opset', "%d" % opset]
         if verbose:
-            print("cmd: python %s" % " ".join(cmdl))
+            print("cmd: %s" % " ".join(cmdl))
         pproc = subprocess.Popen(
             cmdl, shell=False, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             executable=None)
@@ -188,6 +188,20 @@ def check_discrepencies(out1, out2, threshold=1e-3):
     """
     Compares two tensors. Raises an exception if it fails.
     """
+    if isinstance(out1, list):
+        if len(out1) > 1:
+            if len(out1) != len(out2):
+                raise AssertionError(
+                    "Mismatched number of outputs, %d for ONNX, %d for TF." % (
+                        len(out1), len(out2)))
+            for i, (a, b) in enumerate(zip(out1, out2)):
+                try:
+                    check_discrepencies(out1[i], out2[i].numpy(), threshold=1e-3)
+                except AssertionError as e:
+                    raise AssertionError("Discrepency with output %d." % i) from e
+            return
+        else:
+            out1 = out1[0]
     if out1.dtype != out2.dtype:
         raise AssertionError("Type mismatch %r != %r." % (out1.dtype, out2.dtype))
     if out1.shape != out2.shape:
@@ -256,9 +270,11 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
             index = 0
     if isinstance(imgs[0], dict):
         fct_ort = lambda img: ort.run(None, img)[index]
+        fct_orts = lambda img: ort.run(None, img)
     else:
         input_name = ort.get_inputs()[0].name
         fct_ort = lambda img: ort.run(None, {input_name: img})[index]
+        fct_orts = lambda img: ort.run(None, {input_name: img})
     results_ort, duration_ort = measure_time(fct_ort, imgs)
     if verbose:
         print("ORT", len(imgs), duration_ort)
@@ -296,8 +312,12 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         if output_name not in res:
             raise AssertionError("Unable to find output %r in %r." % (output_name, list(sorted(res))))
         res = res[output_name]
+    res_ort = fct_orts(imgs[0])
     try:
-        check_discrepencies(fct_ort(imgs[0]), res.numpy(), threshold)
+        if len(res_ort) > 1:
+            check_discrepencies(res_ort, res, threshold)
+        else:
+            check_discrepencies(res_ort, res.numpy(), threshold)
     except AttributeError as e:
         raise AssertionError(
             "Unable to check discrepencies for res=%r." % res) from e
