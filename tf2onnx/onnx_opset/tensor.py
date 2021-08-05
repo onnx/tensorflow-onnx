@@ -3805,10 +3805,9 @@ class BroadcastTo:
 class AsString:
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
-        if (node.get_attr_value("precision") or
-            node.get_attr_value("scientific") or
-            node.get_attr_value("fill")):
-            logger.warning("ONNX does not support precision, scientific and fill attributes for AsString")
+        if (node.get_attr_value("precision") or node.get_attr_value("scientific") or node.get_attr_value("fill")):
+            logger.warning(
+                "ONNX does not support precision, scientific and fill attributes for AsString")
         shapes = node.output_shapes
         ctx.remove_node(node.name)
         _ = ctx.make_node("Cast", node.input, name=node.name,
