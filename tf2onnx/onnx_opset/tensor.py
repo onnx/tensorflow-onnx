@@ -3799,3 +3799,27 @@ class BroadcastTo:
         # broadcast by expanding
         node.type = "Expand"
         ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+
+
+@tf_op("AsString")
+class AsString:
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        if (node.get_attr_value("precision") or node.get_attr_value("scientific") or node.get_attr_value("fill")):
+            logger.warning(
+                "ONNX does not support precision, scientific and fill attributes for AsString")
+        shapes = node.output_shapes
+        ctx.remove_node(node.name)
+        _ = ctx.make_node("Cast", node.input, name=node.name,
+                          dtypes=[TensorProto.STRING], shapes=shapes, attr={"to": TensorProto.STRING})
+
+
+@tf_op("StringToNumber")
+class StringToNumber:
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        _ = ctx.make_node("Cast", node.input, name=node.name,
+                          dtypes=dtypes, shapes=shapes, attr={"to": dtypes[0]})
