@@ -205,7 +205,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         return result, graph_def, initialized_tables
 
     def convert_to_tfjs(self, graph_def_path, output_names):
-        from tensorflowjs.converters import converter
+        try:
+            from tensorflowjs.converters import converter
+        except ImportError:
+            return None
         tfjs_path = os.path.join(self.test_data_directory, self._testMethodName + "_tfjs")
         try:
             converter.convert([graph_def_path, tfjs_path, '--input_format', 'tf_frozen_model',

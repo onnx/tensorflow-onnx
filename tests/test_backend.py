@@ -5559,6 +5559,37 @@ class BackendTests(Tf2OnnxBackendTestBase):
                     self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=False)
                     self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("2.1")
+    @skip_tflite("TFlite errors on some attributes")
+    @check_opset_min_version(9, "string")
+    def test_asstring(self):
+        def func(x):
+            op_ = tf.strings.as_string(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        x_val = np.array([0, 1, 2, 3], dtype=np.int32)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+        x_val = np.array([0, 1, 2, 3], dtype=np.float32)
+        # can't check the values because in onnx they are padded with 0, in tf they are not
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False)
+
+    @check_tf_min_version("2.1")
+    @skip_tflite("TFlite errors on some attributes")
+    @check_opset_min_version(9, "string")
+    def test_string_to_number(self):
+        def func(x):
+            op_ = tf.strings.to_number(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        # tf gets this wrong and returns fp32 instead of int
+        x_val = np.array("123", dtype=np.object)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+        x_val = np.array("123.1", dtype=np.object)
+        # can't check the values because in onnx they are padded with 0, in tf they are not
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False)
+
 
 if __name__ == '__main__':
     cl = BackendTests()
