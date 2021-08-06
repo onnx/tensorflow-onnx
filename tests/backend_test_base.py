@@ -89,6 +89,13 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         # opt.log_severity_level = 0
         # opt.log_verbosity_level = 255
         # opt.enable_profiling = True
+        import onnx
+        with open(model_path, "rb") as f:
+            onx = onnx.load(f)
+        print(onx)
+        from mlprodict.onnxrt import OnnxInference
+        oinf = OnnxInference(model_path)
+        oinf.run(inputs, verbose=1, fLOG=print)
 
         m = rt.InferenceSession(model_path, opt, providers=providers)
         results = m.run(output_names, inputs)

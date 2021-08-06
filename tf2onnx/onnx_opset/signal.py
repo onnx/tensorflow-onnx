@@ -377,36 +377,71 @@ class CommonFFT2DOp(CommonFFTOp):
     @classmethod
     def any_version_2d(cls, const_length, opset, ctx, node, **kwargs):
         """
-        Python code equivalent to FF2D (assuming fft_length[i] < input.shape[i] for all i).
+        Python code equivalent to FF2D (assuming `fft_length[i] <= input.shape[i]` for all i).
 
         ::
 
             import numpy as np
 
-            def _DFT_cst(N, fft_length, trunc=True):
+            def dft_real_cst(N, fft_length, trunc=True):
                 n = np.arange(N)
                 k = n.reshape((N, 1)).astype(np.float64)
                 M = np.exp(-2j * np.pi * k * n / fft_length)
-                return M[:fft_length // 2 + 1] if trunc else M
+                both = np.empty((2,) + M.shape)
+                both[0, :, :] = np.real(M)
+                both[1, :, :] = np.imag(M)
+                return both
 
-            def DFT(x, fft_length=None, axis=1):
-                if axis == 1:
-                    x = x.T
+            def dft_real_d3(x, fft_length=None, transpose=True):
+                if len(x.shape) != 3:
+                    raise RuntimeError("Not implemented for shape=%r." % x.shape)
+                N = x.shape[1]
+                C = x.shape[-1] if transpose else x.shape[-2]
                 if fft_length is None:
-                    fft_length = x.shape[0]
-                cst = _DFT_cst(x.shape[0], fft_length, trunc=axis==1)
-                if axis == 1:
-                    return np.dot(cst, x).T
+                    fft_length = x.shape[-1]
+                size = fft_length // 2 + 1
+
+                cst = dft_real_cst(C, fft_length)
+                if transpose:
+                    x = np.transpose(x, (0, 2, 1))
+                    a = cst[:, :, :fft_length]
+                    b = x[:, :fft_length, :]
+                    a = np.expand_dims(a, 0)
+                    b = np.expand_dims(b, 1)
+                    res = np.matmul(a, b)
+                    res = res[:, :, :size, :]
+                    return np.transpose(res, (1, 0, 3, 2))
                 else:
-                    return np.dot(cst, x)
+                    a = cst[:, :, :fft_length]
+                    b = x[:, :fft_length, :]
+                    a = np.expand_dims(a, 0)
+                    b = np.expand_dims(b, 1)
+                    res = np.matmul(a, b)
+                    return np.transpose(res, (1, 0, 2, 3))
 
-            def fft2d(mat, fft_length):
-                mat = mat[:fft_length[0], :fft_length[1]]
+
+            def fft2d_d3(mat, fft_length):
+                mat = mat[:, :fft_length[-2], :fft_length[-1]]
                 res = mat.copy()
-                res = DFT(res, fft_length[1], axis=1)
-                res = DFT(res, fft_length[0], axis=0)
-                return res[:fft_length[0], :fft_length[1]//2 + 1]
+                
+                # first FFT
+                res = dft_real_d3(res, fft_length=fft_length[-1], transpose=True)
+                
+                # second FFT decomposed on FFT on real part and imaginary part
+                res2_real = dft_real_d3(res[0], fft_length=fft_length[-2], transpose=False)
+                res2_imag = dft_real_d3(res[1], fft_length=fft_length[-2], transpose=False)
+                res2_imag2 = np.vstack([-res2_imag[1:2], res2_imag[:1]])
+                res = res2_real + res2_imag2
+                size = fft_length[-1]//2 + 1
+                return res[:, :, :fft_length[-2], :size]
 
+
+            def fft2d_any(mat, fft_length):
+                new_shape = (-1, ) + mat.shape[-2:]
+                mat2 = mat.reshape(new_shape)
+                f2 = fft2d_d3(mat2, fft_length)
+                new_shape = (2, ) + mat.shape[:-2] + f2.shape[-2:]
+                return f2.reshape(new_shape)
         """
         consumers = ctx.find_output_consumers(node.output[0])
         consumer_types = set(op.type for op in consumers)
@@ -438,6 +473,9 @@ class CommonFFT2DOp(CommonFFTOp):
         else:
             raise NotImplementedError(
                 "FFT2D with dynamic shape (known at execution) is not implemented yet.")
+        
+        # Initial transpose, everything 
+
 
         # Slice
         if opset >= 10:
