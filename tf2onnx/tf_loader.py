@@ -4,6 +4,7 @@
 """Methods to load tensorflow graph from graphdef, checkpoint or saved_model."""
 
 import logging
+import uuid
 from distutils.version import LooseVersion
 
 import tensorflow as tf
@@ -15,7 +16,8 @@ from tensorflow.python.ops import lookup_ops
 from tensorflow.python.util import compat
 
 from tf2onnx import utils
-from tf2onnx.tf_utils import get_tf_version, tflist_to_onnx, get_hash_table_info, replace_placeholders_with_tables
+from tf2onnx.tf_utils import (get_tf_version, tflist_to_onnx, get_hash_table_info, replace_placeholders_with_tables,
+                              HashTableInfo)
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +186,7 @@ def from_trackable(trackable, concrete_func, inputs, outputs, large_model):
     err_large_model = "model exceeds maximum protobuf size of 2GB. Try setting large_model."
 
     # Avoid errors due to bug in TF freezing
-    removed_resource_to_placeholder, graph_captures_copy, func_captures_copy = \
+    removed_resource_to_placeholder, placeholder_to_resource, graph_captures_copy, func_captures_copy = \
         _remove_non_variable_resources_from_captures(concrete_func)
 
     try:
@@ -197,16 +199,28 @@ def from_trackable(trackable, concrete_func, inputs, outputs, large_model):
     # We might be returning the concrete_func so let's put it back in working order
     _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy)
 
-    table_names, key_dtypes, value_dtypes = get_hash_table_info(frozen_graph)
+    table_info = get_hash_table_info(frozen_graph)
     placeholder_to_table_info = {}
-    _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
+    _get_hash_table_info_from_trackable(trackable, table_info,
                                         removed_resource_to_placeholder, placeholder_to_table_info)
 
     initialized_tables = {}
-    for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
-        h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+    for info in table_info:
+        if info.shared_name is not None:
+            h = lookup_ops.hash_table_v2(info.key_dtype, info.val_dtype, shared_name=info.shared_name)
+            n = info.shared_name
+        elif info.resource_input in placeholder_to_resource and info.resource_input not in placeholder_to_table_info:
+            # We found a lookup op with no corresponding HashTable op, but we can associate the placeholder input
+            # from the op with the resource handle from graph captures and make up a shared_name
+            h = placeholder_to_resource[info.resource_input]
+            n = str(uuid.uuid4()).encode()
+            info.shared_name = n
+            placeholder_to_table_info[info.resource_input] = info
+        else:
+            # Found a lookup op but the corresponding HashTable op has already been found and processed.
+            continue
         try:
-            k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+            k, v = lookup_ops.lookup_table_export_v2(h, info.key_dtype, info.val_dtype)
             initialized_tables[n] = (k.numpy(), v.numpy())
         except Exception:  # pylint: disable=broad-except
             logger.warning("Could not initialize table with shared_name = %r", n)
@@ -260,14 +274,14 @@ def freeze_session(sess, input_names=None, output_names=None, get_tables=False):
         for node in graph_def.node:
             node.device = ""
         graph_def = convert_variables_to_constants(sess, graph_def, output_node_names)
-        table_names, key_dtypes, value_dtypes = get_hash_table_info(graph_def)
+        table_info = get_hash_table_info(graph_def)
         if get_tables:
             initialized_tables = {}
             tf.tables_initializer().run(session=sess)
-            for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
-                h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
+            for info in table_info:
+                h = lookup_ops.hash_table_v2(info.key_dtype, info.val_dtype, shared_name=info.shared_name)
                 try:
-                    k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
+                    k, v = lookup_ops.lookup_table_export_v2(h, info.key_dtype, info.val_dtype)
                     k, v = sess.run([k, v])
                     initialized_tables[n] = (k, v)
                 except Exception:  # pylint: disable=broad-except
@@ -403,7 +417,7 @@ def _from_saved_model_v1(sess, model_path, input_names, output_names, tag, signa
     return frozen_graph, input_names, output_names, initialized_tables, tensors_to_rename
 
 
-def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, value_dtypes,
+def _get_hash_table_info_from_trackable(trackable, table_info,
                                         removed_resource_to_placeholder, placeholder_to_table_info):
     # pylint: disable=protected-access
     stack = [trackable]
@@ -420,26 +434,22 @@ def _get_hash_table_info_from_trackable(trackable, table_names, key_dtypes, valu
             continue
         for t in r.__dict__.values() if hasattr(r, '__dict__') else []:
             if isinstance(t, TfStaticHashTableType) and hasattr(t, '_shared_name'):
-                table_names.append(t._shared_name.encode())
-                key_dtypes.append(t.key_dtype.as_datatype_enum)
-                value_dtypes.append(t.value_dtype.as_datatype_enum)
+                info = HashTableInfo(t._shared_name.encode(), t.key_dtype.as_datatype_enum,
+                                     t.value_dtype.as_datatype_enum)
+                table_info.append(info)
                 table_handle = id(t.resource_handle)
                 if table_handle in removed_resource_to_placeholder:
-                    table_info = (table_names[-1], key_dtypes[-1], value_dtypes[-1])
-                    placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
+                    placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = info
         if isinstance(r, TfRestoredResourceType) and hasattr(r, '_create_resource'):
             try:
                 table_handle = id(r.resource_handle)
             except Exception:  # pylint: disable=broad-except
                 continue
             initializer = r._create_resource.concrete_functions[0].function_def
-            new_names, new_k_dtypes, new_v_dtypes = get_hash_table_info(initializer.node_def)
-            table_names.extend(new_names)
-            key_dtypes.extend(new_k_dtypes)
-            value_dtypes.extend(new_v_dtypes)
-            if table_handle in removed_resource_to_placeholder and len(new_names) == 1:
-                table_info = (new_names[0], new_k_dtypes[0], new_v_dtypes[0])
-                placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = table_info
+            new_table_info = get_hash_table_info(initializer.node_def)
+            table_info.extend(new_table_info)
+            if table_handle in removed_resource_to_placeholder and len(new_table_info) == 1:
+                placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = new_table_info[0]
 
 
 def _remove_non_variable_resources_from_captures(concrete_func):
@@ -449,6 +459,7 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     """
     # pylint: disable=protected-access
     resource_id_to_placeholder = {}
+    placeholder_to_resource = {}
     graph_captures_copy = None
     func_captures_copy = None
     if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
@@ -459,6 +470,7 @@ def _remove_non_variable_resources_from_captures(concrete_func):
             val_tensor, name_tensor = v
             if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
                 resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
+                placeholder_to_resource[name_tensor.name.split(':')[0]] = val_tensor
                 del concrete_func.graph._captures[k]
                 for i in reversed(range(len(concrete_func._captured_inputs))):
                     if concrete_func._captured_inputs[i] is val_tensor:
@@ -472,7 +484,7 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     else:
         logger.warning(
             "Could not search for non-variable resources. Concrete function internal representation may have changed.")
-    return resource_id_to_placeholder, graph_captures_copy, func_captures_copy
+    return resource_id_to_placeholder, placeholder_to_resource, graph_captures_copy, func_captures_copy
 
 
 def _restore_captured_resources(concrete_func, graph_captures_copy, func_captures_copy):
