@@ -3557,14 +3557,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
     def test_reduce_all(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_all(input_tensor=x, keepdims=False)
             res1 = tf.reduce_all(input_tensor=x, axis=[0], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(input_x):
             res = tf.reduce_all(input_tensor=input_x, keepdims=True)
             res1 = tf.reduce_all(input_tensor=input_x, axis=[0], keepdims=True)
@@ -3572,14 +3572,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
     def test_reduce_any(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[0], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=True)
             res1 = tf.reduce_any(input_tensor=x, axis=[0], keepdims=True)
@@ -3588,14 +3588,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "ReduceMin")
     def test_reduce_all_negative_axis(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_all(input_tensor=x, keepdims=False)
             res1 = tf.reduce_all(input_tensor=x, axis=[-1], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(input_x):
             res = tf.reduce_all(input_tensor=input_x, keepdims=True)
             res1 = tf.reduce_all(input_tensor=input_x, axis=[-1], keepdims=True)
@@ -3604,14 +3604,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "ReduceSum")
     def test_reduce_any_negative_axis(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[-1], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=True)
             res1 = tf.reduce_any(input_tensor=x, axis=[-1], keepdims=True)
@@ -3621,12 +3621,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "ReduceSum")
     @check_tf_min_version("1.15")
     def test_reduce_any_empty_axis(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+    def test_reduce_all_scalar_axis(self):
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        def func(x):
+            res = tf.reduce_all(input_tensor=x, keepdims=False)
+            res1 = tf.reduce_all(input_tensor=x, axis=0, keepdims=False)
+            return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+    @check_opset_min_version(13, "ReduceSum")
+    @check_tf_min_version("1.15")
+    def test_reduce_any_nonconst_axis(self):
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        y_val = np.array([1], np.int32)
+        def func(x, y):
+            res = tf.reduce_any(input_tensor=x, axis=y, keepdims=False)
+            return tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: y_val})
 
     @check_opset_min_version(7, "fill")
     def test_zeros_like(self):
