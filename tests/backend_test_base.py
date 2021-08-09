@@ -183,12 +183,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 graph_def = freeze_session(sess,
                                            input_names=list(feed_dict.keys()),
                                            output_names=outputs)
-                table_names, key_dtypes, value_dtypes = get_hash_table_info(graph_def)
+                table_info = get_hash_table_info(graph_def)
                 initialized_tables = {}
-                for n, k_dtype, val_dtype in zip(table_names, key_dtypes, value_dtypes):
-                    h = lookup_ops.hash_table_v2(k_dtype, val_dtype, shared_name=n)
-                    k, v = lookup_ops.lookup_table_export_v2(h, k_dtype, val_dtype)
-                    initialized_tables[n] = (sess.run(k), sess.run(v))
+                for info in table_info:
+                    if info.shared_name is None:
+                        continue
+                    h = lookup_ops.hash_table_v2(info.key_dtype, info.val_dtype, shared_name=info.shared_name)
+                    k, v = lookup_ops.lookup_table_export_v2(h, info.key_dtype, info.val_dtype)
+                    initialized_tables[info.shared_name] = (sess.run(k), sess.run(v))
 
             tf_reset_default_graph()
             with tf_session() as sess:

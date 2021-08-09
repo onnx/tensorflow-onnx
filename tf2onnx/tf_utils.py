@@ -278,6 +278,13 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     logger.info("Computed %d values for constant folding", len(outputs_to_values))
     return outputs_to_values, outputs_to_dtypes
 
+class HashTableInfo:
+    def __init__(self, shared_name, key_dtype, val_dtype, resource_input=None):
+        self.shared_name = shared_name
+        self.key_dtype = key_dtype
+        self.val_dtype = val_dtype
+        self.resource_input = resource_input
+
 def get_hash_table_info(nodes_or_graph_def):
     """
     Return lists of the shared_names, key_dtypes, and value_dtypes of all hash tables declared in the graph_def
@@ -287,18 +294,16 @@ def get_hash_table_info(nodes_or_graph_def):
         nodes = nodes_or_graph_def.node
     else:
         nodes = nodes_or_graph_def
-    names = []
-    key_dtypes = []
-    val_dtypes = []
+    info = []
     for n in nodes:
+        if n.op == "LookupTableFindV2":
+            info.append(HashTableInfo(None, n.attr['Tin'].type, n.attr['Tout'].type, n.input[0]))
         if n.op in ["HashTableV2", "MutableHashTableV2"]:
             if all(k in n.attr for k in ['shared_name', 'key_dtype', 'value_dtype']):
                 name = n.attr['shared_name'].s
                 if name != b'':
-                    names.append(name)
-                    key_dtypes.append(n.attr['key_dtype'].type)
-                    val_dtypes.append(n.attr['value_dtype'].type)
-    return names, key_dtypes, val_dtypes
+                    info.append(HashTableInfo(name, n.attr['key_dtype'].type, n.attr['value_dtype'].type))
+    return info
 
 def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
     """
@@ -307,13 +312,13 @@ def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
     """
     for n in graph_def.node:
         if n.op == "Placeholder" and n.name in placeholder_to_table_info:
-            name, key_dtype, val_dtype = placeholder_to_table_info[n.name]
+            info = placeholder_to_table_info[n.name]
             for a in list(n.attr):
                 del n.attr[a]
             n.op = "HashTableV2"
-            n.attr['shared_name'].s = name
-            n.attr['key_dtype'].type = key_dtype
-            n.attr['value_dtype'].type = val_dtype
+            n.attr['shared_name'].s = info.shared_name
+            n.attr['key_dtype'].type = info.key_dtype
+            n.attr['value_dtype'].type = info.val_dtype
 
 def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
     """Given a tf node def, returns a dict of attribute names to values"""
