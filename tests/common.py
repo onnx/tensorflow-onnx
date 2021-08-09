@@ -286,19 +286,18 @@ def check_tf_min_version(min_required_version, message=""):
 
 
 def skip_tf_versions(excluded_versions, message=""):
-    """ Skip if tf_version SEMANTICALLY matches any of excluded_versions. """
+    """ Skip if tf_version matches any of excluded_versions. """
+    if not isinstance(excluded_versions, list):
+        excluded_versions = [excluded_versions]
     config = get_test_config()
     condition = False
     reason = _append_message("conversion excludes tf {}".format(excluded_versions), message)
 
-    current_tokens = str(config.tf_version).split('.')
     for excluded_version in excluded_versions:
-        exclude_tokens = excluded_version.split('.')
-        # assume len(exclude_tokens) <= len(current_tokens)
-        for i, exclude in enumerate(exclude_tokens):
-            if not current_tokens[i] == exclude:
-                break
-        condition = True
+        # tf version with same specificity as excluded_version
+        tf_version = '.'.join(str(config.tf_version).split('.')[:excluded_version.count('.') + 1])
+        if excluded_version == tf_version:
+            condition = True
 
     return unittest.skipIf(condition, reason)
 
