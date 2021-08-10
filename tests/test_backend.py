@@ -5592,7 +5592,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
 
 if __name__ == '__main__':
-    cl = BackendTests()
-    cl.setUp()
-    cl.test_rfft2d_ops_specific_dimension()
+    # cl = BackendTests()
+    # cl.setUp()
+    # cl.test_rfft2d_ops_specific_dimension()
+    # stop
     unittest_main()

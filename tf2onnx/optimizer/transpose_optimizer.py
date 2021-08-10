@@ -710,6 +710,10 @@ class TransposeOptimizer(GraphOptimizerBase):
         if not self._switch_transpose_and_node(node, trans, update_shape=False):
             return False
 
+        shape = self._g.get_shape(node.output[0])
+        if shape is None:
+            return False
+
         new_axes_sorted = sorted(new_axes)
         trans.set_attr("perm", new_perm)
         new_perm_inv = invert_perm(new_perm)
@@ -720,7 +724,6 @@ class TransposeOptimizer(GraphOptimizerBase):
             new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
             self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
 
-        shape = self._g.get_shape(node.output[0])
         self._g.set_shape(trans.output[0], shape)
         mid_shape = [shape[p] for p in new_perm_inv]
         self._g.set_shape(node.output[0], mid_shape)
