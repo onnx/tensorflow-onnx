@@ -42,10 +42,17 @@ class LookupTableFind:
 
         dtype = ctx.get_dtype(node.output[0])
         in_dtype = ctx.get_dtype(node.input[1])
-        utils.make_sure(dtype == TensorProto.INT64 and in_dtype == TensorProto.STRING,
-                        "Only lookup tables of type string->int64 are currently supported.")
+        utils.make_sure((dtype == TensorProto.INT64 and in_dtype == TensorProto.STRING or \
+                         dtype == TensorProto.STRING and in_dtype == TensorProto.INT64),
+                        "Only lookup tables of type string->int64 or int64->string are currently supported.")
 
-        cats_strings, cats_int64s = initialized_tables[shared_name]
+        attr = {'cats_int64s': cats_int64s, 'cats_strings': cats_strings}
+        if in_dtype == TensorProto.STRING:
+            cats_strings, cats_int64s = initialized_tables[shared_name]
+            attr['default_int64'] = default_val
+        else:
+            cats_int64s, cats_strings = initialized_tables[shared_name]
+            attr['default_string'] = default_val
         shape = ctx.get_shape(node.input[1])
 
         node_name = node.name
@@ -67,7 +74,7 @@ class LookupTableFind:
             ctx.remove_node(node.name)
             ctx.make_node("CategoryMapper", domain=constants.AI_ONNX_ML_DOMAIN,
                           name=node_name, inputs=[node_inputs[1]], outputs=node_outputs,
-                          attr={'cats_int64s': cats_int64s, 'cats_strings': cats_strings, 'default_int64': default_val},
+                          attr=attr,
                           shapes=[shape], dtypes=[dtype])
 
         customer_nodes = ctx.find_output_consumers(table_node.output[0])
