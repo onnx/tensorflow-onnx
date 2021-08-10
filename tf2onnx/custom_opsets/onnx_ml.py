@@ -46,13 +46,12 @@ class LookupTableFind:
                          dtype == TensorProto.STRING and in_dtype == TensorProto.INT64),
                         "Only lookup tables of type string->int64 or int64->string are currently supported.")
 
-        attr = {'cats_int64s': cats_int64s, 'cats_strings': cats_strings}
         if in_dtype == TensorProto.STRING:
             cats_strings, cats_int64s = initialized_tables[shared_name]
-            attr['default_int64'] = default_val
+            attr = {'cats_int64s': cats_int64s, 'cats_strings': cats_strings, 'default_int64': default_val}
         else:
             cats_int64s, cats_strings = initialized_tables[shared_name]
-            attr['default_string'] = default_val
+            attr = {'cats_int64s': cats_int64s, 'cats_strings': cats_strings, 'default_string': default_val}
         shape = ctx.get_shape(node.input[1])
 
         node_name = node.name
