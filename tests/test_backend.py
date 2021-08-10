@@ -2093,6 +2093,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self.assertTrue(-0.1 < np.mean(results) < 0.1)
         self.assertTrue(0.9 < np.std(results) < 1.1)
 
+    @check_opset_min_version(10, "TopK")
+    def test_random_shuffle(self):
+        x_val = make_xval([5, 4, 3])
+        def func(x):
+            x_ = tf.random.shuffle(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
+        feed_dict = {_INPUT: x_val}
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
+        results = self.run_backend(g, g.outputs, feed_dict)
+        np.testing.assert_allclose(x_val, np.sort(results[0], axis=0))
+
     def test_randomuniform_int(self):
         def func():
             shape = tf.constant([100, 3], name="shape")
