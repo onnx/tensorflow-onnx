@@ -3280,6 +3280,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "IsNaN")
+    def test_where_isnan(self):
+        x_val = np.array([1, 2, -3, float('nan'), -5, -6, float('nan'), 8, 9, 0], dtype=np.float32)
+        true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
+                               dtype=np.float32)
+        def func(x):
+            picks = tf.where(is_nan(x), true_result, x)
+            return tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(9, "Where for strings needs opset 9")
     @skip_tfjs("Technically tf where doesn't support strings and tfjs doesn't like it")
     def test_where_string(self):
