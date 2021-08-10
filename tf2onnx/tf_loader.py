@@ -643,8 +643,8 @@ def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=Fal
     optimizers=['function']
     if is_tf2():
         optimizers.extend('dependency')
-    if fold_constant:
-        optimizers.extend('constfold')
+    #if fold_constant:
+    #    optimizers.extend('constfold')
     # ['pruning', 'constfold', 'arithmetic', 'dependency', 'function']
     rewrite_options.optimizers[:] = optimizers
 
