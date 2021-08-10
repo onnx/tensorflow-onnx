@@ -2153,7 +2153,7 @@ class CachedEinsum:
         model = helper.make_model(
             opset_imports=[helper.make_operatorsetid('', opset)],
             ir_version=ir_version,
-            producer_name='mlprodict',
+            producer_name='tensorflow-onnx',
             producer_version='0.0.1',
             graph=helper.make_graph(
                 name='einsum',
