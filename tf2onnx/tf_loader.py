@@ -164,7 +164,8 @@ def convert_variables_to_constants_large_model(func):
         function_converter = _FunctionConverterData
         if LooseVersion(tf.__version__) >= "2.6.0":
             from tensorflow.python.eager import context
-            from tensorflow.python.framework.convert_to_constants import _FunctionConverterDataInEager, _FunctionConverterDataInGraph
+            from tensorflow.python.framework.convert_to_constants import _FunctionConverterDataInEager, \
+                _FunctionConverterDataInGraph
             if context.executing_eagerly():
                 function_converter = _FunctionConverterDataInEager
             else:
