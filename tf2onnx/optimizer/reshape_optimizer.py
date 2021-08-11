@@ -100,11 +100,13 @@ class ReshapeOptimizer(GraphOptimizerBase):
             new_reshape_shape = [1] * shift + graph.get_shape(node.output[0])
             graph.insert_node_on_output(squeeze_node, node.output[0])
         const_shape = graph.make_const(utils.make_name(node.name + "_shape"), np.array(new_shape, np.int64)).output[0]
+        if inp_shape == [-1] and len(new_shape) > 1:
+            # This is a mismatch.
+            return False
         if new_reshape_shape is not None:
             graph.set_shape(node.output[0], new_reshape_shape)
         graph.replace_inputs(node, [node.input[0], const_shape])
         if shift < 0:
             unsqueeze_node = GraphBuilder(graph).make_unsqueeze({'data': node.input[0], 'axes': list(range(-shift))})
             graph.replace_inputs(node, [unsqueeze_node, const_shape])
-
         return True
