@@ -109,6 +109,28 @@ class PassThroughOp:
     def version_1(cls, ctx, node, **kwargs):
         pass
 
+@tf_op(["RandomShuffle"])
+class RandomShuffleOp:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        inp_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
+        dim_0 = GraphBuilder(ctx).make_slice({'data': inp_shape, 'starts': [0], 'ends': [1], 'axes': [0]})
+        zeros = ctx.make_node("ConstantOfShape", [dim_0], shapes=[[-1]]).output[0]
+
+        seed = node.get_attr_value("seed", 0)
+        seed2 = node.get_attr_value("seed2", 0)
+        onnx_seed = utils.combine_seeds(seed, seed2)
+        rand_attr = {'dtype': onnx_pb.TensorProto.FLOAT}
+        if onnx_seed is not None:
+            rand_attr['seed'] = onnx_seed
+
+        random_floats = ctx.make_node("RandomUniformLike", [zeros], op_name_scope=node.name, shapes=[[-1]],
+                                      attr=rand_attr).output[0]
+        # Use indices of the TopK to get a random ordering
+        _, random_ordering = ctx.make_node("TopK", [random_floats, dim_0], output_count=2, attr={'axis': -1}).output
+        shuffled_res = ctx.make_node("Gather", [node.input[0], random_ordering]).output[0]
+        ctx.replace_all_inputs(node.output[0], shuffled_res)
+
 @tf_op("Fill")
 class Fill:
     @classmethod
