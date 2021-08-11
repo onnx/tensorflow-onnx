@@ -466,7 +466,7 @@ class CommonFFT2DOp(CommonFFTOp):
             consumer_types == {'ComplexAbs'},
             "Current implementation of RFFT2D only allows ComplexAbs as consumer not %r",
             consumer_types)
-        
+
         oldnode = node
         fft_length = node.input[1]
         onnx_dtype = ctx.get_dtype(node.input[0])
@@ -475,7 +475,7 @@ class CommonFFT2DOp(CommonFFTOp):
                         "Unsupported input type.")
 
         fft_length_node = ctx.make_node(
-            'Cast', inputs=[node.input[1]], attr={'to': onnx_pb.TensorProto.INT64},
+            'Cast', inputs=[fft_length], attr={'to': onnx_pb.TensorProto.INT64},
             name=utils.make_name('fft_length_cast'))
         varx = {"x": node.input[0], "fft_length": fft_length_node.output[0]}
 
@@ -492,7 +492,7 @@ class CommonFFT2DOp(CommonFFTOp):
         value = np.array([1], dtype=np.int64)
         varx['Co_Concatcst'] = ctx.make_const(name=utils.make_name('init_Co_Concatcst'), np_val=value).name
 
-        value = np.array([-6.2831854820251465], dtype=np.float32)
+        value = np.array([-6.2831854820251465], dtype=np_dtype)
         varx['Id_Identitycst'] = ctx.make_const(name=utils.make_name('init_Id_Identitycst'), np_val=value).name
 
         value = np.array([2], dtype=np.int64)
@@ -931,7 +931,7 @@ class CommonFFT2DOp(CommonFFTOp):
 
         inputs = [varx['Sl_output0'], varx['Co_concat_result012']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape20'))
-        varx['y'] = node.output[0]        
+        varx['y'] = node.output[0]
 
         # finalize
         if getattr(ctx, 'verbose', False):

@@ -5493,8 +5493,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func1_length(x):
             op_ = tf.signal.rfft2d(x, np.array([3, 3], dtype=np.int32))
             return tf.abs(op_, name=_TFOUTPUT)
-        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=False)
-        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+        with self.subTest(optimize=False):
+            self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=False)
+        with self.subTest(optimize=True):
+            self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
     @check_opset_min_version(10, "Slice")
@@ -5503,12 +5505,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
             for j in range(7, 4, -1):
                 for m in range(0, 3):
                     for n in range(0, 3):
-                        with self.subTest(shape=(i, j), fft_length=(m, n)):
-                            x_val = make_xval([i, j]).astype(np.float32) / 100
-                            def func1_length(x):
-                                op_ = tf.signal.rfft2d(x, np.array([i-m, j-n], dtype=np.int32))
-                                return tf.abs(op_, name=_TFOUTPUT)
-                            self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+                        for opt in [False, True]:
+                            with self.subTest(shape=(i, j), fft_length=(m, n), optimize=opt):
+                                x_val = make_xval([i, j]).astype(np.float32) / 100
+                                def func1_length(x):
+                                    op_ = tf.signal.rfft2d(x, np.array([i-m, j-n], dtype=np.int32))
+                                    return tf.abs(op_, name=_TFOUTPUT)
+                                self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=opt)
 
     @check_tf_min_version("1.14")
     @check_opset_min_version(10, "Slice")
@@ -5543,21 +5546,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func1(x):
             op_ = tf.signal.rfft2d(x, np.array([1, 4], dtype=np.int32))
             return tf.abs(op_, name=_TFOUTPUT)
-        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=False)
-        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+        with self.subTest(shape=(3, 1, 4), fft_length=(1, 4), optimize=False):
+            self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=False)
+        with self.subTest(shape=(3, 1, 4), fft_length=(1, 4), optimize=True):
+            self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
 
         for shape in [(3, 1, 4), (5, 7), (3, 5, 7), (7, 5)]:
             for fft_length in [shape[-2:], (1, shape[-1]),
                                (min(2, shape[-2]), shape[-1]),
                                (shape[-2], 2),
                                (min(3, shape[-2]), min(4, shape[-2]))]:
-                with self.subTests(shape=shape, fft_length=fft_length):
-                    x_val = make_xval(list(shape)).astype(np.float32)
-                    def func1(x):
-                        op_ = tf.signal.rfft2d(x, np.array(fft_length, dtype=np.int32))
-                        return tf.abs(op_, name=_TFOUTPUT)
-                    self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=False)
-                    self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+                for optimize in [False, True]:
+                    with self.subTest(shape=shape, fft_length=fft_length, optimize=optimize):
+                        x_val = make_xval(list(shape)).astype(np.float32)
+                        def func1(x):
+                            op_ = tf.signal.rfft2d(x, np.array(fft_length, dtype=np.int32))
+                            return tf.abs(op_, name=_TFOUTPUT)
+                        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=optimize)
 
     @check_tf_min_version("2.1")
     @skip_tflite("TFlite errors on some attributes")
