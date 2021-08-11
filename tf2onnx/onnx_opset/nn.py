@@ -990,11 +990,10 @@ class SampleDistortedBoundingBox:
 
         seed = node.get_attr_value("seed", 0)
         seed2 = node.get_attr_value("seed2", 0)
+        onnx_seed = utils.combine_seeds(seed, seed2)
         rand_attr = {}
-        if seed != 0 or seed2 != 0:
-            # Produce a unique value depending on both seeds. (diagonal grid traversal)
-            combined_seed = (seed + seed2 + 1) * (seed + seed2 + 2) // 2 - seed
-            rand_attr['seed'] = float(combined_seed)
+        if onnx_seed is not None:
+            rand_attr['seed'] = onnx_seed
 
         min_aspect_ratio, max_aspect_ratio = node.get_attr_value("aspect_ratio_range", [0.75, 1.33])
         ratio_range = max_aspect_ratio - min_aspect_ratio
