@@ -537,11 +537,11 @@ class CommonFFT2DOp(CommonFFTOp):
             print('[nodes] %r' % cls)
 
         attr = dict(axis=0,)
-        inputs = [varx['fft_length'], varx['Ga_Gathercst'], ]
+        inputs = [varx['fft_length'], varx['Ga_Gathercst']]
         node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather'))
         varx['Ga_output0'] = node.output[0]
 
-        inputs = [varx['Ga_output0'], varx['Su_Subcst'], ]
+        inputs = [varx['Ga_output0'], varx['Su_Subcst']]
         node = ctx.make_node('Sub', inputs=inputs, name=utils.make_name('Su_Sub'))
         varx['Su_C0'] = node.output[0]
 
@@ -551,407 +551,407 @@ class CommonFFT2DOp(CommonFFTOp):
             name=utils.make_name('Co_ConstantOfShapeAA'))
         varx['Co_output01'] = node.output[0]
 
-        inputs = [varx['Co_output01'], varx['Su_Subcst'], ]
+        inputs = [varx['Co_output01'], varx['Su_Subcst']]
         node = ctx.make_node('CumSum', inputs=inputs, name=utils.make_name('Cu_CumSum'))
         varx['Cu_y0'] = node.output[0]
 
-        inputs = [varx['Cu_y0'], varx['Ad_Addcst'], ]
+        inputs = [varx['Cu_y0'], varx['Ad_Addcst']]
         node = ctx.make_node('Add', inputs=inputs, name=utils.make_name('Ad_Add'))
         varx['Ad_C01'] = node.output[0]
 
-        inputs = [varx['Ad_C01'], ]
+        inputs = [varx['Ad_C01']]
         node = ctx.make_node('Cast', inputs=inputs, attr=dict(to=1), name=utils.make_name('Ca_Cast'))
         varx['Ca_output01'] = node.output[0]
 
-        inputs = [varx['Ga_output0'], varx['Su_Subcst'], ]
+        inputs = [varx['Ga_output0'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze'))
         varx['Un_expanded02'] = node.output[0]
 
         attr = dict(axis=0,)
-        inputs = [varx['Un_expanded02'], varx['Co_Concatcst'], ]
+        inputs = [varx['Un_expanded02'], varx['Co_Concatcst']]
         node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat'))
         varx['Co_concat_result01'] = node.output[0]
 
-        inputs = [varx['Ca_output01'], varx['Co_concat_result01'], ]
+        inputs = [varx['Ca_output01'], varx['Co_concat_result01']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape'))
         varx['Re_reshaped0'] = node.output[0]
 
-        inputs = [varx['Re_reshaped0'], ]
+        inputs = [varx['Re_reshaped0']]
         node = ctx.make_node( 'Cast', inputs=inputs, attr=dict(to=1), name=utils.make_name('Ca_Cast1'))
         varx['Ca_output0'] = node.output[0]
 
-        inputs = [varx['Ca_output0'], varx['Ca_output01'], ]
+        inputs = [varx['Ca_output0'], varx['Ca_output01']]
         node = ctx.make_node('Mul', inputs=inputs, name=utils.make_name('Mu_Mul'))
         varx['Mu_C01'] = node.output[0]
 
-        inputs = [varx['Ga_output0'], ]
+        inputs = [varx['Ga_output0']]
         node = ctx.make_node('Cast', inputs=inputs, attr=dict(to=1), name=utils.make_name('Ca_Cast2'))
         varx['Ca_output02'] = node.output[0]
 
-        inputs = [varx['Mu_C01'], varx['Ca_output02'], ]
+        inputs = [varx['Mu_C01'], varx['Ca_output02']]
         node = ctx.make_node('Div', inputs=inputs, name=utils.make_name('Di_Div'))
         varx['Di_C0'] = node.output[0]
 
-        inputs = [varx['Di_C0'], varx['Id_Identitycst'], ]
+        inputs = [varx['Di_C0'], varx['Id_Identitycst']]
         node = ctx.make_node('Mul', inputs=inputs, name=utils.make_name('Mu_Mul1'))
         varx['Mu_C0'] = node.output[0]
 
-        inputs = [varx['Mu_C0'], ]
+        inputs = [varx['Mu_C0']]
         node = ctx.make_node('Cos', inputs=inputs, name=utils.make_name('Co_Cos'))
         varx['Co_output0'] = node.output[0]
 
-        inputs = [varx['Co_output0'], varx['Su_Subcst'], ]
+        inputs = [varx['Co_output0'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze1'))
         varx['Un_expanded01'] = node.output[0]
 
-        inputs = [varx['Mu_C0'], ]
+        inputs = [varx['Mu_C0']]
         node = ctx.make_node('Sin', inputs=inputs, name=utils.make_name('Si_Sin'))
         varx['Si_output0'] = node.output[0]
 
-        inputs = [varx['Si_output0'], varx['Su_Subcst'], ]
+        inputs = [varx['Si_output0'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze2'))
         varx['Un_expanded03'] = node.output[0]
 
-        inputs = [varx['Un_expanded01'], varx['Un_expanded03'], ]
+        inputs = [varx['Un_expanded01'], varx['Un_expanded03']]
         node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat1'))
         varx['Co_concat_result0'] = node.output[0]
 
-        inputs = [varx['Un_expanded02'], varx['Ad_Addcst'], ]
+        inputs = [varx['Un_expanded02'], varx['Ad_Addcst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape1'))
         varx['Re_reshaped01'] = node.output[0]
 
         inputs = [varx['Co_concat_result0'], varx['Su_Subcst'],
-                  varx['Re_reshaped01'], varx['Sl_Slicecst1'], ]
+                  varx['Re_reshaped01'], varx['Sl_Slicecst1']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice'))
         varx['Sl_output01'] = node.output[0]
 
-        inputs = [varx['Sl_output01'], varx['Su_Subcst'], ]
+        inputs = [varx['Sl_output01'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze4'))
         varx['Un_expanded0'] = node.output[0]
 
-        inputs = [varx['fft_length'], varx['Ga_Gathercst1'], ]
+        inputs = [varx['fft_length'], varx['Ga_Gathercst1']]
         node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather1'))
         varx['Ga_output03'] = node.output[0]
 
-        inputs = [varx['Ga_output03'], varx['Su_Subcst'], ]
+        inputs = [varx['Ga_output03'], varx['Su_Subcst']]
         node = ctx.make_node('Sub', inputs=inputs, name=utils.make_name('Su_Sub1'))
         varx['Su_C02'] = node.output[0]
 
         one_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1])
-        inputs = [varx['Su_C02'], ]
+        inputs = [varx['Su_C02']]
         node = ctx.make_node('ConstantOfShape', inputs=inputs, attr=dict(value=one_tensor),
                              name=utils.make_name('Co_ConstantOfShape1'))
         varx['Co_output04'] = node.output[0]
 
-        inputs = [varx['Co_output04'], varx['Su_Subcst'], ]
+        inputs = [varx['Co_output04'], varx['Su_Subcst']]
         node = ctx.make_node('CumSum', inputs=inputs, name=utils.make_name('Cu_CumSum1'))
         varx['Cu_y01'] = node.output[0]
 
-        inputs = [varx['Cu_y01'], varx['Ad_Addcst'], ]
+        inputs = [varx['Cu_y01'], varx['Ad_Addcst']]
         node = ctx.make_node('Add', inputs=inputs, name=utils.make_name('Ad_Add1'))
         varx['Ad_C02'] = node.output[0]
 
-        inputs = [varx['Ad_C02'], ]
+        inputs = [varx['Ad_C02']]
         node = ctx.make_node('Cast', inputs=inputs, attr=dict(to=1), name=utils.make_name('Ca_Cast3'))
         varx['Ca_output04'] = node.output[0]
 
-        inputs = [varx['Ga_output03'], varx['Su_Subcst'], ]
+        inputs = [varx['Ga_output03'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze5'))
         varx['Un_expanded09'] = node.output[0]
 
-        inputs = [varx['Un_expanded09'], varx['Co_Concatcst'], ]
+        inputs = [varx['Un_expanded09'], varx['Co_Concatcst']]
         node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat2'))
         varx['Co_concat_result04'] = node.output[0]
 
-        inputs = [varx['Ca_output04'], varx['Co_concat_result04'], ]
+        inputs = [varx['Ca_output04'], varx['Co_concat_result04']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape2'))
         varx['Re_reshaped02'] = node.output[0]
 
-        inputs = [varx['Re_reshaped02'], ]
+        inputs = [varx['Re_reshaped02']]
         node = ctx.make_node('Cast', inputs=inputs, attr=dict(to=1), name=utils.make_name('Ca_Cast4'))
         varx['Ca_output03'] = node.output[0]
 
-        inputs = [varx['Ca_output03'], varx['Ca_output04'], ]
+        inputs = [varx['Ca_output03'], varx['Ca_output04']]
         node = ctx.make_node('Mul', inputs=inputs, name=utils.make_name('Mu_Mul2'))
         varx['Mu_C04'] = node.output[0]
 
         attr = dict(to=1,)
-        inputs = [varx['Ga_output03'], ]
+        inputs = [varx['Ga_output03']]
         node = ctx.make_node('Cast', inputs=inputs, attr=attr, name=utils.make_name('Ca_Cast5'))
         varx['Ca_output05'] = node.output[0]
 
-        inputs = [varx['Mu_C04'], varx['Ca_output05'], ]
+        inputs = [varx['Mu_C04'], varx['Ca_output05']]
         node = ctx.make_node('Div', inputs=inputs, name=utils.make_name('Di_Div1'))
         varx['Di_C01'] = node.output[0]
 
-        inputs = [varx['Di_C01'], varx['Id_Identitycst'], ]
+        inputs = [varx['Di_C01'], varx['Id_Identitycst']]
         node = ctx.make_node('Mul', inputs=inputs, name=utils.make_name('Mu_Mul3'))
         varx['Mu_C03'] = node.output[0]
 
-        inputs = [varx['Mu_C03'], ]
+        inputs = [varx['Mu_C03']]
         node = ctx.make_node('Cos', inputs=inputs, name=utils.make_name('Co_Cos1'))
         varx['Co_output03'] = node.output[0]
 
-        inputs = [varx['Co_output03'], varx['Su_Subcst'], ]
+        inputs = [varx['Co_output03'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze6'))
         varx['Un_expanded08'] = node.output[0]
 
-        inputs = [varx['Mu_C03'], ]
+        inputs = [varx['Mu_C03']]
         node = ctx.make_node('Sin', inputs=inputs, name=utils.make_name('Si_Sin1'))
         varx['Si_output02'] = node.output[0]
 
-        inputs = [varx['Si_output02'], varx['Su_Subcst'], ]
+        inputs = [varx['Si_output02'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze7'))
         varx['Un_expanded010'] = node.output[0]
 
-        inputs = [varx['Un_expanded08'], varx['Un_expanded010'], ]
+        inputs = [varx['Un_expanded08'], varx['Un_expanded010']]
         node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat3'))
         varx['Co_concat_result03'] = node.output[0]
 
-        inputs = [varx['Un_expanded09'], varx['Ad_Addcst'], ]
+        inputs = [varx['Un_expanded09'], varx['Ad_Addcst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape3'))
         varx['Re_reshaped03'] = node.output[0]
 
         inputs = [varx['Co_concat_result03'], varx['Su_Subcst'],
-                  varx['Re_reshaped03'], varx['Sl_Slicecst1'], ]
+                  varx['Re_reshaped03'], varx['Sl_Slicecst1']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice1'))
         varx['Sl_output04'] = node.output[0]
 
-        inputs = [varx['Sl_output04'], varx['Su_Subcst'], ]
+        inputs = [varx['Sl_output04'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze9'))
         varx['Un_expanded07'] = node.output[0]
 
-        inputs = [varx['x'], ]
+        inputs = [varx['x']]
         node = ctx.make_node('Shape', inputs=inputs, name=utils.make_name('Sh_Shape'))
         varx['Sh_shape0'] = node.output[0]
 
-        inputs = [varx['Sh_shape0'], ]
+        inputs = [varx['Sh_shape0']]
         node = ctx.make_node('Shape', inputs=inputs, name=utils.make_name('Sh_Shape1'))
         varx['Sh_shape01'] = node.output[0]
 
-        inputs = [varx['Sh_shape01'], varx['Ga_Gathercst'], ]
+        inputs = [varx['Sh_shape01'], varx['Ga_Gathercst']]
         node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather2'))
         varx['Ga_output04'] = node.output[0]
 
-        inputs = [varx['Ga_output04'], varx['Su_Subcst'], ]
+        inputs = [varx['Ga_output04'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze10'))
         varx['Un_expanded014'] = node.output[0]
 
-        inputs = [varx['Un_expanded014'], varx['Ad_Addcst'], ]
+        inputs = [varx['Un_expanded014'], varx['Ad_Addcst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape4'))
         varx['Re_reshaped05'] = node.output[0]
 
         inputs = [varx['Sh_shape0'], varx['Sl_Slicecst4'],
-                  varx['Re_reshaped05'], varx['Su_Subcst'], ]
+                  varx['Re_reshaped05'], varx['Su_Subcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice2'))
         varx['Sl_output07'] = node.output[0]
 
-        inputs = [varx['Ad_Addcst'], varx['Sl_output07'], ]
+        inputs = [varx['Ad_Addcst'], varx['Sl_output07']]
         node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat4'))
         varx['Co_concat_result05'] = node.output[0]
 
-        inputs = [varx['x'], varx['Co_concat_result05'], ]
+        inputs = [varx['x'], varx['Co_concat_result05']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape5'))
         varx['Re_reshaped04'] = node.output[0]
 
         attr = dict(axis=0,)
-        inputs = [varx['fft_length'], varx['Ga_Gathercst3'], ]
+        inputs = [varx['fft_length'], varx['Ga_Gathercst3']]
         node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather3'))
         varx['Ga_output05'] = node.output[0]
 
-        inputs = [varx['Ga_output05'], varx['Su_Subcst'], ]
+        inputs = [varx['Ga_output05'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze11'))
         varx['Un_expanded015'] = node.output[0]
 
-        inputs = [varx['Un_expanded015'], varx['Ad_Addcst'], ]
+        inputs = [varx['Un_expanded015'], varx['Ad_Addcst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape6'))
         varx['Re_reshaped06'] = node.output[0]
 
-        inputs = [varx['Re_reshaped06'], varx['Re_reshaped03'], ]
+        inputs = [varx['Re_reshaped06'], varx['Re_reshaped03']]
         node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat5'))
         varx['Co_concat_result06'] = node.output[0]
 
         inputs = [varx['Re_reshaped04'], varx['Sl_Slicecst6'],
-                  varx['Co_concat_result06'], varx['Sl_Slicecst7'], ]
+                  varx['Co_concat_result06'], varx['Sl_Slicecst7']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice3'))
         varx['Sl_output06'] = node.output[0]
 
-        inputs = [varx['Sl_output06'], ]
+        inputs = [varx['Sl_output06']]
         node = ctx.make_node(
             'Transpose', inputs=inputs, attr=dict(perm=[0, 2, 1]), name=utils.make_name('Tr_Transpose'))
         varx['Tr_transposed02'] = node.output[0]
 
         inputs = [varx['Tr_transposed02'], varx['Su_Subcst'],
-                  varx['Re_reshaped03'], varx['Co_Concatcst'], ]
+                  varx['Re_reshaped03'], varx['Co_Concatcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice4'))
         varx['Sl_output05'] = node.output[0]
 
-        inputs = [varx['Sl_output05'], varx['Co_Concatcst'], ]
+        inputs = [varx['Sl_output05'], varx['Co_Concatcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze14'))
         varx['Un_expanded013'] = node.output[0]
 
-        inputs = [varx['Un_expanded07'], varx['Un_expanded013'], ]
+        inputs = [varx['Un_expanded07'], varx['Un_expanded013']]
         node = ctx.make_node('MatMul', inputs=inputs, name=utils.make_name('Ma_MatMul'))
         varx['Ma_Y01'] = node.output[0]
 
-        inputs = [varx['Ga_output03'], varx['Sl_Slicecst1'], ]
+        inputs = [varx['Ga_output03'], varx['Sl_Slicecst1']]
         node = ctx.make_node('Div', inputs=inputs, name=utils.make_name('Di_Div2'))
         varx['Di_C02'] = node.output[0]
 
-        inputs = [varx['Di_C02'], varx['Co_Concatcst'], ]
+        inputs = [varx['Di_C02'], varx['Co_Concatcst']]
         node = ctx.make_node('Add', inputs=inputs, name=utils.make_name('Ad_Add2'))
         varx['Ad_C03'] = node.output[0]
 
-        inputs = [varx['Ad_C03'], varx['Su_Subcst'], ]
+        inputs = [varx['Ad_C03'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze15'))
         varx['Un_expanded018'] = node.output[0]
 
-        inputs = [varx['Un_expanded018'], varx['Ad_Addcst'], ]
+        inputs = [varx['Un_expanded018'], varx['Ad_Addcst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape9'))
         varx['Re_reshaped09'] = node.output[0]
 
         inputs = [varx['Ma_Y01'], varx['Su_Subcst'],
-                  varx['Re_reshaped09'], varx['Co_Concatcst'], ]
+                  varx['Re_reshaped09'], varx['Co_Concatcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice5'))
         varx['Sl_output03'] = node.output[0]
 
-        inputs = [varx['Sl_output03'], ]
+        inputs = [varx['Sl_output03']]
         node = ctx.make_node(
             'Transpose', inputs=inputs, attr=dict(perm=[1, 0, 3, 2]), name=utils.make_name('Tr_Transpose1'))
         varx['Tr_transposed01'] = node.output[0]
 
-        inputs = [varx['Tr_transposed01'], varx['Ga_Gathercst'], ]
+        inputs = [varx['Tr_transposed01'], varx['Ga_Gathercst']]
         node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather5'))
         varx['Ga_output02'] = node.output[0]
 
         inputs = [varx['Ga_output02'], varx['Su_Subcst'],
-                  varx['Re_reshaped01'], varx['Co_Concatcst'], ]
+                  varx['Re_reshaped01'], varx['Co_Concatcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice6'))
         varx['Sl_output02'] = node.output[0]
 
-        inputs = [varx['Sl_output02'], varx['Co_Concatcst'], ]
+        inputs = [varx['Sl_output02'], varx['Co_Concatcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze17'))
         varx['Un_expanded06'] = node.output[0]
 
-        inputs = [varx['Un_expanded0'], varx['Un_expanded06'], ]
+        inputs = [varx['Un_expanded0'], varx['Un_expanded06']]
         node = ctx.make_node('MatMul', inputs=inputs, name=utils.make_name('Ma_MatMul1'))
         varx['Ma_Y0'] = node.output[0]
 
-        inputs = [varx['Ma_Y0'], ]
+        inputs = [varx['Ma_Y0']]
         node = ctx.make_node(
             'Transpose', inputs=inputs, attr=dict(perm=[1, 0, 2, 3]), name=utils.make_name('Tr_Transpose2'))
         varx['Tr_transposed0'] = node.output[0]
 
-        inputs = [varx['Tr_transposed01'], varx['Ga_Gathercst7'], ]
+        inputs = [varx['Tr_transposed01'], varx['Ga_Gathercst7']]
         node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather7'))
         varx['Ga_output08'] = node.output[0]
 
         inputs = [varx['Ga_output08'], varx['Su_Subcst'],
-                  varx['Re_reshaped01'], varx['Co_Concatcst'], ]
+                  varx['Re_reshaped01'], varx['Co_Concatcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice8'))
         varx['Sl_output010'] = node.output[0]
 
-        inputs = [varx['Sl_output010'], varx['Co_Concatcst'], ]
+        inputs = [varx['Sl_output010'], varx['Co_Concatcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze24'))
         varx['Un_expanded026'] = node.output[0]
 
-        inputs = [varx['Un_expanded0'], varx['Un_expanded026'], ]
+        inputs = [varx['Un_expanded0'], varx['Un_expanded026']]
         node = ctx.make_node('MatMul', inputs=inputs, name=utils.make_name('Ma_MatMul2'))
         varx['Ma_Y03'] = node.output[0]
 
-        inputs = [varx['Ma_Y03'], ]
+        inputs = [varx['Ma_Y03']]
         node = ctx.make_node(
             'Transpose', inputs=inputs, attr=dict(perm=[1, 0, 2, 3]), name=utils.make_name('Tr_Transpose3'))
         varx['Tr_transposed04'] = node.output[0]
 
         inputs = [varx['Tr_transposed04'], varx['Co_Concatcst'],
-                  varx['Sl_Slicecst1'], varx['Su_Subcst'], ]
+                  varx['Sl_Slicecst1'], varx['Su_Subcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice9'))
         varx['Sl_output08'] = node.output[0]
 
-        inputs = [varx['Sl_output08'], ]
+        inputs = [varx['Sl_output08']]
         node = ctx.make_node('Neg', inputs=inputs, name=utils.make_name('Ne_Neg'))
         varx['Ne_Y0'] = node.output[0]
 
         inputs = [varx['Tr_transposed04'], varx['Su_Subcst'],
-                  varx['Co_Concatcst'], varx['Su_Subcst'], ]
+                  varx['Co_Concatcst'], varx['Su_Subcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice10'))
         varx['Sl_output012'] = node.output[0]
 
-        inputs = [varx['Ne_Y0'], varx['Sl_output012'], ]
+        inputs = [varx['Ne_Y0'], varx['Sl_output012']]
         node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat8'))
         varx['Co_concat_result07'] = node.output[0]
 
-        inputs = [varx['Tr_transposed0'], varx['Co_concat_result07'], ]
+        inputs = [varx['Tr_transposed0'], varx['Co_concat_result07']]
         node = ctx.make_node('Add', inputs=inputs, name=utils.make_name('Ad_Add4'))
         varx['Ad_C0'] = node.output[0]
 
-        inputs = [varx['fft_length'], varx['Ga_Gathercst7'], ]
+        inputs = [varx['fft_length'], varx['Ga_Gathercst7']]
         node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather9'))
         varx['Ga_output010'] = node.output[0]
 
-        inputs = [varx['Ga_output010'], varx['Sl_Slicecst1'], ]
+        inputs = [varx['Ga_output010'], varx['Sl_Slicecst1']]
         node = ctx.make_node('Div', inputs=inputs, name=utils.make_name('Di_Div4'))
         varx['Di_C04'] = node.output[0]
 
-        inputs = [varx['Di_C04'], varx['Co_Concatcst'], ]
+        inputs = [varx['Di_C04'], varx['Co_Concatcst']]
         node = ctx.make_node('Add', inputs=inputs, name=utils.make_name('Ad_Add5'))
         varx['Ad_C06'] = node.output[0]
 
-        inputs = [varx['Ad_C06'], varx['Su_Subcst'], ]
+        inputs = [varx['Ad_C06'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze26'))
         varx['Un_expanded029'] = node.output[0]
 
-        inputs = [varx['Un_expanded029'], varx['Ad_Addcst'], ]
+        inputs = [varx['Un_expanded029'], varx['Ad_Addcst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape15'))
         varx['Re_reshaped016'] = node.output[0]
 
-        inputs = [varx['Re_reshaped06'], varx['Re_reshaped016'], ]
+        inputs = [varx['Re_reshaped06'], varx['Re_reshaped016']]
         node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat9'))
         varx['Co_concat_result010'] = node.output[0]
 
         inputs = [varx['Ad_C0'], varx['Sl_Slicecst6'],
-                  varx['Co_concat_result010'], varx['Sl_Slicecst25'], ]
+                  varx['Co_concat_result010'], varx['Sl_Slicecst25']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice11'))
         varx['Sl_output0'] = node.output[0]
 
         inputs = [varx['Sh_shape0'], varx['Su_Subcst'],
-                  varx['Sl_Slicecst4'], varx['Su_Subcst'], ]
+                  varx['Sl_Slicecst4'], varx['Su_Subcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice12'))
         varx['Sl_output014'] = node.output[0]
 
-        inputs = [varx['Sl_output0'], ]
+        inputs = [varx['Sl_output0']]
         node = ctx.make_node('Shape', inputs=inputs, name=utils.make_name('Sh_Shape3'))
         varx['Sh_shape03'] = node.output[0]
 
-        inputs = [varx['Sh_shape03'], ]
+        inputs = [varx['Sh_shape03']]
         node = ctx.make_node('Shape', inputs=inputs, name=utils.make_name('Sh_Shape4'))
         varx['Sh_shape04'] = node.output[0]
 
         attr = dict(axis=0,)
-        inputs = [varx['Sh_shape04'], varx['Ga_Gathercst'], ]
+        inputs = [varx['Sh_shape04'], varx['Ga_Gathercst']]
         node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather10'))
         varx['Ga_output011'] = node.output[0]
 
-        inputs = [varx['Ga_output011'], varx['Su_Subcst'], ]
+        inputs = [varx['Ga_output011'], varx['Su_Subcst']]
         node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze27'))
         varx['Un_expanded030'] = node.output[0]
 
-        inputs = [varx['Un_expanded030'], varx['Ad_Addcst'], ]
+        inputs = [varx['Un_expanded030'], varx['Ad_Addcst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape16'))
         varx['Re_reshaped017'] = node.output[0]
 
         inputs = [varx['Sh_shape03'], varx['Sl_Slicecst4'],
-                  varx['Re_reshaped017'], varx['Su_Subcst'], ]
+                  varx['Re_reshaped017'], varx['Su_Subcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice13'))
         varx['Sl_output015'] = node.output[0]
 
         inputs = [varx['Sl_Slicecst1'],
-                  varx['Sl_output014'], varx['Sl_output015'], ]
+                  varx['Sl_output014'], varx['Sl_output015']]
         node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat10'))
         varx['Co_concat_result012'] = node.output[0]
 
-        inputs = [varx['Sl_output0'], varx['Co_concat_result012'], ]
+        inputs = [varx['Sl_output0'], varx['Co_concat_result012']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape17'))
         varx['y'] = node.output[0]
 
