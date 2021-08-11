@@ -259,6 +259,13 @@ def make_sure(bool_val, error_msg, *args):
     if not bool_val:
         raise ValueError("make_sure failure: " + error_msg % args)
 
+def combine_seeds(seed, seed2):
+    """Produces an onnx float seed from two tf int seeds. Returns None if both seeds are 0."""
+    if seed != 0 or seed2 != 0:
+        # Produce a unique value depending on both seeds. (diagonal grid traversal)
+        combined_seed = (seed + seed2 + 1) * (seed + seed2 + 2) // 2 - seed
+        return float(combined_seed)
+    return None
 
 def topological_sort(dependencies):
     """
