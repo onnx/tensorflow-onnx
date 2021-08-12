@@ -184,6 +184,15 @@ class Select:
         # We can't use the mul/add trick if a NaN is involved. handles_nan is added earlier in the converter.
         handles_nan = node.get_attr_value("handles_nan", False)
         if ctx.get_dtype(node.output[0]) in [TensorProto.FLOAT, TensorProto.DOUBLE]:
+            cond_node = node.inputs[0]
+            if cond_node.type == "IsNaN":
+                handles_nan = True
+            if cond_node.type == "NotEqual" and cond_node.input[0] == cond_node.input[1]:
+                handles_nan = True
+            if cond_node.type == "Not" and cond_node.inputs[0].type == "Equal":
+                eq_node = cond_node.inputs[0]
+                if eq_node.input[0] == eq_node.input[1]:
+                    handles_nan = True
             for inp in node.inputs[1:]:
                 if inp.is_const() and np.any(np.isnan(inp.get_tensor_value(as_list=False))):
                     handles_nan = True
