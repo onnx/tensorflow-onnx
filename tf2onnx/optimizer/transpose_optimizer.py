@@ -721,9 +721,10 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
 
         shape = self._g.get_shape(node.output[0])
-        self._g.set_shape(trans.output[0], shape)
-        mid_shape = [shape[p] for p in new_perm_inv]
-        self._g.set_shape(node.output[0], mid_shape)
+        if shape is not None:
+            self._g.set_shape(trans.output[0], shape)
+            mid_shape = [shape[p] for p in new_perm_inv]
+            self._g.set_shape(node.output[0], mid_shape)
 
         return True
 
