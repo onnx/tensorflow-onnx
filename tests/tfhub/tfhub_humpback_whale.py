@@ -11,7 +11,7 @@ def main(opset=13):
     name = "humpback-whale"
     onnx_name = os.path.join(dest, "%s-%d.onnx" % (name, opset))
 
-    kind = "function"
+    kind = "cmd"
     if kind == "function":
         import tensorflow as tf
         import tensorflow_hub as hub

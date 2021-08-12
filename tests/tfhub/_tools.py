@@ -437,7 +437,7 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
             num_results.append("diff=%f names=(%r,%r) " % (diff, name_tfl, name_ort))
             print("*** diff=%f names=(%r,%r) " % (diff, name_tfl, name_ort))
             print("    TFL:", tfl_value.dtype, tfl_value.shape, tfl_value.min(), tfl_value.max()) 
-            print("    ORT:", result.dtype, result.shape, result.min(), result.max()) 
+            print("    ORT:", result.dtype, result.shape, result.min(), result.max())
         
         print("\n".join(num_results))
 

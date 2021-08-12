@@ -240,8 +240,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 with open(tflite_path, 'wb') as f:
                     f.write(tflite_model)
                 return tflite_path
-            except ConverterError:
-                return None
+            except ConverterError as e:
+                raise e
 
     def tflite_has_supported_types(self, tflite_path):
         try:
@@ -276,9 +276,9 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             interpreter.invoke()
             result = [interpreter.get_tensor(output['index']) for output in output_details]
             return result, output_names
-        except (RuntimeError, ValueError):
+        except (RuntimeError, ValueError) as e:
             # tflite sometimes converts from tf but produces an invalid model
-            return None, None
+            raise e
 
     def assert_shapes_correct(self, graph, allow_missing=False, run_checker=True):
         model_proto = graph.make_model("test")

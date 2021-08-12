@@ -16,6 +16,10 @@ def main(opset=13):
         ('stft/rfft3', 'FFT_stft/rfft4_reshape__190:0'),
         ('magnitude_spectrogram', 'ComplexAbsmagnitude_spectrogram__206:0'),
         ('log_mel_spectrogram', 'log_mel_spectrogram'),
+        ('pre_tower/split',
+         'tower0/network/layer1/conv/Relu6;tower0/network/layer1/conv/BatchNorm/FusedBatchNormV3;tower0/network/layer2/sepconv/BatchNorm/FusedBatchNormV3;tower0/network/layer2/sepconv/depthwise;tower0/network/layer1/conv/Conv2D_prequant__222:0'),
+        ('tower0/network/layer1/conv/Relu6;tower0/network/layer1/conv/BatchNorm/FusedBatchNormV3;tower0/network/layer2/sepconv/BatchNorm/FusedBatchNormV3;tower0/network/layer2/sepconv/depthwise;tower0/network/layer1/conv/Conv2D',
+         'tower0/network/layer1/conv/Relu6;tower0/network/layer1/conv/BatchNorm/FusedBatchNormV3;tower0/network/layer2/sepconv/BatchNorm/FusedBatchNormV3;tower0/network/layer2/sepconv/depthwise;tower0/network/layer1/conv/Conv2D'),
     ])
 
 
