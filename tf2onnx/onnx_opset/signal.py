@@ -492,7 +492,7 @@ class CommonFFT2DOp(CommonFFTOp):
         value = np.array([1], dtype=np.int64)
         varx['Co_Concatcst'] = ctx.make_const(name=utils.make_name('init_Co_Concatcst'), np_val=value).name
 
-        value = np.array([-6.2831854820251465], dtype=np.float32)
+        value = np.array([-6.2831854820251465], dtype=np_dtype)
         varx['Id_Identitycst'] = ctx.make_const(name=utils.make_name('init_Id_Identitycst'), np_val=value).name
 
         value = np.array([2], dtype=np.int64)
