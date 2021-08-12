@@ -5462,7 +5462,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     def test_rfft2d_ops(self):
 
         x_val = make_xval([3, 4]).astype(np.float32)
@@ -5486,7 +5486,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     def test_rfft2d_ops_fft_length(self):
 
         x_val = make_xval([3, 4]).astype(np.float32)
@@ -5499,7 +5499,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     def test_rfft2d_ops_fft_length_many(self):
         for i in range(7, 4, -1):
             for j in range(7, 4, -1):
@@ -5514,7 +5514,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                 self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=opt)
 
     @check_tf_min_version("1.14")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     @unittest.skipIf(True, reason="Not fully implemented for dynamic shape.")
     def test_fft_ops(self):
         x_val = make_xval([3, 4]).astype(np.float32)
@@ -5538,7 +5538,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     def test_rfft2d_ops_specific_dimension(self):
 
         x_val = make_xval([3, 1, 4]).astype(np.float32)
