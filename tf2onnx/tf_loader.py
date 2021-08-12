@@ -161,7 +161,18 @@ def convert_variables_to_constants_large_model(func):
     tensor_util.make_tensor_proto = make_tensor_proto_wrapped
 
     try:
-        converter_data = _FunctionConverterData(func=func, lower_control_flow=False, aggressive_inlining=True)
+        function_converter = _FunctionConverterData
+        if LooseVersion(tf.__version__) >= "2.6.0":
+            from tensorflow.python.eager import context
+            from tensorflow.python.framework.convert_to_constants import _FunctionConverterDataInEager, \
+                _FunctionConverterDataInGraph
+            if context.executing_eagerly():
+                function_converter = _FunctionConverterDataInEager
+            else:
+                function_converter = _FunctionConverterDataInGraph
+        else:
+            function_converter = _FunctionConverterData
+        converter_data = function_converter(func=func, lower_control_flow=False, aggressive_inlining=True)
         frozen_graph_def, _ = _replace_variables_by_constants(converter_data=converter_data)
     finally:
         tensor_util.make_tensor_proto = make_tensor_proto_original
