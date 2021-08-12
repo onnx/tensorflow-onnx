@@ -707,10 +707,6 @@ class TransposeOptimizer(GraphOptimizerBase):
                 new_perm.append(shift_map[perm[perm_i]])
                 perm_i += 1
 
-        shape = self._g.get_shape(node.output[0])
-        if shape is None:
-            return False
-
         if not self._switch_transpose_and_node(node, trans, update_shape=False):
             return False
 
