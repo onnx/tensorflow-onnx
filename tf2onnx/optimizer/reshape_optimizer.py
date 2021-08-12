@@ -109,4 +109,5 @@ class ReshapeOptimizer(GraphOptimizerBase):
         if shift < 0:
             unsqueeze_node = GraphBuilder(graph).make_unsqueeze({'data': node.input[0], 'axes': list(range(-shift))})
             graph.replace_inputs(node, [unsqueeze_node, const_shape])
+
         return True
