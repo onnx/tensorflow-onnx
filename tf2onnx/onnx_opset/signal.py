@@ -520,19 +520,20 @@ class CommonFFT2DOp(CommonFFTOp):
         varx['Sl_Slicecst25'] = ctx.make_const(name=utils.make_name('init_Sl_Slicecst25'), np_val=value).name
 
         # nodes
+        if getattr(ctx, 'verbose', False):
+            print('[nodes] %r' % cls)
 
-        attr = dict(axis=0)
         inputs = [varx['fft_length'], varx['Ga_Gathercst']]
-        node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather'))
+        node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather'))
         varx['Ga_output0'] = node.output[0]
 
         inputs = [varx['Ga_output0'], varx['Re_Reshapecst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape'))
         varx['Re_reshaped01'] = node.output[0]
 
-        attr = dict(value=helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1]))
         inputs = [varx['Re_reshaped01']]
-        node = ctx.make_node('ConstantOfShape', inputs=inputs, attr=attr, name=utils.make_name('Co_ConstantOfShape'))
+        node = ctx.make_node('ConstantOfShape', inputs=inputs, attr=dict(value=helper.make_tensor(
+            "value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1])), name=utils.make_name('Co_ConstantOfShape'))
         varx['Co_output01'] = node.output[0]
 
         inputs = [varx['Co_output01'], varx['Cu_CumSumcst']]
@@ -543,36 +544,34 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Add', inputs=inputs, name=utils.make_name('Ad_Add'))
         varx['Ad_C01'] = node.output[0]
 
-        attr = dict(to=onnx_pb.TensorProto.FLOAT)
         inputs = [varx['Ad_C01']]
-        node = ctx.make_node('Cast', inputs=inputs, attr=attr, name=utils.make_name('Ca_Cast'))
+        node = ctx.make_node('Cast', inputs=inputs, attr=dict(
+            to=onnx_pb.TensorProto.FLOAT), name=utils.make_name('Ca_Cast'))
         varx['Ca_output01'] = node.output[0]
 
-        inputs = [varx['Ga_output0'], varx['Cu_CumSumcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Ga_output0'], 'axes': [0]}, return_node=True)
         varx['Un_expanded02'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Un_expanded02'], varx['Co_Concatcst']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat'))
         varx['Co_concat_result01'] = node.output[0]
 
         inputs = [varx['Ca_output01'], varx['Co_concat_result01']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape1'))
         varx['Re_reshaped0'] = node.output[0]
 
-        attr = dict(to=onnx_pb.TensorProto.FLOAT)
         inputs = [varx['Re_reshaped0']]
-        node = ctx.make_node('Cast', inputs=inputs, attr=attr, name=utils.make_name('Ca_Cast1'))
+        node = ctx.make_node('Cast', inputs=inputs, attr=dict(
+            to=onnx_pb.TensorProto.FLOAT), name=utils.make_name('Ca_Cast1'))
         varx['Ca_output0'] = node.output[0]
 
         inputs = [varx['Ca_output0'], varx['Ca_output01']]
         node = ctx.make_node('Mul', inputs=inputs, name=utils.make_name('Mu_Mul'))
         varx['Mu_C01'] = node.output[0]
 
-        attr = dict(to=onnx_pb.TensorProto.FLOAT)
         inputs = [varx['Ga_output0']]
-        node = ctx.make_node('Cast', inputs=inputs, attr=attr, name=utils.make_name('Ca_Cast2'))
+        node = ctx.make_node('Cast', inputs=inputs, attr=dict(
+            to=onnx_pb.TensorProto.FLOAT), name=utils.make_name('Ca_Cast2'))
         varx['Ca_output02'] = node.output[0]
 
         inputs = [varx['Mu_C01'], varx['Ca_output02']]
@@ -587,43 +586,38 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Cos', inputs=inputs, name=utils.make_name('Co_Cos'))
         varx['Co_output0'] = node.output[0]
 
-        inputs = [varx['Co_output0'], varx['Cu_CumSumcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze1'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Co_output0'], 'axes': [0]}, return_node=True)
         varx['Un_expanded01'] = node.output[0]
 
         inputs = [varx['Mu_C0']]
         node = ctx.make_node('Sin', inputs=inputs, name=utils.make_name('Si_Sin'))
         varx['Si_output0'] = node.output[0]
 
-        inputs = [varx['Si_output0'], varx['Cu_CumSumcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze2'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Si_output0'], 'axes': [0]}, return_node=True)
         varx['Un_expanded03'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Un_expanded01'], varx['Un_expanded03']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat1'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat1'))
         varx['Co_concat_result0'] = node.output[0]
 
         inputs = [varx['Co_concat_result0'], varx['Cu_CumSumcst'], varx['Re_reshaped01'], varx['Sl_Slicecst1']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice'))
         varx['Sl_output01'] = node.output[0]
 
-        inputs = [varx['Sl_output01'], varx['Cu_CumSumcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze3'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Sl_output01'], 'axes': [0]}, return_node=True)
         varx['Un_expanded0'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['fft_length'], varx['Ga_Gathercst1']]
-        node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather1'))
+        node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather1'))
         varx['Ga_output03'] = node.output[0]
 
         inputs = [varx['Ga_output03'], varx['Re_Reshapecst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape3'))
         varx['Re_reshaped04'] = node.output[0]
 
-        attr = dict(value=helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1]))
         inputs = [varx['Re_reshaped04']]
-        node = ctx.make_node('ConstantOfShape', inputs=inputs, attr=attr, name=utils.make_name('Co_ConstantOfShape1'))
+        node = ctx.make_node('ConstantOfShape', inputs=inputs, attr=dict(value=helper.make_tensor(
+            "value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1])), name=utils.make_name('Co_ConstantOfShape1'))
         varx['Co_output04'] = node.output[0]
 
         inputs = [varx['Co_output04'], varx['Cu_CumSumcst']]
@@ -634,36 +628,34 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Add', inputs=inputs, name=utils.make_name('Ad_Add1'))
         varx['Ad_C02'] = node.output[0]
 
-        attr = dict(to=onnx_pb.TensorProto.FLOAT)
         inputs = [varx['Ad_C02']]
-        node = ctx.make_node('Cast', inputs=inputs, attr=attr, name=utils.make_name('Ca_Cast3'))
+        node = ctx.make_node('Cast', inputs=inputs, attr=dict(
+            to=onnx_pb.TensorProto.FLOAT), name=utils.make_name('Ca_Cast3'))
         varx['Ca_output04'] = node.output[0]
 
-        inputs = [varx['Ga_output03'], varx['Cu_CumSumcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze4'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Ga_output03'], 'axes': [0]}, return_node=True)
         varx['Un_expanded08'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Un_expanded08'], varx['Co_Concatcst']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat2'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat2'))
         varx['Co_concat_result04'] = node.output[0]
 
         inputs = [varx['Ca_output04'], varx['Co_concat_result04']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape4'))
         varx['Re_reshaped03'] = node.output[0]
 
-        attr = dict(to=onnx_pb.TensorProto.FLOAT)
         inputs = [varx['Re_reshaped03']]
-        node = ctx.make_node('Cast', inputs=inputs, attr=attr, name=utils.make_name('Ca_Cast4'))
+        node = ctx.make_node('Cast', inputs=inputs, attr=dict(
+            to=onnx_pb.TensorProto.FLOAT), name=utils.make_name('Ca_Cast4'))
         varx['Ca_output03'] = node.output[0]
 
         inputs = [varx['Ca_output03'], varx['Ca_output04']]
         node = ctx.make_node('Mul', inputs=inputs, name=utils.make_name('Mu_Mul2'))
         varx['Mu_C04'] = node.output[0]
 
-        attr = dict(to=onnx_pb.TensorProto.FLOAT)
         inputs = [varx['Ga_output03']]
-        node = ctx.make_node('Cast', inputs=inputs, attr=attr, name=utils.make_name('Ca_Cast5'))
+        node = ctx.make_node('Cast', inputs=inputs, attr=dict(
+            to=onnx_pb.TensorProto.FLOAT), name=utils.make_name('Ca_Cast5'))
         varx['Ca_output05'] = node.output[0]
 
         inputs = [varx['Mu_C04'], varx['Ca_output05']]
@@ -678,29 +670,25 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Cos', inputs=inputs, name=utils.make_name('Co_Cos1'))
         varx['Co_output03'] = node.output[0]
 
-        inputs = [varx['Co_output03'], varx['Cu_CumSumcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze5'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Co_output03'], 'axes': [0]}, return_node=True)
         varx['Un_expanded07'] = node.output[0]
 
         inputs = [varx['Mu_C03']]
         node = ctx.make_node('Sin', inputs=inputs, name=utils.make_name('Si_Sin1'))
         varx['Si_output02'] = node.output[0]
 
-        inputs = [varx['Si_output02'], varx['Cu_CumSumcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze6'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Si_output02'], 'axes': [0]}, return_node=True)
         varx['Un_expanded09'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Un_expanded07'], varx['Un_expanded09']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat3'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat3'))
         varx['Co_concat_result03'] = node.output[0]
 
         inputs = [varx['Co_concat_result03'], varx['Cu_CumSumcst'], varx['Re_reshaped04'], varx['Sl_Slicecst1']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice1'))
         varx['Sl_output04'] = node.output[0]
 
-        inputs = [varx['Sl_output04'], varx['Cu_CumSumcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze7'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Sl_output04'], 'axes': [0]}, return_node=True)
         varx['Un_expanded06'] = node.output[0]
 
         inputs = [varx['x']]
@@ -719,44 +707,40 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice2'))
         varx['Sl_output07'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Re_Reshapecst'], varx['Sl_output07']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat4'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat4'))
         varx['Co_concat_result05'] = node.output[0]
 
         inputs = [varx['x'], varx['Co_concat_result05']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape6'))
         varx['Re_reshaped06'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['fft_length'], varx['Ga_Gathercst3']]
-        node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather3'))
+        node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather3'))
         varx['Ga_output05'] = node.output[0]
 
         inputs = [varx['Ga_output05'], varx['Re_Reshapecst']]
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape7'))
         varx['Re_reshaped07'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Re_reshaped07'], varx['Re_reshaped04']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat5'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat5'))
         varx['Co_concat_result06'] = node.output[0]
 
         inputs = [varx['Re_reshaped06'], varx['Sl_Slicecst6'], varx['Co_concat_result06'], varx['Sl_Slicecst7']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice3'))
         varx['Sl_output06'] = node.output[0]
 
-        attr = dict(perm=[0, 2, 1])
         inputs = [varx['Sl_output06']]
-        node = ctx.make_node('Transpose', inputs=inputs, attr=attr, name=utils.make_name('Tr_Transpose'))
+        node = ctx.make_node('Transpose', inputs=inputs, attr=dict(
+            perm=[0, 2, 1]), name=utils.make_name('Tr_Transpose'))
         varx['Tr_transposed02'] = node.output[0]
 
         inputs = [varx['Tr_transposed02'], varx['Cu_CumSumcst'], varx['Re_reshaped04'], varx['Co_Concatcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice4'))
         varx['Sl_output05'] = node.output[0]
 
-        inputs = [varx['Sl_output05'], varx['Co_Concatcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze8'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Sl_output05'], 'axes': [1]}, return_node=True)
         varx['Un_expanded010'] = node.output[0]
 
         inputs = [varx['Un_expanded06'], varx['Un_expanded010']]
@@ -779,53 +763,49 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice5'))
         varx['Sl_output03'] = node.output[0]
 
-        attr = dict(perm=[1, 0, 3, 2])
         inputs = [varx['Sl_output03']]
-        node = ctx.make_node('Transpose', inputs=inputs, attr=attr, name=utils.make_name('Tr_Transpose1'))
+        node = ctx.make_node('Transpose', inputs=inputs, attr=dict(
+            perm=[1, 0, 3, 2]), name=utils.make_name('Tr_Transpose1'))
         varx['Tr_transposed01'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Tr_transposed01'], varx['Ga_Gathercst']]
-        node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather5'))
+        node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather5'))
         varx['Ga_output02'] = node.output[0]
 
         inputs = [varx['Ga_output02'], varx['Cu_CumSumcst'], varx['Re_reshaped01'], varx['Co_Concatcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice6'))
         varx['Sl_output02'] = node.output[0]
 
-        inputs = [varx['Sl_output02'], varx['Co_Concatcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze9'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Sl_output02'], 'axes': [1]}, return_node=True)
         varx['Un_expanded05'] = node.output[0]
 
         inputs = [varx['Un_expanded0'], varx['Un_expanded05']]
         node = ctx.make_node('MatMul', inputs=inputs, name=utils.make_name('Ma_MatMul1'))
         varx['Ma_Y0'] = node.output[0]
 
-        attr = dict(perm=[1, 0, 2, 3])
         inputs = [varx['Ma_Y0']]
-        node = ctx.make_node('Transpose', inputs=inputs, attr=attr, name=utils.make_name('Tr_Transpose2'))
+        node = ctx.make_node('Transpose', inputs=inputs, attr=dict(
+            perm=[1, 0, 2, 3]), name=utils.make_name('Tr_Transpose2'))
         varx['Tr_transposed0'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Tr_transposed01'], varx['Ga_Gathercst7']]
-        node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather7'))
+        node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather7'))
         varx['Ga_output08'] = node.output[0]
 
         inputs = [varx['Ga_output08'], varx['Cu_CumSumcst'], varx['Re_reshaped01'], varx['Co_Concatcst']]
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice8'))
         varx['Sl_output010'] = node.output[0]
 
-        inputs = [varx['Sl_output010'], varx['Co_Concatcst']]
-        node = ctx.make_node('Unsqueeze', inputs=inputs, name=utils.make_name('Un_Unsqueeze14'))
+        node = GraphBuilder(ctx).make_unsqueeze({'data': varx['Sl_output010'], 'axes': [1]}, return_node=True)
         varx['Un_expanded016'] = node.output[0]
 
         inputs = [varx['Un_expanded0'], varx['Un_expanded016']]
         node = ctx.make_node('MatMul', inputs=inputs, name=utils.make_name('Ma_MatMul2'))
         varx['Ma_Y03'] = node.output[0]
 
-        attr = dict(perm=[1, 0, 2, 3])
         inputs = [varx['Ma_Y03']]
-        node = ctx.make_node('Transpose', inputs=inputs, attr=attr, name=utils.make_name('Tr_Transpose3'))
+        node = ctx.make_node('Transpose', inputs=inputs, attr=dict(
+            perm=[1, 0, 2, 3]), name=utils.make_name('Tr_Transpose3'))
         varx['Tr_transposed04'] = node.output[0]
 
         inputs = [varx['Tr_transposed04'], varx['Co_Concatcst'], varx['Sl_Slicecst1'], varx['Cu_CumSumcst']]
@@ -840,18 +820,16 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice10'))
         varx['Sl_output012'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Ne_Y0'], varx['Sl_output012']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat8'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat8'))
         varx['Co_concat_result07'] = node.output[0]
 
         inputs = [varx['Tr_transposed0'], varx['Co_concat_result07']]
         node = ctx.make_node('Add', inputs=inputs, name=utils.make_name('Ad_Add4'))
         varx['Ad_C0'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['fft_length'], varx['Ga_Gathercst7']]
-        node = ctx.make_node('Gather', inputs=inputs, attr=attr, name=utils.make_name('Ga_Gather9'))
+        node = ctx.make_node('Gather', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Ga_Gather9'))
         varx['Ga_output010'] = node.output[0]
 
         inputs = [varx['Ga_output010'], varx['Sl_Slicecst1']]
@@ -866,9 +844,8 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Reshape', inputs=inputs, name=utils.make_name('Re_Reshape17'))
         varx['Re_reshaped018'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Re_reshaped07'], varx['Re_reshaped018']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat9'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat9'))
         varx['Co_concat_result010'] = node.output[0]
 
         inputs = [varx['Ad_C0'], varx['Sl_Slicecst6'], varx['Co_concat_result010'], varx['Sl_Slicecst25']]
@@ -895,9 +872,8 @@ class CommonFFT2DOp(CommonFFTOp):
         node = ctx.make_node('Slice', inputs=inputs, name=utils.make_name('Sl_Slice13'))
         varx['Sl_output015'] = node.output[0]
 
-        attr = dict(axis=0)
         inputs = [varx['Sl_Slicecst1'], varx['Sl_output014'], varx['Sl_output015']]
-        node = ctx.make_node('Concat', inputs=inputs, attr=attr, name=utils.make_name('Co_Concat10'))
+        node = ctx.make_node('Concat', inputs=inputs, attr=dict(axis=0), name=utils.make_name('Co_Concat10'))
         varx['Co_concat_result012'] = node.output[0]
 
         inputs = [varx['Sl_output0'], varx['Co_concat_result012']]
