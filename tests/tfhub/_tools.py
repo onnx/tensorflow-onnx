@@ -213,7 +213,7 @@ def check_discrepencies(out1, out2, threshold=1e-3):
 
 def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
               signature=None, tag=None, output_name=None, ort_name=None,
-              optimize=True, convert_tflite=None):
+              optimize=True, convert_tflite=None, custom_tf=None):
     """
     Runs a simple benchmark.
     Goes through every steps (download, convert).
@@ -290,18 +290,21 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         print("ORT", len(imgs), duration_ort)
 
     # tensorflow
-    import tensorflow_hub as hub
-    from tensorflow import convert_to_tensor
-    if isinstance(imgs[0], OrderedDict):
-        imgs_tf = [
-            OrderedDict((k, convert_to_tensor(v)) for k, v in img.items())
-            for img in imgs]
+    if custom_tf is None:
+        import tensorflow_hub as hub
+        from tensorflow import convert_to_tensor
+        if isinstance(imgs[0], OrderedDict):
+            imgs_tf = [
+                OrderedDict((k, convert_to_tensor(v)) for k, v in img.items())
+                for img in imgs]
+        else:
+            imgs_tf = [convert_to_tensor(img) for img in imgs]
+        model = hub.load(url.split("?")[0])
+        if signature is not None:
+            model = model.signatures[signature]
+        results_tf, duration_tf = measure_time(model, imgs_tf)
     else:
-        imgs_tf = [convert_to_tensor(img) for img in imgs]
-    model = hub.load(url.split("?")[0])
-    if signature is not None:
-        model = model.signatures[signature]
-    results_tf, duration_tf = measure_time(model, imgs_tf)
+        output, results_tf, duration_tf = custom_tf(tname)
 
     if verbose:
         print("TF", len(imgs), duration_tf)
@@ -310,7 +313,10 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         print("ratio ORT=%r / TF=%r = %r" % (mean_ort, mean_tf, mean_ort / mean_tf))
 
     # checks discrepencies
-    res = model(imgs_tf[0])
+    if custom_tf is None:
+        res = model(imgs_tf[0])
+    else:
+        res = output
     if isinstance(res, dict):
         if output_name is None:
             if len(res) != 1:
