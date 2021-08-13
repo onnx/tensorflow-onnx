@@ -4694,6 +4694,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
 
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "CumSum")
+    @skip_tflite("unknown rank")
+    def test_ragged_tensor_to_tensor_row_ids(self):
+        ids_val1 = np.array([0, 0, 0, 2, 2], dtype=np.int32)
+        ids_val2 = np.array([0, 0, 2, 2, 2, 3, 3, 4], dtype=np.int32)
+        dense_vals_val = np.array([10, 20, 30, 40, 50, 60, 70, 80], dtype=np.float32)
+        def func(ids1, ids2, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_value_rowids(rt_dense_values, [ids1, ids2], [4, 5])
+            y = x.to_tensor(default_value=7)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: ids_val1, _INPUT1: ids_val2, _INPUT2: dense_vals_val})
+
     @check_tf_min_version("2.2", "ragged to_tensor with constrained shape")
     @check_opset_min_version(11, "CumSum")
     def test_ragged_tensor_to_tensor_constrain_shape(self):
