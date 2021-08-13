@@ -4700,7 +4700,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_ragged_tensor_to_tensor_row_ids(self):
         ids_val1 = np.array([0, 0, 0, 2, 2], dtype=np.int32)
         ids_val2 = np.array([0, 0, 2, 2, 2, 3, 3, 4], dtype=np.int32)
-        dense_vals_val = np.array([10, 20, 30, 40, 50, 60, 70, 80], dtype=np.float32)
+        dense_vals_val = make_xval([8, 2, 3])
         def func(ids1, ids2, rt_dense_values):
             x = tf.RaggedTensor.from_nested_value_rowids(rt_dense_values, [ids1, ids2], [4, 5])
             y = x.to_tensor(default_value=7)
@@ -4713,9 +4713,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
         splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
         dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        dense_vals_val = make_xval([10, 2, 3])
         def func(splits1, splits2, rt_dense_values):
             x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits1, splits2], validate=True)
-            y = x.to_tensor(default_value=7, shape=[20, None, 2])
+            y = x.to_tensor(default_value=7, shape=[20, None, 2, None, 3])
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
 
