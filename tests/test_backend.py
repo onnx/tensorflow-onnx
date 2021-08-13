@@ -3319,6 +3319,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(7, "GreaterEqual")
+    def test_where_bool(self):
+        x_val = np.array([1, 2, -3, 4, -5], dtype=np.float32)
+        true_result = np.array([True, False, True, False, True],
+                               dtype=np.bool)
+        false_result = np.array([False, True, False, True, True],
+                                dtype=np.bool)
+        def func(x):
+            picks = tf.where(x > -1, true_result, false_result)
+            return tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(7, "GreaterEqual")
     #@check_target("rs6", "onnxruntime Where type limitation")
     def test_where_int32(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.int32)
