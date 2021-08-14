@@ -193,6 +193,23 @@ def fix_freezing_errors(graph_def):
     return graph_def
 
 
+def fix_freezing_errors_part2(graph_def):
+    # Sometimes tf freezing fails to convert ResourceGather ops in subgraphs
+    for f in graph_def.library.function:
+        for n in f.node_def:
+            if n.op == "ResourceGather":
+                # Convert to standard Gather op. Freezing will have replaced resource with constant.
+                # Needed because of: https://github.com/tensorflow/tensorflow/issues/51488
+                n.op = "Gather"
+                n.attr['Tparams'].type = n.attr['dtype'].type
+                del n.attr['dtype']
+                if 'batch_dims' in n.attr:
+                    v = n.attr['batch_dims'].i
+                    utils.make_sure(v == 0, "Unsupported batch_dims value of ResourceGather %d", v)
+                    del n.attr['batch_dims']
+    return graph_def
+
+
 def from_trackable(trackable, concrete_func, inputs, outputs, large_model):
     err_large_model = "model exceeds maximum protobuf size of 2GB. Try setting large_model."
 
@@ -263,6 +280,7 @@ def from_function(func, input_names, output_names, large_model=False):
             raise e
     else:
         graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
+    graph_def = fix_freezing_errors_part2(graph_def)
 
     # output_names = [i.name for i in frozen_func.outputs]
     with tf.Graph().as_default() as tf_graph:
