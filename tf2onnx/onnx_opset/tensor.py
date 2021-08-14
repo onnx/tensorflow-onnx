@@ -1172,7 +1172,7 @@ class TopKV2:
         # cast X if needed
         if dtypes[0] != onnx_pb.TensorProto.FLOAT:
             # opset-10 supports types other than float but onnxruntime does not
-            ctx.insert_new_node_on_output("Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
+            ctx.insert_new_node_on_input(node, "Cast", node.input[0], input_index=0, to=onnx_pb.TensorProto.FLOAT)
             ctx.insert_new_node_on_output("Cast", node.output[0], to=dtypes[0])
         # cast the index output to int32
         cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
