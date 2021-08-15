@@ -1172,7 +1172,7 @@ class TopKV2:
         # cast X if needed
         if dtypes[0] != onnx_pb.TensorProto.FLOAT:
             # opset-10 supports types other than float but onnxruntime does not
-            ctx.insert_new_node_on_output("Cast", node.input[0], to=onnx_pb.TensorProto.FLOAT)
+            ctx.insert_new_node_on_input(node, "Cast", node.input[0], input_index=0, to=onnx_pb.TensorProto.FLOAT)
             ctx.insert_new_node_on_output("Cast", node.output[0], to=dtypes[0])
         # cast the index output to int32
         cast_out = ctx.insert_new_node_on_output("Cast", node.output[1], name=utils.make_name(node.name), to=dtypes[1])
@@ -1313,8 +1313,11 @@ class OneHot:
         if axis.i == 0:
             # TODO: revisit for rank > 1
             name = utils.make_name(node.name)
-            transpose_node = ctx.insert_new_node_on_output("Transpose", node.output[0], name)
-            ctx.copy_shape(node.output[0], transpose_node.output[0])
+            shape = ctx.get_shape(node.output[0])
+            transpose_node = ctx.make_node("Transpose", [node.output[0]], name=name, shapes=[shape])
+            ctx.insert_node_on_output(transpose_node, node.output[0])
+            if shape is not None:
+                ctx.set_shape(node.output[0], shape[::-1])
 
     @classmethod
     def any_version_after9(cls, opset, ctx, node, **kwargs):
@@ -1323,9 +1326,11 @@ class OneHot:
         # in ONNX, op's schema is (input, depth, value, @int axis), meaning of "value" is [off-value, on-value]
         # onnxruntime only supports int64
         output_dtype = ctx.get_dtype(node.input[2])
-        if ctx.is_target(constants.TARGET_RS6) \
-                and output_dtype not in [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]:
-            logger.warning("unsupported dtype in onnxruntime, onehot-9 can't be used directly")
+        supported_dtypes = [onnx_pb.TensorProto.FLOAT]
+        if ctx.is_target(constants.TARGET_RS6):
+            supported_dtypes = [onnx_pb.TensorProto.INT64, onnx_pb.TensorProto.INT32]
+        if output_dtype not in supported_dtypes:
+            logger.warning("unsupported dtype in target runtime, OneHot op can't be used directly")
             cls.version_1(ctx, node, **kwargs)
             return
 

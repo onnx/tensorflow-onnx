@@ -2271,13 +2271,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-    @check_target("rs6", "onehot")
+    @skip_tfjs("tfjs produces incorrect results")
     def test_onehot0(self):
         x_val = np.array([0, 1, 2], dtype=np.int32)
         depth = 5
-        for axis in [-1, 0, 1]:
+        for dtype, axis in [(tf.float32, -1), (tf.int64, 0), (tf.float64, 1)]:
             def func(x):
-                x_ = tf.one_hot(x, depth, on_value=5.0, axis=axis, off_value=1.0, dtype=tf.float32)
+                val1 = tf.constant(5, dtype)
+                val2 = tf.constant(1, dtype)
+                x_ = tf.one_hot(x, depth, on_value=val1, axis=axis, off_value=val2, dtype=dtype)
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -3313,6 +3315,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                dtype=np.str)
         false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
                                 dtype=np.str)
+        def func(x):
+            picks = tf.where(x > -1, true_result, false_result)
+            return tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(7, "GreaterEqual")
+    def test_where_bool(self):
+        x_val = np.array([1, 2, -3, 4, -5], dtype=np.float32)
+        true_result = np.array([True, False, True, False, True],
+                               dtype=np.bool)
+        false_result = np.array([False, True, False, True, True],
+                                dtype=np.bool)
         def func(x):
             picks = tf.where(x > -1, true_result, false_result)
             return tf.identity(picks, name=_TFOUTPUT)
