@@ -323,8 +323,9 @@ class TransposeOptimizer(GraphOptimizerBase):
                 op_handler = self._handler_map[p.type]
                 return op_handler(trans, p)
             return False
-        if out_nodes:
+        if out_nodes and trans.get_attr_value("perm") in [NCHW_TO_NHWC, NCDHW_TO_NDHWC]:
             # move transpose into branches to let Transposes can be "handled" in each branch
+            # this will add more transpose ops, so only do this if further optimization is likely (check perm)
             for n in out_nodes:
                 branch_trans = n.graph.make_node("Transpose", [trans.input[0]], attr=trans.get_onnx_attrs())
                 n.graph.replace_input(n, trans.output[0], branch_trans.output[0])
