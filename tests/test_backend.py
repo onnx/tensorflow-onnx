@@ -2093,6 +2093,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self.assertTrue(-0.1 < np.mean(results) < 0.1)
         self.assertTrue(0.9 < np.std(results) < 1.1)
 
+    @check_opset_min_version(10, "TopK")
+    def test_random_shuffle(self):
+        x_val = make_xval([5, 4, 3])
+        def func(x):
+            x_ = tf.random.shuffle(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        # since results are random, compare the shapes only
+        g = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
+        feed_dict = {_INPUT: x_val}
+        if "input" in g.input_names:
+            # TFLite inputs don't have port numbers
+            feed_dict = {k.split(":")[0]: v for k, v in feed_dict.items()}
+        results = self.run_backend(g, g.outputs, feed_dict)
+        np.testing.assert_allclose(x_val, np.sort(results[0], axis=0))
+
     def test_randomuniform_int(self):
         def func():
             shape = tf.constant([100, 3], name="shape")
@@ -2256,13 +2271,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-    @check_target("rs6", "onehot")
+    @skip_tfjs("tfjs produces incorrect results")
     def test_onehot0(self):
         x_val = np.array([0, 1, 2], dtype=np.int32)
         depth = 5
-        for axis in [-1, 0, 1]:
+        for dtype, axis in [(tf.float32, -1), (tf.int64, 0), (tf.float64, 1)]:
             def func(x):
-                x_ = tf.one_hot(x, depth, on_value=5.0, axis=axis, off_value=1.0, dtype=tf.float32)
+                val1 = tf.constant(5, dtype)
+                val2 = tf.constant(1, dtype)
+                x_ = tf.one_hot(x, depth, on_value=val1, axis=axis, off_value=val2, dtype=dtype)
                 return tf.identity(x_, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -3280,6 +3297,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "IsNaN")
+    def test_where_isnan(self):
+        x_val = np.array([1, 2, -3, float('nan'), -5, -6, float('nan'), 8, 9, 0], dtype=np.float32)
+        true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
+                               dtype=np.float32)
+        def func(x):
+            picks = tf.where(is_nan(x), true_result, x)
+            return tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(9, "Where for strings needs opset 9")
     @skip_tfjs("Technically tf where doesn't support strings and tfjs doesn't like it")
     def test_where_string(self):
@@ -3288,6 +3315,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                dtype=np.str)
         false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
                                 dtype=np.str)
+        def func(x):
+            picks = tf.where(x > -1, true_result, false_result)
+            return tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(7, "GreaterEqual")
+    def test_where_bool(self):
+        x_val = np.array([1, 2, -3, 4, -5], dtype=np.float32)
+        true_result = np.array([True, False, True, False, True],
+                               dtype=np.bool)
+        false_result = np.array([False, True, False, True, True],
+                                dtype=np.bool)
         def func(x):
             picks = tf.where(x > -1, true_result, false_result)
             return tf.identity(picks, name=_TFOUTPUT)
@@ -3557,14 +3596,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
     def test_reduce_all(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_all(input_tensor=x, keepdims=False)
             res1 = tf.reduce_all(input_tensor=x, axis=[0], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(input_x):
             res = tf.reduce_all(input_tensor=input_x, keepdims=True)
             res1 = tf.reduce_all(input_tensor=input_x, axis=[0], keepdims=True)
@@ -3572,14 +3611,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
     def test_reduce_any(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[0], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=True)
             res1 = tf.reduce_any(input_tensor=x, axis=[0], keepdims=True)
@@ -3588,14 +3627,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "ReduceMin")
     def test_reduce_all_negative_axis(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_all(input_tensor=x, keepdims=False)
             res1 = tf.reduce_all(input_tensor=x, axis=[-1], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(input_x):
             res = tf.reduce_all(input_tensor=input_x, keepdims=True)
             res1 = tf.reduce_all(input_tensor=input_x, axis=[-1], keepdims=True)
@@ -3604,14 +3643,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "ReduceSum")
     def test_reduce_any_negative_axis(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[-1], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=True)
             res1 = tf.reduce_any(input_tensor=x, axis=[-1], keepdims=True)
@@ -3621,12 +3660,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "ReduceSum")
     @check_tf_min_version("1.15")
     def test_reduce_any_empty_axis(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+    def test_reduce_all_scalar_axis(self):
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        def func(x):
+            res = tf.reduce_all(input_tensor=x, keepdims=False)
+            res1 = tf.reduce_all(input_tensor=x, axis=0, keepdims=False)
+            return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
+
+    @check_opset_min_version(13, "ReduceSum")
+    @check_tf_min_version("1.15")
+    def test_reduce_any_nonconst_axis(self):
+        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        y_val = np.array([1], np.int32)
+        def func(x, y):
+            res = tf.reduce_any(input_tensor=x, axis=y, keepdims=False)
+            return tf.identity(res, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: y_val})
 
     @check_opset_min_version(7, "fill")
     def test_zeros_like(self):
@@ -4651,15 +4708,29 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
 
+    @check_tf_min_version("1.14", "ragged needs tf 1.14")
+    @check_opset_min_version(11, "CumSum")
+    @skip_tflite("unknown rank")
+    def test_ragged_tensor_to_tensor_row_ids(self):
+        ids_val1 = np.array([0, 0, 0, 2, 2], dtype=np.int32)
+        ids_val2 = np.array([0, 0, 2, 2, 2, 3, 3, 4], dtype=np.int32)
+        dense_vals_val = make_xval([8, 2, 3])
+        def func(ids1, ids2, rt_dense_values):
+            x = tf.RaggedTensor.from_nested_value_rowids(rt_dense_values, [ids1, ids2], [4, 5])
+            y = x.to_tensor(default_value=7)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: ids_val1, _INPUT1: ids_val2, _INPUT2: dense_vals_val})
+
     @check_tf_min_version("2.2", "ragged to_tensor with constrained shape")
     @check_opset_min_version(11, "CumSum")
     def test_ragged_tensor_to_tensor_constrain_shape(self):
         splits_val1 = np.array([0, 1, 1, 5], dtype=np.int32)
         splits_val2 = np.array([0, 3, 3, 5, 9, 10], dtype=np.int32)
         dense_vals_val = np.array([10, 11, 12, 13, 14, 15, 16, 17, 18, 19], dtype=np.float32)
+        dense_vals_val = make_xval([10, 2, 3])
         def func(splits1, splits2, rt_dense_values):
             x = tf.RaggedTensor.from_nested_row_splits(rt_dense_values, [splits1, splits2], validate=True)
-            y = x.to_tensor(default_value=7, shape=[20, None, 2])
+            y = x.to_tensor(default_value=7, shape=[20, None, 2, None, 3])
             return tf.identity(y, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: splits_val1, _INPUT1: splits_val2, _INPUT2: dense_vals_val})
 
@@ -5367,7 +5438,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
-    #@skip_tflite("FlexRFFT2D")
     def test_rfft_ops(self):
 
         def dft_slow(x, M, fft_length):
@@ -5409,7 +5479,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    #@skip_tflite("FlexRFFT2D")
     @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length(self):
@@ -5421,7 +5490,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    #@skip_tflite("FlexRFFT2D")
     @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many(self):
@@ -5436,7 +5504,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    #@skip_tflite("FlexRFFT2D")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many_bigger(self):
         for i in range(4, 7):
@@ -5466,8 +5533,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    #@skip_tflite("FlexRFFT2D")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     def test_rfft2d_ops(self):
 
         x_val = make_xval([3, 4]).astype(np.float32)
@@ -5491,34 +5557,35 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    #@skip_tflite("FlexRFFT2D")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     def test_rfft2d_ops_fft_length(self):
 
         x_val = make_xval([3, 4]).astype(np.float32)
         def func1_length(x):
             op_ = tf.signal.rfft2d(x, np.array([3, 3], dtype=np.int32))
             return tf.abs(op_, name=_TFOUTPUT)
-        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=False)
-        self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+        with self.subTest(optimize=False):
+            self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=False)
+        with self.subTest(optimize=True):
+            self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
-    #@skip_tflite("FlexRFFT2D")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     def test_rfft2d_ops_fft_length_many(self):
         for i in range(7, 4, -1):
             for j in range(7, 4, -1):
                 for m in range(0, 3):
                     for n in range(0, 3):
-                        with self.subTest(shape=(i, j), fft_length=(m, n)):
-                            x_val = make_xval([i, j]).astype(np.float32) / 100
-                            def func1_length(x):
-                                op_ = tf.signal.rfft2d(x, np.array([i-m, j-n], dtype=np.int32))
-                                return tf.abs(op_, name=_TFOUTPUT)
-                            self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
+                        for opt in [False, True]:
+                            with self.subTest(shape=(i, j), fft_length=(m, n), optimize=opt):
+                                x_val = make_xval([i, j]).astype(np.float32) / 100
+                                def func1_length(x):
+                                    op_ = tf.signal.rfft2d(x, np.array([i-m, j-n], dtype=np.int32))
+                                    return tf.abs(op_, name=_TFOUTPUT)
+                                self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val}, optimize=opt)
 
     @check_tf_min_version("1.14")
-    @check_opset_min_version(10, "Slice")
+    @check_opset_min_version(11, "CumSum")
     @unittest.skipIf(True, reason="Not fully implemented for dynamic shape.")
     def test_fft_ops(self):
         x_val = make_xval([3, 4]).astype(np.float32)
@@ -5540,6 +5607,37 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         x_val = np.array([1, 5, 2, 0, 3, 4], dtype=np.int64)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "CumSum")
+    def test_rfft2d_ops_specific_dimension(self):
+
+        x_val = make_xval([3, 1, 4]).astype(np.float32)
+
+        def func1(x):
+            op_ = tf.signal.rfft2d(x, np.array([1, 4], dtype=np.int32))
+            return tf.abs(op_, name=_TFOUTPUT)
+        with self.subTest(shape=(3, 1, 4), fft_length=(1, 4), optimize=False):
+            self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=False)
+        with self.subTest(shape=(3, 1, 4), fft_length=(1, 4), optimize=True):
+            self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val})
+
+        for shape in [(3, 1, 4), (5, 7), (3, 5, 7), (7, 5)]:
+            for fft_length in [shape[-2:], (1, shape[-1]),
+                               (min(2, shape[-2]), shape[-1]),
+                               (shape[-2], 2),
+                               (min(3, shape[-2]), min(4, shape[-2]))]:
+                if fft_length == (1, 1):
+                    # The code fails in this case but that's unlikely to happen.
+                    continue
+                for optimize in [False, True]:
+                    with self.subTest(shape=shape, fft_length=fft_length, optimize=optimize):
+                        x_val = make_xval(list(shape)).astype(np.float32)
+                        x_val /= x_val.size
+                        def func1(x):
+                            op_ = tf.signal.rfft2d(x, np.array(fft_length, dtype=np.int32))
+                            return tf.abs(op_, name=_TFOUTPUT)
+                        self._run_test_case(func1, [_OUTPUT], {_INPUT: x_val}, optimize=optimize)
 
     @check_tf_min_version("2.1")
     @skip_tflite("TFlite errors on some attributes")

@@ -161,7 +161,18 @@ def convert_variables_to_constants_large_model(func):
     tensor_util.make_tensor_proto = make_tensor_proto_wrapped
 
     try:
-        converter_data = _FunctionConverterData(func=func, lower_control_flow=False, aggressive_inlining=True)
+        function_converter = _FunctionConverterData
+        if LooseVersion(tf.__version__) >= "2.6.0":
+            from tensorflow.python.eager import context
+            from tensorflow.python.framework.convert_to_constants import _FunctionConverterDataInEager, \
+                _FunctionConverterDataInGraph
+            if context.executing_eagerly():
+                function_converter = _FunctionConverterDataInEager
+            else:
+                function_converter = _FunctionConverterDataInGraph
+        else:
+            function_converter = _FunctionConverterData
+        converter_data = function_converter(func=func, lower_control_flow=False, aggressive_inlining=True)
         frozen_graph_def, _ = _replace_variables_by_constants(converter_data=converter_data)
     finally:
         tensor_util.make_tensor_proto = make_tensor_proto_original
@@ -179,6 +190,23 @@ def fix_freezing_errors(graph_def):
         for i in reversed(range(len(n.input))):
             if n.input[i].startswith("^") and n.input[i][1:] in names_to_remove:
                 n.input.pop(i)
+    return graph_def
+
+
+def fix_freezing_errors_part2(graph_def):
+    # Sometimes tf freezing fails to convert ResourceGather ops in subgraphs
+    for f in graph_def.library.function:
+        for n in f.node_def:
+            if n.op == "ResourceGather":
+                # Convert to standard Gather op. Freezing will have replaced resource with constant.
+                # Needed because of: https://github.com/tensorflow/tensorflow/issues/51488
+                n.op = "Gather"
+                n.attr['Tparams'].type = n.attr['dtype'].type
+                del n.attr['dtype']
+                if 'batch_dims' in n.attr:
+                    v = n.attr['batch_dims'].i
+                    utils.make_sure(v == 0, "Unsupported batch_dims value of ResourceGather %d", v)
+                    del n.attr['batch_dims']
     return graph_def
 
 
@@ -252,6 +280,7 @@ def from_function(func, input_names, output_names, large_model=False):
             raise e
     else:
         graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
+    graph_def = fix_freezing_errors_part2(graph_def)
 
     # output_names = [i.name for i in frozen_func.outputs]
     with tf.Graph().as_default() as tf_graph:

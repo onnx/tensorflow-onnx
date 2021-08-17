@@ -213,7 +213,7 @@ def check_discrepencies(out1, out2, threshold=1e-3):
 
 def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
               signature=None, tag=None, output_name=None, ort_name=None,
-              optimize=True, convert_tflite=None):
+              optimize=True, convert_tflite=None, custom_tf=None):
     """
     Runs a simple benchmark.
     Goes through every steps (download, convert).
@@ -290,18 +290,21 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         print("ORT", len(imgs), duration_ort)
 
     # tensorflow
-    import tensorflow_hub as hub
-    from tensorflow import convert_to_tensor
-    if isinstance(imgs[0], OrderedDict):
-        imgs_tf = [
-            OrderedDict((k, convert_to_tensor(v)) for k, v in img.items())
-            for img in imgs]
+    if custom_tf is None:
+        import tensorflow_hub as hub
+        from tensorflow import convert_to_tensor
+        if isinstance(imgs[0], OrderedDict):
+            imgs_tf = [
+                OrderedDict((k, convert_to_tensor(v)) for k, v in img.items())
+                for img in imgs]
+        else:
+            imgs_tf = [convert_to_tensor(img) for img in imgs]
+        model = hub.load(url.split("?")[0])
+        if signature is not None:
+            model = model.signatures[signature]
+        results_tf, duration_tf = measure_time(model, imgs_tf)
     else:
-        imgs_tf = [convert_to_tensor(img) for img in imgs]
-    model = hub.load(url.split("?")[0])
-    if signature is not None:
-        model = model.signatures[signature]
-    results_tf, duration_tf = measure_time(model, imgs_tf)
+        output, results_tf, duration_tf = custom_tf(tname)
 
     if verbose:
         print("TF", len(imgs), duration_tf)
@@ -310,7 +313,10 @@ def benchmark(url, dest, onnx_name, opset, imgs, verbose=True, threshold=1e-3,
         print("ratio ORT=%r / TF=%r = %r" % (mean_ort, mean_tf, mean_ort / mean_tf))
 
     # checks discrepencies
-    res = model(imgs_tf[0])
+    if custom_tf is None:
+        res = model(imgs_tf[0])
+    else:
+        res = output
     if isinstance(res, dict):
         if output_name is None:
             if len(res) != 1:
@@ -403,9 +409,15 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
         with open(onnx_name, "rb") as f:
             model_onnx = onnx.load(f)
 
-        call_tflite(imgs[0])
+        interpreter_details = tf.lite.Interpreter(tname, experimental_preserve_all_tensors=True)
+        input_details = interpreter_details.get_input_details()
+        index_in = input_details[0]['index']
+        interpreter_details.allocate_tensors()
+        interpreter_details.set_tensor(index_in, imgs[0])
+        interpreter_details.invoke()
+        details = interpreter_details.get_tensor_details()
+
         inputs = {input_name: imgs[0]}
-        details = interpreter.get_tensor_details()
         names_index = {}
         for tt in details:
             names_index[tt['name']] = (tt['index'], tt['quantization'], tt['quantization_parameters'])
@@ -414,7 +426,7 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
         for name_tfl, name_ort in names:
             index = names_index[name_tfl]
         
-            tfl_value = interpreter.get_tensor(index[0])
+            tfl_value = interpreter_details.get_tensor(index[0])
             
             new_name = onnx_name + ".%s.onnx" % name_ort.replace(":", "_").replace(";", "_").replace("/", "_")
             if not os.path.exists(new_name):
