@@ -2465,6 +2465,8 @@ class RaggedTensorToSparse:
         # https://www.tensorflow.org/guide/ragged_tensor#multiple_ragged_dimensions
         dense_values = node.input[-1]
         nested_splits = node.input[:-1]
+        err_msg2 = "RaggedTensorToSparse conversion only supports tensors with no dense dimensions"
+        utils.make_sure(ctx.get_rank(dense_values) in [None, 1], err_msg2)
         sparse_indices, dense_shape = ragged_nested_splits_to_sparse_indices(ctx, nested_splits, node.name)
         ctx.replace_all_inputs(node.output[0], sparse_indices)
         ctx.replace_all_inputs(node.output[1], dense_values)
@@ -2477,6 +2479,7 @@ class RaggedTensorToTensor:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         shape, values, default_value, *row_partition_tensors = node.input
+        has_uniform_dims = ctx.get_rank(values) != 1
         partition_types = node.get_attr_value("row_partition_types")
         layout_type = None
         if len(partition_types) >= 2 and partition_types[0] == b'FIRST_DIM_SIZE' and \
@@ -2488,17 +2491,25 @@ class RaggedTensorToTensor:
 
         if layout_type == 'ROW_SPLITS':
             nested_splits = row_partition_tensors
+            n_dims = len(nested_splits) + 1
             sparse_indices, dense_shape = ragged_nested_splits_to_sparse_indices(ctx, nested_splits, node.name)
         else:
             utils.make_sure(layout_type == 'VALUE_ROWIDS', error_msg, partition_types)
             first_dim = row_partition_tensors[0]
             row_ids = row_partition_tensors[1:]
+            n_dims = len(row_ids) + 1
             sparse_indices, dense_shape = ragged_nested_row_ids_to_sparse_indices(ctx, first_dim, row_ids, node.name)
 
         # A shape of rank 0 means the natural shape should be used.
         if ctx.get_rank(shape) != 0:
             if ctx.get_dtype(shape) != TensorProto.INT64:
                 shape = ctx.make_node("Cast", [shape], attr={'to': TensorProto.INT64}).output[0]
+            if has_uniform_dims:
+                const_zero_unsq = ctx.make_const(utils.make_name("const_zero"), np.array([0], dtype=np.int64)).output[0]
+                const_n_unsq = ctx.make_const(utils.make_name("const_num_dims"),
+                                              np.array([n_dims], dtype=np.int64)).output[0]
+                shape = GraphBuilder(ctx).make_slice(
+                    {'data': shape, 'starts': const_zero_unsq, 'ends': const_n_unsq, 'axes': [0]})
             const_zero_int64 = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.int64)).output[0]
             unspec_dims = ctx.make_node("Less", [shape, const_zero_int64]).output[0]
             out_shape = ctx.make_node("Where", [unspec_dims, dense_shape, shape]).output[0]
@@ -2510,6 +2521,16 @@ class RaggedTensorToTensor:
             values = ctx.make_node("Compress", [values, idx_in_bounds], attr={'axis': 0}).output[0]
         else:
             out_shape = dense_shape
+
+        if has_uniform_dims:
+            values_shape = ctx.make_node("Shape", [values]).output[0]
+            const_one_unsq = ctx.make_const(utils.make_name("const_one"), np.array([1], dtype=np.int64)).output[0]
+            max_int64 = np.array([utils.get_max_value(np.int64)], dtype=np.int64)
+            const_max_val_unsq = ctx.make_const(utils.make_name("max_int"), max_int64).output[0]
+            uniform_dims = GraphBuilder(ctx).make_slice(
+                {'data': values_shape, 'starts': const_one_unsq, 'ends': const_max_val_unsq, 'axes': [0]})
+            out_shape = ctx.make_node("Concat", [out_shape, uniform_dims], attr={'axis': 0}).output[0]
+
         expand_node = ctx.make_node("Expand", [default_value, out_shape])
         node.type = "ScatterND"
         ctx.replace_inputs(node, [expand_node.output[0], sparse_indices, values])
