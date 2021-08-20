@@ -12,12 +12,16 @@ class ArgMinOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsArgMinOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = ArgMinOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsArgMinOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def ArgMinOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -33,6 +37,15 @@ class ArgMinOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int8Flags, o + self._tab.Pos)
         return 0
 
-def ArgMinOptionsStart(builder): builder.StartObject(1)
-def ArgMinOptionsAddOutputType(builder, outputType): builder.PrependInt8Slot(0, outputType, 0)
-def ArgMinOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(1)
+def ArgMinOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddOutputType(builder, outputType): builder.PrependInt8Slot(0, outputType, 0)
+def ArgMinOptionsAddOutputType(builder, outputType):
+    """This method is deprecated. Please switch to AddOutputType."""
+    return AddOutputType(builder, outputType)
+def End(builder): return builder.EndObject()
+def ArgMinOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

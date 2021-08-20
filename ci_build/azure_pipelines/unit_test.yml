@@ -5,20 +5,9 @@ stages:
     jobs:
     - template: 'templates/job_generator.yml'
       parameters:
-        # tf 2.5
-        python_versions: ['3.8']
-        tf_versions: ['2.6.0rc2']
-        onnx_opsets: ['14']
-        job:
-          steps:
-          - template: 'unit_test.yml'
-        report_coverage: 'True'
-
-    - template: 'templates/job_generator.yml'
-      parameters:
-        # TFJS tf 2.5
+        # TFJS tf 2.6
         python_versions: ['3.9']
-        tf_versions: ['2.5.0']
+        tf_versions: ['2.6.0']
         onnx_opsets: ['']
         skip_tfjs_tests: 'False'
         skip_tf_tests: 'True'
@@ -29,9 +18,9 @@ stages:
 
     - template: 'templates/job_generator.yml'
       parameters:
-        # TFLite tf 2.5
+        # TFLite tf 2.6
         python_versions: ['3.8']
-        tf_versions: ['2.5.0']
+        tf_versions: ['2.6.0']
         onnx_opsets: ['']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'True'
@@ -42,9 +31,9 @@ stages:
 
     - template: 'templates/job_generator.yml'
       parameters:
-        # tf 2.5
+        # tf 2.6
         python_versions: ['3.8']
-        tf_versions: ['2.5.0']
+        tf_versions: ['2.6.0']
         onnx_opsets: ['']
         job:
           steps:
@@ -52,9 +41,10 @@ stages:
         report_coverage: 'True'
 
     - template: 'templates/job_generator.yml'
+      # tf 2.5, tf 1.15
       parameters:
         python_versions: ['3.7']
-        tf_versions: ['1.15.2','2.3.0']
+        tf_versions: ['1.15.2','2.5.0']
         onnx_opsets: ['']
         job:
           steps:

@@ -12,12 +12,16 @@ class SequenceRNNOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSequenceRNNOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SequenceRNNOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsSequenceRNNOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def SequenceRNNOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -47,8 +51,23 @@ class SequenceRNNOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def SequenceRNNOptionsStart(builder): builder.StartObject(3)
-def SequenceRNNOptionsAddTimeMajor(builder, timeMajor): builder.PrependBoolSlot(0, timeMajor, 0)
-def SequenceRNNOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(1, fusedActivationFunction, 0)
-def SequenceRNNOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.PrependBoolSlot(2, asymmetricQuantizeInputs, 0)
-def SequenceRNNOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(3)
+def SequenceRNNOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddTimeMajor(builder, timeMajor): builder.PrependBoolSlot(0, timeMajor, 0)
+def SequenceRNNOptionsAddTimeMajor(builder, timeMajor):
+    """This method is deprecated. Please switch to AddTimeMajor."""
+    return AddTimeMajor(builder, timeMajor)
+def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(1, fusedActivationFunction, 0)
+def SequenceRNNOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
+    """This method is deprecated. Please switch to AddFusedActivationFunction."""
+    return AddFusedActivationFunction(builder, fusedActivationFunction)
+def AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.PrependBoolSlot(2, asymmetricQuantizeInputs, 0)
+def SequenceRNNOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs):
+    """This method is deprecated. Please switch to AddAsymmetricQuantizeInputs."""
+    return AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs)
+def End(builder): return builder.EndObject()
+def SequenceRNNOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

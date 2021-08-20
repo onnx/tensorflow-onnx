@@ -12,12 +12,16 @@ class SparsityParameters(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSparsityParameters(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SparsityParameters()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsSparsityParameters(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def SparsityParametersBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -105,11 +109,35 @@ class SparsityParameters(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         return o == 0
 
-def SparsityParametersStart(builder): builder.StartObject(3)
-def SparsityParametersAddTraversalOrder(builder, traversalOrder): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(traversalOrder), 0)
-def SparsityParametersStartTraversalOrderVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def SparsityParametersAddBlockMap(builder, blockMap): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(blockMap), 0)
-def SparsityParametersStartBlockMapVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def SparsityParametersAddDimMetadata(builder, dimMetadata): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(dimMetadata), 0)
-def SparsityParametersStartDimMetadataVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def SparsityParametersEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(3)
+def SparsityParametersStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddTraversalOrder(builder, traversalOrder): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(traversalOrder), 0)
+def SparsityParametersAddTraversalOrder(builder, traversalOrder):
+    """This method is deprecated. Please switch to AddTraversalOrder."""
+    return AddTraversalOrder(builder, traversalOrder)
+def StartTraversalOrderVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def SparsityParametersStartTraversalOrderVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartTraversalOrderVector(builder, numElems)
+def AddBlockMap(builder, blockMap): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(blockMap), 0)
+def SparsityParametersAddBlockMap(builder, blockMap):
+    """This method is deprecated. Please switch to AddBlockMap."""
+    return AddBlockMap(builder, blockMap)
+def StartBlockMapVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def SparsityParametersStartBlockMapVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartBlockMapVector(builder, numElems)
+def AddDimMetadata(builder, dimMetadata): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(dimMetadata), 0)
+def SparsityParametersAddDimMetadata(builder, dimMetadata):
+    """This method is deprecated. Please switch to AddDimMetadata."""
+    return AddDimMetadata(builder, dimMetadata)
+def StartDimMetadataVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def SparsityParametersStartDimMetadataVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartDimMetadataVector(builder, numElems)
+def End(builder): return builder.EndObject()
+def SparsityParametersEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

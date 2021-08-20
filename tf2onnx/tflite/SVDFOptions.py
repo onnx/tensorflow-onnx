@@ -12,12 +12,16 @@ class SVDFOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSVDFOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SVDFOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsSVDFOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def SVDFOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -47,8 +51,23 @@ class SVDFOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def SVDFOptionsStart(builder): builder.StartObject(3)
-def SVDFOptionsAddRank(builder, rank): builder.PrependInt32Slot(0, rank, 0)
-def SVDFOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(1, fusedActivationFunction, 0)
-def SVDFOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.PrependBoolSlot(2, asymmetricQuantizeInputs, 0)
-def SVDFOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(3)
+def SVDFOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddRank(builder, rank): builder.PrependInt32Slot(0, rank, 0)
+def SVDFOptionsAddRank(builder, rank):
+    """This method is deprecated. Please switch to AddRank."""
+    return AddRank(builder, rank)
+def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(1, fusedActivationFunction, 0)
+def SVDFOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
+    """This method is deprecated. Please switch to AddFusedActivationFunction."""
+    return AddFusedActivationFunction(builder, fusedActivationFunction)
+def AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.PrependBoolSlot(2, asymmetricQuantizeInputs, 0)
+def SVDFOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs):
+    """This method is deprecated. Please switch to AddAsymmetricQuantizeInputs."""
+    return AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs)
+def End(builder): return builder.EndObject()
+def SVDFOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

@@ -12,12 +12,16 @@ class PackOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsPackOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = PackOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsPackOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def PackOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -40,7 +44,19 @@ class PackOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def PackOptionsStart(builder): builder.StartObject(2)
-def PackOptionsAddValuesCount(builder, valuesCount): builder.PrependInt32Slot(0, valuesCount, 0)
-def PackOptionsAddAxis(builder, axis): builder.PrependInt32Slot(1, axis, 0)
-def PackOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(2)
+def PackOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddValuesCount(builder, valuesCount): builder.PrependInt32Slot(0, valuesCount, 0)
+def PackOptionsAddValuesCount(builder, valuesCount):
+    """This method is deprecated. Please switch to AddValuesCount."""
+    return AddValuesCount(builder, valuesCount)
+def AddAxis(builder, axis): builder.PrependInt32Slot(1, axis, 0)
+def PackOptionsAddAxis(builder, axis):
+    """This method is deprecated. Please switch to AddAxis."""
+    return AddAxis(builder, axis)
+def End(builder): return builder.EndObject()
+def PackOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

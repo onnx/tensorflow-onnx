@@ -2879,6 +2879,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.15")
     @check_opset_min_version(11, "ScatterND")
+    @skip_tflite("TFLite uses a pattern for ScatterND so number of DequantizeLinear won't match")
     def test_qdq_optimizer_scatter(self):
         x_val = np.array([10, 20, 30, 40], dtype=np.float32).reshape((4))
         y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
@@ -4485,6 +4486,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.15", "tensor_scatter_nd_update for strings needs tf 1.15")
     @check_opset_min_version(11, "ScatterND")
+    @skip_tflite("Conversion crashes")
     def test_tensor_scatter_update_str(self):
         x_val = np.array(['A', '♠♣♥♦', 'B', 'C'], dtype=np.str).reshape((4))
         y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
@@ -4497,6 +4499,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.15", "tensor_scatter_nd_update for strings needs tf 1.15")
     @check_opset_min_version(11, "ScatterND")
+    @skip_tflite("Conversion crashes")
     def test_tensor_scatter_update_str_const(self):
         x_val = np.array(['A', '♠♣♥♦', 'B', 'C'], dtype=np.str).reshape((4))
         y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))

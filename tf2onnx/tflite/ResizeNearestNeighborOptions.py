@@ -12,12 +12,16 @@ class ResizeNearestNeighborOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsResizeNearestNeighborOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = ResizeNearestNeighborOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsResizeNearestNeighborOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def ResizeNearestNeighborOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -40,7 +44,19 @@ class ResizeNearestNeighborOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def ResizeNearestNeighborOptionsStart(builder): builder.StartObject(2)
-def ResizeNearestNeighborOptionsAddAlignCorners(builder, alignCorners): builder.PrependBoolSlot(0, alignCorners, 0)
-def ResizeNearestNeighborOptionsAddHalfPixelCenters(builder, halfPixelCenters): builder.PrependBoolSlot(1, halfPixelCenters, 0)
-def ResizeNearestNeighborOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(2)
+def ResizeNearestNeighborOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddAlignCorners(builder, alignCorners): builder.PrependBoolSlot(0, alignCorners, 0)
+def ResizeNearestNeighborOptionsAddAlignCorners(builder, alignCorners):
+    """This method is deprecated. Please switch to AddAlignCorners."""
+    return AddAlignCorners(builder, alignCorners)
+def AddHalfPixelCenters(builder, halfPixelCenters): builder.PrependBoolSlot(1, halfPixelCenters, 0)
+def ResizeNearestNeighborOptionsAddHalfPixelCenters(builder, halfPixelCenters):
+    """This method is deprecated. Please switch to AddHalfPixelCenters."""
+    return AddHalfPixelCenters(builder, halfPixelCenters)
+def End(builder): return builder.EndObject()
+def ResizeNearestNeighborOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)
