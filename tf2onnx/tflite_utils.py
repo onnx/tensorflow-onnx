@@ -114,11 +114,14 @@ def lookup_enum(idx, enum_name):
     if enum_name == 'TensorType':
         return map_tflite_dtype_to_onnx(idx)
     if enum_name in enum_cache:
-        return enum_cache[enum_name][idx]
-    module = importlib.import_module('tf2onnx.tflite.' + enum_name)
-    enum_class = getattr(module, enum_name)
-    idx_to_name = {value: key for key, value in enum_class.__dict__.items() if not key.startswith('_')}
-    enum_cache[enum_name] = idx_to_name
+        idx_to_name = enum_cache[enum_name]
+    else:
+        module = importlib.import_module('tf2onnx.tflite.' + enum_name)
+        enum_class = getattr(module, enum_name)
+        idx_to_name = {value: key for key, value in enum_class.__dict__.items() if not key.startswith('_')}
+        enum_cache[enum_name] = idx_to_name
+    utils.make_sure(idx in idx_to_name, "Can't lookup value %s for tflite enum %s. Please update tf2onnx or "
+                    "submit an issue on GitHub.", idx, enum_name)
     return idx_to_name[idx]
 
 
@@ -436,7 +439,8 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
             # All flatbuffer objects have these properties.
-            block_list = [options_type_name + 'BufferHasIdentifier', 'Init', 'GetRootAs' + options_type_name]
+            block_list = [options_type_name + 'BufferHasIdentifier', 'Init',
+                          'GetRootAs' + options_type_name, 'GetRootAs']
             # The rest of the properties of the options class provide its attribute names
             attr_names = {opt for opt in dir(options) if not opt.startswith('_') and opt not in block_list}
             for a in list(attr_names):

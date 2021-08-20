@@ -12,12 +12,16 @@ class ShapeOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsShapeOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = ShapeOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsShapeOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def ShapeOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -33,6 +37,15 @@ class ShapeOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int8Flags, o + self._tab.Pos)
         return 0
 
-def ShapeOptionsStart(builder): builder.StartObject(1)
-def ShapeOptionsAddOutType(builder, outType): builder.PrependInt8Slot(0, outType, 0)
-def ShapeOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(1)
+def ShapeOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddOutType(builder, outType): builder.PrependInt8Slot(0, outType, 0)
+def ShapeOptionsAddOutType(builder, outType):
+    """This method is deprecated. Please switch to AddOutType."""
+    return AddOutType(builder, outType)
+def End(builder): return builder.EndObject()
+def ShapeOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

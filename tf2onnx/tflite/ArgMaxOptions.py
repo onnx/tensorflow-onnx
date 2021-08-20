@@ -12,12 +12,16 @@ class ArgMaxOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsArgMaxOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = ArgMaxOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsArgMaxOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def ArgMaxOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -33,6 +37,15 @@ class ArgMaxOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int8Flags, o + self._tab.Pos)
         return 0
 
-def ArgMaxOptionsStart(builder): builder.StartObject(1)
-def ArgMaxOptionsAddOutputType(builder, outputType): builder.PrependInt8Slot(0, outputType, 0)
-def ArgMaxOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(1)
+def ArgMaxOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddOutputType(builder, outputType): builder.PrependInt8Slot(0, outputType, 0)
+def ArgMaxOptionsAddOutputType(builder, outputType):
+    """This method is deprecated. Please switch to AddOutputType."""
+    return AddOutputType(builder, outputType)
+def End(builder): return builder.EndObject()
+def ArgMaxOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

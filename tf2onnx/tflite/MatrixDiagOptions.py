@@ -12,12 +12,16 @@ class MatrixDiagOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsMatrixDiagOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = MatrixDiagOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsMatrixDiagOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def MatrixDiagOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -26,5 +30,11 @@ class MatrixDiagOptions(object):
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
 
-def MatrixDiagOptionsStart(builder): builder.StartObject(0)
-def MatrixDiagOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(0)
+def MatrixDiagOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def End(builder): return builder.EndObject()
+def MatrixDiagOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

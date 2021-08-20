@@ -12,12 +12,16 @@ class ConcatenationOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsConcatenationOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = ConcatenationOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsConcatenationOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def ConcatenationOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -40,7 +44,19 @@ class ConcatenationOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int8Flags, o + self._tab.Pos)
         return 0
 
-def ConcatenationOptionsStart(builder): builder.StartObject(2)
-def ConcatenationOptionsAddAxis(builder, axis): builder.PrependInt32Slot(0, axis, 0)
-def ConcatenationOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(1, fusedActivationFunction, 0)
-def ConcatenationOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(2)
+def ConcatenationOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddAxis(builder, axis): builder.PrependInt32Slot(0, axis, 0)
+def ConcatenationOptionsAddAxis(builder, axis):
+    """This method is deprecated. Please switch to AddAxis."""
+    return AddAxis(builder, axis)
+def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(1, fusedActivationFunction, 0)
+def ConcatenationOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
+    """This method is deprecated. Please switch to AddFusedActivationFunction."""
+    return AddFusedActivationFunction(builder, fusedActivationFunction)
+def End(builder): return builder.EndObject()
+def ConcatenationOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)
