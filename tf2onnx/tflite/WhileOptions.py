@@ -12,12 +12,16 @@ class WhileOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsWhileOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = WhileOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsWhileOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def WhileOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -40,7 +44,19 @@ class WhileOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def WhileOptionsStart(builder): builder.StartObject(2)
-def WhileOptionsAddCondSubgraphIndex(builder, condSubgraphIndex): builder.PrependInt32Slot(0, condSubgraphIndex, 0)
-def WhileOptionsAddBodySubgraphIndex(builder, bodySubgraphIndex): builder.PrependInt32Slot(1, bodySubgraphIndex, 0)
-def WhileOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(2)
+def WhileOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddCondSubgraphIndex(builder, condSubgraphIndex): builder.PrependInt32Slot(0, condSubgraphIndex, 0)
+def WhileOptionsAddCondSubgraphIndex(builder, condSubgraphIndex):
+    """This method is deprecated. Please switch to AddCondSubgraphIndex."""
+    return AddCondSubgraphIndex(builder, condSubgraphIndex)
+def AddBodySubgraphIndex(builder, bodySubgraphIndex): builder.PrependInt32Slot(1, bodySubgraphIndex, 0)
+def WhileOptionsAddBodySubgraphIndex(builder, bodySubgraphIndex):
+    """This method is deprecated. Please switch to AddBodySubgraphIndex."""
+    return AddBodySubgraphIndex(builder, bodySubgraphIndex)
+def End(builder): return builder.EndObject()
+def WhileOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

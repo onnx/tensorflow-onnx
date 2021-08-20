@@ -645,10 +645,12 @@ class ScatterND:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         onnxdtype = ctx.get_dtype(node.input[1])
-        const_of_shape = ctx.insert_new_node_on_input(node, "ConstantOfShape", node.input[2])
+        zero_tensor = helper.make_tensor("value", onnxdtype, dims=[1], vals=[0])
+        const_of_shape = ctx.make_node("ConstantOfShape", [node.input[2]], attr={'value': zero_tensor},
+                                       shapes=node.output_shapes, dtypes=[onnxdtype])
+        ctx.replace_input(node, node.input[2], const_of_shape.output[0], 2)
         ctx.insert_new_node_on_input(const_of_shape, "Cast", const_of_shape.input[0], to=TensorProto.INT64)
         ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=TensorProto.INT64)
-        ctx.insert_new_node_on_input(node, "Cast", node.input[2], to=onnxdtype)
         # reorder inputs to match onnx
         ctx.replace_inputs(node, [node.input[2], node.input[0], node.input[1]])
 

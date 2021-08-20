@@ -116,4 +116,7 @@ class BuiltinOptions(object):
     HashtableFindOptions = 108
     HashtableImportOptions = 109
     HashtableSizeOptions = 110
+    VarHandleOptions = 111
+    ReadVariableOptions = 112
+    AssignVariableOptions = 113
 
