@@ -388,6 +388,8 @@ class Test(object):
             model_path = self.local
 
         logger.info("Load model from %s", model_path)
+        tf_reset_default_graph()
+        tf.keras.backend.clear_session()
         input_names = list(self.input_names.keys())
         initialized_tables = {}
         outputs = self.output_names
