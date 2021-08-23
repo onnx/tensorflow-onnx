@@ -12,12 +12,16 @@ class CustomQuantization(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsCustomQuantization(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = CustomQuantization()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsCustomQuantization(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def CustomQuantizationBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -53,7 +57,19 @@ class CustomQuantization(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         return o == 0
 
-def CustomQuantizationStart(builder): builder.StartObject(1)
-def CustomQuantizationAddCustom(builder, custom): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(custom), 0)
-def CustomQuantizationStartCustomVector(builder, numElems): return builder.StartVector(1, numElems, 1)
-def CustomQuantizationEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(1)
+def CustomQuantizationStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddCustom(builder, custom): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(custom), 0)
+def CustomQuantizationAddCustom(builder, custom):
+    """This method is deprecated. Please switch to AddCustom."""
+    return AddCustom(builder, custom)
+def StartCustomVector(builder, numElems): return builder.StartVector(1, numElems, 1)
+def CustomQuantizationStartCustomVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartCustomVector(builder, numElems)
+def End(builder): return builder.EndObject()
+def CustomQuantizationEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

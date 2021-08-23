@@ -12,12 +12,16 @@ class L2NormOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsL2NormOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = L2NormOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsL2NormOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def L2NormOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -33,6 +37,15 @@ class L2NormOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int8Flags, o + self._tab.Pos)
         return 0
 
-def L2NormOptionsStart(builder): builder.StartObject(1)
-def L2NormOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
-def L2NormOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(1)
+def L2NormOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
+def L2NormOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
+    """This method is deprecated. Please switch to AddFusedActivationFunction."""
+    return AddFusedActivationFunction(builder, fusedActivationFunction)
+def End(builder): return builder.EndObject()
+def L2NormOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

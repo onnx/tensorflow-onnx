@@ -145,6 +145,9 @@ class Select:
         utils.make_sure(len(node.input) > 1, "Select with only condition is not supported.")
         dtype = ctx.get_dtype(node.output[0])
         utils.make_sure(dtype != TensorProto.STRING, "Select with dtype string requires opset 9")
+        tmp_dtype = dtype
+        if tmp_dtype == TensorProto.BOOL:
+            tmp_dtype = TensorProto.INT32
 
         cond_shape = ctx.get_shape(node.input[0])
         input_shape = ctx.get_shape(node.input[1])
@@ -152,6 +155,11 @@ class Select:
             input_shape = ctx.get_shape(node.input[2])
         input_rank = len(input_shape) if input_shape is not None else None
         cond_rank = len(cond_shape) if cond_shape is not None else None
+        true_inp = node.input[1]
+        false_inp = node.input[2]
+        if tmp_dtype != dtype:
+            true_inp = ctx.make_node("Cast", [true_inp], op_name_scope=node.name, attr={"to": tmp_dtype}).output[0]
+            false_inp = ctx.make_node("Cast", [false_inp], op_name_scope=node.name, attr={"to": tmp_dtype}).output[0]
         # if cond shape is 1-dimensional while input has higher rank, need to be reshaped to broadcast
         if node.type == "Select" and cond_rank == 1 and input_rank != 1:
             utils.make_sure(input_rank is not None, "input_rank unknown and cond_rank == 1")
@@ -161,18 +169,20 @@ class Select:
             ctx.replace_input(node, node.input[0], reshape.output[0], 0)
 
         positive_cast = ctx.make_node("Cast", [node.input[0]], name=utils.make_name(node.name),
-                                      attr={"to": dtype})
+                                      attr={"to": tmp_dtype})
         negative = ctx.make_node("Not", [node.input[0]], name=utils.make_name(node.name))
         negative_cast = ctx.make_node("Cast", [negative.output[0]], name=utils.make_name(node.name),
-                                      attr={"to": dtype})
-        multiply_1 = ctx.make_node("Mul", [positive_cast.output[0], node.input[1]], name=utils.make_name(node.name))
-        multiply_2 = ctx.make_node("Mul", [node.input[2], negative_cast.output[0]], name=utils.make_name(node.name))
+                                      attr={"to": tmp_dtype})
+        multiply_1 = ctx.make_node("Mul", [positive_cast.output[0], true_inp], name=utils.make_name(node.name))
+        multiply_2 = ctx.make_node("Mul", [false_inp, negative_cast.output[0]], name=utils.make_name(node.name))
         add_name = node.name
         add_out = node.output
         shape = ctx.get_shape(node.output[0])
         ctx.remove_node(node.name)
         ctx.make_node("Add", [multiply_1.output[0], multiply_2.output[0]], outputs=add_out, name=add_name,
-                      dtypes=[dtype], shapes=[shape])
+                      dtypes=[tmp_dtype], shapes=[shape])
+        if tmp_dtype != dtype:
+            ctx.insert_new_node_on_output("Cast", node.output[0], to=dtype)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
@@ -184,6 +194,15 @@ class Select:
         # We can't use the mul/add trick if a NaN is involved. handles_nan is added earlier in the converter.
         handles_nan = node.get_attr_value("handles_nan", False)
         if ctx.get_dtype(node.output[0]) in [TensorProto.FLOAT, TensorProto.DOUBLE]:
+            cond_node = node.inputs[0]
+            if cond_node.type == "IsNaN":
+                handles_nan = True
+            if cond_node.type == "NotEqual" and cond_node.input[0] == cond_node.input[1]:
+                handles_nan = True
+            if cond_node.type == "Not" and cond_node.inputs[0].type == "Equal":
+                eq_node = cond_node.inputs[0]
+                if eq_node.input[0] == eq_node.input[1]:
+                    handles_nan = True
             for inp in node.inputs[1:]:
                 if inp.is_const() and np.any(np.isnan(inp.get_tensor_value(as_list=False))):
                     handles_nan = True
@@ -234,6 +253,7 @@ class StatelessIfOp:
 
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
+        outputs = node.output
         ctx.remove_node(node.name)
 
         # replace the original node
@@ -245,7 +265,7 @@ class StatelessIfOp:
             wire_if_branch(ctx, g, inputs, output_shapes, output_dtypes, func_name, node.name)
             branches[branch] = g
 
-        _ = ctx.make_node("If", node.input[:1], name=node.name, output_count=len(output_shapes),
+        _ = ctx.make_node("If", node.input[:1], name=node.name, outputs=outputs,
                           shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True, branches=branches)
 
 
@@ -623,12 +643,13 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
 
     g.outputs = [cond_outputs[0]] + g.outputs[2:] + scan_outputs
 
-    # FIXME: onnx does not have a variant type so we try to fish for the dtype in a prior TensorListSetItem.
+    # onnx does not have a variant type so we try to fish for the dtype in a prior TensorListSetItem.
     for o in g.outputs:
         if g.get_dtype(o) == onnx_pb.TensorProto.UNDEFINED:
-            node = g.get_node_by_output(o)
-            if node.type in ["Identity"]:
-                g.set_dtype(o, node.inputs[0].output_dtypes[0])
+            curr_o = o
+            while g.get_node_by_output(curr_o).type == "Identity":
+                curr_o = g.get_node_by_output(curr_o).input[0]
+            g.copy_dtype(curr_o, o)
 
     for node in g.ragged_variant_list_reads:
         # Requires opset 11

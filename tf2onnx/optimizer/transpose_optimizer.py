@@ -208,6 +208,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Min": self._maxmin_handler,
             "Mul": self._mul_handler,
             "Pad": self._pad_handler,
+            "PRelu": self._prelu_handler,
             "Reciprocal": self._simple_through_handler,
             "ReduceLogSum": self._reduce_handler,
             "ReduceLogSumExp": self._reduce_handler,
@@ -236,14 +237,14 @@ class TransposeOptimizer(GraphOptimizerBase):
         }
 
     def _handle_node_having_branches(self, trans, node):
-        if not self._should_push_transpose(trans, node):
+        if not self._should_push_transpose(trans, node) or len(node.output) != 1:
             return False
         # create transpose pairs if some input are not.
         if not self._create_transpose_pairs_before_node(trans, node):
             return False
         # make sure node's all input transpose all have only 1 consumer node,
         # otherwise, it would impact their other output nodes
-        if self._nodes_has_single_consumer_node(node.inputs) and len(node.output) == 1:
+        if self._nodes_has_single_consumer_node(node.inputs):
             self._create_transpose_pairs_after_node(trans, node)
             input_transposes = set(node.inputs)
             for n in input_transposes:
@@ -322,8 +323,9 @@ class TransposeOptimizer(GraphOptimizerBase):
                 op_handler = self._handler_map[p.type]
                 return op_handler(trans, p)
             return False
-        if out_nodes:
-            # move transpose into branches to let Transposes can be "handled" in each branch
+        if out_nodes and trans.get_attr_value("perm") in [NCHW_TO_NHWC, NCDHW_TO_NDHWC]:
+            # Move transpose into branches to let Transposes can be "handled" in each branch.
+            # This will add more transpose ops, so only do this if further optimization is likely (check perm).
             for n in out_nodes:
                 branch_trans = n.graph.make_node("Transpose", [trans.input[0]], attr=trans.get_onnx_attrs())
                 n.graph.replace_input(n, trans.output[0], branch_trans.output[0])
@@ -720,9 +722,10 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
 
         shape = self._g.get_shape(node.output[0])
-        self._g.set_shape(trans.output[0], shape)
-        mid_shape = [shape[p] for p in new_perm_inv]
-        self._g.set_shape(node.output[0], mid_shape)
+        if shape is not None:
+            self._g.set_shape(trans.output[0], shape)
+            mid_shape = [shape[p] for p in new_perm_inv]
+            self._g.set_shape(node.output[0], mid_shape)
 
         return True
 
@@ -777,8 +780,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             if input_shape is not None:
                 new_squeeze_output_shape = [input_shape[i] for i in range(trans_rank) if i not in new_squeeze_axes]
             else:
-                new_squeeze_output_shape = [-1] * trans_rank
-                self.logger.warning("%s's shape is unknown, which may interfere further optimization", node.input[0])
+                new_squeeze_output_shape = [-1] * (trans_rank - len(new_squeeze_axes))
             self._g.set_shape(node.output[0], new_squeeze_output_shape)
             return True
         return False
@@ -816,6 +818,9 @@ class TransposeOptimizer(GraphOptimizerBase):
         new_pads = self._g.make_node("Concat", permute_pads(pads), {'axis': 0})
         self._g.replace_input(node, node.input[1], new_pads.output[0], 1)
         return self._switch_transpose_and_node(node, trans)
+
+    def _prelu_handler(self, trans, node):
+        return self._handle_node_having_branches(trans, node)
 
     def _arg_min_max_handler(self, trans, node):
         axis = node.get_attr_value("axis", 0)

@@ -6,6 +6,7 @@ jobs:
     python_versions: ['3.7']
     tf_versions: ['2.4.1']
     skip_tflite_tests: 'False'
+    skip_tfjs_tests: 'False'
     skip_tf_tests: 'True'
     job:
       steps:
@@ -14,7 +15,7 @@ jobs:
 - template: 'templates/job_generator.yml'
   parameters:
     python_versions: ['3.7']
-    tf_versions: ['1.15.5','2.4.1']
+    tf_versions: ['1.15.5','2.6.0']
     job:
       steps:
       - template: 'pretrained_model_test.yml'

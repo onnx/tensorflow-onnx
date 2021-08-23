@@ -12,12 +12,16 @@ class QuantizationParameters(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsQuantizationParameters(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = QuantizationParameters()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsQuantizationParameters(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def QuantizationParametersBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -158,16 +162,55 @@ class QuantizationParameters(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def QuantizationParametersStart(builder): builder.StartObject(7)
-def QuantizationParametersAddMin(builder, min): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(min), 0)
-def QuantizationParametersStartMinVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def QuantizationParametersAddMax(builder, max): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(max), 0)
-def QuantizationParametersStartMaxVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def QuantizationParametersAddScale(builder, scale): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(scale), 0)
-def QuantizationParametersStartScaleVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def QuantizationParametersAddZeroPoint(builder, zeroPoint): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(zeroPoint), 0)
-def QuantizationParametersStartZeroPointVector(builder, numElems): return builder.StartVector(8, numElems, 8)
-def QuantizationParametersAddDetailsType(builder, detailsType): builder.PrependUint8Slot(4, detailsType, 0)
-def QuantizationParametersAddDetails(builder, details): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(details), 0)
-def QuantizationParametersAddQuantizedDimension(builder, quantizedDimension): builder.PrependInt32Slot(6, quantizedDimension, 0)
-def QuantizationParametersEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(7)
+def QuantizationParametersStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddMin(builder, min): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(min), 0)
+def QuantizationParametersAddMin(builder, min):
+    """This method is deprecated. Please switch to AddMin."""
+    return AddMin(builder, min)
+def StartMinVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def QuantizationParametersStartMinVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartMinVector(builder, numElems)
+def AddMax(builder, max): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(max), 0)
+def QuantizationParametersAddMax(builder, max):
+    """This method is deprecated. Please switch to AddMax."""
+    return AddMax(builder, max)
+def StartMaxVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def QuantizationParametersStartMaxVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartMaxVector(builder, numElems)
+def AddScale(builder, scale): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(scale), 0)
+def QuantizationParametersAddScale(builder, scale):
+    """This method is deprecated. Please switch to AddScale."""
+    return AddScale(builder, scale)
+def StartScaleVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def QuantizationParametersStartScaleVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartScaleVector(builder, numElems)
+def AddZeroPoint(builder, zeroPoint): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(zeroPoint), 0)
+def QuantizationParametersAddZeroPoint(builder, zeroPoint):
+    """This method is deprecated. Please switch to AddZeroPoint."""
+    return AddZeroPoint(builder, zeroPoint)
+def StartZeroPointVector(builder, numElems): return builder.StartVector(8, numElems, 8)
+def QuantizationParametersStartZeroPointVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartZeroPointVector(builder, numElems)
+def AddDetailsType(builder, detailsType): builder.PrependUint8Slot(4, detailsType, 0)
+def QuantizationParametersAddDetailsType(builder, detailsType):
+    """This method is deprecated. Please switch to AddDetailsType."""
+    return AddDetailsType(builder, detailsType)
+def AddDetails(builder, details): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(details), 0)
+def QuantizationParametersAddDetails(builder, details):
+    """This method is deprecated. Please switch to AddDetails."""
+    return AddDetails(builder, details)
+def AddQuantizedDimension(builder, quantizedDimension): builder.PrependInt32Slot(6, quantizedDimension, 0)
+def QuantizationParametersAddQuantizedDimension(builder, quantizedDimension):
+    """This method is deprecated. Please switch to AddQuantizedDimension."""
+    return AddQuantizedDimension(builder, quantizedDimension)
+def End(builder): return builder.EndObject()
+def QuantizationParametersEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

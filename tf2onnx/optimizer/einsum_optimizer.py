@@ -90,12 +90,20 @@ class OnnxMicroRuntime:
         return (np.concatenate(targs, axis),)
 
     def _op_gemm(self, a, b, c=None, alpha=None, beta=None,  # pylint: disable=C0103
-                 transA=False, transB=False):  # pylint: disable=C0103
+                 transA=None, transB=None):  # pylint: disable=C0103
         "Runtime for operator."
         if alpha is not None:
             alpha = alpha.f
         if beta is not None:
             beta = beta.f
+        if transA is None:
+            transA = False
+        else:
+            transA = transA.i
+        if transB is None:
+            transB = False
+        else:
+            transB = transB.i
 
         def _gemm00(a, b, c, alpha, beta):
             o = np.dot(a, b) * alpha
@@ -2153,7 +2161,7 @@ class CachedEinsum:
         model = helper.make_model(
             opset_imports=[helper.make_operatorsetid('', opset)],
             ir_version=ir_version,
-            producer_name='mlprodict',
+            producer_name='tensorflow-onnx',
             producer_version='0.0.1',
             graph=helper.make_graph(
                 name='einsum',

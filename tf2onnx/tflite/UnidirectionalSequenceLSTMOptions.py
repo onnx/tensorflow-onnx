@@ -12,12 +12,16 @@ class UnidirectionalSequenceLSTMOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsUnidirectionalSequenceLSTMOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = UnidirectionalSequenceLSTMOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsUnidirectionalSequenceLSTMOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def UnidirectionalSequenceLSTMOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -61,10 +65,31 @@ class UnidirectionalSequenceLSTMOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def UnidirectionalSequenceLSTMOptionsStart(builder): builder.StartObject(5)
-def UnidirectionalSequenceLSTMOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
-def UnidirectionalSequenceLSTMOptionsAddCellClip(builder, cellClip): builder.PrependFloat32Slot(1, cellClip, 0.0)
-def UnidirectionalSequenceLSTMOptionsAddProjClip(builder, projClip): builder.PrependFloat32Slot(2, projClip, 0.0)
-def UnidirectionalSequenceLSTMOptionsAddTimeMajor(builder, timeMajor): builder.PrependBoolSlot(3, timeMajor, 0)
-def UnidirectionalSequenceLSTMOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.PrependBoolSlot(4, asymmetricQuantizeInputs, 0)
-def UnidirectionalSequenceLSTMOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(5)
+def UnidirectionalSequenceLSTMOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
+def UnidirectionalSequenceLSTMOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
+    """This method is deprecated. Please switch to AddFusedActivationFunction."""
+    return AddFusedActivationFunction(builder, fusedActivationFunction)
+def AddCellClip(builder, cellClip): builder.PrependFloat32Slot(1, cellClip, 0.0)
+def UnidirectionalSequenceLSTMOptionsAddCellClip(builder, cellClip):
+    """This method is deprecated. Please switch to AddCellClip."""
+    return AddCellClip(builder, cellClip)
+def AddProjClip(builder, projClip): builder.PrependFloat32Slot(2, projClip, 0.0)
+def UnidirectionalSequenceLSTMOptionsAddProjClip(builder, projClip):
+    """This method is deprecated. Please switch to AddProjClip."""
+    return AddProjClip(builder, projClip)
+def AddTimeMajor(builder, timeMajor): builder.PrependBoolSlot(3, timeMajor, 0)
+def UnidirectionalSequenceLSTMOptionsAddTimeMajor(builder, timeMajor):
+    """This method is deprecated. Please switch to AddTimeMajor."""
+    return AddTimeMajor(builder, timeMajor)
+def AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.PrependBoolSlot(4, asymmetricQuantizeInputs, 0)
+def UnidirectionalSequenceLSTMOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs):
+    """This method is deprecated. Please switch to AddAsymmetricQuantizeInputs."""
+    return AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs)
+def End(builder): return builder.EndObject()
+def UnidirectionalSequenceLSTMOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

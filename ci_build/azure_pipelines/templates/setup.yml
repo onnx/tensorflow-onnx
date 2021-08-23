@@ -12,17 +12,18 @@ steps:
     then
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
-    if [[ $ONNX_TEST ==  "true" ]] ;
-    then
-      pip uninstall -y onnx
-      pip install --index-url https://test.pypi.org/simple/ onnx
-    fi
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
     then
       pip uninstall -y onnxruntime
       # install numpy upfront since it is not on https://test.pypi.org/simple/
       pip install 'numpy>=1.18'
       pip install --index-url https://test.pypi.org/simple/ ort-nightly
+    fi
+
+    if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
+    then
+      pip install tensorflowjs
+      npm install @tensorflow/tfjs
     fi
 
     if [[ $CI_TF_VERSION == 2.* ]] ;
@@ -40,9 +41,22 @@ steps:
       then
         pip install tensorflow-text>=2.5
       fi
+      if [[ $CI_TF_VERSION == 2.6* ]] ;
+      then
+        # FIXME: make it >= 2.6 after offical tensorflow-text was released
+        pip install tensorflow-text==2.6.0rc0
+      fi
     fi
 
     python setup.py install
+
+    if [[ $ONNX_TEST ==  "true" ]] ;
+    then
+      # onnx-weekly won't satisfy onnx requirement so uninstallation must happen here
+      pip uninstall -y onnx
+      pip install --index-url https://test.pypi.org/simple/ ${PIP_ONNX_NAME:-onnx}
+    fi
+
     pip freeze --all
   displayName: 'Setup Environment'
 

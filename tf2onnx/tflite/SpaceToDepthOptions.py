@@ -12,12 +12,16 @@ class SpaceToDepthOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSpaceToDepthOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SpaceToDepthOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsSpaceToDepthOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def SpaceToDepthOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -33,6 +37,15 @@ class SpaceToDepthOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def SpaceToDepthOptionsStart(builder): builder.StartObject(1)
-def SpaceToDepthOptionsAddBlockSize(builder, blockSize): builder.PrependInt32Slot(0, blockSize, 0)
-def SpaceToDepthOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(1)
+def SpaceToDepthOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddBlockSize(builder, blockSize): builder.PrependInt32Slot(0, blockSize, 0)
+def SpaceToDepthOptionsAddBlockSize(builder, blockSize):
+    """This method is deprecated. Please switch to AddBlockSize."""
+    return AddBlockSize(builder, blockSize)
+def End(builder): return builder.EndObject()
+def SpaceToDepthOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

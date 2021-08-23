@@ -12,12 +12,16 @@ class Conv2DOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsConv2DOptions(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = Conv2DOptions()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsConv2DOptions(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def Conv2DOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -68,11 +72,35 @@ class Conv2DOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 1
 
-def Conv2DOptionsStart(builder): builder.StartObject(6)
-def Conv2DOptionsAddPadding(builder, padding): builder.PrependInt8Slot(0, padding, 0)
-def Conv2DOptionsAddStrideW(builder, strideW): builder.PrependInt32Slot(1, strideW, 0)
-def Conv2DOptionsAddStrideH(builder, strideH): builder.PrependInt32Slot(2, strideH, 0)
-def Conv2DOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(3, fusedActivationFunction, 0)
-def Conv2DOptionsAddDilationWFactor(builder, dilationWFactor): builder.PrependInt32Slot(4, dilationWFactor, 1)
-def Conv2DOptionsAddDilationHFactor(builder, dilationHFactor): builder.PrependInt32Slot(5, dilationHFactor, 1)
-def Conv2DOptionsEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(6)
+def Conv2DOptionsStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddPadding(builder, padding): builder.PrependInt8Slot(0, padding, 0)
+def Conv2DOptionsAddPadding(builder, padding):
+    """This method is deprecated. Please switch to AddPadding."""
+    return AddPadding(builder, padding)
+def AddStrideW(builder, strideW): builder.PrependInt32Slot(1, strideW, 0)
+def Conv2DOptionsAddStrideW(builder, strideW):
+    """This method is deprecated. Please switch to AddStrideW."""
+    return AddStrideW(builder, strideW)
+def AddStrideH(builder, strideH): builder.PrependInt32Slot(2, strideH, 0)
+def Conv2DOptionsAddStrideH(builder, strideH):
+    """This method is deprecated. Please switch to AddStrideH."""
+    return AddStrideH(builder, strideH)
+def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(3, fusedActivationFunction, 0)
+def Conv2DOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
+    """This method is deprecated. Please switch to AddFusedActivationFunction."""
+    return AddFusedActivationFunction(builder, fusedActivationFunction)
+def AddDilationWFactor(builder, dilationWFactor): builder.PrependInt32Slot(4, dilationWFactor, 1)
+def Conv2DOptionsAddDilationWFactor(builder, dilationWFactor):
+    """This method is deprecated. Please switch to AddDilationWFactor."""
+    return AddDilationWFactor(builder, dilationWFactor)
+def AddDilationHFactor(builder, dilationHFactor): builder.PrependInt32Slot(5, dilationHFactor, 1)
+def Conv2DOptionsAddDilationHFactor(builder, dilationHFactor):
+    """This method is deprecated. Please switch to AddDilationHFactor."""
+    return AddDilationHFactor(builder, dilationHFactor)
+def End(builder): return builder.EndObject()
+def Conv2DOptionsEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

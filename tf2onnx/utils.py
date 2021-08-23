@@ -259,6 +259,58 @@ def make_sure(bool_val, error_msg, *args):
     if not bool_val:
         raise ValueError("make_sure failure: " + error_msg % args)
 
+def combine_seeds(seed, seed2):
+    """Produces an onnx float seed from two tf int seeds. Returns None if both seeds are 0."""
+    if seed != 0 or seed2 != 0:
+        # Produce a unique value depending on both seeds. (diagonal grid traversal)
+        combined_seed = (seed + seed2 + 1) * (seed + seed2 + 2) // 2 - seed
+        return float(combined_seed)
+    return None
+
+def topological_sort(dependencies):
+    """
+    Given a dictionary mapping items to lists of dependencies, returns a topological ordering of the items.
+    Raises a ValueError for cyclic dependencies.
+    """
+    stack = list(dependencies.keys())
+    visiting = set()
+    visited = set()
+    ordered = []
+    while stack:
+        x = stack.pop()
+        if x in visited:
+            continue
+        if x in visiting:
+            visiting.remove(x)
+            visited.add(x)
+            ordered.append(x)
+            continue
+        stack.append(x)
+        visiting.add(x)
+        for y in dependencies[x]:
+            if y in visiting:
+                raise ValueError("Cyclic dependencies present: %r" % dependencies)
+            if y not in visited:
+                stack.append(y)
+    return ordered
+
+
+def check_io(input_names, output_names, valid_outputs):
+    """Asserts that input_names and output_names are contained within valid_outputs else raises an error"""
+    io_to_check = []
+    if input_names:
+        io_to_check.extend(input_names)
+    if output_names:
+        io_to_check.extend(output_names)
+    if io_to_check:
+        # check output existence in case user passed in wrong output ids
+        non_exists = set(io_to_check) - set(valid_outputs)
+        if non_exists:
+            logger.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed"
+                         "in format: input/output_node_name:port_id. Problematic inputs/outputs are: %s \n",
+                         non_exists)
+            raise ValueError("Inputs/Outputs Not Found")
+
 
 def is_cpp_protobuf():
     return isinstance(ModelProto().ParseFromString, types.BuiltinFunctionType)

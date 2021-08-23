@@ -20,7 +20,7 @@ args = parser.parse_args()
 
 
 LATEST_OPSET = {
-    "": 13,  # default domain
+    "": 14,  # default domain
     "com.microsoft": 1,  # microsoft domain
     "ai.onnx.contrib": 1,  # contrib ops
 }
@@ -48,6 +48,8 @@ with open(args.filename, 'w+') as doc_file:
         unsupported_cases = OrderedDict()
         for opset in opsets:
             for name, func in opset.items():
+                if func[0].__name__ in ["to_tf"]:
+                    continue
                 handler_ver = int(func[0].__name__.replace("version_", ""))
                 if name not in tf_op_to_versions or handler_ver < tf_op_to_versions[name]:
                     tf_op_to_versions[name] = handler_ver
