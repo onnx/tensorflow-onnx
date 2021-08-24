@@ -328,9 +328,10 @@ def build_dynamic_target_size(ctx, transposed_intput, target_hw):
     shape_of_transposed_input = ctx.make_node("Shape", [transposed_intput])
     first_half_of_shape = GraphBuilder(ctx).make_slice(
         {"data": shape_of_transposed_input.output[0], "ends": [2], "starts": [0]})
-    target_size_int64 = ctx.make_node("Cast", [target_hw], attr={'to': TensorProto.INT64})
+    if ctx.get_dtype(target_hw) != TensorProto.INT64:
+        target_hw = ctx.make_node("Cast", [target_hw], attr={'to': TensorProto.INT64}).output[0]
     # We build a tensor containing [n c nh nw]
-    final_target_size = ctx.make_node("Concat", [first_half_of_shape, target_size_int64.output[0]], {'axis': 0})
+    final_target_size = ctx.make_node("Concat", [first_half_of_shape, target_hw], {'axis': 0})
     return final_target_size
 
 
@@ -999,11 +1000,10 @@ class SampleDistortedBoundingBox:
 
         seed = node.get_attr_value("seed", 0)
         seed2 = node.get_attr_value("seed2", 0)
+        onnx_seed = utils.combine_seeds(seed, seed2)
         rand_attr = {}
-        if seed != 0 or seed2 != 0:
-            # Produce a unique value depending on both seeds. (diagonal grid traversal)
-            combined_seed = (seed + seed2 + 1) * (seed + seed2 + 2) // 2 - seed
-            rand_attr['seed'] = float(combined_seed)
+        if onnx_seed is not None:
+            rand_attr['seed'] = onnx_seed
 
         min_aspect_ratio, max_aspect_ratio = node.get_attr_value("aspect_ratio_range", [0.75, 1.33])
         ratio_range = max_aspect_ratio - min_aspect_ratio
@@ -1193,9 +1193,13 @@ class CropAndResize:
             "method").s == b"nearest" else "linear"
         extrapolation_value = float(node.get_attr("extrapolation_value", "0").f)
         input_x = node.input[0]
+        x_shape = ctx.make_node("Shape", [input_x]).output[0]
+        num_channels = GraphBuilder(ctx).make_slice({"data": x_shape, "starts": [3], "ends": [4], "axes": [0]})
         boxes = node.input[1]
         box_ind = node.input[2]
         crop_size = node.input[3]
+        if ctx.get_dtype(crop_size) != TensorProto.INT64:
+            crop_size = ctx.make_node("Cast", [crop_size], attr={'to': TensorProto.INT64}).output[0]
         trip_name = utils.make_name(node.name + "_i")
         cond_name = utils.make_name(node.name + "_cond")
         cond_out_name = utils.make_name(node.name + "cond_out")
@@ -1243,6 +1247,10 @@ class CropAndResize:
         branches = {"body": g}
         inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]], name=node.name,
                                    outputs=node.output, branches=branches)
+        const_neg_one = ctx.make_const(utils.make_name("const_neg_one"), np.array([-1], np.int64)).output[0]
+        final_shape = ctx.make_node("Concat", [const_neg_one, crop_size, num_channels], attr={'axis': 0}).output[0]
+        # This reshape fixes the case when there are no iterations and the scan output is empty.
+        ctx.insert_new_node_on_output("Reshape", inner_loop.output[0], inputs=[inner_loop.output[0], final_shape])
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):

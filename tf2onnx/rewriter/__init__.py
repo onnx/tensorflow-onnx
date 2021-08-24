@@ -21,6 +21,8 @@ from tf2onnx.rewriter.conv2d_with_add_rewriter import rewrite_biasadd_with_conv2
 from tf2onnx.rewriter.quantization_ops_rewriter import rewrite_quantize_and_dequantize
 from tf2onnx.rewriter.layer_normalization_rewriter import rewrite_layer_normalization
 from tf2onnx.rewriter.ragged_variant_shape_rewriter import rewrite_ragged_variant_shape
+from tf2onnx.rewriter.lstm_tf2_rewriter import rewriter_lstm_tf2
+from tf2onnx.rewriter.fused_op_rewriter import rewrite_fused_ops
 
 
 __all__ = [
@@ -46,5 +48,7 @@ __all__ = [
     "rewrite_quantize_and_dequantize",
     "rewrite_layer_normalization",
     "rewrite_conv_dilations",
-    "rewrite_ragged_variant_shape"
+    "rewrite_ragged_variant_shape",
+    "rewriter_lstm_tf2",
+    "rewrite_fused_ops",
 ]

@@ -278,6 +278,13 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     logger.info("Computed %d values for constant folding", len(outputs_to_values))
     return outputs_to_values, outputs_to_dtypes
 
+class HashTableInfo:
+    def __init__(self, shared_name, key_dtype, val_dtype, resource_input=None):
+        self.shared_name = shared_name
+        self.key_dtype = key_dtype
+        self.val_dtype = val_dtype
+        self.resource_input = resource_input
+
 def get_hash_table_info(nodes_or_graph_def):
     """
     Return lists of the shared_names, key_dtypes, and value_dtypes of all hash tables declared in the graph_def
@@ -287,18 +294,16 @@ def get_hash_table_info(nodes_or_graph_def):
         nodes = nodes_or_graph_def.node
     else:
         nodes = nodes_or_graph_def
-    names = []
-    key_dtypes = []
-    val_dtypes = []
+    info = []
     for n in nodes:
+        if n.op == "LookupTableFindV2":
+            info.append(HashTableInfo(None, n.attr['Tin'].type, n.attr['Tout'].type, n.input[0]))
         if n.op in ["HashTableV2", "MutableHashTableV2"]:
             if all(k in n.attr for k in ['shared_name', 'key_dtype', 'value_dtype']):
                 name = n.attr['shared_name'].s
                 if name != b'':
-                    names.append(name)
-                    key_dtypes.append(n.attr['key_dtype'].type)
-                    val_dtypes.append(n.attr['value_dtype'].type)
-    return names, key_dtypes, val_dtypes
+                    info.append(HashTableInfo(name, n.attr['key_dtype'].type, n.attr['value_dtype'].type))
+    return info
 
 def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
     """
@@ -307,13 +312,13 @@ def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
     """
     for n in graph_def.node:
         if n.op == "Placeholder" and n.name in placeholder_to_table_info:
-            name, key_dtype, val_dtype = placeholder_to_table_info[n.name]
+            info = placeholder_to_table_info[n.name]
             for a in list(n.attr):
                 del n.attr[a]
             n.op = "HashTableV2"
-            n.attr['shared_name'].s = name
-            n.attr['key_dtype'].type = key_dtype
-            n.attr['value_dtype'].type = val_dtype
+            n.attr['shared_name'].s = info.shared_name
+            n.attr['key_dtype'].type = info.key_dtype
+            n.attr['value_dtype'].type = info.val_dtype
 
 def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
     """Given a tf node def, returns a dict of attribute names to values"""
@@ -338,30 +343,35 @@ def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
             return read_tf_node_attrs(node)
 
 
+# ignore the following attributes
+TF_IGNORED_NODE_ATTRS = {
+    "T", "unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
+    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
+    "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
+    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
+    "T_threshold", "shape_type", "_lower_using_switch_merge",
+    "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
+    "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
+    "Toutput_types", "dense_shapes", "Tdense", "Tsegmentids", "Tshift", "Tnumsegments", "SrcT",
+    "Tcomplex", "Treal",    # For RFFT, Tcomplex is ignored because
+                            # onnx.helper.make_node fails,
+                            # TODO: it should be added back.
+}
+
+TF_SUBGRAPH_ATTRS = {
+    "body", "cond", "then_branch", "else_branch", "f"
+}
+
+
 def read_tf_node_attrs(node):
     """Given a tf Node, returns a dict of attribute names to values"""
     attr = {}
     attr_cnt = collections.Counter()
 
-    # ignore the following attributes
-    ignored_attr = {"T", "unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
-                    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
-                    "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-                    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
-                    "T_threshold", "shape_type", "_lower_using_switch_merge",
-                    "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
-                    "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
-                    "Toutput_types", "dense_shapes", "Tdense", "Tsegmentids", "Tshift", "Tnumsegments", "SrcT",
-                    "body", "cond", "then_branch", "else_branch", "f",
-                    "Tcomplex", "Treal",  # For RFFT, Tcomplex is ignored because
-                                          # onnx.helper.make_node fails,
-                                          # TODO: it should be added back.
-                    }
-
     for a in node.node_def.attr:
         attr_cnt[a] += 1
         value = get_tf_node_attr(node, a)
-        if a in ignored_attr or isinstance(value, tensor_pb2.TensorProto):
+        if a in TF_IGNORED_NODE_ATTRS or a in TF_SUBGRAPH_ATTRS or isinstance(value, tensor_pb2.TensorProto):
             pass
         elif a == "shape":
             shape = get_tf_shape_attr(node)
@@ -417,7 +427,7 @@ def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=Non
             if a == "T":
                 if value and not isinstance(value, list):
                     dtypes[node.name] = map_tf_dtype(value)
-            elif a in {"body", "cond", "then_branch", "else_branch", "f"}:
+            elif a in TF_SUBGRAPH_ATTRS:
                 input_shapes = [inp.get_shape() for inp in node.inputs]
                 nattr = get_tf_node_attr(node, a)
                 attr[a] = nattr.name

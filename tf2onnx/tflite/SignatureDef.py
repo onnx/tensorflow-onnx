@@ -12,12 +12,16 @@ class SignatureDef(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSignatureDef(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SignatureDef()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsSignatureDef(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def SignatureDefBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -77,24 +81,48 @@ class SignatureDef(object):
         return o == 0
 
     # SignatureDef
-    def MethodName(self):
+    def SignatureKey(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             return self._tab.String(o + self._tab.Pos)
         return None
 
     # SignatureDef
-    def Key(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+    def SubgraphIndex(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
-            return self._tab.String(o + self._tab.Pos)
-        return None
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
 
-def SignatureDefStart(builder): builder.StartObject(4)
-def SignatureDefAddInputs(builder, inputs): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(inputs), 0)
-def SignatureDefStartInputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def SignatureDefAddOutputs(builder, outputs): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(outputs), 0)
-def SignatureDefStartOutputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def SignatureDefAddMethodName(builder, methodName): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(methodName), 0)
-def SignatureDefAddKey(builder, key): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(key), 0)
-def SignatureDefEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(5)
+def SignatureDefStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddInputs(builder, inputs): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(inputs), 0)
+def SignatureDefAddInputs(builder, inputs):
+    """This method is deprecated. Please switch to AddInputs."""
+    return AddInputs(builder, inputs)
+def StartInputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def SignatureDefStartInputsVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartInputsVector(builder, numElems)
+def AddOutputs(builder, outputs): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(outputs), 0)
+def SignatureDefAddOutputs(builder, outputs):
+    """This method is deprecated. Please switch to AddOutputs."""
+    return AddOutputs(builder, outputs)
+def StartOutputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def SignatureDefStartOutputsVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartOutputsVector(builder, numElems)
+def AddSignatureKey(builder, signatureKey): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(signatureKey), 0)
+def SignatureDefAddSignatureKey(builder, signatureKey):
+    """This method is deprecated. Please switch to AddSignatureKey."""
+    return AddSignatureKey(builder, signatureKey)
+def AddSubgraphIndex(builder, subgraphIndex): builder.PrependUint32Slot(4, subgraphIndex, 0)
+def SignatureDefAddSubgraphIndex(builder, subgraphIndex):
+    """This method is deprecated. Please switch to AddSubgraphIndex."""
+    return AddSubgraphIndex(builder, subgraphIndex)
+def End(builder): return builder.EndObject()
+def SignatureDefEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

@@ -12,12 +12,16 @@ class Operator(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsOperator(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = Operator()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsOperator(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     @classmethod
     def OperatorBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
@@ -192,19 +196,67 @@ class Operator(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
         return o == 0
 
-def OperatorStart(builder): builder.StartObject(9)
-def OperatorAddOpcodeIndex(builder, opcodeIndex): builder.PrependUint32Slot(0, opcodeIndex, 0)
-def OperatorAddInputs(builder, inputs): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(inputs), 0)
-def OperatorStartInputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def OperatorAddOutputs(builder, outputs): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(outputs), 0)
-def OperatorStartOutputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def OperatorAddBuiltinOptionsType(builder, builtinOptionsType): builder.PrependUint8Slot(3, builtinOptionsType, 0)
-def OperatorAddBuiltinOptions(builder, builtinOptions): builder.PrependUOffsetTRelativeSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(builtinOptions), 0)
-def OperatorAddCustomOptions(builder, customOptions): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(customOptions), 0)
-def OperatorStartCustomOptionsVector(builder, numElems): return builder.StartVector(1, numElems, 1)
-def OperatorAddCustomOptionsFormat(builder, customOptionsFormat): builder.PrependInt8Slot(6, customOptionsFormat, 0)
-def OperatorAddMutatingVariableInputs(builder, mutatingVariableInputs): builder.PrependUOffsetTRelativeSlot(7, flatbuffers.number_types.UOffsetTFlags.py_type(mutatingVariableInputs), 0)
-def OperatorStartMutatingVariableInputsVector(builder, numElems): return builder.StartVector(1, numElems, 1)
-def OperatorAddIntermediates(builder, intermediates): builder.PrependUOffsetTRelativeSlot(8, flatbuffers.number_types.UOffsetTFlags.py_type(intermediates), 0)
-def OperatorStartIntermediatesVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def OperatorEnd(builder): return builder.EndObject()
+def Start(builder): builder.StartObject(9)
+def OperatorStart(builder):
+    """This method is deprecated. Please switch to Start."""
+    return Start(builder)
+def AddOpcodeIndex(builder, opcodeIndex): builder.PrependUint32Slot(0, opcodeIndex, 0)
+def OperatorAddOpcodeIndex(builder, opcodeIndex):
+    """This method is deprecated. Please switch to AddOpcodeIndex."""
+    return AddOpcodeIndex(builder, opcodeIndex)
+def AddInputs(builder, inputs): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(inputs), 0)
+def OperatorAddInputs(builder, inputs):
+    """This method is deprecated. Please switch to AddInputs."""
+    return AddInputs(builder, inputs)
+def StartInputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def OperatorStartInputsVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartInputsVector(builder, numElems)
+def AddOutputs(builder, outputs): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(outputs), 0)
+def OperatorAddOutputs(builder, outputs):
+    """This method is deprecated. Please switch to AddOutputs."""
+    return AddOutputs(builder, outputs)
+def StartOutputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def OperatorStartOutputsVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartOutputsVector(builder, numElems)
+def AddBuiltinOptionsType(builder, builtinOptionsType): builder.PrependUint8Slot(3, builtinOptionsType, 0)
+def OperatorAddBuiltinOptionsType(builder, builtinOptionsType):
+    """This method is deprecated. Please switch to AddBuiltinOptionsType."""
+    return AddBuiltinOptionsType(builder, builtinOptionsType)
+def AddBuiltinOptions(builder, builtinOptions): builder.PrependUOffsetTRelativeSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(builtinOptions), 0)
+def OperatorAddBuiltinOptions(builder, builtinOptions):
+    """This method is deprecated. Please switch to AddBuiltinOptions."""
+    return AddBuiltinOptions(builder, builtinOptions)
+def AddCustomOptions(builder, customOptions): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(customOptions), 0)
+def OperatorAddCustomOptions(builder, customOptions):
+    """This method is deprecated. Please switch to AddCustomOptions."""
+    return AddCustomOptions(builder, customOptions)
+def StartCustomOptionsVector(builder, numElems): return builder.StartVector(1, numElems, 1)
+def OperatorStartCustomOptionsVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartCustomOptionsVector(builder, numElems)
+def AddCustomOptionsFormat(builder, customOptionsFormat): builder.PrependInt8Slot(6, customOptionsFormat, 0)
+def OperatorAddCustomOptionsFormat(builder, customOptionsFormat):
+    """This method is deprecated. Please switch to AddCustomOptionsFormat."""
+    return AddCustomOptionsFormat(builder, customOptionsFormat)
+def AddMutatingVariableInputs(builder, mutatingVariableInputs): builder.PrependUOffsetTRelativeSlot(7, flatbuffers.number_types.UOffsetTFlags.py_type(mutatingVariableInputs), 0)
+def OperatorAddMutatingVariableInputs(builder, mutatingVariableInputs):
+    """This method is deprecated. Please switch to AddMutatingVariableInputs."""
+    return AddMutatingVariableInputs(builder, mutatingVariableInputs)
+def StartMutatingVariableInputsVector(builder, numElems): return builder.StartVector(1, numElems, 1)
+def OperatorStartMutatingVariableInputsVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartMutatingVariableInputsVector(builder, numElems)
+def AddIntermediates(builder, intermediates): builder.PrependUOffsetTRelativeSlot(8, flatbuffers.number_types.UOffsetTFlags.py_type(intermediates), 0)
+def OperatorAddIntermediates(builder, intermediates):
+    """This method is deprecated. Please switch to AddIntermediates."""
+    return AddIntermediates(builder, intermediates)
+def StartIntermediatesVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def OperatorStartIntermediatesVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartIntermediatesVector(builder, numElems)
+def End(builder): return builder.EndObject()
+def OperatorEnd(builder):
+    """This method is deprecated. Please switch to End."""
+    return End(builder)

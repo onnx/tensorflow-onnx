@@ -19,6 +19,7 @@ from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
 from tf2onnx.flexbuffers import read_flexbuffer
 from tf2onnx.tf_utils import read_tf_node_def_attrs
+from tf2onnx.graph import Graph
 from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
@@ -113,11 +114,14 @@ def lookup_enum(idx, enum_name):
     if enum_name == 'TensorType':
         return map_tflite_dtype_to_onnx(idx)
     if enum_name in enum_cache:
-        return enum_cache[enum_name][idx]
-    module = importlib.import_module('tf2onnx.tflite.' + enum_name)
-    enum_class = getattr(module, enum_name)
-    idx_to_name = {value: key for key, value in enum_class.__dict__.items() if not key.startswith('_')}
-    enum_cache[enum_name] = idx_to_name
+        idx_to_name = enum_cache[enum_name]
+    else:
+        module = importlib.import_module('tf2onnx.tflite.' + enum_name)
+        enum_class = getattr(module, enum_name)
+        idx_to_name = {value: key for key, value in enum_class.__dict__.items() if not key.startswith('_')}
+        enum_cache[enum_name] = idx_to_name
+    utils.make_sure(idx in idx_to_name, "Can't lookup value %s for tflite enum %s. Please update tf2onnx or "
+                    "submit an issue on GitHub.", idx, enum_name)
     return idx_to_name[idx]
 
 
@@ -127,6 +131,40 @@ def get_options_class(name):
         return None
     module = importlib.import_module('tf2onnx.tflite.' + name)
     return getattr(module, name)
+
+
+def graphs_from_tflite(tflite_path, input_names=None, output_names=None):
+    """
+    Given the path to a tflite model, returns a tuple (main_graph, subgraphs) of graph.py Graph objects
+    inputs/outputs will be taken from main graph in model if not overridden
+    """
+    tflite_graphs, opcodes, model, tensor_shapes = read_tflite_model(tflite_path)
+    main_g = None
+    subgraphs = []
+    for i, tfl_graph in enumerate(tflite_graphs):
+        is_main_g = i == len(tflite_graphs) - 1
+        prefix = '' if is_main_g else tfl_graph.Name().decode() + '_'
+        tensor_shapes_from_interpreter = None
+        if is_main_g:
+            tensor_shapes_from_interpreter = tensor_shapes
+        onnx_nodes, _, _, output_shapes, dtypes, f_inputs, f_outputs, graph_name = \
+            parse_tflite_graph(tfl_graph, opcodes, model, prefix, tensor_shapes_from_interpreter)
+        g_inputs = f_inputs
+        g_outputs = f_outputs
+        if is_main_g:
+            # Override IO in main graph
+            utils.check_io(input_names, output_names, output_shapes.keys())
+            if input_names is not None:
+                g_inputs = input_names
+            if output_names is not None:
+                g_outputs = output_names
+        g = Graph(onnx_nodes, output_shapes, dtypes, input_names=g_inputs, output_names=g_outputs,
+                  is_subgraph=not is_main_g, graph_name=graph_name)
+        if is_main_g:
+            main_g = g
+        else:
+            subgraphs.append(g)
+    return main_g, subgraphs
 
 
 def read_tflite_model(tflite_path):
@@ -199,22 +237,7 @@ def get_model_subgraphs(model):
         utils.make_sure(main_g not in ds, "Main graph %s is a dependency of subgraph %s", main_g, i)
         dependencies[i] = ds
 
-    ordered = []
-    visited = set()
-    visiting = set()
-    def visit(g):
-        utils.make_sure(g not in visiting, "Subgraphs have cyclic dependencies: %r", dependencies)
-        if g in visited:
-            return
-        visiting.add(g)
-        for d in dependencies[g]:
-            visit(d)
-        visited.add(g)
-        ordered.append(g)
-        visiting.remove(g)
-
-    for g in reversed(range(model.SubgraphsLength())):
-        visit(g)
+    ordered = utils.topological_sort(dependencies)
 
     return [idx_to_graph[i] for i in ordered]
 
@@ -416,7 +439,8 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             options = option_class()
             options.Init(op.BuiltinOptions().Bytes, op.BuiltinOptions().Pos)
             # All flatbuffer objects have these properties.
-            block_list = [options_type_name + 'BufferHasIdentifier', 'Init', 'GetRootAs' + options_type_name]
+            block_list = [options_type_name + 'BufferHasIdentifier', 'Init',
+                          'GetRootAs' + options_type_name, 'GetRootAs']
             # The rest of the properties of the options class provide its attribute names
             attr_names = {opt for opt in dir(options) if not opt.startswith('_') and opt not in block_list}
             for a in list(attr_names):

@@ -10,7 +10,7 @@ from collections import OrderedDict
 from tf2onnx import utils
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.utils import is_tf_loopcond_op, is_tf_tensor_array_op
-from tf2onnx.utils import is_tf_tensor_array_gather_op, is_tf_tensor_array_write_op
+from tf2onnx.utils import is_tf_tensor_array_gather_op, is_tf_tensor_array_write_op, is_tf_tensor_array_read_op
 from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx.utils import TensorValueInfo
 
@@ -47,6 +47,7 @@ class LoopProperties(object):
         # used as initial input for more than one Enter nodes.
         self.state_variables = OrderedDict()
         self.scan_variables = OrderedDict()
+        self.unneeded_scan_variables = OrderedDict()
 
         self.tensor_array_inputs = []  # list of type InputTensorArray
 
@@ -55,10 +56,14 @@ class LoopProperties(object):
                         "variable %s already exists as scan variable.", var.enter_name)
         utils.make_sure(var.enter_name not in self.state_variables,
                         "variable %s already exists as state variable.", var.enter_name)
-        if not var.is_tensor_array:
-            self.state_variables[var.enter_name] = var
-        else:
+        if var.tensor_array_type == TensorArrayVariableType.READ_LAST:
+            # If the variable just returns the last value of the constructed tensor array, it doesn't need to be
+            # a scan output
+            self.unneeded_scan_variables[var.enter_name] = var
+        elif var.tensor_array_type == TensorArrayVariableType.GATHER_ALL:
             self.scan_variables[var.enter_name] = var
+        else:
+            self.state_variables[var.enter_name] = var
 
     def get_variables(self, checker):
         if not checker:
@@ -69,6 +74,7 @@ class LoopProperties(object):
     def all_variables(self):
         items = self.state_variables.copy()
         items.update(self.scan_variables)
+        items.update(self.unneeded_scan_variables)
         return items
 
     # state inputs and outputs are in pairs, even though some outputs are not depending on corresponding input,
@@ -111,6 +117,16 @@ class LoopProperties(object):
     def scan_inputs_initial_values(self):
         return [i.data_input_id for i in self.tensor_array_inputs]
 
+    def has_variable_with_ta_type(self, tensor_array_type):
+        for variable in self.all_variables.values():
+            if variable.tensor_array_type == tensor_array_type:
+                return True
+        return False
+
+class TensorArrayVariableType:
+    GATHER_ALL = "GATHER_ALL"
+    READ_LAST = "READ_LAST"
+
 class LoopVariable(object):
     """In TensorFlow loop, all loop variables are listed both in iteration body graph's inputs, and outputs.
        Loop (state variable 1, state variable 2) {
@@ -131,7 +147,7 @@ class LoopVariable(object):
               (e.g. switch_true_identity_output.id).
     """
     def __init__(self, enter_name, enter_input_id, next_iteration_input_id,
-                 switch_true_identity_output_id, exit_output_id, is_tensor_array, ta_index_id, g):
+                 switch_true_identity_output_id, exit_output_id, tensor_array_type, ta_index_id, g):
         self.enter_name = enter_name
         self.enter_input_id = enter_input_id
 
@@ -150,7 +166,7 @@ class LoopVariable(object):
         self.exit_output = TensorValueInfo(exit_output_id, g)
 
         # only applicable for tensor array variable
-        self.is_tensor_array = is_tensor_array
+        self.tensor_array_type = tensor_array_type
         # todo: need check ta's index variable is a scalar starting from 1, and increase by 1 each iteration.
         # then we can be sure this is equivalent to scan output behavior.
         self.ta_index_id = ta_index_id
@@ -189,7 +205,7 @@ class LoopRewriterBase(object):
     def rewrite(self, context):
         return REWRITER_RESULT.FAIL
 
-    def run_internal(self):
+    def run_internal(self, allow_ta_read_last=False):
         loopcond_ops = []
         for op in self.g.get_nodes():
             if is_tf_loopcond_op(op):
@@ -201,7 +217,11 @@ class LoopRewriterBase(object):
             context = self.create_context()
             context.loop_cond = op
 
-            self._check_in_read_only_mode(context)
+            self._check_in_read_only_mode(context)  # parses loop variables
+
+            loop_properties = context.loop_properties
+            if not allow_ta_read_last and loop_properties.has_variable_with_ta_type(TensorArrayVariableType.READ_LAST):
+                continue
 
             if self.need_rewrite(context):
                 # cut off connection between cell/cond graphs and useless nodes like Merge, NextIteration.
@@ -240,6 +260,27 @@ class LoopRewriterBase(object):
 
             loop_var = self._get_loop_var_from_switch(s)
             context.loop_properties.add_variable(loop_var)
+
+        def inputs_equal(inp1, inp2):
+            # Checks input equality with an exception for a Select pattern in some LSTM nodes
+            if inp1 == inp2:
+                return True
+            node1 = self.g.get_node_by_output(inp1)
+            node2 = self.g.get_node_by_output(inp2)
+            if node1.type != "Select" or node2.type != "Select":
+                return False
+            if node1.inputs[0].type != "Tile" or node2.inputs[0].type != "Tile":
+                return False
+            if node1.inputs[0].input[0] != node2.inputs[0].input[0]:
+                return False
+            # Ignore the tile input. It gets its shape from different nodes but is actually the same.
+            return node1.input[1:] == node2.input[1:]
+
+        for unneeded_scan_variable in context.loop_properties.unneeded_scan_variables.values():
+            for state_variable in context.loop_properties.state_variables.values():
+                if inputs_equal(unneeded_scan_variable.next_iteration_input.id, state_variable.next_iteration_input.id):
+                    unneeded_scan_variable.equivalent_state_variable = state_variable
+                    break
 
     def _parse_input_ta(self, context):
         graph_inputs = [v.switch_true_identity_output.id for v in context.loop_properties.all_variables.values()
@@ -313,7 +354,7 @@ class LoopRewriterBase(object):
                 n = self.g.get_node_by_output(val.switch_true_identity_output.id)
                 self.g.remove_node(n.name)
 
-            if val.is_tensor_array:
+            if val.tensor_array_type == TensorArrayVariableType.GATHER_ALL:
                 # connect NextIteration to an invalid node, to cut off an ending node of the cell.
                 ta_write_nodes = [n for n in self.g.get_nodes() if is_tf_tensor_array_write_op(n)]
                 self.g.replace_all_inputs(val.next_iteration_input.id, INVALID_INPUT_ID, ops=ta_write_nodes)
@@ -382,10 +423,9 @@ class LoopRewriterBase(object):
         else:
             raise ValueError("unexpected number of switch false consumers")
 
-        is_ta = False
+        ta_type = None
         ta_index_id = None
         if is_tf_tensor_array_op(self.g.get_node_by_output(target_node_input_id)):
-            is_ta = True
 
             ta_write_node = self.g.get_node_by_output(last_iteration_output_id)
             utils.make_sure(is_tf_tensor_array_write_op(ta_write_node), "ta nextiteration is not following ta write op")
@@ -396,13 +436,19 @@ class LoopRewriterBase(object):
             # ta.write(), then ta.stack(), because this is the most frequent usage pattern.
             if exit_output_id:
                 exit_consumers = self.g.find_output_consumers(exit_output_id)
-                ta_gather_node = [n for n in exit_consumers if is_tf_tensor_array_gather_op(n)][0]
+                ta_access_node = [n for n in exit_consumers if is_tf_tensor_array_gather_op(n) or \
+                                                               is_tf_tensor_array_read_op(n)][0]
+
+                if is_tf_tensor_array_read_op(ta_access_node):
+                    ta_type = TensorArrayVariableType.READ_LAST
+                else:
+                    ta_type = TensorArrayVariableType.GATHER_ALL
 
                 # update exit output id, treat the gather output as ta's output
-                exit_output_id = ta_gather_node.output[0]
+                exit_output_id = ta_access_node.output[0]
 
         loop_var = LoopVariable(enter_node.name, target_node_input_id, last_iteration_output_id,
-                                switch_true_identity_output, exit_output_id, is_ta, ta_index_id, self.g)
+                                switch_true_identity_output, exit_output_id, ta_type, ta_index_id, self.g)
 
         return loop_var
 

@@ -1,12 +1,11 @@
 <!--- SPDX-License-Identifier: Apache-2.0 -->
 
-# tf2onnx - Convert TensorFlow, Keras and Tflite models to ONNX.
+# tf2onnx - Convert TensorFlow, Keras, Tensorflow.js and Tflite models to ONNX.
 
-tf2onnx converts TensorFlow (tf-1.x or tf-2.x), tf.keras and tflite models to ONNX via command 
+tf2onnx converts TensorFlow (tf-1.x or tf-2.x), keras, tensorflow.js and tflite models to ONNX via command 
 line or python api.
 
-__Note: after tf2onnx-1.8.3 we made a change that impacts the output names for the ONNX model.
-Instead of taking the output names from the tensorflow graph (ie. for keras models this is frequently Identity:0) we decided that it is better to use the structured output names of the model so the output names are now identical to the names in the keras or saved model.__
+__Note: tensorflow.js support was just added. While we tested it with many tfjs models from tfhub, it should be considered experimental.__
 
 TensorFlow has many more ops than ONNX and occasionally mapping a model to ONNX creates issues.
 
@@ -16,10 +15,10 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 <br/>
 
-| Build Type | OS | Python | Tensorflow | Onnx opset | Status |
+| Build Type | OS | Python | Tensorflow | ONNX opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.5 | 7-13 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.6, 3.7, 3.8 | 1.12-1.15, 2.1-2.5 | 7-13 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6-3.9 | 1.12-1.15, 2.1-2.6 | 8-14 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.6-3.9 | 1.12-1.15, 2.1-2.6 | 8-14 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
 <br/>
 
 ## Supported Versions
@@ -28,13 +27,14 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 tf2onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support ONNX opset-6 to opset-13. By default we use ```opset-9``` for the resulting ONNX graph since most runtimes will support opset-9.
+We support and test ONNX opset-8 to opset-14. opset-6 and opset-7 should work but we don't test them.
+By default we use ```opset-9``` for the resulting ONNX graph since most runtimes will support opset-9.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 13```.
 
 ### TensorFlow
 
-We support ```tf-1.x graphs``` and ```tf-2```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 and up```.
+We support ```tf-1.x graphs``` and ```tf-2```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 or better```.
 
 When running under tf-2.x tf2onnx will use the tensorflow V2 controlflow.
 
@@ -42,7 +42,8 @@ You can install tf2onnx on top of tf-1.x or tf-2.x.
 
 ### Python
 
-We support Python ```3.6```, ```3.7``` and ```3.8```.
+We support Python ```3.6-3.9```.
+Note that on windows for Python > 3.7 the protobuf package doesn't use the cpp implementation and is very slow - we recommend to use Python 3.7 for that reason.
 
 ## Prerequisites
 
@@ -125,7 +126,8 @@ We recently added support for tflite. You convert ```tflite``` models via comman
 python -m tf2onnx.convert
     --saved-model SOURCE_SAVED_MODEL_PATH |
     --checkpoint SOURCE_CHECKPOINT_METAFILE_PATH |
-    --tflite SOURCE_TFLITE_PATH |
+    --tflite TFLITE_MODEL_PATH |
+    --tfjs TFJS_MODEL_PATH | 
     --input | --graphdef SOURCE_GRAPHDEF_PB
     --output TARGET_ONNX_MODEL
     [--inputs GRAPH_INPUTS]
@@ -155,13 +157,17 @@ TensorFlow model as saved_model. We expect the path to the saved_model directory
 
 TensorFlow model as checkpoint. We expect the path to the .meta file.
 
-#### --tflite
-
-Convert a tflite model by providing a path to the .tflite file. Inputs/outputs do not need to be specified.
-
 #### --input or --graphdef
 
 TensorFlow model as graphdef file.
+
+#### --tfjs
+
+Convert a tensorflow.js model by providing a path to the .tfjs file. Inputs/outputs do not need to be specified.
+
+#### --tflite
+
+Convert a tflite model by providing a path to the .tflite file. Inputs/outputs do not need to be specified.
 
 #### --output
 
@@ -258,7 +264,6 @@ optional arguments:
   --opset OPSET      target opset to use
   --perf csv-file    capture performance numbers for tensorflow and onnx runtime
   --debug            dump generated graph with shape info
-  --fold_const when set, TensorFlow fold_constants transformation will be applied before conversion. This will benefit features including Transpose optimization (e.g. Transpose operations introduced during tf-graph-to-onnx-graph conversion will be removed), and RNN unit conversion (for example LSTM).
 ```
 ```run_pretrained_models.py``` will run the TensorFlow model, captures the TensorFlow output and runs the same test against the specified ONNX backend after converting the model.
 

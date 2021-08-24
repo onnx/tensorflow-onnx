@@ -31,6 +31,7 @@ __all__ = [
     "check_opset_max_version",
     "skip_tf2",
     "skip_tflite",
+    "skip_tfjs",
     "requires_tflite",
     "check_opset_after_tf_version",
     "check_target",
@@ -58,6 +59,7 @@ class TestConfig(object):
         self.target = os.environ.get("TF2ONNX_TEST_TARGET", ",".join(constants.DEFAULT_TARGET)).split(',')
         self.backend = os.environ.get("TF2ONNX_TEST_BACKEND", "onnxruntime")
         self.skip_tflite_tests = os.environ.get("TF2ONNX_SKIP_TFLITE_TESTS", "FALSE").upper() == "TRUE"
+        self.skip_tfjs_tests = os.environ.get("TF2ONNX_SKIP_TFJS_TESTS", "FALSE").upper() == "TRUE"
         self.skip_tf_tests = os.environ.get("TF2ONNX_SKIP_TF_TESTS", "FALSE").upper() == "TRUE"
         self.skip_onnx_checker = False
         self.allow_missing_shapes = False
@@ -102,6 +104,7 @@ class TestConfig(object):
                             "opset={}".format(self.opset),
                             "target={}".format(self.target),
                             "skip_tflite_tests={}".format(self.skip_tflite_tests),
+                            "skip_tfjs_tests={}".format(self.skip_tfjs_tests),
                             "skip_tf_tests={}".format(self.skip_tf_tests),
                             "run_tfl_consistency_test={}".format(self.run_tfl_consistency_test),
                             "backend={}".format(self.backend),
@@ -181,12 +184,31 @@ def skip_tf2(message=""):
     return unittest.skipIf(tf_loader.is_tf2(), reason)
 
 
+def skip_tfjs(message=""):
+    """ Skip the tfjs conversion for this test """
+    config = get_test_config()
+    reason = _append_message("test disabled for tfjs", message)
+    if config.skip_tf_tests and config.skip_tflite_tests:
+        # If we are skipping tf and tflite also, there is no reason to run this test
+        return unittest.skip(reason)
+    def decorator(func):
+        def test(self):
+            tmp = config.skip_tfjs_tests
+            config.skip_tfjs_tests = True
+            try:
+                func(self)
+            finally:
+                config.skip_tfjs_tests = tmp
+        return test
+    return decorator
+
+
 def skip_tflite(message=""):
     """ Skip the tflite conversion for this test """
     config = get_test_config()
     reason = _append_message("test disabled for tflite", message)
-    if config.skip_tf_tests:
-        # If we are skipping tf also, there is no reason to run this test
+    if config.skip_tf_tests and config.skip_tfjs_tests:
+        # If we are skipping tf and tfjs also, there is no reason to run this test
         return unittest.skip(reason)
     def decorator(func):
         def test(self):
@@ -264,19 +286,18 @@ def check_tf_min_version(min_required_version, message=""):
 
 
 def skip_tf_versions(excluded_versions, message=""):
-    """ Skip if tf_version SEMANTICALLY matches any of excluded_versions. """
+    """ Skip if tf_version matches any of excluded_versions. """
+    if not isinstance(excluded_versions, list):
+        excluded_versions = [excluded_versions]
     config = get_test_config()
     condition = False
     reason = _append_message("conversion excludes tf {}".format(excluded_versions), message)
 
-    current_tokens = str(config.tf_version).split('.')
     for excluded_version in excluded_versions:
-        exclude_tokens = excluded_version.split('.')
-        # assume len(exclude_tokens) <= len(current_tokens)
-        for i, exclude in enumerate(exclude_tokens):
-            if not current_tokens[i] == exclude:
-                break
-        condition = True
+        # tf version with same specificity as excluded_version
+        tf_version = '.'.join(str(config.tf_version).split('.')[:excluded_version.count('.') + 1])
+        if excluded_version == tf_version:
+            condition = True
 
     return unittest.skipIf(condition, reason)
 

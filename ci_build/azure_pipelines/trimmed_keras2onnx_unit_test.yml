@@ -1,0 +1,74 @@
+# Tests copied from keras2onnx
+
+jobs:
+
+- job: 'Linux'
+  pool:
+    vmImage: 'Ubuntu-16.04'
+  strategy:
+    matrix:
+
+      ############ TF Keras Unit Tests ############
+      Python36-tf1.15:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python38-tf2.5:
+        python.version: '3.8'
+        ONNX_PATH: onnx==1.8.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.5.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      ############ Pure Keras Unit Tests ############
+      Keras-Py37-tf1.15.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        KERAS: keras==2.4.3
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      # UT for keras 2.3 need tensorflow <= 2.0.0
+      Keras-Py37-tf2.0.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.6.0
+        KERAS: keras==2.3.1
+        TENSORFLOW_PATH: tensorflow==2.0.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+  steps:
+  - template: 'templates/keras2onnx_unit_test.yml'
+    parameters:
+      platform: 'linux'
+
+- job: 'Win'
+  pool:
+    vmImage: 'vs2017-win2016'
+  strategy:
+    matrix:
+      ############ TF Keras Unit Tests ############
+      Python36-onnx1.2:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.2.3
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python37-tf2.3:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.3.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      ############ Pure Keras Unit Tests ############
+      Keras-Py37-tf2.2.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        KERAS: keras==2.4.3
+        TENSORFLOW_PATH: tensorflow==2.2.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+  steps:
+  - template: 'templates/keras2onnx_unit_test.yml'
+    parameters:
+      platform: 'windows'

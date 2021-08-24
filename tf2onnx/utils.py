@@ -184,6 +184,35 @@ def find_opset(opset):
     return opset
 
 
+def get_subgraphs_from_onnx(model_proto):
+    """Returns an iterator over the graphs/subgraphs of a model (using dfs)"""
+    stack = [model_proto.graph]
+    while stack:
+        g = stack.pop()
+        yield g
+        for node in g.node:
+            for attr in node.attribute:
+                if hasattr(attr, "g"):
+                    stack.append(attr.g)
+                if hasattr(attr, "graphs"):
+                    stack.extend(attr.graphs)
+
+
+def initialize_name_counter(model_proto):
+    """Avoid name conflicts by initializing the counter used by make_name based on the provided model"""
+    suffix_regex = re.compile(r"__(\d+)(:\d+)?$")
+    def avoid_name(name):
+        global INTERNAL_NAME
+        suffix = suffix_regex.search(name)
+        if suffix:
+            INTERNAL_NAME = max(INTERNAL_NAME, int(suffix.group(1)) + 1)
+    for g in get_subgraphs_from_onnx(model_proto):
+        for n in g.node:
+            avoid_name(n.name)
+            for out in n.output:
+                avoid_name(out)
+
+
 def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, include_test_data=False, as_text=False,
                     external_tensor_storage=None):
     """Save onnx model as file. Save a pbtxt file as well if as_text is True"""
@@ -229,6 +258,58 @@ def save_onnx_zip(target_path, model_proto, external_tensor_storage):
 def make_sure(bool_val, error_msg, *args):
     if not bool_val:
         raise ValueError("make_sure failure: " + error_msg % args)
+
+def combine_seeds(seed, seed2):
+    """Produces an onnx float seed from two tf int seeds. Returns None if both seeds are 0."""
+    if seed != 0 or seed2 != 0:
+        # Produce a unique value depending on both seeds. (diagonal grid traversal)
+        combined_seed = (seed + seed2 + 1) * (seed + seed2 + 2) // 2 - seed
+        return float(combined_seed)
+    return None
+
+def topological_sort(dependencies):
+    """
+    Given a dictionary mapping items to lists of dependencies, returns a topological ordering of the items.
+    Raises a ValueError for cyclic dependencies.
+    """
+    stack = list(dependencies.keys())
+    visiting = set()
+    visited = set()
+    ordered = []
+    while stack:
+        x = stack.pop()
+        if x in visited:
+            continue
+        if x in visiting:
+            visiting.remove(x)
+            visited.add(x)
+            ordered.append(x)
+            continue
+        stack.append(x)
+        visiting.add(x)
+        for y in dependencies[x]:
+            if y in visiting:
+                raise ValueError("Cyclic dependencies present: %r" % dependencies)
+            if y not in visited:
+                stack.append(y)
+    return ordered
+
+
+def check_io(input_names, output_names, valid_outputs):
+    """Asserts that input_names and output_names are contained within valid_outputs else raises an error"""
+    io_to_check = []
+    if input_names:
+        io_to_check.extend(input_names)
+    if output_names:
+        io_to_check.extend(output_names)
+    if io_to_check:
+        # check output existence in case user passed in wrong output ids
+        non_exists = set(io_to_check) - set(valid_outputs)
+        if non_exists:
+            logger.error("\nFailed to convert: inputs/outputs specified do not exist, make sure your passed"
+                         "in format: input/output_node_name:port_id. Problematic inputs/outputs are: %s \n",
+                         non_exists)
+            raise ValueError("Inputs/Outputs Not Found")
 
 
 def is_cpp_protobuf():
@@ -500,6 +581,9 @@ def is_tf_tensor_array_gather_op(op):
 
 def is_tf_tensor_array_write_op(op):
     return op.type in ("TensorArrayWriteV2", "TensorArrayWriteV3")
+
+def is_tf_tensor_array_read_op(op):
+    return op.type in ("TensorArrayReadV2", "TensorArrayReadV3")
 
 
 def is_tf_tensor_array_op(op):

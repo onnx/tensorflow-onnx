@@ -45,6 +45,7 @@ from tf2onnx import tf_loader, logging, optimizer, utils, tf_utils, constants
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx.tf_loader import tf_session, tf_reset_default_graph
 from tf2onnx.graph import ExternalTensorStorage
+from tfjs_runner import run_tfjs
 
 logger = logging.getLogger("run_pretrained")
 
@@ -68,6 +69,11 @@ def get_img(shape, path, dtype, should_scale=True):
 def get_beach(shape):
     """Get beach image as input."""
     return get_img(shape, "beach.jpg", np.float32, should_scale=True)
+
+
+def get_beach_uint8(shape):
+    """Get beach image as uint8."""
+    return get_img(shape, "ade20k.jpg", np.uint8, should_scale=False)
 
 
 def get_car(shape):
@@ -151,6 +157,7 @@ def get_sentences(shape):
 
 _INPUT_FUNC_MAPPING = {
     "get_beach": get_beach,
+    "get_beach_uint8": get_beach_uint8,
     "get_car": get_car,
     "get_ade20k": get_ade20k,
     "get_ade20k_uint8": get_ade20k_uint8,
@@ -251,6 +258,10 @@ class Test(object):
         elif self.model_type == 'tflite':
             fname = self.local
             dir_name = fname.replace(".tflite", "") + "_dir"
+        elif self.model_type == 'tfjs':
+            ftype = 'tgz'
+            fname = 'model.tar.gz'
+            dir_name = "_".join(url.split("/")[5:-3]) + "_dir"
         dir_name = os.path.join(cache_dir, dir_name)
         os.makedirs(dir_name, exist_ok=True)
         fpath = os.path.join(dir_name, fname)
@@ -303,7 +314,8 @@ class Test(object):
         return result
 
     def to_onnx(self, tf_graph, opset=None, extra_opset=None, shape_override=None, input_names=None,
-                const_node_values=None, initialized_tables=None, tflite_path=None, tensors_to_rename=None):
+                const_node_values=None, initialized_tables=None, tflite_path=None, tensors_to_rename=None,
+                tfjs_path=None):
         """Convert graph to tensorflow."""
         if extra_opset is None:
             extra_opset = []
@@ -314,7 +326,7 @@ class Test(object):
                                 input_names=input_names, output_names=self.output_names,
                                 const_node_values=const_node_values, initialized_tables=initialized_tables,
                                 tflite_path=tflite_path, dequantize=self.dequantize,
-                                tensors_to_rename=tensors_to_rename)
+                                tensors_to_rename=tensors_to_rename, tfjs_path=tfjs_path)
 
     def run_onnxruntime(self, name, model_proto, inputs, outputs, external_tensor_storage=None):
         """Run test against onnxruntime backend."""
@@ -323,14 +335,19 @@ class Test(object):
                                            as_text=utils.is_debug_mode(),
                                            external_tensor_storage=external_tensor_storage)
         logger.info("Model saved to %s", model_path)
+        providers = ['CPUExecutionProvider']
+        if rt.get_device() == "GPU":
+            gpus = os.environ.get("CUDA_VISIBLE_DEVICES")
+            if gpus is None or len(gpus) > 1:
+                providers = ['CUDAExecutionProvider']
+
         opt = rt.SessionOptions()
         if self.use_custom_ops:
             from onnxruntime_extensions import get_library_path
             opt.register_custom_ops_library(get_library_path())
-            m = rt.InferenceSession(model_path, opt)
         if self.ort_profile is not None:
             opt.enable_profiling = True
-        m = rt.InferenceSession(model_path, opt)
+        m = rt.InferenceSession(model_path, sess_options=opt, providers=providers)
         results = m.run(outputs, inputs)
         if self.perf:
             n = 0
@@ -371,10 +388,13 @@ class Test(object):
             model_path = self.local
 
         logger.info("Load model from %s", model_path)
+        tf_reset_default_graph()
+        tf.keras.backend.clear_session()
         input_names = list(self.input_names.keys())
         initialized_tables = {}
         outputs = self.output_names
         tflite_path = None
+        tfjs_path = None
         to_rename = {}
         if self.model_type in ["checkpoint"]:
             graph_def, input_names, outputs = tf_loader.from_checkpoint(model_path, input_names, outputs)
@@ -393,6 +413,9 @@ class Test(object):
             graph_def, input_names, outputs = tf_loader.from_keras(model_path, input_names, outputs)
         elif self.model_type in ["tflite"]:
             tflite_path = model_path
+            graph_def = None
+        elif self.model_type in ["tfjs"]:
+            tfjs_path = model_path
             graph_def = None
         else:
             graph_def, input_names, outputs = tf_loader.from_graphdef(model_path, input_names, outputs)
@@ -434,6 +457,16 @@ class Test(object):
                     logger.info("TFLite perf {:.2f}ms/inference, n={}".format(self.tf_runtime, n))
                 logger.info("TFLite OK")
 
+        if tfjs_path is not None:
+            inputs = {}
+            for k in input_names:
+                v = self.input_names[k]
+                inputs[k] = self.make_input(v)
+            if not self.skip_tensorflow:
+                logger.info("Running TFJS")
+                tf_results = run_tfjs(tfjs_path, inputs, outputs)
+                logger.info("TFJS OK")
+
         if not self.run_tf_frozen:
             inputs = {}
             for k in input_names:
@@ -465,7 +498,6 @@ class Test(object):
                 logger.info("TF perf {:.2f}ms/inference, n={}".format(self.tf_runtime, n))
             logger.info("TensorFlow OK")
 
-        shape_override = {}
         const_node_values = None
         tf_graph = None
 
@@ -497,10 +529,6 @@ class Test(object):
                         else:
                             inputs[k] = self.make_input(v).astype(expected_dtype)
 
-                if self.force_input_shape:
-                    for k, v in inputs.items():
-                        shape_override[k] = list(v.shape)
-
                 # run the model with tensorflow
                 if self.skip_tensorflow:
                     logger.info("TensorFlow SKIPPED")
@@ -526,11 +554,15 @@ class Test(object):
         else:
             try:
                 # convert model to onnx
+                if self.force_input_shape:
+                    shape_override = {k: list(v.shape) for k, v in inputs.items()}
+                else:
+                    shape_override = None
                 onnx_graph = self.to_onnx(tf_graph, opset=opset, extra_opset=extra_opset,
                                           shape_override=shape_override, input_names=inputs.keys(),
                                           const_node_values=const_node_values,
                                           initialized_tables=initialized_tables, tflite_path=tflite_path,
-                                          tensors_to_rename=to_rename)
+                                          tensors_to_rename=to_rename, tfjs_path=tfjs_path)
                 onnx_graph = optimizer.optimize_graph(onnx_graph)
                 print("ONNX", onnx_graph.dump_node_statistics())
                 external_tensor_storage = ExternalTensorStorage() if self.large_model else None
@@ -636,6 +668,7 @@ def get_args():
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")
     parser.add_argument("--skip_tf_tests", help="skip non-tflite tests", default="False")
     parser.add_argument("--skip_tflite_tests", help="skip tflite tests", default="False")
+    parser.add_argument("--skip_tfjs_tests", help="skip tfjs tests", default="False")
     parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
     parser.add_argument("--debug", help="debug mode", action="store_true")
     parser.add_argument("--list", help="list tests", action="store_true")
@@ -647,6 +680,7 @@ def get_args():
     args.target = args.target.split(",")
     args.skip_tf_tests = args.skip_tf_tests.upper() == "TRUE"
     args.skip_tflite_tests = args.skip_tflite_tests.upper() == "TRUE"
+    args.skip_tfjs_tests = args.skip_tfjs_tests.upper() == "TRUE"
     if args.extra_opset:
         tokens = args.extra_opset.split(':')
         if len(tokens) != 2:
@@ -739,11 +773,14 @@ def main():
                 logger.info("Skip %s: disabled", test)
                 continue
 
+            if args.skip_tfjs_tests and t.model_type == "tfjs":
+                logger.info("Skip %s: tfjs test", test)
+                continue
             if args.skip_tflite_tests and t.model_type == "tflite":
                 logger.info("Skip %s: tflite test", test)
                 continue
-            if args.skip_tf_tests and t.model_type != "tflite":
-                logger.info("Skip %s: not tflite test", test)
+            if args.skip_tf_tests and t.model_type not in ["tflite", "tfjs"]:
+                logger.info("Skip %s: tf test", test)
                 continue
 
             condition, reason = t.check_opset_constraints(args.opset, args.extra_opset)

@@ -1,8 +1,8 @@
-# Tests copied from keras2onnx
+# Nightly keras2onnx unit tests
 
 jobs:
 
-- job: 'Test'
+- job: 'Linux'
   pool:
     vmImage: 'Ubuntu-16.04'
   strategy:
@@ -40,12 +40,12 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.8.0
 
       ############ Pure Keras Unit Tests ############
-      # Keras-Py36-tf1.15.0:  # Failing, will enable soon.
-      #   python.version: '3.6'
-      #   ONNX_PATH: onnx==1.5.0
-      #   KERAS: keras==2.2.5
-      #   TENSORFLOW_PATH: tensorflow==1.15.0
-      #   INSTALL_ORT: pip install onnxruntime==1.8.0
+      Keras-Py36-tf1.15.0:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        KERAS: keras==2.2.5
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
 
       Keras-Py37-tf1.15.0:
         python.version: '3.7'
@@ -70,46 +70,75 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.8.0
 
   steps:
-  - script: sudo install -d -m 0777 /home/vsts/.conda/envs
-    displayName: Fix Conda permissions
+  - template: 'templates/keras2onnx_unit_test.yml'
+    parameters:
+      platform: 'linux'
 
-  - task: CondaEnvironment@1
-    inputs:
-      createCustomEnvironment: true
-      environmentName: 'py$(python.version)'
-      packageSpecs: 'python=$(python.version)'
+- job: 'Win'
+  pool:
+    vmImage: 'vs2017-win2016'
+  strategy:
+    matrix:
+      ############ TF Keras Unit Tests ############
+      Python36-onnx1.2:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.2.3
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
 
-  - script: |
-      python -m pip install --upgrade pip
-      conda config --set always_yes yes --set changeps1 no
-      pip install $(ONNX_PATH)
-      pip install h5py==2.9.0
-      pip install numpy==1.19
-      pip install $(TENSORFLOW_PATH)
-      if [[ ! -z $KERAS ]];
-      then
-        pip install $(KERAS)
-      fi
-      pip install git+https://github.com/microsoft/onnxconverter-common
-      pip install -r requirements.txt
-      pip install -r requirements-dev.txt
-      pip install pytest pytest-cov pytest-runner
-      $(INSTALL_ORT)
-    displayName: 'Install dependencies'
+      Python36-onnx1.5:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
 
-  - script: |
-      pip install -e .
-      python -c "import onnxruntime"
-      python -c "import onnxconverter_common"
-      if [[ ! -z $KERAS ]];
-      then
-        export TF_KERAS=0
-      fi
-      pytest keras2onnx_tests --doctest-modules --junitxml=junit/test-results.xml
-    displayName: 'pytest'
+      Python37-tf2.1:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.6.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.1.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
 
-  - task: PublishTestResults@2
-    inputs:
-      testResultsFiles: '**/test-results.xml'
-      testRunTitle: 'Python $(python.version)'
-    condition: succeededOrFailed()
+      Python37-tf2.2:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.7.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.2.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python37-tf2.3:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.3.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Python37-tf2.5:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.5.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      ############ Pure Keras Unit Tests ############
+      Keras-Py36-tf1.15.0:
+        python.version: '3.6'
+        ONNX_PATH: onnx==1.5.0
+        KERAS: keras==2.2.5
+        TENSORFLOW_PATH: tensorflow==1.15.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Keras-Py37-tf2.0.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.7.0
+        KERAS: keras==2.3.1
+        TENSORFLOW_PATH: tensorflow==2.0.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+      Keras-Py37-tf2.2.0:
+        python.version: '3.7'
+        ONNX_PATH: onnx==1.9.0
+        KERAS: keras==2.4.3
+        TENSORFLOW_PATH: tensorflow==2.2.0
+        INSTALL_ORT: pip install onnxruntime==1.8.0
+
+  steps:
+  - template: 'templates/keras2onnx_unit_test.yml'
+    parameters:
+      platform: 'windows'

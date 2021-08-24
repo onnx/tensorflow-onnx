@@ -144,6 +144,29 @@ class AllAny:
         ctx.make_node(op_type="Greater", inputs=[reduce_node_output, zero_node.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
 
+    @classmethod
+    def version_13(cls, ctx, node, **kwargs):
+        keepdims = node.get_attr_value('keep_dims')
+        reduce_input = node.input[0]
+        if node.type == "All":
+            reduce_input = ctx.make_node("Not", [reduce_input]).output[0]
+        cast = ctx.make_node("Cast", inputs=[reduce_input], attr={"to": onnx_pb.TensorProto.FLOAT}).output[0]
+        axes_cast = node.input[1]
+        if ctx.get_rank(axes_cast) == 0:
+            # Unsqueeze scalar axes
+            axes_cast = GraphBuilder(ctx).make_unsqueeze({'data': axes_cast, 'axes': [0]})
+        if ctx.get_dtype(axes_cast) != onnx_pb.TensorProto.INT64:
+            axes_cast = ctx.make_node("Cast", inputs=[axes_cast], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
+        reduce_node_output = GraphBuilder(ctx).make_reduce_sum(
+            {"data": cast, "axes": axes_cast, "keepdims": keepdims, "noop_with_empty_axes": 1},
+            shapes=node.output_shapes, op_name_scope=node.name)
+        zero_node = ctx.make_const(utils.make_name("zero_reduce"), np.array(0, dtype=np.float32))
+        greater_node = ctx.make_node(op_type="Greater", inputs=[reduce_node_output, zero_node.output[0]])
+        result = greater_node.output[0]
+        if node.type == "All":
+            result = ctx.make_node("Not", [result]).output[0]
+        ctx.replace_all_inputs(node.output[0], result)
+
 
 @tf_op("AddN")
 class AddN():

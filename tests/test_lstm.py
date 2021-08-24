@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_opset_after_tf_version, skip_tf2, skip_tf_versions
+from common import unittest_main, check_opset_after_tf_version, skip_tf2, skip_tf_versions, check_op_count
 
 from tf2onnx.tf_loader import is_tf2
 
@@ -36,12 +36,22 @@ else:
 
 class LSTMTests(Tf2OnnxBackendTestBase):
 
-    def run_test_case(self, *args, **kwargs):  #pylint: disable=arguments-differ
+    def run_test_case(self, *args, require_lstm_count=1, **kwargs):  #pylint: disable=arguments-differ
         # TF LSTM has an unknown dim
         tmp = self.config.allow_missing_shapes
         self.config.allow_missing_shapes = True
+        def graph_validator(g):
+            good = True
+            if "graph_validator" in kwargs:
+                good = good and kwargs["graph_validator"](g)
+            if require_lstm_count is None or ":" not in g.outputs[0]:
+                # Skip checks for tflite graphs (no ":" in outputs)
+                return good
+            good = good and check_op_count(g, "LSTM", require_lstm_count, disabled=False)
+            good = good and check_op_count(g, "Loop", 0, disabled=False)
+            return good
         try:
-            super().run_test_case(*args, **kwargs)
+            super().run_test_case(*args, graph_validator=graph_validator, **kwargs)
         finally:
             self.config.allow_missing_shapes = tmp
 
@@ -385,7 +395,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0", "cell_state:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06,
+                           require_lstm_count=2)
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
     @skip_tf2()     # Still failing likely due to inconsistent random number initialization
@@ -663,7 +674,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output_1:0", "cell_state_1:0", "output_2:0", "cell_state_2:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
+                           require_lstm_count=2)
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
     @skip_tf_versions("2.1", "Bug in TF 2.1")
@@ -710,7 +722,8 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val, "input_2:0": seq_len_val, "input_3:0": seq_len_val}
         input_names_with_port = ["input_1:0", "input_2:0", "input_3:0"]
         output_names_with_port = ["output_1:0", "cell_state_1:0", "output_2:0", "cell_state_2:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06)
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
+                           require_lstm_count=2)
 
 
 if __name__ == '__main__':

@@ -29,7 +29,9 @@ TARGET_RS5 = "rs5"
 TARGET_RS6 = "rs6"
 TARGET_CAFFE2 = "caffe2"
 TARGET_TENSORRT = "tensorrt"
-POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2, TARGET_TENSORRT]
+TARGET_CHANNELS_LAST = "nhwc"
+TARGET_CHANNELS_FIRST = "nchw"
+POSSIBLE_TARGETS = [TARGET_RS4, TARGET_RS5, TARGET_RS6, TARGET_CAFFE2, TARGET_TENSORRT, TARGET_CHANNELS_LAST]
 DEFAULT_TARGET = []
 
 NCHW_TO_NHWC = [0, 2, 3, 1]
@@ -41,9 +43,10 @@ NCHW_TO_HWCN = [2, 3, 1, 0]
 
 # Environment variables
 ENV_TF2ONNX_DEBUG_MODE = "TF2ONNX_DEBUG_MODE"
+ENV_TF2ONNX_CATCH_ERRORS = "TF2ONNX_CATCH_ERRORS"
 
 # Mapping opset to IR version.
 # Note: opset 7 and opset 8 came out with IR3 but we need IR4 because of PlaceholderWithDefault
 OPSET_TO_IR_VERSION = {
-    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7
+    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7, 14: 7
 }

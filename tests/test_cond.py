@@ -190,6 +190,7 @@ class CondTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
     @allow_missing_shapes("TF1 has unknown dim in if output")
+    @skip_tfjs("TFJS executes model incorrectly")
     def test_case_with_multi_merge(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)

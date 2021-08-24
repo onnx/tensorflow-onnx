@@ -144,6 +144,18 @@ inception_v3_slim:
   rtol: 0.02
   atol: 0.00001
 
+inception_v4:
+  disabled: true # works, keeping down to limit ci time
+  url: https://storage.googleapis.com/download.tensorflow.org/models/inception_v4_2016_09_09_frozen.pb.tar.gz
+  model: inception_v4_2016_09_09_frozen.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 299, 299, 3]
+  outputs:
+    - InceptionV4/Logits/Predictions:0
+  rtol: 0.02
+  atol: 0.00001
+
 googlenet_v1_nonslim:
   disabled: true
   url: https://storage.googleapis.com/download.tensorflow.org/models/inception5h.zip
@@ -336,7 +348,7 @@ ssd_mobilenet_v1_coco:
 
 ssd_mobilenet_v2_coco:
   # works with opset-10
-  disabled: true
+  disabled: true   # works, keeping down to limit ci time
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
   model: ssd_mobilenet_v2_coco_2018_03_29/frozen_inference_graph.pb
   opset_constraints:
@@ -353,7 +365,7 @@ ssd_mobilenet_v2_coco:
 
 ssdlite_mobilenet_v2_coco:
   # works with opset-10
-  disabled: true
+  disabled: true   # works, keeping down to limit ci time
   url: http://download.tensorflow.org/models/object_detection/ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
   model: ssdlite_mobilenet_v2_coco_2018_05_09/frozen_inference_graph.pb
   opset_constraints:
@@ -369,7 +381,7 @@ ssdlite_mobilenet_v2_coco:
     - detection_classes:0
 
 ssd_inception_v2_coco:
-  disabled: true
+  disabled: true   # works, keeping down to limit ci time
   url: http://download.tensorflow.org/models/object_detection/ssd_inception_v2_coco_2017_11_17.tar.gz
   model: ssd_inception_v2_coco_2017_11_17/frozen_inference_graph.pb
   opset_constraints:
@@ -384,19 +396,21 @@ ssd_inception_v2_coco:
     - num_detections:0
     - detection_classes:0
 
-#
-# models that will not work
-#
-style-transfer:
-  # quantitized model
-  disabled: true
-  url: https://storage.googleapis.com/download.tensorflow.org/models/stylize_v1.zip
-  model: stylize_quantized.pb
+faster_rcnn_resnet101:
+  disabled: true  # works, keeping down to limit ci time
+  url:  http://download.tensorflow.org/models/object_detection/faster_rcnn_resnet101_coco_2018_01_28.tar.gz
+  model: faster_rcnn_resnet101_coco_2018_01_28/frozen_inference_graph.pb
+  opset_constraints:
+    "onnx":
+      "min": 11
   input_get: get_beach
   inputs:
-    "input:0": [1, 416, 416, 3]
+    "image_tensor:0": [1, 224, 224, 3]
   outputs:
-    - output:0
+    - detection_boxes:0
+    - detection_classes:0
+    - detection_scores:0
+    - num_detections:0
 
 faster_rcnn_inception_v2_coco:
   url: http://download.tensorflow.org/models/object_detection/faster_rcnn_inception_v2_coco_2018_01_28.tar.gz
@@ -586,3 +600,119 @@ melgan_tflite:   # TFLite model with FlexOps and rank-3 transposes
     - Identity
   rtol: 0.02
   atol: 0.0005
+
+handdetector_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tensorflow/tfjs-model/handdetector/1/default/1?tfjs-format=compressed
+  model: "model.json"
+  model_type: tfjs
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 256, 256, 3]
+  outputs:
+    - Identity:0
+  atol: 0.0005
+
+posenet_mobilenet_float_100_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tensorflow/tfjs-model/posenet/mobilenet/float/100/1/default/1?tfjs-format=compressed
+  model: "model-stride8.json"
+  model_type: tfjs
+  input_get: get_beach
+  force_input_shape: True  # ORT doesn't implement autopadding for convs with dilations
+  inputs:
+    "sub_2:0": [1, 256, 256, 3]
+  outputs:
+    - MobilenetV1/offset_2/BiasAdd:0
+    - MobilenetV1/heatmap_2/BiasAdd:0
+    - MobilenetV1/displacement_fwd_2/BiasAdd:0
+    - MobilenetV1/displacement_bwd_2/BiasAdd:0
+  rtol: 0.02
+  atol: 0.0005
+
+posenet_mobilenet_quantized_2_075_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tensorflow/tfjs-model/posenet/mobilenet/quantized/2/075/1/default/1?tfjs-format=compressed
+  model: "model-stride16.json"
+  model_type: tfjs
+  input_get: get_beach
+  force_input_shape: True  # ORT doesn't implement autopadding for convs with dilations
+  inputs:
+    "sub_2:0": [1, 256, 256, 3]
+  outputs:
+    - MobilenetV1/offset_2/BiasAdd:0
+    - MobilenetV1/heatmap_2/BiasAdd:0
+    - MobilenetV1/displacement_fwd_2/BiasAdd:0
+    - MobilenetV1/displacement_bwd_2/BiasAdd:0
+  rtol: 0.1
+  ptol: 0.2
+  atol: 0.005
+
+blazeposedetector_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/mediapipe/tfjs-model/blazeposedetector/1/default/1?tfjs-format=compressed
+  model: "model.json"
+  opset_constraints:
+    "onnx":
+      "min": 10
+  model_type: tfjs
+  input_get: get_beach
+  #force_input_shape: True  # ORT doesn't implement autopadding for convs with dilations
+  inputs:
+    "input:0": [1, 224, 224, 3]
+  outputs:
+    - Identity:0
+  rtol: 0.05
+  atol: 0.0005
+
+facemesh_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/mediapipe/tfjs-model/facemesh/1/default/1?tfjs-format=compressed
+  model: "model.json"
+  model_type: tfjs
+  input_get: get_beach
+  inputs:
+    "input_1:0": [1, 192, 192, 3]
+  outputs:
+    - Identity:0
+    - Identity_1:0
+    - Identity_2:0
+  rtol: 0.05
+  atol: 0.0005
+
+ssd_mobilenet_v1_tfjs:
+  tf_min_version: 2.1
+  disabled: false
+  url: https://tfhub.dev/tensorflow/tfjs-model/ssd_mobilenet_v1/1/default/1?tfjs-format=compressed
+  model: "model.json"
+  opset_constraints:
+    "onnx":
+      "min": 9
+  model_type: tfjs
+  input_get: get_beach_uint8
+  inputs:
+    "image_tensor:0": [1, 200, 200, 3]
+  outputs:
+    - Postprocessor/Slice:0
+    - Postprocessor/ExpandDims_1:0
+  rtol: 0.05
+  atol: 0.0005
+
+#
+# models that will not work
+#
+style-transfer:
+  # quantitized model
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/stylize_v1.zip
+  model: stylize_quantized.pb
+  input_get: get_beach
+  inputs:
+    "input:0": [1, 416, 416, 3]
+  outputs:
+    - output:0

@@ -464,19 +464,16 @@ class Graph(object):
         # A list of index, output tuples of potential scan outputs in this graph
         # Used by the tflite while loop handler
         self.scan_outputs = []
+        # Used by lstm_tf2_rewriter to indicate this subgraph is an LSTM cell
+        self.lstm_rewriter_context = None
         self.func_inputs = []
         self.ragged_variant_list_reads = []
         self.ragged_variant_list_writes = []
 
-        self._target = set(target)
         self._dtypes = dtypes
-
         self._output_shapes = output_shapes
-        self._opset = find_opset(opset)
 
-        if extra_opset is not None:
-            utils.make_sure(isinstance(extra_opset, list), "invalid extra_opset")
-        self._extra_opset = extra_opset
+        self.set_config(target, opset, extra_opset)
 
         self.outputs = output_names if output_names is not None else []
 
@@ -501,40 +498,54 @@ class Graph(object):
 
         self.reset_nodes(ops)
 
-        if not is_subgraph:
-            # add identity node after each output, in case it is renamed during conversion.
-            for o in self.outputs:
-                n = self.get_node_by_output_in_current_graph(o)
-                if n.is_graph_input():
-                    # Don't add identity if the node is also an input. We want to keep input names the same.
-                    continue
-                new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
-                n_shapes = n.output_shapes
-                n_dtypes = n.output_dtypes
-                body_graphs = n.graph.contained_graphs.pop(n.name, None)
-                self.remove_node(n.name)
+        # add identity node after each output, in case it is renamed during conversion.
+        for o in self.outputs:
+            n = self.get_node_by_output_in_current_graph(o)
+            if n.is_graph_input():
+                # Don't add identity if the node is also an input. We want to keep input names the same.
+                continue
+            new_output_name = port_name(n.name + "_" + utils.make_name("raw_output_"))
+            n_shapes = n.output_shapes
+            n_dtypes = n.output_dtypes
+            o_shape = self.get_shape(o)
+            o_dtype = self.get_dtype(o)
+            body_graphs = n.graph.contained_graphs.pop(n.name, None)
+            self.remove_node(n.name)
 
-                new_outputs = [output if output != o else new_output_name for output in n.output]
-                # domain should be passed to new node
-                branches = {}
-                if body_graphs:
-                    for attr_name, body_graph in body_graphs.items():
-                        body_graph.parent_graph = self
-                        branches[attr_name] = body_graph
+            new_outputs = [output if output != o else new_output_name for output in n.output]
+            # domain should be passed to new node
+            branches = {}
+            if body_graphs:
+                for attr_name, body_graph in body_graphs.items():
+                    body_graph.parent_graph = self
+                    branches[attr_name] = body_graph
 
-                _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
-                                   skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
-                                   domain=n.domain, branches=branches)
+            _ = self.make_node(n.type, n.input, outputs=new_outputs, attr=n.attr, name=n.name,
+                               skip_conversion=n._skip_conversion, dtypes=n_dtypes, shapes=n_shapes,
+                               domain=n.domain, branches=branches)
 
-                self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
-                self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs")
-                self.copy_shape(new_output_name, o)
-                self.copy_dtype(new_output_name, o)
+            self.replace_all_inputs(o, new_output_name, ops=self.get_nodes())
+            self.make_node("Identity", [new_output_name], outputs=[o], op_name_scope=n.name + "_" + "graph_outputs",
+                           dtypes=[o_dtype], shapes=[o_shape])
+            self.copy_shape(new_output_name, o)
+            self.copy_dtype(new_output_name, o)
 
     def create_new_graph_with_same_config(self):
         """Create a clean graph inheriting current graph's configuration."""
         return Graph([], output_shapes={}, dtypes={}, target=self._target, opset=self._opset,
                      extra_opset=self.extra_opset, output_names=[])
+
+    def set_config(self, target=None, opset=None, extra_opset=None):
+        """Set graph fields containing conversion options"""
+        if target is None:
+            target = constants.DEFAULT_TARGET
+
+        self._opset = find_opset(opset)
+        self._target = set(target)
+
+        if extra_opset is not None:
+            utils.make_sure(isinstance(extra_opset, list), "invalid extra_opset")
+        self._extra_opset = extra_opset
 
     @property
     def input_names(self):
@@ -872,6 +883,23 @@ class Graph(object):
     def get_tensor_value(self, output, as_list=True):
         return self.get_node_by_output(output).get_tensor_value(as_list)
 
+    def rename_tensors(self, tensors_to_rename):
+        """Replace tensor names within nodes and graph inputs/outputs"""
+        def rename_list(l):
+            return [tensors_to_rename.get(t, t) for t in l]
+
+        def rename_keys(d):
+            return {tensors_to_rename.get(k, k): v for k, v in d.items()}
+
+        self._output_to_node_name = rename_keys(self._output_to_node_name)
+        self._output_to_consumers = rename_keys(self._output_to_consumers)
+        self._dtypes = rename_keys(self._dtypes)
+        self._output_shapes = rename_keys(self._output_shapes)
+        self.outputs = rename_list(self.outputs)
+        for node in self._nodes:
+            node._input = rename_list(node._input)
+            node._output = rename_list(node._output)
+
     def change_node_name(self, node, new_name):
         """Remove node in current graph."""
         utils.make_sure(new_name not in self._nodes_by_name, "node %s not unique ", new_name)
@@ -1124,13 +1152,29 @@ class Graph(object):
         # create output_tensor_values
         output_tensor_values = self.make_onnx_graph_io(self.outputs)
 
+        tensor_value_info = []
+
+        for op in ops:
+            if op.domain in [constants.ONNX_DOMAIN, constants.AI_ONNX_ML_DOMAIN]:
+                continue
+            # We still don't 100% trust the accuracy of all the shapes in graph.py, but for custom ops they are
+            # almost certainly accurate and onnx has no other way of knowing them.
+            for out in op.output:
+                if out == '' or out in self.outputs:
+                    continue
+                dtype = self.get_dtype(out)
+                shape = self.get_shape(out)
+                v = utils.make_onnx_inputs_outputs(out, dtype, shape)
+                tensor_value_info.append(v)
+
         # create graph proto
         graph = helper.make_graph([op.op for op in ops],
                                   graph_name,
                                   input_tensor_values,
                                   output_tensor_values,
                                   initializer=initializers,
-                                  doc_string=doc)
+                                  doc_string=doc,
+                                  value_info=tensor_value_info)
 
         return graph
 
@@ -1214,15 +1258,23 @@ class Graph(object):
             return []
         return val
 
-    def dump_node_statistics(self):
+    def dump_node_statistics(self, include_attrs=False, include_subgraphs=True):
+        """Return a counter of op types (and optionally attribute names) within the graph"""
         op_cnt = collections.Counter()
+        attr_cnt = collections.Counter()
         for n in self.get_nodes():
             op_cnt[n.type] += 1
+            for k in n.attr.keys():
+                attr_cnt[k] += 1
             body_graphs = n.get_body_graphs()
-            if body_graphs:
+            if body_graphs and include_subgraphs:
                 for b_g in body_graphs.values():
-                    op_cnt += b_g.dump_node_statistics()
+                    g_op_cnt, g_attr_cnt = b_g.dump_node_statistics(include_attrs=True, include_subgraphs=True)
+                    op_cnt += g_op_cnt
+                    attr_cnt += g_attr_cnt
 
+        if include_attrs:
+            return op_cnt, attr_cnt
         return op_cnt
 
     def remove_input(self, node, to_be_removed, input_index=None):
@@ -1628,10 +1680,11 @@ class GraphUtil(object):
         return kwargs
 
     @staticmethod
-    def create_graph_from_onnx_model(onnx_model_proto):
+    def create_graph_from_onnx_model(onnx_model_proto, target=None):
         """Create Graph loading onnx model proto."""
         # apply shape inference on the model
         inferred_model = shape_inference.infer_shapes(onnx_model_proto)
+        utils.initialize_name_counter(inferred_model)
         graph_proto = inferred_model.graph
 
         opset_version = None
@@ -1644,11 +1697,11 @@ class GraphUtil(object):
                 extra_opset.append(opset)
 
         utils.make_sure(opset_version is not None, "opset version is not specified for onnx domain")
-        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version, extra_opset)
+        main_graph = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version, extra_opset, target)
         return main_graph
 
     @staticmethod
-    def create_graph_from_onnx_graph(graph_proto, opset_version=None, extra_opset=None):
+    def create_graph_from_onnx_graph(graph_proto, opset_version=None, extra_opset=None, target=None):
         """Create Graph loading onnx graph proto."""
         output_shapes = {}
         output_dtypes = {}
@@ -1675,7 +1728,7 @@ class GraphUtil(object):
         for n in graph_proto.output:
             output_names.append(n.name)
 
-        g = Graph(nodes_to_append, output_shapes, output_dtypes, None, opset_version, extra_opset, None, output_names)
+        g = Graph(nodes_to_append, output_shapes, output_dtypes, target, opset_version, extra_opset, None, output_names)
         const_nodes = GraphUtil._parse_graph_initializer(g, graph_proto)
         GraphUtil._parse_graph_input(g, graph_proto, [n.name for n in const_nodes])
 
@@ -1702,6 +1755,10 @@ class GraphUtil(object):
         for shape_info in value_infos:
             type_proto = shape_info.type
             elem_type = type_proto.tensor_type.elem_type
+            output_dtypes[shape_info.name] = elem_type
+            if not type_proto.tensor_type.HasField("shape"):
+                output_shapes[shape_info.name] = None
+                continue
             shape = type_proto.tensor_type.shape
             tuned_shape = []
             for d in shape.dim:
@@ -1713,7 +1770,6 @@ class GraphUtil(object):
                     # it is found, some unknown dims is missing after inference.
                     tuned_shape.append(-1)
             output_shapes[shape_info.name] = tuned_shape
-            output_dtypes[shape_info.name] = elem_type
 
         return output_shapes, output_dtypes
 

@@ -26,6 +26,28 @@ class TflTransposeConv:
         transpose_node.skip_conversion = True
         node.set_attr("data_format", "NHWC")
 
+@tfl_op(["TFL_CONV_3D_TRANSPOSE"], tf_op="Conv3DBackpropInputV2")
+class TflConv3DTranspose:
+    @classmethod
+    def to_tf(cls, ctx, node, **kwargs):
+        separate_fused_activation_function(ctx, node)
+        # No need to change 'padding' attribute
+        stride_h = node.get_attr_int("stride_h")
+        stride_w = node.get_attr_int("stride_w")
+        stride_d = node.get_attr_int("stride_d")
+        dilation_w_factor = node.get_attr_int("dilation_w_factor")
+        dilation_h_factor = node.get_attr_int("dilation_h_factor")
+        dilation_d_factor = node.get_attr_int("dilation_d_factor")
+        node.set_attr("strides", [1, stride_d, stride_h, stride_w, 1])
+        node.set_attr("dilations", [1, dilation_d_factor, dilation_h_factor, dilation_w_factor, 1])
+        del node.attr["stride_h"]
+        del node.attr["stride_w"]
+        del node.attr["stride_d"]
+        del node.attr["dilation_h_factor"]
+        del node.attr["dilation_w_factor"]
+        del node.attr["dilation_d_factor"]
+        node.set_attr("data_format", "NDHWC")
+
 @tfl_op(["TFL_CONV_2D"], tf_op="Conv2D")
 class TflConv2D:
     @classmethod

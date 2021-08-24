@@ -1,8 +1,9 @@
 # Run unit test
 
 parameters:
-    onnx_opsets: ['13', '12', '11', '10', '9', '8', '7']
+    onnx_opsets: ['14', '13', '12', '11', '10', '9', '8']
     skip_tflite_tests: 'True'
+    skip_tfjs_tests: 'True'
     skip_tf_tests: 'False'
 
 steps:
@@ -11,6 +12,7 @@ steps:
       export TF2ONNX_TEST_BACKEND=$CI_ONNX_BACKEND
       export TF2ONNX_TEST_OPSET=$CI_ONNX_OPSET
       export TF2ONNX_SKIP_TFLITE_TESTS=$CI_SKIP_TFLITE_TESTS
+      export TF2ONNX_SKIP_TFJS_TESTS=$CI_SKIP_TFJS_TESTS
       export TF2ONNX_SKIP_TF_TESTS=$CI_SKIP_TF_TESTS
       python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
     timeoutInMinutes: 15
@@ -19,4 +21,5 @@ steps:
     env:
         CI_ONNX_OPSET: '${{ onnx_opset }}'
         CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tflite_tests }}'
+        CI_SKIP_TFJS_TESTS: '${{ parameters.skip_tfjs_tests }}'
         CI_SKIP_TF_TESTS: '${{ parameters.skip_tf_tests }}'
