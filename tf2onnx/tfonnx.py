@@ -379,11 +379,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
                      extra_opset=None, shape_override=None, inputs_as_nchw=None,
                      input_names=None, output_names=None, ignore_default=None, use_default=None,
                      is_subgraph=False, const_node_values=None, tensors_to_rename=None,
-<<<<<<< HEAD
-                     initialized_tables=None, tflite_path=None, dequantize=False, fold_constant=False):
-=======
                      initialized_tables=None, tflite_path=None, dequantize=False, tfjs_path=None):
->>>>>>> origin/master
     """Convert tensorflow graph to onnx graph.
         Args:
             tf_graph: tensorflow graph
