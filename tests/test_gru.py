@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_gru_count, check_opset_after_tf_version, skip_tf2
+from common import unittest_main, check_gru_count, check_opset_after_tf_version, check_op_count
 from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
@@ -35,17 +35,25 @@ else:
 # TODO: as a workaround, set batch_size to 1 for now to bypass a onnxruntime bug, revert it when the bug is fixed
 class GRUTests(Tf2OnnxBackendTestBase):
 
-    def run_test_case(self, *args, **kwargs):  #pylint: disable=arguments-differ
+    def run_test_case(self, *args, graph_validator=None, **kwargs):  #pylint: disable=arguments-differ
         # TF GRU has an unknown dim
         tmp = self.config.allow_missing_shapes
         self.config.allow_missing_shapes = True
+        def new_graph_validator(g):
+            good = True
+            if graph_validator is not None:
+                good = good and graph_validator(g)
+            if is_tf2() and ':' in g.outputs[0]:
+                # Only check for tf2 and tfjs, not tflite
+                good = good and check_op_count(g, "Loop", 0, disabled=False)
+                good = good and check_op_count(g, "Scan", 0, disabled=False)
+            return good
         try:
-            super().run_test_case(*args, **kwargs)
+            super().run_test_case(*args, graph_validator=new_graph_validator, **kwargs)
         finally:
             self.config.allow_missing_shapes = tmp
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
-    @skip_tf2()
     def test_single_dynamic_gru(self):
         units = 5
         batch_size = 1
@@ -56,7 +64,9 @@ class GRUTests(Tf2OnnxBackendTestBase):
             # no scope
             cell = GRUCell(
                 units,
-                activation=None)
+                activation=None,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
             outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
@@ -71,7 +81,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
-    @skip_tf2()
     def test_multiple_dynamic_gru(self):
         units = 5
         batch_size = 1
@@ -84,7 +93,9 @@ class GRUTests(Tf2OnnxBackendTestBase):
             # no scope
             cell = GRUCell(
                 units,
-                activation=None)
+                activation=None,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
             outputs, cell_state = dynamic_rnn(
                 cell,
                 x,
@@ -95,7 +106,9 @@ class GRUTests(Tf2OnnxBackendTestBase):
             # given scope
             cell = GRUCell(
                 units,
-                activation=None)
+                activation=None,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=45))
             with variable_scope.variable_scope("root1") as scope:
                 outputs, cell_state = dynamic_rnn(
                     cell,
@@ -115,7 +128,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
         # graph_validator=lambda g: check_gru_count(g, 2))
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
-    @skip_tf2()
     def test_single_dynamic_gru_seq_length_is_const(self):
         units = 5
         batch_size = 1
@@ -143,7 +155,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Select")
-    @skip_tf2()
     def test_single_dynamic_gru_seq_length_is_not_const(self):
         for np_dtype in [np.int32, np.int64, np.float32]:
             units = 5
@@ -174,7 +185,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                                graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
-    @skip_tf2()
     def test_single_dynamic_gru_placeholder_input(self):
         units = 5
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.], [4., 4.]], dtype=np.float32)
@@ -200,7 +210,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
-    @skip_tf2()
     def test_single_dynamic_gru_ch_zero_state_initializer(self):
         units = 5
         batch_size = 1
@@ -231,7 +240,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
-    @skip_tf2()
     def test_single_dynamic_gru_random_weights(self):
         hidden_size = 5
         batch_size = 1
@@ -239,7 +247,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         def func(x):
-            initializer = tf.random_uniform_initializer(-1.0, 1.0)
+            initializer = tf.random_uniform_initializer(-1.0, 1.0, seed=42)
 
             # no scope
             cell = GRUCell(
@@ -260,15 +268,16 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
-    @skip_tf2()
     def test_single_dynamic_gru_random_weights2(self):
         hidden_size = 128
         batch_size = 1
         x_val = np.random.randn(1, 133).astype('f')
         x_val = np.stack([x_val] * batch_size)
 
+
         def func(x):
-            initializer = tf.random_uniform_initializer(0.0, 1.0)
+            #initializer = tf.constant_initializer(5.0)
+            initializer = tf.random_uniform_initializer(0.0, 1.0, seed=42)
             # no scope
             cell = GRUCell(
                 hidden_size,
@@ -288,7 +297,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
-    @skip_tf2()
     def test_dynamic_gru_output_consumed_only(self):
         units = 5
         batch_size = 6
@@ -296,7 +304,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         def func(x):
-            initializer = tf.random_uniform_initializer(-1.0, 1.0)
+            initializer = tf.random_uniform_initializer(-1.0, 1.0, seed=42)
             cell1 = GRUCell(
                 units,
                 kernel_initializer=initializer)
@@ -315,7 +323,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
-    @skip_tf2()
     def test_dynamic_gru_state_consumed_only(self):
         units = 5
         batch_size = 6
@@ -323,7 +330,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         x_val = np.stack([x_val] * batch_size)
 
         def func(x):
-            initializer = tf.random_uniform_initializer(-1.0, 1.0)
+            initializer = tf.random_uniform_initializer(-1.0, 1.0, seed=42)
             cell1 = GRUCell(
                 units,
                 kernel_initializer=initializer)
@@ -342,7 +349,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_bigru(self):
         units = 5
         batch_size = 1
@@ -374,7 +380,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_bigru_output_consumed_only(self):
         units = 5
         batch_size = 1
@@ -406,7 +411,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_bigru_state_consumed_only(self):
         units = 5
         batch_size = 1
@@ -438,7 +442,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_bidirectional_but_one_gru(self):
         units = 5
         batch_size = 1
@@ -467,7 +470,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_bidirectional_but_one_gru_and_output_consumed_only(self):
         units = 5
         batch_size = 1
@@ -478,7 +480,9 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
             # bigru, no scope
             cell = GRUCell(
-                units)
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
             outputs, _ = bidirectional_dynamic_rnn(
                 cell,
                 cell,
@@ -494,7 +498,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_bidirectional_but_one_gru_and_state_consumed_only(self):
         units = 5
         batch_size = 1
@@ -505,7 +508,9 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
             # bigru, no scope
             cell = GRUCell(
-                units)
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
             _, cell_state = bidirectional_dynamic_rnn(
                 cell,
                 cell,
@@ -521,7 +526,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_bigru_unknown_batch_size(self):
         units = 5
         batch_size = 6
@@ -530,8 +534,14 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
         def func(x):
 
-            cell1 = GRUCell(units)
-            cell2 = GRUCell(units)
+            cell1 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
+            cell2 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=45))
             _, cell_state = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
@@ -548,7 +558,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_bigru_outputs_partially_consumed(self):
         units = 5
         batch_size = 6
@@ -557,8 +566,14 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
         def func(x):
 
-            cell1 = GRUCell(units)
-            cell2 = GRUCell(units)
+            cell1 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
+            cell2 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=45))
             (output_fw, _), (_, state_bw) = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
@@ -574,7 +589,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_multi_bigru_with_same_input_hidden_size(self):
         batch_size = 10
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
@@ -583,8 +597,14 @@ class GRUTests(Tf2OnnxBackendTestBase):
         def func(x):
             # bigru, no scope
             units = 5
-            cell1 = GRUCell(units)
-            cell2 = GRUCell(units)
+            cell1 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
+            cell2 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=45))
             outputs_1, cell_state_1 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
@@ -594,8 +614,14 @@ class GRUTests(Tf2OnnxBackendTestBase):
             )
 
             units = 10
-            cell1 = GRUCell(units)
-            cell2 = GRUCell(units)
+            cell1 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
+            cell2 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=45))
             outputs_2, cell_state_2 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
@@ -616,7 +642,6 @@ class GRUTests(Tf2OnnxBackendTestBase):
         # graph_validator=lambda g: check_gru_count(g, 2))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
-    @skip_tf2()
     def test_dynamic_multi_bigru_with_same_input_seq_len(self):
         units = 5
         batch_size = 10
@@ -626,8 +651,14 @@ class GRUTests(Tf2OnnxBackendTestBase):
 
         def func(x, y1, y2):
             seq_len1 = tf.tile(y1, [batch_size])
-            cell1 = GRUCell(units)
-            cell2 = GRUCell(units)
+            cell1 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))
+            cell2 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=45))
             outputs_1, cell_state_1 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,
@@ -637,8 +668,14 @@ class GRUTests(Tf2OnnxBackendTestBase):
                 scope="bigru_1"
             )
             seq_len2 = tf.tile(y2, [batch_size])
-            cell1 = GRUCell(units)
-            cell2 = GRUCell(units)
+            cell1 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=46),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=47))
+            cell2 = GRUCell(
+                units,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=48),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=49))
             outputs_2, cell_state_2 = bidirectional_dynamic_rnn(
                 cell1,
                 cell2,

@@ -36,14 +36,15 @@ else:
 
 class LSTMTests(Tf2OnnxBackendTestBase):
 
-    def run_test_case(self, *args, require_lstm_count=1, **kwargs):  #pylint: disable=arguments-differ
+    def run_test_case(self, *args, require_lstm_count=1,  #pylint: disable=arguments-differ
+                      graph_validator=None, **kwargs):
         # TF LSTM has an unknown dim
         tmp = self.config.allow_missing_shapes
         self.config.allow_missing_shapes = True
-        def graph_validator(g):
+        def new_graph_validator(g):
             good = True
-            if "graph_validator" in kwargs:
-                good = good and kwargs["graph_validator"](g)
+            if graph_validator is not None:
+                good = good and graph_validator(g)
             if require_lstm_count is None or ":" not in g.outputs[0]:
                 # Skip checks for tflite graphs (no ":" in outputs)
                 return good
@@ -51,7 +52,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             good = good and check_op_count(g, "Loop", 0, disabled=False)
             return good
         try:
-            super().run_test_case(*args, graph_validator=graph_validator, **kwargs)
+            super().run_test_case(*args, graph_validator=new_graph_validator, **kwargs)
         finally:
             self.config.allow_missing_shapes = tmp
 

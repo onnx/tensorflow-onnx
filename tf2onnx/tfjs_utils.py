@@ -180,6 +180,9 @@ def get_output_shapes(node_def, input_dtypes, input_shapes, inp_consts):
 
     del node_def.input[:]
     node_def.name = "node"
+    if "_class" in node_def.attr:
+        # Remove colocation information (list of nodes tf wants computed on same device)
+        del node_def.attr["_class"]
 
     g = tf.Graph()
     with g.as_default():
