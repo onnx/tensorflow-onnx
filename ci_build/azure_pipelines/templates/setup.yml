@@ -43,8 +43,7 @@ steps:
       fi
       if [[ $CI_TF_VERSION == 2.6* ]] ;
       then
-        # FIXME: make it >= 2.6 after offical tensorflow-text was released
-        pip install tensorflow-text==2.6.0rc0
+        pip install tensorflow-text>=2.6
       fi
     fi
 
