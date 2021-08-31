@@ -3274,6 +3274,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val_shape = [4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
         def func(x):
+            x_ = reverse_v2(x, axis=[0])
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+        def func(x):
             x_ = reverse_v2(x, axis=[])
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
