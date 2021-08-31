@@ -14,6 +14,24 @@ from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
 
+# names for input and outputs for tests
+_TFINPUT = "input"
+_INPUT = "input:0"
+_TFINPUT1 = "input1"
+_INPUT1 = "input1:0"
+_TFINPUT2 = "input2"
+_INPUT2 = "input2:0"
+_TFINPUT3 = "input3"
+_INPUT3 = "input3:0"
+_TFOUTPUT = "output"
+_OUTPUT = "output:0"
+_TFOUTPUT1 = "output1"
+_OUTPUT1 = "output1:0"
+_TFOUTPUT2 = "output2"
+_OUTPUT2 = "output2:0"
+_TFOUTPUT3 = "output3"
+_OUTPUT3 = "output3:0"
+
 if is_tf2():
     # There is no LSTMBlockCell in tf-2.x
     BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
@@ -79,6 +97,31 @@ class GRUTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0", "cell_state:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-03, atol=1e-06,
                            graph_validator=lambda g: check_gru_count(g, 1))
+
+    def test_keras_gru(self):
+        from tensorflow.keras.models import Model, load_model
+        from tensorflow.keras.layers import Input, Dense, GRU, Dropout, Activation
+
+        in_shape = [10, 2]
+        batch_size = 1
+        outlen = 7
+        x_val = np.random.uniform(size=[1, 10, 2]).astype(np.float32)
+
+        model_in = Input(tuple(in_shape),batch_size=batch_size)
+        # x = Dense(192, activation='relu')(model_in)
+        # x = Dropout(0.5)(x)
+        x = GRU(5, return_sequences=True, return_state=True,
+            kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+            recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+            bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))(model_in)
+        # x = Dropout(0.5)(x)
+        # model_out = Dense(outlen, activation='softmax')(x)
+        model = Model(inputs=model_in, outputs=x)
+
+        def func(x):
+            y = model(x)
+            return tf.identity(y[0], name=_TFOUTPUT), tf.identity(y[1], name=_TFOUTPUT1)
+        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT, _OUTPUT1], rtol=1e-03, atol=1e-06)
 
     @check_opset_after_tf_version("1.15", 8, "might need Scan")
     def test_multiple_dynamic_gru(self):
