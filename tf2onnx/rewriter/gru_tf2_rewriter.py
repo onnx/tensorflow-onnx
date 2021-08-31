@@ -115,9 +115,6 @@ def rewrite_gru_tf2(g, ops):
                 "linear_before_reset": 1 if pattern is pattern2 else 0,
             }
 
-    # if any(n.type == "TensorListSetItem" for n in ops):
-    #     g.gru_rewriter_context = {'x_idx': 6, 'out_idx': 3, 'initial_state_idx': 4, 'hidden_kernel_idx': 9, 'hidden_bias_idx': 10, 'gate_kernel_idx': 7, 'gate_bias_idx': 8, 'seq_len_idx': None, 'activations': ['Sigmoid', 'Tanh']}
-
     for op in ops:
         if op.is_while():
             body_graph = find_function(op.get_attr_str("body"))

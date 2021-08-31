@@ -176,33 +176,34 @@ def make_keras_gru_split_pattern(bias_name, kernel_name, input_name, input_op_ty
     ])
 
 keras_gru_split0_pattern = make_keras_gru_split_pattern("gate_bias", "gate_kernel", "gru_input", "TensorListGetItem")
-keras_gru_split1_pattern = make_keras_gru_split_pattern("hidden_bias", "hidden_kernel", "state", "Placeholder|PlaceholderV2")
+keras_gru_split1_pattern = \
+    make_keras_gru_split_pattern("hidden_bias", "hidden_kernel", "state", "Placeholder|PlaceholderV2")
 
 keras_gru_sigmoid_pattern = \
     OpTypePattern("Sigmoid", inputs=[
         OpTypePattern("Add|AddV2", inputs=[
-            keras_gru_split0_pattern,  # EXPAND
-            keras_gru_split1_pattern  # EXPAND
+            keras_gru_split0_pattern,
+            keras_gru_split1_pattern
         ])
     ])
 
 keras_gru_pattern = \
     OpTypePattern("Add|AddV2", name="cell_output", inputs=[
         OpTypePattern("Mul", inputs=[
-            keras_gru_sigmoid_pattern,  # EXPAND
+            keras_gru_sigmoid_pattern,
             OpTypePattern("Placeholder|PlaceholderV2")
         ]),
         OpTypePattern("Mul", inputs=[
             OpTypePattern("Sub", inputs=[
-                OpTypePattern("Const"),  # 1-u
-                keras_gru_sigmoid_pattern  # EXPAND
+                OpTypePattern("Const"),
+                keras_gru_sigmoid_pattern
             ], allow_reorder=False),
             OpTypePattern("*", name="optional_activation", inputs=[
                 OpTypePattern("Add|AddV2", inputs=[
                     keras_gru_split0_pattern,
                     OpTypePattern("Mul", inputs=[
                         keras_gru_sigmoid_pattern,
-                        keras_gru_split1_pattern  # ACTUALLY SPLIT1
+                        keras_gru_split1_pattern
                     ])
                 ])
             ])

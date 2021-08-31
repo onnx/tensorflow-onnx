@@ -176,10 +176,6 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         weights = context.weights
         # from code of tensorflow GRU cell, it can be known that shape of hidden_kernel(or candidate_kernel)
         # is (input_size+hidden_unit, hidden_unit)
-
-        # weights["hidden_kernel"] = weights["hidden_kernel"].transpose()
-        # weights["gate_kernel"] = weights["gate_kernel"].transpose()
-
         hidden_size = weights["hidden_kernel"].shape[1]
         input_size = weights["hidden_kernel"].shape[0] - hidden_size
         weight_dtype = weights["hidden_kernel"].dtype
