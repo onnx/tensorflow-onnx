@@ -160,7 +160,7 @@ class GraphMatcher(object):
 
         return False
 
-    def _match_pattern(self, pattern, op, tensor):
+    def _match_pattern(self, pattern, op, tensor, depth=0):
         """Returns whether an TF expression rooted at `op` matches `pattern`.
 
         If there is a match, adds to `self._match_result` the matching op and tensor
@@ -184,6 +184,7 @@ class GraphMatcher(object):
           if not pattern.inputs, then treat as same
           otherwise, iteratively compare input nodes with pattern.
         """
+        #print("MATCHING", depth, pattern.op_type, op.type, tensor)
         match_list = []
         if pattern.op_type is None:
             return True, match_list
@@ -213,8 +214,7 @@ class GraphMatcher(object):
             match_flag_of_inputs = []
             match_lists_of_inputs = []
             for input_tensor, input_op, input_pattern in pat:
-                # print("MATCHING", input_pattern.op_type, input_tensor.type)
-                flag, match_list_of_input = self._match_pattern(input_pattern, input_op, input_tensor)
+                flag, match_list_of_input = self._match_pattern(input_pattern, input_op, input_tensor, depth + 1)
                 match_flag_of_inputs.append(flag)
                 match_lists_of_inputs.extend(match_list_of_input)
 
