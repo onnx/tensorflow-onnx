@@ -1853,7 +1853,6 @@ def test_GRU(runner):
         init_state = np.array([0.4, 0.5]).astype(np.float32).reshape((1, 2))
         init_state_onnx = np.array([0.4, 0.5]).astype(np.float32).reshape((1, 2))
         expected = model.predict([data, init_state])
-        assert no_loops_in_tf2(onnx_model)
         assert runner(onnx_model.graph.name, onnx_model, [data, init_state_onnx], expected)
 
 
@@ -1866,7 +1865,6 @@ def test_GRU_2(runner):
     onnx_model = convert_keras(model, name=model.name)
     data = np.random.rand(3, 257).astype(np.float32).reshape((3, 1, 257))
     expected = model.predict(data)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
@@ -1881,7 +1879,6 @@ def test_LSTM(runner, return_sequences):
             model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c])
             onnx_model = convert_keras(model, model.name)
             expected = model.predict(data)
-            assert no_loops_in_tf2(onnx_model)
             assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 @pytest.mark.skipif((is_tensorflow_older_than('1.14.0') or (not is_tf_keras)), reason='old tf version')
@@ -1895,7 +1892,6 @@ def test_LSTM_rev(runner):
             model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c])
             onnx_model = convert_keras(model, model.name)
             expected = model.predict(data)
-            assert no_loops_in_tf2(onnx_model)
             assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
@@ -1912,7 +1908,6 @@ def test_LSTM_time_major_return_seq_true(runner):
     model = keras.Model(inputs=inputs1, outputs=[lstm1_trans, state_h, state_c])
     onnx_model = convert_keras(model, model.name)
     expected = model.predict(data)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
@@ -1928,7 +1923,6 @@ def test_LSTM_time_major_return_seq_false(runner):
     model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c])
     onnx_model = convert_keras(model, model.name)
     expected = model.predict(data)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
@@ -1943,7 +1937,6 @@ def test_LSTM_with_bias(runner):
     onnx_model = convert_keras(model, model.name)
 
     expected = model.predict(data)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
@@ -1960,7 +1953,6 @@ def test_LSTM_reshape(runner):
     onnx_model = convert_keras(model, 'test')
     data = np.random.rand(input_dim, sequence_len).astype(np.float32).reshape((1, sequence_len, input_dim))
     expected = model.predict(data)
-    assert no_loops_in_tf2(onnx_model)
     assert runner('tf_lstm', onnx_model, data, expected)
 
 
@@ -1990,7 +1982,6 @@ def test_LSTM_with_initializer(runner):
     sc = np.random.rand(1, C).astype(np.float32)
     expected = keras_model.predict([x, sh, sc])
     onnx_model = convert_keras(keras_model, keras_model.name)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, {"inputs": x, 'state_h': sh, 'state_c': sc}, expected)
 
 
@@ -2007,7 +1998,6 @@ def test_LSTM_seqlen_none(runner):
 
         onnx_model = convert_keras(keras_model)
         expected = keras_model.predict(data)
-        assert no_loops_in_tf2(onnx_model)
         assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
@@ -2026,7 +2016,6 @@ def test_bidirectional(runner, rnn_class, return_sequences):
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
     onnx_model = convert_keras(model, 'test', target_opset=op_version)
-    assert no_loops_in_tf2(onnx_model)
     for batch in batch_list:
         data = np.random.rand(batch, sequence_len, input_dim).astype(np.float32)
         expected = model.predict(data)
@@ -2038,7 +2027,6 @@ def test_bidirectional(runner, rnn_class, return_sequences):
                                     input_shape=(5, 10), merge_mode=merge_mode)(sub_input1)
         keras_model = keras.Model(inputs=sub_input1, outputs=sub_mapped1)
         onnx_model = convert_keras(keras_model, 'test_2', target_opset=op_version)
-        assert no_loops_in_tf2(onnx_model)
         for batch in batch_list:
             data = np.random.rand(batch, sequence_len, input_dim).astype(np.float32)
             expected = keras_model.predict(data)
@@ -2057,7 +2045,6 @@ def test_bidirectional_with_bias(runner, rnn_class):
     # Test with the default bias
     expected = model.predict(x)
     onnx_model = convert_keras(model, model.name)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, x, expected)
 
     # Set bias values to random floats
@@ -2070,7 +2057,6 @@ def test_bidirectional_with_bias(runner, rnn_class):
     # Test with random bias
     expected = model.predict(x)
     onnx_model = convert_keras(model, model.name)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, x, expected)
 
 
@@ -2098,7 +2084,6 @@ def test_bidirectional_time_major_true(runner, rnn_class):
 
             expected = model.predict(x)
             onnx_model = convert_keras(model, model.name)
-            assert no_loops_in_tf2(onnx_model)
             assert runner(onnx_model.graph.name, onnx_model, x, expected)
 
 
@@ -2113,7 +2098,6 @@ def test_bidirectional_with_initial_states(runner, rnn_class):
 
     expected = model.predict(inputs)
     onnx_model = convert_keras(model, model.name)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, inputs, expected)
 
     input2 = Input(shape=(None, 5))
@@ -2124,7 +2108,6 @@ def test_bidirectional_with_initial_states(runner, rnn_class):
 
     expected = model.predict(inputs)
     onnx_model = convert_keras(model, model.name)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, inputs, expected, atol=1e-5)
 
 
@@ -2143,7 +2126,6 @@ def test_bidirectional_seqlen_none(runner, rnn_class):
     for batch in [1, 4]:
         x = np.random.rand(batch, 50).astype(np.float32)
         expected = model.predict(x)
-        assert no_loops_in_tf2(onnx_model)
         assert runner(onnx_model.graph.name, onnx_model, x, expected)
 
 
@@ -2161,7 +2143,6 @@ def test_rnn_state_passing(runner, rnn_class):
 
     expected = model.predict(inputs)
     onnx_model = convert_keras(model, model.name)
-    assert no_loops_in_tf2(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, inputs, expected, atol=1e-5)
 
 
@@ -2199,7 +2180,6 @@ def test_seq_dynamic_batch_size(runner):
         test_input = np.random.random_sample((5, timesteps, data_dim)).astype(np.float32)
         test_output = model.predict(test_input)
         onnx_model = convert_keras(model, model.name)
-        assert no_loops_in_tf2(onnx_model)
         assert runner(onnx_model.graph.name, onnx_model, test_input, test_output)
 
 
