@@ -193,6 +193,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _initialize_handlers(self):
         self._handler_map = {
+            "Abs": self._simple_through_handler,
             "Add": self._add_handler,
             "ArgMax": self._arg_min_max_handler,
             "ArgMin": self._arg_min_max_handler,
