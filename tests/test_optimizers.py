@@ -121,6 +121,27 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
+    def test_transpose_abs(self, shape, perm_input, perm_output):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans1")
+        node1 = helper.make_node("Abs", ["Y"], ["Z"], name="abs")
+        node2 = helper.make_node("Transpose", ["Z"], ["OUT"], perm=perm_output, name="trans2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-abs-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["OUT"], {"X": np.random.randn(*shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
+        ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
     def test_transpose_with_add1(self, input_shape, perm_input, perm_output):
         # when transpose follows with a broadcasting op
         # reshape is needed when switching transpose with this op and op need broadcast its inputs
