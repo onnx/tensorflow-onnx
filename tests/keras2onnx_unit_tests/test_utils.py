@@ -157,6 +157,10 @@ def parse_profile_results(sess_time, kernel_time_only=False, threshold=0):
     return results
 
 
+def no_loops_in_tf2(onnx_model):
+    return not is_tf2 or all(n.op_type != "Loop" for n in onnx_model.graph.node)
+
+
 def run_onnx_runtime(case_name, onnx_model, data, expected, model_files, rtol=1.e-3, atol=1.e-6,
                      compare_perf=False, enable_profiling=False):
     if not os.path.exists(tmp_path):
