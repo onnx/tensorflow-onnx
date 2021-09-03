@@ -31,6 +31,7 @@ class UnitRnnContext(Context):
         self.state_variables = {}
         self.input_size = None
         self.hidden_size = None
+        self.from_keras = False
 
         self.attributes = {} # onnx attributes
         # onnx inputs: [X, W, R, B, sequence_lens, initial_h, initial_c, P],

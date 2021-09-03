@@ -9,10 +9,28 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_gru_count, check_opset_after_tf_version, check_op_count
+from common import unittest_main, check_gru_count, check_opset_after_tf_version, check_op_count, check_tf_min_version
 from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
+
+# names for input and outputs for tests
+_TFINPUT = "input"
+_INPUT = "input:0"
+_TFINPUT1 = "input1"
+_INPUT1 = "input1:0"
+_TFINPUT2 = "input2"
+_INPUT2 = "input2:0"
+_TFINPUT3 = "input3"
+_INPUT3 = "input3:0"
+_TFOUTPUT = "output"
+_OUTPUT = "output:0"
+_TFOUTPUT1 = "output1"
+_OUTPUT1 = "output1:0"
+_TFOUTPUT2 = "output2"
+_OUTPUT2 = "output2:0"
+_TFOUTPUT3 = "output3"
+_OUTPUT3 = "output3:0"
 
 if is_tf2():
     # There is no LSTMBlockCell in tf-2.x
@@ -695,6 +713,23 @@ class GRUTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output_1:0", "cell_state_1:0", "output_2:0", "cell_state_2:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06)
         # graph_validator=lambda g: check_gru_count(g, 2))
+
+    @check_tf_min_version("2.0")
+    def test_keras_gru(self):
+        in_shape = [10, 3]
+        x_val = np.random.uniform(size=[2, 10, 3]).astype(np.float32)
+
+        model_in = tf.keras.layers.Input(tuple(in_shape), batch_size=2)
+        x = tf.keras.layers.GRU(5, return_sequences=True, return_state=True,
+                                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                                recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43))(model_in)
+        model = tf.keras.models.Model(inputs=model_in, outputs=x)
+
+        def func(x):
+            y = model(x)
+            return tf.identity(y[0], name=_TFOUTPUT), tf.identity(y[1], name=_TFOUTPUT1)
+        self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT, _OUTPUT1], rtol=1e-05, atol=1e-06)
 
 
 if __name__ == '__main__':

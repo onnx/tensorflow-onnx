@@ -6,7 +6,7 @@ tf2onnx.rewriter.gru_tf2_rewriter - Rewrites GRU pattern used by tf2.
 """
 
 from tf2onnx.graph_matcher import GraphMatcher
-from tf2onnx.rewriter.rnn_utils import make_grucell_pattern
+from tf2onnx.rewriter.rnn_utils import make_grucell_pattern, keras_gru_pattern
 from tf2onnx.tf_loader import find_function
 from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnContext
 from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
@@ -17,8 +17,9 @@ from tf2onnx.graph_builder import GraphBuilder
 
 def rewrite_gru_tf2(g, ops):
     pattern1 = make_grucell_pattern("Identity")
+    pattern2 = keras_gru_pattern
 
-    for pattern in [pattern1]:
+    for pattern in [pattern1, pattern2]:
         matcher = GraphMatcher(pattern, allow_reorder=True)
         match_results = list(matcher.match_ops(ops))
         for match_result in match_results:
@@ -27,17 +28,21 @@ def rewrite_gru_tf2(g, ops):
             if activation_op.type not in ["Relu", "Tanh", "Sigmoid"]:
                 continue
 
-            concat = match_result.get_op("cell_inputs")
-            if len(concat.inputs) != 3:
-                continue
-            get_item = concat.inputs[0]
+            if pattern is pattern1:
+                concat = match_result.get_op("cell_inputs")
+                if len(concat.inputs) != 3:
+                    continue
+                get_item = concat.inputs[0]
+                init_state = concat.inputs[1]
+            else:
+                get_item = match_result.get_op("gru_input")
+                init_state = match_result.get_op("state")
             if not get_item.type == "TensorListGetItem":
                 continue
             x_e = get_item.inputs[0]
             if not x_e.is_graph_input():
                 continue
             x_idx = g.input_names.index(x_e.output[0])
-            init_state = concat.inputs[1]
             if not init_state.is_graph_input():
                 continue
             init_state_idx = g.input_names.index(init_state.output[0])
@@ -69,6 +74,8 @@ def rewrite_gru_tf2(g, ops):
             out_idx = g.input_names.index(tensor_set_items[0].input[0])
 
             hk = match_result.get_op("hidden_kernel")
+            while hk.type == "Identity":
+                hk = hk.inputs[0]
             if not hk.is_graph_input():
                 continue
             hk_idx = g.input_names.index(hk.output[0])
@@ -79,6 +86,8 @@ def rewrite_gru_tf2(g, ops):
             hb_idx = g.input_names.index(hb.output[0])
 
             gk = match_result.get_op("gate_kernel")
+            while gk.type == "Identity":
+                gk = gk.inputs[0]
             if not gk.is_graph_input():
                 continue
             gk_idx = g.input_names.index(gk.output[0])
@@ -102,6 +111,8 @@ def rewrite_gru_tf2(g, ops):
                 "gate_bias_idx": gb_idx,
                 "seq_len_idx": seq_len_idx,
                 "activations": activations,
+                "from_keras": pattern is pattern2,
+                "linear_before_reset": 1 if pattern is pattern2 else 0,
             }
 
     for op in ops:
@@ -125,6 +136,7 @@ def rewrite_gru_tf2(g, ops):
             initial_state = GraphBuilder(g).make_unsqueeze({"data": initial_state_sq, "axes": [0]})
 
             context = UnitRnnContext()
+            context.from_keras = body_context["from_keras"]
             context.weights.update({
                 "hidden_kernel": hk_const,
                 "hidden_bias": hb_const,
@@ -132,6 +144,7 @@ def rewrite_gru_tf2(g, ops):
                 "gate_bias": gb_const
             })
             context.attributes["activations"] = body_context["activations"]
+            context.attributes["linear_before_reset"] = body_context["linear_before_reset"]
             tensor_array_inp = op.inputs[body_context["x_idx"]]
             if not tensor_array_inp.type == "TensorListFromTensor":
                 continue
