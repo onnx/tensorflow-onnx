@@ -17,6 +17,7 @@ parameters:
 
 jobs:
   - job: ${{ parameters.job.name }}
+    timeoutInMinutes: 100
     pool:
         vmImage: $(CI_VM_IMAGE)
 
