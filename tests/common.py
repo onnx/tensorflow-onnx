@@ -45,7 +45,9 @@ __all__ = [
     "group_nodes_by_type",
     "test_ms_domain",
     "check_node_domain",
-    "check_op_count"
+    "check_op_count",
+    "check_gru_count",
+    "check_lstm_count",
 ]
 
 

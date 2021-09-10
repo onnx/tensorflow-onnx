@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_gru_count, check_opset_after_tf_version, check_op_count, check_tf_min_version
+from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
@@ -607,6 +607,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: check_gru_count(g, 1))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf_versions(["2.1"], "TF fails to correctly add output_2 node.")
     def test_dynamic_multi_bigru_with_same_input_hidden_size(self):
         batch_size = 10
         x_val = np.array([[1., 1.], [2., 2.], [3., 3.]], dtype=np.float32)
@@ -660,6 +661,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         # graph_validator=lambda g: check_gru_count(g, 2))
 
     @check_opset_after_tf_version("1.15", 10, "might need ReverseV2")
+    @skip_tf_versions(["2.1"], "TF fails to correctly add output_2 node.")
     def test_dynamic_multi_bigru_with_same_input_seq_len(self):
         units = 5
         batch_size = 10
@@ -714,7 +716,7 @@ class GRUTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06)
         # graph_validator=lambda g: check_gru_count(g, 2))
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("2.2")
     def test_keras_gru(self):
         in_shape = [10, 3]
         x_val = np.random.uniform(size=[2, 10, 3]).astype(np.float32)
