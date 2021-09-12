@@ -308,7 +308,10 @@ def freeze_session(sess, input_names=None, output_names=None, get_tables=False):
             initialized_tables = {}
             tf.tables_initializer().run(session=sess)
             for info in table_info:
+                if info.shared_name is None:
+                    continue
                 h = lookup_ops.hash_table_v2(info.key_dtype, info.val_dtype, shared_name=info.shared_name)
+                n = info.shared_name
                 try:
                     k, v = lookup_ops.lookup_table_export_v2(h, info.key_dtype, info.val_dtype)
                     k, v = sess.run([k, v])
