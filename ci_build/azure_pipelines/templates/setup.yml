@@ -12,13 +12,11 @@ steps:
     then
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
-    if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
-    then
-      pip uninstall -y onnxruntime
-      # install numpy upfront since it is not on https://test.pypi.org/simple/
-      pip install 'numpy>=1.18'
-      pip install --index-url https://test.pypi.org/simple/ ort-nightly
-    fi
+
+    pip uninstall -y onnxruntime
+    # install numpy upfront since it is not on https://test.pypi.org/simple/
+    pip install 'numpy>=1.18'
+    pip install -i https://test.pypi.org/simple/ ort-nightly==1.9.0.dev20210910002
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
