@@ -320,6 +320,7 @@ resnet50_v1:
     - softmax_tensor:0
 
 ssd_mobilenet_v3_large_coco:
+  tf_min_version: 2.2
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_large_coco_2019_08_14.tar.gz
   model: ssd_mobilenet_v3_large_coco_2019_08_14/frozen_inference_graph.pb
   opset_constraints:
