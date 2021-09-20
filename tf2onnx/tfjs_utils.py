@@ -255,24 +255,8 @@ def read_model_json(model_path):
     return model, zip_compressed
 
 
-def graphs_from_tfjs(model_path, input_names=None, output_names=None, shape_override=None,
-                     ignore_default=None, use_default=None):
-    """Given the path to a model.json file, parses the model into onnx graphs and returns the main graph and a
-    topologically sorted list of subgraphs."""
-    model, zip_compressed = read_model_json(model_path)
-
-    model_format = model['modelTopology'].get('format')
-    if model_format is None:
-        if 'keras_version' in model['modelTopology']:
-            model_format = 'layers-model'
-        else:
-            model_format = 'graph-model'
-    utils.make_sure(model_format == 'graph-model', "tf2onnx only supports conversion from tfjs graph models, "
-                    "not format %s. Use Google's tfjs converter to convert to a graph model, then try again.",
-                    model_format)
-
-    weights_manifest = model['weightsManifest'][0]
-
+def read_weights(model_path, weights_manifest, zip_compressed=False):
+    """Returns a dictionary mapping weight names to numpy arrays"""
     sharded_data = []
     for path in weights_manifest["paths"]:
         with open(os.path.join(os.path.dirname(model_path), path), "rb") as f:
@@ -291,6 +275,39 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, shape_over
         i += num_bytes
 
     utils.make_sure(len(weights_data) == i, "Total weight bytes %d doesn't match read bytes %d", len(weights_data), i)
+    return weights
+
+
+def graphs_from_tfjs(model_path, input_names=None, output_names=None, shape_override=None,
+                     ignore_default=None, use_default=None):
+    """Given the path to a model.json file, parses the model into onnx graphs and returns the main graph and a
+    topologically sorted list of subgraphs."""
+    model, zip_compressed = read_model_json(model_path)
+
+    model_format = model['modelTopology'].get('format')
+    if model_format is None:
+        if 'keras_version' in model['modelTopology']:
+            model_format = 'layers-model'
+        else:
+            model_format = 'graph-model'
+    utils.make_sure(model_format == 'graph-model', "tf2onnx only supports conversion from tfjs graph models, "
+                    "not format %s. Use Google's tfjs converter to convert to a graph model, then try again.",
+                    model_format)
+
+    weights_manifest = model['weightsManifest'][0]
+    # For most models the zip compression of the weights matches that of the .json file, but for some it does't
+    # Checking for gzip magic numbers isn't safe since model weights are binary and could contain them by accident.
+    try:
+        # Try loading weights using expected zip compression status
+        weights = read_weights(model_path, weights_manifest, zip_compressed)
+    except ValueError as e:
+        try:
+            # If it fails, try with opposite compression flag
+            weights = read_weights(model_path, weights_manifest, not zip_compressed)
+        except Exception:  # pylint: disable=broad-except
+            # If it still fails, raise original error
+            raise e
+
     topology = model['modelTopology']
 
     tensors_to_rename = {}
