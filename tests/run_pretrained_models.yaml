@@ -210,6 +210,7 @@ googlenet_v4_slim:
   rtol: 0.1
 
 mobilenet_v3_large_float:
+  tf_min_version: 1.14  # explicit_paddings for Conv2D
   url: https://storage.googleapis.com/mobilenet_v3/checkpoints/v3-large_224_1.0_float.tgz
   model: v3-large_224_1.0_float/v3-large_224_1.0_float.pb
   input_get: get_beach
@@ -319,6 +320,7 @@ resnet50_v1:
     - softmax_tensor:0
 
 ssd_mobilenet_v3_large_coco:
+  tf_min_version: 2.2
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_large_coco_2019_08_14.tar.gz
   model: ssd_mobilenet_v3_large_coco_2019_08_14/frozen_inference_graph.pb
   opset_constraints:
@@ -428,7 +430,7 @@ faster_rcnn_inception_v2_coco:
     - num_detections:0
 
 keras_resnet50:
-  tf_min_version: 2.1
+  tf_min_version: 2.2
   disabled: false
   url: module://tensorflow.keras.applications.resnet50/ResNet50
   model: ResNet50
@@ -440,7 +442,7 @@ keras_resnet50:
     - Identity:0
 
 keras_mobilenet_v2:
-  tf_min_version: 2.1
+  tf_min_version: 2.2
   disabled: false
   url: module://tensorflow.keras.applications.mobilenet_v2/MobileNetV2
   model: MobileNetV2

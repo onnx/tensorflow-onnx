@@ -2044,6 +2044,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(op, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "Compress")
+    def test_pad_symmetric(self):
+        x_val = make_xval([4, 1, 5])
+        def func(x):
+            paddings = tf.constant([[1, 3], [0, 0], [2, 4]], name="paddings")
+            op = tf.pad(x, paddings, mode="SYMMETRIC", name="symmetric")
+            return tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Pad")
+    def test_dynamic_pad_symmetric(self):
+        x_val = make_xval([4, 1, 5])
+        y_val = np.array([[1, 3], [0, 0], [2, 4]], np.int32)
+        def func(x, y):
+            op = tf.pad(x, y, mode="SYMMETRIC", name="symmetric")
+            return tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
     @skip_caffe2_backend()
     def test_randomuniform(self):
         def func():
@@ -3273,6 +3291,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # Adds an identity block.
         x_val_shape = [4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        def func(x):
+            x_ = reverse_v2(x, axis=[0])
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
         def func(x):
             x_ = reverse_v2(x, axis=[])
             return tf.identity(x_, name=_TFOUTPUT)

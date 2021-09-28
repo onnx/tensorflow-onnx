@@ -139,10 +139,40 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
             return False
         return True
 
+    def _make_constants(self, context, W_zrh, R_zrh, B_zrh):
+        input_size = W_zrh.shape[-1]
+        hidden_size = R_zrh.shape[-1]
+        w_name = utils.make_name("W")
+        w_node = self.g.make_const(w_name, W_zrh, skip_conversion=True)
+
+        r_name = utils.make_name("R")
+        r_node = self.g.make_const(r_name, R_zrh, skip_conversion=True)
+
+        b_name = utils.make_name("B")
+        b_node = self.g.make_const(b_name, B_zrh, skip_conversion=True)
+
+        context.input_size = input_size
+        context.hidden_size = hidden_size
+        context.onnx_input_ids["W"] = w_node.output[0]
+        context.onnx_input_ids["R"] = r_node.output[0]
+        context.onnx_input_ids["B"] = b_node.output[0]
+
+    def _process_weights_and_bias_keras(self, context):
+        weights = context.weights
+        W_zrh = np.expand_dims(weights["gate_kernel"].transpose(), axis=0)
+        R_zrh = np.expand_dims(weights["hidden_kernel"].transpose(), axis=0)
+        Wb_zrh = weights["gate_bias"]
+        Rb_zrh = weights["hidden_bias"]
+        B_zrh = np.expand_dims(np.concatenate((Wb_zrh, Rb_zrh), axis=0), axis=0)
+        self._make_constants(context, W_zrh, R_zrh, B_zrh)
+
     def process_weights_and_bias(self, context):
         """
         why split the data in this way should refer to code of tensorflow GRU cell and official document of ONNX GRU
         """
+        if context.from_keras:
+            self._process_weights_and_bias_keras(context)
+            return
         weights = context.weights
         # from code of tensorflow GRU cell, it can be known that shape of hidden_kernel(or candidate_kernel)
         # is (input_size+hidden_unit, hidden_unit)
@@ -157,6 +187,8 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         h_kernel = weights["hidden_kernel"]
         r_bias, z_bias = np.split(weights["gate_bias"], [hidden_size], axis=0)
         h_bias = weights["hidden_bias"]
+        for k in sorted(weights.keys()):
+            print(k, weights[k].shape)
         # ONNX GRU split weights of input and state, so have to split *_kernel
         input_r_kernel, state_r_kernel = np.split(r_kernel, [input_size], axis=0)
         input_z_kernel, state_z_kernel = np.split(z_kernel, [input_size], axis=0)
@@ -181,20 +213,7 @@ class GRUUnitRewriter(UnitRnnRewriterBase):
         B_zrh = B_zrh.astype(bias_dtype)
         assert B_zrh.shape == (1, 6*hidden_size)
         # create const ONNX node
-        w_name = utils.make_name("W")
-        w_node = self.g.make_const(w_name, W_zrh, skip_conversion=True)
-
-        r_name = utils.make_name("R")
-        r_node = self.g.make_const(r_name, R_zrh, skip_conversion=True)
-
-        b_name = utils.make_name("B")
-        b_node = self.g.make_const(b_name, B_zrh, skip_conversion=True)
-
-        context.input_size = input_size
-        context.hidden_size = hidden_size
-        context.onnx_input_ids["W"] = w_node.output[0]
-        context.onnx_input_ids["R"] = r_node.output[0]
-        context.onnx_input_ids["B"] = b_node.output[0]
+        self._make_constants(context, W_zrh, R_zrh, B_zrh)
 
     def process_var_init_nodes(self, context):
         assert "state" in context.state_variables.keys()

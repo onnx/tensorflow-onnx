@@ -569,6 +569,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
         rewrite_thresholded_relu,
         rewrite_conv2d_with_pad,
         rewriter_lstm_tf2,
+        rewrite_gru_tf2,
         rewrite_single_direction_lstm,
         # bi-directional
         rewrite_bi_direction_lstm,

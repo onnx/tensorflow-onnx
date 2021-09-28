@@ -810,6 +810,67 @@ class BiasAdd:
 
 @tf_op(["Pad", "PadV2", "MirrorPad"], onnx_op="Pad")
 class Pad:
+
+    @classmethod
+    def convert_symmetric_pads(cls, ctx, node):
+        """Currently there isn't a symmetric padding mode in ONNX so we add a dummy row then use the reflect mode
+        and remove the dummy row with compress. Ex: 1234 -> 012340 -> 2101234043 -> 21123443. Only do this to
+        dims with non-zero pads (if pads are constant)"""
+        rank = ctx.get_rank(node.input[0])
+        utils.make_sure(rank is not None, "Cannot convert pad with symmetric mode and unknown rank")
+        utils.make_sure(ctx.opset >= 9, "opset 9 required for symmetric padding mode")
+        node.set_attr("mode", "reflect")
+        const_pads = None
+        consumers = ctx.find_output_consumers(node.output[0])
+        output_shape = ctx.get_shape(node.output[0])
+        if ctx.opset < 11:
+            const_pads = node.get_attr_value("pads")
+        elif node.inputs[1].is_const():
+            const_pads = node.inputs[1].get_tensor_value()
+        non_zero_axes = list(range(rank))
+        if const_pads is not None:
+            non_zero_axes = []
+            for i in range(rank):
+                if const_pads[i] != 0 or const_pads[i + rank] != 0:
+                    non_zero_axes.append(i)
+
+        inc_pads = [0] * (rank * 2)
+        for a in non_zero_axes:
+            inc_pads[a] = 1
+            inc_pads[a + rank] = 1
+
+        if ctx.opset < 11:
+            padded_inp = ctx.make_node("Pad", [node.input[0]], attr={'mode': 'constant', 'pads': inc_pads}).output[0]
+        else:
+            pad1_pads_const = ctx.make_const(utils.make_name("pad1_pads"), np.array(inc_pads, np.int64)).output[0]
+            padded_inp = ctx.make_node("Pad", [node.input[0], pad1_pads_const], attr={'mode': 'constant'}).output[0]
+        ctx.replace_input(node, node.input[0], padded_inp, 0)
+        ctx.update_node_shape_dtype(node, override=True)
+
+        output = node.output[0]
+        shape = ctx.make_node("Shape", [output]).output[0]
+        dims = ctx.make_node("Split", [shape], output_count=rank).output
+        two_false = ctx.make_const(utils.make_name("two_false"), np.array([False, False], np.bool)).output[0]
+        inv_second = ctx.make_const(utils.make_name("inv_second"), np.array([1, -1], np.int64)).output[0]
+        dec_second = ctx.make_const(utils.make_name("dec_second"), np.array([0, 1], np.int64)).output[0]
+        for a in non_zero_axes:
+            one_tensor = helper.make_tensor("value", onnx_pb.TensorProto.BOOL, dims=[1], vals=[1])
+            ones_of_shape = ctx.make_node("ConstantOfShape", [dims[a]], attr={'value': one_tensor}).output[0]
+            if const_pads is not None:
+                to_remove_val = [const_pads[a], -1 - const_pads[a + rank]]
+                to_remove = ctx.make_const(utils.make_name("to_remove"), np.array(to_remove_val, np.int64)).output[0]
+            else:
+                pads_idx = ctx.make_const(utils.make_name("pads_idx"), np.array([a, a + rank], np.int64)).output[0]
+                pads_vals = ctx.make_node("Gather", [node.input[1], pads_idx]).output[0]
+                pads_inv_second = ctx.make_node("Mul", [pads_vals, inv_second]).output[0]
+                to_remove = ctx.make_node("Sub", [pads_inv_second, dec_second]).output[0]
+            scatter_op = "ScatterElements" if ctx.opset >= 11 else "Scatter"
+            dims_to_keep = ctx.make_node(scatter_op, [ones_of_shape, to_remove, two_false]).output[0]
+            compress = ctx.make_node("Compress", [output, dims_to_keep], attr={'axis': a})
+            output = compress.output[0]
+        ctx.replace_all_inputs(node.output[0], output, consumers)
+        ctx.set_shape(output, output_shape)
+
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         node.type = "Pad"
@@ -822,7 +883,7 @@ class Pad:
         if mode:
             mode = mode.s.decode("utf-8").lower()
             node.set_attr("mode", mode)
-        if mode not in [None, "constant", "reflect"]:
+        if mode not in [None, "symmetric", "constant", "reflect"]:
             raise ValueError(mode + " pad mode is not supported")
 
         if mode in [None, "constant"] and len(node.input) == 3:
@@ -846,21 +907,29 @@ class Pad:
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
 
+        if mode == "symmetric":
+            cls.convert_symmetric_pads(ctx, node)
+
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         mode = node.get_attr("mode")
         if mode:
             mode = mode.s.decode("utf-8").lower()
             node.set_attr("mode", mode)
-        if mode not in [None, "constant", "reflect"]:
+        if mode not in [None, "symmetric", "constant", "reflect"]:
             raise ValueError(mode + " pad mode is not supported")
 
-        # pads must be int64.
-        if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
-            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
-        ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
-        shape_const = ctx.make_const(utils.make_name(node.name), np.array([-1]).astype(np.int64))
-        ctx.insert_new_node_on_input(node, "Reshape", [node.input[1], shape_const.name])
+        if not node.inputs[1].is_const():
+            # pads must be int64.
+            if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
+                ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
+            ctx.insert_new_node_on_input(node, "Transpose", node.input[1])
+            shape_const = ctx.make_const(utils.make_name(node.name), np.array([-1]).astype(np.int64))
+            ctx.insert_new_node_on_input(node, "Reshape", [node.input[1], shape_const.name])
+        else:
+            paddings = node.inputs[1].get_tensor_value(as_list=False).astype(np.int64).transpose().flatten()
+            pad_const = ctx.make_const(utils.make_name("pad_const"), paddings)
+            ctx.replace_input(node, node.input[1], pad_const.output[0], 1)
 
         origin_dtype = ctx.get_dtype(node.output[0])
         if origin_dtype not in [TensorProto.FLOAT, TensorProto.DOUBLE,
@@ -874,6 +943,9 @@ class Pad:
                                                            to=origin_dtype)
             ctx.set_dtype(cast_back_node.output[0], origin_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
+
+        if mode == "symmetric":
+            cls.convert_symmetric_pads(ctx, node)
 
 
 @tf_op(["FusedBatchNorm", "FusedBatchNormV2", "FusedBatchNormV3"])

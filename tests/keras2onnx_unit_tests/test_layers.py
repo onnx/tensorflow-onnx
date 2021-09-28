@@ -7,6 +7,7 @@ from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
                                    is_keras_older_than, is_keras_later_than)
+from test_utils import no_loops_in_tf2
 
 K = keras.backend
 Activation = keras.layers.Activation
@@ -1864,7 +1865,7 @@ def test_GRU_2(runner):
     onnx_model = convert_keras(model, name=model.name)
     data = np.random.rand(3, 257).astype(np.float32).reshape((3, 1, 257))
     expected = model.predict(data)
-    runner(onnx_model.graph.name, onnx_model, data, expected)
+    assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
 @pytest.mark.parametrize('return_sequences', [False, True])

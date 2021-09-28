@@ -18,7 +18,7 @@ def rewrite_random_uniform(g, ops):
         OpTypePattern('Add', name='output', inputs=[
             OpTypePattern('Mul', inputs=[
                 OpTypePattern('RandomUniform', name='input1', inputs=["*"]),
-                OpTypePattern('Sub', name='input2', inputs=["*", "*"]),
+                OpTypePattern('Sub', name='input2', inputs=["Const|ConstV2", "Const|ConstV2"]),
             ]), None
         ])
 
@@ -45,9 +45,9 @@ def rewrite_random_uniform_fold_const(g, ops):
         OpTypePattern('Add', name='output', inputs=[
             OpTypePattern('Mul', name='mul', inputs=[
                 OpTypePattern('RandomUniform', name='input1', inputs=["*"]),
-                None,
+                "Const|ConstV2",
             ]),
-            None,
+            "Const|ConstV2",
         ])
 
     matcher = GraphMatcher(pattern)
