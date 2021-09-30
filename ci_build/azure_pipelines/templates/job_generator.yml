@@ -5,7 +5,7 @@ parameters:
   python_versions: ['3.7']
   tf_versions: ['']
   onnx_versions: ['']
-  onnx_opsets: ['14', '13', '12', '11', '10', '9', '8']
+  onnx_opsets: ['15', '14', '13', '12', '11', '10', '9', '8']
   onnx_backends: {onnxruntime: ['1.9.0']}
   job: {}
   run_setup: 'True'
