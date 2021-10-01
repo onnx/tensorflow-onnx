@@ -69,11 +69,11 @@ ONNX Runtime (available for Linux, Windows, and Mac):
 
 ### Install on apple silicon 
 
-```  brew install cmake
+     brew install cmake
      brew install protobuf
      pip install onnx --no-use-pep517
      pip install tf2onnx --no-use-pep517
-     '''
+     
      
 
 ### Install latest from github
