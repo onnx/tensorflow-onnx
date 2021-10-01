@@ -2,17 +2,17 @@
 
 """
 This example builds a simple model without training.
-It is converted into ONNX. Predictions are compared to
-the predictions from tensorflow to check there is no
+It is converted into ONNX directly, by serializing to byte string.
+Predictions are compared to the predictions from tensorflow to check there is no
 discrepencies. Inferencing time is also compared between
 *onnxruntime*, *tensorflow* and *tensorflow.lite*.
 """
+
+# from https://github.com/microprediction/tensorflow-onnx/blob/master/examples/end2end_tfkeras.py
+
 from onnxruntime import InferenceSession
-import os
-import subprocess
 import timeit
 import numpy as np
-import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Input
 
@@ -40,23 +40,14 @@ expected = model.predict(input)
 print(expected)
 
 ########################################
-# Saves the model.
-if not os.path.exists("simple_rnn"):
-    os.mkdir("simple_rnn")
-tf.keras.models.save_model(model, "simple_rnn")
-
-########################################
-# Run the command line.
-proc = subprocess.run('python -m tf2onnx.convert --saved-model simple_rnn '
-                      '--output simple_rnn.onnx --opset 12'.split(),
-                      capture_output=True)
-print(proc.returncode)
-print(proc.stdout.decode('ascii'))
-print(proc.stderr.decode('ascii'))
+# Serialize but do not save the model
+from tf2onnx.keras2onnx_api import convert_keras
+onnx_model = convert_keras(model=model,name='example')
+onnx_model_as_byte_string = onnx_model.SerializeToString()
 
 ########################################
 # Runs onnxruntime.
-session = InferenceSession("simple_rnn.onnx")
+session = InferenceSession(onnx_model_as_byte_string)
 got = session.run(None, {'input_1': input})
 print(got[0])
 
