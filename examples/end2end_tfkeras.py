@@ -8,7 +8,6 @@ discrepencies. Inferencing time is also compared between
 *onnxruntime*, *tensorflow* and *tensorflow.lite*.
 """
 
-# from https://github.com/microprediction/tensorflow-onnx/blob/master/examples/end2end_tfkeras.py
 
 from onnxruntime import InferenceSession
 import timeit
