@@ -5696,6 +5696,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # can't check the values because in onnx they are padded with 0, in tf they are not
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False)
 
+    @check_tf_min_version("2.5")
+    @check_opset_min_version(14, "hardswish")
+    @skip_tfjs("not supported in tfjs")
+    def test_hardswish(self):
+        def func(x):
+            # there is no hardswich in tf but toco will optimize to it
+            op_ = x * tf.nn.relu6(x + np.float32(3)) * np.float32(1. / 6.)
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        # tf gets this wrong and returns fp32 instead of int
+        x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
 
 if __name__ == '__main__':
     unittest_main()
