@@ -806,3 +806,11 @@ class InvertPermutationOp:
             shapes=[shape], dtypes=[onnx_dtype])
 
         ctx.replace_all_inputs(node.output[0], last_node.output[0])  # ops=ctx.get_nodes()
+
+
+@tf_op(["HardSwish"])
+class HardSwish:
+    # Note: this doesn't really exist in tensorflow but it does in tflite
+    @classmethod
+    def version_14(cls, ctx, node, **kwargs):
+        pass
