@@ -2320,6 +2320,13 @@ class EinsumOptimizer(GraphOptimizerBase):
                     graph.make_node(
                         'Identity', [last_node.output[0]], outputs=[node.output[0]],
                         name="%s_final" % node.name)
+                if equation != new_equation_obj.equation_:
+                    self.logger.info(
+                        "replaced einsum equation %r by %r",
+                        equation, new_equation_obj.equation_)
+                self.logger.info(
+                    "einsum optimizer successfully replaced equation %r",
+                    equation)
                 return True
         elif equation != new_equation_obj.equation_:
             node.attr['equation'].s = new_equation_obj.equation_.encode('ascii')

@@ -47,7 +47,7 @@ class BugTests(Tf2OnnxBackendTestBase):
         def func(x, y):
             ret = tf.einsum("abc,cde->abde", x, y)
             return tf.identity(ret, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, check_shape=False)
 
     @check_opset_min_version(13)
     @check_tf_min_version("2.1")
@@ -57,7 +57,7 @@ class BugTests(Tf2OnnxBackendTestBase):
         def func(x, y):
             ret = tf.einsum("abcd,cde->abe", x, y)
             return tf.identity(ret, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, check_shape=False)
 
     def common_save_model_einsum(self, equation, x_val, y_val):
         @tf.function
