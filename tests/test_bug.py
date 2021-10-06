@@ -39,7 +39,7 @@ class BugTests(Tf2OnnxBackendTestBase):
         kwargs["constant_fold"] = False
         return self.run_test_case(func, feed_dict, [], output_names_with_port, **kwargs)
 
-    @check_opset_min_version(12)
+    @check_opset_min_version(13)
     @check_tf_min_version("2.1")
     def test_einsum_abc_cde_abde(self):
         x_val = np.random.random([2, 3, 5]).astype(np.float32)
@@ -49,7 +49,7 @@ class BugTests(Tf2OnnxBackendTestBase):
             return tf.identity(ret, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
-    @check_opset_min_version(12)
+    @check_opset_min_version(13)
     @check_tf_min_version("2.1")
     def test_einsum_abcd_cde_abe(self):
         x_val = np.random.random([2, 3, 5, 7]).astype(np.float32)
@@ -73,23 +73,23 @@ class BugTests(Tf2OnnxBackendTestBase):
         module_func(x_val, y_val)    
         tf.saved_model.save(module_func, "einsum_" + equation.replace(",", "_").replace("->", "__"))
 
-    @check_opset_min_version(12)
+    @check_opset_min_version(13)
     @check_tf_min_version("2.1")
     def test_einsum_abc_cde_abde_2(self):
         x_val = np.random.random([2, 3, 5]).astype(np.float32)
         y_val = np.random.random([5, 7, 11]).astype(np.float32)
         self.common_save_model_einsum("abc,cde->abde", x_val, y_val)
         # convert with
-        # python -m tf2onnx.convert --saved-model einsum_m1 --output einsum1.onnx --opset 13 --tag serve --concrete_function 0
+        # python -m tf2onnx.convert --saved-model einsum_abc_cde__abde --output einsum_abc_cde__abde.onnx --opset 13 --tag serve --concrete_function 0
 
-    @check_opset_min_version(12)
+    @check_opset_min_version(13)
     @check_tf_min_version("2.1")
     def test_einsum_abcd_cde_abe_2(self):
         x_val = np.random.random([2, 3, 5, 7]).astype(np.float32)
         y_val = np.random.random([5, 7, 11]).astype(np.float32)
         self.common_save_model_einsum("abcd,cde->abe", x_val, y_val)
         # convert with
-        # python -m tf2onnx.convert --saved-model einsum_m1 --output einsum1.onnx --opset 13 --tag serve --concrete_function 0
+        # python -m tf2onnx.convert --saved-model einsum_abcd_cde__abe --output einsum_abcd_cde__abe.onnx --opset 13 --tag serve --concrete_function 0
 
 
 if __name__ == '__main__':
