@@ -326,7 +326,7 @@ ssd_mobilenet_v3_large_coco:
   opset_constraints:
     "onnx":
       "min": 10
-      "max": 14 # FIXME, waiting of a new onnx release to fix opset-15
+      "max": 14 # FIXME, temorary until onnx-1.10.2 is out
   input_get: get_beach
   inputs:
     "normalized_input_image_tensor:0": [1, 320, 320, 3]
@@ -421,6 +421,7 @@ faster_rcnn_inception_v2_coco:
   opset_constraints:
     "onnx":
       "min": 11
+      "max": 14 # FIXME: temporary until onnx-1.10.2 is out
   input_get: get_beach
   inputs:
     "image_tensor:0": [1, 224, 224, 3]
