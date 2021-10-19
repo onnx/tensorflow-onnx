@@ -1302,6 +1302,114 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
+    @check_opset_max_version(12, "Before opset 13, Softmax coerced its inputs to 2D and can thus only be optimized for certain permutations")
+    def test_transpose_softmax_valid_perm(self):
+        input_shape = [4, 4, 4, 4]
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Softmax", ["Y"], ["Z"], axis=1, name="softmax")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-softmax-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, input_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @check_opset_max_version(12, "Before opset 13, Softmax coerced its inputs to 2D and can thus only be optimized for certain permutations")
+    def test_transpose_softmax_invalid_perm(self):
+        input_shape = [4, 4, 4, 4]
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Softmax", ["Y"], ["Z"], axis=3, name="softmax")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-softmax-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, input_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=2)
+
+    @check_opset_min_version(13, "Softmax can be optimized for all permutations since opset 13")
+    def test_transpose_softmax_13(self):
+        input_shape = [4, 4, 4, 4]
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("Softmax", ["Y"], ["Z"], axis=3, name="softmax")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-softmax-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, input_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @check_opset_max_version(12, "Before opset 13, LogSoftmax coerced its inputs to 2D and can thus only be optimized for certain permutations")
+    def test_transpose_logsoftmax_valid_perm(self):
+        input_shape = [4, 4, 4, 4]
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("LogSoftmax", ["Y"], ["Z"], axis=1, name="logsoftmax")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-logsoftmax-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, input_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @check_opset_max_version(12, "Before opset 13, LogSoftmax coerced its inputs to 2D and can thus only be optimized for certain permutations")
+    def test_transpose_logsoftmax_invalid_perm(self):
+        input_shape = [4, 4, 4, 4]
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("LogSoftmax", ["Y"], ["Z"], axis=3, name="logsoftmax")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-logsoftmax-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, input_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=2)
+
+    @check_opset_min_version(13, "LogSoftmax can be optimized for all permutations since opset 13")
+    def test_transpose_logsoftmax_13(self):
+        input_shape = [4, 4, 4, 4]
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
+        node1 = helper.make_node("LogSoftmax", ["Y"], ["Z"], axis=3, name="logsoftmax")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=[0, 3, 1, 2], name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-logsoftmax-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, input_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
     def test_transpose_tile(self):
         input_shape = [1, 2, 3, 4]
 
