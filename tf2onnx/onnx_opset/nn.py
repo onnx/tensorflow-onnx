@@ -504,14 +504,15 @@ class ConvTranspose:
                 use_strides_workaround = False
             input_shape = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.INT64})
             output_shape = ctx.make_node("Shape", [node.output[0]])
+            sp_index_start = 1 if is_channels_last(node) else 2
             output_h = GraphBuilder(ctx).make_slice(
-                {"data": output_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
+                {"data": output_shape.output[0], "ends": [sp_index_start+1], "starts": [sp_index_start], "axes": [0]})
             output_w = GraphBuilder(ctx).make_slice(
-                {"data": output_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
+                {"data": output_shape.output[0], "ends": [sp_index_start+2], "starts": [sp_index_start+1], "axes": [0]})
             expect_h = GraphBuilder(ctx).make_slice(
-                {"data": input_shape.output[0], "ends": [2], "starts": [1], "axes": [0]})
+                {"data": input_shape.output[0], "ends": [sp_index_start+1], "starts": [sp_index_start], "axes": [0]})
             expect_w = GraphBuilder(ctx).make_slice(
-                {"data": input_shape.output[0], "ends": [3], "starts": [2], "axes": [0]})
+                {"data": input_shape.output[0], "ends": [sp_index_start+2], "starts": [sp_index_start+1], "axes": [0]})
             diff_h = ctx.make_node("Sub", [output_h, expect_h])
             diff_w = ctx.make_node("Sub", [output_w, expect_w])
             nonneg_diff_h = diff_h
@@ -528,10 +529,12 @@ class ConvTranspose:
             end_h = ctx.make_node("Add", [start_h.output[0], expect_h])
             end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
             if spatial == 3:
-                output_d = GraphBuilder(ctx).make_slice(
-                    {"data": output_shape.output[0], "ends": [4], "starts": [3], "axes": [0]})
-                expect_d = GraphBuilder(ctx).make_slice(
-                    {"data": input_shape.output[0], "ends": [4], "starts": [3], "axes": [0]})
+                output_d = GraphBuilder(ctx).make_slice({
+                    "data": output_shape.output[0], "ends": [sp_index_start+3], "starts": [sp_index_start+2], "axes": [0]
+                })
+                expect_d = GraphBuilder(ctx).make_slice({
+                    "data": input_shape.output[0], "ends": [sp_index_start+3], "starts": [sp_index_start+2], "axes": [0]
+                })
                 diff_d = ctx.make_node("Sub", [output_d, expect_d])
                 nonneg_diff_d = diff_d
                 if use_strides_workaround:
@@ -543,12 +546,12 @@ class ConvTranspose:
                                        attr={"axis": 0})
                 ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0], end_d.output[0]], attr={"axis": 0})
                 slice_axes = ctx.make_const(utils.make_name(node.name + "_const_slice_axes"),
-                                            np.array([1, 2, 3], dtype=np.int64))
+                                            np.arange(sp_index_start, sp_index_start + 3, dtype=np.int64))
             else:
                 starts = ctx.make_node("Concat", [start_h.output[0], start_w.output[0]], attr={"axis": 0})
                 ends = ctx.make_node("Concat", [end_h.output[0], end_w.output[0]], attr={"axis": 0})
                 slice_axes = ctx.make_const(utils.make_name(node.name + "_const_slice_axes"),
-                                            np.array([1, 2], dtype=np.int64))
+                                            np.arange(sp_index_start, sp_index_start + 2, dtype=np.int64))
 
             slice_node = ctx.make_node("Slice",
                                        [node.output[0], starts.output[0], ends.output[0], slice_axes.output[0]],
@@ -571,10 +574,16 @@ class ConvTranspose:
                     neg_diff_d = ctx.make_node("Neg", [diff_d.output[0]])
                     shrink_d_by = ctx.make_node("Max", [neg_diff_d.output[0], const_zero.output[0]])
                     sdb = shrink_d_by.output[0]
-                    pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, cz, shb, swb, sdb, cz], attr={"axis": 0})
+                    if is_channels_last(node):
+                        pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, cz, shb, swb, sdb, cz], attr={"axis": 0})
+                    else:
+                        pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, cz, cz, shb, swb, sdb], attr={"axis": 0})
                     padded_node = ctx.make_node("Pad", [slice_node.output[0], pads.output[0]])
                 else:
-                    pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, shb, swb, cz], attr={"axis": 0})
+                    if is_channels_last(node):
+                        pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, shb, swb, cz], attr={"axis": 0})
+                    else:
+                        pads = ctx.make_node("Concat", [cz, cz, cz, cz, cz, cz, shb, swb], attr={"axis": 0})
                     padded_node = ctx.make_node("Pad", [slice_node.output[0], pads.output[0]])
 
                 final_node = padded_node
