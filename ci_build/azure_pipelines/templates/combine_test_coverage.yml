@@ -11,7 +11,7 @@ stages:
       CI_ARTIFACT_NAME: '${{ parameters.artifact_name }}'
   
     pool:
-      vmImage: 'ubuntu-16.04'
+      vmImage: 'ubuntu-latest'
   
     steps:
     - task: DownloadBuildArtifacts@0

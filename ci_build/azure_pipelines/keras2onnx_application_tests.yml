@@ -5,7 +5,7 @@ jobs:
 - job: 'Linux'
   timeoutInMinutes: 180
   pool:
-    vmImage: 'Ubuntu-16.04'
+    vmImage: 'ubuntu-latest'
   strategy:
     matrix:
       Python36-onnx1.5:
