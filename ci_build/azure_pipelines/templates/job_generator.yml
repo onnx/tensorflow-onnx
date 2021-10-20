@@ -33,7 +33,7 @@ jobs:
                     ${{ each onnx_opset in parameters.onnx_opsets }}:
                       ${{ format('{0} python{1}{2}{3} tf{4} onnx{5} {6}{7}{8}', platform, python_version, replace(replace(parameters.skip_tflite_tests,'True', ''), 'False', ' tflite'), replace(replace(parameters.skip_tfjs_tests,'True', ''), 'False', ' tfjs'), tf_version, onnx_version, replace(format('opset{0} ', onnx_opset), 'opset ', ''), onnx_backend.key, onnx_backend_version) }}:
                         ${{ if eq(platform, 'linux') }}:
-                          CI_VM_IMAGE: 'ubuntu-16.04'
+                          CI_VM_IMAGE: 'ubuntu-latest'
                         ${{ if eq(platform, 'windows') }}:
                           CI_VM_IMAGE: 'vs2017-win2016'
                         ${{ if eq(platform, 'mac') }}:
