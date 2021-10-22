@@ -5464,6 +5464,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
+    @skip_tfjs("Fails to run tfjs model")
     def test_rfft_ops(self):
 
         def dft_slow(x, M, fft_length):

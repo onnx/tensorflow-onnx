@@ -9,13 +9,15 @@ import tensorflow as tf
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_opset_after_tf_version, skip_tf2, skip_tf_versions, check_op_count
+from common import check_tf_min_version, unittest_main, check_opset_after_tf_version, \
+    skip_tf2, skip_tf_versions, check_op_count
 
 from tf2onnx.tf_loader import is_tf2
 
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
 # pylint: disable=invalid-name
+
 
 if is_tf2():
     # There is no LSTMBlockCell in tf-2.x
@@ -725,6 +727,28 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output_1:0", "cell_state_1:0", "output_2:0", "cell_state_2:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-3, atol=1e-06,
                            require_lstm_count=2)
+
+    @check_tf_min_version("2.0")
+    def test_keras_lstm(self):
+        in_shape = [10, 3]
+        x_val = np.random.uniform(size=[2, 10, 3]).astype(np.float32)
+
+        model_in = tf.keras.layers.Input(tuple(in_shape), batch_size=2)
+        x = tf.keras.layers.LSTM(
+            units=5,
+            return_sequences=True,
+            return_state=True,
+            kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+            recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+            bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43)
+        )(model_in)
+        model = tf.keras.models.Model(inputs=model_in, outputs=x)
+
+        def func(x):
+            y = model(x)
+            # names for input and outputs for tests
+            return tf.identity(y[0], name="output"), tf.identity(y[1], name="output1")
+        self.run_test_case(func, {"input:0": x_val}, [], ["output:0", "output1:0"], rtol=1e-05, atol=1e-06)
 
 
 if __name__ == '__main__':
