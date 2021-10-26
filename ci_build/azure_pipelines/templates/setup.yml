@@ -53,7 +53,7 @@ steps:
     then
       # onnx-weekly won't satisfy onnx requirement so uninstallation must happen here
       pip uninstall -y onnx
-      pip install --index-url https://test.pypi.org/simple/ onnx==1.10.2
+      pip install --index-url https://test.pypi.org/simple/ ${PIP_ONNX_NAME:-onnx}
     fi
 
     pip freeze --all
