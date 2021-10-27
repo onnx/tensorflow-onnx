@@ -729,6 +729,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                            require_lstm_count=2)
 
     @check_tf_min_version("2.0")
+    @skip_tf_versions("2.1", "Bug in TF 2.1")
     def test_keras_lstm(self):
         in_shape = [10, 3]
         x_val = np.random.uniform(size=[2, 10, 3]).astype(np.float32)
