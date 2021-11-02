@@ -2681,6 +2681,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
     @check_opset_min_version(10, "Slice")
+    @skip_tfjs("TFJS executes model incorrectly")
     def test_new_axis_mask(self):
         def func(x, y):
             x_ = x[tf.newaxis, 0:y, y::2, tf.newaxis, :, tf.newaxis, :y, tf.newaxis, ..., 9]
