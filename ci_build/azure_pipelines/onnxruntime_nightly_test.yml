@@ -80,7 +80,7 @@ stages:
       parameters:
         platforms: ['linux']
         python_versions: ['3.9']
-        tf_versions: ['2.6.0']
+        tf_versions: ['2.6.1']
         onnx_opsets: ['']
         onnx_backends: {onnxruntime: ['nightly']}
         job:
