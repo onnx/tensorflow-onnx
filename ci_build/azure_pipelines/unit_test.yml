@@ -7,7 +7,7 @@ stages:
       parameters:
         # TFJS tf 2.6
         python_versions: ['3.9']
-        tf_versions: ['2.6.0']
+        tf_versions: ['2.6.1']
         onnx_opsets: ['']
         skip_tfjs_tests: 'False'
         skip_tf_tests: 'True'
@@ -20,7 +20,7 @@ stages:
       parameters:
         # TFLite tf 2.6
         python_versions: ['3.8']
-        tf_versions: ['2.6.0']
+        tf_versions: ['2.6.1']
         onnx_opsets: ['']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'True'
@@ -33,7 +33,7 @@ stages:
       parameters:
         # tf 2.6
         python_versions: ['3.8']
-        tf_versions: ['2.6.0']
+        tf_versions: ['2.6.1']
         onnx_opsets: ['']
         job:
           steps:
