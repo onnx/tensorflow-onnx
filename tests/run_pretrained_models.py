@@ -38,7 +38,7 @@ except:  # pylint: disable=bare-except
 
 try:
     import tensorflow_text  # pylint: disable=unused-import
-except ModuleNotFoundError:
+except Exception as err:
     pass
 
 from tf2onnx import tf_loader, logging, optimizer, utils, tf_utils, constants
