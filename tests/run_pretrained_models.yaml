@@ -493,7 +493,7 @@ deeplabv3_mnv2_ade20k_uint8_tflite_dequantize:
   model: "deeplabv3_mnv2_ade20k_uint8.tflite"
   model_type: tflite
   input_get: get_ade20k_uint8
-  ptol: 1.0
+  ptol: 1.1  # unreliable because of quantization
   dequantize: true
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
