@@ -45,6 +45,10 @@ steps:
       then
         pip install tensorflow-text>=2.6
       fi
+      if [[ $CI_TF_VERSION == 2.7* ]] ;
+      then
+        pip install tensorflow-text>=2.6
+      fi
     fi
 
     python setup.py install
