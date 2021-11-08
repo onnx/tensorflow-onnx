@@ -209,6 +209,17 @@ googlenet_v4_slim:
     - InceptionV4/Logits/Predictions:0
   rtol: 0.1
 
+squeezenet:
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/tflite/model_zoo/upload_20180427/squeezenet_2018_04_27.tgz
+  model: squeezenet.pb
+  input_get: get_beach
+  inputs:
+    "Placeholder:0": [1, 224, 224, 3]
+  outputs:
+    - softmax_tensor:0
+    - ArgMax:0
+
 mobilenet_v3_large_float:
   tf_min_version: 1.14  # explicit_paddings for Conv2D
   url: https://storage.googleapis.com/mobilenet_v3/checkpoints/v3-large_224_1.0_float.tgz
@@ -493,7 +504,7 @@ deeplabv3_mnv2_ade20k_uint8_tflite_dequantize:
   model: "deeplabv3_mnv2_ade20k_uint8.tflite"
   model_type: tflite
   input_get: get_ade20k_uint8
-  ptol: 1.1  # unreliable because of quantization
+  ptol: 0.1  # unreliable because of quantization
   dequantize: true
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
@@ -510,7 +521,7 @@ deeplabv3_mnv2_ade20k_uint8_tflite:
   opset_constraints:
     "onnx":
       "min": 10
-  ptol: 1.5
+  ptol: 0.1
   dequantize: false
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
@@ -524,7 +535,7 @@ deeplabv3_mnv2_ade20k_int8_tflite_dequantize:
   model: "deeplabv3_mnv2_ade20k_int8.tflite"
   model_type: tflite
   input_get: get_ade20k_uint8   # the input is uint8 despite the model name
-  ptol: 3.0
+  ptol: 0.1
   dequantize: true
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
@@ -541,7 +552,7 @@ deeplabv3_mnv2_ade20k_int8_tflite:
   opset_constraints:
     "onnx":
       "min": 13
-  ptol: 1.9
+  ptol: 0.1
   dequantize: false
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
@@ -568,6 +579,7 @@ mobilebert_tflite:
     - end_logits
     - start_logits
 
+    
 palm_detection_tflite:
   tf_min_version: 2.1
   disabled: false
