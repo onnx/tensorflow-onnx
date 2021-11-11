@@ -2818,6 +2818,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
 
     @check_opset_min_version(7, "batchnorm")
+    def test_fused_batchnorm_3d(self):
+        x_shape = [1, 28, 28, 2, 2]
+        x_dtype = np.float32
+        scale_dtype = np.float32
+        scale_shape = [2]
+        data_format = "NDHWC"
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        mean_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        def func(x):
+            scale = tf.constant(scale_val, name='scale')
+            offset = tf.constant(offset_val, name='offset')
+            mean = tf.constant(mean_val, name='mean')
+            var = tf.constant(var_val, name='variance')
+            epsilon = 0.001
+            y, _, _ = fused_batch_norm(
+                x, scale, offset, mean=mean, variance=var,
+                epsilon=epsilon, data_format=data_format, is_training=False)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
+
+    @check_opset_min_version(7, "batchnorm")
     @skip_tfjs("TFJS executes model incorrectly")
     def test_fused_batchnorm_training(self):
         x_shape = [1, 28, 28, 2]

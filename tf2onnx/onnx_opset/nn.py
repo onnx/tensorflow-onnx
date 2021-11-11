@@ -943,6 +943,14 @@ class BatchNorm:
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
         tf_type = node.type
+        input_rank = len(ctx.get_shape(node.input[0]))
+        if input_rank == 4:
+            spatial = 2
+        elif input_rank == 5:
+            spatial = 3
+        else:
+            raise ValueError("node input must be 4 or 5-dimensional, is {} now".format(input_rank))
+
         node.type = "BatchNormalization"
         # tf inputs: x, scale, bias, mean, variance
         # tf outputs: y, batch_mean, batch_var
@@ -973,7 +981,7 @@ class BatchNorm:
             # the setter makes a copy of new_output
             node.output = new_output
 
-        conv_convert_inputs(ctx, node, with_kernel=False)
+        conv_convert_inputs(ctx, node, with_kernel=False, spatial=spatial)
 
         inp_shape = ctx.get_shape(node.input[0])
         inp_rank = len(inp_shape) if inp_shape is not None else None
