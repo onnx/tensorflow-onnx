@@ -2291,8 +2291,6 @@ class EinsumOptimizer(GraphOptimizerBase):
 
     def _optimize_einsum(self, node, graph):
         """Apply the optimizer."""
-        if node.inputs[1].is_const():
-            return False
         inp_shape = graph.get_shape(node.input[0])
         if inp_shape is None:
             # The rank must be known

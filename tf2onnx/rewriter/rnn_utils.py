@@ -28,52 +28,75 @@ class REWRITER_RESULT(Enum):
     FAIL = 3
 
 
-# TensorFlow LSTMCell/BasicLSTMCell computation graph matching
+# TensorFlow LSTMCell/BasicLSTMCell and Keras LSTM computation graph matching
 
-_make_xc_pattern_memo = {}
+def make_lstm_xc_pattern(enter_or_id="Enter", from_keras=False, use_bias=False):
+    if from_keras:
+        lstm_xh_pattern = OpTypePattern("Add|AddV2", allow_reorder=False, inputs=[
+            # xt*(W^T)
+            OpTypePattern("MatMul", name='x', inputs=[
+                OpTypePattern("TensorListGetItem", name="xt"),
+                OpTypePattern("*", name="W"),
+            ], allow_reorder=False),
 
-def make_xc_pattern(enter_or_id="Enter"):
-    return OpTypePattern('Split', inputs=[
-        OpTypePattern("Const"), # axis for split
-        OpTypePattern("BiasAdd", name="bias_add", inputs=[
-            OpTypePattern("MatMul", inputs=[
-                OpTypePattern("ConcatV2|Concat", name="xh"),
-                OpTypePattern(enter_or_id, inputs=[
-                    OpTypePattern("*", name="cell_kernel"),
-                ]),
-            ]),
+            # (ht-1)*(R^T)
+            OpTypePattern("MatMul", name='h', inputs=[
+                OpTypePattern("*", name="ht-1"),
+                OpTypePattern("*", name="R"),
+            ], allow_reorder=False),
+        ])
+        return lstm_xh_pattern if not use_bias else \
+            OpTypePattern("BiasAdd", name="bias_add", inputs=[
+                lstm_xh_pattern,
+                OpTypePattern("*", name="cell_bias")
+            ])
+    return OpTypePattern("BiasAdd", name="bias_add", inputs=[
+        OpTypePattern("MatMul", inputs=[
+            OpTypePattern("ConcatV2|Concat", name="xh"),
             OpTypePattern(enter_or_id, inputs=[
-                OpTypePattern("*", name="cell_bias"),
+                OpTypePattern("*", name="cell_kernel"),
             ]),
+        ]),
+        OpTypePattern(enter_or_id, inputs=[
+            OpTypePattern("*", name="cell_bias"),
         ]),
     ])
 
-xc_pattern = make_xc_pattern()
 
-def make_lstmcell_pattern(enter_or_id="Enter"):
-    my_xc_pattern = make_xc_pattern(enter_or_id)
-    return OpTypePattern('Mul', name='ht', inputs=[
-        OpTypePattern("Sigmoid", name="ot", inputs=[my_xc_pattern]),
-        OpTypePattern('Tanh', inputs=[
+def make_lstm_pattern(enter_or_id="Enter", from_keras=False, use_bias=False):
+    # split (Xt*(W[ifco]^T) + Ht-1*(R[ifco]^T)) on 'Const' axis
+    lstm_xc_pattern = OpTypePattern('Split', inputs=[
+        OpTypePattern("Const"),
+        make_lstm_xc_pattern(enter_or_id, from_keras, use_bias)
+    ])
+
+    # TF forget gate bias
+    lstm_fb_pattern = lstm_xc_pattern if from_keras else \
+        OpTypePattern("Add|AddV2", inputs=[
+            lstm_xc_pattern,
+            OpTypePattern("*", name="ft_bias"),
+        ])
+
+    activation = "Tanh|Relu|Sigmoid"
+    recurrent_activation = "Tanh|Relu|Sigmoid"
+
+    return OpTypePattern("Mul", name='ht', inputs=[
+        OpTypePattern(recurrent_activation, name="ot", inputs=[lstm_xc_pattern]),
+        OpTypePattern(activation, name="ct'", inputs=[
             OpTypePattern("Add|AddV2", name="ct", inputs=[
                 OpTypePattern("Mul", name="ct_identity_consumer", inputs=[
-                    OpTypePattern("Sigmoid", name="ft", inputs=[
-                        OpTypePattern("Add|AddV2", inputs=[
-                            my_xc_pattern,
-                            OpTypePattern("*", name="ft_bias"),
-                        ]),
-                    ]),
+                    OpTypePattern(recurrent_activation, name="ft", inputs=[lstm_fb_pattern]),
                     OpTypePattern("*", name="c"),
                 ]),
                 OpTypePattern("Mul", inputs=[
-                    OpTypePattern("Sigmoid", name="it", inputs=[my_xc_pattern]),
-                    OpTypePattern("Tanh", name="gt", inputs=[my_xc_pattern]),
+                    OpTypePattern(recurrent_activation, name="it", inputs=[lstm_xc_pattern]),
+                    OpTypePattern(activation, name="gt", inputs=[lstm_xc_pattern]),
                 ]),
             ]),
         ]),
     ])
 
-lstmcell_pattern = make_lstmcell_pattern()
+lstmcell_pattern = make_lstm_pattern()
 
 xc_pattern_optimized = \
     OpTypePattern('Split', inputs=[
@@ -110,16 +133,16 @@ lstmcell_pattern_optimized = \
 
 # input sequence: top to down, left to right
 # split into update gate and reset gate
-gru_split_pattern = \
-    OpTypePattern("Split", inputs=[
+def make_gru_split_pattern(enter_or_id="Enter"):
+    return OpTypePattern("Split", inputs=[
         OpTypePattern("Const"),  # split dim, a constant
         OpTypePattern("Sigmoid", inputs=[
-            OpTypePattern("BiasAdd", inputs=[
-                OpTypePattern("Enter", inputs=[
+            OpTypePattern("BiasAdd", name="bias_add", inputs=[
+                OpTypePattern(enter_or_id, inputs=[
                     OpTypePattern("*", name="gate_bias")
                 ]),
                 OpTypePattern("MatMul", name="update_reset_gate", inputs=[
-                    OpTypePattern("Enter", inputs=[
+                    OpTypePattern(enter_or_id, inputs=[
                         OpTypePattern("*", name="gate_kernel")
                     ]),
                     OpTypePattern("ConcatV2|Concat", name="cell_inputs")
@@ -128,25 +151,26 @@ gru_split_pattern = \
         ])
     ])
 
+gru_split_pattern = make_gru_split_pattern()
 
-grucell_pattern = \
-    OpTypePattern("Add", name="cell_output", inputs=[
+def make_grucell_pattern(enter_or_id="Enter"):
+    return OpTypePattern("Add|AddV2", name="cell_output", inputs=[
         OpTypePattern("Mul", inputs=[
-            gru_split_pattern,
-            OpTypePattern("Identity")
+            make_gru_split_pattern(enter_or_id),
+            OpTypePattern("Identity|Placeholder")
         ]),
         OpTypePattern("Mul", inputs=[
             OpTypePattern("Sub", inputs=[
                 OpTypePattern("Const"),  # 1-u
-                gru_split_pattern
-            ]),
+                make_gru_split_pattern(enter_or_id)
+            ], allow_reorder=False),
             OpTypePattern("*", name="optional_activation", inputs=[
                 OpTypePattern("BiasAdd", inputs=[
-                    OpTypePattern("Enter", inputs=[
+                    OpTypePattern(enter_or_id, inputs=[
                         OpTypePattern("*", name="hidden_bias")
                     ]),
                     OpTypePattern("MatMul", inputs=[
-                        OpTypePattern("Enter", inputs=[
+                        OpTypePattern(enter_or_id, inputs=[
                             OpTypePattern("*", name="hidden_kernel")
                         ]),
                         OpTypePattern("ConcatV2|Concat")
@@ -156,6 +180,54 @@ grucell_pattern = \
         ])
     ])
 
+grucell_pattern = make_grucell_pattern()
+
+def make_keras_gru_split_pattern(bias_name, kernel_name, input_name, input_op_type):
+    return OpTypePattern("Split", inputs=[
+        OpTypePattern("Const"),
+        OpTypePattern("BiasAdd", inputs=[
+            OpTypePattern("MatMul", inputs=[
+                OpTypePattern(input_op_type, name=input_name),
+                OpTypePattern("Placeholder|PlaceholderV2|Identity", name=kernel_name),
+            ], allow_reorder=False),
+            OpTypePattern("Placeholder|PlaceholderV2", name=bias_name)
+        ])
+    ])
+
+keras_gru_split0_pattern = make_keras_gru_split_pattern("gate_bias", "gate_kernel", "gru_input", "TensorListGetItem")
+keras_gru_split1_pattern = \
+    make_keras_gru_split_pattern("hidden_bias", "hidden_kernel", "state", "Placeholder|PlaceholderV2")
+
+keras_gru_sigmoid_pattern = \
+    OpTypePattern("Sigmoid", inputs=[
+        OpTypePattern("Add|AddV2", inputs=[
+            keras_gru_split0_pattern,
+            keras_gru_split1_pattern
+        ])
+    ])
+
+keras_gru_pattern = \
+    OpTypePattern("Add|AddV2", name="cell_output", inputs=[
+        OpTypePattern("Mul", inputs=[
+            keras_gru_sigmoid_pattern,
+            OpTypePattern("Placeholder|PlaceholderV2")
+        ]),
+        OpTypePattern("Mul", inputs=[
+            OpTypePattern("Sub", inputs=[
+                OpTypePattern("Const"),
+                keras_gru_sigmoid_pattern
+            ], allow_reorder=False),
+            OpTypePattern("*", name="optional_activation", inputs=[
+                OpTypePattern("Add|AddV2", inputs=[
+                    keras_gru_split0_pattern,
+                    OpTypePattern("Mul", inputs=[
+                        keras_gru_sigmoid_pattern,
+                        keras_gru_split1_pattern
+                    ])
+                ])
+            ])
+        ])
+    ])
 
 cudnn_compatible_grucell_pattern = \
     OpTypePattern("Add", name="cell_output", inputs=[
@@ -163,7 +235,7 @@ cudnn_compatible_grucell_pattern = \
             OpTypePattern("Sub", inputs=[
                 OpTypePattern("Const"),  # 1-u
                 gru_split_pattern
-            ]),
+            ], allow_reorder=False),
             OpTypePattern("*", name="optional_activation", inputs=[
                 OpTypePattern("Add", inputs=[
                     OpTypePattern("Mul", inputs=[

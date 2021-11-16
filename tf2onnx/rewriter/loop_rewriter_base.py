@@ -52,18 +52,19 @@ class LoopProperties(object):
         self.tensor_array_inputs = []  # list of type InputTensorArray
 
     def add_variable(self, var):
-        utils.make_sure(var.enter_name not in self.scan_variables,
-                        "variable %s already exists as scan variable.", var.enter_name)
-        utils.make_sure(var.enter_name not in self.state_variables,
-                        "variable %s already exists as state variable.", var.enter_name)
+        key = (var.enter_name, var.merge_name)
+        utils.make_sure(key not in self.scan_variables,
+                        "variable %r already exists as scan variable.", key)
+        utils.make_sure(key not in self.state_variables,
+                        "variable %r already exists as state variable.", key)
         if var.tensor_array_type == TensorArrayVariableType.READ_LAST:
             # If the variable just returns the last value of the constructed tensor array, it doesn't need to be
             # a scan output
-            self.unneeded_scan_variables[var.enter_name] = var
+            self.unneeded_scan_variables[key] = var
         elif var.tensor_array_type == TensorArrayVariableType.GATHER_ALL:
-            self.scan_variables[var.enter_name] = var
+            self.scan_variables[key] = var
         else:
-            self.state_variables[var.enter_name] = var
+            self.state_variables[key] = var
 
     def get_variables(self, checker):
         if not checker:
@@ -146,9 +147,10 @@ class LoopVariable(object):
            5. the body graph output might go to next iteration as corresponding input
               (e.g. switch_true_identity_output.id).
     """
-    def __init__(self, enter_name, enter_input_id, next_iteration_input_id,
+    def __init__(self, enter_name, merge_name, enter_input_id, next_iteration_input_id,
                  switch_true_identity_output_id, exit_output_id, tensor_array_type, ta_index_id, g):
         self.enter_name = enter_name
+        self.merge_name = merge_name
         self.enter_input_id = enter_input_id
 
         # the output of iteration body graph for this variable
@@ -330,7 +332,7 @@ class LoopRewriterBase(object):
         dependent_vars = []
         for merge_node in merge_nodes:
             enter_node = [n for n in merge_node.inputs if n.type == "Enter"][0]
-            loop_var = context.loop_properties.all_variables[enter_node.name]
+            loop_var = context.loop_properties.all_variables[(enter_node.name, merge_node.name)]
 
             # cut off connection between condition graph and Merge node.
             # replace condition graph's inputs to be cell graph's outputs, because we want condition graph
@@ -447,7 +449,7 @@ class LoopRewriterBase(object):
                 # update exit output id, treat the gather output as ta's output
                 exit_output_id = ta_access_node.output[0]
 
-        loop_var = LoopVariable(enter_node.name, target_node_input_id, last_iteration_output_id,
+        loop_var = LoopVariable(enter_node.name, merge_node.name, target_node_input_id, last_iteration_output_id,
                                 switch_true_identity_output, exit_output_id, ta_type, ta_index_id, self.g)
 
         return loop_var

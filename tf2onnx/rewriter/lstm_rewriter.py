@@ -217,46 +217,77 @@ class LSTMRewriter(LSTMRewriterBase):
             return False
         return True
 
-    def process_weights_and_bias_per_layer(self, context, i):
+    def _convert_gates_icfo_to_iofc(self, gates, axis=0):
+        # from Tensorflow
+        return (np.concatenate((g[0], g[3], g[2], g[1]), axis=axis) for g in gates)
+
+    def _convert_gates_ifco_to_iofc(self, gates, axis=0):
+        # from Keras
+        return (np.concatenate((g[0], g[3], g[1], g[2]), axis=axis) for g in gates)
+
+    def _process_weights_and_bias_per_layer(self, context, i):
         weights = context.weights[i]
-        w_r_icfo = weights["weight"]
-        w_dtype = weights["weight"].dtype
-        b_r_icfo = weights["bias"]
-        b_dtype = weights["bias"].dtype
-        ft_bias_scalar = weights["ft_bias"]
 
-        # split bias for each hidden unit
-        # b_r_icfo: (4 * num_units,)
-        bias_dim = b_r_icfo.shape[0]
-        hidden_size = int(bias_dim / 4)
-        b_r_icfo = np.reshape(b_r_icfo, (1, bias_dim))
-        bias_gates = np.split(b_r_icfo, 4, axis=1)
-        ft_bias = np.add(bias_gates[2], ft_bias_scalar)
-        wb_bias_iofc = np.concatenate((bias_gates[0], bias_gates[3], ft_bias, bias_gates[1]), axis=1)
+        if context.from_keras:
+            wx = weights["w"]
+            wh = weights["r"]
+            w_dtype = weights["w"].dtype
+            hidden_size = int(wx.shape[1] / 4)
 
-        # fill Rb with empty since in TF, we have only one bias.
+            # split bias for each hidden unit
+            if weights["bias"] is not None:
+                b_r_icfo = weights["bias"] # (4 * num_units,)
+                b_dtype = weights["bias"].dtype
+                bias_dim = b_r_icfo.shape[0]
+                assert int(bias_dim / 4) == hidden_size
+
+                b_r_icfo = np.reshape(b_r_icfo, (1, bias_dim))
+                bias_gates = np.split(b_r_icfo, 4, axis=1)
+                wb_bias_iofc, = self._convert_gates_ifco_to_iofc([bias_gates], axis=1)
+            else:
+                bias_dim = 4 * hidden_size
+                b_dtype = w_dtype # use w_dtype if bias is not given
+                wb_bias_iofc = np.zeros((1, bias_dim), dtype=b_dtype)
+
+        else:
+            w_r_icfo = weights["weight"]
+            w_dtype = weights["weight"].dtype
+            b_r_icfo = weights["bias"]
+            b_dtype = weights["bias"].dtype
+            ft_bias_scalar = weights["ft_bias"]
+
+            # split bias for each hidden unit
+            bias_dim = b_r_icfo.shape[0]
+            hidden_size = int(bias_dim / 4)
+            b_r_icfo = np.reshape(b_r_icfo, (1, bias_dim)) # (4 * num_units,)
+            bias_gates = np.split(b_r_icfo, 4, axis=1)
+            bias_gates[2] = np.add(bias_gates[2], ft_bias_scalar)
+            wb_bias_iofc, = self._convert_gates_icfo_to_iofc([bias_gates], axis=1)
+
+            [wx, wh] = np.split(w_r_icfo, [-1 * hidden_size])
+            assert int(wx.shape[1] / 4) == hidden_size
+
+        # fill Rb with zeros since TF and Keras have Wb bias.
         rb_bias_iofc = np.zeros((1, bias_dim), dtype=b_dtype)
         B = np.concatenate((wb_bias_iofc, rb_bias_iofc), axis=1)
         assert B.shape == (1, 2 * bias_dim)
 
-        [wx, wh] = np.split(w_r_icfo, [-1 * hidden_size])
-        input_size = wx.shape[0]
-        assert wx.shape[0] == input_size
-        assert int(wx.shape[1] / 4) == hidden_size
-
-        # split weight for gates
         w_gates = np.split(wx, 4, axis=1)
-        new_wx = np.concatenate((w_gates[0], w_gates[3], w_gates[2], w_gates[1]), axis=1)
-
         h_gates = np.split(wh, 4, axis=1)
-        new_wh = np.concatenate((h_gates[0], h_gates[3], h_gates[2], h_gates[1]), axis=1)
-        W_iofc = np.transpose(new_wx)
-        R_iofc = np.transpose(new_wh)
+        new_w, new_r = self._convert_gates_ifco_to_iofc([w_gates, h_gates], axis=1) if context.from_keras else \
+            self._convert_gates_icfo_to_iofc([w_gates, h_gates], axis=1)
 
+        W_iofc = np.transpose(new_w)
+        R_iofc = np.transpose(new_r)
         W = np.array([W_iofc], w_dtype)
         R = np.array([R_iofc], w_dtype)
 
-        # create node
+        return W, R, B
+
+    def _make_constants(self, context, i, W, R, B):
+        input_size = W.shape[-1]
+        hidden_size = R.shape[-1]
+
         w_name = utils.make_name("W" + str(i))
         w_node = self.g.make_const(w_name, W, skip_conversion=True)
 
@@ -271,6 +302,10 @@ class LSTMRewriter(LSTMRewriterBase):
         context.onnx_input_ids[i]["W"] = w_node.output[0]
         context.onnx_input_ids[i]["R"] = r_node.output[0]
         context.onnx_input_ids[i]["B"] = b_node.output[0]
+
+    def process_weights_and_bias_per_layer(self, context, i):
+        W, R, B = self._process_weights_and_bias_per_layer(context, i)
+        self._make_constants(context, i, W, R, B) # create node
 
     def process_weights_and_bias(self, context):
         for i in range(self.num_lstm_layers):
@@ -339,7 +374,6 @@ class LSTMRewriter(LSTMRewriterBase):
         # after this one, which will based on patterns to combine a forward LSTM and a
         # backward LSTM into a bidirectional one.
         num_direction = 1
-        # todo: input_forget
         context.attributes[i]["direction"] = "forward"
         context.attributes[i]["hidden_size"] = context.hidden_size[i]
         inputs = context.onnx_input_ids[i]

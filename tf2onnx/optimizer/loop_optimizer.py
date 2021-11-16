@@ -2,7 +2,7 @@
 
 
 """Loop Optimizer.
-   some op in loop's body graph can be moved out to the loop
+   some op in loop's body graph can be moved out of the loop
 """
 
 from tf2onnx.utils import make_name, make_sure
@@ -36,13 +36,15 @@ class LoopOptimizer(GraphOptimizerBase):
         return g
 
     @staticmethod
-    def consumer_nodes_num(graph, node):
+    def num_consumers(graph, node):
         make_sure(len(node.output) == 1, "only consider node with only one output")
         res = len(graph.find_output_consumers(node.output[0]))
+        # This is an optimizer so we cannot rely on outputs having Identity nodes
+        res += graph.outputs.count(node.output[0])
         return res
 
     def _try_move_transpose_out_of_body_graph(self, loop_node):
-        # output node of body graph can be loop-carried-dependent, if so it can't be move out of the body graph
+        # output node of body graph can be loop-carried-dependent, if so it can't be moved out of the body graph
         # return True if moving some nodes successfully
         # for now, we only consider moving transpose
         body_graph = loop_node.get_body_graphs()["body"]
@@ -54,14 +56,14 @@ class LoopOptimizer(GraphOptimizerBase):
             # 1 delete node in body graph if possible
             # only consider two case: trans is output, or transpose > identity > output
             need_process = False
-            if node.type == "Transpose" and self.consumer_nodes_num(body_graph, node) <= 1:
+            if node.type == "Transpose" and self.num_consumers(body_graph, node) == 1:
                 trans = node
                 new_output = node.input[0]
                 body_graph.remove_node(node.name)
                 need_process = True
             elif node.type == "Identity" and node.inputs[0].type == "Transpose" \
-                    and self.consumer_nodes_num(body_graph, node) <= 1\
-                    and self.consumer_nodes_num(body_graph, node.inputs[0]) <= 1:
+                    and self.num_consumers(body_graph, node) == 1\
+                    and self.num_consumers(body_graph, node.inputs[0]) == 1:
                 trans = node.inputs[0]
                 new_output = node.inputs[0].input[0]
                 body_graph.remove_node(node.inputs[0].name)

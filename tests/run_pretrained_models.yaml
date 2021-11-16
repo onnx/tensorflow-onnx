@@ -209,7 +209,19 @@ googlenet_v4_slim:
     - InceptionV4/Logits/Predictions:0
   rtol: 0.1
 
+squeezenet:
+  disabled: true
+  url: https://storage.googleapis.com/download.tensorflow.org/models/tflite/model_zoo/upload_20180427/squeezenet_2018_04_27.tgz
+  model: squeezenet.pb
+  input_get: get_beach
+  inputs:
+    "Placeholder:0": [1, 224, 224, 3]
+  outputs:
+    - softmax_tensor:0
+    - ArgMax:0
+
 mobilenet_v3_large_float:
+  tf_min_version: 1.14  # explicit_paddings for Conv2D
   url: https://storage.googleapis.com/mobilenet_v3/checkpoints/v3-large_224_1.0_float.tgz
   model: v3-large_224_1.0_float/v3-large_224_1.0_float.pb
   input_get: get_beach
@@ -319,11 +331,13 @@ resnet50_v1:
     - softmax_tensor:0
 
 ssd_mobilenet_v3_large_coco:
+  tf_min_version: 2.2
   url: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_large_coco_2019_08_14.tar.gz
   model: ssd_mobilenet_v3_large_coco_2019_08_14/frozen_inference_graph.pb
   opset_constraints:
     "onnx":
       "min": 10
+      "max": 15
   input_get: get_beach
   inputs:
     "normalized_input_image_tensor:0": [1, 320, 320, 3]
@@ -418,6 +432,7 @@ faster_rcnn_inception_v2_coco:
   opset_constraints:
     "onnx":
       "min": 11
+      "max": 15
   input_get: get_beach
   inputs:
     "image_tensor:0": [1, 224, 224, 3]
@@ -428,7 +443,7 @@ faster_rcnn_inception_v2_coco:
     - num_detections:0
 
 keras_resnet50:
-  tf_min_version: 2.1
+  tf_min_version: 2.2
   disabled: false
   url: module://tensorflow.keras.applications.resnet50/ResNet50
   model: ResNet50
@@ -440,7 +455,7 @@ keras_resnet50:
     - Identity:0
 
 keras_mobilenet_v2:
-  tf_min_version: 2.1
+  tf_min_version: 2.2
   disabled: false
   url: module://tensorflow.keras.applications.mobilenet_v2/MobileNetV2
   model: MobileNetV2
@@ -454,7 +469,7 @@ keras_mobilenet_v2:
 ssd_mobilenet_v2_300_float_tflite:
   tf_min_version: 2.1
   disabled: false
-  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/ssd_mobilenet_v2_300_float.tflite
+  url: https://github.com/mlcommons/mobile_models/raw/9c7b31ce63ff0331bd659ac2609c4e68b6b4ec0f/v0_7/tflite/ssd_mobilenet_v2_300_float.tflite
   model: "ssd_mobilenet_v2_300_float.tflite"
   model_type: tflite
   input_get: get_car
@@ -472,7 +487,7 @@ ssd_mobilenet_v2_300_float_tflite:
 deeplabv3_mnv2_ade20k_float_tflite:
   tf_min_version: 2.1
   disabled: false
-  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_float.tflite
+  url: https://github.com/mlcommons/mobile_models/raw/9c7b31ce63ff0331bd659ac2609c4e68b6b4ec0f/v0_7/tflite/deeplabv3_mnv2_ade20k_float.tflite
   model: "deeplabv3_mnv2_ade20k_float.tflite"
   model_type: tflite
   input_get: get_ade20k
@@ -485,11 +500,11 @@ deeplabv3_mnv2_ade20k_float_tflite:
 deeplabv3_mnv2_ade20k_uint8_tflite_dequantize:
   tf_min_version: 2.1
   disabled: false
-  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
+  url: https://github.com/mlcommons/mobile_models/raw/9c7b31ce63ff0331bd659ac2609c4e68b6b4ec0f/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
   model: "deeplabv3_mnv2_ade20k_uint8.tflite"
   model_type: tflite
   input_get: get_ade20k_uint8
-  ptol: 1.0
+  ptol: 0.1  # unreliable because of quantization
   dequantize: true
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
@@ -499,14 +514,14 @@ deeplabv3_mnv2_ade20k_uint8_tflite_dequantize:
 deeplabv3_mnv2_ade20k_uint8_tflite:
   tf_min_version: 2.1
   disabled: true   # Requires ORT nightly for dequantize of int32
-  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
+  url: https://github.com/mlcommons/mobile_models/raw/9c7b31ce63ff0331bd659ac2609c4e68b6b4ec0f/v0_7/tflite/deeplabv3_mnv2_ade20k_uint8.tflite
   model: "deeplabv3_mnv2_ade20k_uint8.tflite"
   model_type: tflite
   input_get: get_ade20k_uint8
   opset_constraints:
     "onnx":
       "min": 10
-  ptol: 1.5
+  ptol: 0.1
   dequantize: false
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
@@ -516,11 +531,11 @@ deeplabv3_mnv2_ade20k_uint8_tflite:
 deeplabv3_mnv2_ade20k_int8_tflite_dequantize:
   tf_min_version: 2.1
   disabled: false
-  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_int8.tflite
+  url: https://github.com/mlcommons/mobile_models/raw/9c7b31ce63ff0331bd659ac2609c4e68b6b4ec0f/v0_7/tflite/deeplabv3_mnv2_ade20k_int8.tflite
   model: "deeplabv3_mnv2_ade20k_int8.tflite"
   model_type: tflite
   input_get: get_ade20k_uint8   # the input is uint8 despite the model name
-  ptol: 3.0
+  ptol: 0.1
   dequantize: true
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
@@ -530,14 +545,14 @@ deeplabv3_mnv2_ade20k_int8_tflite_dequantize:
 deeplabv3_mnv2_ade20k_int8_tflite:
   tf_min_version: 2.1
   disabled: true   # Requires ORT nightly for dequantize of int32
-  url: https://github.com/mlcommons/mobile_models/raw/main/v0_7/tflite/deeplabv3_mnv2_ade20k_int8.tflite
+  url: https://github.com/mlcommons/mobile_models/raw/9c7b31ce63ff0331bd659ac2609c4e68b6b4ec0f/v0_7/tflite/deeplabv3_mnv2_ade20k_int8.tflite
   model: "deeplabv3_mnv2_ade20k_int8.tflite"
   model_type: tflite
   input_get: get_ade20k_uint8   # the input is uint8 despite the model name
   opset_constraints:
     "onnx":
       "min": 13
-  ptol: 1.9
+  ptol: 0.1
   dequantize: false
   inputs:
     "MobilenetV2/MobilenetV2/input": [1, 512, 512, 3]
@@ -564,10 +579,11 @@ mobilebert_tflite:
     - end_logits
     - start_logits
 
+    
 palm_detection_tflite:
   tf_min_version: 2.1
   disabled: false
-  url: https://github.com/google/mediapipe/raw/master/mediapipe/modules/palm_detection/palm_detection.tflite
+  url: https://github.com/google/mediapipe/raw/v0.8.8/mediapipe/modules/palm_detection/palm_detection.tflite
   model: "palm_detection.tflite"
   model_type: tflite
   input_get: get_beach

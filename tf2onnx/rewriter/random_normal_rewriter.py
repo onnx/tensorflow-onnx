@@ -16,8 +16,8 @@ def rewrite_random_normal(g, ops):
     pattern1 = \
         OpTypePattern('Add', name='output', inputs=[
             OpTypePattern('Mul', name='input2', inputs=[
-                OpTypePattern('RandomStandardNormal', name='input1', inputs=["*"]), "*"
-            ]), "*"
+                OpTypePattern('RandomStandardNormal', name='input1', inputs=["*"]), "Const|ConstV2"
+            ]), "Const|ConstV2"
         ])
 
     pattern2 = \

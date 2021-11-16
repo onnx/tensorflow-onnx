@@ -727,7 +727,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
 
     @skip_tflite("TFlite adds ops that obscure pattern")
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
     def test_conv1d_dilations_rewriter(self):
         x_shape = [2, 32, 3]
         x_val = make_xval(x_shape)
@@ -740,7 +740,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
     def test_conv2d_dilations_rewriter(self):
         x_shape = [2, 32, 16, 3]
         x_val = make_xval(x_shape)
@@ -760,7 +760,39 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
+    @skip_tf_cpu("only tf_gpu can run conv2d with NCHW format")
+    def test_nchw_conv2d_dilations_rewriter(self):
+        x_shape = [2, 3, 32, 16]
+        x_val = make_xval(x_shape)
+        for p in ['SAME', 'VALID']:
+            def func(x):
+                t = tf.keras.layers.Conv2D(
+                    filters=768,
+                    kernel_size=3,
+                    dilation_rate=3,
+                    padding=p,
+                    data_format='channels_first'
+                )
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+            def func(x):
+                t = tf.keras.layers.DepthwiseConv2D(
+                    kernel_size=3,
+                    dilation_rate=3,
+                    padding=p,
+                    data_format='channels_first'
+                )
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("1.15")
     @skip_tflite("TFlite adds ops that obscure pattern")
     @allow_missing_shapes("Rewriting makes some shapes known")
     def test_conv2d_dilations_rewriter_unknown_shape(self):
@@ -776,13 +808,56 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             as_session=True, premade_placeholders=True,
                             graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
+    @skip_tflite("TFlite adds ops that obscure pattern")
+    @skip_tf_cpu("only tf_gpu can run conv2d with NCHW format")
+    @allow_missing_shapes("Rewriting makes some shapes known")
+    def test_nchw_conv2d_dilations_rewriter_unknown_shape(self):
+        x_shape = [2, 3, 32, 16]
+        x_val = make_xval(x_shape)
+        def func():
+            x = tf_placeholder(tf.float32, [2, 3, None, None], name=_TFINPUT)
+            t = tf.keras.layers.Conv2D(
+                filters=768,
+                kernel_size=3,
+                dilation_rate=3,
+                padding="VALID",
+                data_format='channels_first'
+            )
+            t.build(x_shape)
+            y = t.call(x)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2,
+                            as_session=True, premade_placeholders=True,
+                            graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("1.15")
     def test_conv3d_dilations_rewriter(self):
         x_shape = [2, 32, 16, 8, 3]
         x_val = make_xval(x_shape)
         for p in ['SAME', 'VALID']:
             def func(x):
                 t = tf.keras.layers.Conv3D(filters=768, kernel_size=3, dilation_rate=3, padding=p)
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("1.15")
+    @skip_tf_cpu("only tf_gpu can run conv3d with NCDHW format")
+    def test_ncdhw_conv3d_dilations_rewriter(self):
+        x_shape = [2, 3, 32, 16, 8]
+        x_val = make_xval(x_shape)
+        for p in ['SAME', 'VALID']:
+            def func(x):
+                t = tf.keras.layers.Conv3D(
+                    filters=768,
+                    kernel_size=3,
+                    dilation_rate=3,
+                    padding=p,
+                    data_format='channels_first'
+                )
                 t.build(x_shape)
                 y = t.call(x)
                 return tf.identity(y, name=_TFOUTPUT)
@@ -2044,6 +2119,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(op, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "Compress")
+    def test_pad_symmetric(self):
+        x_val = make_xval([4, 1, 5])
+        def func(x):
+            paddings = tf.constant([[1, 3], [0, 0], [2, 4]], name="paddings")
+            op = tf.pad(x, paddings, mode="SYMMETRIC", name="symmetric")
+            return tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Pad")
+    def test_dynamic_pad_symmetric(self):
+        x_val = make_xval([4, 1, 5])
+        y_val = np.array([[1, 3], [0, 0], [2, 4]], np.int32)
+        def func(x, y):
+            op = tf.pad(x, y, mode="SYMMETRIC", name="symmetric")
+            return tf.identity(op, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
     @skip_caffe2_backend()
     def test_randomuniform(self):
         def func():
@@ -2663,6 +2756,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
     @check_opset_min_version(10, "Slice")
+    @skip_tfjs("TFJS executes model incorrectly")
     def test_new_axis_mask(self):
         def func(x, y):
             x_ = x[tf.newaxis, 0:y, y::2, tf.newaxis, :, tf.newaxis, :y, tf.newaxis, ..., 9]
@@ -2706,6 +2800,31 @@ class BackendTests(Tf2OnnxBackendTestBase):
         scale_shape = [2]
         # only nhwc is support on cpu for tensorflow
         data_format = "NHWC"
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        mean_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        def func(x):
+            scale = tf.constant(scale_val, name='scale')
+            offset = tf.constant(offset_val, name='offset')
+            mean = tf.constant(mean_val, name='mean')
+            var = tf.constant(var_val, name='variance')
+            epsilon = 0.001
+            y, _, _ = fused_batch_norm(
+                x, scale, offset, mean=mean, variance=var,
+                epsilon=epsilon, data_format=data_format, is_training=False)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
+
+    @check_opset_min_version(7, "batchnorm")
+    @check_tf_min_version("2.0", "tf-1.x does not support NDHWC")
+    def test_fused_batchnorm_3d(self):
+        x_shape = [1, 28, 28, 2, 2]
+        x_dtype = np.float32
+        scale_dtype = np.float32
+        scale_shape = [2]
+        data_format = "NDHWC"
         x_val = np.random.random_sample(x_shape).astype(x_dtype)
         scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
         offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
@@ -3273,6 +3392,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # Adds an identity block.
         x_val_shape = [4]
         x_val = np.random.randint(0, 100, x_val_shape).astype(np.float32)
+        def func(x):
+            x_ = reverse_v2(x, axis=[0])
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
         def func(x):
             x_ = reverse_v2(x, axis=[])
             return tf.identity(x_, name=_TFOUTPUT)
@@ -5441,6 +5565,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
+    @skip_tfjs("Fails to run tfjs model")
     def test_rfft_ops(self):
 
         def dft_slow(x, M, fft_length):
@@ -5672,6 +5797,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array("123.1", dtype=np.object)
         # can't check the values because in onnx they are padded with 0, in tf they are not
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False)
+
+    @check_tf_min_version("2.5")
+    @check_opset_min_version(14, "hardswish")
+    @skip_tfjs("not supported in tfjs")
+    def test_hardswish(self):
+        def func(x):
+            # there is no hardswich in tf but toco will optimize to it
+            op_ = x * tf.nn.relu6(x + np.float32(3)) * np.float32(1. / 6.)
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        # tf gets this wrong and returns fp32 instead of int
+        x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 
 if __name__ == '__main__':
