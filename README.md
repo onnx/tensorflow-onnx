@@ -17,8 +17,8 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 | Build Type | OS | Python | Tensorflow | ONNX opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6-3.9 | 1.12-1.15, 2.1-2.6 | 9-15 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.6-3.9 | 1.12-1.15, 2.1-2.6 | 9-15 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6-3.9 | 1.12-1.15, 2.1-2.7 | 9-15 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=master) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.6-3.9 | 1.12-1.15, 2.1-2.7 | 9-15 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=master)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=master) | |
 <br/>
 
 ## Supported Versions
@@ -34,7 +34,7 @@ If you want the graph to be generated with a specific opset, use ```--opset``` i
 
 ### TensorFlow
 
-We support ```tf-1.x graphs``` and ```tf-2```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 or better```.
+We support ```tf-1.x graphs``` and ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 or better```.
 
 When running under tf-2.x tf2onnx will use the tensorflow V2 controlflow.
 
