@@ -38,7 +38,7 @@ except:  # pylint: disable=bare-except
 
 try:
     import tensorflow_text  # pylint: disable=unused-import
-except ModuleNotFoundError:
+except Exception as err:
     pass
 
 from tf2onnx import tf_loader, logging, optimizer, utils, tf_utils, constants
@@ -604,7 +604,7 @@ class Test(object):
                         for tf_res, onnx_res in zip(tf_results, onnx_results):
                             good_cnt = np.count_nonzero(np.isclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol))
                             bad_cnt = tf_res.size - good_cnt
-                            if bad_cnt > self.ptol / 100 * tf_res.size:
+                            if bad_cnt > self.ptol * tf_res.size:
                                 # Prints a nice error message with stats
                                 np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
                     logger.info("Results: OK")

@@ -203,8 +203,11 @@ class Softmax:
     def version_1(cls, ctx, node, **kwargs):
         # T output = Softmax(T logits). The axis softmax would be performed on is always on -1.
         # T output = Softmax(T input, @int axis). Default axis is 1.
-        logits_rank = len(ctx.get_shape(node.input[0]))
-        node.set_attr("axis", logits_rank - 1)
+        axis = node.get_attr_value("axis")
+        if axis is None:
+            # by default use the last dim
+            axis = len(ctx.get_shape(node.input[0])) - 1
+        node.set_attr("axis", axis)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):

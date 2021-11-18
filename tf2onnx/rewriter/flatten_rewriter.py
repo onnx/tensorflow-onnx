@@ -85,15 +85,9 @@ def rewrite_flatten(g, ops):
             out_name = utils.port_name(op_name)
             g.make_node("Flatten", [reshape_node.input[0]], outputs=[out_name], name=op_name)
 
-            last_dim = input_shape[-1]
-            sec_last_dim = input_shape[-2]
-            new_dim = None
-            if last_dim > 0 and sec_last_dim > 0:
-                new_dim = last_dim * sec_last_dim
-            else:
-                new_dim = -1
-
-            g.set_shape(out_name, input_shape[:-2] + [new_dim])
+            # take output shape from reshape()
+            output_shape = g.get_shape(reshape_node.output[0])
+            g.set_shape(out_name, output_shape)
             g.replace_all_inputs(reshape_node.output[0], out_name, ops=ops)
             for n in to_remove:
                 g.remove_node(n.name)

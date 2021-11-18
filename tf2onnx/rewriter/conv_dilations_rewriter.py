@@ -13,6 +13,7 @@ from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
 
 def rewrite_conv_dilations(g, ops):
+
     pattern1 = \
         OpTypePattern("BatchToSpaceND", name="batch_to_space", inputs=[
             OpTypePattern("DepthwiseConv2dNative|Conv2D|Conv3D", name="conv", inputs=[
@@ -67,14 +68,7 @@ def rewrite_conv_dilations(g, ops):
             if block_shape1 != block_shape2:
                 continue
             ndims = 2 if is_conv_1d else len(block_shape1)
-            data_format = b"NHWC" if ndims == 2 else b"NDHWC"
-            ones = [1] * (ndims + 2)
-            if conv.get_attr_value("dilations", ones) != ones:
-                continue
-            if conv.get_attr_value("strides", ones) != ones:
-                continue
-            if conv.get_attr_value("data_format", data_format) != data_format:
-                continue
+
             if conv.get_attr_value("padding") != b"VALID":
                 continue
 
@@ -114,7 +108,10 @@ def rewrite_conv_dilations(g, ops):
                 g.copy_shape(batch_to_space.output[0], conv.output[0])
                 g.replace_all_inputs(batch_to_space.output[0], conv.output[0])
 
-            conv.set_attr("dilations", [1] + block_shape1 + [1])
+            if conv.get_attr_value("data_format") in [b"NCHW", b"NCDHW"]:
+                conv.set_attr("dilations", [1] + block_shape1)
+            else:
+                conv.set_attr("dilations", [1] + block_shape1 + [1])
             conv.set_attr("padding", pad_mode)
             if pad_mode == "EXPLICIT":
                 conv.set_attr("explicit_paddings", base_pad_flat)
