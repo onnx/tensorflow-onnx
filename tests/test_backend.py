@@ -2421,6 +2421,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 graph = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
                 self.assertTrue(len(group_nodes_by_type(graph)["OneHot"]) == 1, "onnx onehot should be used")
 
+    @check_opset_min_version(9, "onehot")
+    @skip_tfjs("tfjs produces incorrect results")
+    def test_onehot_rank0(self):
+        depth = 5
+        for np_dtype in [np.int32, np.int64]:
+            x_val = np.array(3, dtype=np_dtype)
+            for axis in [-1, 0]:
+                def func(x):
+                    x_ = tf.one_hot(x, depth, axis=axis)
+                    return tf.identity(x_, name=_TFOUTPUT)
+                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @skip_caffe2_backend("issue undefined dim 1")
     @check_tf_max_version("1.15", "not supported in tf-2.0")
     def test_flatten0(self):
