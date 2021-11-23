@@ -2830,7 +2830,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
 
     @check_opset_min_version(7, "batchnorm")
-    @check_tf_min_version("2.0", "tf-1.x does not support NDHWC")
+    @check_tf_min_version("2.4", "tf version above 2.4 supports NDHWC")
     def test_fused_batchnorm_3d(self):
         x_shape = [1, 28, 28, 2, 2]
         x_dtype = np.float32
