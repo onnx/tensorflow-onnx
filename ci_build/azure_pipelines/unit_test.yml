@@ -9,6 +9,7 @@ stages:
         python_versions: ['3.9']
         tf_versions: ['2.7.0']
         onnx_opsets: ['']
+        onnx_backends: {onnxruntime: ['nightly']}
         skip_tfjs_tests: 'False'
         skip_tf_tests: 'True'
         job:
@@ -22,6 +23,7 @@ stages:
         python_versions: ['3.8']
         tf_versions: ['2.7.0']
         onnx_opsets: ['']
+        onnx_backends: {onnxruntime: ['nightly']}
         skip_tflite_tests: 'False'
         skip_tf_tests: 'True'
         job:
