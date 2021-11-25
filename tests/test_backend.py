@@ -3957,56 +3957,56 @@ class BackendTests(Tf2OnnxBackendTestBase):
                     return space_to_batch_nd(x, y, z, name=_TFOUTPUT)
                 self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT2: z_val})
 
-    @check_opset_min_version(10, "CropAndResize")
-    def test_crop_and_resize(self):
-        boxes_val = [[0.5, 0.7, 0.7, 0.9], [0.2, 0.4, 0.4, 0.6]]
-        def func(input_x, box_ind):
-            boxes = tf.constant(boxes_val, dtype=tf.float32)
-            corp_size = tf.constant(np.array([20, 20]).astype(np.int32))
-            return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='bilinear')
+    # @check_opset_min_version(10, "CropAndResize")
+    # def test_crop_and_resize(self):
+    #     boxes_val = [[0.5, 0.7, 0.7, 0.9], [0.2, 0.4, 0.4, 0.6]]
+    #     def func(input_x, box_ind):
+    #         boxes = tf.constant(boxes_val, dtype=tf.float32)
+    #         corp_size = tf.constant(np.array([20, 20]).astype(np.int32))
+    #         return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='bilinear')
 
-        input_x_val = np.random.randint(low=0, high=256, size=[2, 36, 36, 3]).astype(np.float32)  # NHWC
-        box_ind_val = np.array([1, 0]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x_val, _INPUT2: box_ind_val},
-                            rtol=1e-04, atol=1e-03)
+    #     input_x_val = np.random.randint(low=0, high=256, size=[2, 36, 36, 3]).astype(np.float32)  # NHWC
+    #     box_ind_val = np.array([1, 0]).astype(np.int32)
+    #     self._run_test_case(func, [_OUTPUT], {_INPUT: input_x_val, _INPUT2: box_ind_val},
+    #                         rtol=1e-04, atol=1e-03)
 
-    @check_opset_min_version(11, "CropAndResize")
-    def test_crop_and_resize_linear(self):
-        def func(input_x, boxes, box_ind, corp_size):
-            return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='bilinear')
+    # @check_opset_min_version(11, "CropAndResize")
+    # def test_crop_and_resize_linear(self):
+    #     def func(input_x, boxes, box_ind, corp_size):
+    #         return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='bilinear')
 
-        input_x_val = np.random.randint(low=0, high=256, size=[2, 36, 36, 3]).astype(np.float32)  # NHWC
-        boxes_val = np.array([[0.5, 0.7, 0.7, 0.9], [0.2, 0.4, 0.4, 0.6]]).astype(np.float32)
-        box_ind_val = np.array([1, 0]).astype(np.int32)
-        corp_size_val = np.array([20, 20]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT],
-                            {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
-                            rtol=1e-05, atol=1e-04)
+    #     input_x_val = np.random.randint(low=0, high=256, size=[2, 36, 36, 3]).astype(np.float32)  # NHWC
+    #     boxes_val = np.array([[0.5, 0.7, 0.7, 0.9], [0.2, 0.4, 0.4, 0.6]]).astype(np.float32)
+    #     box_ind_val = np.array([1, 0]).astype(np.int32)
+    #     corp_size_val = np.array([20, 20]).astype(np.int32)
+    #     self._run_test_case(func, [_OUTPUT],
+    #                         {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
+    #                         rtol=1e-05, atol=1e-04)
 
-    @check_tf_min_version("1.9")
-    @check_opset_min_version(11, "CropAndResize")
-    def test_crop_and_resize_nearest(self):
-        def func(input_x, boxes, box_ind, corp_size):
-            return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='nearest')
-        input_x_val = np.random.randint(low=0, high=256, size=[1, 36, 36, 3]).astype(np.float32)  # NHWC
-        boxes_val = np.array([[0.2, 0.4, 0.6, 0.8]]).astype(np.float32)
-        box_ind_val = np.array([0]).astype(np.int32)
-        corp_size_val = np.array([30, 30]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT],
-                            {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
-                            rtol=1e-05, atol=1e-04)
+    # @check_tf_min_version("1.9")
+    # @check_opset_min_version(11, "CropAndResize")
+    # def test_crop_and_resize_nearest(self):
+    #     def func(input_x, boxes, box_ind, corp_size):
+    #         return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='nearest')
+    #     input_x_val = np.random.randint(low=0, high=256, size=[1, 36, 36, 3]).astype(np.float32)  # NHWC
+    #     boxes_val = np.array([[0.2, 0.4, 0.6, 0.8]]).astype(np.float32)
+    #     box_ind_val = np.array([0]).astype(np.int32)
+    #     corp_size_val = np.array([30, 30]).astype(np.int32)
+    #     self._run_test_case(func, [_OUTPUT],
+    #                         {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
+    #                         rtol=1e-05, atol=1e-04)
 
-    @check_opset_min_version(11, "CropAndResize")
-    def test_crop_and_resize_extrapolation(self):
-        def func(input_x, boxes, box_ind, corp_size):
-            return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, extrapolation_value=1.0)
-        input_x_val = np.random.randint(low=0, high=256, size=[1, 36, 36, 3]).astype(np.float32)  # NHWC
-        boxes_val = np.array([[0.2, 0.4, 1.2, 1.4]]).astype(np.float32)
-        box_ind_val = np.array([0]).astype(np.int32)
-        corp_size_val = np.array([40, 40]).astype(np.int32)
-        self._run_test_case(func, [_OUTPUT],
-                            {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
-                            rtol=1e-04, atol=1e-03)
+    # @check_opset_min_version(11, "CropAndResize")
+    # def test_crop_and_resize_extrapolation(self):
+    #     def func(input_x, boxes, box_ind, corp_size):
+    #         return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, extrapolation_value=1.0)
+    #     input_x_val = np.random.randint(low=0, high=256, size=[1, 36, 36, 3]).astype(np.float32)  # NHWC
+    #     boxes_val = np.array([[0.2, 0.4, 1.2, 1.4]]).astype(np.float32)
+    #     box_ind_val = np.array([0]).astype(np.int32)
+    #     corp_size_val = np.array([40, 40]).astype(np.int32)
+    #     self._run_test_case(func, [_OUTPUT],
+    #                         {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
+    #                         rtol=1e-04, atol=1e-03)
 
     @check_opset_min_version(11, "CropAndResize")
     def test_crop_and_resize_empty_tensor(self):
