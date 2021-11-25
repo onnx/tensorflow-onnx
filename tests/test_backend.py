@@ -3996,17 +3996,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
     #                         {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
     #                         rtol=1e-05, atol=1e-04)
 
-    # @check_opset_min_version(11, "CropAndResize")
-    # def test_crop_and_resize_extrapolation(self):
-    #     def func(input_x, boxes, box_ind, corp_size):
-    #         return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, extrapolation_value=1.0)
-    #     input_x_val = np.random.randint(low=0, high=256, size=[1, 36, 36, 3]).astype(np.float32)  # NHWC
-    #     boxes_val = np.array([[0.2, 0.4, 1.2, 1.4]]).astype(np.float32)
-    #     box_ind_val = np.array([0]).astype(np.int32)
-    #     corp_size_val = np.array([40, 40]).astype(np.int32)
-    #     self._run_test_case(func, [_OUTPUT],
-    #                         {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
-    #                         rtol=1e-04, atol=1e-03)
+# @check_opset_min_version(11, "CropAndResize")
+# def test_crop_and_resize_extrapolation(self):
+#     def func(input_x, boxes, box_ind, corp_size):
+#         return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, extrapolation_value=1.0)
+#     input_x_val = np.random.randint(low=0, high=256, size=[1, 36, 36, 3]).astype(np.float32)  # NHWC
+#     boxes_val = np.array([[0.2, 0.4, 1.2, 1.4]]).astype(np.float32)
+#     box_ind_val = np.array([0]).astype(np.int32)
+#     corp_size_val = np.array([40, 40]).astype(np.int32)
+#     self._run_test_case(func, [_OUTPUT],
+#                         {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
+#                         rtol=1e-04, atol=1e-03)
 
     @check_opset_min_version(11, "CropAndResize")
     def test_crop_and_resize_empty_tensor(self):
