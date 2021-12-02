@@ -684,8 +684,10 @@ def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=Non
     #   depends on so for now don't turn this on.
     rewrite_options.optimizers[:] = [
         # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
-        'constfold', 'function'
+        'function'
     ]
+    if fold_constant:
+        rewrite_options.optimizers.append("constfold")
     meta_graph = tf.compat.v1.train.export_meta_graph(graph_def=graph_def)
     fetch_collection = meta_graph_pb2.CollectionDef()
     for t in input_names + output_names:
