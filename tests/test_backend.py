@@ -741,6 +741,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
     @check_tf_min_version("1.15")
+    def test_conv2dtranspose_biasadd_rewriter(self):
+        x_shape = [2, 3, 32, 16]
+        x_val = make_xval(x_shape)
+        def func(x):
+            t = tf.keras.layers.Conv2DTranspose(
+                filters=768,
+                kernel_size=3,
+                strides=1,
+                use_bias=True,
+                data_format="channels_first",
+                name="conv2d_transpose",
+            )(x)
+            return tf.identity(t, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                            graph_validator=lambda g: check_op_count(g, "Add", 0, disabled=False))
+
+    @check_tf_min_version("1.15")
     def test_conv2d_dilations_rewriter(self):
         x_shape = [2, 32, 16, 3]
         x_val = make_xval(x_shape)
