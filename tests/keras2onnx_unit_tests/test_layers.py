@@ -1198,28 +1198,6 @@ def test_conv2d_transpose_2(runner, padding):
     assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
-def test_conv2d_bias_add(runner):
-    size = 128
-    input_img = Input((size, size, 64))
-    x = tf.keras.layers.ZeroPadding2D(
-        padding=(0, 4),
-        data_format="channels_first",
-        name="padding")(input_img)
-    y = tf.keras.layers.Conv2D(
-        filters=1,
-        kernel_size=(9, 9),
-        strides=(1, 1),
-        use_bias=True,
-        data_format="channels_first",
-        name="conv2d",
-    )(x)
-    model = tf.keras.Model(inputs=input_img, outputs=y)
-    data = np.random.rand(1, size, size, 64).astype(np.float32)
-    onnx_model = convert_keras(model, model.name)
-    expected = model.predict(data)
-    assert runner(onnx_model.graph.name, onnx_model, data, expected)
-
-
 def test_conv2d_padding_same(conv2_runner):
     conv2_runner(3, 5, (2, 2), (1, 1), (5, 5), padding='same')
     conv2_runner(8, 16, (1, 1), (2, 2), (60, 60), padding='same')
