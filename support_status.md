@@ -251,6 +251,7 @@
 | TensorListResize | 7 ~ 15 |
 | TensorListSetItem | 7 ~ 15 |
 | TensorListStack | 7 ~ 15 |
+| TensorScatterAdd | 11 ~ 15 |
 | TensorScatterUpdate | 11 ~ 15 |
 | Tile | 1 ~ 15 |
 | TopKV2 | 1 ~ 15 |
