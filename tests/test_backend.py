@@ -4608,18 +4608,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-    @check_tf_min_version("1.14", "tensor_scatter_nd_add needs tf 1.14")
-    @check_opset_min_version(11, "ScatterND")
-    def test_tensor_scatter_add(self):
-        x_val = np.array([10, 20, 30, 40], dtype=np.int32).reshape((4))
-        y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
-        z_val = np.array([8, 11], dtype=np.int32).reshape((2))
-
-        def func(x, y, z):
-            x_ = tf.tensor_scatter_nd_add(x, y, z)
-            return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
-
     @check_tf_min_version("1.14", "tensor_scatter_nd_update needs tf 1.14")
     @check_opset_min_version(11, "ScatterND")
     def test_tensor_scatter_update(self):
