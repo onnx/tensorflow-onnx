@@ -203,18 +203,18 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         try:
             from tensorflowjs.converters import converter
         except ImportError:
-            self.logger.debug("Tensorflowjs.converters package import failed.")
+            self.logger.warning("Tensorflowjs.converters package imports failed.")
             return None
         tfjs_path = os.path.join(self.test_data_directory, self._testMethodName + "_tfjs")
         try:
             converter.convert([graph_def_path, tfjs_path, '--input_format', 'tf_frozen_model',
                                '--output_node_names', ','.join(output_names)])
         except ValueError:
-            self.logger.debug("Convert tensorflowjs graph failed.")
+            self.logger.warning("Convert tensorflowjs graph failed.")
             return None
         model_path = os.path.join(tfjs_path, 'model.json')
         if not os.path.exists(model_path):
-            self.logger.debug("Tensorflowjs model path %s is empty.", model_path)
+            self.logger.warning("Tensorflowjs model path %s is empty.", model_path)
             return None
         return model_path
 

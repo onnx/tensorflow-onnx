@@ -19,7 +19,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         # TFLite tf 2.7
-        python_versions: ['3.9']
+        python_versions: ['3.8']
         tf_versions: ['2.7.0']
         onnx_opsets: ['']
         skip_tflite_tests: 'False'
@@ -32,7 +32,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         # tf 2.7
-        python_versions: ['3.9']
+        python_versions: ['3.8']
         tf_versions: ['2.7.0']
         onnx_opsets: ['']
         job:
@@ -43,7 +43,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         # TFJS tf 2.6
-        python_versions: ['3.8']
+        python_versions: ['3.9']
         tf_versions: ['2.6.2']
         onnx_opsets: ['']
         skip_tfjs_tests: 'False'
