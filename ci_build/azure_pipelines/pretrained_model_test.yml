@@ -5,7 +5,7 @@ jobs:
   parameters:
     # 2.6, tflite/tfjs
     python_versions: ['3.8']
-    tf_versions: ['2.6.2']
+    tf_versions: ['2.7.0']
     skip_tflite_tests: 'False'
     skip_tfjs_tests: 'False'
     skip_tf_tests: 'True'
