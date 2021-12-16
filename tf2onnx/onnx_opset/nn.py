@@ -59,8 +59,8 @@ def get_channels_last_permutation(spatial):
 
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                         input_indices=None, output_indices=None, spatial=2):
-    """Convert input and kernel from tensorflow to onnx. This maybe require to
-        to insert transpose ops for input, kernel and output unless they are constants
+    """Convert input and kernel from tensorflow to onnx. This may be required to
+        insert transpose ops for input, kernel, and output unless they are constants
         and we can transpose the constant.
         We transpose inputs if they are in NHWC. We always transpose the kernel from
         HWNC to NCHW. Outputs are transposed if the format is NHWC.
