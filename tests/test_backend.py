@@ -757,8 +757,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 name="conv2d",
             )(middles)
             return tf.identity(t, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True, constant_fold=False,
-                            graph_validator=lambda g: check_op_count(g, "Add", 0, disabled =False))
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                            graph_validator=lambda g: check_op_count(g, "Add", 0, disabled=False))
 
     @check_tf_min_version("1.15")
     def test_conv2d_dilations_rewriter(self):

@@ -374,8 +374,9 @@ def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, cu
     with tf.device("/cpu:0"):
         frozen_graph, initialized_tables = tf_loader.freeze_session(sess, input_names, output_names, get_tables=True)
         tf_loader.tf_reset_default_graph()
-        tf.import_graph_def(frozen_graph, name='')
-        frozen_graph = tf_loader.tf_optimize(input_names, output_names, frozen_graph)
+        with tf_loader.tf_session() as sess:
+            tf.import_graph_def(frozen_graph, name='')
+            frozen_graph = tf_loader.tf_optimize(input_names, output_names, frozen_graph, False)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=model.name,
