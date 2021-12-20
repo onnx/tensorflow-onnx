@@ -12,6 +12,7 @@ from mock_keras2onnx.proto import keras
 import numpy as np
 import tensorflow as tf
 from onnxconverter_common.onnx_ex import get_maximum_opset_supported
+from test_utils import check_bloburl_access
 
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_onnx_runtime
@@ -21,20 +22,12 @@ enable_full_transformer_test = False
 if os.environ.get('ENABLE_FULL_TRANSFORMER_TEST', '0') != '0':
     enable_transformer_test = True
 
-def check_bloburl_access():
-    url = r'https://lotus.blob.core.windows.net/converter-models/transformer_tokenizer/'
-    try:
-        response = urllib.request.urlopen(url)
-        if response.getcode() != 200:
-            return False
-    except urllib.error.URLError:
-        return False
-    return True
+CONVERTER_TRANSFERMER_PATH = r'https://lotus.blob.core.windows.net/converter-models/transformer_tokenizer/'
 
 
 @unittest.skipIf(is_tensorflow_older_than('2.1.0'),
                  "Transformers conversion need tensorflow 2.1.0+")
-@unittest.skipIf(check_bloburl_access(), "Model blob url can't access")
+@unittest.skipIf(check_bloburl_access(CONVERTER_TRANSFERMER_PATH), "Model blob url can't access.")
 class TestTransformers(unittest.TestCase):
 
     text_str = 'The quick brown fox jumps over lazy dog.'
