@@ -741,20 +741,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
     @check_tf_min_version("1.15")
+    @skip_tf_cpu("only tf_gpu can run conv2d with NCHW format")
     def test_conv2d_biasadd_rewriter(self):
         x_shape = [2, 3, 32, 16]
         x_val = make_xval(x_shape)
         def func(x):
-            middles = tf.keras.layers.ZeroPadding2D(padding=(0, 4),
+            middles = tf.keras.layers.ZeroPadding2D(
+                padding=(0, 4),
                 data_format="channels_first",
-                name="padding")(x)
+                name="padding"
+            )(x)
             t = tf.keras.layers.Conv2D(
                 filters=768,
                 kernel_size=3,
                 strides=1,
                 use_bias=True,
                 data_format="channels_first",
-                name="conv2d",
+                name="conv2d"
             )(middles)
             return tf.identity(t, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
