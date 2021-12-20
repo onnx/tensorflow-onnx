@@ -25,6 +25,16 @@ working_path = os.path.abspath(os.path.dirname(__file__))
 tmp_path = os.path.join(working_path, 'temp')
 
 
+def check_bloburl_access(url):
+    try:
+        response = urllib.request.urlopen(url)
+        if response.getcode() != 200:
+            return False
+    except urllib.error.URLError:
+        return False
+    return True
+
+
 class TestYoloV3(unittest.TestCase):
 
     def setUp(self):
@@ -45,6 +55,8 @@ class TestYoloV3(unittest.TestCase):
 
     @unittest.skipIf(StrictVersion(onnx.__version__.split('-')[0]) < StrictVersion("1.5.0"),
                      "NonMaxSuppression op is not supported for onnx < 1.5.0.")
+    @unittest.skipIf(check_bloburl_access(YOLOV3_WEIGHTS_PATH) or check_bloburl_access(YOLOV3_TINY_WEIGHTS_PATH),
+                     "Model blob url can't access")
     def test_yolov3(self):
         img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
         yolo3_yolo3_dir = os.path.join(os.path.dirname(__file__), '../../../keras-yolo3/yolo3')

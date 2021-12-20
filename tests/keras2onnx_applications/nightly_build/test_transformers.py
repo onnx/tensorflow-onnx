@@ -21,9 +21,20 @@ enable_full_transformer_test = False
 if os.environ.get('ENABLE_FULL_TRANSFORMER_TEST', '0') != '0':
     enable_transformer_test = True
 
+def check_bloburl_access():
+    url = r'https://lotus.blob.core.windows.net/converter-models/transformer_tokenizer/'
+    try:
+        response = urllib.request.urlopen(url)
+        if response.getcode() != 200:
+            return False
+    except urllib.error.URLError:
+        return False
+    return True
+
 
 @unittest.skipIf(is_tensorflow_older_than('2.1.0'),
                  "Transformers conversion need tensorflow 2.1.0+")
+@unittest.skipIf(check_bloburl_access(), "Model blob url can't access")
 class TestTransformers(unittest.TestCase):
 
     text_str = 'The quick brown fox jumps over lazy dog.'
