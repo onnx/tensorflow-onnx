@@ -284,12 +284,9 @@ def run_image(model, model_files, img_path, model_name='onnx_conversion', rtol=1
     return res, msg
 
 
-def check_bloburl_access(url):
+def is_bloburl_access(url):
     try:
         response = urllib.request.urlopen(url)
         return response.getcode() == 200
-    except urllib.error.URLError as e:
-        mock_keras2onnx.common.k2o_logger().warning("URLError:", e.code)
+    except urllib.error.URLError:
         return False
-    except urllib.error.HTTPError as e:
-        mock_keras2onnx.common.k2o_logger().warning("HTTPError :", e.reason)
