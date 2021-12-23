@@ -2353,6 +2353,12 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+        x_val = np.array([1, 2, 3, 4], dtype=np.uint32).reshape((2, 2))
+        def func(x):
+            x_ = tf.cast(x, tf.uint64)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(7, "sign")
     def test_sign(self):
         x_vals = [np.array([1.0, 2.0, 0.0, -1.0, 0.0, -2.0], dtype=np.float32).reshape((2, 3)),
