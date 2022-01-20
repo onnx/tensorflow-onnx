@@ -2376,6 +2376,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("skip_tflite is not support unit32 when tf version <= 2.3.0")
+    @check_opset_min_version(6, "cast")
+    def test_cast_unit32(self):
         x_val = np.array([1, 2, 3, 4], dtype=np.uint32).reshape((2, 2))
         def func(x):
             x_ = tf.cast(x, tf.uint64)

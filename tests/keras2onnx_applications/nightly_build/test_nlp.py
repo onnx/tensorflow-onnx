@@ -91,6 +91,7 @@ class TestNLP(unittest.TestCase):
         expected = model.predict([x, y])
         self.assertTrue(run_onnx_runtime(onnx_model.graph.name, onnx_model, {model.input_names[0]: x, model.input_names[1]: y}, expected, self.model_files))
 
+    @check_tf_min_version("2.0", "Results are slightly different in tf1")
     @unittest.skipIf(get_maximum_opset_supported() < 9,
                      "None seq_length LSTM is not supported before opset 9.")
     def test_imdb_bidirectional_lstm(self):
