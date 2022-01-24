@@ -28,7 +28,6 @@ from tf2onnx.rewriter.fused_op_rewriter import rewrite_fused_ops
 
 __all__ = [
     "rewrite_cond",
-    "rewrite_conv2d_with_pad",
     "rewrite_dropout",
     "rewrite_eye",
     "rewrite_flatten",
@@ -49,6 +48,7 @@ __all__ = [
     "rewrite_quantize_and_dequantize",
     "rewrite_layer_normalization",
     "rewrite_conv_dilations",
+    "rewrite_conv2d_with_pad",
     "rewrite_ragged_variant_shape",
     "rewriter_lstm_tf2",
     "rewrite_gru_tf2",
