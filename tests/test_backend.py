@@ -4609,6 +4609,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "Round")
+    def test_rint(self):
+        x_val = np.array([-2.7, -1.5, -0.0, +0.0, 0.3, 0.5, 1.5, 2.5, 3.4, 3.5, float('nan')], dtype=np.float32)
+        def func(x):
+            x_ = tf.math.rint(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(11, "Det")
     @unittest.skip("unclear how this is called in tf-2, fix later")
     def test_determinant(self):

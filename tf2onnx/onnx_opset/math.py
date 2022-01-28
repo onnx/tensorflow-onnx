@@ -559,6 +559,15 @@ class Round:
         pass
 
 
+@tf_op("Rint", onnx_op="Round")
+class Rint:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Same with tf round, two different people just happened to write the function.
+        # https://github.com/tensorflow/tensorflow/issues/709
+        pass
+
+
 @tf_op("MatrixDeterminant", onnx_op="Det")
 class Det:
     @classmethod
