@@ -681,7 +681,7 @@ def tf_optimize_grappler(input_names, output_names, graph_def, disable_constfold
     rewrite_options = config.graph_options.rewrite_options
     config.graph_options.infer_shapes = True
     # TODO: if we turn on pruning, grappler removes some identities that the tf-1.x lstm rewriter
-    #   depends on so for now don't turn this on.
+    # depends on so for now don't turn this on, fold_constant is always enabled now.
     rewrite_options.optimizers[:] = [
         # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
         'function', 'dependency'

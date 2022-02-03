@@ -1110,6 +1110,27 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
+        ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    def test_transpose_neg(self, shape, perm_input, perm_output):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans1")
+        node1 = helper.make_node("Neg", ["Y"], ["Z"], name="neg")
+        node2 = helper.make_node("Transpose", ["Z"], ["OUT"], perm=perm_output, name="trans2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-neg-test",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["OUT"], {"X": np.random.randn(*shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
         ((3, 4, 5), (8, 4, 6), [1, 3, 0, 0, 2, 0], [2, 0, 1], [1, 2, 0]),
         ((1, 3, 4, 5), (2, 6, 4, 8), [1, 0, 1, 3, 0, 0, 2, 0], [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5, 6), (2, 5, 6, 8, 10), [1, 0, 1, 3, 1, 0, 2, 2, 1, 1], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),

@@ -45,6 +45,7 @@ Lambda = keras.layers.Lambda
 Layer = keras.layers.Layer
 LeakyReLU = keras.layers.LeakyReLU
 LSTM = keras.layers.LSTM
+LSTMCell = keras.layers.LSTMCell
 Maximum = keras.layers.Maximum
 MaxPool1D = keras.layers.MaxPool1D
 MaxPool3D = keras.layers.MaxPool3D
@@ -52,6 +53,7 @@ MaxPooling2D = keras.layers.MaxPooling2D
 Model = keras.models.Model
 Multiply = keras.layers.Multiply
 Reshape = keras.layers.Reshape
+RNN = keras.layers.RNN
 SeparableConv1D = keras.layers.SeparableConv1D
 SeparableConv2D = keras.layers.SeparableConv2D
 Sequential = keras.models.Sequential
@@ -66,11 +68,15 @@ ZeroPadding2D = keras.layers.ZeroPadding2D
 if not is_keras_older_than("2.2.4"):
     ReLU = keras.layers.ReLU
 
+GRU_CLASSES = [(GRU, "v1")]
+LSTM_CLASSES = [(LSTM, LSTMCell, "v1")]
 RNN_CLASSES = [SimpleRNN, GRU, LSTM]
 
 if is_tf_keras and is_tensorflow_later_than("1.14.0"):
     # Add the TF v2 compatability layers (available after TF 1.14)
     from tensorflow.python.keras.layers import recurrent_v2
+    GRU_CLASSES.append((recurrent_v2.GRU, "v2"))
+    LSTM_CLASSES.append((recurrent_v2.LSTM, recurrent_v2.LSTMCell, "v2"))
     RNN_CLASSES.extend([recurrent_v2.GRU, recurrent_v2.LSTM])
 
 
@@ -1829,134 +1835,175 @@ def test_simpleRNN(runner):
     assert runner(onnx_model.graph.name, onnx_model, [x, s], expected)
 
 
-def test_GRU(runner):
+@pytest.mark.parametrize("gru_class, rnn_version", GRU_CLASSES)
+@pytest.mark.parametrize("return_sequences", [True, False])
+def test_GRU(runner, gru_class, rnn_version, return_sequences):
     inputs1 = keras.Input(shape=(3, 1))
 
-    cls = GRU(2, return_state=False, return_sequences=False)
+    # GRU with no initial state
+    cls = gru_class(2, return_state=False, return_sequences=False)
     oname = cls(inputs1)
     model = keras.Model(inputs=inputs1, outputs=[oname])
     onnx_model = convert_keras(model, model.name)
-
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
     data = np.array([0.1, 0.2, 0.3]).astype(np.float32).reshape((1, 3, 1))
     expected = model.predict(data)
     assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
     # GRU with initial state
-    for return_sequences in [True, False]:
-        cls = GRU(2, return_state=False, return_sequences=return_sequences)
-        initial_state_input = keras.Input(shape=(2,))
-        oname = cls(inputs1, initial_state=initial_state_input)
-        model = keras.Model(inputs=[inputs1, initial_state_input], outputs=[oname])
-        onnx_model = convert_keras(model, model.name)
-
-        data = np.array([0.1, 0.2, 0.3]).astype(np.float32).reshape((1, 3, 1))
-        init_state = np.array([0.4, 0.5]).astype(np.float32).reshape((1, 2))
-        init_state_onnx = np.array([0.4, 0.5]).astype(np.float32).reshape((1, 2))
-        expected = model.predict([data, init_state])
-        assert runner(onnx_model.graph.name, onnx_model, [data, init_state_onnx], expected)
+    cls = gru_class(2, return_state=False, return_sequences=return_sequences)
+    initial_state_input = keras.Input(shape=(2,))
+    oname = cls(inputs1, initial_state=initial_state_input)
+    model = keras.Model(inputs=[inputs1, initial_state_input], outputs=[oname])
+    onnx_model = convert_keras(model, model.name)
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
+    data = np.array([0.1, 0.2, 0.3]).astype(np.float32).reshape((1, 3, 1))
+    init_state = np.array([0.4, 0.5]).astype(np.float32).reshape((1, 2))
+    init_state_onnx = np.array([0.4, 0.5]).astype(np.float32).reshape((1, 2))
+    expected = model.predict([data, init_state])
+    assert runner(onnx_model.graph.name, onnx_model, [data, init_state_onnx], expected)
 
 
 @pytest.mark.skipif(not is_tf_keras and is_tf2 and is_tensorflow_older_than('2.2'),
                     reason="Fails due to some reason involving bad graph captures. Works in new versions and tf_keras")
-def test_GRU_2(runner):
+@pytest.mark.parametrize("gru_class, rnn_version", GRU_CLASSES)
+def test_GRU_2(runner, gru_class, rnn_version):
     model = keras.Sequential(name='TestGRU')
-    model.add(keras.layers.GRU(400, reset_after=True, input_shape=(1, 257)))
-    model.add(keras.layers.Dense(257, activation='sigmoid'))
+    model.add(gru_class(400, reset_after=True, input_shape=(1, 257)))
+    model.add(Dense(257, activation='sigmoid'))
     onnx_model = convert_keras(model, name=model.name)
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
     data = np.random.rand(3, 257).astype(np.float32).reshape((3, 1, 257))
     expected = model.predict(data)
     assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
+@pytest.mark.parametrize("lstm_class, lstmcell_class, rnn_version", LSTM_CLASSES)
 @pytest.mark.parametrize('return_sequences', [False, True])
-def test_LSTM(runner, return_sequences):
+@pytest.mark.parametrize('use_bias', [False, True])
+def test_LSTM(runner, lstm_class, lstmcell_class, rnn_version, return_sequences, use_bias):
     inputs1 = keras.Input(shape=(3, 5))
     data = np.random.rand(3, 5).astype(np.float32).reshape((1, 3, 5))
-    for use_bias in [True, False]:
-        for return_sequences in [True, False]:
-            cls = LSTM(units=2, return_state=True, return_sequences=return_sequences, use_bias=use_bias)
-            lstm1, state_h, state_c = cls(inputs1)
-            model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c])
-            onnx_model = convert_keras(model, model.name)
-            expected = model.predict(data)
-            assert runner(onnx_model.graph.name, onnx_model, data, expected)
+    cls1 = lstm_class(units=2, return_state=True, return_sequences=return_sequences, use_bias=use_bias)
+    cls2 = RNN(lstmcell_class(units=2, use_bias=use_bias), return_state=True, return_sequences=return_sequences)
+    lstm1, state_h, state_c = cls1(inputs1)
+    lstm2, state_h_2, state_c_2 = cls2(inputs1)
+    model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c, lstm2, state_h_2, state_c_2])
+    onnx_model = convert_keras(model, model.name)
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
+    expected = model.predict(data)
+    assert runner(onnx_model.graph.name, onnx_model, data, expected)
+
 
 @pytest.mark.skipif((is_tensorflow_older_than('1.14.0') or (not is_tf_keras)), reason='old tf version')
-def test_LSTM_rev(runner):
+@pytest.mark.parametrize("lstm_class, lstmcell_class, rnn_version", LSTM_CLASSES)
+@pytest.mark.parametrize('return_sequences', [False, True])
+@pytest.mark.parametrize('use_bias', [False, True])
+def test_LSTM_rev(runner, lstm_class, lstmcell_class, rnn_version, return_sequences, use_bias):
     inputs1 = keras.Input(shape=(3, 5))
     data = np.random.rand(3, 5).astype(np.float32).reshape((1, 3, 5))
-    for use_bias in [True, False]:
-        for return_sequences in [True, False]:
-            cls = LSTM(units=2, return_state=True, go_backwards=True, return_sequences=return_sequences, use_bias=use_bias)
-            lstm1, state_h, state_c = cls(inputs1)
-            model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c])
-            onnx_model = convert_keras(model, model.name)
-            expected = model.predict(data)
-            assert runner(onnx_model.graph.name, onnx_model, data, expected)
-
-
-@pytest.mark.skipif((is_tensorflow_older_than('1.14.0') or (not is_tf_keras)),
-                    reason="keras LSTM does not have time_major attribute")
-def test_LSTM_time_major_return_seq_true(runner):
-    inputs1 = keras.Input(shape=(3, 5))
-    data = np.random.rand(1, 3, 5).astype(np.float32)
-    # Transpose input to be time major
-    input_transposed = tf.transpose(inputs1, perm=[1, 0, 2])
-    lstm1, state_h, state_c = LSTM(units=2, time_major=True, return_state=True,
-                                   return_sequences=True)(input_transposed)
-    lstm1_trans = tf.transpose(lstm1, perm=[1, 0, 2])
-    model = keras.Model(inputs=inputs1, outputs=[lstm1_trans, state_h, state_c])
-    onnx_model = convert_keras(model, model.name)
-    expected = model.predict(data)
-    assert runner(onnx_model.graph.name, onnx_model, data, expected)
-
-
-@pytest.mark.skipif((is_tensorflow_older_than('1.14.0') or (not is_tf_keras)),
-                    reason="keras LSTM does not have time_major attribute")
-def test_LSTM_time_major_return_seq_false(runner):
-    inputs1 = keras.Input(shape=(3, 5))
-    data = np.random.rand(1, 3, 5).astype(np.float32)
-    # Transpose input to be time major
-    input_transposed = tf.transpose(inputs1, perm=[1, 0, 2])
-    lstm1, state_h, state_c = LSTM(units=2, time_major=True, return_state=True,
-                                   return_sequences=False)(input_transposed)
-    model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c])
-    onnx_model = convert_keras(model, model.name)
-    expected = model.predict(data)
-    assert runner(onnx_model.graph.name, onnx_model, data, expected)
-
-
-def test_LSTM_with_bias(runner):
-    inputs1 = keras.Input(shape=(1, 1))
-    cls = LSTM(units=1, return_state=True, return_sequences=True)
+    cls = lstm_class(units=2, return_state=True, go_backwards=True, return_sequences=return_sequences, use_bias=use_bias)
     lstm1, state_h, state_c = cls(inputs1)
     model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c])
-    # Set weights: kernel, recurrent_kernel and bias
-    model.set_weights((np.array([[1, 2, 3, 4]]), np.array([[5, 6, 7, 8]]), np.array([1, 2, 3, 4])))
-    data = np.random.rand(1, 1).astype(np.float32).reshape((1, 1, 1))
     onnx_model = convert_keras(model, model.name)
-
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
     expected = model.predict(data)
     assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
-def test_LSTM_reshape(runner):
+@pytest.mark.skipif((is_tensorflow_older_than('1.14.0') or (not is_tf_keras)),
+                    reason="keras LSTM does not have time_major attribute")
+@pytest.mark.parametrize("lstm_class, lstmcell_class, rnn_version", LSTM_CLASSES)
+def test_LSTM_time_major_return_seq_true(runner, lstm_class, lstmcell_class, rnn_version):
+    inputs1 = keras.Input(shape=(3, 5))
+    data = np.random.rand(1, 3, 5).astype(np.float32)
+    # Transpose input to be time major
+    input_transposed = tf.transpose(inputs1, perm=[1, 0, 2])
+    lstm1, state_h, state_c = lstm_class(units=2, time_major=True, return_state=True,
+                                   return_sequences=True)(input_transposed)
+    lstm2, state_h_2, state_c_2 = RNN(lstmcell_class(units=2), time_major=True, return_state=True,
+                                      return_sequences=True)(input_transposed)
+    lstm1_trans = tf.transpose(lstm1, perm=[1, 0, 2])
+    lstm2_trans = tf.transpose(lstm2, perm=[1,0,2])
+    model = keras.Model(inputs=inputs1, outputs=[lstm1_trans, state_h, state_c,
+                                                 lstm2_trans, state_h_2, state_c_2])
+    onnx_model = convert_keras(model, model.name)
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
+    expected = model.predict(data)
+    assert runner(onnx_model.graph.name, onnx_model, data, expected)
+
+
+@pytest.mark.skipif((is_tensorflow_older_than('1.14.0') or (not is_tf_keras)),
+                    reason="keras LSTM does not have time_major attribute")
+@pytest.mark.parametrize("lstm_class, lstmcell_class, rnn_version", LSTM_CLASSES)
+def test_LSTM_time_major_return_seq_false(runner, lstm_class, lstmcell_class, rnn_version):
+    inputs1 = keras.Input(shape=(3, 5))
+    data = np.random.rand(1, 3, 5).astype(np.float32)
+    # Transpose input to be time major
+    input_transposed = tf.transpose(inputs1, perm=[1, 0, 2])
+    lstm1, state_h, state_c = lstm_class(units=2, time_major=True, return_state=True,
+                                   return_sequences=False)(input_transposed)
+    lstm2, state_h_2, state_c_2 = RNN(lstmcell_class(units=2), time_major=True, return_state=True,
+                                  return_sequences=False)(input_transposed)
+    model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c,
+                                                 lstm2, state_h_2, state_c_2])
+    onnx_model = convert_keras(model, model.name)
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
+    expected = model.predict(data)
+    assert runner(onnx_model.graph.name, onnx_model, data, expected)
+
+
+@pytest.mark.parametrize("lstm_class, lstmcell_class, rnn_version", LSTM_CLASSES)
+def test_LSTM_with_bias(runner, lstm_class, lstmcell_class, rnn_version):
+    inputs1 = keras.Input(shape=(1, 1))
+    cls = lstm_class(units=1, return_state=True, return_sequences=True)
+    lstm1, state_h, state_c = cls(inputs1)
+    lstm2, state_h_2, state_c_2 = RNN(lstmcell_class(units=1), return_state=True,
+                                      return_sequences=True)(inputs1)
+    model = keras.Model(inputs=inputs1, outputs=[lstm1, state_h, state_c,
+                                                 lstm2, state_h_2, state_c_2])
+    # Set weights: kernel, recurrent_kernel and bias
+    model.set_weights((np.array([[1, 2, 3, 4]]), np.array([[5, 6, 7, 8]]), np.array([1, 2, 3, 4]),
+                       np.array([[1, 2, 3, 4]]), np.array([[5, 6, 7, 8]]), np.array([1, 2, 3, 4])))
+    data = np.random.rand(1, 1).astype(np.float32).reshape((1, 1, 1))
+    onnx_model = convert_keras(model, model.name)
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
+    expected = model.predict(data)
+    assert runner(onnx_model.graph.name, onnx_model, data, expected)
+
+
+@pytest.mark.parametrize("lstm_class, lstmcell_class, rnn_version", LSTM_CLASSES)
+def test_LSTM_reshape(runner, lstm_class, lstmcell_class, rnn_version):
     input_dim = 7
     sequence_len = 3
     inputs1 = keras.Input(shape=(sequence_len, input_dim))
-    cls = LSTM(units=5, return_state=False, return_sequences=True)
+    cls = lstm_class(units=5, return_state=False, return_sequences=True)
     lstm1 = cls(inputs1)
+    lstm2 = RNN(lstmcell_class(units=5), return_state=False, return_sequences=True)(inputs1)
+
     output = Reshape((sequence_len, 5))(lstm1)
-    model = keras.Model(inputs=inputs1, outputs=output)
+    output_2 = Reshape((sequence_len, 5))(lstm2)
+    model = keras.Model(inputs=inputs1, outputs=[output, output_2])
     model.compile(optimizer='sgd', loss='mse')
 
     onnx_model = convert_keras(model, 'test')
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
     data = np.random.rand(input_dim, sequence_len).astype(np.float32).reshape((1, sequence_len, input_dim))
     expected = model.predict(data)
     assert runner('tf_lstm', onnx_model, data, expected)
 
 
-def test_LSTM_with_initializer(runner):
+@pytest.mark.parametrize("lstm_class, lstmcell_class, rnn_version", LSTM_CLASSES)
+def test_LSTM_with_initializer(runner, lstm_class, lstmcell_class, rnn_version):
     # batch_size = N
     # seq_length = H
     # input_size = W
@@ -1971,34 +2018,44 @@ def test_LSTM_with_initializer(runner):
     state_c = keras.Input(shape=(C,), name='state_c')
 
     # create keras model
-    lstm_layer = LSTM(units=C, activation='relu', return_sequences=True)(inputs,
+    lstm_layer = lstm_class(units=C, activation='relu', return_sequences=True)(inputs,
                                                                          initial_state=[state_h,
                                                                                         state_c])
+    lstm_layer_2 = RNN(lstmcell_class(units=C, activation='relu'),
+                       return_sequences=True)(inputs, initial_state=[state_h, state_c])
     outputs = Dense(W, activation='sigmoid')(lstm_layer)
-    keras_model = keras.Model(inputs=[inputs, state_h, state_c], outputs=outputs)
+    outputs_2 = Dense(W, activation='sigmoid')(lstm_layer_2)
+    keras_model = keras.Model(inputs=[inputs, state_h, state_c],
+                              outputs=[outputs, outputs_2])
 
     x = np.random.rand(1, H, W).astype(np.float32)
     sh = np.random.rand(1, C).astype(np.float32)
     sc = np.random.rand(1, C).astype(np.float32)
-    expected = keras_model.predict([x, sh, sc])
     onnx_model = convert_keras(keras_model, keras_model.name)
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
+    expected = keras_model.predict([x, sh, sc])
     assert runner(onnx_model.graph.name, onnx_model, {"inputs": x, 'state_h': sh, 'state_c': sc}, expected)
 
 
 @pytest.mark.skipif(get_maximum_opset_supported() < 5,
                     reason="None seq_length LSTM is not supported before opset 5.")
 @pytest.mark.skipif(is_tensorflow_older_than('2.2'), reason='require 2.2 to fix freezing')
-def test_LSTM_seqlen_none(runner):
+@pytest.mark.parametrize("lstm_class, lstmcell_class, rnn_version", LSTM_CLASSES)
+@pytest.mark.parametrize('return_sequences', [False, True])
+def test_LSTM_seqlen_none(runner, lstm_class, lstmcell_class, rnn_version, return_sequences):
     lstm_dim = 2
     data = np.random.rand(1, 5, 1).astype(np.float32)
-    for return_sequences in [True, False]:
-        inp = Input(batch_shape=(1, None, 1))
-        out = LSTM(lstm_dim, return_sequences=return_sequences, stateful=True)(inp)
-        keras_model = keras.Model(inputs=inp, outputs=out)
+    inp = Input(batch_shape=(1, None, 1))
+    out = lstm_class(lstm_dim, return_sequences=return_sequences, stateful=True)(inp)
+    out_2 = RNN(lstmcell_class(lstm_dim), return_sequences=return_sequences, stateful=True)(inp)
+    keras_model = keras.Model(inputs=inp, outputs=[out, out_2])
 
-        onnx_model = convert_keras(keras_model)
-        expected = keras_model.predict(data)
-        assert runner(onnx_model.graph.name, onnx_model, data, expected)
+    onnx_model = convert_keras(keras_model)
+    if rnn_version == "v2":
+        assert no_loops_in_tf2(onnx_model)
+    expected = keras_model.predict(data)
+    assert runner(onnx_model.graph.name, onnx_model, data, expected)
 
 
 @pytest.mark.parametrize("return_sequences", [True, False])

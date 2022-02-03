@@ -34,6 +34,8 @@ TF_TO_ONNX_DTYPE = {
     types_pb2.DT_INT8: onnx_pb.TensorProto.INT8,
     types_pb2.DT_UINT8: onnx_pb.TensorProto.UINT8,
     types_pb2.DT_UINT16: onnx_pb.TensorProto.UINT16,
+    types_pb2.DT_UINT32: onnx_pb.TensorProto.UINT32,
+    types_pb2.DT_UINT64: onnx_pb.TensorProto.UINT64,
     types_pb2.DT_INT64: onnx_pb.TensorProto.INT64,
     types_pb2.DT_STRING: onnx_pb.TensorProto.STRING,
     types_pb2.DT_COMPLEX64: onnx_pb.TensorProto.COMPLEX64,

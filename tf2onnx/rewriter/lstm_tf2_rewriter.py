@@ -7,7 +7,7 @@ tf2onnx.rewriter.lstm_tf2_rewriter - Rewrites LSTM pattern used by tf2.
 
 import numpy as np
 from tf2onnx.graph_matcher import GraphMatcher
-from tf2onnx.rewriter.rnn_utils import make_lstmcell_pattern
+from tf2onnx.rewriter.rnn_utils import make_lstm_pattern
 from tf2onnx.tf_loader import find_function
 from tf2onnx.rewriter.lstm_rewriter_base import LSTMContext
 from tf2onnx.rewriter.lstm_rewriter import LSTMRewriter
@@ -18,16 +18,34 @@ from tf2onnx import utils
 
 
 def rewriter_lstm_tf2(g, ops):
-    pattern1 = make_lstmcell_pattern("Identity")
 
-    for pattern in [pattern1]:
+    pattern1 = make_lstm_pattern(enter_or_id="Identity")          # TF LSTM
+    pattern2 = make_lstm_pattern(from_keras=True, use_bias=False) # keras LSTM
+    pattern3 = make_lstm_pattern(from_keras=True, use_bias=True)  # keras LSTM with bias
+
+    for pattern in [pattern1, pattern2, pattern3]:
         matcher = GraphMatcher(pattern, allow_reorder=False)
         match_results = list(matcher.match_ops(ops))
+
         for match_result in match_results:
-            concat = match_result.get_op("xh")
-            if len(concat.inputs) != 3:
+            from_keras = pattern != pattern1
+            activations_fgh = [
+                match_result.get_op("ft").type,
+                match_result.get_op("gt").type,
+                match_result.get_op("ct'").type
+            ]
+            supported_activations = ['Relu', 'Sigmoid', 'Tanh']
+            if any(f not in supported_activations for f in activations_fgh):
                 continue
-            get_item = concat.inputs[0]
+
+            # extract input x_t
+            if from_keras:
+                get_item = match_result.get_op("xt")
+            else:
+                concat = match_result.get_op("xh")
+                if len(concat.inputs) != 3:
+                    continue
+                get_item = concat.inputs[0]
             if not get_item.type == "TensorListGetItem":
                 continue
             x_e = get_item.inputs[0]
@@ -35,6 +53,7 @@ def rewriter_lstm_tf2(g, ops):
                 continue
             x_idx = g.input_names.index(x_e.output[0])
 
+            # extract output h_t
             ht_mul = match_result.get_op("ht")
             final_consumers = g.find_output_consumers(ht_mul.output[0])
             select_ops = [n for n in final_consumers if n.type == "Select"]
@@ -61,9 +80,11 @@ def rewriter_lstm_tf2(g, ops):
                 continue
             out_idx = g.input_names.index(tensor_set_items[0].input[0])
 
-            if concat.inputs[1].is_graph_input():
+            # extract input h_(t-1) and c_(t-1)
+            init_state = match_result.get_op("ht-1") if from_keras else concat.inputs[1]
+            if init_state.is_graph_input():
                 # c and h are separate
-                h_idx = g.input_names.index(concat.input[1])
+                h_idx = g.input_names.index(init_state.output[0])
                 c_e = match_result.get_op("c")
                 if not c_e.is_graph_input():
                     continue
@@ -75,9 +96,9 @@ def rewriter_lstm_tf2(g, ops):
                 }
             else:
                 # c and h are concatenated
-                if not concat.inputs[1].type == "Slice":
+                if not init_state.type == "Slice":
                     continue
-                ch_e = concat.inputs[1].inputs[0]
+                ch_e = init_state.inputs[0]
                 if not ch_e.is_graph_input():
                     continue
                 ch_idx = g.input_names.index(ch_e.output[0])
@@ -90,35 +111,81 @@ def rewriter_lstm_tf2(g, ops):
                     "ch_idx": ch_idx,
                 }
 
-            w_e = match_result.get_op("cell_kernel")
-            if not w_e.is_graph_input():
-                continue
-            w_idx = g.input_names.index(w_e.output[0])
+            # extract weights and bias
+            w_idx = hk_idx = gk_idx = 0
+            ft_bias = None
 
-            bias_add = match_result.get_op("bias_add")
-            if bias_add is not None and bias_add.data_format != "NHWC":
-                continue
+            if from_keras:
+                # hidden kernel
+                hk = match_result.get_op("R")
+                while hk.type == "Identity":
+                    hk = hk.inputs[0]
+                if not hk.is_graph_input():
+                    continue
+                hk_idx = g.input_names.index(hk.output[0])
 
-            b_e = match_result.get_op("cell_bias")
-            if not b_e.is_graph_input():
-                continue
-            b_idx = g.input_names.index(b_e.output[0])
+                # gate kernel
+                gk = match_result.get_op("W")
+                while gk.type == "Identity":
+                    gk = gk.inputs[0]
+                if not gk.is_graph_input():
+                    continue
+                gk_idx = g.input_names.index(gk.output[0])
 
-            ft_bias_node = match_result.get_op("ft_bias")
-            if not ft_bias_node.is_const():
-                continue
-            if g.get_dtype(ft_bias_node.output[0]) != g.get_dtype(b_e.output[0]):
-                continue
-            ft_bias = ft_bias_node.get_tensor_value(as_list=False)
+                # Wb and Rb are concatenated
+                b_idx = None
+                if pattern is pattern3:
+                    bias_add = match_result.get_op("bias_add")
+                    if bias_add is not None and bias_add.data_format != "NHWC":
+                        continue
+
+                    b_e = match_result.get_op("cell_bias")
+                    while b_e.type == "Identity":
+                        b_e = b_e.inputs[0]
+                    if not b_e.is_graph_input():
+                        continue
+                    b_idx = g.input_names.index(b_e.output[0])
+
+            else:
+                # W and R are concatenated
+                w_e = match_result.get_op("cell_kernel")
+                if not w_e.is_graph_input():
+                    continue
+                w_idx = g.input_names.index(w_e.output[0])
+
+                bias_add = match_result.get_op("bias_add")
+                if bias_add is not None and bias_add.data_format != "NHWC":
+                    continue
+
+                b_e = match_result.get_op("cell_bias")
+                if not b_e.is_graph_input():
+                    continue
+                b_idx = g.input_names.index(b_e.output[0])
+
+                ft_bias_node = match_result.get_op("ft_bias")
+                if not ft_bias_node.is_const():
+                    continue
+                if g.get_dtype(ft_bias_node.output[0]) != g.get_dtype(b_e.output[0]):
+                    continue
+                ft_bias = ft_bias_node.get_tensor_value(as_list=False)
 
             g.lstm_rewriter_context = {
+                # common
                 "x_idx": x_idx,
                 "out_idx": out_idx,
-                "weight_idx": w_idx,
-                "bias_idx": b_idx,
-                "ft_bias": ft_bias,
                 "seq_len_idx": seq_len_idx,
-                **ch_info
+                "bias_idx": b_idx,
+                "from_keras": from_keras,
+                "activations_fgh": activations_fgh,
+                **ch_info, # {state_is_tuple, h_idx, c_idx} or {state_is_tuple, ch_idx}
+
+                # TF
+                "weight_idx": w_idx,
+                "ft_bias": ft_bias,
+
+                # Keras
+                "w_idx": gk_idx,
+                "r_idx": hk_idx,
             }
 
     for op in ops:
@@ -127,13 +194,32 @@ def rewriter_lstm_tf2(g, ops):
             if body_graph.lstm_rewriter_context is None:
                 continue
             body_context = body_graph.lstm_rewriter_context
-            w = op.input[body_context["weight_idx"]]
-            b = op.input[body_context["bias_idx"]]
-            if not g.is_const(w) or not g.is_const(b):
-                continue
-            w_const = g.get_tensor_value(w, as_list=False)
-            b_const = g.get_tensor_value(b, as_list=False)
 
+            # parse weights
+            consts = []
+            if body_context["from_keras"]:
+                wx = op.input[body_context["w_idx"]]
+                wh = op.input[body_context["r_idx"]]
+                wx_const = g.get_tensor_value(wx, as_list=False)
+                wh_const = g.get_tensor_value(wh, as_list=False)
+                consts.extend([wx, wh])
+            else:
+                w = op.input[body_context["weight_idx"]]
+                w_const = g.get_tensor_value(w, as_list=False)
+                consts.append(w)
+
+            # parse bias
+            if body_context["bias_idx"] is not None:
+                b = op.input[body_context["bias_idx"]]
+                b_const = g.get_tensor_value(b, as_list=False)
+                consts.append(b)
+            else:
+                b_const = None
+
+            if not all(g.is_const(c) for c in consts):
+                continue
+
+            # parse states
             if body_context["state_is_tuple"]:
                 initial_c_sq = op.input[body_context["c_idx"]]
                 initial_h_sq = op.input[body_context["h_idx"]]
@@ -151,12 +237,19 @@ def rewriter_lstm_tf2(g, ops):
                 initial_c = g.make_const(utils.make_name("initial_c"), initial_c_const).output[0]
                 initial_h = g.make_const(utils.make_name("initial_h"), initial_h_const).output[0]
 
+            # build LSTMContext
             context = LSTMContext()
-            context.weights.append({"weight": w_const, "bias": b_const, "ft_bias": body_context["ft_bias"]})
+            context.from_keras = body_context["from_keras"]
+
+            if context.from_keras:
+                context.weights.append({"w": wx_const, "r": wh_const, "bias": b_const})
+            else:
+                context.weights.append({"weight": w_const, "bias": b_const, "ft_bias": body_context["ft_bias"]})
+
             context.onnx_input_ids.append({})
             context.input_size.append(None)
             context.hidden_size.append(None)
-            context.attributes.append({})
+            context.attributes.append({"activations": body_context['activations_fgh']})
             tensor_array_inp = op.inputs[body_context["x_idx"]]
             if not tensor_array_inp.type == "TensorListFromTensor":
                 continue
@@ -174,8 +267,10 @@ def rewriter_lstm_tf2(g, ops):
 
             lstm_rewriter = LSTMRewriter(g)
             lstm_rewriter.num_lstm_layers = 1
+
             lstm_rewriter.process_weights_and_bias(context)
             lstm_node = lstm_rewriter.create_rnn_node(context)[0]
+
             squeeze_output = GraphBuilder(g).make_squeeze({"data": lstm_node.output[0], "axes": [1]})
             for output in output_ys:
                 g.replace_all_inputs(output, squeeze_output)

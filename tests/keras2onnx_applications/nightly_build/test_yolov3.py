@@ -1,25 +1,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-import sys
-import unittest
-import mock_keras2onnx
-import onnx
-import numpy as np
 from os.path import dirname, abspath
+import numpy as np
+import unittest
+import sys
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from keras.models import load_model
+sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../yolov3'))
 
+from keras.models import load_model
+import onnx
 import urllib.request
+from yolov3 import YOLO, convert_model
+
+from distutils.version import StrictVersion
+import mock_keras2onnx
+from test_utils import is_bloburl_access
+
+
 YOLOV3_WEIGHTS_PATH = r'https://lotus.blob.core.windows.net/converter-models/yolov3.h5'
 model_file_name = 'yolov3.h5'
 YOLOV3_TINY_WEIGHTS_PATH = r'https://lotus.blob.core.windows.net/converter-models/yolov3-tiny.h5'
 tiny_model_file_name = 'yolov3-tiny.h5'
-
-sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../yolov3'))
-from yolov3 import YOLO, convert_model
-
-from distutils.version import StrictVersion
 
 working_path = os.path.abspath(os.path.dirname(__file__))
 tmp_path = os.path.join(working_path, 'temp')
@@ -45,6 +47,8 @@ class TestYoloV3(unittest.TestCase):
 
     @unittest.skipIf(StrictVersion(onnx.__version__.split('-')[0]) < StrictVersion("1.5.0"),
                      "NonMaxSuppression op is not supported for onnx < 1.5.0.")
+    @unittest.skipIf(not is_bloburl_access(YOLOV3_WEIGHTS_PATH) or not is_bloburl_access(YOLOV3_TINY_WEIGHTS_PATH),
+                     "Model blob url can't access.")
     def test_yolov3(self):
         img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
         yolo3_yolo3_dir = os.path.join(os.path.dirname(__file__), '../../../keras-yolo3/yolo3')

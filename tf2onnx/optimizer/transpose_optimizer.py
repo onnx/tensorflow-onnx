@@ -208,6 +208,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Max": self._maxmin_handler,
             "Min": self._maxmin_handler,
             "Mul": self._mul_handler,
+            "Neg": self._simple_through_handler,
             "Pad": self._pad_handler,
             "PRelu": self._prelu_handler,
             "Reciprocal": self._simple_through_handler,

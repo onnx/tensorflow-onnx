@@ -1344,6 +1344,19 @@ class OneHot:
         off_on_value = ctx.make_node("Concat", [off_value, on_value], attr={"axis": 0}).output[0]
 
         indices = node.input[0]
+        indices_rank = ctx.get_rank(indices)
+
+        # Add a special support for 0-rank indices, to do so we have to expand the dimension to 1
+        # before the one hot encoding and remove it after.
+        if indices_rank == 0:
+            dims = ctx.make_const(name=utils.make_name('dims'), np_val=np.array([1], dtype=np.int64))
+            indices = ctx.make_node("Expand", [indices, dims.name]).output[0]
+
+            # Axis 0 is supported by TensorFlow for the one-hot encoding of a 0-rank tensor. It should behave
+            # as if axis has been set to -1 so we artificially set it as is here.
+            if node.get_attr('axis').i == 0:
+                node.set_attr('axis', -1)
+
         if ctx.is_target(constants.TARGET_RS6) \
                 and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
             indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
@@ -1366,6 +1379,26 @@ class OneHot:
             new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
             ctx.set_dtype(new_node.output[0], output_dtype)
             ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
+
+        # Remove the dimension artificially added in order to support 0-rank indices
+        if indices_rank == 0:
+            nodes = [node]
+            name = utils.make_name(node.name)
+            shape = ctx.get_shape(node.output[0])
+            dtype = ctx.get_dtype(node.output[0])
+            squeeze_node = GraphBuilder(ctx).make_squeeze(
+                {
+                    "axes": [0],
+                    'data': node.output[0]
+                },
+                name=name,
+                dtypes=[dtype],
+                shapes=[shape],
+                return_node=True)
+            ctx.insert_node_on_output(squeeze_node)
+
+            nodes.append(squeeze_node)
+            ctx.update_node_shape_dtype(node, override=True)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):

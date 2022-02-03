@@ -28,56 +28,75 @@ class REWRITER_RESULT(Enum):
     FAIL = 3
 
 
-# TensorFlow LSTMCell/BasicLSTMCell computation graph matching
+# TensorFlow LSTMCell/BasicLSTMCell and Keras LSTM computation graph matching
 
-_make_xc_pattern_memo = {}
+def make_lstm_xc_pattern(enter_or_id="Enter", from_keras=False, use_bias=False):
+    if from_keras:
+        lstm_xh_pattern = OpTypePattern("Add|AddV2", allow_reorder=False, inputs=[
+            # xt*(W^T)
+            OpTypePattern("MatMul", name='x', inputs=[
+                OpTypePattern("TensorListGetItem", name="xt"),
+                OpTypePattern("*", name="W"),
+            ], allow_reorder=False),
 
-def make_xc_pattern(enter_or_id="Enter"):
-    if enter_or_id in _make_xc_pattern_memo:
-        return _make_xc_pattern_memo[enter_or_id]
-    result = OpTypePattern('Split', inputs=[
-        OpTypePattern("Const"), # axis for split
-        OpTypePattern("BiasAdd", name="bias_add", inputs=[
-            OpTypePattern("MatMul", inputs=[
-                OpTypePattern("ConcatV2|Concat", name="xh"),
-                OpTypePattern(enter_or_id, inputs=[
-                    OpTypePattern("*", name="cell_kernel"),
-                ]),
-            ]),
+            # (ht-1)*(R^T)
+            OpTypePattern("MatMul", name='h', inputs=[
+                OpTypePattern("*", name="ht-1"),
+                OpTypePattern("*", name="R"),
+            ], allow_reorder=False),
+        ])
+        return lstm_xh_pattern if not use_bias else \
+            OpTypePattern("BiasAdd", name="bias_add", inputs=[
+                lstm_xh_pattern,
+                OpTypePattern("*", name="cell_bias")
+            ])
+    return OpTypePattern("BiasAdd", name="bias_add", inputs=[
+        OpTypePattern("MatMul", inputs=[
+            OpTypePattern("ConcatV2|Concat", name="xh"),
             OpTypePattern(enter_or_id, inputs=[
-                OpTypePattern("*", name="cell_bias"),
+                OpTypePattern("*", name="cell_kernel"),
             ]),
         ]),
+        OpTypePattern(enter_or_id, inputs=[
+            OpTypePattern("*", name="cell_bias"),
+        ]),
     ])
-    _make_xc_pattern_memo[enter_or_id] = result
-    return result
 
-xc_pattern = make_xc_pattern()
 
-def make_lstmcell_pattern(enter_or_id="Enter"):
-    my_xc_pattern = make_xc_pattern(enter_or_id)
-    return OpTypePattern('Mul', name='ht', inputs=[
-        OpTypePattern("Sigmoid", name="ot", inputs=[my_xc_pattern]),
-        OpTypePattern('Tanh', inputs=[
+def make_lstm_pattern(enter_or_id="Enter", from_keras=False, use_bias=False):
+    # split (Xt*(W[ifco]^T) + Ht-1*(R[ifco]^T)) on 'Const' axis
+    lstm_xc_pattern = OpTypePattern('Split', inputs=[
+        OpTypePattern("Const"),
+        make_lstm_xc_pattern(enter_or_id, from_keras, use_bias)
+    ])
+
+    # TF forget gate bias
+    lstm_fb_pattern = lstm_xc_pattern if from_keras else \
+        OpTypePattern("Add|AddV2", inputs=[
+            lstm_xc_pattern,
+            OpTypePattern("*", name="ft_bias"),
+        ])
+
+    activation = "Tanh|Relu|Sigmoid"
+    recurrent_activation = "Tanh|Relu|Sigmoid"
+
+    return OpTypePattern("Mul", name='ht', inputs=[
+        OpTypePattern(recurrent_activation, name="ot", inputs=[lstm_xc_pattern]),
+        OpTypePattern(activation, name="ct'", inputs=[
             OpTypePattern("Add|AddV2", name="ct", inputs=[
                 OpTypePattern("Mul", name="ct_identity_consumer", inputs=[
-                    OpTypePattern("Sigmoid", name="ft", inputs=[
-                        OpTypePattern("Add|AddV2", inputs=[
-                            my_xc_pattern,
-                            OpTypePattern("*", name="ft_bias"),
-                        ]),
-                    ]),
+                    OpTypePattern(recurrent_activation, name="ft", inputs=[lstm_fb_pattern]),
                     OpTypePattern("*", name="c"),
                 ]),
                 OpTypePattern("Mul", inputs=[
-                    OpTypePattern("Sigmoid", name="it", inputs=[my_xc_pattern]),
-                    OpTypePattern("Tanh", name="gt", inputs=[my_xc_pattern]),
+                    OpTypePattern(recurrent_activation, name="it", inputs=[lstm_xc_pattern]),
+                    OpTypePattern(activation, name="gt", inputs=[lstm_xc_pattern]),
                 ]),
             ]),
         ]),
     ])
 
-lstmcell_pattern = make_lstmcell_pattern()
+lstmcell_pattern = make_lstm_pattern()
 
 xc_pattern_optimized = \
     OpTypePattern('Split', inputs=[
