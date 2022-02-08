@@ -673,7 +673,7 @@ def from_keras(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def tf_optimize_grappler(input_names, output_names, graph_def):
+def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=None):
     from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
 
