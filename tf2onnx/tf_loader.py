@@ -209,7 +209,7 @@ def fix_freezing_errors_part2(graph_def):
     return graph_def
 
 
-def from_trackable(trackable, concrete_func, inputs, outputs, large_model, disable_constfold=False):
+def from_trackable(trackable, concrete_func, inputs, outputs, large_model):
     err_large_model = "model exceeds maximum protobuf size of 2GB. Try setting large_model."
 
     # Avoid errors due to bug in TF freezing
@@ -217,7 +217,7 @@ def from_trackable(trackable, concrete_func, inputs, outputs, large_model, disab
         _remove_non_variable_resources_from_captures(concrete_func)
 
     try:
-        frozen_graph = from_function(concrete_func, inputs, outputs, large_model, disable_constfold)
+        frozen_graph = from_function(concrete_func, inputs, outputs, large_model)
     except ValueError as e:
         if any(msg in str(e) for msg in ["exceeds maximum protobuf size of 2GB", "string too long"]):
             raise ValueError(err_large_model)
@@ -261,7 +261,7 @@ def from_trackable(trackable, concrete_func, inputs, outputs, large_model, disab
     return frozen_graph, initialized_tables
 
 
-def from_function(func, input_names, output_names, large_model=False, disable_constfold=False):
+def from_function(func, input_names, output_names, large_model=False):
     if large_model:
         return convert_variables_to_constants_large_model(func)
 
@@ -286,7 +286,7 @@ def from_function(func, input_names, output_names, large_model=False, disable_co
         with tf_session(graph=tf_graph) as sess:
             tf.import_graph_def(graph_def, name='')
             input_names = inputs_without_resource(sess, input_names)
-            graph_def = tf_optimize(input_names, output_names, graph_def, disable_constfold)
+            graph_def = tf_optimize(input_names, output_names, graph_def)
     return graph_def
 
 
@@ -527,7 +527,7 @@ def _restore_captured_resources(concrete_func, graph_captures_copy, func_capture
 
 
 def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_def,
-                         concrete_function_index, large_model, use_graph_names, disable_constfold=False):
+                         concrete_function_index, large_model, use_graph_names):
     """Load tensorflow graph from saved_model."""
 
     wrn_no_tag = "'--tag' not specified for saved_model. Using --tag serve"
@@ -594,7 +594,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     else:
         outputs = output_names
 
-    frozen_graph, initialized_tables = from_trackable(imported, concrete_func, inputs, outputs, large_model, disable_constfold)
+    frozen_graph, initialized_tables = from_trackable(imported, concrete_func, inputs, outputs, large_model)
 
     return frozen_graph, inputs, outputs, concrete_func, imported, initialized_tables, tensors_to_rename
 
@@ -602,7 +602,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
 def from_saved_model(model_path, input_names, output_names, tag=None,
                      signatures=None, concrete_function=None, large_model=False,
                      return_concrete_func=False, return_initialized_tables=False,
-                     return_tensors_to_rename=False, use_graph_names=False, disable_constfold=False):
+                     return_tensors_to_rename=False, use_graph_names=False):
     """Load tensorflow graph from saved_model."""
     if signatures is None:
         signatures = []
@@ -612,7 +612,7 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
 
             frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables, tensors_to_rename = \
                 _from_saved_model_v2(model_path, input_names, output_names,
-                                     tag, signatures, concrete_function, large_model, use_graph_names, disable_constfold)
+                                     tag, signatures, concrete_function, large_model, use_graph_names)
             result = [frozen_graph, input_names, output_names]
             if return_concrete_func:
                 result += [concrete_func, imported]
@@ -673,7 +673,7 @@ def from_keras(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def tf_optimize_grappler(input_names, output_names, graph_def, disable_constfold=False):
+def tf_optimize_grappler(input_names, output_names, graph_def):
     from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
 
@@ -686,8 +686,8 @@ def tf_optimize_grappler(input_names, output_names, graph_def, disable_constfold
         # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
         'function', 'dependency'
     ]
-    if not disable_constfold:
-        rewrite_options.optimizers.append('constfold')
+    # This flag disables folding QDQ nodes around constants in the network (eg: around conv/FC weights)
+    rewrite_options.experimental_disable_folding_quantization_emulation = True
 
     meta_graph = tf.compat.v1.train.export_meta_graph(graph_def=graph_def)
     fetch_collection = meta_graph_pb2.CollectionDef()
@@ -698,7 +698,7 @@ def tf_optimize_grappler(input_names, output_names, graph_def, disable_constfold
     return graph_def
 
 
-def tf_optimize(input_names, output_names, graph_def, disable_constfold=False):
+def tf_optimize(input_names, output_names, graph_def):
     """Extract inference subgraph and optimize graph."""
     assert isinstance(input_names, list)
     assert isinstance(output_names, list)
@@ -710,7 +710,7 @@ def tf_optimize(input_names, output_names, graph_def, disable_constfold=False):
 
     want_grappler = is_tf2() or LooseVersion(tf.__version__) >= "1.15"
     if want_grappler:
-        graph_def = tf_optimize_grappler(input_names, output_names, graph_def, disable_constfold)
+        graph_def = tf_optimize_grappler(input_names, output_names, graph_def)
     else:
         # the older transform path
         from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name

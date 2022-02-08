@@ -85,8 +85,6 @@ def get_args():
     parser.add_argument("--output_frozen_graph", help="output frozen tf graph to file")
     parser.add_argument("--fold_const", help="Deprecated. Constant folding is always enabled.",
                         action="store_true")
-    parser.add_argument("--disable_constfold", help="Constant folding is always enabled. Use this flag to disable constfold optimizer in Tensorflow grappler.",
-                        action="store_true")
     # experimental
     parser.add_argument("--inputs-as-nchw", help="transpose inputs as from nhwc to nchw")
     args = parser.parse_args()
@@ -235,7 +233,7 @@ def main():
         graph_def, inputs, outputs, initialized_tables, tensors_to_rename = tf_loader.from_saved_model(
             args.saved_model, args.inputs, args.outputs, args.tag, args.signature_def, args.concrete_function,
             args.large_model, return_initialized_tables=True, return_tensors_to_rename=True,
-            use_graph_names=args.use_graph_names, disable_constfold=args.disable_constfold)
+            use_graph_names=args.use_graph_names)
         model_path = args.saved_model
     if args.keras:
         graph_def, inputs, outputs = tf_loader.from_keras(
