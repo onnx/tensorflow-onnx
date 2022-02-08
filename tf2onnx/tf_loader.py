@@ -192,7 +192,6 @@ def fix_freezing_errors(graph_def):
                 n.input.pop(i)
     return graph_def
 
-
 def fix_freezing_errors_part2(graph_def):
     # Sometimes tf freezing fails to convert ResourceGather ops in subgraphs
     for f in graph_def.library.function:
@@ -610,6 +609,7 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
     tf_reset_default_graph()
     with tf.device("/cpu:0"):
         if is_tf2():
+
             frozen_graph, input_names, output_names, concrete_func, imported, initialized_tables, tensors_to_rename = \
                 _from_saved_model_v2(model_path, input_names, output_names,
                                      tag, signatures, concrete_function, large_model, use_graph_names)
@@ -673,7 +673,7 @@ def from_keras(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=None):
+def tf_optimize_grappler(input_names, output_names, graph_def):
     from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
 
@@ -684,8 +684,11 @@ def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=Non
     # depends on so for now don't turn this on, fold_constant is always enabled now.
     rewrite_options.optimizers[:] = [
         # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
-        'constfold', 'function'
+        'function', 'dependency'
     ]
+    # This flag disables folding QDQ nodes around constants in the network (eg: around conv/FC weights)
+    rewrite_options.experimental_disable_folding_quantization_emulation = True
+
     meta_graph = tf.compat.v1.train.export_meta_graph(graph_def=graph_def)
     fetch_collection = meta_graph_pb2.CollectionDef()
     for t in input_names + output_names:
