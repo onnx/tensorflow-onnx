@@ -150,7 +150,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 val = np.transpose(val, permutation)
                 weights_node.set_tensor_value(val)
                 need_transpose = False
-                #Change the quantization axis for Q and DQ node accordingly
+                # Change the quantization axis for Q and DQ node accordingly
                 kernel_node.set_attr("axis", 0) # DQ node
                 kernel_node.inputs[0].set_attr("axis", 0) # Q node
             else:
