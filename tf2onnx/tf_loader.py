@@ -686,7 +686,7 @@ def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=Non
         # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
         'function', 'dependency'
     ]
-    if LooseVersion(tf.__version__) > "2.4"::
+    if LooseVersion(tf.__version__) > "2.4":
         # This flag disables folding QDQ nodes around constants in the network (eg: around conv/FC weights)
         rewrite_options.experimental_disable_folding_quantization_emulation = True
 
