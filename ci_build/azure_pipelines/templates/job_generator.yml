@@ -4,7 +4,7 @@ parameters:
   platforms: ['linux']
   python_versions: ['3.7']
   tf_versions: ['']
-  onnx_versions: ['1.11.0rc2']
+  onnx_versions: ['']
   onnx_opsets: ['15', '14', '13', '12', '11', '10', '9']
   onnx_backends: {onnxruntime: ['1.9.0']}
   job: {}
@@ -56,7 +56,7 @@ jobs:
                           CI_PIP_TF_NAME: ${{ format('tensorflow=={0}', tf_version) }}
 
                         ${{ if eq(onnx_version, '') }}:
-                          CI_PIP_ONNX_NAME: 'onnx'
+                          CI_PIP_ONNX_NAME: '-i https://test.pypi.org/simple/ onnx==1.11.0rc2'
                         ${{ if ne(onnx_version, '') }}:
                           CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
 
