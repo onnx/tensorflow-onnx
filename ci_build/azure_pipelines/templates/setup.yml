@@ -39,15 +39,15 @@ steps:
       fi
       if [[ $CI_TF_VERSION == 2.5* ]] ;
       then
-        pip install tensorflow-text>=2.5
+        pip install "tensorflow-text>=2.5,<2.6"
       fi
       if [[ $CI_TF_VERSION == 2.6* ]] ;
       then
-        pip install tensorflow-text>=2.6
+        pip install "tensorflow-text>=2.6,<2.7"
       fi
       if [[ $CI_TF_VERSION == 2.7* ]] ;
       then
-        pip install tensorflow-text>=2.6
+        pip install "tensorflow-text>=2.7,<2.8"
       fi
     fi
 
