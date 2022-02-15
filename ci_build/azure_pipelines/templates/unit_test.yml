@@ -4,7 +4,7 @@ parameters:
     onnx_opsets: ['15', '14', '13', '12', '11', '10', '9', '8']
     skip_tflite_tests: 'True'
     skip_tfjs_tests: 'True'
-    skip_tf_tests: 'False'
+    skip_tf_tests: 'True'
 
 steps:
 - ${{ each onnx_opset in parameters.onnx_opsets }}:
