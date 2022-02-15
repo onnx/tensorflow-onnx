@@ -66,7 +66,7 @@ jobs:
         python.version: '3.8'
         ONNX_PATH: -i onnx==1.10.2
         KERAS: keras==2.4.3
-        TENSORFLOW_PATH: tensorflow==2.2.0
+        TENSORFLOW_PATH: tensorflow==2.7.0
         INSTALL_ORT: pip install onnxruntime==1.9.0
 
   steps:
@@ -129,7 +129,7 @@ jobs:
         python.version: '3.7'
         ONNX_PATH: onnx==1.10.2
         KERAS: keras==2.4.3
-        TENSORFLOW_PATH: tensorflow==2.2.0
+        TENSORFLOW_PATH: tensorflow==2.7.0
         INSTALL_ORT: pip install onnxruntime==1.9.0
 
   steps:
