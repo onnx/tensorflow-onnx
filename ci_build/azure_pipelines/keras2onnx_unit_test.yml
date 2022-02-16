@@ -125,7 +125,7 @@ jobs:
         TENSORFLOW_PATH: tensorflow==2.0.0
         INSTALL_ORT: pip install onnxruntime==1.9.0
 
-      Keras-Py37-tf2.2.0:
+      Keras-Py37-tf2.7.0:
         python.version: '3.7'
         ONNX_PATH: onnx==1.10.2
         KERAS: keras==2.4.3

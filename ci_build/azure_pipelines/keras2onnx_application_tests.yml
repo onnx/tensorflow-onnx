@@ -63,35 +63,46 @@ jobs:
     vmImage: 'vs2017-win2016'
   strategy:
     matrix:
-      Python36-onnx1.5:
-        python.version: '3.6'
-        ONNX_PATH: onnx==1.5.0
-        INSTALL_KERAS: pip install keras==2.2.4
-        UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.8.0
-        INSTALL_KERAS_RESNET: pip install keras-resnet
-        INSTALL_TRANSFORMERS:
-        NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
+      # Python36-onnx1.5:
+      #   python.version: '3.6'
+      #   ONNX_PATH: onnx==1.5.0
+      #   INSTALL_KERAS: pip install keras==2.2.4
+      #   UNINSTALL_KERAS:
+      #   INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
+      #   INSTALL_ORT: pip install onnxruntime==1.8.0
+      #   INSTALL_KERAS_RESNET: pip install keras-resnet
+      #   INSTALL_TRANSFORMERS:
+      #   NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
 
-      Python37-onnx1.6:
-        python.version: '3.7'
-        ONNX_PATH: onnx==1.6.0
+      # Python37-onnx1.6:
+      #   python.version: '3.7'
+      #   ONNX_PATH: onnx==1.6.0
+      #   INSTALL_KERAS: pip install keras==2.3.1
+      #   UNINSTALL_KERAS:
+      #   INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
+      #   INSTALL_ORT: pip install onnxruntime==1.8.0
+      #   INSTALL_KERAS_RESNET: pip install keras-resnet
+      #   INSTALL_TRANSFORMERS:
+      #   NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
+
+      # Python37-onnx1.9:
+      #   python.version: '3.7'
+      #   ONNX_PATH: onnx==1.9.0
+      #   INSTALL_KERAS: pip install keras==2.3.1
+      #   UNINSTALL_KERAS:
+      #   INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
+      #   INSTALL_ORT: pip install onnxruntime==1.8.0
+      #   INSTALL_KERAS_RESNET: pip install keras-resnet
+      #   INSTALL_TRANSFORMERS:
+      #   NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
+
+      Python38-onnx1.10:
+        python.version: '3.8'
+        ONNX_PATH: onnx==1.10.0
         INSTALL_KERAS: pip install keras==2.3.1
         UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.8.0
-        INSTALL_KERAS_RESNET: pip install keras-resnet
-        INSTALL_TRANSFORMERS:
-        NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
-
-      Python37-onnx1.9:
-        python.version: '3.7'
-        ONNX_PATH: onnx==1.9.0
-        INSTALL_KERAS: pip install keras==2.3.1
-        UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.8.0
+        INSTALL_TENSORFLOW: pip install tensorflow==2.8.0
+        INSTALL_ORT: pip install onnxruntime==1.10.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS:
         NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py test_mask_rcnn.py"
