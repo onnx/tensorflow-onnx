@@ -69,9 +69,9 @@ def get_args():
     parser.add_argument("--use-graph-names", help="(saved model only) skip renaming io using signature names",
                         action="store_true")
     parser.add_argument("--opset", type=int, default=None, help="opset version to use for onnx domain")
-    parser.add_argument("--dequantize", help="Remove quantization from model. Only supported for tflite currently.",
+    parser.add_argument("--dequantize", help="remove quantization from model. Only supported for tflite currently.",
                         action="store_true")
-    parser.add_argument("--custom-ops", help="Comma-separated map of custom ops to domains in format OpName:domain. "
+    parser.add_argument("--custom-ops", help="comma-separated map of custom ops to domains in format OpName:domain. "
                                              "Domain 'ai.onnx.converters.tensorflow' is used by default.")
     parser.add_argument("--extra_opset", default=None,
                         help="extra opset with format like domain:version, e.g. com.microsoft:1")

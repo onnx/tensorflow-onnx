@@ -140,6 +140,7 @@ python -m tf2onnx.convert
     [--concrete_function CONCRETE_FUNCTION]
     [--target TARGET]
     [--custom-ops list-of-custom-ops]
+    [--load_op_libraries custom_library_path]
     [--large_model]
     [--continue_on_error]
     [--verbose]
@@ -224,6 +225,10 @@ If a model contains ops not recognized by onnx runtime, you can tag these ops wi
 runtime can still open the model. The format is a comma-separated map of tf op names to domains in the format
 OpName:domain. If only an op name is provided (no colon), the default domain of `ai.onnx.converters.tensorflow`
 will be used.
+
+#### --load_op_libraries
+
+Some ops are not covered by the existing TensorFlow library. You can create a custom library following [Create an op](https://www.tensorflow.org/guide/create_op). Then use this parameter to load the comma-separated list of custom library paths, each library file usually ends with `.so`.
 
 #### --target
 
