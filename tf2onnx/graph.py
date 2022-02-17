@@ -1193,10 +1193,8 @@ class Graph(object):
                       "producer_version": __version__}
 
         if "opset_imports" not in kwargs:
-            opsets = []
-            imp = OperatorSetIdProto()
-            imp.version = self._opset
-            opsets.append(imp)
+            opsets = [helper.make_opsetid(constants.ONNX_DOMAIN, self._opset)]
+            opsets.append(constants.AI_ONNX_ML_OPSET)
             if self.extra_opset is not None:
                 opsets.extend(self.extra_opset)
             kwargs["opset_imports"] = opsets
