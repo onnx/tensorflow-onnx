@@ -11,7 +11,7 @@ import logging
 import six
 import numpy as np
 
-from onnx import helper, numpy_helper, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
+from onnx import helper, numpy_helper, shape_inference, AttributeProto, TensorProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import make_name, port_name, find_opset
 from tf2onnx import optimizer
