@@ -140,7 +140,7 @@ python -m tf2onnx.convert
     [--concrete_function CONCRETE_FUNCTION]
     [--target TARGET]
     [--custom-ops list-of-custom-ops]
-    [--load_op_libraries custom_library_path]
+    [--load_op_libraries tensorflow_library_path]
     [--large_model]
     [--continue_on_error]
     [--verbose]
@@ -228,7 +228,7 @@ will be used.
 
 #### --load_op_libraries
 
-Some ops are not covered by the existing TensorFlow library. You can create a custom library following [Create an op](https://www.tensorflow.org/guide/create_op). Then use this parameter to load the comma-separated list of custom library paths, each library file usually ends with `.so`.
+Some ops are not covered by the existing TensorFlow library. You can create a custom library following [Create an op](https://www.tensorflow.org/guide/create_op). Then use this parameter to load the comma-separated list of tensorflow plugin libraries before conversion, each library file usually ends with `.so`.
 
 #### --target
 
