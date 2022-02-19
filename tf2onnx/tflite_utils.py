@@ -328,9 +328,9 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
 
         if name in tensor_shapes_override:
             output_shapes[name] = tensor_shapes_override[name]
-        elif tensor.ShapeIsNone():
+        elif tensor.ShapeLength() == 0:
             output_shapes[name] = None
-        elif tensor.ShapeSignatureIsNone():
+        elif tensor.ShapeSignatureLength() == 0:
             # The shape signature uses -1 to signify unknown dims. Old models don't have this and use Shape instead.
             output_shapes[name] = tensor.ShapeAsNumpy().tolist()
         else:
