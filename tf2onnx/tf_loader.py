@@ -686,6 +686,11 @@ def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=Non
         # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
         'constfold', 'function'
     ]
+
+    if LooseVersion(tf.__version__) >= "2.5":
+        # This flag disables folding QDQ nodes around constants in the network (eg: around conv/FC weights)
+        rewrite_options.experimental_disable_folding_quantization_emulation = True
+
     meta_graph = tf.compat.v1.train.export_meta_graph(graph_def=graph_def)
     fetch_collection = meta_graph_pb2.CollectionDef()
     for t in input_names + output_names:
