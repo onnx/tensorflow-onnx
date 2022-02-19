@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class TensorMap(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsTensorMap(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = TensorMap()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsTensorMap(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def TensorMapBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # TensorMap
     def Init(self, buf, pos):
@@ -44,19 +34,7 @@ class TensorMap(object):
             return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
         return 0
 
-def Start(builder): builder.StartObject(2)
-def TensorMapStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddName(builder, name): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(name), 0)
-def TensorMapAddName(builder, name):
-    """This method is deprecated. Please switch to AddName."""
-    return AddName(builder, name)
-def AddTensorIndex(builder, tensorIndex): builder.PrependUint32Slot(1, tensorIndex, 0)
-def TensorMapAddTensorIndex(builder, tensorIndex):
-    """This method is deprecated. Please switch to AddTensorIndex."""
-    return AddTensorIndex(builder, tensorIndex)
-def End(builder): return builder.EndObject()
-def TensorMapEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def TensorMapStart(builder): builder.StartObject(2)
+def TensorMapAddName(builder, name): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(name), 0)
+def TensorMapAddTensorIndex(builder, tensorIndex): builder.PrependUint32Slot(1, tensorIndex, 0)
+def TensorMapEnd(builder): return builder.EndObject()

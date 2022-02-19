@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class Uint16Vector(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsUint16Vector(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = Uint16Vector()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsUint16Vector(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def Uint16VectorBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # Uint16Vector
     def Init(self, buf, pos):
@@ -52,24 +42,7 @@ class Uint16Vector(object):
             return self._tab.VectorLen(o)
         return 0
 
-    # Uint16Vector
-    def ValuesIsNone(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
-        return o == 0
-
-def Start(builder): builder.StartObject(1)
-def Uint16VectorStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddValues(builder, values): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(values), 0)
-def Uint16VectorAddValues(builder, values):
-    """This method is deprecated. Please switch to AddValues."""
-    return AddValues(builder, values)
-def StartValuesVector(builder, numElems): return builder.StartVector(2, numElems, 2)
-def Uint16VectorStartValuesVector(builder, numElems):
-    """This method is deprecated. Please switch to Start."""
-    return StartValuesVector(builder, numElems)
-def End(builder): return builder.EndObject()
-def Uint16VectorEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def Uint16VectorStart(builder): builder.StartObject(1)
+def Uint16VectorAddValues(builder, values): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(values), 0)
+def Uint16VectorStartValuesVector(builder, numElems): return builder.StartVector(2, numElems, 2)
+def Uint16VectorEnd(builder): return builder.EndObject()

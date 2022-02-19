@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class IfOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsIfOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = IfOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsIfOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def IfOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # IfOptions
     def Init(self, buf, pos):
@@ -44,19 +34,7 @@ class IfOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def Start(builder): builder.StartObject(2)
-def IfOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddThenSubgraphIndex(builder, thenSubgraphIndex): builder.PrependInt32Slot(0, thenSubgraphIndex, 0)
-def IfOptionsAddThenSubgraphIndex(builder, thenSubgraphIndex):
-    """This method is deprecated. Please switch to AddThenSubgraphIndex."""
-    return AddThenSubgraphIndex(builder, thenSubgraphIndex)
-def AddElseSubgraphIndex(builder, elseSubgraphIndex): builder.PrependInt32Slot(1, elseSubgraphIndex, 0)
-def IfOptionsAddElseSubgraphIndex(builder, elseSubgraphIndex):
-    """This method is deprecated. Please switch to AddElseSubgraphIndex."""
-    return AddElseSubgraphIndex(builder, elseSubgraphIndex)
-def End(builder): return builder.EndObject()
-def IfOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def IfOptionsStart(builder): builder.StartObject(2)
+def IfOptionsAddThenSubgraphIndex(builder, thenSubgraphIndex): builder.PrependInt32Slot(0, thenSubgraphIndex, 0)
+def IfOptionsAddElseSubgraphIndex(builder, elseSubgraphIndex): builder.PrependInt32Slot(1, elseSubgraphIndex, 0)
+def IfOptionsEnd(builder): return builder.EndObject()

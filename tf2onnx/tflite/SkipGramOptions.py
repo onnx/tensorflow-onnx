@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class SkipGramOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsSkipGramOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SkipGramOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsSkipGramOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def SkipGramOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # SkipGramOptions
     def Init(self, buf, pos):
@@ -51,23 +41,8 @@ class SkipGramOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def Start(builder): builder.StartObject(3)
-def SkipGramOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddNgramSize(builder, ngramSize): builder.PrependInt32Slot(0, ngramSize, 0)
-def SkipGramOptionsAddNgramSize(builder, ngramSize):
-    """This method is deprecated. Please switch to AddNgramSize."""
-    return AddNgramSize(builder, ngramSize)
-def AddMaxSkipSize(builder, maxSkipSize): builder.PrependInt32Slot(1, maxSkipSize, 0)
-def SkipGramOptionsAddMaxSkipSize(builder, maxSkipSize):
-    """This method is deprecated. Please switch to AddMaxSkipSize."""
-    return AddMaxSkipSize(builder, maxSkipSize)
-def AddIncludeAllNgrams(builder, includeAllNgrams): builder.PrependBoolSlot(2, includeAllNgrams, 0)
-def SkipGramOptionsAddIncludeAllNgrams(builder, includeAllNgrams):
-    """This method is deprecated. Please switch to AddIncludeAllNgrams."""
-    return AddIncludeAllNgrams(builder, includeAllNgrams)
-def End(builder): return builder.EndObject()
-def SkipGramOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def SkipGramOptionsStart(builder): builder.StartObject(3)
+def SkipGramOptionsAddNgramSize(builder, ngramSize): builder.PrependInt32Slot(0, ngramSize, 0)
+def SkipGramOptionsAddMaxSkipSize(builder, maxSkipSize): builder.PrependInt32Slot(1, maxSkipSize, 0)
+def SkipGramOptionsAddIncludeAllNgrams(builder, includeAllNgrams): builder.PrependBoolSlot(2, includeAllNgrams, 0)
+def SkipGramOptionsEnd(builder): return builder.EndObject()

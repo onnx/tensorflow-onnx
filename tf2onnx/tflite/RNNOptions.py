@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class RNNOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsRNNOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = RNNOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsRNNOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def RNNOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # RNNOptions
     def Init(self, buf, pos):
@@ -44,19 +34,7 @@ class RNNOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def Start(builder): builder.StartObject(2)
-def RNNOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
-def RNNOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
-    """This method is deprecated. Please switch to AddFusedActivationFunction."""
-    return AddFusedActivationFunction(builder, fusedActivationFunction)
-def AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.PrependBoolSlot(1, asymmetricQuantizeInputs, 0)
-def RNNOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs):
-    """This method is deprecated. Please switch to AddAsymmetricQuantizeInputs."""
-    return AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs)
-def End(builder): return builder.EndObject()
-def RNNOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def RNNOptionsStart(builder): builder.StartObject(2)
+def RNNOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
+def RNNOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.PrependBoolSlot(1, asymmetricQuantizeInputs, 0)
+def RNNOptionsEnd(builder): return builder.EndObject()

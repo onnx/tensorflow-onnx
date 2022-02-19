@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class TransposeConvOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsTransposeConvOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = TransposeConvOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsTransposeConvOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def TransposeConvOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # TransposeConvOptions
     def Init(self, buf, pos):
@@ -51,23 +41,8 @@ class TransposeConvOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def Start(builder): builder.StartObject(3)
-def TransposeConvOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddPadding(builder, padding): builder.PrependInt8Slot(0, padding, 0)
-def TransposeConvOptionsAddPadding(builder, padding):
-    """This method is deprecated. Please switch to AddPadding."""
-    return AddPadding(builder, padding)
-def AddStrideW(builder, strideW): builder.PrependInt32Slot(1, strideW, 0)
-def TransposeConvOptionsAddStrideW(builder, strideW):
-    """This method is deprecated. Please switch to AddStrideW."""
-    return AddStrideW(builder, strideW)
-def AddStrideH(builder, strideH): builder.PrependInt32Slot(2, strideH, 0)
-def TransposeConvOptionsAddStrideH(builder, strideH):
-    """This method is deprecated. Please switch to AddStrideH."""
-    return AddStrideH(builder, strideH)
-def End(builder): return builder.EndObject()
-def TransposeConvOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def TransposeConvOptionsStart(builder): builder.StartObject(3)
+def TransposeConvOptionsAddPadding(builder, padding): builder.PrependInt8Slot(0, padding, 0)
+def TransposeConvOptionsAddStrideW(builder, strideW): builder.PrependInt32Slot(1, strideW, 0)
+def TransposeConvOptionsAddStrideH(builder, strideH): builder.PrependInt32Slot(2, strideH, 0)
+def TransposeConvOptionsEnd(builder): return builder.EndObject()

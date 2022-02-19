@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class DimensionMetadata(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsDimensionMetadata(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = DimensionMetadata()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsDimensionMetadata(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def DimensionMetadataBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # DimensionMetadata
     def Init(self, buf, pos):
@@ -78,35 +68,11 @@ class DimensionMetadata(object):
             return obj
         return None
 
-def Start(builder): builder.StartObject(6)
-def DimensionMetadataStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddFormat(builder, format): builder.PrependInt8Slot(0, format, 0)
-def DimensionMetadataAddFormat(builder, format):
-    """This method is deprecated. Please switch to AddFormat."""
-    return AddFormat(builder, format)
-def AddDenseSize(builder, denseSize): builder.PrependInt32Slot(1, denseSize, 0)
-def DimensionMetadataAddDenseSize(builder, denseSize):
-    """This method is deprecated. Please switch to AddDenseSize."""
-    return AddDenseSize(builder, denseSize)
-def AddArraySegmentsType(builder, arraySegmentsType): builder.PrependUint8Slot(2, arraySegmentsType, 0)
-def DimensionMetadataAddArraySegmentsType(builder, arraySegmentsType):
-    """This method is deprecated. Please switch to AddArraySegmentsType."""
-    return AddArraySegmentsType(builder, arraySegmentsType)
-def AddArraySegments(builder, arraySegments): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(arraySegments), 0)
-def DimensionMetadataAddArraySegments(builder, arraySegments):
-    """This method is deprecated. Please switch to AddArraySegments."""
-    return AddArraySegments(builder, arraySegments)
-def AddArrayIndicesType(builder, arrayIndicesType): builder.PrependUint8Slot(4, arrayIndicesType, 0)
-def DimensionMetadataAddArrayIndicesType(builder, arrayIndicesType):
-    """This method is deprecated. Please switch to AddArrayIndicesType."""
-    return AddArrayIndicesType(builder, arrayIndicesType)
-def AddArrayIndices(builder, arrayIndices): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(arrayIndices), 0)
-def DimensionMetadataAddArrayIndices(builder, arrayIndices):
-    """This method is deprecated. Please switch to AddArrayIndices."""
-    return AddArrayIndices(builder, arrayIndices)
-def End(builder): return builder.EndObject()
-def DimensionMetadataEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def DimensionMetadataStart(builder): builder.StartObject(6)
+def DimensionMetadataAddFormat(builder, format): builder.PrependInt8Slot(0, format, 0)
+def DimensionMetadataAddDenseSize(builder, denseSize): builder.PrependInt32Slot(1, denseSize, 0)
+def DimensionMetadataAddArraySegmentsType(builder, arraySegmentsType): builder.PrependUint8Slot(2, arraySegmentsType, 0)
+def DimensionMetadataAddArraySegments(builder, arraySegments): builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(arraySegments), 0)
+def DimensionMetadataAddArrayIndicesType(builder, arrayIndicesType): builder.PrependUint8Slot(4, arrayIndicesType, 0)
+def DimensionMetadataAddArrayIndices(builder, arrayIndices): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(arrayIndices), 0)
+def DimensionMetadataEnd(builder): return builder.EndObject()

@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class SparseToDenseOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsSparseToDenseOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SparseToDenseOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsSparseToDenseOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def SparseToDenseOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # SparseToDenseOptions
     def Init(self, buf, pos):
@@ -37,15 +27,6 @@ class SparseToDenseOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def Start(builder): builder.StartObject(1)
-def SparseToDenseOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddValidateIndices(builder, validateIndices): builder.PrependBoolSlot(0, validateIndices, 0)
-def SparseToDenseOptionsAddValidateIndices(builder, validateIndices):
-    """This method is deprecated. Please switch to AddValidateIndices."""
-    return AddValidateIndices(builder, validateIndices)
-def End(builder): return builder.EndObject()
-def SparseToDenseOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def SparseToDenseOptionsStart(builder): builder.StartObject(1)
+def SparseToDenseOptionsAddValidateIndices(builder, validateIndices): builder.PrependBoolSlot(0, validateIndices, 0)
+def SparseToDenseOptionsEnd(builder): return builder.EndObject()

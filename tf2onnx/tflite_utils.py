@@ -337,7 +337,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             output_shapes[name] = tensor.ShapeSignatureAsNumpy().tolist()
         buf = model.Buffers(tensor.Buffer())
         dtypes[name] = map_tflite_dtype_to_onnx(tensor.Type())
-        if not buf.DataIsNone() and tensor.Buffer() > 0:
+        if buf.DataLength() > 0 and tensor.Buffer() > 0:
             # For const values we use TF to decode the binary data from the buffer
             t = tensor_pb2.TensorProto()
             t.tensor_content = buf.DataAsNumpy().tobytes()
@@ -359,7 +359,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
         """Creates a dequantize op for the provided tensor if needed and returns the output of the op, or
         the original tensor name if no dequantization is needed"""
         quant = name_to_tensor[tensor_name].Quantization()
-        if quant is None or quant.ScaleIsNone() or quant.ZeroPointIsNone():
+        if quant is None or quant.ScaleLength() == 0 or quant.ZeroPointLength() == 0:
             return tensor_name
         if tensor_name in tensor_name_to_dequant_output:
             return tensor_name_to_dequant_output[tensor_name]
@@ -378,7 +378,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
         Returns the name that should be used for the "prequantized" tensor, or the original tensor if no quantization
         is needed"""
         quant = name_to_tensor[tensor_name].Quantization()
-        if quant is None or quant.ScaleIsNone() or quant.ZeroPointIsNone():
+        if quant is None or quant.ScaleLength() == 0 or quant.ZeroPointLength() == 0:
             return tensor_name
         prequant_name = tensor_name + "_prequant"
         quantize_name = tensor_name + "_quantize"
@@ -425,7 +425,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes, input_shapes)
             attr.update(tf_attrs)
             optype = tf_op
-        elif not op.CustomOptionsIsNone():
+        elif op.CustomOptionsLength() > 0:
             custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
             if custom_ops_format == 'FLEXBUFFERS':
                 data = None

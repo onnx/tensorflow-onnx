@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class AddOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsAddOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = AddOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsAddOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def AddOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # AddOptions
     def Init(self, buf, pos):
@@ -44,19 +34,7 @@ class AddOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return True
 
-def Start(builder): builder.StartObject(2)
-def AddOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
-def AddOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
-    """This method is deprecated. Please switch to AddFusedActivationFunction."""
-    return AddFusedActivationFunction(builder, fusedActivationFunction)
-def AddPotScaleInt16(builder, potScaleInt16): builder.PrependBoolSlot(1, potScaleInt16, 1)
-def AddOptionsAddPotScaleInt16(builder, potScaleInt16):
-    """This method is deprecated. Please switch to AddPotScaleInt16."""
-    return AddPotScaleInt16(builder, potScaleInt16)
-def End(builder): return builder.EndObject()
-def AddOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def AddOptionsStart(builder): builder.StartObject(2)
+def AddOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
+def AddOptionsAddPotScaleInt16(builder, potScaleInt16): builder.PrependBoolSlot(1, potScaleInt16, 1)
+def AddOptionsEnd(builder): return builder.EndObject()

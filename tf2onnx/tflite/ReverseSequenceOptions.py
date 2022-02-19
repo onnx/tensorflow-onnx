@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class ReverseSequenceOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsReverseSequenceOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = ReverseSequenceOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsReverseSequenceOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def ReverseSequenceOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # ReverseSequenceOptions
     def Init(self, buf, pos):
@@ -44,19 +34,7 @@ class ReverseSequenceOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def Start(builder): builder.StartObject(2)
-def ReverseSequenceOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddSeqDim(builder, seqDim): builder.PrependInt32Slot(0, seqDim, 0)
-def ReverseSequenceOptionsAddSeqDim(builder, seqDim):
-    """This method is deprecated. Please switch to AddSeqDim."""
-    return AddSeqDim(builder, seqDim)
-def AddBatchDim(builder, batchDim): builder.PrependInt32Slot(1, batchDim, 0)
-def ReverseSequenceOptionsAddBatchDim(builder, batchDim):
-    """This method is deprecated. Please switch to AddBatchDim."""
-    return AddBatchDim(builder, batchDim)
-def End(builder): return builder.EndObject()
-def ReverseSequenceOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def ReverseSequenceOptionsStart(builder): builder.StartObject(2)
+def ReverseSequenceOptionsAddSeqDim(builder, seqDim): builder.PrependInt32Slot(0, seqDim, 0)
+def ReverseSequenceOptionsAddBatchDim(builder, batchDim): builder.PrependInt32Slot(1, batchDim, 0)
+def ReverseSequenceOptionsEnd(builder): return builder.EndObject()

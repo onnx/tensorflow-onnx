@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class FakeQuantOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsFakeQuantOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = FakeQuantOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsFakeQuantOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def FakeQuantOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # FakeQuantOptions
     def Init(self, buf, pos):
@@ -58,27 +48,9 @@ class FakeQuantOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def Start(builder): builder.StartObject(4)
-def FakeQuantOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddMin(builder, min): builder.PrependFloat32Slot(0, min, 0.0)
-def FakeQuantOptionsAddMin(builder, min):
-    """This method is deprecated. Please switch to AddMin."""
-    return AddMin(builder, min)
-def AddMax(builder, max): builder.PrependFloat32Slot(1, max, 0.0)
-def FakeQuantOptionsAddMax(builder, max):
-    """This method is deprecated. Please switch to AddMax."""
-    return AddMax(builder, max)
-def AddNumBits(builder, numBits): builder.PrependInt32Slot(2, numBits, 0)
-def FakeQuantOptionsAddNumBits(builder, numBits):
-    """This method is deprecated. Please switch to AddNumBits."""
-    return AddNumBits(builder, numBits)
-def AddNarrowRange(builder, narrowRange): builder.PrependBoolSlot(3, narrowRange, 0)
-def FakeQuantOptionsAddNarrowRange(builder, narrowRange):
-    """This method is deprecated. Please switch to AddNarrowRange."""
-    return AddNarrowRange(builder, narrowRange)
-def End(builder): return builder.EndObject()
-def FakeQuantOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def FakeQuantOptionsStart(builder): builder.StartObject(4)
+def FakeQuantOptionsAddMin(builder, min): builder.PrependFloat32Slot(0, min, 0.0)
+def FakeQuantOptionsAddMax(builder, max): builder.PrependFloat32Slot(1, max, 0.0)
+def FakeQuantOptionsAddNumBits(builder, numBits): builder.PrependInt32Slot(2, numBits, 0)
+def FakeQuantOptionsAddNarrowRange(builder, narrowRange): builder.PrependBoolSlot(3, narrowRange, 0)
+def FakeQuantOptionsEnd(builder): return builder.EndObject()

@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class LSHProjectionOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsLSHProjectionOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = LSHProjectionOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsLSHProjectionOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def LSHProjectionOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # LSHProjectionOptions
     def Init(self, buf, pos):
@@ -37,15 +27,6 @@ class LSHProjectionOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int8Flags, o + self._tab.Pos)
         return 0
 
-def Start(builder): builder.StartObject(1)
-def LSHProjectionOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddType(builder, type): builder.PrependInt8Slot(0, type, 0)
-def LSHProjectionOptionsAddType(builder, type):
-    """This method is deprecated. Please switch to AddType."""
-    return AddType(builder, type)
-def End(builder): return builder.EndObject()
-def LSHProjectionOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def LSHProjectionOptionsStart(builder): builder.StartObject(1)
+def LSHProjectionOptionsAddType(builder, type): builder.PrependInt8Slot(0, type, 0)
+def LSHProjectionOptionsEnd(builder): return builder.EndObject()

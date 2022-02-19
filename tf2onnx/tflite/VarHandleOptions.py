@@ -5,26 +5,16 @@
 # namespace: tflite
 
 import flatbuffers
-from flatbuffers.compat import import_numpy
-np = import_numpy()
 
 class VarHandleOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAs(cls, buf, offset=0):
+    def GetRootAsVarHandleOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = VarHandleOptions()
         x.Init(buf, n + offset)
         return x
-
-    @classmethod
-    def GetRootAsVarHandleOptions(cls, buf, offset=0):
-        """This method is deprecated. Please switch to GetRootAs."""
-        return cls.GetRootAs(buf, offset)
-    @classmethod
-    def VarHandleOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
-        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # VarHandleOptions
     def Init(self, buf, pos):
@@ -44,19 +34,7 @@ class VarHandleOptions(object):
             return self._tab.String(o + self._tab.Pos)
         return None
 
-def Start(builder): builder.StartObject(2)
-def VarHandleOptionsStart(builder):
-    """This method is deprecated. Please switch to Start."""
-    return Start(builder)
-def AddContainer(builder, container): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(container), 0)
-def VarHandleOptionsAddContainer(builder, container):
-    """This method is deprecated. Please switch to AddContainer."""
-    return AddContainer(builder, container)
-def AddSharedName(builder, sharedName): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(sharedName), 0)
-def VarHandleOptionsAddSharedName(builder, sharedName):
-    """This method is deprecated. Please switch to AddSharedName."""
-    return AddSharedName(builder, sharedName)
-def End(builder): return builder.EndObject()
-def VarHandleOptionsEnd(builder):
-    """This method is deprecated. Please switch to End."""
-    return End(builder)
+def VarHandleOptionsStart(builder): builder.StartObject(2)
+def VarHandleOptionsAddContainer(builder, container): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(container), 0)
+def VarHandleOptionsAddSharedName(builder, sharedName): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(sharedName), 0)
+def VarHandleOptionsEnd(builder): return builder.EndObject()
