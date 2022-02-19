@@ -247,9 +247,9 @@ def get_quantization_attr(quant_params):
     attr['scale'] = quant_params.ScaleAsNumpy().tolist()
     attr['zero_point'] = quant_params.ZeroPointAsNumpy().tolist()
     attr['quantized_dimension'] = quant_params.QuantizedDimension()
-    if not quant_params.MaxIsNone():
+    if quant_params.MaxLength() > 0:
         attr['max'] = quant_params.MaxAsNumpy().tolist()
-    if not quant_params.MinIsNone():
+    if quant_params.MinLength() > 0:
         attr['min'] = quant_params.MinAsNumpy().tolist()
     return attr
 
@@ -402,13 +402,13 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             out_tensor = tflite_g.Tensors(op.Outputs(0))
             quant = out_tensor.Quantization()
             has_prequantized_output = False
-            if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
+            if quant is not None and quant.ScaleLength() > 0 and quant.ZeroPointLength() > 0:
                 attr.update(get_quantization_attr(quant))
         elif optype == 'TFL_DEQUANTIZE':
             in_tensor = tflite_g.Tensors(op.Inputs(0))
             quant = in_tensor.Quantization()
             wants_dequantized_input = False
-            if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
+            if quant is not None and quant.ScaleLength() > 0 and quant.ZeroPointLength() > 0:
                 attr.update(get_quantization_attr(quant))
         input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength()) if op.Inputs(i) != -1]
         output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
