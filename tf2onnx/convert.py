@@ -138,7 +138,7 @@ def make_default_custom_op_handler(domain):
 
 
 def _convert_common(frozen_graph, name="unknown", large_model=False, output_path=None,
-                    output_frozen_graph=None, custom_ops=None, custom_op_handlers=None, **kwargs):
+                    output_frozen_graph=None, custom_ops=None, custom_op_handlers=None, optimizers=None, **kwargs):
     """Common processing for conversion."""
 
     model_proto = None
@@ -165,7 +165,7 @@ def _convert_common(frozen_graph, name="unknown", large_model=False, output_path
             catch_errors = constants.ENV_TF2ONNX_CATCH_ERRORS.upper() == "TRUE"
         else:
             catch_errors = not large_model
-        onnx_graph = optimizer.optimize_graph(g, catch_errors)
+        onnx_graph = optimizer.optimize_graph(g, catch_errors, optimizers=optimizers)
         model_proto = onnx_graph.make_model("converted from {}".format(name),
                                             external_tensor_storage=external_tensor_storage)
     if output_path:

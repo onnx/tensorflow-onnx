@@ -2,7 +2,7 @@
 
 
 """
-tf2onnx.rewriter - rewrite tensorflow QuantizeAndDequantizeV2|QuantizeAndDequantizeV3 op
+tf2onnx.rewriter - rewrite tensorflow QuantizeAndDequantizeV2|QuantizeAndDequantizeV3|QuantizeAndDequantizeV4 op
 """
 
 import numpy as np
@@ -25,7 +25,8 @@ def create_qdq_nodes(g, match_results):
         # Get the attributes of qdq node
         narrow_range = qdq_node.attr['narrow_range'].i
         signed_input = qdq_node.attr['signed_input'].i
-        range_given = qdq_node.get_attr_value("range_given", qdq_node.type != "QuantizeAndDequantizeV2")
+        range_given = qdq_node.get_attr_value("range_given", qdq_node.type != "QuantizeAndDequantizeV2" or \
+                                                             qdq_node.type != "QuantizeAndDequantizeV4")
 
         min_quantized, max_quantized = [-127, 127]
         if not narrow_range and signed_input:
@@ -147,9 +148,15 @@ def rewrite_quantize_and_dequantize(g, ops):
             OpTypePattern(None),
             OpTypePattern(None),
         ])
+    pattern_for_qdq_v4 = \
+        OpTypePattern('QuantizeAndDequantizeV4', name='output', inputs=[
+            OpTypePattern("*"),
+            OpTypePattern(None),
+            OpTypePattern(None),
+        ])
 
     # Match all the patterns for QDQ ops
-    patterns = [pattern_for_qdq_v3, pattern_for_qdq_v2]
+    patterns = [pattern_for_qdq_v2, pattern_for_qdq_v3, pattern_for_qdq_v4]
     match_results = []
     for pattern in patterns:
         matcher = GraphMatcher(pattern)
