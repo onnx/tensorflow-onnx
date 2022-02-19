@@ -447,7 +447,8 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                 # Flatbufffer list properties have 3 functions: *Length, *IsNone, and *AsNumpy
                 if a + 'Length' in attr_names:
                     attr_names.remove(a + 'Length')
-                    attr_names.remove(a + 'IsNone')
+                    if a + 'IsNone' in attr_names:
+                        attr_names.remove(a + 'IsNone')
                     attr_names.remove(a)
             for a in attr_names:
                 if a.endswith('AsNumpy'):
