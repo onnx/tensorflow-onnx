@@ -11,7 +11,7 @@ import logging
 import six
 import numpy as np
 
-from onnx import helper, numpy_helper, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
+from onnx import helper, numpy_helper, shape_inference, AttributeProto, TensorProto
 from tf2onnx import utils, __version__
 from tf2onnx.utils import make_name, port_name, find_opset
 from tf2onnx import optimizer
@@ -1193,10 +1193,8 @@ class Graph(object):
                       "producer_version": __version__}
 
         if "opset_imports" not in kwargs:
-            opsets = []
-            imp = OperatorSetIdProto()
-            imp.version = self._opset
-            opsets.append(imp)
+            opsets = [helper.make_opsetid(constants.ONNX_DOMAIN, self._opset)]
+            opsets.append(constants.AI_ONNX_ML_OPSET)
             if self.extra_opset is not None:
                 opsets.extend(self.extra_opset)
             kwargs["opset_imports"] = opsets

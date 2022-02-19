@@ -21,6 +21,9 @@ PREFERRED_OPSET = 9
 # Default opset for custom ops
 TENSORFLOW_OPSET = helper.make_opsetid("ai.onnx.converters.tensorflow", 1)
 
+# Built-in supported opset
+AI_ONNX_ML_OPSET = helper.make_opsetid(AI_ONNX_ML_DOMAIN, 2)
+
 # Target for the generated onnx graph. It possible targets:
 # onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)
 # caffe2 = include some workarounds for caffe2 and winml
