@@ -337,7 +337,8 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             output_shapes[name] = tensor.ShapeSignatureAsNumpy().tolist()
         buf = model.Buffers(tensor.Buffer())
         dtypes[name] = map_tflite_dtype_to_onnx(tensor.Type())
-        if buf.DataLength() > 0 and tensor.Buffer() > 0:
+        buf_data_is_none = isinstance(buf.DataAsNumpy(), int) and buf.DataAsNumpy() == 0
+        if  not buf_data_is_none and tensor.Buffer() > 0:
             # For const values we use TF to decode the binary data from the buffer
             t = tensor_pb2.TensorProto()
             t.tensor_content = buf.DataAsNumpy().tobytes()
