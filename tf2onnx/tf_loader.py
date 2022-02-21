@@ -673,7 +673,7 @@ def from_keras(model_path, input_names, output_names):
     return frozen_graph, input_names, output_names
 
 
-def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=None):
+def tf_optimize_grappler(input_names, output_names, graph_def):
     from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
 
@@ -681,7 +681,7 @@ def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=Non
     rewrite_options = config.graph_options.rewrite_options
     config.graph_options.infer_shapes = True
     # TODO: if we turn on pruning, grappler removes some identities that the tf-1.x lstm rewriter
-    # depends on so for now don't turn this on, fold_constant is always enabled now.
+    # depends on so for now don't turn this on, constfold is always enabled now.
     rewrite_options.optimizers[:] = [
         # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
         'constfold', 'function'
@@ -700,7 +700,7 @@ def tf_optimize_grappler(input_names, output_names, graph_def, fold_constant=Non
     return graph_def
 
 
-def tf_optimize(input_names, output_names, graph_def, fold_constant=True):
+def tf_optimize(input_names, output_names, graph_def):
     """Extract inference subgraph and optimize graph."""
     assert isinstance(input_names, list)
     assert isinstance(output_names, list)
@@ -712,7 +712,7 @@ def tf_optimize(input_names, output_names, graph_def, fold_constant=True):
 
     want_grappler = is_tf2() or LooseVersion(tf.__version__) >= "1.15"
     if want_grappler:
-        graph_def = tf_optimize_grappler(input_names, output_names, graph_def, fold_constant)
+        graph_def = tf_optimize_grappler(input_names, output_names, graph_def)
     else:
         # the older transform path
         from tensorflow.tools.graph_transforms import TransformGraph  # pylint: disable=redefined-outer-name

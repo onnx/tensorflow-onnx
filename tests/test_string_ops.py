@@ -167,7 +167,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
             return tokens_, begin_, end_, rows_
         # Fails due to Attempting to capture an EagerTensor without building a function.
         self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3],
-                            {_INPUT: text_val}, constant_fold=False, as_session=True)
+                            {_INPUT: text_val}, as_session=True)
 
 
 if __name__ == "__main__":

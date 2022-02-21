@@ -83,8 +83,7 @@ def get_args():
     parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
     parser.add_argument("--debug", help="debug mode", action="store_true")
     parser.add_argument("--output_frozen_graph", help="output frozen tf graph to file")
-    parser.add_argument("--fold_const", help="Deprecated. Constant folding is always enabled.",
-                        action="store_true")
+
     # experimental
     parser.add_argument("--inputs-as-nchw", help="transpose inputs as from nhwc to nchw")
     args = parser.parse_args()
@@ -375,7 +374,7 @@ def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, cu
         frozen_graph, initialized_tables = tf_loader.freeze_session(sess, input_names, output_names, get_tables=True)
         with tf.Graph().as_default():
             tf.import_graph_def(frozen_graph, name="")
-            frozen_graph = tf_loader.tf_optimize(input_names, output_names, frozen_graph, False)
+            frozen_graph = tf_loader.tf_optimize(input_names, output_names, frozen_graph)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=model.name,
