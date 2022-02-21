@@ -247,9 +247,9 @@ def get_quantization_attr(quant_params):
     attr['scale'] = quant_params.ScaleAsNumpy().tolist()
     attr['zero_point'] = quant_params.ZeroPointAsNumpy().tolist()
     attr['quantized_dimension'] = quant_params.QuantizedDimension()
-    if quant_params.MaxLength() > 0:
+    if not quant_params.MaxIsNone():
         attr['max'] = quant_params.MaxAsNumpy().tolist()
-    if quant_params.MinLength() > 0:
+    if not quant_params.MinIsNone():
         attr['min'] = quant_params.MinAsNumpy().tolist()
     return attr
 
@@ -328,17 +328,16 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
 
         if name in tensor_shapes_override:
             output_shapes[name] = tensor_shapes_override[name]
-        elif tensor.ShapeLength() == 0:
+        elif tensor.ShapeIsNone():
             output_shapes[name] = None
-        elif tensor.ShapeSignatureLength() == 0:
+        elif tensor.ShapeSignatureIsNone():
             # The shape signature uses -1 to signify unknown dims. Old models don't have this and use Shape instead.
             output_shapes[name] = tensor.ShapeAsNumpy().tolist()
         else:
             output_shapes[name] = tensor.ShapeSignatureAsNumpy().tolist()
         buf = model.Buffers(tensor.Buffer())
         dtypes[name] = map_tflite_dtype_to_onnx(tensor.Type())
-        buf_data_is_none = isinstance(buf.DataAsNumpy(), int) and buf.DataAsNumpy() == 0
-        if  not buf_data_is_none and tensor.Buffer() > 0:
+        if not buf.DataIsNone() and tensor.Buffer() > 0:
             # For const values we use TF to decode the binary data from the buffer
             t = tensor_pb2.TensorProto()
             t.tensor_content = buf.DataAsNumpy().tobytes()
@@ -360,7 +359,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
         """Creates a dequantize op for the provided tensor if needed and returns the output of the op, or
         the original tensor name if no dequantization is needed"""
         quant = name_to_tensor[tensor_name].Quantization()
-        if quant is None or quant.ScaleLength() == 0 or quant.ZeroPointLength() == 0:
+        if quant is None or quant.ScaleIsNone() or quant.ZeroPointIsNone():
             return tensor_name
         if tensor_name in tensor_name_to_dequant_output:
             return tensor_name_to_dequant_output[tensor_name]
@@ -379,7 +378,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
         Returns the name that should be used for the "prequantized" tensor, or the original tensor if no quantization
         is needed"""
         quant = name_to_tensor[tensor_name].Quantization()
-        if quant is None or quant.ScaleLength() == 0 or quant.ZeroPointLength() == 0:
+        if quant is None or quant.ScaleIsNone() or quant.ZeroPointIsNone():
             return tensor_name
         prequant_name = tensor_name + "_prequant"
         quantize_name = tensor_name + "_quantize"
@@ -403,13 +402,13 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             out_tensor = tflite_g.Tensors(op.Outputs(0))
             quant = out_tensor.Quantization()
             has_prequantized_output = False
-            if quant is not None and quant.ScaleLength() > 0 and quant.ZeroPointLength() > 0:
+            if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
                 attr.update(get_quantization_attr(quant))
         elif optype == 'TFL_DEQUANTIZE':
             in_tensor = tflite_g.Tensors(op.Inputs(0))
             quant = in_tensor.Quantization()
             wants_dequantized_input = False
-            if quant is not None and quant.ScaleLength() > 0 and quant.ZeroPointLength() > 0:
+            if quant is not None and not quant.ScaleIsNone() and not quant.ZeroPointIsNone():
                 attr.update(get_quantization_attr(quant))
         input_names = [tensor_names[op.Inputs(i)] for i in range(op.InputsLength()) if op.Inputs(i) != -1]
         output_names = [tensor_names[op.Outputs(i)] for i in range(op.OutputsLength()) if op.Outputs(i) != -1]
@@ -426,7 +425,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
             tf_attrs, _ = read_tf_node_def_attrs(tf_node_def, input_tf_dtypes, input_shapes)
             attr.update(tf_attrs)
             optype = tf_op
-        elif op.CustomOptionsLength() > 0:
+        elif not op.CustomOptionsIsNone():
             custom_ops_format = lookup_enum(op.CustomOptionsFormat(), 'CustomOptionsFormat')
             if custom_ops_format == 'FLEXBUFFERS':
                 data = None
@@ -448,8 +447,7 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                 # Flatbufffer list properties have 3 functions: *Length, *IsNone, and *AsNumpy
                 if a + 'Length' in attr_names:
                     attr_names.remove(a + 'Length')
-                    if a + 'IsNone' in attr_names:
-                        attr_names.remove(a + 'IsNone')
+                    attr_names.remove(a + 'IsNone')
                     attr_names.remove(a)
             for a in attr_names:
                 if a.endswith('AsNumpy'):
