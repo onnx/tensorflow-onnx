@@ -352,9 +352,9 @@ def _is_legacy_keras_model(model):
     return False
 
 
-def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
-                    custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
-                    target=None, large_model=False, output_path=None):
+def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None, custom_rewriter=None,
+                    inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None,
+                    large_model=False, output_path=None):
     """from_keras for tf 1.15"""
     input_names = [t.name for t in model.inputs]
     output_names = [t.name for t in model.outputs]
@@ -422,8 +422,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         An ONNX model_proto and an external_tensor_storage dict.
     """
     if LooseVersion(tf.__version__) < "2.0":
-        return _from_keras_tf1(model, input_signature, opset, custom_ops, custom_op_handlers, custom_rewriter,
-                               inputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
+        return _from_keras_tf1(model, opset, custom_ops, custom_op_handlers, custom_rewriter, inputs_as_nchw,
+                               extra_opset, shape_override, target, large_model, output_path)
 
     old_out_names = _rename_duplicate_keras_model_names(model)
     from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
