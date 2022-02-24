@@ -228,7 +228,7 @@ will be used.
 
 #### --load_op_libraries
 
-Some ops are not covered by the existing TensorFlow library. You can create a custom library following [Create an op](https://www.tensorflow.org/guide/create_op). Then use this parameter to load the comma-separated list of tensorflow plugin libraries before conversion, each library file usually ends with `.so`.
+Load the comma-separated list of tensorflow plugin/op libraries before conversion.
 
 #### --target
 
