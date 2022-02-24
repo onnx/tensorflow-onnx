@@ -302,11 +302,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend()
     @check_opset_min_version(7, "multinomial")
-    @skip_tflite("TFL_MULTINOMIAL op is not supported by ORT yet.")
     def test_multinomial(self):
         x_val = np.array([[10., 10.]], dtype=np.float32)
         def func(x):
-            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int64)
+            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
 
         # since returned indexes are random we can only check type and shape
@@ -315,12 +314,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend()
     @check_opset_min_version(7, "multinomial")
-    @skip_tflite("TFL_MULTINOMIAL op is not supported by ORT yet.")
     def test_multinomial1(self):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
         def func(x):
-            op = multinomial(x, 2, output_dtype=tf.int64)
+            op = multinomial(x, 2, output_dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
         # since returned indexes are random we can only check type and shape
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False,
@@ -685,7 +683,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
                                                        check_op_count(g, "RandomUniformLike", 0)))
 
-    @skip_tflite("TFL_RANDOM_UNIFORM op is not supported by ORT yet.")
     def test_nn_dropout(self):
         x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
         # Define a scope for reusing the variables
@@ -701,7 +698,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                                        check_op_count(g, "RandomUniformLike", 0)))
 
     @check_tf_min_version("1.13")
-    @skip_tflite("TFL_RANDOM_UNIFORM op is not supported by ORT yet.")
     def test_nn_dropout_with_rate(self):
         rate = tf.constant(0., name="rate")
         x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
@@ -2198,7 +2194,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self.assertTrue(1.9 < np.std(results) < 2.1)
 
     @check_opset_min_version(9, "RandomNormalLike")
-    @skip_tflite("TFL_RANDOM_STANDARD_NORMAL op is not supported by ORT yet.")
     def test_randomnormal_unknown_shape(self):
         shape_val = np.array([20, 10, 50], np.int32)
         def func(shape):
@@ -2321,7 +2316,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
 
     @skip_caffe2_backend()
-    @skip_tflite("TFL_RANDOM_UNIFORM op is not supported by ORT yet.")
     def test_randomuniform_calc_shape(self):
         # test for dynamic shape coming from some subgraph
         x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
