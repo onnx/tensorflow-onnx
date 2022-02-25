@@ -20,7 +20,6 @@ steps:
       conda config --set always_yes yes --set changeps1 no
       pip install $(ONNX_PATH)
       pip install h5py==2.9.0
-      pip install numpy==1.19
       pip install parameterized
       pip install $(TENSORFLOW_PATH)
       if [[ ! -z $KERAS ]];
