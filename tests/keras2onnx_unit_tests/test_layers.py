@@ -7,7 +7,7 @@ from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
                                    is_keras_older_than, is_keras_later_than)
-from test_utils import no_loops_in_tf2
+from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
 
 K = keras.backend
 Activation = keras.layers.Activation
@@ -2073,6 +2073,7 @@ def test_bidirectional(runner, rnn_class, return_sequences):
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
     onnx_model = convert_keras(model, 'test', target_opset=op_version)
+    assert all_recurrents_should_bidirectional(onnx_model)
     for batch in batch_list:
         data = np.random.rand(batch, sequence_len, input_dim).astype(np.float32)
         expected = model.predict(data)
@@ -2084,6 +2085,7 @@ def test_bidirectional(runner, rnn_class, return_sequences):
                                     input_shape=(5, 10), merge_mode=merge_mode)(sub_input1)
         keras_model = keras.Model(inputs=sub_input1, outputs=sub_mapped1)
         onnx_model = convert_keras(keras_model, 'test_2', target_opset=op_version)
+        assert all_recurrents_should_bidirectional(onnx_model)
         for batch in batch_list:
             data = np.random.rand(batch, sequence_len, input_dim).astype(np.float32)
             expected = keras_model.predict(data)
@@ -2102,6 +2104,7 @@ def test_bidirectional_with_bias(runner, rnn_class):
     # Test with the default bias
     expected = model.predict(x)
     onnx_model = convert_keras(model, model.name)
+    assert all_recurrents_should_bidirectional(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, x, expected)
 
     # Set bias values to random floats
@@ -2114,6 +2117,7 @@ def test_bidirectional_with_bias(runner, rnn_class):
     # Test with random bias
     expected = model.predict(x)
     onnx_model = convert_keras(model, model.name)
+    assert all_recurrents_should_bidirectional(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, x, expected)
 
 
@@ -2141,6 +2145,7 @@ def test_bidirectional_time_major_true(runner, rnn_class):
 
             expected = model.predict(x)
             onnx_model = convert_keras(model, model.name)
+            assert all_recurrents_should_bidirectional(onnx_model)
             assert runner(onnx_model.graph.name, onnx_model, x, expected)
 
 
@@ -2155,6 +2160,7 @@ def test_bidirectional_with_initial_states(runner, rnn_class):
 
     expected = model.predict(inputs)
     onnx_model = convert_keras(model, model.name)
+    assert all_recurrents_should_bidirectional(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, inputs, expected)
 
     input2 = Input(shape=(None, 5))
@@ -2165,6 +2171,7 @@ def test_bidirectional_with_initial_states(runner, rnn_class):
 
     expected = model.predict(inputs)
     onnx_model = convert_keras(model, model.name)
+    assert all_recurrents_should_bidirectional(onnx_model)
     assert runner(onnx_model.graph.name, onnx_model, inputs, expected, atol=1e-5)
 
 
@@ -2180,6 +2187,7 @@ def test_bidirectional_seqlen_none(runner, rnn_class):
     model.add(Dense(44))
 
     onnx_model = convert_keras(model, model.name)
+    assert all_recurrents_should_bidirectional(onnx_model)
     for batch in [1, 4]:
         x = np.random.rand(batch, 50).astype(np.float32)
         expected = model.predict(x)
