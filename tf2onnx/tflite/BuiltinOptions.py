@@ -119,4 +119,8 @@ class BuiltinOptions(object):
     VarHandleOptions = 111
     ReadVariableOptions = 112
     AssignVariableOptions = 113
+    RandomOptions = 114
+    BucketizeOptions = 115
+    GeluOptions = 116
+    DynamicUpdateSliceOptions = 117
 

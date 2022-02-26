@@ -54,7 +54,7 @@ jobs:
         TENSORFLOW_PATH: tensorflow==1.15.0
         INSTALL_ORT: pip install onnxruntime==1.9.0
 
-      Python37-tf2.3:
+      Python37-tf2.8:
         python.version: '3.7'
         ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow-cpu==2.3.0

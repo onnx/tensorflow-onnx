@@ -305,7 +305,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_multinomial(self):
         x_val = np.array([[10., 10.]], dtype=np.float32)
         def func(x):
-            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int64)
+            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
 
         # since returned indexes are random we can only check type and shape
@@ -318,7 +318,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
         def func(x):
-            op = multinomial(x, 2, output_dtype=tf.int64)
+            op = multinomial(x, 2, output_dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
         # since returned indexes are random we can only check type and shape
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False,

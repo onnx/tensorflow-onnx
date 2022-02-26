@@ -49,6 +49,10 @@ steps:
       then
         pip install "tensorflow-text>=2.7,<2.8"
       fi
+      if [[ $CI_TF_VERSION == 2.8* ]] ;
+      then
+        pip install "tensorflow-text>=2.8,<2.9"
+      fi
     fi
 
     python setup.py install
