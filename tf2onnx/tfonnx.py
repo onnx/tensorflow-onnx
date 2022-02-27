@@ -625,7 +625,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
     return g
 
 
-def tf_optimize(input_names, output_names, graph_def, fold_constant=True):
+def tf_optimize(input_names, output_names, graph_def):
     """optimize tensorflow graph. This is in tf_loader but some apps call this
        so we proxy into tf_loader to keep them working."""
-    return tf2onnx.tf_loader.tf_optimize(input_names, output_names, graph_def, fold_constant)
+    return tf2onnx.tf_loader.tf_optimize(input_names, output_names, graph_def)

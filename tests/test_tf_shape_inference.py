@@ -41,7 +41,7 @@ class TFShapeInferenceTests(Tf2OnnxBackendTestBase):
         tf.import_graph_def(graph_def, name='')
 
         # optimize graph
-        graph_def = tf_optimize(input_names_with_port, output_names_with_port, sess.graph_def, True)
+        graph_def = tf_optimize(input_names_with_port, output_names_with_port, sess.graph_def)
 
         with tf_session() as sess:
             if self.config.is_debug_mode:

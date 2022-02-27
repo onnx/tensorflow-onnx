@@ -33,6 +33,6 @@ The reason for this is that there is a dynamic input of a tensorflow op but the 
 
 An example of this is the [ONNX Slice operator before opset-10](https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Slice-1) - the start and end of the slice are static attributes that need to be known at graph creation. In tensorflow the [strided slice op](https://www.tensorflow.org/api_docs/cc/class/tensorflow/ops/strided-slice) allows dynamic inputs. tf2onnx will try to find the real value of begin and end of the slice and can find them in most cases. But if those are real dynamic values calculate at runtime it will result in the message ```get tensor value: ... must be Const```.
 
-You can pass the options ```--fold_const``` in the tf2onnx command line that allows tf2onnx to apply more aggressive constant folding which will increase chances to find a constant.
+You can pass the options ```--fold_const```(removed after tf2onnx-1.9.3) in the tf2onnx command line that allows tf2onnx to apply more aggressive constant folding which will increase chances to find a constant.
 
 If this doesn't work the model is most likely not to be able to convert to ONNX. We used to see this a lot of issue with the ONNX Slice op and in opset-10 was updated for exactly this reason.

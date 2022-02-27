@@ -140,7 +140,6 @@ python -m tf2onnx.convert
     [--concrete_function CONCRETE_FUNCTION]
     [--target TARGET]
     [--custom-ops list-of-custom-ops]
-    [--fold_const]
     [--large_model]
     [--continue_on_error]
     [--verbose]
@@ -230,9 +229,6 @@ will be used.
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
 
-#### --fold_const
-
-Deprecated. 
 
 ### <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
 

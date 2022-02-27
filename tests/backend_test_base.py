@@ -133,7 +133,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if check_shape:
                 self.assertEqual(expected_val.shape, actual_val.shape)
 
-    def freeze_and_run_tf(self, func, feed_dict, outputs, as_session, premade_placeholders, large_model, constant_fold):
+    def freeze_and_run_tf(self, func, feed_dict, outputs, as_session, premade_placeholders, large_model):
         np.random.seed(1)  # Make it reproducible.
         clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
         if is_tf2() and not as_session:
@@ -195,7 +195,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf_reset_default_graph()
             with tf_session() as sess:
                 tf.import_graph_def(graph_def, name='')
-                graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def, fold_constant=constant_fold)
+                graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def)
 
         return result, graph_def, initialized_tables
 
@@ -331,8 +331,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             self.assertEqual(get_dtype(info), graph.get_dtype(info.name))
 
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port,
-                      rtol=1e-07, atol=1e-5, mtol=None, convert_var_to_const=True, constant_fold=True,
-                      check_value=True, check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
+                      rtol=1e-07, atol=1e-5, mtol=None, convert_var_to_const=True, check_value=True,
+                      check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
                       graph_validator=None, as_session=False, large_model=False, premade_placeholders=False,
                       use_custom_ops=False, optimize=True):
         """
@@ -361,7 +361,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         expected, graph_def, initialized_tables = \
             self.freeze_and_run_tf(func, feed_dict, output_names_with_port, as_session,
-                                   premade_placeholders, large_model, constant_fold)
+                                   premade_placeholders, large_model)
 
         graph_def_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
         utils.save_protobuf(graph_def_path, graph_def)

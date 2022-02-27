@@ -83,8 +83,7 @@ def get_args():
     parser.add_argument("--verbose", "-v", help="verbose output, option is additive", action="count")
     parser.add_argument("--debug", help="debug mode", action="store_true")
     parser.add_argument("--output_frozen_graph", help="output frozen tf graph to file")
-    parser.add_argument("--fold_const", help="Deprecated. Constant folding is always enabled.",
-                        action="store_true")
+
     # experimental
     parser.add_argument("--inputs-as-nchw", help="transpose inputs as from nhwc to nchw")
     args = parser.parse_args()
@@ -353,9 +352,9 @@ def _is_legacy_keras_model(model):
     return False
 
 
-def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
-                    custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
-                    target=None, large_model=False, output_path=None):
+def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None, custom_rewriter=None,
+                    inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None,
+                    large_model=False, output_path=None):
     """from_keras for tf 1.15"""
     input_names = [t.name for t in model.inputs]
     output_names = [t.name for t in model.outputs]
@@ -375,7 +374,7 @@ def _from_keras_tf1(model, input_signature=None, opset=None, custom_ops=None, cu
         frozen_graph, initialized_tables = tf_loader.freeze_session(sess, input_names, output_names, get_tables=True)
         with tf.Graph().as_default():
             tf.import_graph_def(frozen_graph, name="")
-            frozen_graph = tf_loader.tf_optimize(input_names, output_names, frozen_graph, False)
+            frozen_graph = tf_loader.tf_optimize(input_names, output_names, frozen_graph)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=model.name,
@@ -423,8 +422,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         An ONNX model_proto and an external_tensor_storage dict.
     """
     if LooseVersion(tf.__version__) < "2.0":
-        return _from_keras_tf1(model, input_signature, opset, custom_ops, custom_op_handlers, custom_rewriter,
-                               inputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
+        return _from_keras_tf1(model, opset, custom_ops, custom_op_handlers, custom_rewriter, inputs_as_nchw,
+                               extra_opset, shape_override, target, large_model, output_path)
 
     old_out_names = _rename_duplicate_keras_model_names(model)
     from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
