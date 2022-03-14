@@ -1,10 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import numpy as np
 import tensorflow as tf
 import tf2onnx
 import onnx
 import os
+from tf2onnx import utils
+from tf2onnx.handler import tf_op
+from tf2onnx.tf_loader import tf_placeholder
+
 
 DIR_PATH = os.path.realpath(os.path.dirname(__file__))
 saved_model_path = os.path.join(DIR_PATH, "model.onnx")
@@ -22,7 +27,6 @@ class AddOne:
 
 with tf.compat.v1.Session() as sess:
     x = tf_placeholder(tf.int32, [2, 3], name="input")
-    # load tf library, using "--load_op_libraries" parameter for command conversion.
     AddOne = tf.load_op_library(tf_library_path)
     x_ = AddOne.add_one(x)
     _ = tf.identity(x_, name="output")
@@ -38,10 +42,12 @@ onnx_model = onnx.load(saved_model_path)
 onnx.checker.check_model(onnx_model)
 
 
+
+## Run the model in ONNXRuntime to verify the result.
 import onnxruntime as ort
 input = np.arange(6).reshape(2,3).astype(np.int32)
 ort_session = ort.InferenceSession(saved_model_path)
 ort_inputs = {ort_session.get_inputs()[0].name: input}
 
 ort_outs = ort_session.run(None, ort_inputs)
-print("ort_outs:", ort_outs)
+print("input:", input, "\nort_outs:", ort_outs)
