@@ -676,7 +676,7 @@ class Graph(object):
         return node
 
     def append_node(self, node):
-        "Add a node to the graph."
+        """Add a node to the graph."""
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
         node.graph = self

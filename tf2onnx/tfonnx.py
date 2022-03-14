@@ -518,7 +518,7 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
     # or override existing ops with a custom op.
     if custom_op_handlers is not None:
         # below is a bit tricky since there are a few api's:
-        # 1. the future way we want custom ops to be registered with the @tf_op decorator. THose handlers will be
+        # 1. the future way we want custom ops to be registered with the @tf_op decorator. Those handlers will be
         #     registered via the decorator on load of the module ... nothing is required here.
         # 2. the old custom op api: a dictionary of {name: (func, args[])
         #     We deal with this by using a compat_handler that wraps to old handler with a new style handler.
