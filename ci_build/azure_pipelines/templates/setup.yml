@@ -62,8 +62,6 @@ steps:
       # onnx-weekly won't satisfy onnx requirement so uninstallation must happen here
       pip uninstall -y onnx
       pip install --index-url https://test.pypi.org/simple/ ${PIP_ONNX_NAME:-onnx}
-      pip uninstall -y typing-extensions
-      pip install typing-extensions>4.0.0
     fi
 
     pip freeze --all

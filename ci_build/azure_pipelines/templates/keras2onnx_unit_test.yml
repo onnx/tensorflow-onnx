@@ -32,6 +32,7 @@ steps:
       pip install pytest pytest-cov pytest-runner
       $(INSTALL_ORT)
       pip install numpy==1.19
+      pip freeze --all
     displayName: 'Install dependencies'
 
   - script: |

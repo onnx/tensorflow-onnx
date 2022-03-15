@@ -76,7 +76,7 @@ jobs:
 
 - job: 'Win'
   pool:
-    vmImage: 'vs2017-win2016'
+    vmImage: 'windows-2022'
   strategy:
     matrix:
       ############ TF Keras Unit Tests ############

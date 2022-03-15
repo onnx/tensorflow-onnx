@@ -35,9 +35,9 @@ jobs:
                         ${{ if eq(platform, 'linux') }}:
                           CI_VM_IMAGE: 'ubuntu-latest'
                         ${{ if eq(platform, 'windows') }}:
-                          CI_VM_IMAGE: 'vs2017-win2016'
+                          CI_VM_IMAGE: 'windows-2022'
                         ${{ if eq(platform, 'mac') }}:
-                          CI_VM_IMAGE: 'macOS-10.13'
+                          CI_VM_IMAGE: 'macOS-11'
                         CI_PLATFORM: '${{ platform }}'
                         CI_PYTHON_VERSION: '${{ python_version }}'
                         CI_TF_VERSION: '${{ tf_version }}'
