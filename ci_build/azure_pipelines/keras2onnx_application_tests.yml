@@ -60,7 +60,7 @@ jobs:
 - job: 'Win'
   timeoutInMinutes: 180
   pool:
-    vmImage: 'vs2017-win2016'
+    vmImage: 'windows-2019'
   strategy:
     matrix:
       Python36-onnx1.5:
