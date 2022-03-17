@@ -30,7 +30,8 @@ steps:
       pip install -r requirements.txt
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
-      pip install numpy==1.21
+      pip install numpy==1.21.5
+      pip install flatbuffers==2.0
       $(INSTALL_ORT)
       pip freeze --all
     displayName: 'Install dependencies'
@@ -66,7 +67,7 @@ steps:
 
   - script: |
       call activate py$(python.version)
-      python -m pip install --upgrade pip numpy==1.21
+      python -m pip install --upgrade pip numpy==1.21.5
       echo Test numpy installation... && python -c "import numpy"
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
@@ -77,7 +78,8 @@ steps:
       IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install pytest pytest-cov pytest-runner
-      pip install numpy==1.21
+      pip install numpy==1.21.5
+      pip install flatbuffers==2.0
       %INSTALL_ORT%
     displayName: 'Install dependencies'
 

@@ -13,7 +13,7 @@ jobs:
         python.version: '3.6'
         ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow==1.15.0
-        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.11.0.dev20220311003
+        INSTALL_ORT: pip install onnxruntime==1.8.0
 
       Python38-tf2.5:
         python.version: '3.8'
@@ -52,7 +52,7 @@ jobs:
         python.version: '3.6'
         ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow==1.15.0
-        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.11.0.dev20220311003
+        INSTALL_ORT: pip install onnxruntime==1.8.0
 
       Python37-tf2.8:
         python.version: '3.7'
