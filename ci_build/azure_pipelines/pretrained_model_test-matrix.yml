@@ -60,5 +60,5 @@ schedules:
   displayName: pre-trained model test, full matrix
   branches:
     include:
-    - master
+    - main
   always: true

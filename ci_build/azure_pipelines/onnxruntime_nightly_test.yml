@@ -107,5 +107,5 @@ schedules:
   displayName: Daily onnxruntime nightly unittest
   branches:
     include:
-    - master
+    - main
   always: true
