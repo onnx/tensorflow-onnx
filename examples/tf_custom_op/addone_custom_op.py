@@ -24,23 +24,22 @@ class AddOne:
         const_one = ctx.make_const(utils.make_name("const_one"), np.ones(node_shape, dtype = np.int32)).output[0]
         node.input.append(const_one)
 
-
-with tf.compat.v1.Session() as sess:
-    x = tf_placeholder(tf.int32, [2, 3], name="input")
+@tf.function
+def func(x):
     AddOne = tf.load_op_library(tf_library_path)
     x_ = AddOne.add_one(x)
-    _ = tf.identity(x_, name="output")
+    output = tf.identity(x_, name="output")
+    return output
 
-    onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph,
-                                                 input_names=["input:0"],
-                                                 output_names=["output:0"])
-    model_proto = onnx_graph.make_model("test")
-    with open(saved_model_path, "wb") as f:
-        f.write(model_proto.SerializeToString())
+spec = [tf.TensorSpec(shape=(2, 3), dtype=tf.int32, name="input")]
+
+onnx_model, _ = tf2onnx.convert.from_function(func, input_signature=spec, opset=15)
+
+with open(saved_model_path, "wb") as f:
+    f.write(onnx_model.SerializeToString())
 
 onnx_model = onnx.load(saved_model_path)
 onnx.checker.check_model(onnx_model)
-
 
 
 ## Run the model in ONNXRuntime to verify the result.
