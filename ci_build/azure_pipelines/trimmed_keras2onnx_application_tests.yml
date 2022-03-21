@@ -14,7 +14,7 @@ jobs:
         INSTALL_KERAS: pip install keras==2.2.4
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
-        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.11.0.dev20220311003
+        INSTALL_ORT: pip install onnxruntime==1.8.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS:
         NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py"
@@ -24,8 +24,8 @@ jobs:
         ONNX_PATH: onnx==1.9.0
         INSTALL_KERAS:
         UNINSTALL_KERAS: pip uninstall keras -y
-        INSTALL_TENSORFLOW: pip install tensorflow==2.2.0
-        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.11.0.dev20220311003
+        INSTALL_TENSORFLOW: pip install tensorflow==2.7.0 numpy==1.21.5 flatbuffers==2.0
+        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==3.4.0
         NIGHTLY_BUILD_TEST: python run_all_v2.py

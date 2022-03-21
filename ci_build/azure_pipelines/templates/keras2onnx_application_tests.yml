@@ -24,8 +24,6 @@ steps:
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
       pip install git+https://github.com/microsoft/onnxconverter-common
-      pip install numpy==1.21.5
-      pip install flatbuffers==2.0
       $(INSTALL_ORT)
       pip install Pillow==8.2.0
       pip install opencv-python
@@ -86,8 +84,6 @@ steps:
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
       pip install git+https://github.com/microsoft/onnxconverter-common
-      pip install numpy==1.21.5
-      pip install flatbuffers==2.0
       %INSTALL_ORT%
       pip install Pillow==8.2.0
       pip install opencv-python
