@@ -21,10 +21,12 @@ steps:
       pip install $(ONNX_PATH)
       pip install h5py==2.9.0
       pip install parameterized
+      pip install numpy==1.21.5 flatbuffers==2.0
+      $(INSTALL_ORT)
+      pip install numpy==1.19
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
       pip install git+https://github.com/microsoft/onnxconverter-common
-      $(INSTALL_ORT)
       pip install Pillow==8.2.0
       pip install opencv-python
       pip install tqdm
@@ -44,6 +46,7 @@ steps:
       $(INSTALL_TRANSFORMERS)
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
+      pip install numpy==1.19
     displayName: 'Install dependencies'
 
   - script: |
@@ -81,10 +84,12 @@ steps:
       pip install protobuf
       pip install h5py==2.9.0
       pip install parameterized
+      pip install numpy==1.21.5 flatbuffers==2.0
+      $(INSTALL_ORT)
+      pip install numpy==1.19
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
       pip install git+https://github.com/microsoft/onnxconverter-common
-      %INSTALL_ORT%
       pip install Pillow==8.2.0
       pip install opencv-python
       pip install tqdm
@@ -99,6 +104,7 @@ steps:
       %INSTALL_TRANSFORMERS%
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
+      pip install numpy==1.19
       pip freeze --all
     displayName: 'Install dependencies'
 

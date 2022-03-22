@@ -125,16 +125,17 @@ stages:
           - template: 'unit_test.yml'
         report_coverage: 'True'
 
-    - template: 'templates/job_generator.yml'
-      parameters:
-        # tf 1.12
-        python_versions: [3.6']
-        tf_versions: ['1.12.3']
-        onnx_opsets: ['9']
-        job:
-          steps:
-          - template: 'unit_test.yml'
-        report_coverage: 'True'
+    # py 3.6 can not install numpy 1.21.x
+    # - template: 'templates/job_generator.yml'
+    #   parameters:
+    #     # tf 1.12
+    #     python_versions: [3.6']
+    #     tf_versions: ['1.12.3']
+    #     onnx_opsets: ['9']
+    #     job:
+    #       steps:
+    #       - template: 'unit_test.yml'
+    #     report_coverage: 'True'
 
     - template: 'templates/job_generator.yml'
       parameters:

@@ -6,7 +6,7 @@ parameters:
   tf_versions: ['']
   onnx_versions: ['']
   onnx_opsets: ['15', '14', '13', '12', '11', '10', '9']
-  onnx_backends: {onnxruntime: ['1.9.0']}
+  onnx_backends: {onnxruntime: ['nightly']}
   job: {}
   run_setup: 'True'
   report_coverage: 'False'
@@ -50,6 +50,15 @@ jobs:
                         CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tflite_tests }}'
                         CI_SKIP_TFJS_TESTS: '${{ parameters.skip_tfjs_tests }}'
 
+                        ${{ if eq(onnx_backend_version, '') }}:
+                          CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                        ${{ if ne(onnx_backend_version, '') }}:
+                          ${{ if ne(onnx_backend_version, 'nightly') }}:
+                            CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
+                          ${{ if eq(onnx_backend_version, 'nightly') }}:
+                            CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
+                            CI_ONNXRUNTIME_NIGHTLY: 'true'
+
                         ${{ if eq(tf_version, '') }}:
                           CI_PIP_TF_NAME: 'tensorflow'
                         ${{ if ne(tf_version, '') }}:
@@ -60,14 +69,6 @@ jobs:
                         ${{ if ne(onnx_version, '') }}:
                           CI_PIP_ONNX_NAME: ${{ format('onnx=={0}', onnx_version) }}
 
-                        ${{ if eq(onnx_backend_version, '') }}:
-                          CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                        ${{ if ne(onnx_backend_version, '') }}:
-                          ${{ if ne(onnx_backend_version, 'nightly') }}:
-                            CI_PIP_ONNX_BACKEND_NAME: ${{ format('{0}=={1}', onnx_backend.key, onnx_backend_version) }}
-                          ${{ if eq(onnx_backend_version, 'nightly') }}:
-                            CI_PIP_ONNX_BACKEND_NAME: '${{ onnx_backend.key }}'
-                            CI_ONNXRUNTIME_NIGHTLY: 'true'
 
     # Insert all properties other than pool/steps/strategy
     ${{ each pair in parameters.job }}:

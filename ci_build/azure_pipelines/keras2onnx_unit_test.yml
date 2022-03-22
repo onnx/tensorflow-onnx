@@ -24,7 +24,7 @@ jobs:
         Python37-tf2.7:
         python.version: '3.7'
         ONNX_PATH: onnx==1.10.2
-        TENSORFLOW_PATH: tensorflow-cpu==2.7.0 numpy==1.21.5 flatbuffers==2.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.7.0
         INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
 
       Python38-tf2.2:
@@ -43,12 +43,12 @@ jobs:
         python.version: '3.8'
         ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow-cpu==2.5.0
-        INSTALL_ORT: pip install onnxruntime==1.9.0
+        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
 
         Python38-tf2.7:
         python.version: '3.8'
         ONNX_PATH: onnx==1.10.2
-        TENSORFLOW_PATH: tensorflow-cpu==2.7.0 numpy==1.21.5 flatbuffers==2.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.7.0
         INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
 
       ############ Pure Keras Unit Tests ############
@@ -70,7 +70,7 @@ jobs:
         python.version: '3.7'
         ONNX_PATH: -i onnx==1.10.2
         KERAS: keras==2.4.3
-        TENSORFLOW_PATH: tensorflow==2.7.0 numpy==1.21.5 flatbuffers==2.0
+        TENSORFLOW_PATH: tensorflow==2.7.0
         INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
 
       # UT for keras 2.3 need tensorflow <= 2.0.0
@@ -92,7 +92,7 @@ jobs:
         python.version: '3.8'
         ONNX_PATH: -i onnx==1.10.2
         KERAS: keras==2.3.0
-        TENSORFLOW_PATH: tensorflow==2.8.0 numpy==1.21.5 flatbuffers==2.0
+        TENSORFLOW_PATH: tensorflow==2.8.0
         INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
   steps:
   - template: 'templates/keras2onnx_unit_test.yml'
@@ -133,12 +133,12 @@ jobs:
         python.version: '3.7'
         ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow-cpu==2.5.0
-        INSTALL_ORT: pip install onnxruntime==1.9.0
+        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
 
       Python37-tf2.7:
         python.version: '3.7'
         ONNX_PATH: onnx==1.10.2
-        TENSORFLOW_PATH: tensorflow-cpu==2.7.0 numpy==1.21.5 flatbuffers==2.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.7.0
         INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
 
       ############ Pure Keras Unit Tests ############
@@ -167,7 +167,7 @@ jobs:
         python.version: '3.7'
         ONNX_PATH: onnx==1.10.2
         KERAS: keras==2.4.3
-        TENSORFLOW_PATH: tensorflow==2.8.0 numpy==1.21.5 flatbuffers==2.0
+        TENSORFLOW_PATH: tensorflow==2.8.0
         INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly
   
   steps:

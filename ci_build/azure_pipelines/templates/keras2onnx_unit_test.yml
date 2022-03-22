@@ -21,6 +21,14 @@ steps:
       pip install $(ONNX_PATH)
       pip install h5py==2.9.0
       pip install parameterized
+      pip install numpy==1.21.5 flatbuffers==2.0
+      $(INSTALL_ORT)
+      if [ [$TENSORFLOW_PATH =~ "2.8.0" ] ]
+      then
+        echo "tf version 2.8.0"
+      else
+        pip install numpy==1.19
+      fi
       pip install $(TENSORFLOW_PATH)
       if [[ ! -z $KERAS ]];
       then
@@ -30,7 +38,6 @@ steps:
       pip install -r requirements.txt
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
-      $(INSTALL_ORT)
       pip freeze --all
     displayName: 'Install dependencies'
 
@@ -72,11 +79,13 @@ steps:
       pip install protobuf
       pip install h5py==2.9.0
       pip install parameterized
+      pip install numpy==1.21.5 flatbuffers==2.0
+      %INSTALL_ORT%
+      pip install numpy==1.19
       pip install %TENSORFLOW_PATH%
       IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install pytest pytest-cov pytest-runner
-      %INSTALL_ORT%
     displayName: 'Install dependencies'
 
   - script: |
