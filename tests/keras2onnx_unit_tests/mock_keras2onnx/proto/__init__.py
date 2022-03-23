@@ -38,7 +38,7 @@ else:
     is_tf_keras = str_tk_keras != '0'
 
 if is_tf_keras:
-    from tensorflow.python import keras
+    from tensorflow import keras
 else:
     try:
         import keras
@@ -47,7 +47,7 @@ else:
             is_tf_keras = True
     except ImportError:
         is_tf_keras = True
-        from tensorflow.python import keras
+        from tensorflow import keras
 
 
 def is_keras_older_than(version_str):
