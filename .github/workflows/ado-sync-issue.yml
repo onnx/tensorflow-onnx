@@ -1,0 +1,24 @@
+name: Sync issue to Azure DevOps work item 
+
+on:
+  issues:
+    types:
+      [opened, edited, deleted, closed, reopened, labeled, unlabeled, assigned]
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: onnx/tensorflow-onnx@main
+        env:
+          ado_token: "${{ secrets.ADO_PERSONAL_ACCESS_TOKEN }}"
+          ado_organization: "msdata"
+          ado_project: "Vienna"
+          ado_area_path: "Vienna\\ONNX Runtime\\Shared Core\\Converters\\TensorFlow"
+          ado_iteration_path: "Vienna\\Backlog"
+          ado_wit: "Product Backlog Item"
+          ado_new_state: "New"
+          ado_active_state: "Committed"
+          ado_close_state: "Done"
+          github_token: "${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}"
+          log_level: 100
