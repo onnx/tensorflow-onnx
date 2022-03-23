@@ -24,7 +24,7 @@ jobs:
       Python38-tf2.8:
         python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow-cpu==2.7.0
+        TENSORFLOW_PATH: tensorflow-cpu==2.8.0
         INSTALL_ORT: pip install onnxruntime==1.10.0
 
       ############ Pure Keras Unit Tests ############
@@ -66,10 +66,10 @@ jobs:
         TENSORFLOW_PATH: tensorflow-cpu==2.3.0
         INSTALL_ORT: pip install onnxruntime==1.9.0
 
-      Python37-tf2.8:
+      Python38-tf2.8:
         python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow==2.7.0
+        TENSORFLOW_PATH: tensorflow==2.8.0
         INSTALL_ORT: pip install onnxruntime==1.10.0
 
       ############ Pure Keras Unit Tests ############
