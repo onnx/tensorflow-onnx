@@ -101,8 +101,7 @@ steps:
       %INSTALL_TRANSFORMERS%
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
-
-      %INSTALL_NUMPY%
+      $(INSTALL_NUMPY)
 
       pip freeze --all
     displayName: 'Install dependencies'
