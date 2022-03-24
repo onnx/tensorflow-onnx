@@ -70,7 +70,7 @@ cmdclass = {
 }
 
 setup(
-    name="tf2onnx",
+    name='tf2onnx',
     version=VersionInfo.version,
     description='Tensorflow to ONNX converter',
     setup_requires=['pytest-runner'],
@@ -78,8 +78,8 @@ setup(
     cmdclass=cmdclass,
     packages=find_packages(),
     license='Apache License v2.0',
-    author='onnx@microsoft.com',
-    author_email='onnx@microsoft.com',
+    author='ONNX',
+    author_email='onnx-technical-discuss@lists.lfaidata.foundation',
     url='https://github.com/onnx/tensorflow-onnx',
     install_requires=['numpy>=1.14.1', 'onnx>=1.4.1', 'requests', 'six', 'flatbuffers~=1.12'],
     classifiers=[
