@@ -31,7 +31,6 @@ steps:
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
       $(INSTALL_ORT)
-
       $(INSTALL_NUMPY)
 
       pip freeze --all
@@ -80,6 +79,7 @@ steps:
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install pytest pytest-cov pytest-runner
       %INSTALL_ORT%
+      %INSTALL_NUMPY%
 
       pip freeze --all
     displayName: 'Install dependencies'
