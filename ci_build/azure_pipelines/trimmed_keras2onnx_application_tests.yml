@@ -32,8 +32,8 @@ jobs:
         INSTALL_NUMPY: pip install numpy==1.19.0
         NIGHTLY_BUILD_TEST: python run_all_v2.py
 
-      Python38-tf2.x:
-        python.version: '3.8'
+      Python37-tf2.x:
+        python.version: '3.7'
         ONNX_PATH: onnx==1.11.0
         INSTALL_KERAS:
         UNINSTALL_KERAS: pip uninstall keras -y
@@ -41,7 +41,7 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.10.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==3.4.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_NUMPY:
         NIGHTLY_BUILD_TEST: python run_all_v2.py
 
   steps:
