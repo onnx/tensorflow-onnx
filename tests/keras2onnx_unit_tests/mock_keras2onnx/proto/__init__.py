@@ -38,27 +38,20 @@ else:
     is_tf_keras = str_tk_keras != '0'
 
 if is_tf_keras:
+    from tensorflow.python.keras.layers import advanced_activations
     if is_tensorflow_older_than('2.8.0'):
         from tensorflow.python import keras
-        python_keras = keras
     else:
         from tensorflow import keras
-        from tensorflow.python import keras as python_keras
 else:
     try:
         import keras
-        python_keras = keras
 
         if keras.Model == tensorflow.keras.Model:  # since keras 2.4, keras and tf.keras is unified.
             is_tf_keras = True
     except ImportError:
         is_tf_keras = True
-        if is_tensorflow_older_than('2.8.0'):
-            from tensorflow.python import keras
-            python_keras = keras
-        else:
-            from tensorflow import keras
-            from tensorflow.python import keras as python_keras
+        from tensorflow.python import keras
 
 
 def is_keras_older_than(version_str):
