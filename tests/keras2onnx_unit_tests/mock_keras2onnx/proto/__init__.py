@@ -42,7 +42,6 @@ if is_tf_keras:
 else:
     try:
         import keras
-        from keras.layers import advanced_activations
 
         if keras.Model == tensorflow.keras.Model:  # since keras 2.4, keras and tf.keras is unified.
             is_tf_keras = True
