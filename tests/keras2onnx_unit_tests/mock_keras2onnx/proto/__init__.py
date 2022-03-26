@@ -48,7 +48,6 @@ else:
     except ImportError:
         is_tf_keras = True
         from tensorflow.python import keras
-        from tensorflow.python.keras.layers import advanced_activations
 
 
 def is_keras_older_than(version_str):
