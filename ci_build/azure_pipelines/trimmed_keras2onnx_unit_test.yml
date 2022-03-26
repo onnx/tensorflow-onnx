@@ -18,17 +18,10 @@ jobs:
 
       Python37-tf2.5:
         python.version: '3.7'
-        ONNX_PATH: onnx==1.10.2
-        TENSORFLOW_PATH: tensorflow-cpu==2.5.0
-        INSTALL_ORT: pip install onnxruntime==1.9.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
-
-      Python38-tf2.6:
-        python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow-cpu==2.6.3
+        TENSORFLOW_PATH: tensorflow-cpu==2.5.0
         INSTALL_ORT: pip install onnxruntime==1.10.0
-        INSTALL_NUMPY:
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       ############ Pure Keras Unit Tests ############
       Keras-Py37-tf1.15.0:
@@ -68,17 +61,10 @@ jobs:
 
       Python37-tf2.3:
         python.version: '3.7'
-        ONNX_PATH: onnx==1.10.2
-        TENSORFLOW_PATH: tensorflow-cpu==2.3.0
-        INSTALL_ORT: pip install onnxruntime==1.9.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
-
-      Python38-tf2.6:
-        python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow==2.6.3
+        TENSORFLOW_PATH: tensorflow-cpu==2.3.0
         INSTALL_ORT: pip install onnxruntime==1.10.0
-        INSTALL_NUMPY:
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       ############ Pure Keras Unit Tests ############
       Keras-Py37-tf2.2.0:
