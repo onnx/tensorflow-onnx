@@ -31,7 +31,8 @@ steps:
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
       $(INSTALL_ORT)
-      pip install numpy==1.19
+      $(INSTALL_NUMPY)
+
       pip freeze --all
     displayName: 'Install dependencies'
 
@@ -78,7 +79,9 @@ steps:
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install pytest pytest-cov pytest-runner
       %INSTALL_ORT%
-      pip install numpy==1.19
+      %INSTALL_NUMPY%
+
+      pip freeze --all
     displayName: 'Install dependencies'
 
   - script: |

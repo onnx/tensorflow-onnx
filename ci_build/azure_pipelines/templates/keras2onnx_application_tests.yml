@@ -44,7 +44,9 @@ steps:
       $(INSTALL_TRANSFORMERS)
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
-      pip install numpy==1.19
+      $(INSTALL_NUMPY)
+
+      pip freeze --all
     displayName: 'Install dependencies'
 
   - script: |
@@ -100,7 +102,8 @@ steps:
       %INSTALL_TRANSFORMERS%
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
-      pip install numpy==1.19
+      %INSTALL_NUMPY%
+
       pip freeze --all
     displayName: 'Install dependencies'
 
