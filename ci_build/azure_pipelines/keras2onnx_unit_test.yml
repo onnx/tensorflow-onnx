@@ -11,9 +11,9 @@ jobs:
       ############ TF Keras Unit Tests ############
       Python36-tf1.15:
         python.version: '3.6'
-        ONNX_PATH: onnx==1.11.0
+        ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
+        INSTALL_ORT: pip install onnxruntime==1.9.0
         INSTALL_NUMPY: pip install numpy==1.19.0
 
       Python37-tf2.1:
@@ -43,11 +43,10 @@ jobs:
       ############ Pure Keras Unit Tests ############
       Keras-Py36-tf1.15.0:
         python.version: '3.6'
-        ONNX_PATH: onnx==1.11.0
+        ONNX_PATH: onnx==1.10.2
         KERAS: keras==2.2.5
         TENSORFLOW_PATH: tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_ORT: pip install onnxruntime==1.9.0
 
       Keras-Py37-tf1.15.0:
         python.version: '3.7'
@@ -86,10 +85,9 @@ jobs:
       ############ TF Keras Unit Tests ############
       Python36-tf-1.15:
         python.version: '3.6'
-        ONNX_PATH: onnx==1.11.0
+        ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_ORT: pip install onnxruntime==1.9.0
 
       Python37-tf2.1:
         python.version: '3.7'
@@ -118,11 +116,10 @@ jobs:
       ############ Pure Keras Unit Tests ############
       Keras-Py36-tf1.15.0:
         python.version: '3.6'
-        ONNX_PATH: onnx==1.11.0
+        ONNX_PATH: onnx==1.10.2
         KERAS: keras==2.2.5
         TENSORFLOW_PATH: tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_ORT: pip install onnxruntime==1.9.0
 
       Keras-Py37-tf2.0.0:
         python.version: '3.7'
