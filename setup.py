@@ -37,8 +37,9 @@ class create_version(Command):
         pass
 
     def run(self):
+        alv2_license = '# SPDX-License-Identifier: Apache-2.0\n\n'
         with open(os.path.join(SRC_DIR, 'version.py'), 'w') as f:
-            f.write(dedent('''
+            f.write(alv2_license + dedent('''
             version = '{version}'
             git_version = '{git_version}'
             '''.format(**dict(VersionInfo._asdict()))))

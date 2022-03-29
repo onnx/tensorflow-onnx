@@ -411,7 +411,7 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     opset = utils.find_opset(opset)
     logger.info("Using tensorflow=%s, onnx=%s, tf2onnx=%s/%s",
-                get_tf_version(), utils.get_onnx_version(), tf2onnx.__version__, tf2onnx.version.git_version[:6])
+                get_tf_version(), utils.get_onnx_version(), tf2onnx.__version__, tf2onnx.git_version[:6])
     logger.info("Using opset <onnx, %s>", opset)
     if opset > schemas.get_max_supported_opset_version():
         logger.warning("Currently installed onnx package %s is too low to support opset %s, "
