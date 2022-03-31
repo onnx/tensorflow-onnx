@@ -13,7 +13,7 @@ import tensorflow as tf
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("infile", nargs="*", help='event files')
+    parser.add_argument("infile", nargs="*", help="event files")
     args = parser.parse_args()
     return args
 

@@ -71,7 +71,7 @@ def profile(profiler="none", name="MobileNet", show_all=False):
     print("create(%r, %r)" % (profiler, name))
     graph_def, model = create(name)
     print("profile(%r, %r)" % (profiler, name))
-    if profiler == 'none':
+    if profiler == "none":
         convert(graph_def, model)
     elif profiler == "spy":
         # py-spy record -r 10 -o profile.svg -- python conversion_time.py spy
