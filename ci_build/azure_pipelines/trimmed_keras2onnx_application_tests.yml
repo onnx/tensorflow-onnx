@@ -57,8 +57,8 @@ jobs:
         INSTALL_NUMPY: pip install numpy==1.19.0
         NIGHTLY_BUILD_TEST: python run_all_v2.py --exclude "test_keras_applications_v2.py"
 
-      Python38-onnx1.11:
-        python.version: '3.8'
+      Python37-onnx1.11:
+        python.version: '3.7'
         ONNX_PATH: onnx==1.11.0
         INSTALL_KERAS: pip install keras==2.3.1
         UNINSTALL_KERAS:
