@@ -150,7 +150,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         dims_out = len(shape_in) + len(axes)
         axes = [i if i >= 0 else i + dims_out for i in axes]
         # calculate the shape of output accroding to onnx Unsqueeze's spec
-        # https://github.com/onnx/onnx/blob/master/docs/Operators.md#Unsqueeze
+        # https://github.com/onnx/onnx/blob/main/docs/Operators.md#Unsqueeze
         shape_in = iter(shape_in)
         shape_out = [None] * dims_out
         for ind in axes:

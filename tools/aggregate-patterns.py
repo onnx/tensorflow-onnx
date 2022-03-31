@@ -133,7 +133,7 @@ def get_args():
     parser.add_argument("--fold", action="store_true", help="fold smaller sub graphs")
     parser.add_argument("--max-nodes", type=int, default=6, help="number of max nodes in a pattern")
     parser.add_argument("--min-frequency", type=int, default=2, help="show patterns number seen at least this")
-    parser.add_argument("infile", nargs="*", help='event files')
+    parser.add_argument("--infile", nargs="*", help="event files")
     args = parser.parse_args()
     return args
 

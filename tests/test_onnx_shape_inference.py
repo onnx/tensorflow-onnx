@@ -22,7 +22,7 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
     """
     Test shape inference, it's just a subset of all cases that can be inferred shape.
     For more information, please refer to onnx shape inference test:
-    https://github.com/onnx/onnx/blob/master/onnx/test/shape_inference_test.py
+    https://github.com/onnx/onnx/blob/main/onnx/test/shape_inference_test.py
     """
 
     def _run_test_case(self, graph, feed_dict):
