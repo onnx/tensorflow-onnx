@@ -267,3 +267,36 @@ class BackToBackOptimizer(GraphOptimizerBase):
         g.replace_inputs(node2, [node.input[0], node2.input[1]])
         g.remove_node(node.name)
         return []
+
+    @staticmethod
+    @_register_func(('Min', 'Max'))
+    def _optimize_minmax(g, node, consumer_nodes):
+        """replace Min/Max with Clip"""
+        if g.opset <= 11:
+            return []
+        if node.type != 'Min' or len(consumer_nodes) != 1 or len(node.inputs) != 2:
+            return []
+        node2 = consumer_nodes[0]
+        if node2.type != 'Max' or len(node2.inputs) != 2:
+            return []
+
+        shape = g.get_shape(node2.output[0])
+        dtype = g.get_dtype(node2.output[0])
+
+        # for now only do const since in some models we see rankN tensors with a single
+        # element and we don't want to deal with this at runtime
+        if node.inputs[1].is_const() and node2.inputs[1].is_const():
+            min_input = None
+            max_input = None
+            t = node.inputs[1].get_tensor_value(as_list=False)
+            if t.size == 1:
+                min_input = g.make_const(node.name + "_min", np.array(t.item(), dtype=t.dtype))                
+            t = node2.inputs[1].get_tensor_value(as_list=False)
+            if t.size == 1:
+                max_input = g.make_const(node2.name + "_max", np.array(t.item(), dtype=t.dtype))
+            if min_input and max_input:
+                g.remove_node(node.name)
+                g.remove_node(node2.name)
+                g.make_node("Clip", [node.input[0], max_input.name, min_input.name], outputs=node2.output,
+                            shapes=[shape], dtypes=[dtype])
+        return []

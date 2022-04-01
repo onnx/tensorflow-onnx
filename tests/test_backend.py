@@ -5862,6 +5862,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "clip")
+    def test_minmax_to_clip(self):
+        def func(x):
+            # there is no hardswich in tf but toco will optimize to it
+            v0 = np.array([[[6]]])
+            v0 = np.array(6, dtype=np.float32)
+            op_ = tf.math.maximum(tf.math.minimum(x, v0), np.float(0))
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        # tf gets this wrong and returns fp32 instead of int
+        x_val = np.array([-1, 0, 1, 7], dtype=np.float32).reshape((2, 2))
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 if __name__ == '__main__':
     unittest_main()
