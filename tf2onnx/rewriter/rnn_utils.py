@@ -595,9 +595,8 @@ def get_reverse_or_slice_nodes_after_y_output(g, rnn_bw):
 
             if len(reverse_or_slice_nodes) == 1 and reverse_or_slice_nodes[0].type == "Identity":
                 reverse_or_slice_nodes = g.find_output_consumers(reverse_or_slice_nodes[0].output[0])
-
-            if len(reverse_or_slice_nodes) == 1 and reverse_or_slice_nodes[0].type == "Identity":
-                reverse_or_slice_nodes = g.find_output_consumers(reverse_or_slice_nodes[0].output[0])
+                if len(reverse_or_slice_nodes) == 1 and reverse_or_slice_nodes[0].type == "Identity":
+                    reverse_or_slice_nodes = g.find_output_consumers(reverse_or_slice_nodes[0].output[0])
 
             are_all_reverse_or_slice = all([
                 utils.is_tf_reverse_op(r_op) or is_tail_slice_op(r_op)
@@ -649,7 +648,7 @@ def slice_birnn_for_original_rnn_consumers(g, rnn_fw, rnn_bw, bi_rnn, rnn_output
 
     if rnn_output_index == 0:
         axis = 1
-        # remove reverse op for rnn_bw
+        # remove reverse(return_sequence=True) or tail slice(return_sequence=False) op for rnn_bw
         reverse_or_slice_nodes = get_reverse_or_slice_nodes_after_y_output(g, rnn_bw)
 
         for r_op in reverse_or_slice_nodes:
