@@ -16,7 +16,7 @@ class LoopOptimizer(GraphOptimizerBase):
     """Loop Optimizer."""
 
     # a lot of terms used here come from loop's onnx spec
-    # https://github.com/onnx/onnx/blob/master/docs/Operators.md#Loop
+    # https://github.com/onnx/onnx/blob/main/docs/Operators.md#Loop
     def __init__(self):  # pylint: disable=useless-super-delegation
         super(LoopOptimizer, self).__init__()
 

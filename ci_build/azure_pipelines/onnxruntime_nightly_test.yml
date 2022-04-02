@@ -68,7 +68,7 @@ stages:
       parameters:
         platforms: ['linux']
         python_versions: ['3.9']
-        tf_versions: ['2.5.0']
+        tf_versions: ['2.8.0']
         onnx_opsets: ['']
         onnx_backends: {onnxruntime: ['nightly']}
         job:
@@ -107,5 +107,5 @@ schedules:
   displayName: Daily onnxruntime nightly unittest
   branches:
     include:
-    - master
+    - main
   always: true

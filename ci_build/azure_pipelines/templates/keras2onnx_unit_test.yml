@@ -20,7 +20,6 @@ steps:
       conda config --set always_yes yes --set changeps1 no
       pip install $(ONNX_PATH)
       pip install h5py==2.9.0
-      pip install numpy==1.19
       pip install parameterized
       pip install $(TENSORFLOW_PATH)
       if [[ ! -z $KERAS ]];
@@ -32,7 +31,9 @@ steps:
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
       $(INSTALL_ORT)
-      pip install numpy==1.19
+      $(INSTALL_NUMPY)
+
+      pip freeze --all
     displayName: 'Install dependencies'
 
   - script: |
@@ -78,7 +79,9 @@ steps:
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install pytest pytest-cov pytest-runner
       %INSTALL_ORT%
-      pip install numpy==1.19
+      %INSTALL_NUMPY%
+
+      pip freeze --all
     displayName: 'Install dependencies'
 
   - script: |

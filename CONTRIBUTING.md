@@ -11,7 +11,7 @@ We're always looking for your help to fix bugs and improve the product. Create a
 4. Make and checkin your changes along with unit tests
 5. git commit your changes
 6. git push origin HEAD
-7. To request merge into master send a pull request from the web ui
+7. To request merge into main send a pull request from the web ui
 https://github.com/onnx/tensorflow-onnx.
 
 

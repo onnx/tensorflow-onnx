@@ -140,7 +140,7 @@ python -m tf2onnx.convert
     [--concrete_function CONCRETE_FUNCTION]
     [--target TARGET]
     [--custom-ops list-of-custom-ops]
-    [--fold_const]
+    [--load_op_libraries tensorflow_library_path]
     [--large_model]
     [--continue_on_error]
     [--verbose]
@@ -226,13 +226,14 @@ runtime can still open the model. The format is a comma-separated map of tf op n
 OpName:domain. If only an op name is provided (no colon), the default domain of `ai.onnx.converters.tensorflow`
 will be used.
 
+#### --load_op_libraries
+
+Load the comma-separated list of tensorflow plugin/op libraries before conversion.
+
 #### --target
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
 
-#### --fold_const
-
-Deprecated. 
 
 ### <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
 

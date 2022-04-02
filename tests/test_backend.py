@@ -174,7 +174,6 @@ def get_maxpoolwithargmax_getdata():
 class BackendTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, func, output_names_with_port, feed_dict, **kwargs):
         kwargs["convert_var_to_const"] = False
-        kwargs["constant_fold"] = False
         return self.run_test_case(func, feed_dict, [], output_names_with_port, **kwargs)
 
     def _test_expand_dims_known_rank(self, idx):
@@ -305,7 +304,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_multinomial(self):
         x_val = np.array([[10., 10.]], dtype=np.float32)
         def func(x):
-            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int64)
+            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
 
         # since returned indexes are random we can only check type and shape
@@ -318,7 +317,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
         def func(x):
-            op = multinomial(x, 2, output_dtype=tf.int64)
+            op = multinomial(x, 2, output_dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
         # since returned indexes are random we can only check type and shape
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False,
@@ -709,7 +708,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, constant_fold=False,
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port,
                            graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
                                                       check_op_count(g, "RandomUniformLike", 0)))
 
@@ -5229,7 +5228,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             lookup_results = hash_table.lookup(query_holder)
             ret = tf.add(lookup_results, 0, name=_TFOUTPUT)
             return ret
-        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, constant_fold=False, as_session=True)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, as_session=True)
         os.remove(filnm)
 
     @check_opset_min_version(8, "CategoryMapper")

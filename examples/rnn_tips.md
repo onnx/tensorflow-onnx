@@ -16,7 +16,7 @@ For other advanced RNN cells, it is supposed to good to convert as well, but the
 Use following commands to have a quick trial on your model:
 
 ```
-python -m tf2onnx.convert --input frozen_rnn_model.pb --inputs input1:0,input2:0 --outputs output1:0,output2:0 --fold_const --opset 8 --output target.onnx  --continue_on_error
+python -m tf2onnx.convert --input frozen_rnn_model.pb --inputs input1:0,input2:0 --outputs output1:0,output2:0 --opset 8 --output target.onnx  --continue_on_error
 ```
 
 ## Limitation
@@ -36,7 +36,7 @@ Use [onnxruntime](https://github.com/Microsoft/onnxruntime) or [caffe2](https://
 There is a simpler way to run your models and test its correctness (compared with TensorFlow run) using following command.
 
 ```
-python tests\run_pretrained_models.py --backend onnxruntime  --config rnn.yaml --tests model_name --fold_const --onnx-file ".\tmp" --opset 8
+python tests\run_pretrained_models.py --backend onnxruntime  --config rnn.yaml --tests model_name --onnx-file ".\tmp" --opset 8
 ```
 
 The content of rnn.yaml looks as below. For inputs, an explicit numpy expression or a shape can be used. If a shape is specified, the value will be randomly generated.

@@ -3,8 +3,6 @@
 # From https://github.com/titu1994/DenseNet/blob/master/subpixel.py
 # Modifications Copyright (c) Microsoft.
 
-from __future__ import absolute_import
-
 from mock_keras2onnx.proto import keras
 from keras import backend as K
 from keras.engine import Layer
