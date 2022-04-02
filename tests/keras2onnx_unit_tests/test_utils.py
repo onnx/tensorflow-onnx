@@ -3,6 +3,7 @@
 import os
 import sys
 import onnx
+from onnx import helper
 import numpy as np
 import mock_keras2onnx
 from mock_keras2onnx.proto import keras, is_keras_older_than
@@ -159,6 +160,14 @@ def parse_profile_results(sess_time, kernel_time_only=False, threshold=0):
 
 def no_loops_in_tf2(onnx_model):
     return not is_tf2 or all(n.op_type != "Loop" for n in onnx_model.graph.node)
+
+
+def all_recurrents_should_bidirectional(onnx_model):
+    return all([
+        helper.get_attribute_value(attr) == b'bidirectional'
+        for node in onnx_model.graph.node if node.op_type in ['GRU', 'LSTM', 'RNN']
+        for attr in node.attribute if attr.name == 'direction'
+    ])
 
 
 def run_onnx_runtime(case_name, onnx_model, data, expected, model_files, rtol=1.e-3, atol=1.e-6,
