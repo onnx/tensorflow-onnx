@@ -24,17 +24,31 @@ Specify the name of your op, its inputs (types and names) and outputs (types and
 ```
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
+#include "tensorflow/core/framework/register_types.h"
 
 using namespace tensorflow;
 
 
-REGISTER_OP("AddOne")
-  .Input("add_one: int32")
-  .Output("result: int32")
+// opregister
+REGISTER_OP("DoubleAndAddOne")
+  .Input("x: T")
+  .Output("result: T")
+  .Attr("T: {float, double, int32}")
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext *c) {
-    c->set_output(0, c->input(0));
+    ::tensorflow::shape_inference::ShapeHandle shape_x = c->input(0);
+    if (!c->RankKnown(shape_x)) {
+      c->set_output(0, c->UnknownShape());
+      return Status::OK();
+    }
+    c->set_output(0, shape_x);
     return Status::OK();
-  });
+  })
+  .Doc(R"doc(
+    Calculate the value 2x + 1. 
+    x: A Tensor `Tensor`. Must be one of the types in `T`.
+
+    Returns: A `Tensor`. Has the same type with `x`.
+  )doc");
 ```
 
 #### Implement the op kernel
@@ -43,35 +57,34 @@ Create a class that extends `OpKernel` and overrides the `Compute()` method. The
 ```
 #include "tensorflow/core/framework/op_kernel.h"
 
-void AddOneKernelLauncher(const Tensor* t_in, const int n, Tensor* t_out);
-
-class AddOneOp : public OpKernel {
+template <typename T>
+class DoubleAndAddOneOp : public OpKernel {
 public:
-  explicit AddOneOp(OpKernelConstruction* context) : OpKernel(context) {}
+  explicit DoubleAndAddOneOp(OpKernelConstruction* context) : OpKernel(context) {}
 
   void Compute(OpKernelContext* context) override {
-    // Tensore in input
+    // Grab the input tensor
     const Tensor& input_tensor = context->input(0);
-    auto input = input_tensor.flat<int32>();
+    auto input = input_tensor.flat<T>();
 
-    // Tensore in output
+    // Tensor in output
     Tensor* output_tensor = NULL;
     OP_REQUIRES_OK(context, context->allocate_output(0, input_tensor.shape(), &output_tensor));
-    auto output = output_tensor->flat<int32>();
+    auto output = output_tensor->flat<T>();
 
-#if GOOGLE_CUDA
-    AddOneKernelLauncher(input, input.size(), output);
-#else
     const int N = input.size();
-    for (int i = 0; i < N; i++) output(i) += 1;
-#endif
-    if (N > 0) output(0) = input(0);
+    for (int i = 0; i < N; i++) {
+      output(i) = output(i) * T(2) + T(1);
+    }
   }
 };
 ```
 Add the Register kernel build,
 ```
-REGISTER_KERNEL_BUILDER(Name("AddOne").Device(DEVICE_CPU), AddOneOp);
+REGISTER_KERNEL_BUILDER(Name("DoubleAndAddOne")
+                            .Device(DEVICE_CPU)
+                            .TypeConstraint<int>("T"),
+                        DoubleAndAddOneOp<int>);
 ```
 Save below code in C++ `.cc` file,
 
@@ -80,9 +93,9 @@ Assuming you have g++ installed, here is the sequence of commands you can use to
 ```
 TF_CFLAGS=( $(python -c 'import tensorflow as tf; print(" ".join(tf.sysconfig.get_compile_flags()))') )
 TF_LFLAGS=( $(python -c 'import tensorflow as tf; print(" ".join(tf.sysconfig.get_link_flags()))') )
-g++ -std=c++14 -shared add_one.cc -o add_one.so -fPIC ${TF_CFLAGS[@]} ${TF_LFLAGS[@]} -O2
+g++ -std=c++14 -shared double_and_add_one.cc -o double_and_add_one.so -fPIC ${TF_CFLAGS[@]} ${TF_LFLAGS[@]} -O2
 ```
-After below steps, we can get a TensorFlow custom op library `add_one.so`.
+After below steps, we can get a TensorFlow custom op library `double_and_add_one.so`.
 
 
 ### Convert the Operator to ONNX
@@ -105,21 +118,30 @@ from tf2onnx.tf_loader import tf_placeholder
 
 DIR_PATH = os.path.realpath(os.path.dirname(__file__))
 saved_model_path = os.path.join(DIR_PATH, "model.onnx")
-tf_library_path = os.path.join(DIR_PATH, "add_one.so")
+tf_library_path = os.path.join(DIR_PATH, "double_and_add_one.so")
 
 
-@tf_op("AddOne", onnx_op="Add")
-class AddOne:
+@tf_op("DoubleAndAddOne")
+class DoubleAndAddOne:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
+        node.type = "Mul"
         node_shape = ctx.get_shape(node.input[0])
-        const_one = ctx.make_const(utils.make_name("const_one"), np.ones(node_shape, dtype = np.int32)).output[0]
-        node.input.append(const_one)
+        node_dtype = ctx.get_dtype(node.input[0])
+        node_np_dtype = utils.map_onnx_to_numpy_type(node_dtype)
+
+        const_two = ctx.make_const(utils.make_name("cosnt_two"), np.array([2]).astype(node_np_dtype)).output[0]
+        node.input.append(const_two)
+
+        const_one = ctx.make_const(utils.make_name("const_one"), np.ones(node_shape, dtype=node_np_dtype)).output[0]
+        op_name = utils.make_name(node.name)
+        ctx.insert_new_node_on_output("Add", node.output[0], inputs=[node.output[0], const_one], name=op_name)
+
 
 @tf.function
 def func(x):
-    AddOne = tf.load_op_library(tf_library_path)
-    x_ = AddOne.add_one(x)
+    custom_op = tf.load_op_library(tf_library_path)
+    x_ = custom_op.double_and_add_one(x)
     output = tf.identity(x_, name="output")
     return output
 
