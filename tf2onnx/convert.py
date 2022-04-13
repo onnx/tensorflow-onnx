@@ -221,10 +221,9 @@ def main():
 
     if args.load_op_libraries:
         for op_filepath in args.load_op_libraries:
-            # the path in tf.load_op_library() must be absolute path.
-            if os.path.exists(op_filepath) and not os.path.isabs(op_filepath) and filename.endswith(".so"):
+            # change relative path to absolute path to satisfy the tf.load_op_library().
+            if not os.path.isabs(op_filepath):
                 op_filepath = os.getcwd() + "/" + op_filepath
-            logger.info("Load the tensorflow custom ops library so file from: %s", format(op_filepath))
             tf.load_op_library(op_filepath)
     if args.graphdef:
         graph_def, inputs, outputs = tf_loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
