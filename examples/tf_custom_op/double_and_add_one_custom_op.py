@@ -3,7 +3,6 @@
 
 import numpy as np
 import tensorflow as tf
-import tf2onnx
 import onnx
 import os
 from tf2onnx import utils
@@ -25,7 +24,7 @@ class DoubleAndAddOne:
         node_dtype = ctx.get_dtype(node.input[0])
         node_np_dtype = utils.map_onnx_to_numpy_type(node_dtype)
 
-        const_two = ctx.make_const(utils.make_name("cosnt_two"), np.array([2]).astype(node_np_dtype)).output[0]
+        const_two = ctx.make_const(utils.make_name("const_two"), np.array([2]).astype(node_np_dtype)).output[0]
         node.input.append(const_two)
 
         const_one = ctx.make_const(utils.make_name("const_one"), np.ones(node_shape, dtype=node_np_dtype)).output[0]
