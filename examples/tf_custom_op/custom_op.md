@@ -99,11 +99,11 @@ After below steps, we can get a TensorFlow custom op library `double_and_add_one
 
 
 ### Convert the Operator to ONNX
-To be able to use this custom ONNX operator for inference, we need to add our custom operator to an inference engine. If the operator can be conbinded with exsiting [ONNX standard operators](https://github.com/onnx/onnx/blob/main/docs/Operators.md). The case will be easier:
+To be able to use this custom ONNX operator for inference, we need to add our custom operator to an inference engine. If the operator can be combined with exsiting [ONNX standard operators](https://github.com/onnx/onnx/blob/main/docs/Operators.md). The case will be easier:
 
 1- use [--load_op_libraries](https://github.com/onnx/tensorflow-onnx#--load_op_libraries) in conversion command or `tf.load_op_library()` method in code to load the TensorFlow custom ops library.
 
-2- implement the op handler according to the op definitions, registered it with the `@tf_op` decorator. Those handlers will be registered via the decorator on load of the module. [Here](https://github.com/onnx/tensorflow-onnx/tree/main/tf2onnx/onnx_opset) are examples of TensorFlow op hander implementations, which all are conbinded with ONNX ops.
+2- implement the op handler according to the op definitions, registered it with the `@tf_op` decorator. Those handlers will be registered via the decorator on load of the module. [Here](https://github.com/onnx/tensorflow-onnx/tree/main/tf2onnx/onnx_opset) are examples of TensorFlow op hander implementations, which all are combined with ONNX ops.
 
 ```
 import numpy as np
