@@ -2,13 +2,13 @@
 
 ## Example of converting TensorFlow model with custom op to ONNX
 
-This document describes the ways for exporting TensorFlow model with a custom operator, exporting the operator to ONNX format, and adding the operator to ONNX Runtime for model inference. Tensorflow provides abundant set of operators, and also provides the extending implmentation to register as the new operators. The new custom operators are usually not recognized by tf2onnx conversion and onnxruntime. So the TensorFlow custom ops should be exported using a combination of existing and/or new custom ONNX ops. Once the operator is converted to ONNX format, users can implement and register it with ONNX Runtime for model inference. This document explains the details of this process end-to-end, along with an example.
+This document describes the ways for doing TensorFlow model conversion with a custom operator, converting the operator to ONNX format, and adding the operator to ONNX Runtime for model inference. Tensorflow provides abundant set of operators, and also provides the extending implmentation to register as the new operators. The new custom operators are usually not recognized by tf2onnx conversion and onnxruntime. So the TensorFlow custom ops should be converted using a combination of existing and/or new custom ONNX ops. Once the operator is converted to ONNX format, users can implement and register it with ONNX Runtime for model inference. This document explains the details of this process end-to-end, along with an example.
 
 
 ### Required Steps
 
   - [1](#step1) - Adding the Tensorflow custom operator implementation in C++ and registering it with TensorFlow
-  - [2](#step2) - Exporting the custom Operator to ONNX, using:
+  - [2](#step2) - Converting the custom Operator to ONNX, using:
   <br />             - a combination of existing ONNX ops
   <br />              or
   <br />              - a custom ONNX Operator
@@ -16,7 +16,7 @@ This document describes the ways for exporting TensorFlow model with a custom op
 
 
 ### Implement the Custom Operator
-Firstly, try to install the TensorFlow latest version (Nighly is better) build refer to [here](https://github.com/tensorflow/tensorflow#install). And then implement the custom operators saving in TensorFlow library format and the file usually ends with `.so`. We have a simple example of `AddOne`, which is adding one for a tensor.
+Firstly, try to install the TensorFlow latest version (Nighly is better) build refer to [here](https://github.com/tensorflow/tensorflow#install). And then implement the custom operators saving in TensorFlow library format and the file usually ends with `.so`. We have a simple example of `DoubleAndAddOne`, which is calculating `2x + 1` for a tensor.
 
 
 #### Define the op interface
@@ -88,7 +88,7 @@ REGISTER_KERNEL_BUILDER(Name("DoubleAndAddOne")
 ```
 Save below code in C++ `.cc` file,
 
-#### Using C++ compiler to compile the op
+#### Use C++ compiler to compile the op
 Assuming you have g++ installed, here is the sequence of commands you can use to compile your op into a dynamic library.
 ```
 TF_CFLAGS=( $(python -c 'import tensorflow as tf; print(" ".join(tf.sysconfig.get_compile_flags()))') )
@@ -99,11 +99,11 @@ After below steps, we can get a TensorFlow custom op library `double_and_add_one
 
 
 ### Convert the Operator to ONNX
-To be able to use this custom ONNX operator for inference, we need to add our custom operator to an inference engine. If the operator can be conbinded with exsiting [ONNX standard operators](https://github.com/onnx/onnx/blob/main/docs/Operators.md). The case will be easier: 
+To be able to use this custom ONNX operator for inference, we need to add our custom operator to an inference engine. If the operator can be combined with exsiting [ONNX standard operators](https://github.com/onnx/onnx/blob/main/docs/Operators.md). The case will be easier:
 
-1- using [--load_op_libraries](https://github.com/onnx/tensorflow-onnx#--load_op_libraries) in conversion command or `tf.load_op_library()` method in code to load the TensorFlow custom ops library.
+1- use [--load_op_libraries](https://github.com/onnx/tensorflow-onnx#--load_op_libraries) in conversion command or `tf.load_op_library()` method in code to load the TensorFlow custom ops library.
 
-2- implement the op handler, registered it with the `@tf_op` decorator. Those handlers will be registered via the decorator on load of the module. [Here](https://github.com/onnx/tensorflow-onnx/tree/main/tf2onnx/onnx_opset) are examples of TensorFlow op hander implementations.
+2- implement the op handler according to the op definitions, registered it with the `@tf_op` decorator. Those handlers will be registered via the decorator on load of the module. [Here](https://github.com/onnx/tensorflow-onnx/tree/main/tf2onnx/onnx_opset) are examples of TensorFlow op hander implementations, which all are combined with ONNX ops.
 
 ```
 import numpy as np
