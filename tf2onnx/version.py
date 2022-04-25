@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-version = '1.10.0'
-git_version = '0065af6273eac0e911a0e75eab1cdf6be1c9ac7b'
+version = '1.10.1'
+git_version = 'd80392460607cf27708b408b2967ec93687465e2'
