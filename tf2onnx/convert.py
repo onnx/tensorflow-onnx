@@ -220,8 +220,11 @@ def main():
                        "See https://github.com/onnx/tensorflow-onnx/issues/1557")
 
     if args.load_op_libraries:
-        for op_path in args.load_op_libraries:
-            tf.load_op_library(op_path)
+        for op_filepath in args.load_op_libraries:
+            # change relative path to absolute path to satisfy the tf.load_op_library().
+            if not os.path.isabs(op_filepath):
+                op_filepath = os.getcwd() + "/" + op_filepath
+            tf.load_op_library(op_filepath)
     if args.graphdef:
         graph_def, inputs, outputs = tf_loader.from_graphdef(args.graphdef, args.inputs, args.outputs)
         model_path = args.graphdef
