@@ -417,7 +417,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         inputs_as_nchw: transpose inputs in list from nchw to nhwc
         large_model: use the ONNX external tensor storage format
         output_path: save model to output_path
-        optimizers: list (subset) of tf2onnx optimizers if applying all optimizers is not desired. 
+        optimizers: list (subset) of tf2onnx optimizers if applying all optimizers is not desired.
 
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
