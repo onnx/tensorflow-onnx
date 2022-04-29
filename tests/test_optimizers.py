@@ -123,9 +123,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
     ])
     def test_transpose_with_split(self, input_shape, perm, inner_perm):
         input_shape_with_trans = [input_shape[i] for i in perm]
+        output_before_trans = list(input_shape)
+        output_shape = [output_before_trans[i] for i in perm]
         for axis in range(len(input_shape)):
-            output_before_trans = list(input_shape)
-            output_shape = [output_before_trans[i] for i in perm]
             node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=inner_perm, name="trans1")
             node2 = helper.make_node("Split", ["Y"], ["Z"], axis=axis, name="split")
             node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm, name="trans2")
