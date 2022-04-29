@@ -402,7 +402,7 @@ def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None,
 
 def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
                custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
-               target=None, large_model=False, output_path=None):
+               target=None, large_model=False, output_path=None, optimizers=None):
     """Returns a ONNX model_proto for a tf.keras model.
 
     Args:
@@ -420,6 +420,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         inputs_as_nchw: transpose inputs in list from nchw to nhwc
         large_model: use the ONNX external tensor storage format
         output_path: save model to output_path
+        optimizers: list (subset) of tf2onnx optimizers if applying all optimizers is not desired.
 
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
@@ -492,6 +493,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
             opset=opset,
             custom_ops=custom_ops,
             custom_op_handlers=custom_op_handlers,
+            optimizers=optimizers,
             custom_rewriter=custom_rewriter,
             extra_opset=extra_opset,
             shape_override=shape_override,
