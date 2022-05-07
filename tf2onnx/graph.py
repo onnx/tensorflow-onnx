@@ -751,10 +751,10 @@ class Graph(object):
 
         for n in self.inputs:
             if n not in ops:
-                raise ValueError("graph input " + n + " not exist")
+                raise ValueError("graph input '" + n.name + "' not exist")
         for o in self.outputs:
             if o not in self._output_to_node_name:
-                raise ValueError("graph output " + o + " not exist")
+                raise ValueError("graph output '" + o.name + "' not exist")
 
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
