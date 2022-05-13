@@ -128,7 +128,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         # tf 1.12
-        python_versions: [3.6']
+        python_versions: [3.7']
         tf_versions: ['1.12.3']
         onnx_opsets: ['9']
         job:

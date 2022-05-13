@@ -4,14 +4,22 @@ steps:
 - bash: |
     set -ex
     pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized
-    pip install $(CI_PIP_TF_NAME) $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME)
+    pip install $(CI_PIP_TF_NAME) $(CI_PIP_ONNX_NAME)
 
+    # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
+    if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
+    then 
+        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
+    else
+        pip install $(CI_PIP_ONNX_BACKEND_NAME)
+    fi
     # TF 1.10 requires numpy <=1.14.5 and >=1.13.3, but onnxruntime 0.2.1 does not work with numpy <= 1.14.5
     # Upgrade numpy only within constraints from other packages if any.
     if [[ $CI_TF_VERSION == 1.10* ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
     then
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
+
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
     then
       pip uninstall -y onnxruntime
