@@ -14,6 +14,7 @@ jobs:
         ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow==1.15.0
         INSTALL_ORT: pip install onnxruntime==1.9.0
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       Python38-tf2.5:
         python.version: '3.8'
@@ -56,6 +57,7 @@ jobs:
         ONNX_PATH: onnx==1.10.2
         TENSORFLOW_PATH: tensorflow==1.15.0
         INSTALL_ORT: pip install onnxruntime==1.9.0
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       Python37-tf2.3:
         python.version: '3.7'
