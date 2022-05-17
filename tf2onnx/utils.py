@@ -169,7 +169,7 @@ def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
     if elem_type is None:
         elem_type = onnx_pb.TensorProto.UNDEFINED
     elif isinstance(elem_type, SeqType):
-        return helper.make_sequence_value_info(name, elem_type.dtype, make_onnx_shape(shape), **kwargs)
+        return helper.make_tensor_sequence_value_info(name, elem_type.dtype, make_onnx_shape(shape), **kwargs)
     return helper.make_tensor_value_info(
         name,
         elem_type,
