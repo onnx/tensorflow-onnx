@@ -7,7 +7,8 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version, check_tf_max_version, check_onnxruntime_min_version
+from common import unittest_main, check_tf_min_version, check_tf_max_version, \
+    check_onnxruntime_min_version, check_tfjs_max_version
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -66,6 +67,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
             x_val = np.array(3, dtype=np.int32)
         self.run_test_case(func, {_INPUT: x_val}, [], [_OUTPUT], rtol=1e-06)
 
+    @check_tfjs_max_version("3.15", "failed when tfjs version > 3.15")
     def test_while_loop_with_ta_write(self):
         def func(i):
             output_ta = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
@@ -159,6 +161,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "x:0", "y:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @check_tfjs_max_version("3.15", "failed when tfjs version > 3.15")
     def test_while_loop_with_ta_read_and_write(self):
         def func(i, inputs):
             inputs_2 = tf.identity(inputs)
@@ -183,6 +186,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "output_ta:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @check_tfjs_max_version("3.15", "failed when tfjs version > 3.15")
     def test_while_loop_with_multi_scan_outputs(self):
         def func(i, inputs1, inputs2):
             inputs1_ = tf.identity(inputs1)
@@ -217,6 +221,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["i:0", "output_ta:0", "output_ta2:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @check_tfjs_max_version("3.15", "failed when tfjs version > 3.15")
     @check_onnxruntime_min_version(
         "0.5.0",
         "disable this case due to onnxruntime loop issue: https://github.com/microsoft/onnxruntime/issues/1272"

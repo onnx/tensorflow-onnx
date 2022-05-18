@@ -24,6 +24,8 @@ __all__ = [
     "check_onnxruntime_backend",
     "check_tf_min_version",
     "check_tf_max_version",
+    "check_tfjs_min_version",
+    "check_tfjs_max_version",
     "skip_tf_versions",
     "skip_tf_cpu",
     "check_onnxruntime_min_version",
@@ -272,6 +274,29 @@ def requires_custom_ops(message=""):
         can_import = False
     return unittest.skipIf(not can_import, reason)
 
+def check_tfjs_max_version(max_accepted_version, message=""):
+    """ Skip if tfjs_version > max_required_version """
+    config = get_test_config()
+    reason = _append_message("conversion requires tensorflowjs <= {}".format(max_accepted_version), message)
+    try:
+        import tensorflowjs
+        can_import = True
+    except ModuleNotFoundError:
+        can_import = False
+    return unittest.skipIf(can_import and not config.skip_tfjs_tests and \
+         tensorflowjs.__version__ > LooseVersion(max_accepted_version), reason)
+
+def check_tfjs_min_version(min_required_version, message=""):
+    """ Skip if tjs_version < min_required_version """
+    config = get_test_config()
+    reason = _append_message("conversion requires tensorflowjs >= {}".format(min_required_version), message)
+    try:
+        import tensorflowjs
+        can_import = True
+    except ModuleNotFoundError:
+        can_import = False
+    return unittest.skipIf(can_import and not config.skip_tfjs_tests and \
+         tensorflowjs.__version__ < LooseVersion(min_required_version), reason)
 
 def check_tf_max_version(max_accepted_version, message=""):
     """ Skip if tf_version > max_required_version """

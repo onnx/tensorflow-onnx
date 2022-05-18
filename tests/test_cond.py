@@ -118,6 +118,7 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
+    @check_tfjs_max_version("3.15", "failed when tfjs version > 3.15")
     def test_cond_in_while_loop(self):
         def func(i, inputs):
             inputs_2 = tf.identity(inputs)
