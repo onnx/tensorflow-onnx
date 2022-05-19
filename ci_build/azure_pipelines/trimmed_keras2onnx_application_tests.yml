@@ -8,8 +8,8 @@ jobs:
     vmImage: 'ubuntu-latest'
   strategy:
     matrix:
-      Python36-onnx1.10:
-        python.version: '3.6'
+      Python37-onnx1.10:
+        python.version: '3.7'
         ONNX_PATH: onnx==1.10.2
         INSTALL_KERAS: pip install keras==2.2.4
         UNINSTALL_KERAS:
