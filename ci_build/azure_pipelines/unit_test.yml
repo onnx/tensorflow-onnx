@@ -157,5 +157,16 @@ stages:
           - template: 'unit_test.yml'
         report_coverage: 'True'
 
+    - template: 'templates/job_generator.yml'
+      parameters:
+        python_versions: ['3.9']
+        platforms: ['windows']
+        tf_versions: ['2.8.1']
+        onnx_opsets: ['15']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
   - template: 'templates/combine_test_coverage.yml'
 

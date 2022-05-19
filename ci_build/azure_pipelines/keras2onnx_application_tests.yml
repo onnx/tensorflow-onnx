@@ -8,8 +8,8 @@ jobs:
     vmImage: 'ubuntu-latest'
   strategy:
     matrix:
-      Python36-onnx1.5:
-        python.version: '3.6'
+      Python37-onnx1.5:
+        python.version: '3.7'
         ONNX_PATH: onnx==1.5.0
         INSTALL_KERAS: pip install keras==2.2.4
         UNINSTALL_KERAS:
@@ -79,8 +79,8 @@ jobs:
     vmImage: 'windows-2019'
   strategy:
     matrix:
-      Python36-onnx1.5:
-        python.version: '3.6'
+      Python37-onnx1.5:
+        python.version: '3.7'
         ONNX_PATH: onnx==1.5.0
         INSTALL_KERAS: pip install keras==2.2.4
         UNINSTALL_KERAS:

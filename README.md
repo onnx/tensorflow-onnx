@@ -9,16 +9,16 @@ __Note: tensorflow.js support was just added. While we tested it with many tfjs 
 
 TensorFlow has many more ops than ONNX and occasionally mapping a model to ONNX creates issues.
 
-You find a list of supported Tensorflow ops and their mapping to ONNX [here](support_status.md).
+You find a list of supported TensorFlow ops and their mapping to ONNX [here](support_status.md).
 
 The common issues we run into we try to document here [Troubleshooting Guide](Troubleshooting.md).
 
 <br/>
 
-| Build Type | OS | Python | Tensorflow | ONNX opset | Status |
+| Build Type | OS | Python | TensorFlow | ONNX opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.6-3.9 | 1.12-1.15, 2.1-2.8 | 9-15 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.6-3.9 | 1.12-1.15, 2.1-2.8 | 9-15 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.7-3.9 | 1.13-1.15, 2.1-2.8 | 9-15 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.7-3.9 | 1.13-1.15, 2.1-2.8 | 9-15 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
 <br/>
 
 ## Supported Versions
@@ -34,7 +34,7 @@ If you want the graph to be generated with a specific opset, use ```--opset``` i
 
 ### TensorFlow
 
-We support ```tf-1.x graphs``` and ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.12 or better```.
+We support ```tf-1.x graphs``` and ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.13 or better```.
 
 When running under tf-2.x tf2onnx will use the tensorflow V2 controlflow.
 
@@ -42,7 +42,7 @@ You can install tf2onnx on top of tf-1.x or tf-2.x.
 
 ### Python
 
-We support Python ```3.6-3.9```.
+We support Python ```3.7-3.9```.
 Note that on windows for Python > 3.7 the protobuf package doesn't use the cpp implementation and is very slow - we recommend to use Python 3.7 for that reason.
 
 ## Prerequisites
