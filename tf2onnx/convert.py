@@ -535,7 +535,8 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
     if LooseVersion(tf.__version__) < "2.0":
         raise NotImplementedError("from_function requires tf-2.0 or newer")
 
-    if not input_signature:
+    if input_signature is None:
+    # if not input_signature:
         raise ValueError("from_function requires input_signature")
 
     concrete_func = function.get_concrete_function(*input_signature)
