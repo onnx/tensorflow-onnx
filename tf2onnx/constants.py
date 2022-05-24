@@ -15,8 +15,11 @@ AI_ONNX_ML_DOMAIN = "ai.onnx.ml"
 MICROSOFT_DOMAIN = "com.microsoft"
 CONTRIB_OPS_DOMAIN = "ai.onnx.contrib"
 
-# Default opset version for onnx domain
-PREFERRED_OPSET = 9
+# Default opset version for onnx domain.
+# The current update policy is that the default should be set to
+# the latest released version as of 18 months ago.
+# Opset 13 was published in ONNX v1.8.0 (Nov, 2020).
+PREFERRED_OPSET = 13
 
 # Default opset for custom ops
 TENSORFLOW_OPSET = helper.make_opsetid("ai.onnx.converters.tensorflow", 1)
