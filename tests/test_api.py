@@ -187,7 +187,7 @@ class ApiTests(Tf2OnnxBackendTestBase):
         model_proto, _ = tf2onnx.convert.from_function(func, input_signature=spec,
                                                        opset=self.config.opset, output_path=output_path)
         output_names = [n.name for n in model_proto.graph.output]
-        res_onnx = self.run_onnxruntime(output_path, {'x' : x}, output_names)
+        res_onnx = self.run_onnxruntime(output_path, {'x': x}, output_names)
         self.assertAllClose(res_tf, res_onnx[0], rtol=1e-5, atol=1e-5)
 
     @check_tf_min_version("1.15")
