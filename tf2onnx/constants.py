@@ -18,7 +18,7 @@ CONTRIB_OPS_DOMAIN = "ai.onnx.contrib"
 # Default opset version for onnx domain.
 # The current update policy is that the default should be set to
 # the latest released version as of 18 months ago.
-# Opset 13 was published in ONNX v1.8.0 (Nov, 2020).
+# Opset 13 was released in ONNX v1.8.0 (Nov, 2020).
 PREFERRED_OPSET = 13
 
 # Default opset for custom ops
