@@ -28,7 +28,7 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 tf2onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
 We support and test ONNX opset-9 to opset-15. opset-6 to opset-8 should work but we don't test them.
-By default we use ```opset-9``` for the resulting ONNX graph since most runtimes will support opset-9.
+By default we use ```opset-13``` for the resulting ONNX graph.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 13```.
 
@@ -98,9 +98,9 @@ To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providi
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-path --output model.onnx```
 
-The above command uses a default of `9` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
+The above command uses a default of `13` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
 
-```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 13 --output model.onnx```
+```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 15 --output model.onnx```
 
 If your TensorFlow model is in a format other than `saved model`, then you need to provide the inputs and outputs of the model graph.
 
@@ -118,7 +118,7 @@ You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSD
 
 We recently added support for tflite. You convert ```tflite``` models via command line, for example:
 
-```python -m tf2onnx.convert --opset 13 --tflite tflite--file --output model.onnx```
+```python -m tf2onnx.convert --opset 15 --tflite tflite--file --output model.onnx```
 
 ## CLI reference
 
@@ -187,7 +187,7 @@ ONNX requires default values for graph inputs to be constant, while Tensorflow's
 
 #### --opset
 
-By default we use the opset 9 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 13``` would create a onnx graph that uses only ops available in opset 13. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
+By default we use the opset 13 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 15``` would create a onnx graph that uses only ops available in opset 15. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
 
 #### --dequantize
 
