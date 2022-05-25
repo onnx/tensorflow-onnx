@@ -12,6 +12,7 @@ from tf2onnx.handler import tfl_op
 
 
 @tfl_op("TFL_ABS", tf_op="Abs")
+@tfl_op("TFL_BATCH_MATMUL", tf_op="BatchMatMul")
 @tfl_op("TFL_BROADCAST_TO", tf_op="BroadcastTo")
 @tfl_op("TFL_CEIL", tf_op="Ceil")
 @tfl_op("TFL_COS", tf_op="Cos")
@@ -30,6 +31,7 @@ from tf2onnx.handler import tfl_op
 @tfl_op("TFL_LOGICAL_AND", tf_op="LogicalAnd")
 @tfl_op("TFL_LOGICAL_NOT", tf_op="LogicalNot")
 @tfl_op("TFL_LOGICAL_OR", tf_op="LogicalOr")
+@tfl_op("TFL_MATMUL", tf_op="MatMul")
 @tfl_op("TFL_MATRIX_DIAG", tf_op="MatrixDiag")
 @tfl_op("TFL_MATRIX_SET_DIAG", tf_op="MatrixSetDiag")
 @tfl_op("TFL_MAXIMUM", tf_op="Maximum")
