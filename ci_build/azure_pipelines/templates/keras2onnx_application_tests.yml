@@ -19,6 +19,8 @@ steps:
       python -m pip install --upgrade pip
       conda config --set always_yes yes --set changeps1 no
       pip install $(ONNX_PATH)
+      pip uninstall -y protobuf
+      pip install protobuf==3.20.1
       pip install h5py==2.9.0
       pip install parameterized
       $(INSTALL_TENSORFLOW)
@@ -81,7 +83,7 @@ steps:
       echo Test numpy installation... && python -c "import numpy"
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
-      pip install protobuf
+      pip install protobuf==3.20.1
       pip install h5py==2.9.0
       pip install parameterized
       %INSTALL_TENSORFLOW%
