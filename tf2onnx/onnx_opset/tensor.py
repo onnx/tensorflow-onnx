@@ -659,7 +659,7 @@ class ScatterND:
 class TensorScatterAdd:
     @classmethod
     def version_16(cls, ctx, node, **kwargs):
-        # indicies input msut be int64 in ONNX.
+        # indicies input must be int64 in ONNX.
         if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
         node.set_attr("reduction", 'add')

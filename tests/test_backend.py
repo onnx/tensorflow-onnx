@@ -4698,7 +4698,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
-    @check_opset_min_version(16, "ScatterNdAdd")
+    @check_opset_min_version(16, "ScatterND")
     def test_scatternd_add(self):
         x_val = np.array([10, 20, 30, 40], dtype=np.int32).reshape((4))
         y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
