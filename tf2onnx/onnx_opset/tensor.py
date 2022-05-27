@@ -655,6 +655,16 @@ class ScatterND:
         ctx.replace_inputs(node, [node.input[2], node.input[0], node.input[1]])
 
 
+@tf_op("TensorScatterAdd", onnx_op="ScatterND")
+class TensorScatterAdd:
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        # indicies input must be int64 in ONNX.
+        if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+        node.set_attr("reduction", 'add')
+
+
 @tf_op("TensorScatterUpdate", onnx_op="ScatterND")
 class TensorScatterUpdate:
     @classmethod
