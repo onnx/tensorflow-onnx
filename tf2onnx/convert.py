@@ -637,8 +637,8 @@ def from_graph_def(graph_def, name=None, input_names=None, output_names=None, op
 
 
 def from_tflite(tflite_path, input_names=None, output_names=None, opset=None, custom_ops=None, custom_op_handlers=None,
-                  custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None,
-                  large_model=False, output_path=None):
+                custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None,
+                large_model=False, output_path=None):
     """Returns a ONNX model_proto for a tflite model file.
 
     Args:
@@ -664,9 +664,9 @@ def from_tflite(tflite_path, input_names=None, output_names=None, opset=None, cu
     if not tflite_path:
         raise ValueError("tflite_path needs to be provided")
     if not input_names:
-        input_names=[]
+        input_names = []
     if not output_names:
-        output_names=[]
+        output_names = []
 
     with tf.device("/cpu:0"):
         model_proto, external_tensor_storage = _convert_common(

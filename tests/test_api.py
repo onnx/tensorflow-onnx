@@ -237,8 +237,8 @@ class ApiTests(Tf2OnnxBackendTestBase):
 
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         model_proto, _ = tf2onnx.convert.from_tflite("tests/models/regression/tflite/test_api_model.tflite",
-                                                    input_names=['input'], output_names=['output'],
-                                                    output_path=output_path)
+                                                     input_names=['input'], output_names=['output'],
+                                                     output_path=output_path)
         output_names = [n.name for n in model_proto.graph.output]
         oy = self.run_onnxruntime(output_path, {"input": x_val}, output_names)
         self.assertTrue(output_names[0] == "output")
