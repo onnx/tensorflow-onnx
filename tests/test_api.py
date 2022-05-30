@@ -231,7 +231,7 @@ class ApiTests(Tf2OnnxBackendTestBase):
         self.assertTrue(output_names[0] == "pred")
         self.assertAllClose([2.1193342], oy[0], rtol=0.1, atol=0.1)
 
-
+    @check_tf_min_version("2.0")
     def test_tflite(self):
         output_path = os.path.join(self.test_data_directory, "model.onnx")
 
