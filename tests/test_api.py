@@ -232,5 +232,18 @@ class ApiTests(Tf2OnnxBackendTestBase):
         self.assertAllClose([2.1193342], oy[0], rtol=0.1, atol=0.1)
 
 
+    def test_tflite(self):
+        output_path = os.path.join(self.test_data_directory, "model.onnx")
+
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        model_proto, _ = tf2onnx.convert.from_tflite("tests/models/regression/tflite/test_api_model.tflite",
+                                                    input_names=['input'], output_names=['output'],
+                                                    output_path=output_path)
+        output_names = [n.name for n in model_proto.graph.output]
+        oy = self.run_onnxruntime(output_path, {"input": x_val}, output_names)
+        self.assertTrue(output_names[0] == "output")
+        exp_result = tf.add(x_val, x_val)
+        self.assertAllClose(exp_result, oy[0], rtol=0.1, atol=0.1)
+
 if __name__ == '__main__':
     unittest_main()
