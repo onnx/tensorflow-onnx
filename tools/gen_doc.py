@@ -20,7 +20,7 @@ args = parser.parse_args()
 
 
 LATEST_OPSET = {
-    "": 15,  # default domain
+    "": 16,  # default domain
     "com.microsoft": 1,  # microsoft domain
     "ai.onnx.contrib": 1,  # contrib ops
 }
