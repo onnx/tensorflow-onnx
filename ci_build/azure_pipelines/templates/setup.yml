@@ -6,10 +6,6 @@ steps:
     pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized
     pip install $(CI_PIP_TF_NAME) $(CI_PIP_ONNX_NAME)
 
-    # protobuf release version 4.21.0 has some Python changes which is not compatible with tensorflow so far.
-    pip uninstall -y protobuf
-    pip install "protobuf<4.21.0"
-
     # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
     if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
     then 
