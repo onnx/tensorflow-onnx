@@ -71,7 +71,7 @@ def main():
     model_proto = helper.make_model(onnx_graph, **kwargs)
 
     model_proto_inferred = model_shape_inference(model_proto)
- 
+
     # write onnx graph
     if args.output:
         with open(args.output, "wb") as f:
