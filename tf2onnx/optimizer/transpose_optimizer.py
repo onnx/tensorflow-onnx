@@ -828,7 +828,7 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _prelu_handler(self, trans, node):
         return self._handle_node_having_branches(trans, node)
-    
+
     def _softmax_handler(self, trans, node):
         trans_rank = get_transpose_rank(trans)
         perm = trans.get_attr("perm").ints
@@ -841,15 +841,15 @@ class TransposeOptimizer(GraphOptimizerBase):
                 return False
             node.set_attr("axis", new_axis)
             return True
-        else:
-            # For older opsets, the "axis" attribute determines the coercion point for coercing the input tensor to 2D.
-            # We can safely switch transpose and node if the permutation does not make any axes cross that boundary.
-            coercion_axis = node.get_attr_value("axis", 1)
-            for from_axis, to_axis in enumerate(perm):
-                if (from_axis < coercion_axis and to_axis >= coercion_axis) or (from_axis >= coercion_axis and to_axis < coercion_axis):
-                    return False
-            
-            return self._switch_transpose_and_node(node, trans)
+
+        # For older opsets, the "axis" attribute determines the coercion point for coercing the input tensor to 2D.
+        # We can safely switch transpose and node if the permutation does not make any axes cross that boundary.
+        coercion_axis = node.get_attr_value("axis", 1)
+        for from_axis, to_axis in enumerate(perm):
+            if (from_axis < coercion_axis <= to_axis) or (from_axis >= coercion_axis > to_axis):
+                return False
+
+        return self._switch_transpose_and_node(node, trans)
 
     def _arg_min_max_handler(self, trans, node):
         axis = node.get_attr_value("axis", 0)

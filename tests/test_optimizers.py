@@ -1369,7 +1369,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
                                    model_proto, remaining_transpose_num=0)
 
-    @check_opset_max_version(12, "Before opset 13, Softmax coerced its inputs to 2D and can thus only be optimized for certain permutations")
+    @check_opset_max_version(
+        12, "Before opset 13, Softmax coerced its inputs to 2D and can thus only be optimized for certain permutations"
+    )
     def test_transpose_softmax_valid_perm(self):
         input_shape = [4, 4, 4, 4]
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -1384,10 +1386,13 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
-        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                   model_proto, remaining_transpose_num=0)
+        self.run_transpose_compare(
+            ["res"], {"X": np.random.randn(*input_shape).astype(np.float32)}, model_proto, remaining_transpose_num=0
+        )
 
-    @check_opset_max_version(12, "Before opset 13, Softmax coerced its inputs to 2D and can thus only be optimized for certain permutations")
+    @check_opset_max_version(
+        12, "Before opset 13, Softmax coerced its inputs to 2D and can thus only be optimized for certain permutations"
+    )
     def test_transpose_softmax_invalid_perm(self):
         input_shape = [4, 4, 4, 4]
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -1402,8 +1407,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
-        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                   model_proto, remaining_transpose_num=2)
+        self.run_transpose_compare(
+            ["res"], {"X": np.random.randn(*input_shape).astype(np.float32)}, model_proto, remaining_transpose_num=2
+        )
 
     @check_opset_min_version(13, "Softmax can be optimized for all permutations since opset 13")
     def test_transpose_softmax_13(self):
@@ -1420,10 +1426,14 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
-        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                   model_proto, remaining_transpose_num=0)
+        self.run_transpose_compare(
+            ["res"], {"X": np.random.randn(*input_shape).astype(np.float32)}, model_proto, remaining_transpose_num=0
+        )
 
-    @check_opset_max_version(12, "Before opset 13, LogSoftmax coerced its inputs to 2D and can thus only be optimized for certain permutations")
+    @check_opset_max_version(
+        12,
+        "Before opset 13, LogSoftmax coerced its inputs to 2D and can thus only be optimized for certain permutations",
+    )
     def test_transpose_logsoftmax_valid_perm(self):
         input_shape = [4, 4, 4, 4]
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -1438,10 +1448,14 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
-        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                   model_proto, remaining_transpose_num=0)
+        self.run_transpose_compare(
+            ["res"], {"X": np.random.randn(*input_shape).astype(np.float32)}, model_proto, remaining_transpose_num=0
+        )
 
-    @check_opset_max_version(12, "Before opset 13, LogSoftmax coerced its inputs to 2D and can thus only be optimized for certain permutations")
+    @check_opset_max_version(
+        12,
+        "Before opset 13, LogSoftmax coerced its inputs to 2D and can thus only be optimized for certain permutations",
+    )
     def test_transpose_logsoftmax_invalid_perm(self):
         input_shape = [4, 4, 4, 4]
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 3, 1], name="trans_1")
@@ -1456,8 +1470,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
-        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                   model_proto, remaining_transpose_num=2)
+        self.run_transpose_compare(
+            ["res"], {"X": np.random.randn(*input_shape).astype(np.float32)}, model_proto, remaining_transpose_num=2
+        )
 
     @check_opset_min_version(13, "LogSoftmax can be optimized for all permutations since opset 13")
     def test_transpose_logsoftmax_13(self):
@@ -1474,8 +1489,9 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
-        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                   model_proto, remaining_transpose_num=0)
+        self.run_transpose_compare(
+            ["res"], {"X": np.random.randn(*input_shape).astype(np.float32)}, model_proto, remaining_transpose_num=0
+        )
 
     def test_transpose_tile(self):
         input_shape = [1, 2, 3, 4]
