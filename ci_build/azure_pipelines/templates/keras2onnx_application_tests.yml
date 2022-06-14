@@ -15,10 +15,11 @@ steps:
       environmentName: 'py$(python.version)'
       packageSpecs: 'python=$(python.version)'
 
+      # pip install $(ONNX_PATH)
   - script: |
       python -m pip install --upgrade pip
       conda config --set always_yes yes --set changeps1 no
-      pip install $(ONNX_PATH)
+      pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
@@ -77,11 +78,12 @@ steps:
   - script: conda create --yes --quiet --name py$(python.version) -c conda-forge python=$(python.version) numpy protobuf
     displayName: Create Anaconda environment
 
+      # pip install %ONNX_PATH%
   - script: |
       call activate py$(python.version)
       python -m pip install --upgrade pip numpy
       echo Test numpy installation... && python -c "import numpy"
-      pip install %ONNX_PATH%
+      pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
