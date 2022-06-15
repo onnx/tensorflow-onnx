@@ -663,10 +663,6 @@ def from_tflite(tflite_path, input_names=None, output_names=None, opset=None, cu
     """
     if not tflite_path:
         raise ValueError("tflite_path needs to be provided")
-    if not input_names:
-        input_names = []
-    if not output_names:
-        output_names = []
 
     with tf.device("/cpu:0"):
         model_proto, external_tensor_storage = _convert_common(
