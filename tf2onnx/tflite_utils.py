@@ -156,9 +156,9 @@ def graphs_from_tflite(tflite_path, input_names=None, output_names=None):
         if is_main_g:
             # Override IO in main graph
             utils.check_io(input_names, output_names, output_shapes.keys())
-            if input_names is not None:
+            if input_names:
                 g_inputs = input_names
-            if output_names is not None:
+            if output_names:
                 g_outputs = output_names
         g = Graph(onnx_nodes, output_shapes, dtypes, input_names=g_inputs, output_names=g_outputs,
                   is_subgraph=not is_main_g, graph_name=graph_name)
