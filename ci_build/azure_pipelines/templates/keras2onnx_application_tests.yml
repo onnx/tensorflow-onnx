@@ -21,6 +21,7 @@ steps:
       python -m pip install --upgrade pip
       conda config --set always_yes yes --set changeps1 no
       pip uninstall -y onnx
+      pip install typing-extensions
       pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
@@ -86,6 +87,7 @@ steps:
       python -m pip install --upgrade pip numpy
       echo Test numpy installation... && python -c "import numpy"
       pip uninstall -y onnx
+      pip install typing-extensions
       pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
