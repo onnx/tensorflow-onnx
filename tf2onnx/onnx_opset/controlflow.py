@@ -398,15 +398,15 @@ class While:
                     maximum_iterations_name = utils.make_name(node.inputs[1].name)
                 ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
                 ctx.replace_input(node, node.input[1], maximum_iterations_name, 1)
-                maximum_iterations_M = maximum_iterations_name
+                maximum_iterations_m = maximum_iterations_name
             else:
-                maximum_iterations_M = ""
+                maximum_iterations_m = ""
         else:
             cast_inputs = [maximum_iterations_name]
             attr = {"to": onnx_pb.TensorProto.INT64}
             cast_name = node.name + "_cast"
             cast_node = ctx.make_node("Cast", cast_inputs, attr, name=cast_name)
-            maximum_iterations_M = cast_node.output[0]
+            maximum_iterations_m = cast_node.output[0]
 
         cond_name = node.get_attr_str("cond")
         cond_graph = find_function(cond_name)
@@ -514,7 +514,7 @@ class While:
         output_names = output_names[2:]
 
         branches = {"body": body}
-        loop_node = ctx.make_node("Loop", [maximum_iterations_M, cond_outputs[0]] + loop_vars,
+        loop_node = ctx.make_node("Loop", [maximum_iterations_m, cond_outputs[0]] + loop_vars,
                                   output_count=len(output_shapes), name=node.name + "_loop",
                                   shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True,
                                   branches=branches)
