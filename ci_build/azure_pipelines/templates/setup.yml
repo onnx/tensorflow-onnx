@@ -5,7 +5,7 @@ steps:
     set -ex
     pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized
     pip install $(CI_PIP_TF_NAME)
-    pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
+    pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc5
 
     # protobuf release version 4.21.0 has some Python changes which is not compatible with tensorflow so far.
     pip uninstall -y protobuf
@@ -22,7 +22,7 @@ steps:
     # Upgrade numpy only within constraints from other packages if any.
     if [[ $CI_TF_VERSION == 1.10* ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
     then
-        pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
+        pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc5
         pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
 
@@ -75,7 +75,7 @@ steps:
     then
       # onnx-weekly won't satisfy onnx requirement so uninstallation must happen here
       pip uninstall -y onnx
-      pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
+      pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc5
     fi
 
     pip freeze --all

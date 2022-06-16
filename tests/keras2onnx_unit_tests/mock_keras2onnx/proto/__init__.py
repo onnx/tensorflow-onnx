@@ -38,16 +38,26 @@ else:
     is_tf_keras = str_tk_keras != '0'
 
 if is_tf_keras:
-    from tensorflow.python import keras
+    try:
+        from tensorflow.keras.layers import BatchNormalization
+        from tensorflow import keras
+    except ImportError:
+        from tensorflow.python import keras
 else:
     try:
         import keras
+        import keras as python_keras
 
         if keras.Model == tensorflow.keras.Model:  # since keras 2.4, keras and tf.keras is unified.
             is_tf_keras = True
     except ImportError:
         is_tf_keras = True
-        from tensorflow.python import keras
+        from tensorflow.python import keras as python_keras
+        try:
+            from tensorflow.keras.layers import BatchNormalization
+            from tensorflow import keras
+        except ImportError:
+            from tensorflow.python import keras
 
 
 def is_keras_older_than(version_str):
