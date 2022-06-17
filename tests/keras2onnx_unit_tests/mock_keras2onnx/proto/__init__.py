@@ -41,12 +41,14 @@ if is_tf_keras:
     try:
         from tensorflow.keras.layers import BatchNormalization
         from tensorflow import keras
+        print("=====keras2onnx_unit_test: is_tf_keras import keras")
     except ImportError:
         from tensorflow.python import keras
+        print("=====keras2onnx_unit_test: is_tf_keras import python.keras")
 else:
     try:
         import keras
-        import keras as python_keras
+        print("=====keras2onnx_unit_test: not is_tf_keras import keras as python_keras")
 
         if keras.Model == tensorflow.keras.Model:  # since keras 2.4, keras and tf.keras is unified.
             is_tf_keras = True
@@ -56,8 +58,11 @@ else:
         try:
             from tensorflow.keras.layers import BatchNormalization
             from tensorflow import keras
+            print("=====keras2onnx_unit_test: not is_tf_keras import keras")
+
         except ImportError:
             from tensorflow.python import keras
+            print("=====keras2onnx_unit_test: not is_tf_keras import python.keras")
 
 
 def is_keras_older_than(version_str):
