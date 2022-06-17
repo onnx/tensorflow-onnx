@@ -71,7 +71,7 @@ steps:
   - script: conda create --yes --quiet --name py$(python.version) -c conda-forge python=$(python.version) numpy protobuf
     displayName: Create Anaconda environment
 
-      pip install %ONNX_PATH%
+      # pip install %ONNX_PATH%
   - script: |
       call activate py$(python.version)
       python -m pip install --upgrade pip numpy==1.19
