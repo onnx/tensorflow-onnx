@@ -12,10 +12,7 @@ from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
 K = keras.backend
 Activation = keras.layers.Activation
 Add = keras.layers.Add
-if is_tensorflow_later_than("2.4.0"):
-    advanced_activations = keras.layers
-else:
-    advanced_activations = keras.layers.advanced_activations
+advanced_activations = keras.layers.advanced_activations
 AlphaDropout = keras.layers.AlphaDropout
 Average = keras.layers.Average
 AveragePooling1D = keras.layers.AveragePooling1D

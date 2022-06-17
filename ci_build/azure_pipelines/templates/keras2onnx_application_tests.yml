@@ -23,7 +23,7 @@ steps:
       pip install onnx
       pip uninstall -y onnx
       pip uninstall -y onnx
-      pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
+      pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc5
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
@@ -90,7 +90,7 @@ steps:
       pip install onnx
       pip uninstall -y onnx
       pip uninstall -y onnx
-      pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc4
+      pip install -i https://test.pypi.org/simple/ onnx==1.12.0rc5
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
