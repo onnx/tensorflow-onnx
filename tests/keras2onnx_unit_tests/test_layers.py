@@ -14,8 +14,10 @@ Activation = keras.layers.Activation
 Add = keras.layers.Add
 if is_tensorflow_later_than("2.4.0"):
     advanced_activations = keras.layers
+    from tf.python.keras import layers as keras_layers
 else:
     advanced_activations = keras.layers.advanced_activations
+    from tf.keras import layers as keras_layers
 AlphaDropout = keras.layers.AlphaDropout
 Average = keras.layers.Average
 AveragePooling1D = keras.layers.AveragePooling1D
@@ -29,9 +31,9 @@ Conv2D = keras.layers.Conv2D
 Conv2DTranspose = keras.layers.Conv2DTranspose
 Conv3D = keras.layers.Conv3D
 Conv3DTranspose = keras.layers.Conv3DTranspose
-Cropping1D = keras.layers.Cropping1D
-Cropping2D = keras.layers.Cropping2D
-Cropping3D = keras.layers.Cropping3D
+Cropping1D = keras_layers.Cropping1D
+Cropping2D = keras_layers.Cropping2D
+Cropping3D = keras_layers.Cropping3D
 Dense = keras.layers.Dense
 Dot = keras.layers.Dot
 dot = keras.layers.dot
@@ -1262,7 +1264,7 @@ def test_conv3d_transpose(conv3trans_runner):
 
 def test_flatten(runner):
     model = keras.Sequential()
-    model.add(keras.layers.core.Flatten(input_shape=(3, 2)))
+    model.add(keras_layers.core.Flatten(input_shape=(3, 2)))
     model.add(Dense(3))
     onnx_model = convert_keras(model, model.name)
 
@@ -1306,7 +1308,7 @@ def test_flatten2(runner):
 
 def test_reshape(runner):
     model = keras.Sequential()
-    model.add(keras.layers.core.Reshape((2, 3), input_shape=(3, 2)))
+    model.add(keras_layers.core.Reshape((2, 3), input_shape=(3, 2)))
     onnx_model = convert_keras(model, model.name)
 
     data = np.array([[[1, 2], [3, 4], [5, 6]]]).astype(np.float32)
@@ -1317,7 +1319,7 @@ def test_reshape(runner):
 
 def test_permute(runner):
     model = keras.Sequential()
-    model.add(keras.layers.core.Permute((2, 1), input_shape=(3, 2)))
+    model.add(keras_layers.core.Permute((2, 1), input_shape=(3, 2)))
     onnx_model = convert_keras(model, model.name)
 
     data = np.array([[[1, 2], [3, 4], [5, 6]]]).astype(np.float32)
@@ -1328,7 +1330,7 @@ def test_permute(runner):
 
 def test_repeat_vector(runner):
     model = keras.Sequential()
-    model.add(keras.layers.core.RepeatVector(3, input_shape=(4,)))
+    model.add(keras_layers.core.RepeatVector(3, input_shape=(4,)))
     onnx_model = convert_keras(model, model.name)
 
     data = _asarray(1, 2, 3, 4)

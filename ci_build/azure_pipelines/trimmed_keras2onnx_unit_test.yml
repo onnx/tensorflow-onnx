@@ -42,7 +42,7 @@ jobs:
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow-cpu==2.2.0
         INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_NUMPY:
 
       07-Python38-tf2.5:
         python.version: '3.8'
@@ -98,7 +98,7 @@ jobs:
         KERAS: keras==2.4.3
         TENSORFLOW_PATH: tensorflow==2.9.0
         INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_NUMPY:
 
   steps:
   - template: 'templates/keras2onnx_unit_test.yml'
