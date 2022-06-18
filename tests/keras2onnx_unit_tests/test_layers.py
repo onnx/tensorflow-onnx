@@ -15,9 +15,11 @@ Add = keras.layers.Add
 if is_tensorflow_later_than("2.4.0"):
     advanced_activations = keras.layers
     from tf.python.keras import layers as keras_layers
+    print("========== import later than 2.4.0")
 else:
     advanced_activations = keras.layers.advanced_activations
     from tf.keras import layers as keras_layers
+    print("========== import older than 2.4.0")
 AlphaDropout = keras.layers.AlphaDropout
 Average = keras.layers.Average
 AveragePooling1D = keras.layers.AveragePooling1D
