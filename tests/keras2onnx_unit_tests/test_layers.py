@@ -4,10 +4,12 @@ import pytest
 import numpy as np
 from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
-from mock_keras2onnx.proto import (keras, keras_p, is_tf_keras,
+from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
                                    is_keras_older_than, is_keras_later_than)
 from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
+
+from tensorflow.python import keras as keras_p
 
 import tensorflow
 
