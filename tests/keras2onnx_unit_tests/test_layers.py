@@ -15,16 +15,16 @@ K = keras.backend
 Activation = keras.layers.Activation
 Add = keras.layers.Add
 if is_tensorflow_later_than("2.4.0"):
-    print("later than 2.4.0: ", keras)
+    print("========== later than 2.4.0: ", keras)
     advanced_activations = keras.layers
     from keras import layers as advanced_activations
     from tensorflow.python.keras import layers as keras_layers
     print(keras_layers)
     print("========== import later than 2.4.0")
 else:
-    print("older than 2.4.0: ", keras)
-    advanced_activations = keras.layers.advanced_activations
-    from  keras.layers import advanced_activations as advanced_activations
+    print("========== older than 2.4.0: ", keras)
+    advanced_activations = keras_p.layers.advanced_activations
+    from keras_p.layers import advanced_activations as advanced_activations
     from tensorflow.keras import layers as keras_layers
     print(keras_layers)
     print("========== import older than 2.4.0")
