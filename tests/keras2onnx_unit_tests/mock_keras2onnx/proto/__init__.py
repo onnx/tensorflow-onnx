@@ -41,20 +41,23 @@ if is_tf_keras:
     try:
         from tensorflow.keras.layers import BatchNormalization
         from tensorflow import keras
+        from tensorflow.python import keras as keras_p
         print("=====keras2onnx_unit_test: is_tf_keras import keras")
     except ImportError:
         from tensorflow.python import keras
+        from tensorflow.python import keras as keras_p
         print("=====keras2onnx_unit_test: is_tf_keras import python.keras")
 else:
     try:
         import keras
-        print("=====keras2onnx_unit_test: not is_tf_keras import keras as python_keras")
+        import keras as keras_p
+        print("=====keras2onnx_unit_test: not is_tf_keras import keras as keras_p")
 
         if keras.Model == tensorflow.keras.Model:  # since keras 2.4, keras and tf.keras is unified.
             is_tf_keras = True
     except ImportError:
         is_tf_keras = True
-        from tensorflow.python import keras as python_keras
+        from tensorflow.python import keras as keras_p
         try:
             from tensorflow.keras.layers import BatchNormalization
             from tensorflow import keras

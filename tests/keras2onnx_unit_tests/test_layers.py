@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
-from mock_keras2onnx.proto import (keras, is_tf_keras,
+from mock_keras2onnx.proto import (keras, keras_p, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
                                    is_keras_older_than, is_keras_later_than)
 from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
@@ -15,12 +15,18 @@ K = keras.backend
 Activation = keras.layers.Activation
 Add = keras.layers.Add
 if is_tensorflow_later_than("2.4.0"):
+    print("later than 2.4.0: ", keras)
     advanced_activations = keras.layers
+    from keras import layers as advanced_activations
     from tensorflow.python.keras import layers as keras_layers
+    print(keras_layers)
     print("========== import later than 2.4.0")
 else:
+    print("older than 2.4.0: ", keras)
     advanced_activations = keras.layers.advanced_activations
+    from  keras.layers import advanced_activations as advanced_activations
     from tensorflow.keras import layers as keras_layers
+    print(keras_layers)
     print("========== import older than 2.4.0")
 AlphaDropout = keras.layers.AlphaDropout
 Average = keras.layers.Average
@@ -35,9 +41,14 @@ Conv2D = keras.layers.Conv2D
 Conv2DTranspose = keras.layers.Conv2DTranspose
 Conv3D = keras.layers.Conv3D
 Conv3DTranspose = keras.layers.Conv3DTranspose
-Cropping1D = keras_layers.Cropping1D
-Cropping2D = keras_layers.Cropping2D
-Cropping3D = keras_layers.Cropping3D
+Cropping1D = keras_p.layers.Cropping1D
+Cropping2D = keras_p.layers.Cropping2D
+Cropping3D = keras_p.layers.Cropping3D
+
+print("======= check keras_layers")
+print("keras_layers.Cropping1D: ", keras_layers.Cropping1D)
+print("keras.layers.Cropping1D: ", keras.layers.Cropping1D)
+
 Dense = keras.layers.Dense
 Dot = keras.layers.Dot
 dot = keras.layers.dot
@@ -1268,7 +1279,7 @@ def test_conv3d_transpose(conv3trans_runner):
 
 def test_flatten(runner):
     model = keras.Sequential()
-    model.add(keras_layers.core.Flatten(input_shape=(3, 2)))
+    model.add(keras_p.layers.core.Flatten(input_shape=(3, 2)))
     model.add(Dense(3))
     onnx_model = convert_keras(model, model.name)
 
