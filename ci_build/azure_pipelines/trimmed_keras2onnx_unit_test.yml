@@ -42,14 +42,14 @@ jobs:
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow==2.2.0
         INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY:
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       07-Python38-tf2.5:
         python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow==2.9.0
         INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY:
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       # ############ Pure Keras Unit Tests ############
       # 08-Keras-Py37-tf1.15.0:
@@ -98,7 +98,7 @@ jobs:
         KERAS: keras==2.4.3
         TENSORFLOW_PATH: tensorflow==2.9.0
         INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY:
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
   steps:
   - template: 'templates/keras2onnx_unit_test.yml'
