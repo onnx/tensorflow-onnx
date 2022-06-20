@@ -27,7 +27,7 @@ else:
     print("========== older than 2.4.0: ", keras)
     advanced_activations = keras_p.layers.advanced_activations
     # from keras_p.layers import advanced_activations as advanced_activations
-    from tensorflow.keras import layers as keras_layers
+    from tensorflow.python.keras import layers as keras_layers
     print(keras_layers)
     print("========== import older than 2.4.0")
 AlphaDropout = keras.layers.AlphaDropout
