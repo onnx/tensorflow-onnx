@@ -6,30 +6,19 @@ from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
-                                   is_keras_older_than, is_keras_later_than)
+                                   is_keras_older_than, is_keras_later_than, is_python_keras_deprecated)
 from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
 
-from tensorflow.python import keras as keras_p
-
-import tensorflow
-
 K = keras.backend
+
 Activation = keras.layers.Activation
 Add = keras.layers.Add
-if is_tensorflow_later_than("2.4.0"):
-    print("========== later than 2.4.0: ", keras)
+if is_python_keras_deprecated():
     advanced_activations = keras.layers
-    from keras import layers as advanced_activations
-    from tensorflow.python.keras import layers as keras_layers
-    print(keras_layers)
-    print("========== import later than 2.4.0")
+    layers_core = keras.layers
 else:
-    print("========== older than 2.4.0: ", keras)
-    advanced_activations = keras_p.layers.advanced_activations
-    # from keras_p.layers import advanced_activations as advanced_activations
-    from tensorflow.python.keras import layers as keras_layers
-    print(keras_layers)
-    print("========== import older than 2.4.0")
+    advanced_activations = keras.layers.advanced_activations
+    layers_core = keras.layers.core
 AlphaDropout = keras.layers.AlphaDropout
 Average = keras.layers.Average
 AveragePooling1D = keras.layers.AveragePooling1D
@@ -43,14 +32,9 @@ Conv2D = keras.layers.Conv2D
 Conv2DTranspose = keras.layers.Conv2DTranspose
 Conv3D = keras.layers.Conv3D
 Conv3DTranspose = keras.layers.Conv3DTranspose
-Cropping1D = keras_p.layers.Cropping1D
-Cropping2D = keras_p.layers.Cropping2D
-Cropping3D = keras_p.layers.Cropping3D
-
-print("======= check keras_layers")
-print("keras_layers.Cropping1D: ", keras_layers.Cropping1D)
-print("keras.layers.Cropping1D: ", keras.layers.Cropping1D)
-
+Cropping1D = keras.layers.Cropping1D
+Cropping2D = keras.layers.Cropping2D
+Cropping3D = keras.layers.Cropping3D
 Dense = keras.layers.Dense
 Dot = keras.layers.Dot
 dot = keras.layers.dot
@@ -94,7 +78,7 @@ GRU_CLASSES = [(GRU, "v1")]
 LSTM_CLASSES = [(LSTM, LSTMCell, "v1")]
 RNN_CLASSES = [SimpleRNN, GRU, LSTM]
 
-if is_tf_keras and is_tensorflow_later_than("1.14.0"):
+if is_tf_keras and is_tensorflow_later_than("1.14.0") and not is_python_keras_deprecated():
     # Add the TF v2 compatability layers (available after TF 1.14)
     from tensorflow.python.keras.layers import recurrent_v2
     GRU_CLASSES.append((recurrent_v2.GRU, "v2"))
@@ -1281,7 +1265,7 @@ def test_conv3d_transpose(conv3trans_runner):
 
 def test_flatten(runner):
     model = keras.Sequential()
-    model.add(keras_p.layers.core.Flatten(input_shape=(3, 2)))
+    model.add(layers_core.Flatten(input_shape=(3, 2)))
     model.add(Dense(3))
     onnx_model = convert_keras(model, model.name)
 
@@ -1325,7 +1309,7 @@ def test_flatten2(runner):
 
 def test_reshape(runner):
     model = keras.Sequential()
-    model.add(keras_layers.core.Reshape((2, 3), input_shape=(3, 2)))
+    model.add(layers_core.Reshape((2, 3), input_shape=(3, 2)))
     onnx_model = convert_keras(model, model.name)
 
     data = np.array([[[1, 2], [3, 4], [5, 6]]]).astype(np.float32)
@@ -1336,7 +1320,7 @@ def test_reshape(runner):
 
 def test_permute(runner):
     model = keras.Sequential()
-    model.add(keras_layers.core.Permute((2, 1), input_shape=(3, 2)))
+    model.add(layers_core.Permute((2, 1), input_shape=(3, 2)))
     onnx_model = convert_keras(model, model.name)
 
     data = np.array([[[1, 2], [3, 4], [5, 6]]]).astype(np.float32)
@@ -1347,7 +1331,7 @@ def test_permute(runner):
 
 def test_repeat_vector(runner):
     model = keras.Sequential()
-    model.add(keras_layers.core.RepeatVector(3, input_shape=(4,)))
+    model.add(layers_core.RepeatVector(3, input_shape=(4,)))
     onnx_model = convert_keras(model, model.name)
 
     data = _asarray(1, 2, 3, 4)
@@ -1861,7 +1845,6 @@ def test_simpleRNN(runner):
 @pytest.mark.parametrize("return_sequences", [True, False])
 def test_GRU(runner, gru_class, rnn_version, return_sequences):
     inputs1 = keras.Input(shape=(3, 1))
-
     # GRU with no initial state
     cls = gru_class(2, return_state=False, return_sequences=False)
     oname = cls(inputs1)
@@ -2089,6 +2072,7 @@ def test_bidirectional(runner, rnn_class, return_sequences):
     batch_list = [1, 4] if op_version >= 9 else [1]
 
     model = keras.Sequential()
+    print("======= beginning rnn_class: ", rnn_class)
     model.add(Bidirectional(rnn_class(7, return_sequences=return_sequences),
                             input_shape=(5, 10)))
     model.add(Dense(5))
@@ -2103,6 +2087,7 @@ def test_bidirectional(runner, rnn_class, return_sequences):
 
     for merge_mode in ['concat', None]:
         sub_input1 = Input(shape=(sequence_len, input_dim))
+        print("======= rnn_class: ", rnn_class)
         sub_mapped1 = Bidirectional(rnn_class(7, return_sequences=return_sequences),
                                     input_shape=(5, 10), merge_mode=merge_mode)(sub_input1)
         keras_model = keras.Model(inputs=sub_input1, outputs=sub_mapped1)

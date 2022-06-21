@@ -2,7 +2,7 @@
 
 import os
 import tensorflow
-from distutils.version import StrictVersion
+from packaging.version import Version
 
 # Rather than using ONNX protobuf definition throughout our codebase, we import ONNX protobuf definition here so that
 # we can conduct quick fixes by overwriting ONNX functions without changing any lines elsewhere.
@@ -22,11 +22,15 @@ _check_onnx_version()
 
 
 def is_tensorflow_older_than(version_str):
-    return StrictVersion(tensorflow.__version__.split('-')[0]) < StrictVersion(version_str)
+    return Version(tensorflow.__version__.split('-')[0]) < Version(version_str)
 
 
 def is_tensorflow_later_than(version_str):
-    return StrictVersion(tensorflow.__version__.split('-')[0]) > StrictVersion(version_str)
+    return Version(tensorflow.__version__.split('-')[0]) > Version(version_str)
+
+
+def is_python_keras_deprecated():
+    return is_tensorflow_later_than("2.5.0")
 
 
 is_tf_keras = False
@@ -38,39 +42,27 @@ else:
     is_tf_keras = str_tk_keras != '0'
 
 if is_tf_keras:
-    try:
-        from tensorflow.keras.layers import BatchNormalization
+    if is_python_keras_deprecated():
         from tensorflow import keras
-        from tensorflow.python import keras as keras_p
-        print("=====keras2onnx_unit_test: is_tf_keras import keras")
-    except ImportError:
+    else:
         from tensorflow.python import keras
-        from tensorflow.python import keras as keras_p
-        print("=====keras2onnx_unit_test: is_tf_keras import python.keras")
 else:
     try:
         import keras
-        import keras as keras_p
-        print("=====keras2onnx_unit_test: not is_tf_keras import keras as keras_p")
 
         if keras.Model == tensorflow.keras.Model:  # since keras 2.4, keras and tf.keras is unified.
             is_tf_keras = True
     except ImportError:
         is_tf_keras = True
-        from tensorflow.python import keras as keras_p
-        try:
-            from tensorflow.keras.layers import BatchNormalization
+        if is_python_keras_deprecated():
             from tensorflow import keras
-            print("=====keras2onnx_unit_test: not is_tf_keras import keras")
-
-        except ImportError:
+        else:
             from tensorflow.python import keras
-            print("=====keras2onnx_unit_test: not is_tf_keras import python.keras")
 
 
 def is_keras_older_than(version_str):
-    return StrictVersion(keras.__version__.split('-')[0]) < StrictVersion(version_str)
+    return Version(keras.__version__.split('-')[0]) < Version(version_str)
 
 
 def is_keras_later_than(version_str):
-    return StrictVersion(keras.__version__.split('-')[0]) > StrictVersion(version_str)
+    return Version(keras.__version__.split('-')[0]) > Version(version_str)
