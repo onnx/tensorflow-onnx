@@ -30,3 +30,12 @@ jobs:
     job:
       steps:
       - template: 'pretrained_model_test.yml'
+
+- template: 'templates/job_generator.yml'
+  parameters:
+    # 2.8, tf 3.10
+    python_versions: ['3.10']
+    tf_versions: ['2.9.0']
+    job:
+      steps:
+      - template: 'pretrained_model_test.yml'
