@@ -237,11 +237,27 @@ class ApiTests(Tf2OnnxBackendTestBase):
 
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
         model_proto, _ = tf2onnx.convert.from_tflite("tests/models/regression/tflite/test_api_model.tflite",
-                                                     input_names=['input'], output_names=['output'],
+                                                     input_names=["input"], output_names=["output"],
                                                      output_path=output_path)
-        output_names = [n.name for n in model_proto.graph.output]
-        oy = self.run_onnxruntime(output_path, {"input": x_val}, output_names)
-        self.assertTrue(output_names[0] == "output")
+        actual_output_names = [n.name for n in model_proto.graph.output]
+        oy = self.run_onnxruntime(output_path, {"input": x_val}, actual_output_names)
+
+        self.assertTrue(actual_output_names[0] == "output")
+        exp_result = tf.add(x_val, x_val)
+        self.assertAllClose(exp_result, oy[0], rtol=0.1, atol=0.1)
+
+    @check_tf_min_version("2.0")
+    def test_tflite_without_input_output_names(self):
+        output_path = os.path.join(self.test_data_directory, "model.onnx")
+
+        x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
+        model_proto, _ = tf2onnx.convert.from_tflite("tests/models/regression/tflite/test_api_model.tflite",
+                                                     output_path=output_path)
+        actual_input_names = [n.name for n in model_proto.graph.input]
+        actual_output_names = [n.name for n in model_proto.graph.output]
+        oy = self.run_onnxruntime(output_path, {actual_input_names[0]: x_val}, output_names=None)
+
+        self.assertTrue(actual_output_names[0] == "output")
         exp_result = tf.add(x_val, x_val)
         self.assertAllClose(exp_result, oy[0], rtol=0.1, atol=0.1)
 
