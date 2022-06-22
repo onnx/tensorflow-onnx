@@ -1,13 +1,13 @@
 # keras2onnx application tests (trimmed)
 
-# jobs:
+jobs:
 
-# - job: 'Linux'
-#   timeoutInMinutes: 180
-#   pool:
-#     vmImage: 'ubuntu-latest'
-#   strategy:
-#     matrix:
+- job: 'Linux'
+  timeoutInMinutes: 180
+  pool:
+    vmImage: 'ubuntu-latest'
+  strategy:
+    matrix:
       01-Python37-onnx1.10:
         python.version: '3.7'
         ONNX_PATH: onnx==1.11.0
@@ -104,17 +104,17 @@
 #         INSTALL_NUMPY:
 #         NIGHTLY_BUILD_TEST: python run_all_v2.py
 
-#   steps:
-#   - template: 'templates/keras2onnx_application_tests.yml'
-#     parameters:
-#       platform: 'linux'
+  steps:
+  - template: 'templates/keras2onnx_application_tests.yml'
+    parameters:
+      platform: 'linux'
 
-# - job: 'Win'
-#   timeoutInMinutes: 180
-#   pool:
-#     vmImage: 'windows-2019'
-#   strategy:
-#     matrix:
+- job: 'Win'
+  timeoutInMinutes: 180
+  pool:
+    vmImage: 'windows-2019'
+  strategy:
+    matrix:
 #       08-Python37-onnx1.5:
 #         python.version: '3.7'
 #         ONNX_PATH: onnx==1.5.0
@@ -186,7 +186,7 @@
 #         INSTALL_NUMPY: pip install numpy==1.19.0
 #         NIGHTLY_BUILD_TEST: python run_all_v2.py --exclude "test_keras_applications_v2.py"
 
-#   steps:
-#   - template: 'templates/keras2onnx_application_tests.yml'
-#     parameters:
-#       platform: 'windows'
+  steps:
+  - template: 'templates/keras2onnx_application_tests.yml'
+    parameters:
+      platform: 'windows'
