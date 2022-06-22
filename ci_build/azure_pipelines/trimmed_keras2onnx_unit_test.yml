@@ -115,13 +115,14 @@ jobs:
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow-cpu==2.9.0
         INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_NUMPY:
 
       16-Python37-tf-1.15:
         python.version: '3.7'
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.9.0
+        INSTALL_ORT: pip install onnxruntime==1.11.0
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       17-Python37-tf2.1:
         python.version: '3.7'
@@ -142,7 +143,7 @@ jobs:
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow-cpu==2.3.0
         INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY:
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       20-Python37-tf2.5:
         python.version: '3.7'
@@ -165,7 +166,8 @@ jobs:
         ONNX_PATH: onnx==1.11.0
         KERAS: keras==2.2.5
         TENSORFLOW_PATH: tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.9.0
+        INSTALL_ORT: pip install onnxruntime==1.11.0
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       23-Keras-Py37-tf2.0.0:
         python.version: '3.7'
@@ -181,7 +183,7 @@ jobs:
         KERAS: keras==2.4.3
         TENSORFLOW_PATH: tensorflow==2.2.0
         INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY:
+        INSTALL_NUMPY: pip install numpy==1.19.0
 
       25-Keras-Py38-tf2.9.0:
         python.version: '3.8'
