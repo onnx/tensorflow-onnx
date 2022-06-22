@@ -1602,11 +1602,11 @@ def test_crop(misc_conv_runner):
             misc_conv_runner(layer, ishape, opset_)
 
         for data_format_ in ['channels_last', 'channels_first']:
-            ishape = (20, 20, 1)
+            ishape = (20, 20, 10)
             for crop_v in [2, (2, 2), ((1, 2), (2, 3))]:
                 layer = Cropping2D(cropping=crop_v, data_format=data_format_)
                 misc_conv_runner(layer, ishape, opset_)
-            ishape = (20, 20, 20, 1)
+            ishape = (20, 20, 20, 10)
             for crop_v in [2, (2, 3, 4), ((1, 2), (2, 3), (3, 5))]:
                 layer = Cropping3D(cropping=crop_v, data_format=data_format_)
                 misc_conv_runner(layer, ishape, opset_)
