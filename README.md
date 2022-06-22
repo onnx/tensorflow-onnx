@@ -268,7 +268,7 @@ optional arguments:
 ```
 ```run_pretrained_models.py``` will run the TensorFlow model, captures the TensorFlow output and runs the same test against the specified ONNX backend after converting the model.
 
-If the option ```--perf csv-file``` is specified, we'll capture the timeing for inferece of tensorflow and onnx runtime and write the result into the given csv file.
+If the option ```--perf csv-file``` is specified, we'll capture the timing for inference of tensorflow and onnx runtime and write the result into the given csv file.
 
 You call it for example with:
 ```
