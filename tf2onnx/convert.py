@@ -86,6 +86,7 @@ def get_args():
 
     # experimental
     parser.add_argument("--inputs-as-nchw", help="transpose inputs as from nhwc to nchw")
+    parser.add_argument("--outputs-as-nchw", help="transpose outputs as from nhwc to nchw")
     args = parser.parse_args()
 
     args.shape_override = None
@@ -112,6 +113,8 @@ def get_args():
         args.rename_inputs = args.rename_inputs.split(",")
     if args.inputs_as_nchw:
         args.inputs_as_nchw = args.inputs_as_nchw.split(",")
+    if args.outputs_as_nchw:
+        args.outputs_as_nchw = args.outputs_as_nchw.split(",")
     if args.target:
         args.target = args.target.split(",")
     if args.signature_def:
@@ -275,6 +278,7 @@ def main():
             input_names=inputs,
             output_names=outputs,
             inputs_as_nchw=args.inputs_as_nchw,
+            outputs_as_nchw=args.outputs_as_nchw,
             large_model=args.large_model,
             tensors_to_rename=tensors_to_rename,
             ignore_default=args.ignore_default,

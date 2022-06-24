@@ -725,6 +725,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             process_args={"inputs_as_nchw": [_INPUT]},
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
 
+    def test_conv2d_with_output_transpose(self): 
+        x_shape = [2, 32, 32, 3]
+        kernel_shape = [3, 3, 3, 3]
+        x_val = make_xval(x_shape)
+        x_val_for_onnx = x_val.transpose(NHWC_TO_NCHW)
+
+        def func(x):
+            kernel = tf.constant(make_xval(kernel_shape), dtype=tf.float32, name='kernel')
+            conv = tf.nn.conv2d(x, kernel, strides=[1, 1, 1, 1], padding="SAME")
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
+                            process_args={"inputs_as_nchw": [_INPUT],
+                                          "outputs_as_nchw": [_OUTPUT]},
+                            onnx_feed_dict={_INPUT: x_val_for_onnx})
+
     @skip_tflite("TFlite adds ops that obscure pattern")
     @check_tf_min_version("1.15")
     def test_conv1d_dilations_rewriter(self):
