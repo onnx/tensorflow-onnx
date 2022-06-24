@@ -91,7 +91,7 @@ def get_args():
 
     args.shape_override = None
     if args.input:
-        # for backward compativility
+        # for backward compatibility
         args.graphdef = args.input
     if args.graphdef or args.checkpoint:
         if not args.inputs or not args.outputs:
