@@ -330,14 +330,14 @@ def transpose_inputs(ctx, inputs_as_nchw):
     ctx.reset_nodes(ops)
 
 def transpose_outputs(ctx, outputs_as_nchw):
-    """Insert a transpose from NHWC to NCHW on model input on users request."""
+    """Insert a transpose from NHWC to NCHW on model output on users request."""
     ops = []
     for node in ctx.get_nodes():
         for idx, output_name in enumerate(node.output):
             if output_name in outputs_as_nchw:
                 shape = ctx.get_shape(output_name)
                 if len(shape) != len(constants.NHWC_TO_NCHW):
-                    logger.warning("transpose_input for %s: shape must be rank 4, ignored" % output_name)
+                    logger.warning("transpose_output for %s: shape must be rank 4, ignored" % output_name)
                     ops.append(node)
                     continue
                 # insert transpose

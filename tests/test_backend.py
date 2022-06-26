@@ -725,7 +725,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             process_args={"inputs_as_nchw": [_INPUT]},
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
 
-    def test_conv2d_with_output_transpose(self): 
+    def test_conv2d_with_output_transpose(self):
         x_shape = [2, 32, 32, 3]
         kernel_shape = [3, 3, 3, 3]
         x_val = make_xval(x_shape)
@@ -4584,7 +4584,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = tf.add(x, x)
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_2TPUT], {_INPUT: x_val})
 
     @check_opset_min_version(11, "CumSum")
     def test_cumsum(self):
