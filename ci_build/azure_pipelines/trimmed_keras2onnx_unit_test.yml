@@ -1,12 +1,12 @@
 # # Tests copied from keras2onnx
 
-jobs:
+# jobs:
 
-- job: 'Linux'
-  pool:
-    vmImage: 'ubuntu-latest'
-  strategy:
-    matrix:
+# - job: 'Linux'
+#   pool:
+#     vmImage: 'ubuntu-latest'
+#   strategy:
+#     matrix:
 
       ############ TF Keras Unit Tests ############
       # Python37-tf1.15:
@@ -16,33 +16,33 @@ jobs:
       #   INSTALL_ORT: pip install onnxruntime==1.9.0
       #   INSTALL_NUMPY: pip install numpy==1.19.0
 
-      Python38-tf2.2:
-        python.version: '3.8'
-        ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow==2.2.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+      # Python38-tf2.2:
+      #   python.version: '3.8'
+      #   ONNX_PATH: onnx==1.11.0
+      #   TENSORFLOW_PATH: tensorflow==2.2.0
+      #   INSTALL_ORT: pip install onnxruntime==1.11.0
+      #   INSTALL_NUMPY: pip install numpy==1.19.0
 
-      Python38-tf2.3:
-        python.version: '3.8'
-        ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow==2.3.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+      # Python38-tf2.3:
+      #   python.version: '3.8'
+      #   ONNX_PATH: onnx==1.11.0
+      #   TENSORFLOW_PATH: tensorflow==2.3.0
+      #   INSTALL_ORT: pip install onnxruntime==1.11.0
+      #   INSTALL_NUMPY: pip install numpy==1.19.0
 
-      Python38-tf2.5:
-        python.version: '3.8'
-        ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow==2.5.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+      # Python38-tf2.5:
+      #   python.version: '3.8'
+      #   ONNX_PATH: onnx==1.11.0
+      #   TENSORFLOW_PATH: tensorflow==2.5.0
+      #   INSTALL_ORT: pip install onnxruntime==1.11.0
+      #   INSTALL_NUMPY: pip install numpy==1.19.0
 
-      Python38-tf2.8:
-        python.version: '3.8'
-        ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow==2.8.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_NUMPY:
+      # Python38-tf2.8:
+      #   python.version: '3.8'
+      #   ONNX_PATH: onnx==1.11.0
+      #   TENSORFLOW_PATH: tensorflow==2.8.0
+      #   INSTALL_ORT: pip install onnxruntime==1.11.0
+      #   INSTALL_NUMPY:
 
       # ############ Pure Keras Unit Tests ############
       # Keras-Py37-tf1.15.0:
@@ -70,16 +70,16 @@ jobs:
       #   INSTALL_ORT: pip install onnxruntime==1.11.0
       #   INSTALL_NUMPY: pip install numpy==1.19.0
 
-  steps:
-  - template: 'templates/keras2onnx_unit_test.yml'
-    parameters:
-      platform: 'linux'
+#   steps:
+#   - template: 'templates/keras2onnx_unit_test.yml'
+#     parameters:
+#       platform: 'linux'
 
-- job: 'Win'
-  pool:
-    vmImage: 'windows-2019'
-  strategy:
-    matrix:
+# - job: 'Win'
+#   pool:
+#     vmImage: 'windows-2019'
+#   strategy:
+#     matrix:
       ############ TF Keras Unit Tests ############
       # Python37-tf-1.15:
       #   python.version: '3.7'
@@ -140,7 +140,7 @@ jobs:
       #   INSTALL_ORT: pip install onnxruntime==1.11.0
       #   INSTALL_NUMPY: pip install numpy==1.19.0
 
-  steps:
-  - template: 'templates/keras2onnx_unit_test.yml'
-    parameters:
-      platform: 'windows'
+  # steps:
+  # - template: 'templates/keras2onnx_unit_test.yml'
+  #   parameters:
+  #     platform: 'windows'

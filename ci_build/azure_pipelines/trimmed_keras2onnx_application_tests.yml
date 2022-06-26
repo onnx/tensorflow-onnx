@@ -2,12 +2,12 @@
 
 jobs:
 
-- job: 'Linux'
-  timeoutInMinutes: 180
-  pool:
-    vmImage: 'ubuntu-latest'
-  strategy:
-    matrix:
+# - job: 'Linux'
+#   timeoutInMinutes: 180
+#   pool:
+#     vmImage: 'ubuntu-latest'
+#   strategy:
+#     matrix:
       # Python37-onnx1.6:
       #   python.version: '3.7'
       #   ONNX_PATH: onnx==1.6.0
@@ -68,10 +68,10 @@ jobs:
       #   INSTALL_NUMPY:
       #   NIGHTLY_BUILD_TEST: python run_all_v2.py
 
-  steps:
-  - template: 'templates/keras2onnx_application_tests.yml'
-    parameters:
-      platform: 'linux'
+  # steps:
+  # - template: 'templates/keras2onnx_application_tests.yml'
+  #   parameters:
+  #     platform: 'linux'
 
 - job: 'Win'
   timeoutInMinutes: 180
