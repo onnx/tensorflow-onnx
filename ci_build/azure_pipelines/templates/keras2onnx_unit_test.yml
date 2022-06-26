@@ -69,7 +69,7 @@ steps:
 
   - script: |
       call activate py$(python.version)
-      python -m pip install --upgrade pip numpy==1.19
+      python -m pip install --upgrade pip numpy
       echo Test numpy installation... && python -c "import numpy"
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
