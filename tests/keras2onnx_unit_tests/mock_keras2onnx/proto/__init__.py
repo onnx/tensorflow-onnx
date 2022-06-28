@@ -29,7 +29,7 @@ def is_tensorflow_later_than(version_str):
     return Version(tensorflow.__version__.split('-')[0]) > Version(version_str)
 
 
-def is_python_keras_deprecated():
+def python_keras_is_deprecated():
     return is_tensorflow_later_than("2.5.0")
 
 
@@ -42,7 +42,7 @@ else:
     is_tf_keras = str_tk_keras != '0'
 
 if is_tf_keras:
-    if is_python_keras_deprecated():
+    if python_keras_is_deprecated():
         from tensorflow import keras
     else:
         from tensorflow.python import keras
@@ -54,7 +54,7 @@ else:
             is_tf_keras = True
     except ImportError:
         is_tf_keras = True
-        if is_python_keras_deprecated():
+        if python_keras_is_deprecated():
             from tensorflow import keras
         else:
             from tensorflow.python import keras

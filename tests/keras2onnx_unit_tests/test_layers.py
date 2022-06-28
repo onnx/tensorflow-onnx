@@ -6,14 +6,14 @@ from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
-                                   is_keras_older_than, is_keras_later_than, is_python_keras_deprecated)
+                                   is_keras_older_than, is_keras_later_than, python_keras_is_deprecated)
 from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
 
 K = keras.backend
 
 Activation = keras.layers.Activation
 Add = keras.layers.Add
-if is_python_keras_deprecated():
+if python_keras_is_deprecated():
     advanced_activations = keras.layers
     layers_core = keras.layers
 else:
@@ -78,7 +78,7 @@ GRU_CLASSES = [(GRU, "v1")]
 LSTM_CLASSES = [(LSTM, LSTMCell, "v1")]
 RNN_CLASSES = [SimpleRNN, GRU, LSTM]
 
-if is_tf_keras and is_tensorflow_later_than("1.14.0") and not is_python_keras_deprecated():
+if is_tf_keras and is_tensorflow_later_than("1.14.0") and not python_keras_is_deprecated():
     # Add the TF v2 compatability layers (available after TF 1.14)
     from tensorflow.python.keras.layers import recurrent_v2
     GRU_CLASSES.append((recurrent_v2.GRU, "v2"))
