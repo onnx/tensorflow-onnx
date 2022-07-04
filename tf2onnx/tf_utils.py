@@ -50,15 +50,15 @@ TF_TO_ONNX_DTYPE = {
 def tf_to_onnx_tensor(tensor, name=""):
     """Convert tensorflow tensor to onnx tensor."""
     np_data = get_tf_tensor_data(tensor)
-    if np_data.dtype == np.object:
+    if np_data.dtype == object:
         # assume np_data is string, numpy_helper.from_array accepts ndarray,
         # in which each item is of str while the whole dtype is of object.
         try:
             # Faster but fails on Unicode
-            np_data = np_data.astype(np.str).astype(np.object)
+            np_data = np_data.astype(np.str).astype(object)
         except UnicodeDecodeError:
             decode = np.vectorize(lambda x: x.decode('UTF-8'))
-            np_data = decode(np_data).astype(np.object)
+            np_data = decode(np_data).astype(object)
         except:  # pylint: disable=bare-except
             raise RuntimeError("Not support type: {}".format(type(np_data.flat[0])))
     return numpy_helper.from_array(np_data, name=name)

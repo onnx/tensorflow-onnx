@@ -271,7 +271,7 @@ def parse_tflite_string_tensor(buffer_bytes, shape):
     string_list = []
     for i in range(count):
         string_list.append(buffer_bytes[offset_list[i]:offset_list[i+1]].decode("utf-8"))
-    return numpy_helper.from_array(np.array(string_list, dtype=np.object).reshape(shape))
+    return numpy_helper.from_array(np.array(string_list, dtype=object).reshape(shape))
 
 
 def op_has_scalar_output(input_shapes, optype, attr):

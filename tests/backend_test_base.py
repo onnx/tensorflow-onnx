@@ -112,7 +112,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                              check_value=True, check_shape=True, check_dtype=True):
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
-                if expected_val.dtype == np.object:
+                if expected_val.dtype == object:
                     # TFLite pads strings with nul bytes
                     decode = np.vectorize(lambda x: x.replace(b'\x00', b'').decode('UTF-8'))
                     expected_val_str = decode(expected_val)
