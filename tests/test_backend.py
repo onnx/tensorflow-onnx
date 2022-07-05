@@ -5873,6 +5873,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tfjs("not supported in tfjs")
+    def test_l2normalization(self):
+        def func(x):
+            op_ = tf.math.l2_normalize(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        x_val = make_xval([3, 4])
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 if __name__ == '__main__':
     unittest_main()
