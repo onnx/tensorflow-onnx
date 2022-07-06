@@ -5230,7 +5230,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_lookup(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
-        query = np.array(['cherry'], dtype=np.object)
+        query = np.array(['cherry'], dtype=object)
         with open(filnm, "w") as f:
             for word in words:
                 f.write(word + "\n")
@@ -5247,7 +5247,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_lookup_const(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry ♥", "grape"]
-        query_val = np.array(['cherry ♥', 'banana'], dtype=np.object).reshape((1, 2, 1))
+        query_val = np.array(['cherry ♥', 'banana'], dtype=object).reshape((1, 2, 1))
         with open(filnm, "w", encoding='UTF-8') as f:
             for word in words:
                 f.write(word + "\n")
@@ -5264,7 +5264,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_size(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
-        query = np.array(['cherry'], dtype=np.object)
+        query = np.array(['cherry'], dtype=object)
         with open(filnm, "w") as f:
             for word in words:
                 f.write(word + "\n")
@@ -5853,10 +5853,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(op_, name=_TFOUTPUT)
 
         # tf gets this wrong and returns fp32 instead of int
-        x_val = np.array("123", dtype=np.object)
+        x_val = np.array("123", dtype=object)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-        x_val = np.array("123.1", dtype=np.object)
+        x_val = np.array("123.1", dtype=object)
         # can't check the values because in onnx they are padded with 0, in tf they are not
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False)
 
