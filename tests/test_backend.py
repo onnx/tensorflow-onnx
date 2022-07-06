@@ -738,7 +738,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
                             process_args={"inputs_as_nchw": [_INPUT],
                                           "outputs_as_nchw": [_OUTPUT]},
-                            onnx_feed_dict={_INPUT: x_val_for_onnx})
+                            onnx_feed_dict={_INPUT: x_val_for_onnx},
+                            graph_validator=lambda g: check_op_count(g, "Transpose", 0, disabled=False))
 
     @skip_tflite("TFlite adds ops that obscure pattern")
     @check_tf_min_version("1.15")
@@ -4584,7 +4585,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = tf.add(x, x)
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_2TPUT], {_INPUT: x_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(11, "CumSum")
     def test_cumsum(self):

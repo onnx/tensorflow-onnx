@@ -20,6 +20,7 @@ from tensorflow.python.ops import lookup_ops
 import onnx
 from common import get_test_config
 from tfjs_runner import run_tfjs
+from tf2onnx import constants
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
@@ -366,6 +367,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         graph_def_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
         utils.save_protobuf(graph_def_path, graph_def)
         self.logger.debug("created file  %s", graph_def_path)
+        tfl_process_args = process_args.copy()
 
         if test_tfjs:
             tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
@@ -395,6 +397,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     g = optimizer.optimize_graph(g, catch_errors=False)
                 actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model,
                                           use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    actual[i] = np.transpose(actual[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(expected, actual, rtol, atol, mtol, check_value, check_shape, check_dtype)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
@@ -410,12 +416,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if run_tfl_consistency_test:
                 self.assert_results_equal(expected, tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
 
-            tfl_process_args = process_args.copy()
             if 'inputs_as_nchw' in tfl_process_args:
                 nchw_inps_with_port = tfl_process_args['inputs_as_nchw']
                 tfl_process_args['inputs_as_nchw'] = [i.split(':')[0] for i in nchw_inps_with_port]
             input_names_without_port = [inp.split(':')[0] for inp in feed_dict.keys()]
-
+            if 'outputs_as_nchw' in tfl_process_args:
+                nchw_outps_with_port = tfl_process_args['outputs_as_nchw']
+                tfl_process_args['outputs_as_nchw'] = [i.split(':')[0] for i in nchw_outps_with_port]
+            output_names_with_port = [i.split(':')[0] for i in nchw_outps_with_port]
             g = process_tf_graph(None, opset=self.config.opset,
                                  input_names=input_names_without_port,
                                  output_names=tfl_outputs,
@@ -427,6 +435,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
             onnx_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port,
                                             postfix="_from_tflite", use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    onnx_tfl_res[i] = np.transpose(onnx_tfl_res[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(tfl_res, onnx_tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
@@ -456,6 +468,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             g = optimizer.optimize_graph(g)
             onnx_tfjs_res = self.run_backend(g, None, onnx_feed_dict, large_model,
                                              postfix="_from_tfjs", use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    onnx_tfjs_res[i] = np.transpose(onnx_tfjs_res[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(tfjs_res, onnx_tfjs_res, rtol, atol, mtol, check_value, check_shape,
                                       check_dtype=False)
