@@ -333,7 +333,7 @@ def transpose_outputs(ctx, outputs_as_nchw):
     """Insert a transpose from NHWC to NCHW on model output on users request."""
     ops = []
     for node in ctx.get_nodes():
-        for idx, output_name in enumerate(node.output):
+        for output_name in node.output:
             if output_name in outputs_as_nchw:
                 shape = ctx.get_shape(output_name)
                 if len(shape) != len(constants.NHWC_TO_NCHW):
@@ -342,9 +342,10 @@ def transpose_outputs(ctx, outputs_as_nchw):
                     continue
                 # insert transpose
                 op_name = utils.make_name(node.name)
-                transpose = ctx.insert_new_node_on_input("Transpose", output_name, name=op_name)
-                transpose.set_attr("perm", constants.NCHW_TO_NHWC)
-                ctx.copy_shape(output_name, transpose.output[0])
+                transpose = ctx.insert_new_node_on_output("Transpose", node.input[0], name=op_name)
+                transpose.set_attr("perm", constants.NHWC_TO_NCHW)
+                ctx.copy_shape(node.output[0], transpose.output[0])
+                ctx.set_shape(transpose.output[0], np.array(shape)[constants.NHWC_TO_NCHW])
                 ctx.set_shape(output_name, np.array(shape)[constants.NHWC_TO_NCHW])
                 ops.append(transpose)
                 ops.append(node)
@@ -503,7 +504,6 @@ def graphs_from_tf(tf_graph, input_names, output_names, shape_override=None, con
 
 def process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, outputs_as_nchw, continue_on_error,
                    custom_rewriter, initialized_tables, tensors_to_rename, is_tflite=False, dequantize=False):
-
     if tensors_to_rename is not None:
         main_g.rename_tensors(tensors_to_rename)
         inputs_as_nchw = [tensors_to_rename.get(t, t) for t in inputs_as_nchw]
