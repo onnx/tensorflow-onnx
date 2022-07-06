@@ -423,7 +423,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if 'outputs_as_nchw' in tfl_process_args:
                 nchw_outps_with_port = tfl_process_args['outputs_as_nchw']
                 tfl_process_args['outputs_as_nchw'] = [i.split(':')[0] for i in nchw_outps_with_port]
-            output_names_with_port = [i.split(':')[0] for i in nchw_outps_with_port]
+                output_names_with_port = [i.split(':')[0] for i in nchw_outps_with_port]
             g = process_tf_graph(None, opset=self.config.opset,
                                  input_names=input_names_without_port,
                                  output_names=tfl_outputs,
