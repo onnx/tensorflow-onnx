@@ -340,7 +340,7 @@ model_proto, external_tensor_storage = tf2onnx.convert.from_function(function,
         custom_rewriter: list of custom graph rewriters
         extra_opset: list of extra opset's, for example the opset's used by custom ops
         shape_override: dict with inputs that override the shapes given by tensorflow
-        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        inputs_as_nchw: transpose inputs in list from nhwc to nchw
         outputs_as_nchw: transpose inputs in list from nhwc to nchw
         large_model: use the ONNX external tensor storage format
         output_path: save model to output_path
@@ -371,7 +371,7 @@ model_proto, external_tensor_storage = tf2onnx.convert.from_graph_def(graph_def,
         custom_rewriter: list of custom graph rewriters
         extra_opset: list of extra opset's, for example the opset's used by custom ops
         shape_override: dict with inputs that override the shapes given by tensorflow
-        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        inputs_as_nchw: transpose inputs in list from nhwc to nchw
         outputs_as_nchw: transpose inputs in list from nhwc to nchw
         large_model: use the ONNX external tensor storage format
         output_path: save model to output_path
@@ -399,7 +399,7 @@ model_proto, external_tensor_storage = tf2onnx.convert.from_tflite(tflite_path,
             runtime can still open the model. Type is a dictionary `{op name: domain}`.
         custom_op_handlers: dictionary of custom ops handlers
         custom_rewriter: list of custom graph rewriters
-        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        inputs_as_nchw: transpose inputs in list from nhwc to nchw
         outputs_as_nchw: transpose inputs in list from nhwc to nchw
         extra_opset: list of extra opset's, for example the opset's used by custom ops
         shape_override: dict with inputs that override the shapes given by tensorflow
