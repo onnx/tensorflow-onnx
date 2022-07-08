@@ -5,11 +5,37 @@ stages:
     jobs:
     - template: 'templates/job_generator.yml'
       parameters:
-        # TFJS tf 2.8
+        # TFJS tf 2.9.1
         python_versions: ['3.9']
+        tf_versions: ['2.9.1']
+        onnx_opsets: ['']
+        skip_tfjs_tests: 'False'
+        skip_tf_tests: 'True'
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        # TFJS tf 2.8
+        python_versions: ['3.7']
         tf_versions: ['2.8.0']
         onnx_opsets: ['']
         skip_tfjs_tests: 'False'
+        skip_tf_tests: 'True'
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        # TFLite tf 2.9.1
+        python_versions: ['3.8']
+        tf_versions: ['2.9.1']
+        onnx_opsets: ['']
+        skip_tflite_tests: 'False'
         skip_tf_tests: 'True'
         job:
           steps:
@@ -24,6 +50,17 @@ stages:
         onnx_opsets: ['']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'True'
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        # tf 2.9.1
+        python_versions: ['3.9']
+        tf_versions: ['2.9.1']
+        onnx_opsets: ['']
         job:
           steps:
           - template: 'unit_test.yml'
@@ -136,6 +173,8 @@ stages:
           - template: 'unit_test.yml'
         report_coverage: 'True'
 
+### Unit tests on Windows
+
     - template: 'templates/job_generator.yml'
       parameters:
         platforms: ['windows']
@@ -162,6 +201,17 @@ stages:
         python_versions: ['3.9']
         platforms: ['windows']
         tf_versions: ['2.8.1']
+        onnx_opsets: ['15']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        python_versions: ['3.8']
+        platforms: ['windows']
+        tf_versions: ['2.9.1']
         onnx_opsets: ['15']
         job:
           steps:
