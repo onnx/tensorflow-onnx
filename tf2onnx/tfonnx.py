@@ -329,6 +329,29 @@ def transpose_inputs(ctx, inputs_as_nchw):
         ops.append(node)
     ctx.reset_nodes(ops)
 
+def transpose_outputs(ctx, outputs_as_nchw):
+    """Insert a transpose from NHWC to NCHW on model output on users request."""
+    ops = []
+    for node in ctx.get_nodes():
+        for output_name in node.output:
+            if output_name in outputs_as_nchw:
+                shape = ctx.get_shape(output_name)
+                if len(shape) != len(constants.NHWC_TO_NCHW):
+                    logger.warning("transpose_output for %s: shape must be rank 4, ignored" % output_name)
+                    ops.append(node)
+                    continue
+                # insert transpose
+                op_name = utils.make_name(node.name)
+                transpose = ctx.insert_new_node_on_output("Transpose", node.input[0], name=op_name)
+                transpose.set_attr("perm", constants.NHWC_TO_NCHW)
+                ctx.copy_shape(node.output[0], transpose.output[0])
+                ctx.set_shape(transpose.output[0], np.array(shape)[constants.NHWC_TO_NCHW])
+                ctx.set_shape(output_name, np.array(shape)[constants.NHWC_TO_NCHW])
+                ops.append(transpose)
+                ops.append(node)
+                continue
+        ops.append(node)
+    ctx.reset_nodes(ops)
 
 def topological_sort(g, continue_on_error):
     ops = g.get_nodes()
@@ -376,7 +399,7 @@ def run_rewriters(g, funcs, continue_on_error):
 
 def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=None,
                      opset=None, custom_op_handlers=None, custom_rewriter=None,
-                     extra_opset=None, shape_override=None, inputs_as_nchw=None,
+                     extra_opset=None, shape_override=None, inputs_as_nchw=None, outputs_as_nchw=None,
                      input_names=None, output_names=None, ignore_default=None, use_default=None,
                      is_subgraph=False, const_node_values=None, tensors_to_rename=None,
                      initialized_tables=None, tflite_path=None, dequantize=False, tfjs_path=None):
@@ -391,7 +414,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
             custom_rewriter: list of custom graph rewriters
             extra_opset: list of extra opset's, for example the opset's used by custom ops
             shape_override: dict with inputs that override the shapes given by tensorflow
-            inputs_as_nchw: transpose inputs in list from nchw to nhwc
+            inputs_as_nchw: transpose inputs in list from nhwc to nchw
+            outputs_as_nchw: transpose outputs in list from nhwc to nchw
             input_names: list of input node names in graph, input name format as node_name:port_id. Optional.
             output_names: list of output node names in graph, format is node_name:port_id. Optional for tflite.
             ignore_default: list of node names of PlaceholderWithDefault ops to change into Placeholder ops
@@ -421,6 +445,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
     clear_functions()
     if inputs_as_nchw is None:
         inputs_as_nchw = []
+    if outputs_as_nchw is None:
+        outputs_as_nchw = []
 
     is_tflite = False
     if tflite_path is not None:
@@ -435,8 +461,8 @@ def process_tf_graph(tf_graph, continue_on_error=False, verbose=False, target=No
 
     for g in [main_g] + subgraphs:
         g.set_config(target, opset, extra_opset)
-    g = process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
-                       initialized_tables, tensors_to_rename, is_tflite, dequantize)
+    g = process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, outputs_as_nchw, continue_on_error,
+                       custom_rewriter, initialized_tables, tensors_to_rename, is_tflite, dequantize)
     return g
 
 
@@ -476,24 +502,23 @@ def graphs_from_tf(tf_graph, input_names, output_names, shape_override=None, con
     return main_g, subgraphs
 
 
-def process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
-                   initialized_tables, tensors_to_rename, is_tflite=False, dequantize=False):
-
+def process_graphs(main_g, subgraphs, custom_op_handlers, inputs_as_nchw, outputs_as_nchw, continue_on_error,
+                   custom_rewriter, initialized_tables, tensors_to_rename, is_tflite=False, dequantize=False):
     if tensors_to_rename is not None:
         main_g.rename_tensors(tensors_to_rename)
         inputs_as_nchw = [tensors_to_rename.get(t, t) for t in inputs_as_nchw]
+        outputs_as_nchw = [tensors_to_rename.get(t, t) for t in outputs_as_nchw]
 
     for g in subgraphs:
-        fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
-                                  initialized_tables, is_tflite, dequantize)
+        fg = process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, outputs_as_nchw, continue_on_error,
+                                  custom_rewriter, initialized_tables, is_tflite, dequantize)
         set_function(fg.graph_name, fg)
-    g = process_parsed_graph(main_g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
-                             initialized_tables, is_tflite,
-                             dequantize)
+    g = process_parsed_graph(main_g, custom_op_handlers, inputs_as_nchw, outputs_as_nchw, continue_on_error,
+                             custom_rewriter, initialized_tables, is_tflite, dequantize)
     return g
 
 
-def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_error, custom_rewriter,
+def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, outputs_as_nchw, continue_on_error, custom_rewriter,
                          initialized_tables, is_tflite=False, dequantize=False):
 
     op_cnt, attr_cnt = g.dump_node_statistics(include_attrs=True, include_subgraphs=False)
@@ -549,6 +574,8 @@ def process_parsed_graph(g, custom_op_handlers, inputs_as_nchw, continue_on_erro
 
     if inputs_as_nchw:
         transpose_inputs(g, inputs_as_nchw)
+    if outputs_as_nchw:
+        transpose_outputs(g, outputs_as_nchw)
 
     # pre-processing graph rewrites
     # bi-directional re-writer should be placed after single directional re-writer
