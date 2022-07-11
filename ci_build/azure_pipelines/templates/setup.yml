@@ -37,6 +37,7 @@ steps:
     pip uninstall -y onnxruntime
     pip install sympy
     pip install coloredlogs
+    pip install flatbuffers
 
     # install numpy upfront since it is not on https://test.pypi.org/simple/
     pip install 'numpy>=1.18'
