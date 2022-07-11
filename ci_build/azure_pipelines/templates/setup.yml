@@ -10,27 +10,37 @@ steps:
     pip uninstall -y protobuf
     pip install "protobuf<4.21.0"
 
-    # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
-    if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
-    then 
-        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
-    else
-        pip install $(CI_PIP_ONNX_BACKEND_NAME)
-    fi
-    # TF 1.10 requires numpy <=1.14.5 and >=1.13.3, but onnxruntime 0.2.1 does not work with numpy <= 1.14.5
-    # Upgrade numpy only within constraints from other packages if any.
-    if [[ $CI_TF_VERSION == 1.10* ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
-    then
-        pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
-    fi
+    # # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
+    # if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
+    # then 
+    #     # pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
+    #     pip install -i https://test.pypi.org/simple/ ort-nightly==1.12.0.dev20220707003 numpy --no-deps -U
+    # else
+    #     # pip install $(CI_PIP_ONNX_BACKEND_NAME)
+    #     pip install -i https://test.pypi.org/simple/ ort-nightly==1.12.0.dev20220707003
+    # fi
+    # # TF 1.10 requires numpy <=1.14.5 and >=1.13.3, but onnxruntime 0.2.1 does not work with numpy <= 1.14.5
+    # # Upgrade numpy only within constraints from other packages if any.
+    # if [[ $CI_TF_VERSION == 1.10* ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
+    # then
+    #     pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
+    # fi
 
-    if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
-    then
-      pip uninstall -y onnxruntime
-      # install numpy upfront since it is not on https://test.pypi.org/simple/
-      pip install 'numpy>=1.18'
-      pip install --index-url https://test.pypi.org/simple/ ort-nightly
-    fi
+    # if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
+    # then
+    #   pip uninstall -y onnxruntime
+    #   # install numpy upfront since it is not on https://test.pypi.org/simple/
+    #   pip install 'numpy>=1.18'
+    #   pip install --index-url https://test.pypi.org/simple/ ort-nightly
+    # fi
+
+    pip uninstall -y onnxruntime
+    pip install sympy
+    pip install coloredlogs
+
+    # install numpy upfront since it is not on https://test.pypi.org/simple/
+    pip install 'numpy>=1.18'
+    pip install -i https://test.pypi.org/simple/ ort-nightly==1.12.0.dev20220707003
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
