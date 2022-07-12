@@ -37,6 +37,7 @@ steps:
       pip install sympy
       pip install coloredlogs
       pip install flatbuffers
+
       $(INSTALL_ORT)
       $(INSTALL_NUMPY)
 
