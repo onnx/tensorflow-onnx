@@ -163,6 +163,31 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((3, 1, 1), (1, 1, 3), (1), [0, 2, 3, 1]),
+        ((256, 1, 1), (1, 1, 256), (1), [0, 2, 3, 1])
+    ])
+    @check_opset_min_version(13, "split attribute changed to input in opset 13")
+    def test_transpose_with_split_opset13(self, input_shape, output_shape, split_val, perm):
+        unsqueeze_axes = self._make_onnx_const(np.array([0], dtype=np.int64), "axes1")
+        unsqueeze = helper.make_node("Unsqueeze", ["X", "axes1"], ["Y"], name="unsqueeze")
+        trans = helper.make_node("Transpose", ["Y"], ["Z"], perm=perm, name="trans")
+        split_attr = self._make_onnx_const(np.array([split_val], dtype=np.int64), "split_attr")
+        split = helper.make_node("Split", ["Z", "split_attr"], ["A"], axis=0, name="split")
+        squeeze_axes = self._make_onnx_const(np.array([1], dtype=np.int64), "axes2")
+        squeeze = helper.make_node("Squeeze", ["A", "axes2"], ["B"], name="squeeze")
+
+        graph = helper.make_graph(
+            [unsqueeze_axes, unsqueeze, trans, split_attr, split, squeeze_axes, squeeze],
+            "test_transpose_with_split_opset13",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("B", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["B"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
         ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
