@@ -23,6 +23,10 @@ steps:
       pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
       pip install parameterized
+      pip uninstall -y onnxruntime
+      pip install sympy
+      pip install coloredlogs
+      pip install flatbuffers
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
       pip install git+https://github.com/microsoft/onnxconverter-common
@@ -86,6 +90,10 @@ steps:
       pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
       pip install parameterized
+      pip uninstall -y onnxruntime
+      pip install sympy
+      pip install coloredlogs
+      pip install flatbuffers
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
       pip install git+https://github.com/microsoft/onnxconverter-common

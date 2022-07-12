@@ -32,6 +32,11 @@ steps:
       pip install -r requirements.txt
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
+
+      pip uninstall -y onnxruntime
+      pip install sympy
+      pip install coloredlogs
+      pip install flatbuffers
       $(INSTALL_ORT)
       $(INSTALL_NUMPY)
 
@@ -80,6 +85,12 @@ steps:
       IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install pytest pytest-cov pytest-runner
+
+      pip uninstall -y onnxruntime
+      pip install sympy
+      pip install coloredlogs
+      pip install flatbuffers
+
       %INSTALL_ORT%
       %INSTALL_NUMPY%
 
