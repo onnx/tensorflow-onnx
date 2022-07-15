@@ -1902,7 +1902,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
         self.run_merge_duplicated_nodes_compare(["OUT"], {}, model_proto, op_type="Constant", remaining_op_num=0,
-                                                graph_validator=lambda g: self._check_initializer_num(g, 2))
+                                                graph_validator=lambda g: self._check_initializer_num(g, 1))
 
     def test_duplicated_node_is_graph_output(self):
         node0 = helper.make_node('Add', inputs=["X", "X"], outputs=["value0"])
