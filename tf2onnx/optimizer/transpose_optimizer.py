@@ -672,15 +672,15 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _split_handler(self, trans, node):
         # Todo: need handle cases where Split node has more than 1 outputs.
         split = None
-        if len(node.input) > 1 and node.inputs[1].is_const():
+        if self._g.opset >= 13 and len(node.input) > 1 and node.inputs[1].is_const():
+            # split is an input not attr since opset 13
             split = node.inputs[1].get_tensor_value(as_list=True)
         if self._handle_node_having_branches(trans, node):
             perm = trans.get_attr_value("perm")
             axis = node.get_attr_value("axis", 0)
             new_axis = perm[axis]
             node.set_attr("axis", new_axis)
-            if self._g.opset >= 13 and split:
-                # in opset 13, split attr is an input not attr
+            if split:
                 new_axes_np = np.array(split, dtype=np.int64)
                 new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
                 self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
@@ -765,7 +765,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             return False
 
         axes = None
-        # in opset 13, axes is an input not attr
+        # axes is an input not attr since opset 13
         if node.get_attr("axes"):
             axes = node.get_attr("axes").ints
         if len(node.input) > 1 and node.inputs[1].is_const():
