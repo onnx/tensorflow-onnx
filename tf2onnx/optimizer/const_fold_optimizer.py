@@ -99,6 +99,33 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         graph.remove_node(node.name)
 
     @staticmethod
+    @_register_func("Mul")
+    def _fold_mul(node, graph):
+        const_val1 = node.inputs[0].get_tensor_value(as_list=False)
+        const_val2 = node.inputs[1].get_tensor_value(as_list=False)
+        print("_fold_mul:", const_val1, const_val2)
+        const_val_after_nul = np.multiply(const_val1, const_val2)
+        return [const_val_after_nul]
+
+    @staticmethod
+    @_register_func("Add")
+    def _fold_mul(node, graph):
+        const_val1 = node.inputs[0].get_tensor_value(as_list=False)
+        const_val2 = node.inputs[1].get_tensor_value(as_list=False)
+        print("_fold_add:", const_val1, const_val2)
+        const_val_after_nul = np.add(const_val1, const_val2)
+        return const_val_after_nul
+
+    @staticmethod
+    @_register_func("Sub") 
+    def _fold_mul(node, graph):
+        const_val1 = node.inputs[0].get_tensor_value(as_list=False)
+        const_val2 = node.inputs[1].get_tensor_value(as_list=False)
+        print("_fold_sub:", const_val1, const_val2)
+        const_val_after_nul = np.subtract(const_val1, const_val2)
+        return const_val_after_nul
+
+    @staticmethod
     @_register_func("Cast")
     def _fold_cast(node, graph):
         const_val = node.inputs[0].get_tensor_value(as_list=False)

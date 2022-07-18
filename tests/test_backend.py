@@ -3887,6 +3887,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x > 0.5, _INPUT1: input_y})
 
+    @check_opset_min_version(9, "ConstantOfShape")
+    def test_zeros_like_opset9(self):
+        input_x = np.random.random_sample([3, 16, 16]).astype(np.float32)
+        input_y = np.array([16, 16, 3]).astype(np.int64)
+
+        def func(x, y):
+            z = tf.reshape(x, y)
+            return tf.zeros_like(z, name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x, _INPUT1: input_y})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x.astype(np.int32), _INPUT1: input_y}, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "ConstantOfShape", 1, disabled=False))
+
     @check_opset_min_version(9, "is_nan")
     def test_isnan(self):
         # only compatible with dtype `float32`
