@@ -244,16 +244,14 @@ class ZerosLike:
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
-        shapes = node.output_dtypes
         dtypes = node.output_dtypes
         ctx.remove_node(node.name)
         shape = ctx.make_node("Shape", node.input).output[0]
-        dtype = ctx.get_dtype(shape)
         zero_tensor = helper.make_tensor("value", dtypes[0], [1], vals=[0])
         ctx.make_node("ConstantOfShape", inputs=[shape],
-                              attr={'value': zero_tensor},
-                              name=node.name, outputs=node.output,
-                              dtypes=dtypes)
+                      attr={'value': zero_tensor},
+                      name=node.name, outputs=node.output,
+                      dtypes=dtypes)
 
 @tf_op(["IteratorV2", "FIFOQueueV2"])
 class Iterator:

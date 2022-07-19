@@ -3898,7 +3898,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x, _INPUT1: input_y})
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x.astype(np.int32), _INPUT1: input_y}, as_session=True,
-                                graph_validator=lambda g: check_op_count(g, "ConstantOfShape", 1, disabled=False))
+                            graph_validator=lambda g: check_op_count(g, "ConstantOfShape", 1, disabled=False))
 
     @check_opset_min_version(9, "is_nan")
     def test_isnan(self):
