@@ -1791,9 +1791,11 @@ class GraphUtil(object):
         # because for subgraphs, the input orders matter.
         for graph_input in graph_proto.input:
             name = graph_input.name
-            shape = shapes[name]
-            dtype = dtypes[name]
-            if name not in const_node_names:
-                g.add_graph_input(name, dtype, shape)
-            else:
-                g.add_graph_input_with_default(name, g.get_node_by_name(name), dtype, shape)
+            const_initializer_node = g.get_node_by_output_in_current_graph(name)
+            if const_initializer_node is None: # is actual input rather than initializer
+                shape = shapes[name]
+                dtype = dtypes[name]
+                if name not in const_node_names:
+                    g.add_graph_input(name, dtype, shape)
+                else:
+                    g.add_graph_input_with_default(name, g.get_node_by_name(name), dtype, shape)
