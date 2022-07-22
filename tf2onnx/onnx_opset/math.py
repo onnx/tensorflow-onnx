@@ -826,3 +826,15 @@ class HardSwish:
     @classmethod
     def version_14(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op(["L2Normalization"], onnx_op="LpNormalization")
+class L2Normalization:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        axis = node.get_attr_value("axis")
+        if axis is None:
+            # by default use the last dim
+            axis = -1
+        node.set_attr("axis", axis)
+        node.set_attr("p", 2)

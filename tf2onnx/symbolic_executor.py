@@ -136,7 +136,7 @@ class SymbolicExecutor:
 
     def compute_cast(self, node, feed_dict):
         inp = feed_dict[node.input[0]]
-        if inp.dtype == np.object:
+        if inp.dtype == object:
             return [inp]
         np_dtype = utils.ONNX_TO_NUMPY_DTYPE[node.get_attr("to").i]
         return [inp.astype(np_dtype)]
@@ -181,7 +181,7 @@ class SymbolicExecutor:
     def compute_gather(self, node, feed_dict):
         data = feed_dict[node.input[0]]
         indices = feed_dict[node.input[1]]
-        if indices.dtype == np.object:
+        if indices.dtype == object:
             raise SymbolicExecutionException("Gather requires non-symbolic indices")
         axis = node.get_attr_value("axis", 0)
         return [np.take(data, indices, axis=axis)]

@@ -712,7 +712,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                            graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
                                                       check_op_count(g, "RandomUniformLike", 0)))
 
-    def test_conv2d_with_input_transpose(self):
+    def test_inputs_as_nchw_arg(self):
         x_shape = [2, 32, 32, 3]
         kernel_shape = [3, 3, 3, 3]
         x_val = make_xval(x_shape)
@@ -724,6 +724,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
                             process_args={"inputs_as_nchw": [_INPUT]},
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
+
+    def test_outputs_as_nchw_arg(self):
+        x_shape = [2, 32, 32, 3]
+        kernel_shape = [3, 3, 3, 3]
+        x_val = make_xval(x_shape)
+        def func(x):
+            kernel = tf.constant(make_xval(kernel_shape), dtype=tf.float32, name='kernel')
+            conv = tf.nn.conv2d(x, kernel, strides=[1, 1, 1, 1], padding="SAME")
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
+                            process_args={"outputs_as_nchw": [_OUTPUT]})
 
     @skip_tflite("TFlite adds ops that obscure pattern")
     @check_tf_min_version("1.15")
@@ -5230,7 +5241,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_lookup(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
-        query = np.array(['cherry'], dtype=np.object)
+        query = np.array(['cherry'], dtype=object)
         with open(filnm, "w") as f:
             for word in words:
                 f.write(word + "\n")
@@ -5247,7 +5258,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_lookup_const(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry ♥", "grape"]
-        query_val = np.array(['cherry ♥', 'banana'], dtype=np.object).reshape((1, 2, 1))
+        query_val = np.array(['cherry ♥', 'banana'], dtype=object).reshape((1, 2, 1))
         with open(filnm, "w", encoding='UTF-8') as f:
             for word in words:
                 f.write(word + "\n")
@@ -5264,7 +5275,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_size(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
-        query = np.array(['cherry'], dtype=np.object)
+        query = np.array(['cherry'], dtype=object)
         with open(filnm, "w") as f:
             for word in words:
                 f.write(word + "\n")
@@ -5853,10 +5864,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(op_, name=_TFOUTPUT)
 
         # tf gets this wrong and returns fp32 instead of int
-        x_val = np.array("123", dtype=np.object)
+        x_val = np.array("123", dtype=object)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-        x_val = np.array("123.1", dtype=np.object)
+        x_val = np.array("123.1", dtype=object)
         # can't check the values because in onnx they are padded with 0, in tf they are not
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False)
 
@@ -5873,6 +5884,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tfjs("not supported in tfjs")
+    def test_l2normalization(self):
+        def func(x):
+            op_ = tf.math.l2_normalize(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        x_val = make_xval([3, 4])
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 if __name__ == '__main__':
     unittest_main()
