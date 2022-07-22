@@ -16,29 +16,52 @@ from tf2onnx import utils
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring, unused-variable
 
+def _make_lstm_pattern_from_params(params):
+    return make_lstm_pattern(enter_or_id="Identity") if not params.get("from_keras", False) \
+        else make_lstm_pattern(
+            from_keras=True,
+            use_bias=params.get("use_bias", False),
+            activation=params.get("activation", ""),
+            recurrent_activation=params.get("recurrent_activation", "")
+        )
 
 def rewriter_lstm_tf2(g, ops):
-
-    pattern1 = make_lstm_pattern(enter_or_id="Identity")          # TF LSTM
-    pattern2 = make_lstm_pattern(from_keras=True, use_bias=False) # keras LSTM
-    pattern3 = make_lstm_pattern(from_keras=True, use_bias=True)  # keras LSTM with bias
-
-    for pattern in [pattern1, pattern2, pattern3]:
+    lstm_params_variations = [
+        # default activations
+        {"enter_or_id": "Identity"},                                                  # TF LSTM
+        {"from_keras": True, "use_bias": False},                                        # keras LSTM
+        {"from_keras": True, "use_bias": True},                                         # keras LSTM with bias
+        # hard sigmoid as recurrent activation
+        {"from_keras": True, "use_bias": False, "recurrent_activation": "hard_sigmoid"}, # keras LSTM
+        {"from_keras": True, "use_bias": True, "recurrent_activation": "hard_sigmoid"}   # keras LSTM with bias
+        # Note: add other LSTM variations as needed
+    ]
+    for params in lstm_params_variations:
+        pattern = _make_lstm_pattern_from_params(params)
         matcher = GraphMatcher(pattern, allow_reorder=False)
         match_results = list(matcher.match_ops(ops))
 
         for match_result in match_results:
-            from_keras = pattern != pattern1
-            activations_fgh = [
-                match_result.get_op("ft").type,
-                match_result.get_op("gt").type,
-                match_result.get_op("ct'").type
-            ]
-            supported_activations = ['Relu', 'Sigmoid', 'Tanh']
-            if any(f not in supported_activations for f in activations_fgh):
+            is_ft_hard_sigmoid = params.get("recurrent_activation", "") == "hard_sigmoid"
+            recurrent_activation_f = "HardSigmoid" if is_ft_hard_sigmoid else  \
+                match_result.get_op("ft").type
+            activation_g = match_result.get_op("gt").type
+            activation_h = match_result.get_op("ct'").type
+
+            default_activations = ["Relu", "Sigmoid", "Tanh"]
+            if ((activation_g not in default_activations) or
+                    (activation_h not in default_activations) or
+                    (not is_ft_hard_sigmoid and recurrent_activation_f not in default_activations)):
                 continue
 
+            activations_fgh = [
+                recurrent_activation_f,
+                activation_g,
+                activation_h
+            ]
+
             # extract input x_t
+            from_keras = params.get("from_keras", False)
             if from_keras:
                 get_item = match_result.get_op("xt")
             else:
@@ -134,7 +157,7 @@ def rewriter_lstm_tf2(g, ops):
 
                 # Wb and Rb are concatenated
                 b_idx = None
-                if pattern is pattern3:
+                if from_keras and params.get("use_bias", False):
                     bias_add = match_result.get_op("bias_add")
                     if bias_add is not None and bias_add.data_format != "NHWC":
                         continue
