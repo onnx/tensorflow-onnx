@@ -253,6 +253,7 @@ class ZerosLike:
                       name=node.name, outputs=node.output,
                       dtypes=dtypes)
 
+
 @tf_op(["IteratorV2", "FIFOQueueV2"])
 class Iterator:
     @classmethod
