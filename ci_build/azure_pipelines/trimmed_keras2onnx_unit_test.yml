@@ -16,13 +16,6 @@ jobs:
         INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.12.0.dev20220707003
         INSTALL_NUMPY:
 
-      04-Python38-tf2.3:
-        python.version: '3.8'
-        ONNX_PATH: onnx==1.11.0
-        TENSORFLOW_PATH: tensorflow-cpu==2.3.0
-        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.12.0.dev20220707003
-        INSTALL_NUMPY: pip install numpy==1.19.0
-
       06-Python38-tf2.8:
         python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
