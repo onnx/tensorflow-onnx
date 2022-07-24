@@ -13,14 +13,14 @@ jobs:
         python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow-cpu==2.9.0
-        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.12.0.dev20220707003
+        INSTALL_ORT: pip install onnxruntime==1.12.0
         INSTALL_NUMPY:
 
       06-Python38-tf2.8:
         python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow-cpu==2.8.0
-        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.12.0.dev20220707003
+        INSTALL_ORT: pip install onnxruntime==1.12.0
         INSTALL_NUMPY:
 
   steps:
@@ -38,7 +38,7 @@ jobs:
         python.version: '3.8'
         ONNX_PATH: onnx==1.11.0
         TENSORFLOW_PATH: tensorflow-cpu==2.8.0
-        INSTALL_ORT: pip install -i https://test.pypi.org/simple/ ort-nightly==1.12.0.dev20220707003
+        INSTALL_ORT: pip install onnxruntime==1.12.0
         INSTALL_NUMPY:
 
       Python38-tf2.9:
