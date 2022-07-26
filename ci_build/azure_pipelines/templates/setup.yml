@@ -34,7 +34,7 @@ steps:
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
-      pip install tensorflowjs
+      pip install tensorflowjs==3.18.0
       npm install @tensorflow/tfjs
     fi
 
