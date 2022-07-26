@@ -7,17 +7,6 @@ stages:
       parameters:
         platforms: ['linux', 'windows']
         python_versions: ['3.7']
-        tf_versions: ['1.13.1']
-        onnx_opsets: ['']
-        job:
-          steps:
-          - template: 'unit_test.yml'
-        report_coverage: 'True'
-    
-    - template: 'templates/job_generator.yml'
-      parameters:
-        platforms: ['linux', 'windows']
-        python_versions: ['3.7']
         tf_versions: ['1.14.0']
         onnx_opsets: ['']
         job:
@@ -63,6 +52,17 @@ stages:
         platforms: ['linux', 'windows']
         python_versions: ['3.9']
         tf_versions: ['2.8.0']
+        onnx_opsets: ['']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        platforms: ['linux', 'windows']
+        python_versions: ['3.9']
+        tf_versions: ['2.9.0']
         onnx_opsets: ['']
         job:
           steps:
