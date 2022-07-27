@@ -5906,5 +5906,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = make_xval([3, 4])
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "Slice")
+    def test_addition_two_newaxis_simultaneously(self):
+        def func(x):
+            op = x[..., tf.newaxis, tf.newaxis]
+            return tf.identity(op, name=_TFOUTPUT)
+
+        x_val = make_xval([2, 3])
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_addition_three_newaxis_simultaneously(self):
+        def func(x):
+            op = x[..., tf.newaxis, tf.newaxis, tf.newaxis]
+            return tf.identity(op, name=_TFOUTPUT)
+
+        x_val = make_xval([2, 3])
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
 if __name__ == '__main__':
     unittest_main()
