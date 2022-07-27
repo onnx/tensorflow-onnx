@@ -974,6 +974,29 @@ class StridedSlice:
                     begin_mask |= 1 << bit
                     end_mask |= 1 << bit
 
+            if ellipsis_mask:
+                unqueeze_at = []
+                ellipsis_gap = 0
+                num_new = 0
+                end_mask = node.get_attr("end_mask")
+                end_mask = end_mask.i if end_mask is not None else 0
+                begin_mask = node.get_attr("begin_mask")
+                begin_mask = begin_mask.i if begin_mask is not None else 0
+
+                for bit in range(32):
+                    new_axis_flag = (new_axis_mask >> bit) & 1
+                    ellipsis_flag = (ellipsis_mask >> bit) & 1
+                    num_new += not ellipsis_flag and new_axis_flag
+
+                for bit in range(32):
+                    if (ellipsis_mask >> bit) & 1:
+                        ellipsis_gap = len(ctx.get_shape(input_x)) - param_rank + num_new + 1
+                    elif (new_axis_mask >> bit) & 1:
+                        effective_bit = bit if not ellipsis_gap else bit + ellipsis_gap - 1
+                        unqueeze_at.append(effective_bit)
+                        begin_mask |= 1 << bit
+                        end_mask |= 1 << bit
+
             input_x = GraphBuilder(ctx).make_unsqueeze(
                 {'data': input_x, 'axes': unqueeze_at})
 
