@@ -2241,6 +2241,72 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.int64)}, model_proto,
                              "Cast", 0)
 
+    def test_const_fold_add(self):
+        shape = (6, 6)
+        const_tensor1 = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                           vals=np.random.randn(*shape).flatten().astype(np.float32))
+        const_tensor2 = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                           vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const1"], value=const_tensor1)
+        node2 = helper.make_node("Constant", [], ["const2"], value=const_tensor2)
+        node3 = helper.make_node("Add", ["const1", "const2"], ["add"])
+        node4 = helper.make_node("Add", ["add", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3, node4],
+            "test_const_fold_add",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.float32)}, model_proto,
+                             "Add", 1)
+
+    def test_const_fold_sub(self):
+        shape = (6, 6)
+        const_tensor1 = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                           vals=np.random.randn(*shape).flatten().astype(np.float32))
+        const_tensor2 = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                           vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const1"], value=const_tensor1)
+        node2 = helper.make_node("Constant", [], ["const2"], value=const_tensor2)
+        node3 = helper.make_node("Sub", ["const1", "const2"], ["sub"])
+        node4 = helper.make_node("Sub", ["sub", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3, node4],
+            "test_const_fold_sub",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.float32)}, model_proto,
+                             "Sub", 1)
+
+    def test_const_fold_mul(self):
+        shape = (6, 6)
+        const_tensor1 = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                           vals=np.random.randn(*shape).flatten().astype(np.float32))
+        const_tensor2 = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
+                                           vals=np.random.randn(*shape).flatten().astype(np.float32))
+        node1 = helper.make_node("Constant", [], ["const1"], value=const_tensor1)
+        node2 = helper.make_node("Constant", [], ["const2"], value=const_tensor2)
+        node3 = helper.make_node("Mul", ["const1", "const2"], ["mul"])
+        node4 = helper.make_node("Mul", ["mul", "X"], ["res"])
+
+        graph = helper.make_graph(
+            [node1, node2, node3, node4],
+            "test_const_fold_mul",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_and_compare(["res"], {"X": np.random.randn(*shape).astype(np.float32)}, model_proto,
+                             "Mul", 1)
+
     def test_const_fold_split(self):
         shape = (2, 6, 1)
         const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,

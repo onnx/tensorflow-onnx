@@ -8,7 +8,7 @@ generator
 import logging
 
 import numpy as np
-from onnx import onnx_pb, numpy_helper
+from onnx import onnx_pb, numpy_helper, helper
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 from tf2onnx.graph_builder import GraphBuilder
@@ -241,6 +241,17 @@ class ZerosLike:
                       attr={'to': dtypes[0]},
                       name=node.name, outputs=node.output,
                       shapes=shapes, dtypes=dtypes)
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        shape = ctx.make_node("Shape", node.input).output[0]
+        zero_tensor = helper.make_tensor("value", dtypes[0], [1], vals=[0])
+        ctx.make_node("ConstantOfShape", inputs=[shape],
+                      attr={'value': zero_tensor},
+                      name=node.name, outputs=node.output,
+                      dtypes=dtypes)
 
 
 @tf_op(["IteratorV2", "FIFOQueueV2"])
