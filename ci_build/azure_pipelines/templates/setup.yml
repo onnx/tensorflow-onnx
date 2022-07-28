@@ -6,9 +6,11 @@ steps:
     pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers
     pip install $(CI_PIP_TF_NAME) $(CI_PIP_ONNX_NAME)
 
-    # protobuf release version 4.21.0 has some Python changes which is not compatible with tensorflow so far.
+    # Protobuf 3.20 results in linker errors on Windows in TF.
+    # Protobuf 4.0 is binary incompatible with what C++ TF uses.
+    # https://github.com/tensorflow/tensorflow/blob/c3337c73306b2b859d82fe130912f18e6a1c5c23/tensorflow/tools/pip_package/setup.py#L88
     pip uninstall -y protobuf
-    pip install "protobuf<4.21.0"
+    pip install "protobuf<3.20.0"
 
     # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
     if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
@@ -64,6 +66,10 @@ steps:
       if [[ $CI_TF_VERSION == 2.8* ]] ;
       then
         pip install "tensorflow-text>=2.8,<2.9"
+      fi
+      if [[ $CI_TF_VERSION == 2.9* ]] ;
+        then
+          pip install "tensorflow-text>=2.9,<2.10"
       else
         pip install tensorflow-text
       fi
