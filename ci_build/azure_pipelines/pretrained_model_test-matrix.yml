@@ -40,7 +40,7 @@ jobs:
 - template: 'templates/job_generator.yml'
   parameters:
     platforms: ['linux', 'windows']
-    python_versions: ['3.9', '3.10']
+    python_versions: ['3.8']
     tf_versions: ['2.8.0']
     job:
       steps:
