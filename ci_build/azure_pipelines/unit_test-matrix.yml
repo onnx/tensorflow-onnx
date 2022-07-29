@@ -50,7 +50,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         platforms: ['linux', 'windows']
-        python_versions: ['3.9']
+        python_versions: ['3.9', '3.10']
         tf_versions: ['2.8.0']
         onnx_opsets: ['']
         job:

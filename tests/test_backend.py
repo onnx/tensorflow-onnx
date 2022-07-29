@@ -3233,6 +3233,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             y_val = np.array(i / 10, np.float32)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, rtol=1e-6, atol=2e-5)
 
+    # https://github.com/microsoft/onnxruntime/issues/12302
+    @skip_onnxruntime_backend("resize op can't work well under Cubic mode with ORT 1.12")
     @check_tf_min_version("2.0", "Results are slightly different in tf1")
     @check_opset_min_version(11, "resize bicubic")
     def test_resize_bicubic(self):

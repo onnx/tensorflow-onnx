@@ -15,7 +15,7 @@ jobs:
 
 - template: 'templates/job_generator.yml'
   parameters:
-    # 2.7, tf
+    # 2.8, tf
     python_versions: ['3.7']
     tf_versions: ['1.15.5','2.8.0']
     job:
@@ -24,7 +24,7 @@ jobs:
 
 - template: 'templates/job_generator.yml'
   parameters:
-    # 2.8, tf
+    # 2.9, tf
     python_versions: ['3.9']
     tf_versions: ['2.9.1']
     job:
