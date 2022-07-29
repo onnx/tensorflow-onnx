@@ -42,7 +42,12 @@ steps:
 
     if [[ $CI_TF_VERSION == 2.* ]] ;
     then
-      pip install onnxruntime-extensions==0.3.1
+      # onnxruntime-extensions is not supported Python 3.10 so far.
+      # https://github.com/microsoft/onnxruntime-extensions/issues/273
+      if [[ $CI_PYTHON_VERSION != 3.10 ]] ;
+      then
+        pip install onnxruntime-extensions==0.3.1
+      fi
       if [[ $CI_TF_VERSION == 2.3* ]] ;
       then
         pip install tensorflow-text==${CI_TF_VERSION}
