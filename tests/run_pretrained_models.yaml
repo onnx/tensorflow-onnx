@@ -337,7 +337,7 @@ ssd_mobilenet_v3_large_coco:
   opset_constraints:
     "onnx":
       "min": 10
-      "max": 16
+      "max": 17
   input_get: get_beach
   inputs:
     "normalized_input_image_tensor:0": [1, 320, 320, 3]
@@ -432,7 +432,7 @@ faster_rcnn_inception_v2_coco:
   opset_constraints:
     "onnx":
       "min": 11
-      "max": 16
+      "max": 17
   input_get: get_beach
   inputs:
     "image_tensor:0": [1, 224, 224, 3]
