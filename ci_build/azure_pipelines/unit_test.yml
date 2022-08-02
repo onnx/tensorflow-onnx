@@ -173,7 +173,7 @@ stages:
         python_versions: ['3.10']
         platforms: ['windows']
         tf_versions: ['2.9.1']
-        onnx_opsets: ['16']
+        onnx_opsets: ['17']
         job:
           steps:
           - template: 'unit_test.yml'

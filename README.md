@@ -27,7 +27,7 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 tf2onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support and test ONNX opset-9 to opset-16. opset-6 to opset-8 should work but we don't test them.
+We support and test ONNX opset-9 to opset-17. opset-6 to opset-8 should work but we don't test them.
 By default we use ```opset-13``` for the resulting ONNX graph.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 13```.
@@ -187,7 +187,7 @@ ONNX requires default values for graph inputs to be constant, while Tensorflow's
 
 #### --opset
 
-By default we use the opset 13 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 16``` would create a onnx graph that uses only ops available in opset 16. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
+By default we use the opset 13 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 17``` would create a onnx graph that uses only ops available in opset 17. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
 
 #### --dequantize
 
