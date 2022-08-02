@@ -17,8 +17,8 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 | Build Type | OS | Python | TensorFlow | ONNX opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.7-3.10 | 1.13-1.15, 2.1-2.9 | 9-16 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.7-3.10 | 1.13-1.15, 2.1-2.9 | 9-16 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.7-3.10 | 1.13-1.15, 2.1-2.9 | 13-17 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.7-3.10 | 1.13-1.15, 2.1-2.9 | 13-17 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
 <br/>
 
 ## Supported Versions
@@ -27,7 +27,7 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 tf2onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support and test ONNX opset-9 to opset-17. opset-6 to opset-8 should work but we don't test them.
+We support and test ONNX opset-13 to opset-17. opset-6 to opset-12 should work but we don't test them.
 By default we use ```opset-13``` for the resulting ONNX graph.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 13```.
@@ -43,7 +43,6 @@ You can install tf2onnx on top of tf-1.x or tf-2.x.
 ### Python
 
 We support Python ```3.7-3.10```.
-Note that on windows for Python > 3.7 the protobuf package doesn't use the cpp implementation and is very slow - we recommend to use Python 3.7 for that reason.
 
 ## Prerequisites
 
@@ -83,7 +82,7 @@ or
 
 ```python setup.py develop```
 
-tensorflow-onnx requires onnx-1.5 or better and will install/upgrade onnx if needed.
+tensorflow-onnx requires onnx-1.9 or better and will install/upgrade onnx if needed.
 
 To create a wheel for distribution:
 
@@ -100,7 +99,7 @@ To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providi
 
 The above command uses a default of `13` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
 
-```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 16 --output model.onnx```
+```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 17 --output model.onnx```
 
 If your TensorFlow model is in a format other than `saved model`, then you need to provide the inputs and outputs of the model graph.
 
