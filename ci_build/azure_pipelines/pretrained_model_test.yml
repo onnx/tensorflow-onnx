@@ -24,8 +24,8 @@ jobs:
 
 - template: 'templates/job_generator.yml'
   parameters:
-    # 2.9, tf
-    python_versions: ['3.9']
+    # 2.10, tf
+    python_versions: ['3.10']
     tf_versions: ['2.9.1']
     job:
       steps:
