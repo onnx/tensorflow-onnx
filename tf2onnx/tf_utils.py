@@ -6,7 +6,7 @@ tf2onnx.tf_utils - misc utilities for tf2onnx that interface with tensorflow
 """
 
 import collections
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 import numpy as np
 import tensorflow as tf
@@ -121,7 +121,7 @@ def get_tf_node_attr(node, name):
 
 
 def get_tf_version():
-    return LooseVersion(tf.__version__)
+    return Version(tf.__version__)
 
 def compress_graph_def(graph_def):
     """
