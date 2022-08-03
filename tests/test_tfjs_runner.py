@@ -17,7 +17,7 @@ class TestTfjsRunner(unittest.TestCase):
     def test_tfjs_runner(self):
         float_array = np.array([[1.1, 2.2], [3.3, 4.4]], np.float32)
         int_array = np.array([[1, 2], [3, 4]], np.int32)
-        bool_array = np.array([[True, False], [True, True]], np.bool)
+        bool_array = np.array([[True, False], [True, True]], bool)
         string_array = np.array([['Hello world', ''], ['π', 'Tensor']], np.str)
         complex_array = np.array([[1 + 0.1j, 2 + 0.2j], [3 + 0.3j, 4 + 0.4j]], np.complex64)
 
