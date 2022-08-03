@@ -10,7 +10,7 @@ python -m tf2onnx.convert : api and commandline tool to convert a tensorflow mod
 import argparse
 import os
 import sys
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 
@@ -20,7 +20,7 @@ from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import constants, logging, utils, optimizer
 from tf2onnx import tf_loader
 from tf2onnx.graph import ExternalTensorStorage
-from tf2onnx.tf_utils import compress_graph_def
+from tf2onnx.tf_utils import compress_graph_def, get_tf_version
 
 
 
@@ -431,7 +431,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    if LooseVersion(tf.__version__) < "2.0":
+    if get_tf_version() < Version("2.0"):
         return _from_keras_tf1(model, opset, custom_ops, custom_op_handlers, custom_rewriter, inputs_as_nchw,
                                outputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
 
@@ -540,7 +540,7 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    if LooseVersion(tf.__version__) < "2.0":
+    if get_tf_version() < Version("2.0"):
         raise NotImplementedError("from_function requires tf-2.0 or newer")
 
     if input_signature is None:
