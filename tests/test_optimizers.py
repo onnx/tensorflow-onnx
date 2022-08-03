@@ -988,7 +988,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
 
         def _make_loop(external_inputs, outputs):
             trip_cnt = self._make_onnx_const(np.array(10, dtype=np.int64), "trip_cnt")
-            cond = self._make_onnx_const(np.array(True, dtype=np.bool), "cond")
+            cond = self._make_onnx_const(np.array(True, dtype=bool), "cond")
             sub_graph = _define_loop_graph(external_inputs)
             loop_node = helper.make_node("Loop", ["trip_cnt", "cond", "cond"], outputs,
                                          name="loop", body=sub_graph)
@@ -1779,7 +1779,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             ),
         )
 
-        cond_value = np.array(True, dtype=np.bool)
+        cond_value = np.array(True, dtype=bool)
         node3 = helper.make_node(
             'Constant',
             inputs=[],
@@ -1788,7 +1788,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                 name='cond_value',
                 data_type=TensorProto.BOOL,
                 dims=iter_num_value.shape,
-                vals=cond_value.flatten().astype(np.bool).tolist(),
+                vals=cond_value.flatten().astype(bool).tolist(),
             ),
         )
 
