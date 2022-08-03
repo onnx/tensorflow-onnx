@@ -17,7 +17,7 @@ import time
 import zipfile
 import random
 from collections import namedtuple
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 
 import yaml
@@ -789,7 +789,7 @@ def main():
                 continue
 
             if t.tf_min_version:
-                if tf_utils.get_tf_version() < LooseVersion(str(t.tf_min_version)):
+                if tf_utils.get_tf_version() < Version(str(t.tf_min_version)):
                     logger.info("Skip %s: %s %s", test, "Min TF version needed:", t.tf_min_version)
                     continue
 

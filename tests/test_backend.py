@@ -5,11 +5,11 @@
 
 import os
 import unittest
-from packaging.version import Version
 from itertools import product
 
 import numpy as np
 from numpy.testing import assert_almost_equal
+from packaging.version import Version
 import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
