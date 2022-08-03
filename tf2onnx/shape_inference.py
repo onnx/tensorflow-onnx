@@ -6,9 +6,9 @@ tf2onnx.shape_inference - shape inference function for tf2onnx
 """
 
 import logging
-from distutils.version import LooseVersion
 from collections import defaultdict
 import numpy as np
+from packaging.version import Version
 from tf2onnx import utils
 from tf2onnx.tf_utils import get_tf_tensor_shape, get_tf_const_value, get_tf_shape_attr, get_tf_version
 from tf2onnx.tf_loader import tf_reload_graph
@@ -32,7 +32,7 @@ def infer_shape(tf_graph, shape_override):
 
     op_outputs_with_none_shape = check_shape_for_tf_graph(tf_graph)
     if op_outputs_with_none_shape:
-        if get_tf_version() > LooseVersion("1.5.0"):
+        if get_tf_version() > Version("1.5.0"):
             for op, outs in op_outputs_with_none_shape.items():
                 logger.warning(
                     "Cannot infer shape for %s: %s",

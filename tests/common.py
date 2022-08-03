@@ -9,7 +9,7 @@ import sys
 import unittest
 from collections import defaultdict
 
-from distutils.version import LooseVersion
+from packaging.version import Version
 from parameterized import parameterized
 import numpy as np
 import tensorflow as tf
@@ -98,7 +98,7 @@ class TestConfig(object):
             pass
 
         if version:
-            version = LooseVersion(version)
+            version = Version(version)
         return version
 
     def __str__(self):
@@ -178,7 +178,7 @@ def check_opset_after_tf_version(tf_version, required_opset, message=""):
     """ Skip if tf_version > max_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires opset {} after tf {}".format(required_opset, tf_version), message)
-    skip = config.tf_version >= LooseVersion(tf_version) and config.opset < required_opset
+    skip = config.tf_version >= Version(tf_version) and config.opset < required_opset
     return unittest.skipIf(skip, reason)
 
 
@@ -284,7 +284,7 @@ def check_tfjs_max_version(max_accepted_version, message=""):
     except ModuleNotFoundError:
         can_import = False
     return unittest.skipIf(can_import and not config.skip_tfjs_tests and \
-         tensorflowjs.__version__ > LooseVersion(max_accepted_version), reason)
+         Version(tensorflowjs.__version__) > Version(max_accepted_version), reason)
 
 def check_tfjs_min_version(min_required_version, message=""):
     """ Skip if tjs_version < min_required_version """
@@ -296,20 +296,20 @@ def check_tfjs_min_version(min_required_version, message=""):
     except ModuleNotFoundError:
         can_import = False
     return unittest.skipIf(can_import and not config.skip_tfjs_tests and \
-         tensorflowjs.__version__ < LooseVersion(min_required_version), reason)
+         Version(tensorflowjs.__version__) < Version(min_required_version), reason)
 
 def check_tf_max_version(max_accepted_version, message=""):
     """ Skip if tf_version > max_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires tf <= {}".format(max_accepted_version), message)
-    return unittest.skipIf(config.tf_version > LooseVersion(max_accepted_version), reason)
+    return unittest.skipIf(config.tf_version > Version(max_accepted_version), reason)
 
 
 def check_tf_min_version(min_required_version, message=""):
     """ Skip if tf_version < min_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires tf >= {}".format(min_required_version), message)
-    return unittest.skipIf(config.tf_version < LooseVersion(min_required_version), reason)
+    return unittest.skipIf(config.tf_version < Version(min_required_version), reason)
 
 
 def skip_tf_versions(excluded_versions, message=""):
@@ -385,7 +385,7 @@ def check_onnxruntime_min_version(min_required_version, message=""):
     config = get_test_config()
     reason = _append_message("conversion requires onnxruntime >= {}".format(min_required_version), message)
     return unittest.skipIf(config.is_onnxruntime_backend and
-                           config.backend_version < LooseVersion(min_required_version), reason)
+                           config.backend_version < Version(min_required_version), reason)
 
 
 def skip_caffe2_backend(message=""):

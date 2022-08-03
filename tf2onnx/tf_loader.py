@@ -5,7 +5,7 @@
 
 import logging
 import uuid
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 import tensorflow as tf
 import numpy as np
@@ -75,7 +75,7 @@ if is_tf2():
     tf_placeholder = tf.compat.v1.placeholder
     tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
     extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
-elif LooseVersion(tf.__version__) >= "1.13":
+elif Version(tf.__version__) >= Version("1.13"):
     # 1.13 introduced the compat namespace
     tf_reset_default_graph = tf.compat.v1.reset_default_graph
     tf_global_variables = tf.compat.v1.global_variables
@@ -162,7 +162,7 @@ def convert_variables_to_constants_large_model(func):
 
     try:
         function_converter = _FunctionConverterData
-        if LooseVersion(tf.__version__) >= "2.6.0":
+        if Version(tf.__version__) >= Version("2.6.0"):
             from tensorflow.python.eager import context
             from tensorflow.python.framework.convert_to_constants import _FunctionConverterDataInEager, \
                 _FunctionConverterDataInGraph
@@ -267,7 +267,7 @@ def from_function(func, input_names, output_names, large_model=False):
         return convert_variables_to_constants_large_model(func)
 
     try:
-        if get_tf_version() < LooseVersion("2.2"):
+        if get_tf_version() < Version("2.2"):
             frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
         else:
             frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
@@ -687,7 +687,7 @@ def tf_optimize_grappler(input_names, output_names, graph_def):
         'constfold', 'function'
     ]
 
-    if LooseVersion(tf.__version__) >= "2.5":
+    if Version(tf.__version__) >= Version("2.5"):
         # This flag disables folding QDQ nodes around constants in the network (eg: around conv/FC weights)
         rewrite_options.experimental_disable_folding_quantization_emulation = True
 
@@ -710,7 +710,7 @@ def tf_optimize(input_names, output_names, graph_def):
                    [utils.node_name(i) for i in output_names]
     graph_def = extract_sub_graph(graph_def, needed_names)
 
-    want_grappler = is_tf2() or LooseVersion(tf.__version__) >= "1.15"
+    want_grappler = is_tf2() or Version(tf.__version__) >= Version("1.15")
     if want_grappler:
         graph_def = tf_optimize_grappler(input_names, output_names, graph_def)
     else:
@@ -730,7 +730,7 @@ def tf_optimize(input_names, output_names, graph_def):
 def tf_reload_graph(tf_graph):
     """Invoke tensorflow cpp shape inference by reloading graph_def."""
     # invoke c api if tf version is below 1.8
-    if get_tf_version() < LooseVersion("1.8"):
+    if get_tf_version() < Version("1.8"):
         logger.debug(
             "On TF < 1.8, graph is constructed by python API, "
             "which doesn't invoke shape inference, please set "
