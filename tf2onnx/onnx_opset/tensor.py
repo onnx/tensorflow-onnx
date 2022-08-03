@@ -497,7 +497,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
     #   gather_res = gather(gather_cur, index[i])
     scope_name = utils.make_name("gathernd_inner_loop")
     trip_node = ctx.make_node("Size", [index.output[0]])
-    cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+    cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=bool))
     trip_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
     cond_out_name = utils.make_name("cond_out")
@@ -548,7 +548,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
 
     # outter loop for each index
     # for (int i=0; i<outter_shape; i++) inner_loop(params, flatten_indices[i])
-    cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+    cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=bool))
     ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
 
     # body graph creation
@@ -2830,7 +2830,7 @@ class SparseReshape:
             shape = ctx.get_shape(vector)
             rank = shape[0] if shape is not None else -1
             if rank != -1:
-                lower_tri = np.tri(rank, rank, dtype=np.bool)
+                lower_tri = np.tri(rank, rank, dtype=bool)
                 lower_triangular_bool = ctx.make_const(utils.make_name("lower_tri_const"), lower_tri).output[0]
             else:
                 rank = ctx.make_node("Shape", [vector]).output[0]
@@ -3306,7 +3306,7 @@ class MatrixDiagPartV2V3:
         body_graph.add_graph_output(padded_output.output[0], ctx.get_dtype(node.input[0]), per_loop_shape)
         body_graph.add_graph_output(gap_k.output[0], TensorProto.INT64, [-1])
         # make loop
-        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=bool))
         branches = {"body": body_graph}
         main_loop = ctx.make_node('Loop', [total_k.output[0], cond_const.output[0]], output_count=2, branches=branches)
         # reshape output

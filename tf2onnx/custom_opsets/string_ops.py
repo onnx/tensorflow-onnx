@@ -30,7 +30,7 @@ class StringOps:
             del node.attr[a]
         unsqueeze_node = GraphBuilder(ctx).make_unsqueeze({'data': node.input[1], 'axes': [0]}, return_node=True)
 
-        skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], np.bool))
+        skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], bool))
         ctx.replace_inputs(node, [node.input[0], unsqueeze_node.output[0], skip_empty_const.output[0]])
 
 @tf_op("StringToHashBucketFast", domain=constants.CONTRIB_OPS_DOMAIN)
