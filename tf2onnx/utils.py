@@ -42,7 +42,7 @@ ONNX_TO_NUMPY_DTYPE = {
     onnx_pb.TensorProto.UINT64: np.uint64,
     onnx_pb.TensorProto.INT64: np.int64,
     onnx_pb.TensorProto.UINT64: np.uint64,
-    onnx_pb.TensorProto.BOOL: np.bool,
+    onnx_pb.TensorProto.BOOL: bool,
     onnx_pb.TensorProto.COMPLEX64: np.complex64,
     onnx_pb.TensorProto.COMPLEX128: np.complex128,
     onnx_pb.TensorProto.STRING: object,
