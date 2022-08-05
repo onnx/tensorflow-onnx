@@ -687,6 +687,10 @@ def tf_optimize_grappler(input_names, output_names, graph_def):
         'constfold', 'function'
     ]
 
+    if is_tf2():
+        # add for tf2.x lstm optimization.
+        rewrite_options.optimizers.append('dependency')
+
     if Version(tf.__version__) >= Version("2.5"):
         # This flag disables folding QDQ nodes around constants in the network (eg: around conv/FC weights)
         rewrite_options.experimental_disable_folding_quantization_emulation = True
@@ -771,8 +775,8 @@ def resolve_functions(tf_graph):
         try:
             func = function_def_to_graph(fdef, input_shapes=input_shapes)
         except:  # pylint: disable=bare-except
-            # if there is a missmatch between caller and function use the functions shape
-            logger.warning("shape missmatch between caller and function: %s", k)
+            # if there is a mismatch between caller and function use the functions shape
+            logger.warning("shape mismatch between caller and function: %s", k)
             func = function_def_to_graph(fdef)
         _FUNCTIONS[k] = func
         _, _, _, _, _, tfunctions = tflist_to_onnx(func, {})
