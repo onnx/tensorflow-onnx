@@ -684,7 +684,7 @@ def tf_optimize_grappler(input_names, output_names, graph_def):
     # depends on so for now don't turn this on, constfold is always enabled now.
     rewrite_options.optimizers[:] = [
         # 'pruning', 'constfold', 'arithmetic', 'dependency', 'function',
-        'constfold', 'function'
+        'constfold', 'function', 'dependency'
     ]
 
     if Version(tf.__version__) >= Version("2.5"):
