@@ -5653,6 +5653,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
+    @skip_tf_versions("2.4", "Fails to run on TF 2.4.x")
     @skip_tfjs("Fails to run tfjs model")
     def test_rfft_ops(self):
 
@@ -5695,6 +5696,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
+    @skip_tf_versions("2.4", "Fails to run on TF 2.4.x")
     @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length(self):
@@ -5706,6 +5708,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
+    @skip_tf_versions("2.4", "Fails to run on TF 2.4.x")
     @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many(self):
@@ -5720,6 +5723,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
+    @skip_tf_versions("2.4", "Fails to run on TF 2.4.x")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many_bigger(self):
         for i in range(4, 7):
