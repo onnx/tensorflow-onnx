@@ -51,6 +51,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 # Skip checks for tflite graphs (no ":" in outputs)
                 return good
             good = good and check_op_count(g, "LSTM", require_lstm_count, disabled=False)
+            # if LSTM op rewriter matchs failed, Loop op will be shown generally.
             good = good and check_op_count(g, "Loop", 0, disabled=False)
             return good
         try:
@@ -773,6 +774,22 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             y = model(x)
             return tf.identity(y[0], name="output"), tf.identity(y[1], name="output1")
         self.run_test_case(func, {"input:0": x_val}, [], ["output:0", "output1:0"], rtol=1e-05, atol=1e-06)
+
+    def test_keras_lstm_sigmoid_dropout(self):
+        in_shape = [16, 16]
+        batch_size = 2
+        x_val = np.random.uniform(size=[batch_size] + in_shape).astype(np.float32)
+
+        model = tf.keras.models.Sequential()
+        input = tf.keras.layers.Input(shape=(in_shape))
+        lstm = tf.keras.layers.LSTM(16, activation='sigmoid', dropout=0.1)
+        model.add(input)
+        model.add(lstm)
+
+        def func(x):
+            y = model(x)
+            return tf.identity(y[0], name="output")
+        self.run_test_case(func, {"input:0": x_val}, [], ["output:0"], rtol=1e-05, atol=1e-06)
 
 if __name__ == '__main__':
     unittest_main()

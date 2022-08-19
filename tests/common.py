@@ -454,7 +454,7 @@ def group_nodes_by_type(graph):
 
 
 def check_op_count(graph, op_type, expected_count, disabled=True):
-    # FIXME: after switching to grappler some of the op counts are off. Fix later.
+    # The grappler optimization may effect some of the op counts.
     return disabled or len(group_nodes_by_type(graph)[op_type]) == expected_count
 
 
