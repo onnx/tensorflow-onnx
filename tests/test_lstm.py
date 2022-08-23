@@ -10,7 +10,7 @@ from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import check_tf_min_version, unittest_main, check_opset_after_tf_version, \
-    skip_tf2, skip_tf_versions, check_op_count
+    skip_tf2, skip_tf_versions, check_op_count, skip_tfjs
 
 from tf2onnx.tf_loader import is_tf2
 
@@ -776,6 +776,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, {"input:0": x_val}, [], ["output:0", "output1:0"], rtol=1e-05, atol=1e-06)
 
     @check_tf_min_version("2.0")
+    @skip_tfjs("TFJS converts model incorrectly")
     def test_keras_lstm_sigmoid_dropout(self):
         in_shape = [16, 16]
         batch_size = 2
