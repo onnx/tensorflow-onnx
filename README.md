@@ -232,7 +232,7 @@ Load the comma-separated list of tensorflow plugin/op libraries before conversio
 
 (Can be used only for TF2.x models)
 
-Only valid with parameter `--saved_model`. When set, creates a zip file containing the ONNX protobuf model and large tensor values stored externally. This allows for converting models that exceed the 2 GB protobuf limit.
+Only valid with parameter `--saved_model`. When set, creates a zip file containing the ONNX protobuf model and large tensor values stored externally. This allows for converting models whose size exceeds the 2 GB.
 
 #### --continue_on_error
 Continue to run conversion on error, ignore graph cycles so it can report all missing ops and errors.
@@ -242,7 +242,7 @@ Verbose detailed output for diagnostic purposes.
 
 #### --output_frozen_graph
 
-Saves the frozen and optimize tensorflow graph to file.
+Save the frozen and optimized tensorflow graph to a file for debug.
 
 
 ### <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
