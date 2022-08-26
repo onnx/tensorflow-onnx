@@ -31,7 +31,7 @@ steps:
       pip uninstall -y onnxruntime
       # install numpy upfront since it is not on https://test.pypi.org/simple/
       pip install 'numpy>=1.18'
-      pip install --index-url https://test.pypi.org/simple/ ort-nightly
+      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
     fi
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
