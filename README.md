@@ -132,6 +132,7 @@ python -m tf2onnx.convert
     [--inputs GRAPH_INPUTS]
     [--outputs GRAPH_OUTPUS]
     [--inputs-as-nchw inputs_provided_as_nchw]
+    [--outputs-as-nchw outputs_provided_as_nchw]
     [--opset OPSET]
     [--dequantize]
     [--tag TAG]
@@ -180,9 +181,13 @@ TensorFlow model's input/output names, which can be found with [summarize graph 
 
 By default we preserve the image format of inputs (`nchw` or `nhwc`) as given in the TensorFlow model. If your hosts (for example windows) native format nchw and the model is written for nhwc, ```--inputs-as-nchw``` tensorflow-onnx will transpose the input. Doing so is convenient for the application and the converter in many cases can optimize the transpose away. For example ```--inputs input0:0,input1:0 --inputs-as-nchw input0:0``` assumes that images are passed into ```input0:0``` as nchw while the TensorFlow model given uses nhwc.
 
+#### --outputs-as-nchw
+
+Similar usage with `--inputs-as-nchw`. By default we preserve the format of outputs (`nchw` or `nhwc`) as shown in the TensorFlow model. If your hosts native format nchw and the model is written for nhwc, ```--outputs-as-nchw``` tensorflow-onnx will transpose the output and optimize the transpose away. For example ```--outputs output0:0,output1:0 --outputs-as-nchw output0:0``` will change the ```output0:0``` as nchw while the TensorFlow model given uses nhwc.
+
 #### --ignore_default, --use_default
 
-ONNX requires default values for graph inputs to be constant, while Tensorflow's PlaceholderWithDefault op accepts computed defaults.  To convert such models, pass a comma-separated list of node names to the ignore_default and/or use_default flags.  PlaceholderWithDefault nodes with matching names will be replaced with Placeholder or Identity ops, respectively.
+ONNX requires default values for graph inputs to be constant, while Tensorflow's PlaceholderWithDefault op accepts computed defaults. To convert such models, pass a comma-separated list of node names to the ignore_default and/or use_default flags.  PlaceholderWithDefault nodes with matching names will be replaced with Placeholder or Identity ops, respectively.
 
 #### --opset
 
@@ -208,15 +213,9 @@ Only valid with parameter `--saved_model`. Specifies which signature to use with
 
 Only valid with parameter `--saved_model`. If a model contains a list of concrete functions, under the function name `__call__` (as can be viewed using the command `saved_model_cli show --all`), this parameter is a 0-based integer specifying which function in that list should be converted. This parameter takes priority over `--signature_def`, which will be ignored.
 
-#### --large_model
+#### --target
 
-(Can be used only for TF2.x models)
-
-Only valid with parameter `--saved_model`. When set, creates a zip file containing the ONNX protobuf model and large tensor values stored externally. This allows for converting models that exceed the 2 GB protobuf limit.
-
-#### --output_frozen_graph
-
-Saves the frozen and optimize tensorflow graph to file.
+Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
 
 #### --custom-ops
 
@@ -229,9 +228,21 @@ will be used.
 
 Load the comma-separated list of tensorflow plugin/op libraries before conversion.
 
-#### --target
+#### --large_model
 
-Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
+(Can be used only for TF2.x models)
+
+Only valid with parameter `--saved_model`. When set, creates a zip file containing the ONNX protobuf model and large tensor values stored externally. This allows for converting models whose size exceeds the 2 GB.
+
+#### --continue_on_error
+Continue to run conversion on error, ignore graph cycles so it can report all missing ops and errors.
+
+#### --verbose
+Verbose detailed output for diagnostic purposes.
+
+#### --output_frozen_graph
+
+Save the frozen and optimized tensorflow graph to a file for debug.
 
 
 ### <a name="summarize_graph"></a>Tool to get Graph Inputs & Outputs
