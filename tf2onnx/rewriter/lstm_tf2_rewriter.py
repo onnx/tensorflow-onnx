@@ -4,8 +4,10 @@
 """
 tf2onnx.rewriter.lstm_tf2_rewriter - Rewrites LSTM pattern used by tf2.
 """
-
+import logging
 import numpy as np
+from onnx import onnx_pb
+
 from tf2onnx.graph_matcher import GraphMatcher
 from tf2onnx.rewriter.rnn_utils import make_lstm_pattern
 from tf2onnx.tf_loader import find_function
@@ -79,21 +81,35 @@ def rewriter_lstm_tf2(g, ops):
             # extract output h_t
             ht_mul = match_result.get_op("ht")
             final_consumers = g.find_output_consumers(ht_mul.output[0])
-            select_ops = [n for n in final_consumers if n.type == "Select"]
+            select_ops = [n for n in final_consumers if n.type == "Select" or n.type == "SelectV2"]
             def has_tensor_list_consumer(n):
                 return any(c.type == "TensorListSetItem" for c in g.find_output_consumers(n.output[0]))
             select_ops = [n for n in select_ops if has_tensor_list_consumer(n)]
+
+            # extract sequence length
+            seq_len_idx, mask_idx = None, None
             if len(select_ops) == 1:
-                greater_eq = select_ops[0].inputs[0]
-                if greater_eq.type != "GreaterEqual":
+                select_op_condition = select_ops[0].inputs[0]
+                while select_op_condition.type == "Identity":
+                    select_op_condition = select_op_condition.inputs[0]
+
+                # skip timestpes based on speicific sequence length
+                if select_op_condition.type == "GreaterEqual":
+                    seq_len = select_op_condition.inputs[1]
+                    if not seq_len.is_graph_input():
+                        continue
+                    seq_len_idx = g.input_names.index(seq_len.output[0])
+
+                # masked LSTM: skip timesteps based on dynamically-computed boolean mask tensor
+                elif select_op_condition.type == "TensorListGetItem":
+                    mask = select_op_condition.inputs[0]
+                    if not mask.is_graph_input():
+                        continue
+                    mask_idx = g.input_names.index(mask.output[0])
+                else:
                     continue
-                seq_len = greater_eq.inputs[1]
-                if not seq_len.is_graph_input():
-                    continue
-                seq_len_idx = g.input_names.index(seq_len.output[0])
+
                 final_consumers = g.find_output_consumers(select_ops[0].output[0])
-            else:
-                seq_len_idx = None
 
             tensor_set_items = [n for n in final_consumers if n.type == "TensorListSetItem"]
             if len(tensor_set_items) != 1:
@@ -209,6 +225,7 @@ def rewriter_lstm_tf2(g, ops):
                 # Keras
                 "w_idx": gk_idx,
                 "r_idx": hk_idx,
+                "mask_idx": mask_idx,
             }
 
     for op in ops:
@@ -276,15 +293,63 @@ def rewriter_lstm_tf2(g, ops):
             tensor_array_inp = op.inputs[body_context["x_idx"]]
             if not tensor_array_inp.type == "TensorListFromTensor":
                 continue
-
-            final_consumers = g.find_output_consumers(op.output[body_context["out_idx"]])
-            output_ys = [n.output[0] for n in final_consumers if n.type == "TensorListStack"]
-
             context.onnx_input_ids[0]["X"] = tensor_array_inp.input[0]
-            if body_context["seq_len_idx"] is None:
-                context.onnx_input_ids[0]["sequence_lens"] = ""
+
+            # parse sequence length
+            seq_len_idx = body_context["seq_len_idx"]
+            mask_idx = body_context["mask_idx"]
+            if seq_len_idx:
+                context.onnx_input_ids[0]["sequence_lens"] = op.input[seq_len_idx]
+            elif mask_idx:
+                logging.warning(
+                    "Found mask-enabled LSTM. Converted ONNX model will only support post-padded LSTM input. "
+                    "If input is pre- or randomly-padded, masked timesteps will not be correctly skipped.")
+
+                # parse sequence length
+                tensor_array_mask = op.inputs[body_context["mask_idx"]]
+                if not tensor_array_mask.type == "TensorListFromTensor":
+                    continue
+                mask_mat = tensor_array_mask.input[0]
+                mask_mat_node = g.get_node_by_output(mask_mat)
+                is_mask_reverse = mask_mat_node.type == "ReverseV2"
+                # no need to reverse the mask sequence
+                # the positions of skipped timesteps per batch is irrelevant assuming post-padded input
+                if is_mask_reverse:
+                    mask_mat = mask_mat_node.input[0]
+
+                # reduce mask tensor to sequence_lens assuming post-padded input
+                # tranpose (1,0,2)     -> boolean mask tensor (N, timesteps, 1)
+                # squeeze on dim(-1)   -> boolean mask matrix (N, timesteps)
+                # reduceSum on dim(-1) -> sequence_lens (N)
+                mask_transpose_node = g.make_node(op_type="Transpose", inputs=[mask_mat], attr={"perm": [1, 0, 2]})
+                mask_squeeze = GraphBuilder(g).make_squeeze({"data": mask_transpose_node.output[0], "axes": [-1]})
+                mask_cast_node = g.make_node(op_type="Cast", inputs=[mask_squeeze],
+                                             attr={"to": onnx_pb.TensorProto.INT32})
+                sequence_lens = GraphBuilder(g).make_reduce_sum({"data": mask_cast_node.output[0],
+                                                                 "axes": [-1], "keepdims": 0})
+                context.onnx_input_ids[0]["sequence_lens"] = sequence_lens
+
+                # handle backward LSTM
+                tensor_array_inp_producer = tensor_array_inp.inputs[0]
+                is_input_reverse = tensor_array_inp_producer.type == "ReverseV2"
+                # backward LSTM is identified by the reverses of both input and mask tensors pre-LSTM
+                if is_mask_reverse != is_input_reverse:
+                    continue
+                if is_input_reverse:
+                    # TF uses simple "ReverseV2" to reverse input tensor with no assumption on padding position
+                    # because reversed mask with shape (batch_size, timesteps) is explicit per-timestep.
+                    # ONNX requires "ReverseSequence" to keep the reversed input tensor post-padded because mask
+                    # is implied by sequence_lens. This requires passing sequence_lens to such "ReverseSequence" op.
+
+                    # Note: tensor op conversions run after rewriters. Appending sequence_lens as a "ReverseV2" input
+                    # signalizes alternative behavior in "ReverseV2" conversion in onnx_opset/tensor.py.
+                    tensor_array_inp_producer.set_attr("has_sequence_lens", True)
+                    inp_reverse_inputs = tensor_array_inp_producer.input
+                    inp_reverse_inputs.append(sequence_lens)
+
             else:
-                context.onnx_input_ids[0]["sequence_lens"] = op.input[body_context["seq_len_idx"]]
+                context.onnx_input_ids[0]["sequence_lens"] = ""
+
             context.onnx_input_ids[0]["initial_c"] = initial_c
             context.onnx_input_ids[0]["initial_h"] = initial_h
 
@@ -295,6 +360,8 @@ def rewriter_lstm_tf2(g, ops):
             lstm_node = lstm_rewriter.create_rnn_node(context)[0]
 
             squeeze_output = GraphBuilder(g).make_squeeze({"data": lstm_node.output[0], "axes": [1]})
+            final_consumers = g.find_output_consumers(op.output[body_context["out_idx"]])
+            output_ys = [n.output[0] for n in final_consumers if n.type == "TensorListStack"]
             for output in output_ys:
                 g.replace_all_inputs(output, squeeze_output)
 
