@@ -7,7 +7,7 @@ from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
                                    is_keras_older_than, is_keras_later_than, python_keras_is_deprecated)
-from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
+from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional, convert_keras_for_test as convert_keras
 
 K = keras.backend
 Activation = keras.layers.Activation
@@ -88,9 +88,6 @@ if is_tf_keras and is_tensorflow_later_than("1.14.0") and not python_keras_is_de
 def _asarray(*a):
     return np.array([a], dtype='f')
 
-########################
-from tf2onnx.keras2onnx_api import convert_keras
-##########################
 
 def test_keras_lambda(runner):
     model = Sequential()
