@@ -317,7 +317,8 @@ def get_max_opset_supported_by_ort():
         if ort_ver in ORT_OPSET_VERSION.keys():
             return ORT_OPSET_VERSION[ort_ver]
         else:
-            raise ValueError("Given onnxruntime version doesn't exist in ORT_OPSET_VERSION: {}".format(ort_ver)) 
+            print("Given onnxruntime version doesn't exist in ORT_OPSET_VERSION: {}".format(ort_ver))
+            return None
     except ImportError:
         return None
 
@@ -326,6 +327,6 @@ def convert_keras_for_test(model, name=None, target_opset=None, **kwargs):
     if target_opset is None:
         target_opset = get_max_opset_supported_by_ort()
 
-    print("Test is running with opset version: {}".format(target_opset))
+    print("Trying to run test with opset version: {}".format(target_opset))
 
     return convert_keras(model=model, name=name, target_opset=target_opset, **kwargs)
