@@ -2,12 +2,11 @@
 
 import pytest
 import numpy as np
-from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
                                    is_keras_older_than, is_keras_later_than, python_keras_is_deprecated)
-from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional, convert_keras_for_test as convert_keras
+from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional, convert_keras_for_test as convert_keras, get_max_opset_supported_for_test as get_maximum_opset_supported
 
 K = keras.backend
 Activation = keras.layers.Activation
