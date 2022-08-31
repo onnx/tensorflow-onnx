@@ -9,7 +9,7 @@ import mock_keras2onnx
 from mock_keras2onnx.proto import keras, is_keras_older_than
 from mock_keras2onnx.proto.tfcompat import is_tf2
 from packaging.version import Version
-from tf2onnx.keras2onnx_api import convert_keras
+from tf2onnx.keras2onnx_api import convert_keras, get_maximum_opset_supported
 import time
 import json
 import urllib
@@ -323,10 +323,13 @@ def get_max_opset_supported_by_ort():
         return None
 
 
+def get_max_opset_supported_for_test():
+    return min(get_max_opset_supported_by_ort(), get_maximum_opset_supported())
+
+
 def convert_keras_for_test(model, name=None, target_opset=None, **kwargs):
     if target_opset is None:
         target_opset = get_max_opset_supported_by_ort()
 
     print("Trying to run test with opset version: {}".format(target_opset))
-
     return convert_keras(model=model, name=name, target_opset=target_opset, **kwargs)
