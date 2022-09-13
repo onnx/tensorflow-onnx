@@ -5,41 +5,6 @@ jobs:
 - job: 'Win'
   timeoutInMinutes: 180
   pool:
-    vmImage: 'windows-2019'
-  strategy:
-    matrix:
-      Python38-onnx1.11-tf2.8:
-        python.version: '3.8'
-        ONNX_PATH: onnx==1.11.0
-        INSTALL_KERAS:
-        UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==2.8.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
-        INSTALL_KERAS_RESNET: pip install keras-resnet
-        INSTALL_TRANSFORMERS: pip install transformers==3.4.0
-        INSTALL_NUMPY:
-        NIGHTLY_BUILD_TEST: python run_all_v2.py
-
-      Python310-onnx1.12-tf2.9:
-        python.version: '3.10'
-        ONNX_PATH: onnx==1.12.0
-        INSTALL_KERAS:
-        UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==2.9.0
-        INSTALL_ORT: pip install onnxruntime==1.12.0
-        INSTALL_KERAS_RESNET: pip install keras-resnet
-        INSTALL_TRANSFORMERS: pip install transformers==4.12.0
-        INSTALL_NUMPY:
-        NIGHTLY_BUILD_TEST: python run_all_v2.py
-
-  steps:
-  - template: 'templates/keras2onnx_application_tests.yml'
-    parameters:
-      platform: 'windows'
-
-- job: 'LatestWin'
-  timeoutInMinutes: 180
-  pool:
     vmImage: 'windows-latest'
   strategy:
     matrix:
