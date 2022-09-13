@@ -37,7 +37,7 @@ jobs:
     parameters:
       platform: 'windows'
 
-- job: 'Latest-Win'
+- job: 'LatestWin'
   timeoutInMinutes: 180
   pool:
     vmImage: 'windows-latest'
