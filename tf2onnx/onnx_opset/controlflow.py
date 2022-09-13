@@ -204,6 +204,8 @@ class Select:
                 if eq_node.input[0] == eq_node.input[1]:
                     handles_nan = True
             for inp in node.inputs[1:]:
+                if handles_nan:
+                    break
                 if inp.is_const() and (np.any(np.isnan(inp.get_tensor_value(as_list=False))) or \
                                        np.any(np.isinf(inp.get_tensor_value(as_list=False)))):
                     handles_nan = True
