@@ -204,7 +204,8 @@ class Select:
                 if eq_node.input[0] == eq_node.input[1]:
                     handles_nan = True
             for inp in node.inputs[1:]:
-                if inp.is_const() and (np.any(np.isnan(inp.get_tensor_value(as_list=False))) or np.any(np.isinf(inp.get_tensor_value(as_list=False)))):
+                if inp.is_const() and (np.any(np.isnan(inp.get_tensor_value(as_list=False))) or \
+                                       np.any(np.isinf(inp.get_tensor_value(as_list=False)))):
                     handles_nan = True
                 if inp.type == "Mul":
                     inp0 = inp.inputs[0].is_const() and np.any(np.isinf(inp.inputs[0].get_tensor_value(as_list=False)))
