@@ -3,7 +3,6 @@
 import os
 import sys
 import unittest
-import mock_keras2onnx
 import numpy as np
 from mock_keras2onnx.proto import keras
 from mock_keras2onnx.proto.tfcompat import is_tf2
@@ -16,7 +15,7 @@ else:
 from os.path import dirname, abspath
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
-from test_utils import test_level_0, run_image
+from test_utils import run_image
 K = keras.backend
 
 Activation = keras.layers.Activation
