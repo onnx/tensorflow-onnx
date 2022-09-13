@@ -45,13 +45,6 @@ ZeroPadding2D = keras.layers.ZeroPadding2D
 Sequential = keras.models.Sequential
 Model = keras.models.Model
 
-if is_tf2:
-    def l2(weight_decay):
-        # old keras layer expects a tuple but tf keras wants a single value
-        return keras.regularizers.l2(weight_decay[0])
-else:
-    from keras.regularizers import l2
-
 
 def initial_conv_block(input, weight_decay=5e-4):
     channel_axis = -1
