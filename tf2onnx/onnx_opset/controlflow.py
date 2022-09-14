@@ -204,8 +204,15 @@ class Select:
                 if eq_node.input[0] == eq_node.input[1]:
                     handles_nan = True
             for inp in node.inputs[1:]:
-                if inp.is_const() and np.any(np.isnan(inp.get_tensor_value(as_list=False))):
+                if handles_nan:
+                    break
+                if inp.is_const() and (np.any(np.isnan(inp.get_tensor_value(as_list=False))) or \
+                                       np.any(np.isinf(inp.get_tensor_value(as_list=False)))):
                     handles_nan = True
+                if inp.type == "Mul":
+                    inp0 = inp.inputs[0].is_const() and np.any(np.isinf(inp.inputs[0].get_tensor_value(as_list=False)))
+                    inp1 = inp.inputs[1].is_const() and np.any(np.isinf(inp.inputs[1].get_tensor_value(as_list=False)))
+                    handles_nan = inp0 or inp1
 
         if ctx.get_dtype(node.output[0]) != TensorProto.STRING and not handles_nan:
             # Due to bad ORT implementation, Mul/Add ops are faster than Where op
