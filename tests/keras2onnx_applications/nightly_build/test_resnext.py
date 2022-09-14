@@ -6,17 +6,18 @@ import unittest
 import numpy as np
 from mock_keras2onnx.proto import keras
 from mock_keras2onnx.proto.tfcompat import is_tf2
+from os.path import dirname, abspath
+sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
+img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
+from test_utils import run_image
+K = keras.backend
+
 if is_tf2:
     def l2(weight_decay):
         # old keras layer expects a tuple but tf keras wants a single value
         return keras.regularizers.l2(weight_decay[0])
 else:
     from keras.regularizers import l2
-from os.path import dirname, abspath
-sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
-from test_utils import run_image
-K = keras.backend
 
 Activation = keras.layers.Activation
 AveragePooling2D = keras.layers.AveragePooling2D
