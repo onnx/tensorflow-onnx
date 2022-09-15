@@ -3,6 +3,9 @@
 import os
 import sys
 
+from os.path import dirname, abspath
+print("====== os.path ======")
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
 print("====== Update path ======")
@@ -13,9 +16,6 @@ print("====== unittest ======")
 from mock_keras2onnx.proto import keras
 from mock_keras2onnx.proto.tfcompat import is_tf2
 print("====== mock_keras2onnx.proto ======")
-
-from os.path import dirname, abspath
-print("====== os.path ======")
 
 from test_utils import run_image
 print("====== test_utils ======")
