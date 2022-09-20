@@ -2,7 +2,7 @@
 name: Bug/Performance issue
 about: Use this template for reporting a bug or a performance issue.
 title: ''
-labels: 'potential bug'
+labels: 'bug'
 assignees: ''
 ---
 

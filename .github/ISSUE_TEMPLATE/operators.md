@@ -1,6 +1,6 @@
 ---
 name: Missing Operator
-about: Operators that does not currently support in tf2onnx.
+about: Operator that does not currently support in tf2onnx.
 title: ''
 labels: 'unsupported ops'
 assignees: ''
