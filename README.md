@@ -90,7 +90,7 @@ To create a wheel for distribution:
 
 ## Getting started
 
-To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providing:
+To get started with `tensorflow-onnx`, run the `tf2onnx.convert` command, providing:
 
 * the path to your TensorFlow model (where the model is in `saved model` format)
 * a name for the ONNX output file:
