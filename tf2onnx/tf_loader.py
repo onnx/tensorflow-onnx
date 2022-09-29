@@ -74,7 +74,6 @@ if is_tf2():
     tf_gfile = tf.io.gfile
     tf_placeholder = tf.compat.v1.placeholder
     tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-    extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 elif Version(tf.__version__) >= Version("1.13"):
     # 1.13 introduced the compat namespace
     tf_reset_default_graph = tf.compat.v1.reset_default_graph
@@ -85,7 +84,6 @@ elif Version(tf.__version__) >= Version("1.13"):
     tf_gfile = tf.gfile
     tf_placeholder = tf.compat.v1.placeholder
     tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-    extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 else:
     # older than 1.13
     tf_reset_default_graph = tf.reset_default_graph
@@ -96,7 +94,6 @@ else:
     tf_gfile = tf.gfile
     tf_placeholder = tf.placeholder
     tf_placeholder_with_default = tf.placeholder_with_default
-    extract_sub_graph = tf.graph_util.extract_sub_graph
 
 
 def inputs_without_resource(sess, input_names):
@@ -708,11 +705,6 @@ def tf_optimize(input_names, output_names, graph_def):
     """Extract inference subgraph and optimize graph."""
     assert isinstance(input_names, list)
     assert isinstance(output_names, list)
-
-    # TODO: is this needed ?
-    needed_names = [utils.node_name(i) for i in input_names] + \
-                   [utils.node_name(i) for i in output_names]
-    graph_def = extract_sub_graph(graph_def, needed_names)
 
     want_grappler = is_tf2() or Version(tf.__version__) >= Version("1.15")
     if want_grappler:
