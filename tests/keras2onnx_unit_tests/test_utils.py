@@ -312,7 +312,8 @@ def is_bloburl_access(url):
 def get_max_opset_supported_by_ort():
     try:
         import onnxruntime as ort
-        ort_ver = Version(ort.__version__).base_version
+        ort_ver = Version(ort.__version__)
+        ort_ver = Version("{}.{}.0".format(ort_ver.major, ort_ver.minor)).base_version
 
         if ort_ver in ORT_OPSET_VERSION.keys():
             return ORT_OPSET_VERSION[ort_ver]
