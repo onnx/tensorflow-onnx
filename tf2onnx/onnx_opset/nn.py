@@ -506,13 +506,17 @@ class ConvTranspose:
             output_shape = ctx.make_node("Shape", [node.output[0]])
             sp_index_start = 1 if is_channels_last(node) else 2
             output_h = GraphBuilder(ctx).make_slice(
-                {"data": output_shape.output[0], "ends": [sp_index_start+1], "starts": [sp_index_start], "axes": [0]})
+                {"data": output_shape.output[0], "ends": [sp_index_start+1], "starts": [sp_index_start],
+                 "axes": [0]})
             output_w = GraphBuilder(ctx).make_slice(
-                {"data": output_shape.output[0], "ends": [sp_index_start+2], "starts": [sp_index_start+1], "axes": [0]})
+                {"data": output_shape.output[0], "ends": [sp_index_start+2], "starts": [sp_index_start+1],
+                 "axes": [0]})
             expect_h = GraphBuilder(ctx).make_slice(
-                {"data": input_shape.output[0], "ends": [sp_index_start+1], "starts": [sp_index_start], "axes": [0]})
+                {"data": input_shape.output[0], "ends": [sp_index_start+1], "starts": [sp_index_start],
+                 "axes": [0]})
             expect_w = GraphBuilder(ctx).make_slice(
-                {"data": input_shape.output[0], "ends": [sp_index_start+2], "starts": [sp_index_start+1], "axes": [0]})
+                {"data": input_shape.output[0], "ends": [sp_index_start+2], "starts": [sp_index_start+1],
+                 "axes": [0]})
             diff_h = ctx.make_node("Sub", [output_h, expect_h])
             diff_w = ctx.make_node("Sub", [output_w, expect_w])
             nonneg_diff_h = diff_h
@@ -530,11 +534,11 @@ class ConvTranspose:
             end_w = ctx.make_node("Add", [start_w.output[0], expect_w])
             if spatial == 3:
                 output_d = GraphBuilder(ctx).make_slice({
-                    "data": output_shape.output[0], "ends": [sp_index_start+3], "starts": [sp_index_start+2], "axes": [0]
-                })
+                    "data": output_shape.output[0], "ends": [sp_index_start+3], "starts": [sp_index_start+2],
+                    "axes": [0]})
                 expect_d = GraphBuilder(ctx).make_slice({
-                    "data": input_shape.output[0], "ends": [sp_index_start+3], "starts": [sp_index_start+2], "axes": [0]
-                })
+                    "data": input_shape.output[0], "ends": [sp_index_start+3], "starts": [sp_index_start+2],
+                    "axes": [0]})
                 diff_d = ctx.make_node("Sub", [output_d, expect_d])
                 nonneg_diff_d = diff_d
                 if use_strides_workaround:
