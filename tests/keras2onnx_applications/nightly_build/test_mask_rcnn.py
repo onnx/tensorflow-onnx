@@ -21,7 +21,7 @@ if not os.path.exists(model_file_name):
 keras.backend.clear_session()
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../mask_rcnn/'))
 from mask_rcnn import model
-from distutils.version import StrictVersion
+from packaging.version import Version
 
 working_path = os.path.abspath(os.path.dirname(__file__))
 tmp_path = os.path.join(working_path, 'temp')
@@ -36,7 +36,7 @@ class TestMaskRCNN(unittest.TestCase):
         for fl in self.model_files:
             os.remove(fl)
 
-    @unittest.skipIf(StrictVersion(onnx.__version__.split('-')[0]) < StrictVersion("1.6.0"),
+    @unittest.skipIf(Version(onnx.__version__.split('-')[0]) < Version("1.6.0"),
                      "Mask-rcnn conversion needs contrib op for onnx < 1.6.0.")
     def test_mask_rcnn(self):
         set_converter('CropAndResize', convert_tf_crop_and_resize)

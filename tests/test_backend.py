@@ -3488,6 +3488,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "IsNaN")
+    def test_where_ismulinf(self):
+        x_val1 = np.array([np.inf], dtype=np.float32)
+        x_val2 = np.array([0], dtype=np.float32)
+        true_result = np.array([np.inf], dtype=np.float32)
+        def func(x1, x2):
+            mul = tf.multiply(x1, x2)
+            picks = tf.where(x1 < mul, true_result, x2)
+            return tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
     @check_opset_min_version(9, "Where for strings needs opset 9")
     @skip_tfjs("Technically tf where doesn't support strings and tfjs doesn't like it")
     def test_where_string(self):
@@ -5542,7 +5553,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0}, rtol=1e-6, atol=1e-4)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
 
-        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024.
         x_val[0, 0] = -1024
         x_val[0, 1] = -1023
         x_val[0, 2] = 1024
@@ -5579,7 +5590,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0}, rtol=1e-6, atol=1e-4)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
 
-        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024.
         x_val[0, 0] = -1024
         x_val[0, 1] = -1023
         x_val[0, 2] = 1024

@@ -2,12 +2,11 @@
 
 import pytest
 import numpy as np
-from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
                                    is_keras_older_than, is_keras_later_than, python_keras_is_deprecated)
-from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
+from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional, convert_keras_for_test as convert_keras, get_max_opset_supported_for_test as get_maximum_opset_supported
 
 K = keras.backend
 Activation = keras.layers.Activation
@@ -88,9 +87,6 @@ if is_tf_keras and is_tensorflow_later_than("1.14.0") and not python_keras_is_de
 def _asarray(*a):
     return np.array([a], dtype='f')
 
-########################
-from tf2onnx.keras2onnx_api import convert_keras
-##########################
 
 def test_keras_lambda(runner):
     model = Sequential()
@@ -1143,8 +1139,8 @@ def test_conv1d_padding(conv1_runner):
     test_causal = False
     if is_tf_keras:
         import tensorflow
-        from distutils.version import StrictVersion
-        if StrictVersion(tensorflow.__version__.split('-')[0]) >= StrictVersion('1.12.0'):
+        from packaging.version import Version
+        if Version(tensorflow.__version__.split('-')[0]) >= Version('1.12.0'):
             test_causal = True
     else:
         test_causal = True

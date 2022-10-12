@@ -8,9 +8,17 @@ import numpy as np
 import mock_keras2onnx
 from mock_keras2onnx.proto import keras, is_keras_older_than
 from mock_keras2onnx.proto.tfcompat import is_tf2
+from packaging.version import Version
+from tf2onnx.keras2onnx_api import convert_keras, get_maximum_opset_supported
 import time
 import json
 import urllib
+
+
+# Mapping opset to ONNXRuntime version.
+ORT_OPSET_VERSION = {
+    "1.6.0": 13, "1.7.0": 13, "1.8.0": 14, "1.9.0": 15, "1.10.0": 15, "1.11.0": 16, "1.12.0": 17
+}
 
 working_path = os.path.abspath(os.path.dirname(__file__))
 tmp_path = os.path.join(working_path, 'temp')
@@ -299,3 +307,30 @@ def is_bloburl_access(url):
         return response.getcode() == 200
     except urllib.error.URLError:
         return False
+
+
+def get_max_opset_supported_by_ort():
+    try:
+        import onnxruntime as ort
+        ort_ver = Version(ort.__version__)
+        ort_ver = Version("{}.{}.0".format(ort_ver.major, ort_ver.minor)).base_version
+
+        if ort_ver in ORT_OPSET_VERSION.keys():
+            return ORT_OPSET_VERSION[ort_ver]
+        else:
+            print("Given onnxruntime version doesn't exist in ORT_OPSET_VERSION: {}".format(ort_ver))
+            return None
+    except ImportError:
+        return None
+
+
+def get_max_opset_supported_for_test():
+    return min(get_max_opset_supported_by_ort(), get_maximum_opset_supported())
+
+
+def convert_keras_for_test(model, name=None, target_opset=None, **kwargs):
+    if target_opset is None:
+        target_opset = get_max_opset_supported_by_ort()
+
+    print("Trying to run test with opset version: {}".format(target_opset))
+    return convert_keras(model=model, name=name, target_opset=target_opset, **kwargs)
