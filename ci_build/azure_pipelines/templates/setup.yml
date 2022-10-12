@@ -26,7 +26,7 @@ steps:
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
 
-    pip unisntall -y onnxruntime
+    pip uninstall -y onnxruntime
     pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.13.0.dev20221005006
 
     # if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
