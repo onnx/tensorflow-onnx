@@ -26,13 +26,16 @@ steps:
         pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     fi
 
-    if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
-    then
-      pip uninstall -y onnxruntime
-      # install numpy upfront since it is not on https://test.pypi.org/simple/
-      pip install 'numpy>=1.18'
-      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
-    fi
+    pip unisntall -y onnxruntime
+    pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.13.0.dev20221005006
+
+    # if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
+    # then
+    #   pip uninstall -y onnxruntime
+    #   # install numpy upfront since it is not on https://test.pypi.org/simple/
+    #   pip install 'numpy>=1.18'
+    #   pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
+    # fi
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
