@@ -3,13 +3,22 @@
 import os
 import sys
 import onnx
+from onnx import helper
 import numpy as np
 import mock_keras2onnx
 from mock_keras2onnx.proto import keras, is_keras_older_than
 from mock_keras2onnx.proto.tfcompat import is_tf2
-#from mock_keras2onnx.common.onnx_ops import apply_identity, OnnxOperatorBuilder
+from packaging.version import Version
+from tf2onnx.keras2onnx_api import convert_keras, get_maximum_opset_supported
 import time
 import json
+import urllib
+
+
+# Mapping opset to ONNXRuntime version.
+ORT_OPSET_VERSION = {
+    "1.6.0": 13, "1.7.0": 13, "1.8.0": 14, "1.9.0": 15, "1.10.0": 15, "1.11.0": 16, "1.12.0": 17
+}
 
 working_path = os.path.abspath(os.path.dirname(__file__))
 tmp_path = os.path.join(working_path, 'temp')
@@ -161,6 +170,14 @@ def no_loops_in_tf2(onnx_model):
     return not is_tf2 or all(n.op_type != "Loop" for n in onnx_model.graph.node)
 
 
+def all_recurrents_should_bidirectional(onnx_model):
+    return all([
+        helper.get_attribute_value(attr) == b'bidirectional'
+        for node in onnx_model.graph.node if node.op_type in ['GRU', 'LSTM', 'RNN']
+        for attr in node.attribute if attr.name == 'direction'
+    ])
+
+
 def run_onnx_runtime(case_name, onnx_model, data, expected, model_files, rtol=1.e-3, atol=1.e-6,
                      compare_perf=False, enable_profiling=False):
     if not os.path.exists(tmp_path):
@@ -282,3 +299,38 @@ def run_image(model, model_files, img_path, model_name='onnx_conversion', rtol=1
     onnx_model = mock_keras2onnx.convert_keras(model, model.name)
     res = run_onnx_runtime(model_name, onnx_model, x, preds, model_files, rtol=rtol, atol=atol, compare_perf=compare_perf)
     return res, msg
+
+
+def is_bloburl_access(url):
+    try:
+        response = urllib.request.urlopen(url)
+        return response.getcode() == 200
+    except urllib.error.URLError:
+        return False
+
+
+def get_max_opset_supported_by_ort():
+    try:
+        import onnxruntime as ort
+        ort_ver = Version(ort.__version__)
+        ort_ver = Version("{}.{}.0".format(ort_ver.major, ort_ver.minor)).base_version
+
+        if ort_ver in ORT_OPSET_VERSION.keys():
+            return ORT_OPSET_VERSION[ort_ver]
+        else:
+            print("Given onnxruntime version doesn't exist in ORT_OPSET_VERSION: {}".format(ort_ver))
+            return None
+    except ImportError:
+        return None
+
+
+def get_max_opset_supported_for_test():
+    return min(get_max_opset_supported_by_ort(), get_maximum_opset_supported())
+
+
+def convert_keras_for_test(model, name=None, target_opset=None, **kwargs):
+    if target_opset is None:
+        target_opset = get_max_opset_supported_by_ort()
+
+    print("Trying to run test with opset version: {}".format(target_opset))
+    return convert_keras(model=model, name=name, target_opset=target_opset, **kwargs)

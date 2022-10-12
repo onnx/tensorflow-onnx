@@ -38,12 +38,14 @@ ONNX_TO_NUMPY_DTYPE = {
     onnx_pb.TensorProto.INT8: np.int8,
     onnx_pb.TensorProto.UINT8: np.uint8,
     onnx_pb.TensorProto.UINT16: np.uint16,
+    onnx_pb.TensorProto.UINT32: np.uint32,
+    onnx_pb.TensorProto.UINT64: np.uint64,
     onnx_pb.TensorProto.INT64: np.int64,
     onnx_pb.TensorProto.UINT64: np.uint64,
-    onnx_pb.TensorProto.BOOL: np.bool,
+    onnx_pb.TensorProto.BOOL: bool,
     onnx_pb.TensorProto.COMPLEX64: np.complex64,
     onnx_pb.TensorProto.COMPLEX128: np.complex128,
-    onnx_pb.TensorProto.STRING: np.object,
+    onnx_pb.TensorProto.STRING: object,
 }
 
 #
@@ -58,6 +60,8 @@ ONNX_DTYPE_NAMES = {
     onnx_pb.TensorProto.INT8: "int8",
     onnx_pb.TensorProto.UINT8: "uint8",
     onnx_pb.TensorProto.UINT16: "uint16",
+    onnx_pb.TensorProto.UINT32: "uint32",
+    onnx_pb.TensorProto.UINT64: "uint64",
     onnx_pb.TensorProto.INT64: "int64",
     onnx_pb.TensorProto.STRING: "string",
     onnx_pb.TensorProto.BOOL: "bool",
@@ -165,7 +169,7 @@ def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
     if elem_type is None:
         elem_type = onnx_pb.TensorProto.UNDEFINED
     elif isinstance(elem_type, SeqType):
-        return helper.make_sequence_value_info(name, elem_type.dtype, make_onnx_shape(shape), **kwargs)
+        return helper.make_tensor_sequence_value_info(name, elem_type.dtype, make_onnx_shape(shape), **kwargs)
     return helper.make_tensor_value_info(
         name,
         elem_type,

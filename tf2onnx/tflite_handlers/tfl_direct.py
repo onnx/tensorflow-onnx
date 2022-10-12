@@ -12,6 +12,7 @@ from tf2onnx.handler import tfl_op
 
 
 @tfl_op("TFL_ABS", tf_op="Abs")
+@tfl_op("TFL_BATCH_MATMUL", tf_op="BatchMatMul")
 @tfl_op("TFL_BROADCAST_TO", tf_op="BroadcastTo")
 @tfl_op("TFL_CEIL", tf_op="Ceil")
 @tfl_op("TFL_COS", tf_op="Cos")
@@ -30,13 +31,17 @@ from tf2onnx.handler import tfl_op
 @tfl_op("TFL_LOGICAL_AND", tf_op="LogicalAnd")
 @tfl_op("TFL_LOGICAL_NOT", tf_op="LogicalNot")
 @tfl_op("TFL_LOGICAL_OR", tf_op="LogicalOr")
+@tfl_op("TFL_MATMUL", tf_op="MatMul")
 @tfl_op("TFL_MATRIX_DIAG", tf_op="MatrixDiag")
 @tfl_op("TFL_MATRIX_SET_DIAG", tf_op="MatrixSetDiag")
 @tfl_op("TFL_MAXIMUM", tf_op="Maximum")
 @tfl_op("TFL_MINIMUM", tf_op="Minimum")
+@tfl_op("TFL_MULTINOMIAL", tf_op="Multinomial")
 @tfl_op("TFL_NEG", tf_op="Neg")
 @tfl_op("TFL_NOT_EQUAL", tf_op="NotEqual")
 @tfl_op("TFL_POW", tf_op="Pow")
+@tfl_op("TFL_RANDOM_STANDARD_NORMAL", tf_op="RandomNormal")
+@tfl_op("TFL_RANDOM_UNIFORM", tf_op="RandomUniform")
 @tfl_op("TFL_RANK", tf_op="Rank")
 @tfl_op("TFL_RELU", tf_op="Relu")
 @tfl_op("TFL_RELU6", tf_op="Relu6")
@@ -83,6 +88,7 @@ from tf2onnx.handler import tfl_op
 @tfl_op("TFL_RFFT2D", tf_op="RFFT2D")
 @tfl_op("TFL_COMPLEX_ABS", tf_op="ComplexAbs")
 @tfl_op("TFL_HARD_SWISH", tf_op="HardSwish")
+@tfl_op("TFL_L2_NORMALIZATION", tf_op="L2Normalization")
 class TflDirectOp:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):

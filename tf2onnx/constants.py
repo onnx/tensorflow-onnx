@@ -15,11 +15,17 @@ AI_ONNX_ML_DOMAIN = "ai.onnx.ml"
 MICROSOFT_DOMAIN = "com.microsoft"
 CONTRIB_OPS_DOMAIN = "ai.onnx.contrib"
 
-# Default opset version for onnx domain
-PREFERRED_OPSET = 9
+# Default opset version for onnx domain.
+# The current update policy is that the default should be set to
+# the latest released version as of 18 months ago.
+# Opset 13 was released in ONNX v1.8.0 (Nov, 2020).
+PREFERRED_OPSET = 13
 
 # Default opset for custom ops
 TENSORFLOW_OPSET = helper.make_opsetid("ai.onnx.converters.tensorflow", 1)
+
+# Built-in supported opset
+AI_ONNX_ML_OPSET = helper.make_opsetid(AI_ONNX_ML_DOMAIN, 2)
 
 # Target for the generated onnx graph. It possible targets:
 # onnx-1.1 = onnx at v1.1 (winml in rs4 is based on this)
@@ -47,6 +53,7 @@ ENV_TF2ONNX_CATCH_ERRORS = "TF2ONNX_CATCH_ERRORS"
 
 # Mapping opset to IR version.
 # Note: opset 7 and opset 8 came out with IR3 but we need IR4 because of PlaceholderWithDefault
+# Refer from https://github.com/onnx/onnx/blob/main/docs/Versioning.md#released-versions
 OPSET_TO_IR_VERSION = {
-    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7, 14: 7, 15: 8
+    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7, 14: 7, 15: 8, 16: 8, 17: 8
 }

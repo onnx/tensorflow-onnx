@@ -5,7 +5,7 @@ import sys
 import unittest
 import mock_keras2onnx
 import numpy as np
-from mock_keras2onnx.proto import keras, is_tf_keras
+from mock_keras2onnx.proto import keras, is_tensorflow_older_than
 from os.path import dirname, abspath
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_onnx_runtime
@@ -91,6 +91,7 @@ class TestNLP(unittest.TestCase):
         expected = model.predict([x, y])
         self.assertTrue(run_onnx_runtime(onnx_model.graph.name, onnx_model, {model.input_names[0]: x, model.input_names[1]: y}, expected, self.model_files))
 
+    @unittest.skipIf(is_tensorflow_older_than('2.0.0'), "Result is slightly different in tf1")
     @unittest.skipIf(get_maximum_opset_supported() < 9,
                      "None seq_length LSTM is not supported before opset 9.")
     def test_imdb_bidirectional_lstm(self):

@@ -9,7 +9,7 @@ import sys
 import unittest
 from collections import defaultdict
 
-from distutils.version import LooseVersion
+from packaging.version import Version
 from parameterized import parameterized
 import numpy as np
 import tensorflow as tf
@@ -24,6 +24,8 @@ __all__ = [
     "check_onnxruntime_backend",
     "check_tf_min_version",
     "check_tf_max_version",
+    "check_tfjs_min_version",
+    "check_tfjs_max_version",
     "skip_tf_versions",
     "skip_tf_cpu",
     "check_onnxruntime_min_version",
@@ -96,7 +98,7 @@ class TestConfig(object):
             pass
 
         if version:
-            version = LooseVersion(version)
+            version = Version(version)
         return version
 
     def __str__(self):
@@ -176,7 +178,7 @@ def check_opset_after_tf_version(tf_version, required_opset, message=""):
     """ Skip if tf_version > max_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires opset {} after tf {}".format(required_opset, tf_version), message)
-    skip = config.tf_version >= LooseVersion(tf_version) and config.opset < required_opset
+    skip = config.tf_version >= Version(tf_version) and config.opset < required_opset
     return unittest.skipIf(skip, reason)
 
 
@@ -272,19 +274,42 @@ def requires_custom_ops(message=""):
         can_import = False
     return unittest.skipIf(not can_import, reason)
 
+def check_tfjs_max_version(max_accepted_version, message=""):
+    """ Skip if tfjs_version > max_required_version """
+    config = get_test_config()
+    reason = _append_message("conversion requires tensorflowjs <= {}".format(max_accepted_version), message)
+    try:
+        import tensorflowjs
+        can_import = True
+    except ModuleNotFoundError:
+        can_import = False
+    return unittest.skipIf(can_import and not config.skip_tfjs_tests and \
+         Version(tensorflowjs.__version__) > Version(max_accepted_version), reason)
+
+def check_tfjs_min_version(min_required_version, message=""):
+    """ Skip if tjs_version < min_required_version """
+    config = get_test_config()
+    reason = _append_message("conversion requires tensorflowjs >= {}".format(min_required_version), message)
+    try:
+        import tensorflowjs
+        can_import = True
+    except ModuleNotFoundError:
+        can_import = False
+    return unittest.skipIf(can_import and not config.skip_tfjs_tests and \
+         Version(tensorflowjs.__version__) < Version(min_required_version), reason)
 
 def check_tf_max_version(max_accepted_version, message=""):
     """ Skip if tf_version > max_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires tf <= {}".format(max_accepted_version), message)
-    return unittest.skipIf(config.tf_version > LooseVersion(max_accepted_version), reason)
+    return unittest.skipIf(config.tf_version > Version(max_accepted_version), reason)
 
 
 def check_tf_min_version(min_required_version, message=""):
     """ Skip if tf_version < min_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires tf >= {}".format(min_required_version), message)
-    return unittest.skipIf(config.tf_version < LooseVersion(min_required_version), reason)
+    return unittest.skipIf(config.tf_version < Version(min_required_version), reason)
 
 
 def skip_tf_versions(excluded_versions, message=""):
@@ -360,7 +385,7 @@ def check_onnxruntime_min_version(min_required_version, message=""):
     config = get_test_config()
     reason = _append_message("conversion requires onnxruntime >= {}".format(min_required_version), message)
     return unittest.skipIf(config.is_onnxruntime_backend and
-                           config.backend_version < LooseVersion(min_required_version), reason)
+                           config.backend_version < Version(min_required_version), reason)
 
 
 def skip_caffe2_backend(message=""):
@@ -429,7 +454,7 @@ def group_nodes_by_type(graph):
 
 
 def check_op_count(graph, op_type, expected_count, disabled=True):
-    # FIXME: after switching to grappler some of the op counts are off. Fix later.
+    # The grappler optimization may change some of the op counts.
     return disabled or len(group_nodes_by_type(graph)[op_type]) == expected_count
 
 

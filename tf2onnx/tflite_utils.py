@@ -39,6 +39,7 @@ TFLITE_TO_ONNX_DTYPE = {
     TFLiteTensorType.COMPLEX128: onnx_pb.TensorProto.COMPLEX128,
     TFLiteTensorType.UINT64: onnx_pb.TensorProto.UINT64,
     TFLiteTensorType.UINT32: onnx_pb.TensorProto.UINT32,
+    TFLiteTensorType.UINT16: onnx_pb.TensorProto.UINT16,
     TFLiteTensorType.RESOURCE: onnx_pb.TensorProto.UNDEFINED,
     TFLiteTensorType.VARIANT: onnx_pb.TensorProto.UNDEFINED,
 }
@@ -59,6 +60,7 @@ TFLITE_TO_TF_DTYPE = {
     TFLiteTensorType.COMPLEX128: types_pb2.DT_COMPLEX128,
     TFLiteTensorType.UINT64: types_pb2.DT_UINT64,
     TFLiteTensorType.UINT32: types_pb2.DT_UINT32,
+    TFLiteTensorType.UINT16: types_pb2.DT_UINT16,
     TFLiteTensorType.RESOURCE: types_pb2.DT_RESOURCE,
     TFLiteTensorType.VARIANT: types_pb2.DT_VARIANT,
 }
@@ -154,9 +156,9 @@ def graphs_from_tflite(tflite_path, input_names=None, output_names=None):
         if is_main_g:
             # Override IO in main graph
             utils.check_io(input_names, output_names, output_shapes.keys())
-            if input_names is not None:
+            if input_names:
                 g_inputs = input_names
-            if output_names is not None:
+            if output_names:
                 g_outputs = output_names
         g = Graph(onnx_nodes, output_shapes, dtypes, input_names=g_inputs, output_names=g_outputs,
                   is_subgraph=not is_main_g, graph_name=graph_name)
@@ -269,7 +271,7 @@ def parse_tflite_string_tensor(buffer_bytes, shape):
     string_list = []
     for i in range(count):
         string_list.append(buffer_bytes[offset_list[i]:offset_list[i+1]].decode("utf-8"))
-    return numpy_helper.from_array(np.array(string_list, dtype=np.object).reshape(shape))
+    return numpy_helper.from_array(np.array(string_list, dtype=object).reshape(shape))
 
 
 def op_has_scalar_output(input_shapes, optype, attr):

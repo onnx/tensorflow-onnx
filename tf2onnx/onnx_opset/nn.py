@@ -59,8 +59,8 @@ def get_channels_last_permutation(spatial):
 
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                         input_indices=None, output_indices=None, spatial=2):
-    """Convert input and kernel from tensorflow to onnx. This maybe require to
-        to insert transpose ops for input, kernel and output unless they are constants
+    """Convert input and kernel from tensorflow to onnx. This may be required to
+        insert transpose ops for input, kernel, and output unless they are constants
         and we can transpose the constant.
         We transpose inputs if they are in NHWC. We always transpose the kernel from
         HWNC to NCHW. Outputs are transposed if the format is NHWC.
@@ -139,12 +139,25 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
 
         # If kernel is a constant, transpose that one if we are the only consumer.
         need_transpose = True
-        if kernel_node.is_const() and len(ctx.find_output_consumers(kernel_name)) == 1:
-            val = kernel_node.get_tensor_value(as_list=False)
-            val = np.transpose(val, permutation)
-
-            kernel_node.set_tensor_value(val)
-            need_transpose = False
+        if (kernel_node.is_const() or kernel_node.op.op_type == "DequantizeLinear") \
+            and len(ctx.find_output_consumers(kernel_name)) == 1:
+            if kernel_node.op.op_type == 'DequantizeLinear':
+                # Assuming the model was trained in NHWC in TF,
+                # the weights would be in [fH, fW, C_in, C_out].
+                # orig_conv_weights -> Q -> DQ -> new_conv_weights -> conv
+                weights_node = kernel_node.inputs[0].inputs[0]
+                val = weights_node.get_tensor_value(as_list=False)
+                val = np.transpose(val, permutation)
+                weights_node.set_tensor_value(val)
+                need_transpose = False
+                # Change the quantization axis for Q and DQ node accordingly
+                kernel_node.set_attr("axis", 0) # DQ node
+                kernel_node.inputs[0].set_attr("axis", 0) # Q node
+            else:
+                val = kernel_node.get_tensor_value(as_list=False)
+                val = np.transpose(val, permutation)
+                kernel_node.set_tensor_value(val)
+                need_transpose = False
 
         if need_transpose:
             transpose = ctx.insert_new_node_on_input(node, "Transpose", kernel_name)
@@ -853,7 +866,7 @@ class Pad:
         output = node.output[0]
         shape = ctx.make_node("Shape", [output]).output[0]
         dims = ctx.make_node("Split", [shape], output_count=rank).output
-        two_false = ctx.make_const(utils.make_name("two_false"), np.array([False, False], np.bool)).output[0]
+        two_false = ctx.make_const(utils.make_name("two_false"), np.array([False, False], bool)).output[0]
         inv_second = ctx.make_const(utils.make_name("inv_second"), np.array([1, -1], np.int64)).output[0]
         dec_second = ctx.make_const(utils.make_name("dec_second"), np.array([0, 1], np.int64)).output[0]
         for a in non_zero_axes:
@@ -956,6 +969,14 @@ class BatchNorm:
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
         tf_type = node.type
+        input_rank = len(ctx.get_shape(node.input[0]))
+        if input_rank == 4:
+            spatial = 2
+        elif input_rank == 5:
+            spatial = 3
+        else:
+            raise ValueError("node input must be 4 or 5-dimensional, is {} now".format(input_rank))
+
         node.type = "BatchNormalization"
         # tf inputs: x, scale, bias, mean, variance
         # tf outputs: y, batch_mean, batch_var
@@ -986,7 +1007,7 @@ class BatchNorm:
             # the setter makes a copy of new_output
             node.output = new_output
 
-        conv_convert_inputs(ctx, node, with_kernel=False)
+        conv_convert_inputs(ctx, node, with_kernel=False, spatial=spatial)
 
         inp_shape = ctx.get_shape(node.input[0])
         inp_rank = len(inp_shape) if inp_shape is not None else None
@@ -1317,7 +1338,7 @@ class CropAndResize:
         g.add_graph_output(cond_out_name, TensorProto.BOOL, [])
         g.add_graph_output(squeeze_x.output[0], ctx.get_dtype(node.input[0]), [-1, -1, -1])
         trip_node = ctx.make_node("Size", [box_ind])
-        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=bool))
         ctx.remove_node(node.name)
         branches = {"body": g}
         inner_loop = ctx.make_node("Loop", [trip_node.output[0], cond_const.output[0]], name=node.name,
@@ -1630,7 +1651,7 @@ class MatrixBandPart:
         # 2: "loop" to generate mask matrix: generate col or row of matrix one by one
         g = ctx.create_new_graph_with_same_config()
         node_name = utils.make_name("const_zero_bool")
-        const_zero_bool = g.make_const(name=node_name, np_val=np.array([[0]]).astype(np.bool))
+        const_zero_bool = g.make_const(name=node_name, np_val=np.array([[0]]).astype(bool))
         g.set_dtype(const_zero_bool.output[0], onnx_pb.TensorProto.BOOL)
 
         g.add_graph_input("trip", onnx_pb.TensorProto.INT64, [])
@@ -1660,7 +1681,7 @@ class MatrixBandPart:
         line_num = ctx.make_node(op_type="Gather", inputs=[shape.output[0], col_or_row_num_index.output[0]])
         trip_cnt = line_num.output[0]
         node_name = utils.make_name("true")
-        cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(np.bool))
+        cond = ctx.make_const(name=node_name, np_val=np.array(1).astype(bool))
         col_init = one_line.output[0]
 
         branches = {"body": g}

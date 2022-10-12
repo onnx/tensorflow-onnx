@@ -150,7 +150,7 @@ class ConstFoldOptimizer(GraphOptimizerBase):
         dims_out = len(shape_in) + len(axes)
         axes = [i if i >= 0 else i + dims_out for i in axes]
         # calculate the shape of output accroding to onnx Unsqueeze's spec
-        # https://github.com/onnx/onnx/blob/master/docs/Operators.md#Unsqueeze
+        # https://github.com/onnx/onnx/blob/main/docs/Operators.md#Unsqueeze
         shape_in = iter(shape_in)
         shape_out = [None] * dims_out
         for ind in axes:
@@ -161,6 +161,30 @@ class ConstFoldOptimizer(GraphOptimizerBase):
 
         const_val_after_unsqueeze = const_val.reshape(shape_out)
         return [const_val_after_unsqueeze]
+
+    @staticmethod
+    @_register_func("Mul")
+    def _fold_mul(node, graph):
+        const_val1 = node.inputs[0].get_tensor_value(as_list=False)
+        const_val2 = node.inputs[1].get_tensor_value(as_list=False)
+        const_val_after_nul = np.multiply(const_val1, const_val2)
+        return [const_val_after_nul]
+
+    @staticmethod
+    @_register_func("Add")
+    def _fold_add(node, graph):
+        const_val1 = node.inputs[0].get_tensor_value(as_list=False)
+        const_val2 = node.inputs[1].get_tensor_value(as_list=False)
+        const_val_after_add = np.add(const_val1, const_val2)
+        return [const_val_after_add]
+
+    @staticmethod
+    @_register_func("Sub")
+    def _fold_sub(node, graph):
+        const_val1 = node.inputs[0].get_tensor_value(as_list=False)
+        const_val2 = node.inputs[1].get_tensor_value(as_list=False)
+        const_val_after_sub = np.subtract(const_val1, const_val2)
+        return [const_val_after_sub]
 
     @staticmethod
     @_register_func("Split")

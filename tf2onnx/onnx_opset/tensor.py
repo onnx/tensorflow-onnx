@@ -497,7 +497,7 @@ def _make_gathernd_inner_loop(ctx, params, index, dtype):
     #   gather_res = gather(gather_cur, index[i])
     scope_name = utils.make_name("gathernd_inner_loop")
     trip_node = ctx.make_node("Size", [index.output[0]])
-    cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+    cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=bool))
     trip_name = utils.make_name("i")
     cond_name = utils.make_name("cond")
     cond_out_name = utils.make_name("cond_out")
@@ -548,7 +548,7 @@ def make_gathernd(ctx, params, indices, output, scope_name, t_params, shapes, dt
 
     # outter loop for each index
     # for (int i=0; i<outter_shape; i++) inner_loop(params, flatten_indices[i])
-    cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+    cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=bool))
     ctx.make_const(utils.make_name("dummy"), np.ones((), dtype=np.int64))
 
     # body graph creation
@@ -653,6 +653,16 @@ class ScatterND:
         ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=TensorProto.INT64)
         # reorder inputs to match onnx
         ctx.replace_inputs(node, [node.input[2], node.input[0], node.input[1]])
+
+
+@tf_op("TensorScatterAdd", onnx_op="ScatterND")
+class TensorScatterAdd:
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        # indicies input must be int64 in ONNX.
+        if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+        node.set_attr("reduction", 'add')
 
 
 @tf_op("TensorScatterUpdate", onnx_op="ScatterND")
@@ -963,6 +973,29 @@ class StridedSlice:
                     unqueeze_at.append(bit + ellipsis_gap)
                     begin_mask |= 1 << bit
                     end_mask |= 1 << bit
+
+            if ellipsis_mask:
+                unqueeze_at = []
+                ellipsis_gap = 0
+                num_new = 0
+                end_mask = node.get_attr("end_mask")
+                end_mask = end_mask.i if end_mask is not None else 0
+                begin_mask = node.get_attr("begin_mask")
+                begin_mask = begin_mask.i if begin_mask is not None else 0
+
+                for bit in range(32):
+                    new_axis_flag = (new_axis_mask >> bit) & 1
+                    ellipsis_flag = (ellipsis_mask >> bit) & 1
+                    num_new += not ellipsis_flag and new_axis_flag
+
+                for bit in range(32):
+                    if (ellipsis_mask >> bit) & 1:
+                        ellipsis_gap = len(ctx.get_shape(input_x)) - param_rank + num_new + 1
+                    elif (new_axis_mask >> bit) & 1:
+                        effective_bit = bit if not ellipsis_gap else bit + ellipsis_gap - 1
+                        unqueeze_at.append(effective_bit)
+                        begin_mask |= 1 << bit
+                        end_mask |= 1 << bit
 
             input_x = GraphBuilder(ctx).make_unsqueeze(
                 {'data': input_x, 'axes': unqueeze_at})
@@ -1344,6 +1377,19 @@ class OneHot:
         off_on_value = ctx.make_node("Concat", [off_value, on_value], attr={"axis": 0}).output[0]
 
         indices = node.input[0]
+        indices_rank = ctx.get_rank(indices)
+
+        # Add a special support for 0-rank indices, to do so we have to expand the dimension to 1
+        # before the one hot encoding and remove it after.
+        if indices_rank == 0:
+            dims = ctx.make_const(name=utils.make_name('dims'), np_val=np.array([1], dtype=np.int64))
+            indices = ctx.make_node("Expand", [indices, dims.name]).output[0]
+
+            # Axis 0 is supported by TensorFlow for the one-hot encoding of a 0-rank tensor. It should behave
+            # as if axis has been set to -1 so we artificially set it as is here.
+            if node.get_attr('axis').i == 0:
+                node.set_attr('axis', -1)
+
         if ctx.is_target(constants.TARGET_RS6) \
                 and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
             indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]
@@ -1366,6 +1412,26 @@ class OneHot:
             new_node = ctx.insert_new_node_on_output("Cast", node.output[0], new_node_name, to=output_dtype)
             ctx.set_dtype(new_node.output[0], output_dtype)
             ctx.set_shape(new_node.output[0], ctx.get_shape(node.output[0]))
+
+        # Remove the dimension artificially added in order to support 0-rank indices
+        if indices_rank == 0:
+            nodes = [node]
+            name = utils.make_name(node.name)
+            shape = ctx.get_shape(node.output[0])
+            dtype = ctx.get_dtype(node.output[0])
+            squeeze_node = GraphBuilder(ctx).make_squeeze(
+                {
+                    "axes": [0],
+                    'data': node.output[0]
+                },
+                name=name,
+                dtypes=[dtype],
+                shapes=[shape],
+                return_node=True)
+            ctx.insert_node_on_output(squeeze_node)
+
+            nodes.append(squeeze_node)
+            ctx.update_node_shape_dtype(node, override=True)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
@@ -2764,7 +2830,7 @@ class SparseReshape:
             shape = ctx.get_shape(vector)
             rank = shape[0] if shape is not None else -1
             if rank != -1:
-                lower_tri = np.tri(rank, rank, dtype=np.bool)
+                lower_tri = np.tri(rank, rank, dtype=bool)
                 lower_triangular_bool = ctx.make_const(utils.make_name("lower_tri_const"), lower_tri).output[0]
             else:
                 rank = ctx.make_node("Shape", [vector]).output[0]
@@ -3240,7 +3306,7 @@ class MatrixDiagPartV2V3:
         body_graph.add_graph_output(padded_output.output[0], ctx.get_dtype(node.input[0]), per_loop_shape)
         body_graph.add_graph_output(gap_k.output[0], TensorProto.INT64, [-1])
         # make loop
-        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=np.bool))
+        cond_const = ctx.make_const(utils.make_name("cond"), np.ones((), dtype=bool))
         branches = {"body": body_graph}
         main_loop = ctx.make_node('Loop', [total_k.output[0], cond_const.output[0]], output_count=2, branches=branches)
         # reshape output

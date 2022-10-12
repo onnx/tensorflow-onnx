@@ -1,29 +1,32 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-import sys
+from os.path import dirname, abspath
 import unittest
-import mock_keras2onnx
+import sys
+sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
+
 import json
 import urllib.request
 import pickle
-from os.path import dirname, abspath
-from mock_keras2onnx.proto import keras
 import numpy as np
 import tensorflow as tf
-from onnxconverter_common.onnx_ex import get_maximum_opset_supported
 
-sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from test_utils import run_onnx_runtime
-from mock_keras2onnx.proto import is_tensorflow_older_than
+from onnxconverter_common.onnx_ex import get_maximum_opset_supported
+import mock_keras2onnx
+from mock_keras2onnx.proto import keras, is_tensorflow_older_than
+from test_utils import is_bloburl_access, run_onnx_runtime
 
 enable_full_transformer_test = False
 if os.environ.get('ENABLE_FULL_TRANSFORMER_TEST', '0') != '0':
     enable_transformer_test = True
 
+CONVERTER_TRANSFERMER_PATH = r'https://lotus.blob.core.windows.net/converter-models/transformer_tokenizer/'
+
 
 @unittest.skipIf(is_tensorflow_older_than('2.1.0'),
                  "Transformers conversion need tensorflow 2.1.0+")
+@unittest.skipIf(not is_bloburl_access(CONVERTER_TRANSFERMER_PATH), "Model blob url can't access.")
 class TestTransformers(unittest.TestCase):
 
     text_str = 'The quick brown fox jumps over lazy dog.'

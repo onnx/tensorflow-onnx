@@ -20,6 +20,7 @@ from tensorflow.python.ops import lookup_ops
 import onnx
 from common import get_test_config
 from tfjs_runner import run_tfjs
+from tf2onnx import constants
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
@@ -112,7 +113,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                              check_value=True, check_shape=True, check_dtype=True):
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
-                if expected_val.dtype == np.object:
+                if expected_val.dtype == object:
                     # TFLite pads strings with nul bytes
                     decode = np.vectorize(lambda x: x.replace(b'\x00', b'').decode('UTF-8'))
                     expected_val_str = decode(expected_val)
@@ -133,7 +134,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if check_shape:
                 self.assertEqual(expected_val.shape, actual_val.shape)
 
-    def freeze_and_run_tf(self, func, feed_dict, outputs, as_session, premade_placeholders, large_model, constant_fold):
+    def freeze_and_run_tf(self, func, feed_dict, outputs, as_session, premade_placeholders, large_model):
         np.random.seed(1)  # Make it reproducible.
         clean_feed_dict = {utils.node_name(k): v for k, v in feed_dict.items()}
         if is_tf2() and not as_session:
@@ -195,7 +196,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             tf_reset_default_graph()
             with tf_session() as sess:
                 tf.import_graph_def(graph_def, name='')
-                graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def, fold_constant=constant_fold)
+                graph_def = tf_optimize(list(feed_dict.keys()), outputs, graph_def)
 
         return result, graph_def, initialized_tables
 
@@ -203,15 +204,18 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         try:
             from tensorflowjs.converters import converter
         except ImportError:
+            self.logger.warning("Tensorflowjs.converters package imports failed.")
             return None
         tfjs_path = os.path.join(self.test_data_directory, self._testMethodName + "_tfjs")
         try:
             converter.convert([graph_def_path, tfjs_path, '--input_format', 'tf_frozen_model',
                                '--output_node_names', ','.join(output_names)])
         except ValueError:
+            self.logger.warning("Convert tensorflowjs graph failed.")
             return None
         model_path = os.path.join(tfjs_path, 'model.json')
         if not os.path.exists(model_path):
+            self.logger.warning("Tensorflowjs model path %s is empty.", model_path)
             return None
         return model_path
 
@@ -328,8 +332,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             self.assertEqual(get_dtype(info), graph.get_dtype(info.name))
 
     def run_test_case(self, func, feed_dict, input_names_with_port, output_names_with_port,
-                      rtol=1e-07, atol=1e-5, mtol=None, convert_var_to_const=True, constant_fold=True,
-                      check_value=True, check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
+                      rtol=1e-07, atol=1e-5, mtol=None, convert_var_to_const=True, check_value=True,
+                      check_shape=True, check_dtype=True, process_args=None, onnx_feed_dict=None,
                       graph_validator=None, as_session=False, large_model=False, premade_placeholders=False,
                       use_custom_ops=False, optimize=True):
         """
@@ -358,11 +362,12 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
         expected, graph_def, initialized_tables = \
             self.freeze_and_run_tf(func, feed_dict, output_names_with_port, as_session,
-                                   premade_placeholders, large_model, constant_fold)
+                                   premade_placeholders, large_model)
 
         graph_def_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
         utils.save_protobuf(graph_def_path, graph_def)
         self.logger.debug("created file  %s", graph_def_path)
+        tfl_process_args = process_args.copy()
 
         if test_tfjs:
             tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
@@ -392,6 +397,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     g = optimizer.optimize_graph(g, catch_errors=False)
                 actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model,
                                           use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    actual[i] = np.transpose(actual[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(expected, actual, rtol, atol, mtol, check_value, check_shape, check_dtype)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
@@ -407,12 +416,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if run_tfl_consistency_test:
                 self.assert_results_equal(expected, tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
 
-            tfl_process_args = process_args.copy()
             if 'inputs_as_nchw' in tfl_process_args:
                 nchw_inps_with_port = tfl_process_args['inputs_as_nchw']
                 tfl_process_args['inputs_as_nchw'] = [i.split(':')[0] for i in nchw_inps_with_port]
             input_names_without_port = [inp.split(':')[0] for inp in feed_dict.keys()]
-
+            if 'outputs_as_nchw' in tfl_process_args:
+                nchw_outps_with_port = tfl_process_args['outputs_as_nchw']
+                tfl_process_args['outputs_as_nchw'] = [i.split(':')[0] for i in nchw_outps_with_port]
+                output_names_with_port = [i.split(':')[0] for i in nchw_outps_with_port]
             g = process_tf_graph(None, opset=self.config.opset,
                                  input_names=input_names_without_port,
                                  output_names=tfl_outputs,
@@ -424,6 +435,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
             onnx_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port,
                                             postfix="_from_tflite", use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    onnx_tfl_res[i] = np.transpose(onnx_tfl_res[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(tfl_res, onnx_tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
             self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
@@ -453,6 +468,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             g = optimizer.optimize_graph(g)
             onnx_tfjs_res = self.run_backend(g, None, onnx_feed_dict, large_model,
                                              postfix="_from_tfjs", use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    onnx_tfjs_res[i] = np.transpose(onnx_tfjs_res[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(tfjs_res, onnx_tfjs_res, rtol, atol, mtol, check_value, check_shape,
                                       check_dtype=False)

@@ -19,8 +19,9 @@ steps:
       python -m pip install --upgrade pip
       conda config --set always_yes yes --set changeps1 no
       pip install $(ONNX_PATH)
+      pip uninstall -y protobuf
+      pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
-      pip install numpy==1.19
       pip install parameterized
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
@@ -45,6 +46,9 @@ steps:
       $(INSTALL_TRANSFORMERS)
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
+      $(INSTALL_NUMPY)
+
+      pip freeze --all
     displayName: 'Install dependencies'
 
   - script: |
@@ -79,9 +83,8 @@ steps:
       echo Test numpy installation... && python -c "import numpy"
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
-      pip install protobuf
+      pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
-      pip install numpy==1.19
       pip install parameterized
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
@@ -101,6 +104,9 @@ steps:
       %INSTALL_TRANSFORMERS%
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
+      %INSTALL_NUMPY%
+
+      pip freeze --all
     displayName: 'Install dependencies'
 
   - script: |

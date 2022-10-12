@@ -16,7 +16,6 @@ from common import unittest_main
 class ConstantFoldingTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, func, output_names_with_port, feed_dict, **kwargs):
         kwargs["convert_var_to_const"] = False
-        kwargs["constant_fold"] = False
         return self.run_test_case(func, feed_dict, [], output_names_with_port, **kwargs)
 
     def test_concat(self):

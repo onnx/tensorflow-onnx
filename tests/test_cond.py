@@ -118,6 +118,7 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
+    @check_tfjs_max_version("3.15", "failed when tfjs version > 3.15")
     def test_cond_in_while_loop(self):
         def func(i, inputs):
             inputs_2 = tf.identity(inputs)
@@ -159,6 +160,7 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
+    @skip_tfjs("TFJS issue, cannot read properties of undefined (reading 'name')")
     def test_case_with_exclusive(self):
         x_val = np.array([1, 2, 3], dtype=np.float32)
         y_val = np.array([4, 5, 6], dtype=np.float32)
@@ -174,6 +176,7 @@ class CondTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
+    @skip_tfjs("TFJS issue, cannot read properties of undefined (reading 'name')")
     def test_case_without_default_branch(self):
         def func(x, y):
             x = tf.add(x, 1, name="add_x")

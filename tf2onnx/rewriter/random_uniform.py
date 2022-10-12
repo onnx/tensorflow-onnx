@@ -39,7 +39,6 @@ def rewrite_random_uniform(g, ops):
     return ops
 
 
-# rewriter function when fold_const is enabled
 def rewrite_random_uniform_fold_const(g, ops):
     pattern = \
         OpTypePattern('Add', name='output', inputs=[

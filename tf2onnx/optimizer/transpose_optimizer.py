@@ -105,7 +105,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 new_shape = [input_shape[p] for p in perm]
                 return graph.make_const(utils.make_name("new_shape"), np.array(new_shape, dtype=np.int64)).output[0]
 
-            # reshape requires tha output shape can only contain one -1, if not some extra op needed.
+            # reshape requires the output shape can only contain one -1, if not some extra op needed.
             input_shape = graph.make_node("Shape", [op.input[0]]).output[0]
             indice = graph.make_const(utils.make_name("indice"), np.array(perm, np.int64)).output[0]
 
@@ -205,9 +205,11 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Identity": self._identity_handler,
             "LeakyRelu": self._simple_through_handler,
             "Log": self._simple_through_handler,
+            "LogSoftmax": self._softmax_handler,
             "Max": self._maxmin_handler,
             "Min": self._maxmin_handler,
             "Mul": self._mul_handler,
+            "Neg": self._simple_through_handler,
             "Pad": self._pad_handler,
             "PRelu": self._prelu_handler,
             "Reciprocal": self._simple_through_handler,
@@ -222,6 +224,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             "Relu": self._simple_through_handler,
             "Shape": self._shape_handler,
             "Sigmoid": self._simple_through_handler,
+            "Softmax": self._softmax_handler,
             "Sum": self._sum_handler,
             "Slice": self._slice_handler,
             "Split": self._split_handler,
@@ -667,9 +670,20 @@ class TransposeOptimizer(GraphOptimizerBase):
         return False
 
     def _split_handler(self, trans, node):
-        # Todo: need handle cases where Slit node has more than 1 outputs.
+        # Todo: need handle cases where Split node has more than 1 outputs.
+        split = None
+        if self._g.opset >= 13 and len(node.input) > 1 and node.inputs[1].is_const():
+            # split is an input not attr since opset 13
+            split = node.inputs[1].get_tensor_value(as_list=True)
         if self._handle_node_having_branches(trans, node):
-            node.set_attr("axis", 1)
+            perm = trans.get_attr_value("perm")
+            axis = node.get_attr_value("axis", 0)
+            new_axis = perm[axis]
+            node.set_attr("axis", new_axis)
+            if split:
+                new_axes_np = np.array(split, dtype=np.int64)
+                new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
+                self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
             return True
         return False
 
@@ -741,7 +755,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             shape_after_trans = [input_shape[i] for i in ori_perm]
             output_shape = [shape_after_trans[i] for i in range(n) if i not in ori_squeeze_axes]
             # calculate new_perm
-            # after switch, the output shape should be same, using this condtion we can figure the new perm
+            # after switch, the output shape should be same, using this condition we can figure the new perm
             shape_after_squeeze = [input_shape[i] for i in range(n) if i not in new_squeeze_axes]
             new_perm = [shape_after_squeeze.index(i) for i in output_shape]
 
@@ -751,7 +765,7 @@ class TransposeOptimizer(GraphOptimizerBase):
             return False
 
         axes = None
-        # in opset 13, axes is an input not attr
+        # axes is an input not attr since opset 13
         if node.get_attr("axes"):
             axes = node.get_attr("axes").ints
         if len(node.input) > 1 and node.inputs[1].is_const():
@@ -822,6 +836,28 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     def _prelu_handler(self, trans, node):
         return self._handle_node_having_branches(trans, node)
+
+    def _softmax_handler(self, trans, node):
+        trans_rank = get_transpose_rank(trans)
+        perm = trans.get_attr("perm").ints
+
+        if self._g.opset >= 13:
+            # Softmax operates on an arbitrary axis since opset 13
+            axis = node.get_attr_value("axis", -1)
+            new_axis = perm[axis + trans_rank if axis < 0 else axis]
+            if not self._switch_transpose_and_node(node, trans):
+                return False
+            node.set_attr("axis", new_axis)
+            return True
+
+        # For older opsets, the "axis" attribute determines the coercion point for coercing the input tensor to 2D.
+        # We can safely switch transpose and node if the permutation does not make any axes cross that boundary.
+        coercion_axis = node.get_attr_value("axis", 1)
+        for from_axis, to_axis in enumerate(perm):
+            if (from_axis < coercion_axis <= to_axis) or (from_axis >= coercion_axis > to_axis):
+                return False
+
+        return self._switch_transpose_and_node(node, trans)
 
     def _arg_min_max_handler(self, trans, node):
         axis = node.get_attr_value("axis", 0)

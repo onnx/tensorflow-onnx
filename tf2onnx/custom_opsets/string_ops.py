@@ -30,7 +30,7 @@ class StringOps:
             del node.attr[a]
         unsqueeze_node = GraphBuilder(ctx).make_unsqueeze({'data': node.input[1], 'axes': [0]}, return_node=True)
 
-        skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], np.bool))
+        skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], bool))
         ctx.replace_inputs(node, [node.input[0], unsqueeze_node.output[0], skip_empty_const.output[0]])
 
 @tf_op("StringToHashBucketFast", domain=constants.CONTRIB_OPS_DOMAIN)
@@ -53,8 +53,8 @@ class StaticRegexReplace:
         rewrite = node.get_attr_str("rewrite")
         utils.make_sure(node.get_attr_value("replace_global") != 0,
                         "Can not convert StaticRegexReplace if replace_global is False")
-        pattern_node = ctx.make_const(utils.make_name("pattern"), np.array([pattern], np.object))
-        rewrite_node = ctx.make_const(utils.make_name("rewrite"), np.array([rewrite], np.object))
+        pattern_node = ctx.make_const(utils.make_name("pattern"), np.array([pattern], object))
+        rewrite_node = ctx.make_const(utils.make_name("rewrite"), np.array([rewrite], object))
         del node.attr["pattern"]
         del node.attr["rewrite"]
         del node.attr["replace_global"]
@@ -69,7 +69,7 @@ class StringJoin:
         if separator is None:
             separator = b''
         separator = separator.decode('UTF-8')
-        separator_node = ctx.make_const(utils.make_name("separator"), np.array([separator], np.object))
+        separator_node = ctx.make_const(utils.make_name("separator"), np.array([separator], object))
         axis_node = ctx.make_const(utils.make_name("axis"), np.array([0], np.int64))
         inps_with_shapes = [i for i in node.input if ctx.get_shape(i) != []]
         shape_node = None

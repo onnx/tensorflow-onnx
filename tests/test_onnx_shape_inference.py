@@ -22,7 +22,7 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
     """
     Test shape inference, it's just a subset of all cases that can be inferred shape.
     For more information, please refer to onnx shape inference test:
-    https://github.com/onnx/onnx/blob/master/onnx/test/shape_inference_test.py
+    https://github.com/onnx/onnx/blob/main/onnx/test/shape_inference_test.py
     """
 
     def _run_test_case(self, graph, feed_dict):
@@ -353,7 +353,7 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
         sub = else_subgraph.make_node("Sub", [INPUT1, INPUT3])
         else_subgraph.add_graph_output(sub.output[0])
 
-        cond = graph.make_const("cond", np.array(True, dtype=np.bool))
+        cond = graph.make_const("cond", np.array(True, dtype=bool))
         branches = {"then_branch": then_subgraph, "else_branch": else_subgraph}
         if_node = graph.make_node("If", [cond.output[0]], branches=branches)
 
@@ -381,7 +381,7 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
         subgraph.add_graph_output(out.output[0])
 
         max_iter = graph.make_const("max_iter", np.array([10], dtype=np.int64))
-        cond_const = graph.make_const("cond_const", np.array([True], dtype=np.bool))
+        cond_const = graph.make_const("cond_const", np.array([True], dtype=bool))
         branches = {"body": subgraph}
         loop = graph.make_node("Loop", [max_iter.output[0], cond_const.output[0], INPUT1],
                                output_count=2, branches=branches)

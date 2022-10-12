@@ -11,7 +11,7 @@ stages:
       CI_ARTIFACT_NAME: '${{ parameters.artifact_name }}'
   
     pool:
-      vmImage: 'ubuntu-16.04'
+      vmImage: 'ubuntu-latest'
   
     steps:
     - task: DownloadBuildArtifacts@0
@@ -24,7 +24,7 @@ stages:
       inputs:
         createCustomEnvironment: 'true'
         environmentName: 'tf2onnx'
-        packageSpecs: 'python=3.6'
+        packageSpecs: 'python=3.7'
         updateConda: 'false'
   
     - bash: |

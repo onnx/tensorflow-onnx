@@ -11,7 +11,7 @@ We're always looking for your help to fix bugs and improve the product. Create a
 4. Make and checkin your changes along with unit tests
 5. git commit your changes
 6. git push origin HEAD
-7. To request merge into master send a pull request from the web ui
+7. To request merge into main send a pull request from the web ui
 https://github.com/onnx/tensorflow-onnx.
 
 
@@ -24,14 +24,19 @@ New code *must* be accompanied by unit tests.
 Please see [Coding Conventions and Standards](http://google.github.io/styleguide/pyguide.html)
 
 # Licensing guidelines
-This project welcomes contributions and suggestions. Most contributions require you to
-agree to a Contributor License Agreement (CLA) declaring that you have the right to,
-and actually do, grant us the rights to use your contribution. For details, visit
-https://cla-assistant.io/onnx/tensorflow-onnx.
+This project welcomes contributions and suggestions. The contributions require you to
+agree the Developer Certificate of Origin (DCO) declaring that you have the right to,
+and actually do, grant us the rights to use your contribution.
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need
-to provide a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the
-instructions provided by the bot. You will only need to do this once across all repositories using our CLA.
+When you submit a pull request, a DCO-bot will automatically determine whether you need
+to provide a DCO and decorate the PR appropriately.
+
+You are ready to sign your code by using the `-s` flag during your commits.
+
+```sh
+git commit -s
+```
+
 
 # Code of conduct
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).

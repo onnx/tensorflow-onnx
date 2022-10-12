@@ -37,8 +37,9 @@ class create_version(Command):
         pass
 
     def run(self):
+        alv2_license = '# SPDX-License-Identifier: Apache-2.0\n\n'
         with open(os.path.join(SRC_DIR, 'version.py'), 'w') as f:
-            f.write(dedent('''
+            f.write(alv2_license + dedent('''
             version = '{version}'
             git_version = '{git_version}'
             '''.format(**dict(VersionInfo._asdict()))))
@@ -70,7 +71,7 @@ cmdclass = {
 }
 
 setup(
-    name="tf2onnx",
+    name='tf2onnx',
     version=VersionInfo.version,
     description='Tensorflow to ONNX converter',
     setup_requires=['pytest-runner'],
@@ -78,10 +79,10 @@ setup(
     cmdclass=cmdclass,
     packages=find_packages(),
     license='Apache License v2.0',
-    author='onnx@microsoft.com',
-    author_email='onnx@microsoft.com',
+    author='ONNX',
+    author_email='onnx-technical-discuss@lists.lfaidata.foundation',
     url='https://github.com/onnx/tensorflow-onnx',
-    install_requires=['numpy>=1.14.1', 'onnx>=1.4.1', 'requests', 'six', 'flatbuffers~=1.12'],
+    install_requires=['numpy>=1.14.1', 'onnx>=1.4.1', 'requests', 'six', 'flatbuffers<3.0,>=1.12'],
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
@@ -94,8 +95,8 @@ setup(
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9']
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10']
 )

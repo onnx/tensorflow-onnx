@@ -20,7 +20,7 @@ args = parser.parse_args()
 
 
 LATEST_OPSET = {
-    "": 14,  # default domain
+    "": 17,  # default domain
     "com.microsoft": 1,  # microsoft domain
     "ai.onnx.contrib": 1,  # contrib ops
 }
@@ -34,6 +34,7 @@ def is_unsupported(func_body):
 
 
 with open(args.filename, 'w+') as doc_file:
+    doc_file.write("<!--- SPDX-License-Identifier: Apache-2.0 -->\n\n")
     doc_file.write("## `tf2onnx` Support Status\n")
 
     for domain, opsets in tf_op.get_opsets().items():

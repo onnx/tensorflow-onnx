@@ -5,11 +5,11 @@
 
 import os
 import unittest
-from distutils.version import LooseVersion
 from itertools import product
 
 import numpy as np
 from numpy.testing import assert_almost_equal
+from packaging.version import Version
 import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
@@ -72,7 +72,7 @@ if is_tf2():
     matrix_diag_part = tf.compat.v1.matrix_diag_part
     fake_quant_with_min_max_args = tf.quantization.fake_quant_with_min_max_args
     fake_quant_with_min_max_vars = tf.quantization.fake_quant_with_min_max_vars
-elif LooseVersion(tf.__version__) >= "1.13":
+elif Version(tf.__version__) >= Version("1.13"):
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
     conv3d_transpose = tf.compat.v1.nn.conv3d_transpose
     multinomial = tf.compat.v1.random.multinomial
@@ -86,7 +86,7 @@ elif LooseVersion(tf.__version__) >= "1.13":
     quantize_and_dequantize = tf.compat.v1.quantization.quantize_and_dequantize
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
-    if LooseVersion(tf.__version__) >= "1.14":
+    if Version(tf.__version__) >= Version("1.14"):
         resize_bilinear_v2 = tf.compat.v2.image.resize
     is_nan = tf.math.is_nan
     is_inf = tf.math.is_inf
@@ -174,7 +174,6 @@ def get_maxpoolwithargmax_getdata():
 class BackendTests(Tf2OnnxBackendTestBase):
     def _run_test_case(self, func, output_names_with_port, feed_dict, **kwargs):
         kwargs["convert_var_to_const"] = False
-        kwargs["constant_fold"] = False
         return self.run_test_case(func, feed_dict, [], output_names_with_port, **kwargs)
 
     def _test_expand_dims_known_rank(self, idx):
@@ -305,7 +304,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_multinomial(self):
         x_val = np.array([[10., 10.]], dtype=np.float32)
         def func(x):
-            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int64)
+            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
 
         # since returned indexes are random we can only check type and shape
@@ -318,7 +317,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
         def func(x):
-            op = multinomial(x, 2, output_dtype=tf.int64)
+            op = multinomial(x, 2, output_dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
         # since returned indexes are random we can only check type and shape
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False,
@@ -709,11 +708,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
         feed_dict = {"input_1:0": x_val}
         input_names_with_port = ["input_1:0"]
         output_names_with_port = ["output:0"]
-        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, constant_fold=False,
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port,
                            graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
                                                       check_op_count(g, "RandomUniformLike", 0)))
 
-    def test_conv2d_with_input_transpose(self):
+    def test_inputs_as_nchw_arg(self):
         x_shape = [2, 32, 32, 3]
         kernel_shape = [3, 3, 3, 3]
         x_val = make_xval(x_shape)
@@ -726,8 +725,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             process_args={"inputs_as_nchw": [_INPUT]},
                             onnx_feed_dict={_INPUT: x_val_for_onnx})
 
+    def test_outputs_as_nchw_arg(self):
+        x_shape = [2, 32, 32, 3]
+        kernel_shape = [3, 3, 3, 3]
+        x_val = make_xval(x_shape)
+        def func(x):
+            kernel = tf.constant(make_xval(kernel_shape), dtype=tf.float32, name='kernel')
+            conv = tf.nn.conv2d(x, kernel, strides=[1, 1, 1, 1], padding="SAME")
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
+                            process_args={"outputs_as_nchw": [_OUTPUT]})
+
     @skip_tflite("TFlite adds ops that obscure pattern")
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
     def test_conv1d_dilations_rewriter(self):
         x_shape = [2, 32, 3]
         x_val = make_xval(x_shape)
@@ -740,7 +750,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
+    @skip_tf_cpu("only tf_gpu can run conv2d with NCHW format")
+    def test_conv2d_biasadd_rewriter(self):
+        x_shape = [2, 3, 32, 16]
+        x_val = make_xval(x_shape)
+        def func(x):
+            middles = tf.keras.layers.ZeroPadding2D(
+                padding=(0, 4),
+                data_format="channels_first",
+                name="padding"
+            )(x)
+            t = tf.keras.layers.Conv2D(
+                filters=768,
+                kernel_size=3,
+                strides=1,
+                use_bias=True,
+                data_format="channels_first",
+                name="conv2d"
+            )(middles)
+            return tf.identity(t, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                            graph_validator=lambda g: check_op_count(g, "Add", 0, disabled=False))
+
+    @check_tf_min_version("1.15")
     def test_conv2d_dilations_rewriter(self):
         x_shape = [2, 32, 16, 3]
         x_val = make_xval(x_shape)
@@ -760,7 +793,39 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
                                 graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
+    @skip_tf_cpu("only tf_gpu can run conv2d with NCHW format")
+    def test_nchw_conv2d_dilations_rewriter(self):
+        x_shape = [2, 3, 32, 16]
+        x_val = make_xval(x_shape)
+        for p in ['SAME', 'VALID']:
+            def func(x):
+                t = tf.keras.layers.Conv2D(
+                    filters=768,
+                    kernel_size=3,
+                    dilation_rate=3,
+                    padding=p,
+                    data_format='channels_first'
+                )
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+            def func(x):
+                t = tf.keras.layers.DepthwiseConv2D(
+                    kernel_size=3,
+                    dilation_rate=3,
+                    padding=p,
+                    data_format='channels_first'
+                )
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("1.15")
     @skip_tflite("TFlite adds ops that obscure pattern")
     @allow_missing_shapes("Rewriting makes some shapes known")
     def test_conv2d_dilations_rewriter_unknown_shape(self):
@@ -776,13 +841,56 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             as_session=True, premade_placeholders=True,
                             graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
 
-    @check_tf_min_version("2.0")
+    @check_tf_min_version("1.15")
+    @skip_tflite("TFlite adds ops that obscure pattern")
+    @skip_tf_cpu("only tf_gpu can run conv2d with NCHW format")
+    @allow_missing_shapes("Rewriting makes some shapes known")
+    def test_nchw_conv2d_dilations_rewriter_unknown_shape(self):
+        x_shape = [2, 3, 32, 16]
+        x_val = make_xval(x_shape)
+        def func():
+            x = tf_placeholder(tf.float32, [2, 3, None, None], name=_TFINPUT)
+            t = tf.keras.layers.Conv2D(
+                filters=768,
+                kernel_size=3,
+                dilation_rate=3,
+                padding="VALID",
+                data_format='channels_first'
+            )
+            t.build(x_shape)
+            y = t.call(x)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2,
+                            as_session=True, premade_placeholders=True,
+                            graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("1.15")
     def test_conv3d_dilations_rewriter(self):
         x_shape = [2, 32, 16, 8, 3]
         x_val = make_xval(x_shape)
         for p in ['SAME', 'VALID']:
             def func(x):
                 t = tf.keras.layers.Conv3D(filters=768, kernel_size=3, dilation_rate=3, padding=p)
+                t.build(x_shape)
+                y = t.call(x)
+                return tf.identity(y, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04, atol=1e-2, as_session=True,
+                                graph_validator=lambda g: check_op_count(g, "Reshape", 0, disabled=False))
+
+    @check_tf_min_version("1.15")
+    @skip_tf_cpu("only tf_gpu can run conv3d with NCDHW format")
+    def test_ncdhw_conv3d_dilations_rewriter(self):
+        x_shape = [2, 3, 32, 16, 8]
+        x_val = make_xval(x_shape)
+        for p in ['SAME', 'VALID']:
+            def func(x):
+                t = tf.keras.layers.Conv3D(
+                    filters=768,
+                    kernel_size=3,
+                    dilation_rate=3,
+                    padding=p,
+                    data_format='channels_first'
+                )
                 t.build(x_shape)
                 y = t.call(x)
                 return tf.identity(y, name=_TFOUTPUT)
@@ -1212,8 +1320,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_onnxruntime_incompatibility("Add")
     def test_logicaland(self):
-        x_val1 = np.array([1, 0, 1, 1], dtype=np.bool).reshape((2, 2))
-        x_val2 = np.array([0, 1, 1, 1], dtype=np.bool).reshape((2, 2))
+        x_val1 = np.array([1, 0, 1, 1], dtype=bool).reshape((2, 2))
+        x_val2 = np.array([0, 1, 1, 1], dtype=bool).reshape((2, 2))
         def func(x1, x2):
             mi = tf.logical_and(x1, x2)
             return tf.identity(mi, name=_TFOUTPUT)
@@ -2278,6 +2386,15 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tflite("tflite does not support uint32 if tf version <= 2.3.0")
+    @check_opset_min_version(6, "cast")
+    def test_cast_unit32(self):
+        x_val = np.array([1, 2, 3, 4], dtype=np.uint32).reshape((2, 2))
+        def func(x):
+            x_ = tf.cast(x, tf.uint64)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(7, "sign")
     def test_sign(self):
         x_vals = [np.array([1.0, 2.0, 0.0, -1.0, 0.0, -2.0], dtype=np.float32).reshape((2, 3)),
@@ -2345,6 +2462,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
                     return tf.identity(x_, name=_TFOUTPUT)
                 graph = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
                 self.assertTrue(len(group_nodes_by_type(graph)["OneHot"]) == 1, "onnx onehot should be used")
+
+    @check_opset_min_version(9, "onehot")
+    @skip_tfjs("tfjs produces incorrect results")
+    def test_onehot_rank0(self):
+        depth = 5
+        for np_dtype in [np.int32, np.int64]:
+            x_val = np.array(3, dtype=np_dtype)
+            for axis in [-1, 0]:
+                def func(x):
+                    x_ = tf.one_hot(x, depth, axis=axis)
+                    return tf.identity(x_, name=_TFOUTPUT)
+                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @skip_caffe2_backend("issue undefined dim 1")
     @check_tf_max_version("1.15", "not supported in tf-2.0")
@@ -2681,6 +2810,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
     @check_opset_min_version(10, "Slice")
+    @skip_tfjs("TFJS executes model incorrectly")
     def test_new_axis_mask(self):
         def func(x, y):
             x_ = x[tf.newaxis, 0:y, y::2, tf.newaxis, :, tf.newaxis, :y, tf.newaxis, ..., 9]
@@ -2724,6 +2854,31 @@ class BackendTests(Tf2OnnxBackendTestBase):
         scale_shape = [2]
         # only nhwc is support on cpu for tensorflow
         data_format = "NHWC"
+        x_val = np.random.random_sample(x_shape).astype(x_dtype)
+        scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        mean_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        var_val = np.random.random_sample(scale_shape).astype(scale_dtype)
+        def func(x):
+            scale = tf.constant(scale_val, name='scale')
+            offset = tf.constant(offset_val, name='offset')
+            mean = tf.constant(mean_val, name='mean')
+            var = tf.constant(var_val, name='variance')
+            epsilon = 0.001
+            y, _, _ = fused_batch_norm(
+                x, scale, offset, mean=mean, variance=var,
+                epsilon=epsilon, data_format=data_format, is_training=False)
+            return tf.identity(y, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-04)
+
+    @check_opset_min_version(7, "batchnorm")
+    @check_tf_min_version("2.4", "tf version above 2.4 supports NDHWC")
+    def test_fused_batchnorm_3d(self):
+        x_shape = [1, 28, 28, 2, 2]
+        x_dtype = np.float32
+        scale_dtype = np.float32
+        scale_shape = [2]
+        data_format = "NDHWC"
         x_val = np.random.random_sample(x_shape).astype(x_dtype)
         scale_val = np.random.random_sample(scale_shape).astype(scale_dtype)
         offset_val = np.random.random_sample(scale_shape).astype(scale_dtype)
@@ -3078,6 +3233,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             y_val = np.array(i / 10, np.float32)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val}, rtol=1e-6, atol=2e-5)
 
+    # https://github.com/microsoft/onnxruntime/issues/12302
+    @skip_onnxruntime_backend("resize op can't work well under Cubic mode with ORT 1.12")
     @check_tf_min_version("2.0", "Results are slightly different in tf1")
     @check_opset_min_version(11, "resize bicubic")
     def test_resize_bicubic(self):
@@ -3331,6 +3488,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(9, "IsNaN")
+    def test_where_ismulinf(self):
+        x_val1 = np.array([np.inf], dtype=np.float32)
+        x_val2 = np.array([0], dtype=np.float32)
+        true_result = np.array([np.inf], dtype=np.float32)
+        def func(x1, x2):
+            mul = tf.multiply(x1, x2)
+            picks = tf.where(x1 < mul, true_result, x2)
+            return tf.identity(picks, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
     @check_opset_min_version(9, "Where for strings needs opset 9")
     @skip_tfjs("Technically tf where doesn't support strings and tfjs doesn't like it")
     def test_where_string(self):
@@ -3348,9 +3516,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_where_bool(self):
         x_val = np.array([1, 2, -3, 4, -5], dtype=np.float32)
         true_result = np.array([True, False, True, False, True],
-                               dtype=np.bool)
+                               dtype=bool)
         false_result = np.array([False, True, False, True, True],
-                                dtype=np.bool)
+                                dtype=bool)
         def func(x):
             picks = tf.where(x > -1, true_result, false_result)
             return tf.identity(picks, name=_TFOUTPUT)
@@ -3613,21 +3781,21 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2}, rtol=1e-4)
 
     def test_logical_not(self):
-        input_val = np.random.randint(0, 2, (10, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (10, 20)).astype(bool)
         def func(x):
             res = tf.logical_not(x)
             return tf.identity(res, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val})
 
     def test_reduce_all(self):
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(x):
             res = tf.reduce_all(input_tensor=x, keepdims=False)
             res1 = tf.reduce_all(input_tensor=x, axis=[0], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(input_x):
             res = tf.reduce_all(input_tensor=input_x, keepdims=True)
             res1 = tf.reduce_all(input_tensor=input_x, axis=[0], keepdims=True)
@@ -3635,14 +3803,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
     def test_reduce_any(self):
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[0], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=True)
             res1 = tf.reduce_any(input_tensor=x, axis=[0], keepdims=True)
@@ -3651,14 +3819,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "ReduceMin")
     def test_reduce_all_negative_axis(self):
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(x):
             res = tf.reduce_all(input_tensor=x, keepdims=False)
             res1 = tf.reduce_all(input_tensor=x, axis=[-1], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(input_x):
             res = tf.reduce_all(input_tensor=input_x, keepdims=True)
             res1 = tf.reduce_all(input_tensor=input_x, axis=[-1], keepdims=True)
@@ -3667,14 +3835,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(11, "ReduceSum")
     def test_reduce_any_negative_axis(self):
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[-1], keepdims=False)
             return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=True)
             res1 = tf.reduce_any(input_tensor=x, axis=[-1], keepdims=True)
@@ -3684,7 +3852,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "ReduceSum")
     @check_tf_min_version("1.15")
     def test_reduce_any_empty_axis(self):
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(x):
             res = tf.reduce_any(input_tensor=x, keepdims=False)
             res1 = tf.reduce_any(input_tensor=x, axis=[], keepdims=False)
@@ -3692,7 +3860,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val})
 
     def test_reduce_all_scalar_axis(self):
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         def func(x):
             res = tf.reduce_all(input_tensor=x, keepdims=False)
             res1 = tf.reduce_all(input_tensor=x, axis=0, keepdims=False)
@@ -3702,7 +3870,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(13, "ReduceSum")
     @check_tf_min_version("1.15")
     def test_reduce_any_nonconst_axis(self):
-        input_val = np.random.randint(0, 2, (2, 20)).astype(np.bool)
+        input_val = np.random.randint(0, 2, (2, 20)).astype(bool)
         y_val = np.array([1], np.int32)
         def func(x, y):
             res = tf.reduce_any(input_tensor=x, axis=y, keepdims=False)
@@ -3731,6 +3899,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.zeros_like(z, name=_TFOUTPUT)
 
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x > 0.5, _INPUT1: input_y})
+
+    @check_opset_min_version(9, "ConstantOfShape")
+    def test_zeros_like_opset9(self):
+        input_x = np.random.random_sample([3, 16, 16]).astype(np.float32)
+        input_y = np.array([16, 16, 3]).astype(np.int64)
+
+        def func(x, y):
+            z = tf.reshape(x, y)
+            return tf.zeros_like(z, name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x, _INPUT1: input_y})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x.astype(np.int32), _INPUT1: input_y}, as_session=True,
+                            graph_validator=lambda g: check_op_count(g, "ConstantOfShape", 1, disabled=False))
 
     @check_opset_min_version(9, "is_nan")
     def test_isnan(self):
@@ -4464,6 +4645,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "Round")
+    def test_rint(self):
+        x_val = np.array([-2.7, -1.5, -0.0, +0.0, 0.3, 0.5, 1.5, 2.5, 3.4, 3.5, float('nan')], dtype=np.float32)
+        def func(x):
+            x_ = tf.math.rint(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_opset_min_version(11, "Det")
     @unittest.skip("unclear how this is called in tf-2, fix later")
     def test_determinant(self):
@@ -4543,6 +4732,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
         def func(x, y, z):
             x_ = tf.tensor_scatter_nd_update(x, y, z)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+    @check_opset_min_version(16, "ScatterND")
+    def test_scatternd_add(self):
+        x_val = np.array([10, 20, 30, 40], dtype=np.int32).reshape((4))
+        y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
+        z_val = np.array([20, 30], dtype=np.int32).reshape((2))
+
+        def func(x, y, z):
+            x_ = tf.tensor_scatter_nd_add(x, y, z)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
@@ -5067,7 +5267,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_lookup(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
-        query = np.array(['cherry'], dtype=np.object)
+        query = np.array(['cherry'], dtype=object)
         with open(filnm, "w") as f:
             for word in words:
                 f.write(word + "\n")
@@ -5076,7 +5276,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             lookup_results = hash_table.lookup(query_holder)
             ret = tf.add(lookup_results, 0, name=_TFOUTPUT)
             return ret
-        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, constant_fold=False, as_session=True)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, as_session=True)
         os.remove(filnm)
 
     @check_opset_min_version(8, "CategoryMapper")
@@ -5084,7 +5284,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_lookup_const(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry ♥", "grape"]
-        query_val = np.array(['cherry ♥', 'banana'], dtype=np.object).reshape((1, 2, 1))
+        query_val = np.array(['cherry ♥', 'banana'], dtype=object).reshape((1, 2, 1))
         with open(filnm, "w", encoding='UTF-8') as f:
             for word in words:
                 f.write(word + "\n")
@@ -5101,7 +5301,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_hashtable_size(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry", "grape"]
-        query = np.array(['cherry'], dtype=np.object)
+        query = np.array(['cherry'], dtype=object)
         with open(filnm, "w") as f:
             for word in words:
                 f.write(word + "\n")
@@ -5353,7 +5553,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0}, rtol=1e-6, atol=1e-4)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
 
-        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024.
         x_val[0, 0] = -1024
         x_val[0, 1] = -1023
         x_val[0, 2] = 1024
@@ -5390,7 +5590,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val0}, rtol=1e-6, atol=1e-4)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=1e-4)
 
-        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024
+        x_val = np.random.random(size=[4, 3]).astype(np.float32) * 2048. - 1024.
         x_val[0, 0] = -1024
         x_val[0, 1] = -1023
         x_val[0, 2] = 1024
@@ -5464,6 +5664,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self.config.opset = current_opset
 
     @check_tf_min_version("1.14")
+    @skip_tf_versions("2.4", "Fails to run on TF 2.4.x")
+    @skip_tfjs("Fails to run tfjs model")
     def test_rfft_ops(self):
 
         def dft_slow(x, M, fft_length):
@@ -5505,6 +5707,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func3, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
+    @skip_tf_versions("2.4", "Fails to run on TF 2.4.x")
     @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length(self):
@@ -5516,6 +5719,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
+    @skip_tf_versions("2.4", "Fails to run on TF 2.4.x")
     @skip_tfjs("TFJS executes rfft with poor accuracy")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many(self):
@@ -5530,6 +5734,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                         self._run_test_case(func1_length, [_OUTPUT], {_INPUT: x_val})
 
     @check_tf_min_version("1.14")
+    @skip_tf_versions("2.4", "Fails to run on TF 2.4.x")
     @check_opset_min_version(10, "Slice")
     def test_rfft_ops_fft_length_many_bigger(self):
         for i in range(4, 7):
@@ -5689,10 +5894,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(op_, name=_TFOUTPUT)
 
         # tf gets this wrong and returns fp32 instead of int
-        x_val = np.array("123", dtype=np.object)
+        x_val = np.array("123", dtype=object)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-        x_val = np.array("123.1", dtype=np.object)
+        x_val = np.array("123.1", dtype=object)
         # can't check the values because in onnx they are padded with 0, in tf they are not
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False)
 
@@ -5709,6 +5914,32 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = np.array([0.5, 1.0, -0.5, -1.0], dtype=np.float32).reshape((2, 2))
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @skip_tfjs("not supported in tfjs")
+    def test_l2normalization(self):
+        def func(x):
+            op_ = tf.math.l2_normalize(x)
+            return tf.identity(op_, name=_TFOUTPUT)
+
+        x_val = make_xval([3, 4])
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_addition_two_newaxis_simultaneously(self):
+        def func(x):
+            op = x[..., tf.newaxis, tf.newaxis]
+            return tf.identity(op, name=_TFOUTPUT)
+
+        x_val = make_xval([2, 3])
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_addition_three_newaxis_simultaneously(self):
+        def func(x):
+            op = x[..., tf.newaxis, tf.newaxis, tf.newaxis]
+            return tf.identity(op, name=_TFOUTPUT)
+
+        x_val = make_xval([2, 3])
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 if __name__ == '__main__':
     unittest_main()

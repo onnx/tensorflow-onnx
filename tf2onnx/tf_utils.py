@@ -6,7 +6,7 @@ tf2onnx.tf_utils - misc utilities for tf2onnx that interface with tensorflow
 """
 
 import collections
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 import numpy as np
 import tensorflow as tf
@@ -34,6 +34,8 @@ TF_TO_ONNX_DTYPE = {
     types_pb2.DT_INT8: onnx_pb.TensorProto.INT8,
     types_pb2.DT_UINT8: onnx_pb.TensorProto.UINT8,
     types_pb2.DT_UINT16: onnx_pb.TensorProto.UINT16,
+    types_pb2.DT_UINT32: onnx_pb.TensorProto.UINT32,
+    types_pb2.DT_UINT64: onnx_pb.TensorProto.UINT64,
     types_pb2.DT_INT64: onnx_pb.TensorProto.INT64,
     types_pb2.DT_STRING: onnx_pb.TensorProto.STRING,
     types_pb2.DT_COMPLEX64: onnx_pb.TensorProto.COMPLEX64,
@@ -48,15 +50,15 @@ TF_TO_ONNX_DTYPE = {
 def tf_to_onnx_tensor(tensor, name=""):
     """Convert tensorflow tensor to onnx tensor."""
     np_data = get_tf_tensor_data(tensor)
-    if np_data.dtype == np.object:
+    if np_data.dtype == object:
         # assume np_data is string, numpy_helper.from_array accepts ndarray,
         # in which each item is of str while the whole dtype is of object.
         try:
             # Faster but fails on Unicode
-            np_data = np_data.astype(np.str).astype(np.object)
+            np_data = np_data.astype(np.str).astype(object)
         except UnicodeDecodeError:
             decode = np.vectorize(lambda x: x.decode('UTF-8'))
-            np_data = decode(np_data).astype(np.object)
+            np_data = decode(np_data).astype(object)
         except:  # pylint: disable=bare-except
             raise RuntimeError("Not support type: {}".format(type(np_data.flat[0])))
     return numpy_helper.from_array(np_data, name=name)
@@ -119,7 +121,7 @@ def get_tf_node_attr(node, name):
 
 
 def get_tf_version():
-    return LooseVersion(tf.__version__)
+    return Version(tf.__version__)
 
 def compress_graph_def(graph_def):
     """
@@ -217,7 +219,8 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
                     outputs_to_dtypes[node.outputs[0].name] = node.outputs[0].dtype
                     progress = True
             can_fold = node.type not in ['Enter', 'Placeholder', 'PlaceholderWithDefault', 'Switch', 'Merge',
-                                         'NextIteration', 'Exit']
+                                         'NextIteration', 'Exit', 'QuantizeAndDequantizeV2', 'QuantizeAndDequantizeV3',
+                                         'QuantizeAndDequantizeV4']
             can_fold = can_fold and not node.type.startswith('Random')
             can_fold = can_fold and len(input_names) > 0 and all(inp in outputs_to_values for inp in input_names)
             # We can only fold nodes with a single output

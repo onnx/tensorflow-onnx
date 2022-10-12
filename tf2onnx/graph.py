@@ -11,8 +11,8 @@ import logging
 import six
 import numpy as np
 
-from onnx import helper, numpy_helper, shape_inference, OperatorSetIdProto, AttributeProto, TensorProto
-from tf2onnx import utils, __version__
+from onnx import helper, numpy_helper, shape_inference, AttributeProto, TensorProto
+from tf2onnx import utils, __version__, git_version
 from tf2onnx.utils import make_name, port_name, find_opset
 from tf2onnx import optimizer
 from tf2onnx.schemas import get_schema, infer_onnx_shape_dtype
@@ -582,7 +582,7 @@ class Graph(object):
             raw: whether to store data at field of raw_data or the specific field according to its dtype
         """
         np_val_flat = np_val.flatten()
-        is_bytes = np_val.dtype == np.object and len(np_val_flat) > 0 and isinstance(np_val_flat[0], bytes)
+        is_bytes = np_val.dtype == object and len(np_val_flat) > 0 and isinstance(np_val_flat[0], bytes)
         if raw and not is_bytes:
             onnx_tensor = numpy_helper.from_array(np_val, name)
         else:
@@ -676,7 +676,7 @@ class Graph(object):
         return node
 
     def append_node(self, node):
-        "Add a node to the graph."
+        """Add a node to the graph."""
         output_shapes = node.output_shapes
         output_dtypes = node.output_dtypes
         node.graph = self
@@ -751,10 +751,10 @@ class Graph(object):
 
         for n in self.inputs:
             if n not in ops:
-                raise ValueError("graph input " + n + " not exist")
+                raise ValueError("graph input '" + n.name + "' not exist")
         for o in self.outputs:
             if o not in self._output_to_node_name:
-                raise ValueError("graph output " + o + " not exist")
+                raise ValueError("graph output '" + o.name + "' not exist")
 
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
@@ -1189,14 +1189,13 @@ class Graph(object):
         graph = self.make_graph(graph_doc, graph_name, external_tensor_storage)
 
         if "producer_name" not in kwargs:
-            kwargs = {"producer_name": "tf2onnx",
-                      "producer_version": __version__}
-
+            kwargs = {
+                "producer_name": "tf2onnx",
+                "producer_version": __version__ + " " + git_version[:6]
+            }
         if "opset_imports" not in kwargs:
-            opsets = []
-            imp = OperatorSetIdProto()
-            imp.version = self._opset
-            opsets.append(imp)
+            opsets = [helper.make_opsetid(constants.ONNX_DOMAIN, self._opset)]
+            opsets.append(constants.AI_ONNX_ML_OPSET)
             if self.extra_opset is not None:
                 opsets.extend(self.extra_opset)
             kwargs["opset_imports"] = opsets
@@ -1607,7 +1606,7 @@ class Graph(object):
                 self.remove_node(n.name)
 
     def is_safe_to_remove_nodes(self, to_delete, outputs_to_ignore=None):
-        """Returns true if the outputs of all the nodes in to_delete have no third-party nodes consuming them"""
+        """Returns true if the outputs of all the nodes in to_delete have no third-party nodes consuming them."""
         delete_set = set(to_delete)
         outputs_to_ignore_set = set(outputs_to_ignore or [])
         for n in delete_set:
@@ -1662,7 +1661,7 @@ class GraphUtil(object):
 
     @staticmethod
     def get_onnx_model_properties(onnx_model_proto):
-        """Get ModelProto properties"""
+        """Get ModelProto properties."""
         kwargs = {}
         if onnx_model_proto.HasField('ir_version'):
             kwargs["ir_version"] = onnx_model_proto.ir_version
@@ -1792,9 +1791,11 @@ class GraphUtil(object):
         # because for subgraphs, the input orders matter.
         for graph_input in graph_proto.input:
             name = graph_input.name
-            shape = shapes[name]
-            dtype = dtypes[name]
-            if name not in const_node_names:
-                g.add_graph_input(name, dtype, shape)
-            else:
-                g.add_graph_input_with_default(name, g.get_node_by_name(name), dtype, shape)
+            const_initializer_node = g.get_node_by_output_in_current_graph(name)
+            if const_initializer_node is None: # is actual input rather than initializer
+                shape = shapes[name]
+                dtype = dtypes[name]
+                if name not in const_node_names:
+                    g.add_graph_input(name, dtype, shape)
+                else:
+                    g.add_graph_input_with_default(name, g.get_node_by_name(name), dtype, shape)

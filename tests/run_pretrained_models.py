@@ -17,7 +17,7 @@ import time
 import zipfile
 import random
 from collections import namedtuple
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 
 import yaml
@@ -38,7 +38,7 @@ except:  # pylint: disable=bare-except
 
 try:
     import tensorflow_text  # pylint: disable=unused-import
-except ModuleNotFoundError:
+except Exception as err:
     pass
 
 from tf2onnx import tf_loader, logging, optimizer, utils, tf_utils, constants
@@ -525,7 +525,7 @@ class Test(object):
                         inputs[k] = np_value.astype(expected_dtype)
                     else:
                         if expected_dtype == "string":
-                            inputs[k] = self.make_input(v).astype(np.str).astype(np.object)
+                            inputs[k] = self.make_input(v).astype(np.str).astype(object)
                         else:
                             inputs[k] = self.make_input(v).astype(expected_dtype)
 
@@ -604,7 +604,7 @@ class Test(object):
                         for tf_res, onnx_res in zip(tf_results, onnx_results):
                             good_cnt = np.count_nonzero(np.isclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol))
                             bad_cnt = tf_res.size - good_cnt
-                            if bad_cnt > self.ptol / 100 * tf_res.size:
+                            if bad_cnt > self.ptol * tf_res.size:
                                 # Prints a nice error message with stats
                                 np.testing.assert_allclose(tf_res, onnx_res, rtol=self.rtol, atol=self.atol)
                     logger.info("Results: OK")
@@ -789,7 +789,7 @@ def main():
                 continue
 
             if t.tf_min_version:
-                if tf_utils.get_tf_version() < LooseVersion(str(t.tf_min_version)):
+                if tf_utils.get_tf_version() < Version(str(t.tf_min_version)):
                     logger.info("Skip %s: %s %s", test, "Min TF version needed:", t.tf_min_version)
                     continue
 

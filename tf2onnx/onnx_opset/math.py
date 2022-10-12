@@ -203,8 +203,11 @@ class Softmax:
     def version_1(cls, ctx, node, **kwargs):
         # T output = Softmax(T logits). The axis softmax would be performed on is always on -1.
         # T output = Softmax(T input, @int axis). Default axis is 1.
-        logits_rank = len(ctx.get_shape(node.input[0]))
-        node.set_attr("axis", logits_rank - 1)
+        axis = node.get_attr_value("axis")
+        if axis is None:
+            # by default use the last dim
+            axis = len(ctx.get_shape(node.input[0])) - 1
+        node.set_attr("axis", axis)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -556,6 +559,15 @@ class Round:
         pass
 
 
+@tf_op("Rint", onnx_op="Round")
+class Rint:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # Same with tf round, two different people just happened to write the function.
+        # https://github.com/tensorflow/tensorflow/issues/709
+        pass
+
+
 @tf_op("MatrixDeterminant", onnx_op="Det")
 class Det:
     @classmethod
@@ -814,3 +826,15 @@ class HardSwish:
     @classmethod
     def version_14(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op(["L2Normalization"], onnx_op="LpNormalization")
+class L2Normalization:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        axis = node.get_attr_value("axis")
+        if axis is None:
+            # by default use the last dim
+            axis = -1
+        node.set_attr("axis", axis)
+        node.set_attr("p", 2)
