@@ -17,7 +17,7 @@ import urllib
 
 # Mapping opset to ONNXRuntime version.
 ORT_OPSET_VERSION = {
-    "1.6.0": 13, "1.7.0": 13, "1.8.0": 14, "1.9.0": 15, "1.10.0": 15, "1.11.0": 16, "1.12.0": 17
+    "1.6.0": 13, "1.7.0": 13, "1.8.0": 14, "1.9.0": 15, "1.10.0": 15, "1.11.0": 16, "1.12.0": 17, "1.13.0": 17
 }
 
 working_path = os.path.abspath(os.path.dirname(__file__))
