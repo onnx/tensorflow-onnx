@@ -162,11 +162,34 @@ def graphs_from_tflite(tflite_path, input_names=None, output_names=None):
                 g_outputs = output_names
         g = Graph(onnx_nodes, output_shapes, dtypes, input_names=g_inputs, output_names=g_outputs,
                   is_subgraph=not is_main_g, graph_name=graph_name)
+        remove_unexpected_nodes(g, ["AssignVariableOp", "AssignSubVariableOp", "ReadVariableOp", "VarHandleOp"])
         if is_main_g:
             main_g = g
         else:
             subgraphs.append(g)
     return main_g, subgraphs
+
+
+def remove_unexpected_nodes(g, to_be_removed_nodes):
+    ops = g.get_nodes()
+    removed_nodes=[]
+    for i, op in enumerate(ops):
+        all_input = set(op.input)
+        implicit_inputs = op.get_implicit_inputs()
+        all_input |= set(implicit_inputs)
+        for node_name in to_be_removed_nodes:
+            for inp in all_input:
+                if ";" not in inp and node_name in inp:
+                    op.input.remove(inp)
+                    print("====== removing ", inp)
+                    continue
+    ops = g.get_nodes()
+    for op in ops:
+        if op.type in ["TFL_READ_VARIABLE", "TFL_VAR_HANDLE"]:
+            removed_nodes.append(op.name)
+            continue
+    for node_name in removed_nodes:
+        g.remove_node(node_name)
 
 
 def read_tflite_model(tflite_path):
@@ -482,8 +505,9 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                         output_shapes[out] = None
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]
-        onnx_node = helper.make_node(optype, input_names, output_names, name=output_names[0], **attr)
-        onnx_nodes.append(onnx_node)
+        if len(output_names) > 0: # to try to hackily work around this error: https://github.com/onnx/tensorflow-onnx/issues/2055
+            onnx_node = helper.make_node(optype, input_names, output_names, name=output_names[0], **attr)
+            onnx_nodes.append(onnx_node)
 
     inputs = [tensor_names[tflite_g.Inputs(i)] for i in range(tflite_g.InputsLength())]
     outputs = [tensor_names[tflite_g.Outputs(i)] for i in range(tflite_g.OutputsLength())]
