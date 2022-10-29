@@ -414,7 +414,7 @@ class MatMul:
             ctx.get_dtype(node.input[1]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
             ctx.get_dtype(node.output[0]) == onnx_pb.TensorProto.INT32):
             node.type = "MatMulInteger"
-        version_1(cls, ctx, node, **kwargs)
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("Erf")
 class Erf:
