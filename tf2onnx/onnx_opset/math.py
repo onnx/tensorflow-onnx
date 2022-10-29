@@ -369,12 +369,7 @@ class MatMul:
     def version_1(cls, ctx, node, **kwargs):
         # tensorflow allows transpose and conjugated. If found, insert the required transpose.
         # We could use Gemm as well but tensorflow does not pass bias in matmul.
-        if (ctx.get_dtype(node.input[0]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
-            ctx.get_dtype(node.input[1]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
-            ctx.get_dtype(node.output[0]) == onnx_pb.TensorProto.INT32):
-            node.type = "MatMulInteger"
-        else:
-            node.type = "MatMul" 
+        if node.type != "MatMulInteger": node.type = "MatMul"
 
         attrs = ["transpose_a", "transpose_b", "adjoint_a", "adjoint_b", "adj_x", "adj_y"]
         attrs_val = [node.get_attr(attr) for attr in attrs]
@@ -413,7 +408,13 @@ class MatMul:
             val = node.get_attr(i)
             if val is not None and val.i != 0:
                 raise ValueError(node.type + " attribute " + i + " is not supported")
-
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        if (ctx.get_dtype(node.input[0]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
+            ctx.get_dtype(node.input[1]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
+            ctx.get_dtype(node.output[0]) == onnx_pb.TensorProto.INT32):
+            node.type = "MatMulInteger"
+        version_1(cls, ctx, node, **kwargs)
 
 @tf_op("Erf")
 class Erf:
