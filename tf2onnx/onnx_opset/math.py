@@ -411,13 +411,13 @@ class MatMul:
     @classmethod
     def version_10(cls, ctx, node, **kwargs):
         if (ctx.get_dtype(node.input[0]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
-            ctx.get_dtype(node.input[1]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
-            ctx.get_dtype(node.output[0]) == onnx_pb.TensorProto.INT32):
+                ctx.get_dtype(node.input[1]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
+                ctx.get_dtype(node.output[0]) == onnx_pb.TensorProto.INT32):
             node.type = "MatMulInteger"
             zero_point_node_a = ctx.make_const(utils.make_name("zero_point_a"),
-                np.zeros(1, dtype=utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0]))))
+                                               np.zeros(1, dtype=utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0]))))
             zero_point_node_b = ctx.make_const(utils.make_name("zero_point_b"),
-                np.zeros(1, dtype=utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1]))))
+                                               np.zeros(1, dtype=utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1]))))
             ctx.replace_inputs(node, [node.input[0], node.input[1], zero_point_node_a.output[0], zero_point_node_b.output[0]])
         cls.version_1(ctx, node, **kwargs)
 
