@@ -1075,6 +1075,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=1e-5)
 
+    @check_tf_min_version("2.6")
     def test_matmulinteger(self):
         x_val = np.array([1, 2, -3, -4], dtype=np.int8).reshape((2, 2))
         y_val = np.array([1, 2, -3, -4], dtype=np.int8).reshape((2, 2))
