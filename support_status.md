@@ -27,6 +27,7 @@
 | AvgPool3D | 1 ~ 17 |
 | BatchMatMul | 1 ~ 17 |
 | BatchMatMulV2 | 1 ~ 17 |
+| BatchMatMulV3 | 1 ~ 17 |
 | BatchToSpaceND | 1 ~ 17 |
 | BiasAdd | 1 ~ 17 |
 | BiasAddV1 | 1 ~ 17 |
