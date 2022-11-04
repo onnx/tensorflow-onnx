@@ -23,6 +23,7 @@ steps:
       pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
       pip install parameterized
+      pip install coloredlogs flatbuffers
       pip install $(TENSORFLOW_PATH)
       if [[ ! -z $KERAS ]];
       then
@@ -76,6 +77,7 @@ steps:
       pip install "protobuf<4.21.0"
       pip install h5py==2.9.0
       pip install parameterized
+      pip install coloredlogs flatbuffers
       pip install %TENSORFLOW_PATH%
       IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install git+https://github.com/microsoft/onnxconverter-common
