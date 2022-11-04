@@ -1075,6 +1075,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=1e-5)
 
+    def test_matmulinteger(self):
+        x_val = np.array([1, 2, -3, -4], dtype=np.int8).reshape((2, 2))
+        y_val = np.array([1, 2, -3, -4], dtype=np.int8).reshape((2, 2))
+        def func(x, y):
+            x_ = tf.matmul(x, y, output_type=tf.int32)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
     @check_onnxruntime_incompatibility("Sub")
     def test_sub(self):
         x_val = np.array([1.0, 2.0, -3.0, -4.0], dtype=np.float32).reshape((2, 2))
