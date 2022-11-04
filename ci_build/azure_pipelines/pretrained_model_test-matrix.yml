@@ -50,7 +50,7 @@ jobs:
   parameters:
     platforms: ['linux', 'windows']
     python_versions: ['3.10']
-    tf_versions: ['2.9.1']
+    tf_versions: ['2.10.0']
     job:
       steps:
       - template: 'pretrained_model_test.yml'
