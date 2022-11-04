@@ -17,8 +17,8 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 | Build Type | OS | Python | TensorFlow | ONNX opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.7-3.10 | 1.13-1.15, 2.1-2.9 | 13-17 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.7-3.10 | 1.13-1.15, 2.1-2.9 | 13-17 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
+| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.7-3.10 | 1.13-1.15, 2.1-2.10 | 13-17 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
+| Unit Test - Full | Linux, MacOS, Windows | 3.7-3.10 | 1.13-1.15, 2.1-2.10 | 13-17 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
 <br/>
 
 ## Supported Versions
