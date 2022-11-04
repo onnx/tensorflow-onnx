@@ -363,13 +363,13 @@ class LRN:
                                       name=op_name, shapes=shapes, dtypes=dtypes)
 
 
-@tf_op(["MatMul", "BatchMatMul", "BatchMatMulV2"])
+@tf_op(["MatMul", "BatchMatMul", "BatchMatMulV2", "BatchMatMulV3"])
 class MatMul:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # tensorflow allows transpose and conjugated. If found, insert the required transpose.
         # We could use Gemm as well but tensorflow does not pass bias in matmul.
-        node.type = "MatMul"
+        if node.type != "MatMulInteger": node.type = "MatMul"
 
         attrs = ["transpose_a", "transpose_b", "adjoint_a", "adjoint_b", "adj_x", "adj_y"]
         attrs_val = [node.get_attr(attr) for attr in attrs]
@@ -408,7 +408,19 @@ class MatMul:
             val = node.get_attr(i)
             if val is not None and val.i != 0:
                 raise ValueError(node.type + " attribute " + i + " is not supported")
-
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        if (ctx.get_dtype(node.input[0]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
+                ctx.get_dtype(node.input[1]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
+                ctx.get_dtype(node.output[0]) == onnx_pb.TensorProto.INT32):
+            node.type = "MatMulInteger"
+            zpdata_a = np.zeros(1, dtype=utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0])))
+            zero_point_node_a = ctx.make_const(utils.make_name("zero_point_a"), zpdata_a)
+            zpdata_b = np.zeros(1, dtype=utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1])))
+            zero_point_node_b = ctx.make_const(utils.make_name("zero_point_b"), zpdata_b)
+            ctx.replace_inputs(node, [node.input[0], node.input[1],
+                                      zero_point_node_a.output[0], zero_point_node_b.output[0]])
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("Erf")
 class Erf:
