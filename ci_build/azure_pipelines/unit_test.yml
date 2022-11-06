@@ -40,7 +40,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         python_versions: ['3.9']
-        tf_versions: ['2.10.0']
+        tf_versions: ['2.7.4']
         onnx_opsets: ['']
         skip_tfjs_tests: 'False'
         skip_tf_tests: 'True'
@@ -52,7 +52,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         python_versions: ['3.8']
-        tf_versions: ['2.10.0']
+        tf_versions: ['2.7.4']
         onnx_opsets: ['']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'True'
@@ -64,7 +64,7 @@ stages:
     - template: 'templates/job_generator.yml'
       parameters:
         python_versions: ['3.10']
-        tf_versions: ['2.10.0']
+        tf_versions: ['2.7.4']
         onnx_opsets: ['']
         job:
           steps:
