@@ -232,7 +232,7 @@ class Node(object):
 
         if self.output:
             for name in self.output:
-                lines.append("Outpus:")
+                lines.append("Output:")
                 lines.append("\t{}={}, {}".format(name, g.get_shape(name), g.get_dtype(name)))
 
         return '\n'.join(lines)

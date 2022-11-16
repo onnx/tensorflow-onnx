@@ -109,6 +109,8 @@ FUNCTION_ATTRS = ['then_subgraph_index', 'else_subgraph_index', 'cond_subgraph_i
                   'body_subgraph_index', 'subgraph']
 FUNCTION_ATTRS = [snake_to_proper_case(attr) for attr in FUNCTION_ATTRS]
 
+VAR_OPS_TO_KEEP_OUTPUT = ["TFL_READ_VARIABLE"]
+VAR_OPS_UNUSED = ["TFL_READ_VARIABLE", "TFL_VAR_HANDLE"]
 
 enum_cache = {}
 def lookup_enum(idx, enum_name):
@@ -162,7 +164,7 @@ def graphs_from_tflite(tflite_path, input_names=None, output_names=None):
                 g_outputs = output_names
         g = Graph(onnx_nodes, output_shapes, dtypes, input_names=g_inputs, output_names=g_outputs,
                   is_subgraph=not is_main_g, graph_name=graph_name)
-        remove_unexpected_nodes(g, ["AssignVariableOp", "AssignSubVariableOp", "ReadVariableOp", "VarHandleOp"])
+        process_variable_ops(g)
         if is_main_g:
             main_g = g
         else:
@@ -170,24 +172,38 @@ def graphs_from_tflite(tflite_path, input_names=None, output_names=None):
     return main_g, subgraphs
 
 
-def remove_unexpected_nodes(g, to_be_removed_nodes):
+def process_variable_ops(g):
+    replace_var_ops_with_const(g, VAR_OPS_TO_KEEP_OUTPUT)
+    remove_unused_nodes(g, VAR_OPS_UNUSED)
+
+
+def replace_var_ops_with_const(g, var_op_types):
     ops = g.get_nodes()
-    removed_nodes=[]
-    for i, op in enumerate(ops):
-        all_input = set(op.input)
-        implicit_inputs = op.get_implicit_inputs()
-        all_input |= set(implicit_inputs)
-        for node_name in to_be_removed_nodes:
-            for inp in all_input:
-                if ";" not in inp and node_name in inp:
-                    op.input.remove(inp)
-                    print("====== removing ", inp)
-                    continue
-    ops = g.get_nodes()
+    input_const_nodes = {}
+
     for op in ops:
-        if op.type in ["TFL_READ_VARIABLE", "TFL_VAR_HANDLE"]:
+        if op.type in var_op_types:
+            if op.output[0] in input_const_nodes:
+                continue;
+            node_shape = g.get_shape(op.output[0])
+            node_dtype = g.get_dtype(op.output[0])
+            input_const_nodes[op.output[0]] = g.make_const(utils.make_name("var_const"), 
+                                                           np.zeros(node_shape, 
+                                                           dtype=utils.map_onnx_to_numpy_type(node_dtype)))
+
+    for op in ops:
+        for i, inp in enumerate(op.input):
+            if inp in input_const_nodes:
+                g.replace_input(op, inp, input_const_nodes[inp].output[0], input_index=i)
+
+
+def remove_unused_nodes(g, node_types):
+    ops = g.get_nodes()
+    removed_nodes = []
+    for op in ops:
+        if op.type in node_types:
             removed_nodes.append(op.name)
-            continue
+
     for node_name in removed_nodes:
         g.remove_node(node_name)
 
