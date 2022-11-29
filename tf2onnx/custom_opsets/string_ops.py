@@ -96,8 +96,7 @@ class ReduceJoin:
         
         axis_node = ctx.get_node_by_output(node.input[1])
         axis = axis_node.get_attr_value('value')
-        if axis.dims not in [[], [1]]:
-            raise TypeError("Onnx ReduceJoin operation supports a single axis, only.")
+        utils.make_sure(axis.dims in [[], [1]], "Only a single axis is supported for ReduceJoin node")
         axis = to_array(axis)
         new_axis_node = ctx.make_const(utils.make_name("axis"), np.array(axis, np.int64).reshape((1)))
 
