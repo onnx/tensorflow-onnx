@@ -377,11 +377,13 @@ class ConvOp:
         data_format = str(node.attr["data_format"].s, encoding="utf8")
         shape_dim = -1
         if data_format == "NHWC":
-            shape_dim = ctx.get_shape(node.input[0])[3]
+            shape_dim = ctx.get_shape(node.input[0])[-1]
         elif data_format == "NCHW":
             shape_dim = ctx.get_shape(node.input[0])[1]
         if shape_dim != -1:
-            groups = int(shape_dim / ctx.get_shape(node.input[1])[2])
+            filter_in_channels = ctx.get_shape(node.input[1])[-2]
+            if filter_in_channels != -1:
+                groups = shape_dim // filter_in_channels
 
         node.set_attr("group", groups)
 
