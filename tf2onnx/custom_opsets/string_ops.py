@@ -92,24 +92,23 @@ class ReduceJoin:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         node.domain = constants.CONTRIB_OPS_DOMAIN
-        node.type = "StringJoin"
-        
+        node.type = "StringJoin"    
         axis_node = ctx.get_node_by_output(node.input[1])
         axis = axis_node.get_attr_value('value')
         utils.make_sure(axis.dims in [[], [1]], "Only a single axis is supported for ReduceJoin node")
         axis = to_array(axis)
         new_axis_node = ctx.make_const(utils.make_name("axis"), np.array(axis, np.int64).reshape((1)))
-
         separator = node.get_attr_value("separator")
         if isinstance(separator, bytes):
             separator = separator.decode()
         separator_node = ctx.make_const(utils.make_name("separator"), np.array([separator], object))
-        
         ctx.replace_inputs(node, [node.input[0], separator_node.output[0], new_axis_node.output[0]])
-        
         keep_dims = node.get_attr_value("keep_dims")
         if keep_dims:
-            unsqueeze_node = GraphBuilder(ctx).make_unsqueeze({'data': node.output[0], 'axes': [-1]}, name=node.name + '/Unsqueeze')
+            unsqueeze_node = GraphBuilder(ctx).make_unsqueeze(
+                {'data': node.output[0], 'axes': [-1]},
+                name=node.name + '/Unsqueeze'
+                )
             ctx.insert_node_on_output(ctx.get_node_by_output(unsqueeze_node))
 
 @tf_op(["Equal", "NotEqual"], domain=constants.CONTRIB_OPS_DOMAIN)
