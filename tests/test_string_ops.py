@@ -52,6 +52,14 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: text_val1, _INPUT1: text_val2, _INPUT2: text_val3})
 
+    @requires_custom_ops("ReduceJoin")
+    def test_reduce_join(self):
+        text_val = np.array([["a", "Test 1 2 3"], ["b", "test test"], ["c", "Hi there Test"]], dtype=np.str)
+        def func(text):
+            x_ = tf.strings.reduce_join(text, axis=1, separator="±")
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: text_val})
+
     @requires_custom_ops("StringSplit")
     @check_tf_min_version("2.0", "result is sparse not ragged in tf1")
     def test_string_split(self):
