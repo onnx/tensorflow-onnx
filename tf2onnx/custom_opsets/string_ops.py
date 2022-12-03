@@ -92,7 +92,7 @@ class ReduceJoin:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         node.domain = constants.CONTRIB_OPS_DOMAIN
-        node.type = "StringJoin"    
+        node.type = "StringJoin"
         axis_node = ctx.get_node_by_output(node.input[1])
         axis = axis_node.get_attr_value('value')
         utils.make_sure(axis.dims in [[], [1]], "Only a single axis is supported for ReduceJoin node")
