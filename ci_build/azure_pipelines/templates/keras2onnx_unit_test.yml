@@ -18,6 +18,7 @@ steps:
   - script: |
       python -m pip install --upgrade pip
       conda config --set always_yes yes --set changeps1 no
+      pip install coverage graphviz requests pyyaml pandas sympy coloredlogs flatbuffers
       pip install $(ONNX_PATH)
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
@@ -33,7 +34,8 @@ steps:
       pip install -r requirements.txt
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
-      $(INSTALL_ORT)
+      # ################################################################## $(INSTALL_ORT)
+      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.14.0.dev20230119003
       $(INSTALL_NUMPY)
 
       pip freeze --all
@@ -72,6 +74,7 @@ steps:
       call activate py$(python.version)
       python -m pip install --upgrade pip numpy
       echo Test numpy installation... && python -c "import numpy"
+      pip install coverage graphviz requests pyyaml pandas sympy coloredlogs flatbuffers
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
@@ -82,7 +85,8 @@ steps:
       IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install git+https://github.com/microsoft/onnxconverter-common
       pip install pytest pytest-cov pytest-runner
-      %INSTALL_ORT%
+      # ################################################################## $(INSTALL_ORT)
+      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.14.0.dev20230119003
       %INSTALL_NUMPY%
 
       pip freeze --all
