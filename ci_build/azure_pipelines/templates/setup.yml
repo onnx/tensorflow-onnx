@@ -27,7 +27,7 @@ steps:
     fi
 
     pip uninstall -y onnxruntime
-    pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.14.0.dev20230119003
+    pip install -i https://test.pypi.org/simple/ ort-nightly==1.14.0.dev20230119003
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
