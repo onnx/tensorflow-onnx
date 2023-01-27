@@ -65,7 +65,7 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.11.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==3.4.0
-        INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_NUMPY: pip install numpy==1.21.6
         NIGHTLY_BUILD_TEST: python run_all_v2.py
 
       Python37-onnx1.11-tf2.8:

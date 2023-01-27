@@ -14,6 +14,8 @@ steps:
       export TF2ONNX_SKIP_TFLITE_TESTS=$CI_SKIP_TFLITE_TESTS
       export TF2ONNX_SKIP_TFJS_TESTS=$CI_SKIP_TFJS_TESTS
       export TF2ONNX_SKIP_TF_TESTS=$CI_SKIP_TF_TESTS
+      pip uninstall -y protobuf
+      pip install protobuf==3.20.3
       python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
     timeoutInMinutes: 15
     displayName: ${{ format('Run UnitTest - Opset{0}', onnx_opset) }}
