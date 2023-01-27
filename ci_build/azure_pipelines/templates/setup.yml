@@ -84,6 +84,9 @@ steps:
       pip install --index-url https://test.pypi.org/simple/ ${PIP_ONNX_NAME:-onnx}
     fi
 
+    pip uninstall -y protobuf
+    pip install "protobuf<3.20.0"
+
     pip freeze --all
   displayName: 'Setup Environment'
 
