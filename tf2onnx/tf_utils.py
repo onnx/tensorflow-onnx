@@ -21,8 +21,14 @@ from . import logging
 
 logger = logging.getLogger(__name__)
 
+
+def is_tensorflow_older_than(version_str):
+    return Version(tf.__version__.split('-')[0]) < Version(version_str)
+
+
 if is_tensorflow_older_than("1.20"):
     from numpy import str
+
 
 #
 #  mapping dtypes from tensorflow to onnx

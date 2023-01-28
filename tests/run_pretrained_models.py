@@ -47,6 +47,8 @@ from tf2onnx.tf_loader import tf_session, tf_reset_default_graph
 from tf2onnx.graph import ExternalTensorStorage
 from tfjs_runner import run_tfjs
 
+from common import is_tensorflow_older_than
+
 if is_tensorflow_older_than("1.20"):
     from numpy import str
 

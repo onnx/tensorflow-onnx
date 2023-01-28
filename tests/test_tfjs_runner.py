@@ -8,6 +8,7 @@ import unittest
 
 import numpy as np
 
+from common import is_tensorflow_older_than
 from tfjs_runner import numpy_to_json, json_to_numpy
 
 # pylint: disable=missing-docstring

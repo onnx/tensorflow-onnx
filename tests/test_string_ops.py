@@ -31,6 +31,8 @@ _OUTPUT2 = "output2:0"
 _TFOUTPUT3 = "output3"
 _OUTPUT3 = "output3:0"
 
+from common import is_tensorflow_older_than
+
 if is_tensorflow_older_than("1.20"):
     from numpy import str
 
