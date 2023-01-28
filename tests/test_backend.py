@@ -21,6 +21,8 @@ from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default, tf_placeholder
 from tf2onnx.onnx_opset.signal import make_dft_constant
 
+from common import is_tensorflow_older_than
+
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
 
 if is_tensorflow_older_than("1.20"):
