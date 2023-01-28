@@ -333,6 +333,14 @@ def is_tf_gpu():
     return tf.test.is_gpu_available()
 
 
+def is_tensorflow_older_than(version_str):
+    return Version(tf.__version__.split('-')[0]) < Version(version_str)
+
+
+def is_tensorflow_later_than(version_str):
+    return Version(tf.__version__.split('-')[0]) > Version(version_str)
+
+
 def skip_tf_cpu(message=""):
     is_tf_cpu = not is_tf_gpu()
     return unittest.skipIf(is_tf_cpu, message)

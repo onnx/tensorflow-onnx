@@ -12,11 +12,13 @@ import numpy as np
 import tensorflow as tf
 from onnx import helper
 
-from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version, skip_tf_versions
+from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version, skip_tf_versions, is_tensorflow_older_than
 from tf2onnx.tf_loader import is_tf2
 from backend_test_base import Tf2OnnxBackendTestBase
 import tf2onnx
 
+if is_tensorflow_older_than("1.20"):
+    from numpy import str
 
 class ApiTests(Tf2OnnxBackendTestBase):
     """Test tf2onnx python API."""
@@ -103,7 +105,7 @@ class ApiTests(Tf2OnnxBackendTestBase):
         model.compile(optimizer='adam', loss=tf.keras.losses.mean_squared_error)
 
         inp1 = np.array([[2.], [3.]], dtype=np.float32)
-        inp2 = np.array([["a"], ["b"]], dtype=np.str)
+        inp2 = np.array([["a"], ["b"]], dtype=str)
         if not is_tf2():
             tf.keras.backend.get_session().run(tf.tables_initializer(name='init_all_tables'))
         k_res = model.predict([inp1, inp2])

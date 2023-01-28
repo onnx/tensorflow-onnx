@@ -47,6 +47,9 @@ from tf2onnx.tf_loader import tf_session, tf_reset_default_graph
 from tf2onnx.graph import ExternalTensorStorage
 from tfjs_runner import run_tfjs
 
+if is_tensorflow_older_than("1.20"):
+    from numpy import str
+
 logger = logging.getLogger("run_pretrained")
 
 TEMP_DIR = os.path.join(utils.get_temp_directory(), "run_pretrained")
@@ -525,7 +528,7 @@ class Test(object):
                         inputs[k] = np_value.astype(expected_dtype)
                     else:
                         if expected_dtype == "string":
-                            inputs[k] = self.make_input(v).astype(np.str).astype(object)
+                            inputs[k] = self.make_input(v).astype(str).astype(object)
                         else:
                             inputs[k] = self.make_input(v).astype(expected_dtype)
 
