@@ -17,7 +17,7 @@ steps:
     then 
         pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
     else
-        pip install $(CI_PIP_ONNX_BACKEND_NAME)
+        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy==1.23.4
     fi
     # TF 1.10 requires numpy <=1.14.5 and >=1.13.3, but onnxruntime 0.2.1 does not work with numpy <= 1.14.5
     # Upgrade numpy only within constraints from other packages if any.
