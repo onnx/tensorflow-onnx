@@ -525,7 +525,7 @@ class Test(object):
                         inputs[k] = np_value.astype(expected_dtype)
                     else:
                         if expected_dtype == "string":
-                            inputs[k] = self.make_input(v).astype(np.str).astype(object)
+                            inputs[k] = self.make_input(v).astype(str).astype(object)
                         else:
                             inputs[k] = self.make_input(v).astype(expected_dtype)
 
