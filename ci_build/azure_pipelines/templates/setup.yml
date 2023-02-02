@@ -80,6 +80,8 @@ steps:
       fi
     fi
 
+    pip install onnx==1.12.0
+
     python setup.py install
 
     if [[ $ONNX_TEST ==  "true" ]] ;
