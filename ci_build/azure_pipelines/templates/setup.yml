@@ -89,6 +89,9 @@ steps:
       pip install --index-url https://test.pypi.org/simple/ ${PIP_ONNX_NAME:-onnx}
     fi
 
+    pip uninstall onnx -y
+    pip install onnx==1.12.0
+
     pip freeze --all
   displayName: 'Setup Environment'
 
