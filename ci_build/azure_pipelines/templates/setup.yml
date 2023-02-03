@@ -10,7 +10,7 @@ steps:
     # Protobuf 4.0 is binary incompatible with what C++ TF uses.
     # https://github.com/tensorflow/tensorflow/blob/c3337c73306b2b859d82fe130912f18e6a1c5c23/tensorflow/tools/pip_package/setup.py#L88
     pip uninstall -y protobuf
-    pip install "protobuf==3.20.3"
+    pip install "protobuf==3.19.6"
 
     # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
     if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
