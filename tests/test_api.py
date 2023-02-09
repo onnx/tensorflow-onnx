@@ -103,7 +103,7 @@ class ApiTests(Tf2OnnxBackendTestBase):
         model.compile(optimizer='adam', loss=tf.keras.losses.mean_squared_error)
 
         inp1 = np.array([[2.], [3.]], dtype=np.float32)
-        inp2 = np.array([["a"], ["b"]], dtype=np.str)
+        inp2 = np.array([["a"], ["b"]], dtype=np.str_)
         if not is_tf2():
             tf.keras.backend.get_session().run(tf.tables_initializer(name='init_all_tables'))
         k_res = model.predict([inp1, inp2])

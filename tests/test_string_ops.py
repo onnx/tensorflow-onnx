@@ -35,7 +35,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops("StringRegexReplace")
     def test_static_regex_replace(self):
-        text_val = np.array([["Hello world!", "Test 1 2 3"], ["Hi there", "test test"]], dtype=np.str)
+        text_val = np.array([["Hello world!", "Test 1 2 3"], ["Hi there", "test test"]], dtype=np.str_)
         def func(text):
             x_ = tf.strings.regex_replace(text, " ", "_", replace_global=True)
             return tf.identity(x_, name=_TFOUTPUT)
@@ -44,9 +44,9 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
     @requires_custom_ops("StringJoin")
     @check_opset_min_version(8, "Expand")
     def test_string_join(self):
-        text_val1 = np.array([["a", "Test 1 2 3"], ["Hi there", "test test"]], dtype=np.str)
-        text_val2 = np.array([["b", "Test 1 2 3"], ["Hi there", "suits ♠♣♥♦"]], dtype=np.str)
-        text_val3 = np.array("Some scalar text", dtype=np.str)
+        text_val1 = np.array([["a", "Test 1 2 3"], ["Hi there", "test test"]], dtype=np.str_)
+        text_val2 = np.array([["b", "Test 1 2 3"], ["Hi there", "suits ♠♣♥♦"]], dtype=np.str_)
+        text_val3 = np.array("Some scalar text", dtype=np.str_)
         def func(text1, text2, text3):
             x_ = tf.strings.join([text1, text2, text3], separator="±")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -55,7 +55,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
     @requires_custom_ops("StringSplit")
     @check_tf_min_version("2.0", "result is sparse not ragged in tf1")
     def test_string_split(self):
-        text_val = np.array([["a", "Test 1 2 3"], ["Hi there", "test test"]], dtype=np.str)
+        text_val = np.array([["a", "Test 1 2 3"], ["Hi there", "test test"]], dtype=np.str_)
         def func(text):
             x = tf.strings.split(text, sep=' ').flat_values
             x_ = tf.identity(x, name=_TFOUTPUT)
@@ -64,7 +64,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops("StringToHashBucketFast")
     def test_string_to_hash_bucket_fast(self):
-        text_val = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
+        text_val = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str_)
         def func(text):
             x = tf.strings.to_hash_bucket_fast(text, 20)
             x_ = tf.identity(x, name=_TFOUTPUT)
@@ -73,8 +73,8 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops("StringEqual")
     def test_string_equal(self):
-        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
-        text_val2 = np.array([["a", "Test 2 4 6", "♠♣"], ["Hello", "test test", "♥ ♦"]], dtype=np.str)
+        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str_)
+        text_val2 = np.array([["a", "Test 2 4 6", "♠♣"], ["Hello", "test test", "♥ ♦"]], dtype=np.str_)
         def func(text1, text2):
             x = tf.equal(text1, text2)
             x_ = tf.identity(x, name=_TFOUTPUT)
@@ -83,8 +83,8 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops("StringNotEqual")
     def test_string_not_equal(self):
-        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
-        text_val2 = np.array([["a", "Test 2 4 6", "♠♣"], ["Hello", "test test", "♥ ♦"]], dtype=np.str)
+        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str_)
+        text_val2 = np.array([["a", "Test 2 4 6", "♠♣"], ["Hello", "test test", "♥ ♦"]], dtype=np.str_)
         def func(text1, text2):
             x = tf.not_equal(text1, text2)
             x_ = tf.identity(x, name=_TFOUTPUT)
@@ -116,7 +116,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
         from tensorflow_text.python.ops.regex_split_ops import (
             gen_regex_split_ops as lib_gen_regex_split_ops)
         text_val = np.array(["a Test 1 2 3 ♠♣",
-                             "Hi there test test ♥♦"], dtype=np.str)
+                             "Hi there test test ♥♦"], dtype=np.str_)
         def func(text):
             tokens, begin_offsets, end_offsets, row_splits = lib_gen_regex_split_ops.regex_split_with_offsets(
                 text, "(\\s)", "")
@@ -153,7 +153,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
                 init, num_oov, lookup_key_dtype=tf.string)
 
         vocab = _CreateTable(["great", "they", "the", "##'", "##re", "##est"])
-        text_val = np.array(["they're", "the", "greatest"], dtype=np.str)
+        text_val = np.array(["they're", "the", "greatest"], dtype=np.str_)
 
         def func(text):
             inputs = ragged_tensor.convert_to_tensor_or_ragged_tensor(text)

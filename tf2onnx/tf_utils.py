@@ -55,7 +55,7 @@ def tf_to_onnx_tensor(tensor, name=""):
         # in which each item is of str while the whole dtype is of object.
         try:
             # Faster but fails on Unicode
-            np_data = np_data.astype(np.str).astype(object)
+            np_data = np_data.astype(np.str_).astype(object)
         except UnicodeDecodeError:
             decode = np.vectorize(lambda x: x.decode('UTF-8'))
             np_data = decode(np_data).astype(object)

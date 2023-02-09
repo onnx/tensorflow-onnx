@@ -1648,8 +1648,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, "input3:0": x_val3})
 
     def test_concat_const_string(self):
-        x_val1 = np.array([["Hello world", "abc"], ["def", "♦♥♠♣"]], dtype=np.str)
-        const_val = np.array([["Hello there", "wxyz"], ["", "π"]], dtype=np.str)
+        x_val1 = np.array([["Hello world", "abc"], ["def", "♦♥♠♣"]], dtype=np.str_)
+        const_val = np.array([["Hello there", "wxyz"], ["", "π"]], dtype=np.str_)
         def func(x1):
             x_ = tf.concat([x1, const_val], 0)
             return tf.identity(x_, name=_TFOUTPUT)
@@ -3513,9 +3513,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_where_string(self):
         x_val = np.array([1, 2, -3, 4, -5, -6, -7, 8, 9, 0], dtype=np.float32)
         true_result = np.array([111, 222, 333, 444, 555, 666, 777, 888, 999, 1000],
-                               dtype=np.str)
+                               dtype=np.str_)
         false_result = np.array([-111, -222, -333, -444, -555, -666, -777, -888, -999, -1000],
-                                dtype=np.str)
+                                dtype=np.str_)
         def func(x):
             picks = tf.where(x > -1, true_result, false_result)
             return tf.identity(picks, name=_TFOUTPUT)
@@ -3613,7 +3613,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.14", "tf.strings.lower")
     @check_opset_min_version(10, "StringNormalizer")
     def test_string_lower(self):
-        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
+        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str_)
         def func(text1):
             x = tf.strings.lower(text1)
             x_ = tf.identity(x, name=_TFOUTPUT)
@@ -3623,7 +3623,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.14", "tf.strings.lower")
     @check_opset_min_version(10, "StringNormalizer")
     def test_string_lower_flat(self):
-        text_val1 = np.array(["a", "Test 1 2 3", "♠♣", "Hi there", "test test", "♥♦"], dtype=np.str)
+        text_val1 = np.array(["a", "Test 1 2 3", "♠♣", "Hi there", "test test", "♥♦"], dtype=np.str_)
         def func(text1):
             x = tf.strings.lower(text1)
             x_ = tf.identity(x, name=_TFOUTPUT)
@@ -3633,7 +3633,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.14", "tf.strings.lower")
     @check_opset_min_version(10, "StringNormalizer")
     def test_string_upper(self):
-        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str)
+        text_val1 = np.array([["a", "Test 1 2 3", "♠♣"], ["Hi there", "test test", "♥♦"]], dtype=np.str_)
         def func(text1):
             x = tf.strings.upper(text1)
             x_ = tf.identity(x, name=_TFOUTPUT)
@@ -4709,9 +4709,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "ScatterND")
     @skip_tflite("Conversion crashes")
     def test_tensor_scatter_update_str(self):
-        x_val = np.array(['A', '♠♣♥♦', 'B', 'C'], dtype=np.str).reshape((4))
+        x_val = np.array(['A', '♠♣♥♦', 'B', 'C'], dtype=np.str_).reshape((4))
         y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
-        z_val = np.array(['☺', '11'], dtype=np.str).reshape((2))
+        z_val = np.array(['☺', '11'], dtype=np.str_).reshape((2))
 
         def func(x, y, z):
             x_ = tf.tensor_scatter_nd_update(x, y, z)
@@ -4722,9 +4722,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "ScatterND")
     @skip_tflite("Conversion crashes")
     def test_tensor_scatter_update_str_const(self):
-        x_val = np.array(['A', '♠♣♥♦', 'B', 'C'], dtype=np.str).reshape((4))
+        x_val = np.array(['A', '♠♣♥♦', 'B', 'C'], dtype=np.str_).reshape((4))
         y_val = np.array([0, 2], dtype=np.int64).reshape((2, 1))
-        z_val = np.array(['☺', '11'], dtype=np.str).reshape((2))
+        z_val = np.array(['☺', '11'], dtype=np.str_).reshape((2))
 
         def func(x, y):
             z = tf.constant(z_val)
