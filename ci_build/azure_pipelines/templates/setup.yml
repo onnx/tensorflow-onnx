@@ -98,6 +98,9 @@ steps:
     pip uninstall onnx -y
     pip install onnx==1.12.0
 
+    pip uninstall tensorflow-io-gcs-filesystem -y
+    pip install tensorflow-io-gcs-filesystem==0.27.0
+
     pip uninstall flatbuffers -y
     pip install flatbuffers==22.10.26
 
