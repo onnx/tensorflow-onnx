@@ -89,6 +89,12 @@ steps:
       pip install --index-url https://test.pypi.org/simple/ ${PIP_ONNX_NAME:-onnx}
     fi
 
+    pip uninstall h5py -y
+    pip install h5py==3.7.0
+
+    pip uninstall charset-normalizer -y
+    pip install charset-normalizer==2.1.1
+
     pip uninstall onnx -y
     pip install onnx==1.12.0
 
