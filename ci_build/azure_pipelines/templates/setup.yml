@@ -95,6 +95,9 @@ steps:
     pip uninstall flatbuffers -y
     pip install flatbuffers==22.10.26
 
+    pip uninstall protobuf -y
+    pip install protobuf==3.19.6
+
     pip freeze --all
   displayName: 'Setup Environment'
 
