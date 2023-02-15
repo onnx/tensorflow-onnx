@@ -21,7 +21,7 @@ steps:
       pip install $(ONNX_PATH)
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
-      pip install h5py==2.9.0
+      pip install h5py==3.7.0
       pip install parameterized
       pip install coloredlogs flatbuffers
       pip install $(TENSORFLOW_PATH)
@@ -75,7 +75,7 @@ steps:
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
-      pip install h5py==2.9.0
+      pip install h5py==3.7.0
       pip install parameterized
       pip install coloredlogs flatbuffers
       pip install %TENSORFLOW_PATH%
