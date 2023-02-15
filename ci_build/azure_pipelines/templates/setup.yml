@@ -28,11 +28,6 @@ steps:
       pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
     fi
 
-    if [[ $CI_TF_VERSION < 2.0 ]] ;
-    then 
-        pip install h5py==2.9.0
-    fi
-
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
       pip install tensorflowjs==3.18.0
