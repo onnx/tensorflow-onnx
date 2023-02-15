@@ -23,6 +23,7 @@ steps:
       pip install "protobuf<4.21.0"
       pip install h5py==3.7.0
       pip install parameterized
+      pip install timeout-decorator
       pip install coloredlogs flatbuffers
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
@@ -91,6 +92,7 @@ steps:
       pip install "protobuf<4.21.0"
       pip install h5py==3.7.0
       pip install parameterized
+      pip install timeout-decorator
       pip install coloredlogs flatbuffers
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
