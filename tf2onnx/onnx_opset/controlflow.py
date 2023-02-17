@@ -494,9 +494,8 @@ class While:
                 ragged_scan_output_names.append(body_ragged_name)
                 ragged_scan_output_to_len[output_names[idx]] = external_ragged_name
                 continue
-            ctx.remove_node(n.name)
             # make the node output bad
-            ctx.replace_all_inputs(n.output[0], "@@ALLOC")  # ops=ctx.get_nodes()
+            ctx.replace_input(node, node.input[idx], "@@ALLOC", idx)
             del body.inputs[idx]
             del cond_graph.inputs[idx]
             del tf_while_inputs[idx]

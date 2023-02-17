@@ -22,58 +22,11 @@ from tf2onnx.onnx_opset.controlflow import parameter_binding, inline_subgraph
 @tfl_op(["TFL_WHILE"])
 class TflWhile:
     @classmethod
-    def version_7(cls, ctx, node, **kwargs):
-        tfl_while_inputs = node.input
-        output_shapes = node.output_shapes
-        output_dtypes = node.output_dtypes
-        output_names = node.output
-
-        cond_name = node.get_attr_str("cond_subgraph_index")
-        cond_graph = find_function(cond_name)
-        cond_graph.parent_graph = ctx
-
-        body_name = node.get_attr_str("body_subgraph_index")
-        body = find_function(body_name)
-        body.parent_graph = ctx
-
-        ctx.remove_node(node.name)
-
-        cond_binding = parameter_binding(cond_graph, tfl_while_inputs)
-        cond_outputs = inline_subgraph(ctx, cond_graph, cond_name, cond_binding)
-
-        # Potential scan output candidates are identified in the body subgraph using tfl_scan_output_rewriter.
-        # They can then be optimized in this tfl loop handler provided they are not used in the cond subgraph.
-        scan_outputs = sorted(body.scan_outputs, reverse=True)
-        def input_is_unused(g, index):
-            return len(g.find_output_consumers(g.inputs[index])) == 0
-        scan_outputs = [(i, out) for i, out in scan_outputs if input_is_unused(cond_graph, i)]
-
-        for idx, _ in scan_outputs:
-            del tfl_while_inputs[idx]
-            output_shapes.append(output_shapes.pop(idx))
-            output_dtypes.append(output_dtypes.pop(idx))
-            output_names.append(output_names.pop(idx))
-
-        max_iterations = ctx.make_const(utils.make_name("max_iterations"), np.array(np.iinfo(np.int64).max))
-
-        loop_node = ctx.make_node("Loop", [max_iterations.output[0], cond_outputs[0]] + tfl_while_inputs,
-                                  output_count=len(output_shapes), name=node.name + "_loop",
-                                  shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True)
-
-        output_map = dict(zip(output_names, loop_node.output))
-
-        # shift output consumers
-        for k, v in output_map.items():
-            ctx.replace_all_inputs(k, v)  # ops=ctx.get_nodes()
-
-        body = wire_tfl_while_body(body, loop_node.inputs, output_shapes, output_dtypes, cond_graph, scan_outputs)
-
-        for i in range(len(scan_outputs)):
-            squeeze_node = GraphBuilder(body).make_squeeze(
-                {'data': body.outputs[-1-i], "axes": [0]}, return_node=True)
-            body.outputs[-1-i] = squeeze_node.output[0]
-
-        loop_node.set_body_graph_as_attr("body", body)
+    def to_tf(cls, ctx, node, **kwargs):
+        node.attr["cond"] = node.attr["cond_subgraph_index"]
+        del node.attr["cond_subgraph_index"]
+        node.attr["body"] = node.attr["body_subgraph_index"]
+        del node.attr["body_subgraph_index"]
 
 def wire_tfl_while_body(g, loop_node_inputs, output_shapes,
                         output_dtypes, cond_graph, scan_outputs):
