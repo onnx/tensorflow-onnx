@@ -17,7 +17,7 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.11.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==3.4.0
-        INSTALL_NUMPY: pip install numpy==1.23.4
+        INSTALL_NUMPY: pip install numpy==1.21.0
         NIGHTLY_BUILD_TEST: python run_all_v2.py
 
       Python39-onnx1.12-tf2.8:
@@ -29,7 +29,7 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.12.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==3.4.0
-        INSTALL_NUMPY: pip install numpy==1.23.4
+        INSTALL_NUMPY: pip install numpy==1.24.2
         NIGHTLY_BUILD_TEST: python run_all_v2.py
 
       Python310-onnx1.12-tf2.9:
@@ -41,7 +41,7 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.13.1
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.12.0
-        INSTALL_NUMPY: pip install numpy==1.23.4
+        INSTALL_NUMPY: pip install numpy==1.24.2
         NIGHTLY_BUILD_TEST: python run_all_v2.py
 
   steps:
