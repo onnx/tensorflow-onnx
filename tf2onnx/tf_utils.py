@@ -210,7 +210,8 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
             input_names = [i.name for i in node.inputs]
             output_names = [i.name for i in node.outputs]
             if node.type == 'StridedSlice' and input_names[0] in shape_node_outputs \
-                                           and output_names[0] not in outputs_to_values:
+                                           and output_names[0] not in outputs_to_values \
+                                           and output_names[0] not in unneeded_outputs:
                 shape = shape_node_outputs[input_names[0]]
                 i = get_index_from_strided_slice_of_shape(node, outputs_to_values)
                 if i is not None and 0 <= i < len(shape) and shape[i] is not None:
