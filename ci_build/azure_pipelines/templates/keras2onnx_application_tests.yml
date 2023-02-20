@@ -18,6 +18,7 @@ steps:
   - script: |
       python -m pip install --upgrade pip
       conda config --set always_yes yes --set changeps1 no
+      pip install git+https://github.com/microsoft/onnxconverter-common
       pip install $(ONNX_PATH)
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
@@ -26,7 +27,6 @@ steps:
       pip install coloredlogs flatbuffers
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
-      pip install git+https://github.com/microsoft/onnxconverter-common
       $(INSTALL_ORT)
       pip install Pillow==8.2.0
       pip install opencv-python
@@ -86,6 +86,7 @@ steps:
       call activate py$(python.version)
       python -m pip install --upgrade pip numpy
       echo Test numpy installation... && python -c "import numpy"
+      pip install git+https://github.com/microsoft/onnxconverter-common
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
@@ -94,7 +95,6 @@ steps:
       pip install coloredlogs flatbuffers
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
-      pip install git+https://github.com/microsoft/onnxconverter-common
       %INSTALL_ORT%
       pip install Pillow==8.2.0
       pip install opencv-python
