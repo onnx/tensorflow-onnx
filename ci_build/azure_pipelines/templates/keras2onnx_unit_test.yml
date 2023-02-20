@@ -24,6 +24,7 @@ steps:
       pip install "protobuf<4.21.0"
       pip install h5py==3.7.0
       pip install parameterized
+      pip install timeout-decorator
       pip install coloredlogs flatbuffers
       pip install $(TENSORFLOW_PATH)
       if [[ ! -z $KERAS ]];
@@ -78,6 +79,7 @@ steps:
       pip install "protobuf<4.21.0"
       pip install h5py==3.7.0
       pip install parameterized
+      pip install timeout-decorator
       pip install coloredlogs flatbuffers
       pip install %TENSORFLOW_PATH%
       IF NOT "%KERAS%"=="" (pip install %KERAS%)

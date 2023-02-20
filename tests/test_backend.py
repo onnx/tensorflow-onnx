@@ -1691,6 +1691,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return len(g.get_nodes()) == 2
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, graph_validator=graph_validator)
 
+    @timeout(5)
+    def test_slice_const_fold_halts(self):
+        # Regression test for infinite loop during constant-folding.
+        x_val = np.array([4, 3], dtype=np.int32)
+        x_shape = np.array([-1, 3], dtype=np.int32)
+        def func(x):
+            x_reshaped = tf.reshape(tf.zeros(x), tf.constant(x_shape))
+            s = tf.shape(x_reshaped)
+            const1 = tf.constant([1], dtype=tf.int32)
+            const2 = tf.constant([2], dtype=tf.int32)
+            s_indexed = tf.strided_slice(s, const1, const2, strides=const1, shrink_axis_mask=1)
+            x_indexed = tf.strided_slice(x, const1, const2, strides=const1, shrink_axis_mask=1)
+            mul = tf.multiply(s_indexed, tf.constant(2, dtype=s_indexed.dtype))
+            add = const1 + x_indexed + mul
+            return tf.identity(add, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     def test_slice(self):
         x_val = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.float32)
         def func(x):
