@@ -21,8 +21,9 @@ steps:
       pip install $(ONNX_PATH)
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
-      pip install h5py==2.9.0
+      pip install h5py==3.7.0
       pip install parameterized
+      pip install timeout-decorator
       pip install coloredlogs flatbuffers
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
@@ -48,6 +49,10 @@ steps:
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
       $(INSTALL_NUMPY)
+      if [[ ! -z $INSTALL_LEGACY ]];
+      then
+        pip install $(INSTALL_LEGACY)
+      fi
 
       pip freeze --all
     displayName: 'Install dependencies'
@@ -85,8 +90,9 @@ steps:
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
-      pip install h5py==2.9.0
+      pip install h5py==3.7.0
       pip install parameterized
+      pip install timeout-decorator
       pip install coloredlogs flatbuffers
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
@@ -107,6 +113,7 @@ steps:
       pip install keras-self-attention
       pip install pytest pytest-cov pytest-runner
       %INSTALL_NUMPY%
+      IF NOT "%INSTALL_LEGACY%"=="" (pip install %INSTALL_LEGACY%)
 
       pip freeze --all
     displayName: 'Install dependencies'
