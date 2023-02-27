@@ -13,6 +13,7 @@ __pycache__
 .eggs
 *.egg-info
 run.sh
+node_modules/*
 tests/tfhub/*/*.onnx
 tests/tfhub/*/*.tar.gz
 tests/tfhub/*/*.tflite

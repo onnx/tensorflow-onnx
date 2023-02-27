@@ -153,4 +153,3 @@ stages:
         report_coverage: 'True'
 
   - template: 'templates/combine_test_coverage.yml'
-
