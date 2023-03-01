@@ -3,17 +3,18 @@
 stages:
   - stage:
     jobs:
-    - template: 'templates/job_generator.yml'
-      parameters:
-        python_versions: ['3.9']
-        tf_versions: ['2.8.0']
-        onnx_opsets: ['']
-        skip_tfjs_tests: 'False'
-        skip_tf_tests: 'True'
-        job:
-          steps:
-          - template: 'unit_test.yml'
-        report_coverage: 'True'
+    # TODO: Enable these tests once https://github.com/onnx/tensorflow-onnx/issues/2118 is fixed.
+    # - template: 'templates/job_generator.yml'
+    #   parameters:
+    #     python_versions: ['3.9']
+    #     tf_versions: ['2.8.0']
+    #     onnx_opsets: ['']
+    #     skip_tfjs_tests: 'False'
+    #     skip_tf_tests: 'True'
+    #     job:
+    #       steps:
+    #       - template: 'unit_test.yml'
+    #     report_coverage: 'True'
 
     - template: 'templates/job_generator.yml'
       parameters:
@@ -37,17 +38,18 @@ stages:
           - template: 'unit_test.yml'
         report_coverage: 'True'
 
-    - template: 'templates/job_generator.yml'
-      parameters:
-        python_versions: ['3.9']
-        tf_versions: ['2.7.4']
-        onnx_opsets: ['']
-        skip_tfjs_tests: 'False'
-        skip_tf_tests: 'True'
-        job:
-          steps:
-          - template: 'unit_test.yml'
-        report_coverage: 'True'
+    # TODO: Enable these tests once https://github.com/onnx/tensorflow-onnx/issues/2118 is fixed.
+    # - template: 'templates/job_generator.yml'
+    #   parameters:
+    #     python_versions: ['3.9']
+    #     tf_versions: ['2.7.4']
+    #     onnx_opsets: ['']
+    #     skip_tfjs_tests: 'False'
+    #     skip_tf_tests: 'True'
+    #     job:
+    #       steps:
+    #       - template: 'unit_test.yml'
+    #     report_coverage: 'True'
 
     - template: 'templates/job_generator.yml'
       parameters:
@@ -61,17 +63,18 @@ stages:
           - template: 'unit_test.yml'
         report_coverage: 'True'
 
-    - template: 'templates/job_generator.yml'
-      parameters:
-        python_versions: ['3.10']
-        tf_versions: ['2.9.1']
-        onnx_opsets: ['']
-        skip_tfjs_tests: 'False'
-        skip_tf_tests: 'True'
-        job:
-          steps:
-          - template: 'unit_test.yml'
-        report_coverage: 'True'
+    # TODO: Enable these tests once https://github.com/onnx/tensorflow-onnx/issues/2118 is fixed.
+    # - template: 'templates/job_generator.yml'
+    #   parameters:
+    #     python_versions: ['3.10']
+    #     tf_versions: ['2.9.1']
+    #     onnx_opsets: ['']
+    #     skip_tfjs_tests: 'False'
+    #     skip_tf_tests: 'True'
+    #     job:
+    #       steps:
+    #       - template: 'unit_test.yml'
+    #     report_coverage: 'True'
 
     - template: 'templates/job_generator.yml'
       parameters:
@@ -150,4 +153,3 @@ stages:
         report_coverage: 'True'
 
   - template: 'templates/combine_test_coverage.yml'
-

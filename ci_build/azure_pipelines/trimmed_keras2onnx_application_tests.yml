@@ -18,6 +18,7 @@ jobs:
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS:
         INSTALL_NUMPY: pip install numpy==1.19.0
+        INSTALL_LEGACY: pip install h5py==2.9.0
         NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py"
 
       Python38-tf2-latest:

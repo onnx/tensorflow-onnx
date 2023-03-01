@@ -75,7 +75,7 @@ setup(
     version=VersionInfo.version,
     description='Tensorflow to ONNX converter',
     setup_requires=['pytest-runner'],
-    tests_require=['graphviz', 'parameterized', 'pytest', 'pytest-cov', 'pyyaml'],
+    tests_require=['graphviz', 'parameterized', 'pytest', 'pytest-cov', 'pyyaml', 'timeout-decorator'],
     cmdclass=cmdclass,
     packages=find_packages(),
     license='Apache License v2.0',
