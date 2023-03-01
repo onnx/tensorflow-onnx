@@ -5950,5 +5950,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = make_xval([2, 3])
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "Pad")
+    def test_conv_unknown_kernel_channels(self):
+        x_shape = [2, 10, 3]
+        x_val = make_xval(x_shape)
+        kernel_shape = [4, 3, 5]
+        kernel_val = make_xval(kernel_shape)
+        pad_val = np.array([[0, 0], [0, 0], [0, 0]], np.int64)
+        def func(x, kernel, pad):
+            # Make kernel dimensions unknown
+            kernel = tf.pad(kernel, pad)
+            conv = tf.nn.conv1d(x, kernel, stride=[1], padding='VALID')
+            return tf.identity(conv, name='output')
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: kernel_val, _INPUT2: pad_val})
+
 if __name__ == '__main__':
     unittest_main()
