@@ -1407,11 +1407,11 @@ class Resize:
         nearest_mode = "floor"
         if "align_corners" in node.attr and node.attr["align_corners"].i:
             transformation_mode = "align_corners"
+            nearest_mode = "round_prefer_ceil"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
             if node.type == "ResizeNearestNeighbor" and not ctx.is_target(constants.TARGET_TENSORRT):
                 # TensorRT only supports nearest_mode = "floor" for mode = "nearest"
-                transformation_mode = "half_pixel"
-                nearest_mode = "round_prefer_ceil"
+                transformation_mode = "tf_half_pixel_for_nn"
             else:
                 transformation_mode = "half_pixel"
         attr = {"mode": mode, "nearest_mode": nearest_mode, "coordinate_transformation_mode": transformation_mode,
@@ -1433,6 +1433,12 @@ class Resize:
         # wants the input to be NHWC - adjust target_shape to this.
         utils.make_sure(node.type != "ResizeBicubic", "Opset 11 is required for bicubic interpolation for node %s",
                         node.name)
+        if "align_corners" in node.attr:
+            utils.make_sure(not node.attr["align_corners"].i,
+                            "Opset 11 is required for align_corners=True for node %s", node.name)
+        if "half_pixel_centers" in node.attr:
+            utils.make_sure(not node.attr["half_pixel_centers"].i,
+                            "Opset 11 is required for half_pixel_centers=True for node %s", node.name)
         mode = "linear" if node.type == "ResizeBilinear" else "nearest"
 
         # because onnxruntime only supports to scale the last two dims so transpose is inserted

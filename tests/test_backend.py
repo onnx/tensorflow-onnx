@@ -3154,7 +3154,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_nearest_neighbor(self):
         x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_nearest_neighbor(x, x_new_size_)
@@ -3164,7 +3164,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(9, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor_with_non_const(self):
         x_shape = [3, 10, 8, 5]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1, dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_nearest_neighbor(x, x_new_size_)
@@ -3185,11 +3185,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend()
     @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "coordinate_transformation_mode attr of resize_bilinear")
+    def test_resize_bilinear_align_coreners(self):
+        x_shape = [1, 15, 20, 2]
+        x_new_size = [30, 40]
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
+        def func(x):
+            x_new_size_ = tf.constant(x_new_size)
+            x_ = resize_bilinear(x, x_new_size_, align_corners=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @skip_caffe2_backend()
+    @check_tf_min_version("1.14")
     @check_opset_min_version(11, "coordinate_transformation_mode attr")
     def test_resize_bilinear_half_pixel_centers(self):
         x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_bilinear(x, x_new_size_, half_pixel_centers=True)
@@ -3199,7 +3212,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(9, "resize_bilinear")
     def test_resize_bilinear_with_non_const(self):
         x_shape = [3, 10, 8, 5]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1, dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_bilinear(x, x_new_size_)
@@ -3210,7 +3223,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_bilinear_with_non_const2(self):
         # scales has an element larger than 1 and also has an element less that 1
         x_shape = [3, 100, 8, 5]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1, dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_bilinear(x, x_new_size_)
@@ -3221,7 +3234,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "resize_bilinear_v2")
     def test_resize_bilinear_v2_with_non_const(self):
         x_shape = [3, 10, 8, 5]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1, dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_bilinear_v2(x, x_new_size_)
@@ -3266,7 +3279,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_bicubic(self):
         x_shape = [1, 15, 20, 2]
         new_size_val = np.array([30, 40], dtype=np.int32)
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x, new_size):
             y = tf.image.resize(x, new_size, method=tf.image.ResizeMethod.BICUBIC)
             return tf.identity(y, name=_TFOUTPUT)
@@ -3276,7 +3289,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_nearest_neighbor2(self):
         x_shape = [1, 300, 20, 2]
         x_new_size = [30, 40]
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_nearest_neighbor(x, x_new_size_)
@@ -3288,10 +3301,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_nearest_neighbor_half_pixel_centers(self):
         x_shape = [1, 10, 20, 2]
         x_new_size = [20, 40]
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_nearest_neighbor(x, x_new_size_, half_pixel_centers=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "coordinate_transformation_mode and nearest_mode attr")
+    def test_resize_nearest_neighbor_align_corners(self):
+        x_shape = [1, 10, 20, 2]
+        x_new_size = [20, 40]
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
+        def func(x):
+            x_new_size_ = tf.constant(x_new_size)
+            x_ = resize_nearest_neighbor(x, x_new_size_, align_corners=True)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
