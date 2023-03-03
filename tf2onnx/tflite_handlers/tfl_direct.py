@@ -12,6 +12,9 @@ from tf2onnx.handler import tfl_op
 
 
 @tfl_op("TFL_ABS", tf_op="Abs")
+@tfl_op("TFL_ARG_MAX", tf_op="ArgMax")
+@tfl_op("TFL_ARG_MIN", tf_op="ArgMin")
+@tfl_op("TFL_ATAN2", tf_op="Atan2")
 @tfl_op("TFL_BATCH_MATMUL", tf_op="BatchMatMul")
 @tfl_op("TFL_BROADCAST_TO", tf_op="BroadcastTo")
 @tfl_op("TFL_CEIL", tf_op="Ceil")
@@ -72,8 +75,6 @@ from tf2onnx.handler import tfl_op
 @tfl_op("TFL_ADD_N", tf_op="AddN")
 @tfl_op("TFL_ONE_HOT", tf_op="OneHot")
 @tfl_op("TFL_DEPTH_TO_SPACE", tf_op="DepthToSpace")
-@tfl_op("TFL_ARG_MIN", tf_op="ArgMin")
-@tfl_op("TFL_ARG_MAX", tf_op="ArgMax")
 @tfl_op("TFL_NON_MAX_SUPPRESSION_V5", tf_op="NonMaxSuppressionV5")
 @tfl_op("TFL_RESIZE_NEAREST_NEIGHBOR", tf_op="ResizeNearestNeighbor")
 @tfl_op("TFL_LEAKY_RELU", tf_op="LeakyRelu")
