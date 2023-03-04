@@ -59,7 +59,6 @@ class ConvTransposeWithDynamicPads:
         # pads[i_end] = total_padding[i] - (total_padding[i]/2)
         # output dtype of onnx "shape" is int64 while in tf dtype could be specified
         utils.make_sure(node.is_nhwc(), "only support NHWC for now")
-        separate_fused_activation_function(ctx, node)
         node.domain = constants.MICROSOFT_DOMAIN
         input_shape = ctx.make_node("Shape", [node.input[2]])
         hw_indices = ctx.make_const(utils.make_name("hw_indices"), np.array([1, 2]).astype(np.int64))
