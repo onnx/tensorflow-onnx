@@ -23,11 +23,23 @@ jobs:
 
       Python38-tf2-latest:
         python.version: '3.8'
-        ONNX_PATH: onnx
+        ONNX_PATH: onnx==1.12.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow
-        INSTALL_ORT: pip install onnxruntime
+        INSTALL_TENSORFLOW: pip install tensorflow==2.10.0
+        INSTALL_ORT: pip install onnxruntime==1.13.1
+        INSTALL_KERAS_RESNET: pip install keras-resnet
+        INSTALL_TRANSFORMERS: pip install transformers==4.2.0
+        INSTALL_NUMPY:
+        NIGHTLY_BUILD_TEST: python run_all_v2.py
+
+      Python38-tf2-2.11:
+        python.version: '3.9'
+        ONNX_PATH: onnx==1.13.1
+        INSTALL_KERAS:
+        UNINSTALL_KERAS:
+        INSTALL_TENSORFLOW: pip install tensorflow==2.11.0
+        INSTALL_ORT: pip install onnxruntime==1.13.1
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.2.0
         INSTALL_NUMPY:

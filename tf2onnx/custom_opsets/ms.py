@@ -11,6 +11,7 @@ from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import controlflow
 from tf2onnx.onnx_opset.nn import conv_convert_inputs, conv_dims_attr
 
+
 # pylint: disable=unused-argument,missing-docstring
 
 def make_range(ctx, start, limit, delta, output, scope_name, shape, dtype):
