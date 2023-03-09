@@ -12,6 +12,8 @@ from onnx import onnx_pb
 from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
+from tf2onnx.graph_builder import GraphBuilder
+
 
 logger = logging.getLogger(__name__)
 
@@ -553,6 +555,163 @@ class CumSum:
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op("Cumprod")
+class CumProd:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # opset 10 required for Slice to support starts/ends/axes/steps as inputs
+        axis_node = ctx.make_node("Cast", inputs=[node.input[1]], attr={"to":  onnx_pb.TensorProto.INT64},
+                                  op_name_scope=node.name, outputs=[utils.make_name("axis")])
+        axis = GraphBuilder(ctx).make_unsqueeze({'data': axis_node.output[0], 'axes': [0]})
+        cond_true_node = ctx.make_const(utils.make_name("cond_in"), np.ones((), dtype=bool))
+        input_shape_node = ctx.make_node("Shape", inputs=[node.input[0]], op_name_scope=node.name, outputs=[utils.make_name("input_shape")])        
+        input_rank_node = ctx.make_node("Shape", inputs=[input_shape_node.output[0]], op_name_scope=node.name, outputs=[utils.make_name("input_rank")])    
+        axis_length_node = ctx.make_node("Gather", inputs=[input_shape_node.output[0], node.input[1]],
+                                         op_name_scope=node.name, outputs=[utils.make_name("axis_length")])
+        one_node = ctx.make_const(utils.make_name("one"), np.array([1], "int64"))
+        axis_length_plus_one_node = ctx.make_node("Add", inputs=[axis_length_node.output[0], one_node.output[0]],
+                                                  op_name_scope=node.name, outputs=[utils.make_name("axis_length_plus_one")])
+        num_iter_node = ctx.make_node("Sub", inputs=[axis_length_node.output[0], one_node.output[0]],
+                                      op_name_scope=node.name, outputs=[utils.make_name("num_iter")])
+        
+        if node.get_attr_value("exclusive"): # one iter less, crop the input, then pad the output
+            num_iter_node = ctx.make_node("Sub", inputs=[num_iter_node.output[0], one_node.output[0]],
+                                          op_name_scope=node.name, outputs=[utils.make_name("num_iter")])
+            zero_node = ctx.make_const(utils.make_name("zero"), np.array([0], "int64"))
+            if node.get_attr_value("reverse"):
+                pad_tensors = [zero_node.output[0], one_node.output[0]]
+                start_slice = one_node.output[0]
+                end_slice = axis_length_plus_one_node.output[0]
+            else:
+                minus_one_node = ctx.make_const(utils.make_name("minus_one"), np.array([-1], "int64"))
+                pad_tensors = [one_node.output[0], zero_node.output[0]]
+                start_slice = zero_node.output[0]
+                end_slice = minus_one_node.output[0]
+            pads_node = cls.get_pads_node(ctx, pad_tensors, axis, input_rank_node.output[0], node.name)
+            slice_shape = [-1] * len(ctx.get_shape(node.input[0]))
+            inputs_node = ctx.make_node("Slice", inputs=[node.input[0], start_slice, end_slice, axis],
+                                        op_name_scope=node.name, outputs=[utils.make_name("slice")],
+                                        shapes=[slice_shape], dtypes=[ctx.get_dtype(node.input[0])])
+            inputs = inputs_node.output[0]
+        else:
+            inputs = node.input[0]
+        
+        loop_graph = cls.make_loop_graph(ctx, node, inputs)
+        loop_graph.parent_graph = ctx
+
+        loop_inputs = [num_iter_node.output[0], cond_true_node.output[0], inputs, input_rank_node.output[0], axis, axis_length_plus_one_node.output[0], inputs]
+        loop_outputs = [utils.make_name("loop_inputs_out"), utils.make_name("loop_rank_out"), utils.make_name("loop_axis_out"),
+                        utils.make_name("loop_axis_length_plus_one_out"), utils.make_name("loop_accumulator_out")]
+        loop_outputs_shapes = [loop_graph.get_shape(o) for o in loop_graph.outputs[1:]]
+        loop_outputs_dtypes = [loop_graph.get_dtype(o) for o in loop_graph.outputs[1:]]
+        
+        loop_node = ctx.make_node("Loop", inputs=loop_inputs, branches={"body": loop_graph}, outputs=loop_outputs,
+                                  shapes=loop_outputs_shapes, dtypes=loop_outputs_dtypes, op_name_scope=node.name)
+        
+        if node.get_attr_value("exclusive"): # pad the output
+            if ctx.get_dtype(loop_node.output[-1]) != ctx.get_dtype(one_node.output[0]):
+                pad_const_node = ctx.make_node("Cast", inputs=[one_node.output[0]], attr={"to":  ctx.get_dtype(loop_node.output[-1])},
+                                               op_name_scope=node.name, outputs=[utils.make_name("pad_const")])
+            else:
+                pad_const_node = one_node
+            output_node = ctx.make_node("Pad", inputs=[loop_node.output[-1], pads_node.output[0], pad_const_node.output[0]],
+                                     op_name_scope=node.name, outputs=[utils.make_name("cumprod_out")])
+            output = output_node.output[0]
+        else:
+            output = loop_node.output[-1]
+        output_node = ctx.make_node("Identity", inputs=[output], outputs=[utils.make_name("cumprod_out")],
+                                    shapes=[ctx.get_shape(node.input[0])], dtypes=[ctx.get_dtype(node.input[0])])
+        ctx.insert_node_on_output(output_node, node.output[0])
+        ctx.remove_node(node.name)
+
+    @classmethod
+    def make_loop_graph(cls, ctx, node, inputs_tensor):
+        graph = ctx.create_new_graph_with_same_config()
+        graph.add_graph_input(utils.make_name("iteration_num"), onnx_pb.TensorProto.INT64, [])
+        graph.add_graph_input(utils.make_name("condition_in"), onnx_pb.TensorProto.BOOL, [])
+        graph.add_graph_input(utils.make_name("inputs"), ctx.get_dtype(node.input[0]), ctx.get_shape(inputs_tensor))
+        graph.add_graph_input(utils.make_name("rank"), onnx_pb.TensorProto.INT64, [1])
+        graph.add_graph_input(utils.make_name("axis"), onnx_pb.TensorProto.INT64, [1])
+        graph.add_graph_input(utils.make_name("axis_length_plus_one"), onnx_pb.TensorProto.INT64, [1])
+        graph.add_graph_input(utils.make_name("accumulator"), ctx.get_dtype(node.input[0]), ctx.get_shape(inputs_tensor))
+
+        # main loop graph
+        loop_name = node.name + "/loop"
+        iter_num = GraphBuilder(graph).make_unsqueeze({'data': graph.input_names[0], 'axes': [0]})
+        one_node = graph.make_const(utils.make_name("one"), np.array(1, "int64"))
+        zero_node = graph.make_const(utils.make_name("zero"), np.array([0], "int64"))
+        
+        add_node = graph.make_node("Add", inputs=[iter_num, one_node.output[0]],
+                                   outputs=[utils.make_name("add")], op_name_scope=loop_name)
+
+        if node.get_attr_value("reverse"):
+            pad_tensors = [zero_node.output[0], add_node.output[0]]
+            start_slice = add_node.output[0]
+            end_slice = graph.input_names[5]
+        else:
+            neg_node = graph.make_node("Neg", inputs=[add_node.output[0]], outputs=[utils.make_name("neg")], op_name_scope=loop_name)
+            pad_tensors = [add_node.output[0], zero_node.output[0]]
+            start_slice = zero_node.output[0]
+            end_slice = neg_node.output[0]
+        
+        pads_node = cls.get_pads_node(graph, pad_tensors, graph.input_names[4], graph.input_names[3], loop_name)
+        slice_node = graph.make_node("Slice", inputs=[graph.input_names[2], start_slice, end_slice, graph.input_names[4]],
+                                     op_name_scope=loop_name, outputs=[utils.make_name("slice")])
+        if graph.get_dtype(slice_node.output[0]) != graph.get_dtype(one_node.output[0]):
+            pad_const_node = graph.make_node("Cast", inputs=[one_node.output[0]], attr={"to":  graph.get_dtype(slice_node.output[0])},
+                                           op_name_scope=loop_name, outputs=[utils.make_name("pad_const")])
+        else:
+            pad_const_node = one_node
+        pad_node = graph.make_node("Pad", inputs=[slice_node.output[0], pads_node.output[0], pad_const_node.output[0]],
+                                     op_name_scope=loop_name, outputs=[utils.make_name("pad")])
+        mul_node = graph.make_node("Mul", inputs=[graph.input_names[-1], pad_node.output[0]],
+                                   op_name_scope=loop_name, outputs=[utils.make_name("mul")])
+        
+        # manage loop outputs
+        output_cond_node = graph.make_node("Identity", inputs=[graph.input_names[1]], op_name_scope=loop_name,
+                                        outputs=[utils.make_name("condition_out")])
+        output_inp_node = graph.make_node("Identity", inputs=[graph.input_names[2]], op_name_scope=loop_name,
+                                        outputs=[utils.make_name("inputs_out")])
+        output_rank_node = graph.make_node("Identity", inputs=[graph.input_names[3]], op_name_scope=loop_name,
+                                        outputs=[utils.make_name("rank_out")])
+        output_axis_node = graph.make_node("Identity", inputs=[graph.input_names[4]], op_name_scope=loop_name,
+                                        outputs=[utils.make_name("axis_out")])
+        output_axis_length_plus_one_node = graph.make_node("Identity", inputs=[graph.input_names[5]],
+                                        op_name_scope=loop_name,  outputs=[utils.make_name("axis_length_plus_one_out")])
+        output_acc_node = graph.make_node("Identity", inputs=[mul_node.output[0]], op_name_scope=loop_name,
+                                          outputs=[utils.make_name("accumulator_out")],
+                                          shapes=[ctx.get_shape(node.input[0])], dtypes=[ctx.get_dtype(node.input[0])])
+
+        graph.add_graph_output(output_cond_node.output[0])                  # 1 condition output
+        graph.add_graph_output(output_inp_node.output[0])                   # N loop carried dependencies outputs
+        graph.add_graph_output(output_rank_node.output[0])                  # N loop carried dependencies outputs
+        graph.add_graph_output(output_axis_node.output[0])                  # N loop carried dependencies outputs
+        graph.add_graph_output(output_axis_length_plus_one_node.output[0])  # N loop carried dependencies outputs
+        graph.add_graph_output(output_acc_node.output[0])                   # N loop carried dependencies outputs
+        return graph
+
+    @classmethod
+    def get_pads_node(cls, graph, pad_tensors, axis_tensor, rank_tensor, base_name=""):
+        zero_node = graph.make_const(utils.make_name("zero"), np.array([0], "int64"))
+        one_node = graph.make_const(utils.make_name("zero"), np.array([1], "int64"))
+
+        post_repeat_node = graph.make_node("Sub", inputs=[rank_tensor, axis_tensor],
+                                           outputs=[utils.make_name("post_repeat")], op_name_scope=base_name)
+        post_repeat_node = graph.make_node("Sub", inputs=[post_repeat_node.output[0], one_node.output[0]],
+                                           outputs=[utils.make_name("post_repeat")], op_name_scope=base_name)
+        
+        pre_pad_node = graph.make_node("Tile", inputs=[zero_node.output[0], axis_tensor],
+                                         attr = {"axis": 0}, outputs=[utils.make_name("pre_pad")], op_name_scope=base_name)
+        
+        post_pad_node = graph.make_node("Tile", inputs=[zero_node.output[0], post_repeat_node.output[0]],
+                                          attr = {"axis": 0}, outputs=[utils.make_name("post_pad")], op_name_scope=base_name)
+        
+        pads_node = graph.make_node("Concat", attr = {"axis": 0}, outputs=[utils.make_name("pads")], op_name_scope=base_name,
+                                    inputs=[pre_pad_node.output[0], pad_tensors[0], post_pad_node.output[0],
+                                            pre_pad_node.output[0], pad_tensors[1], post_pad_node.output[0]])
+        return pads_node
 
 
 @tf_op("Round")
