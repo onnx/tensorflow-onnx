@@ -569,7 +569,7 @@ class CumProd:
             axis_node = ctx.make_const(utils.make_name("axis"), np.array([axis], dtype=np.int64))
         else:
             axis_node = ctx.make_node("Cast", inputs=[axis_node.output[0]], attr={"to": onnx_pb.TensorProto.INT64},
-                                  op_name_scope=node.name, outputs=[utils.make_name("axis")])
+                                      op_name_scope=node.name, outputs=[utils.make_name("axis")])
             axis_node = GraphBuilder(ctx).make_unsqueeze({'data': axis_node.output[0], 'axes': [0]}, return_node=True)
             axis = axis_node.output[0]
 
@@ -591,12 +591,12 @@ class CumProd:
                                           op_name_scope=node.name, outputs=[utils.make_name("num_iter")])
             zero_node = ctx.make_const(utils.make_name("zero"), np.array([0], "int64"))
             if node.get_attr_value("reverse"):
-                pad_axis = [0,1]
+                pad_axis = [0, 1]
                 start_slice = one_node.output[0]
                 end_slice = axis_length_plus_one_node.output[0]
             else:
                 minus_one_node = ctx.make_const(utils.make_name("minus_one"), np.array([-1], "int64"))
-                pad_axis = [1,0]
+                pad_axis = [1, 0]
                 start_slice = zero_node.output[0]
                 end_slice = minus_one_node.output[0]
             pads_node = cls.get_pads_node(ctx, pad_axis, axis, input_rank, node.name)
@@ -696,7 +696,7 @@ class CumProd:
 
         # manage loop outputs
         output_cond_node = graph.make_node("Identity", inputs=[graph.input_names[1]], op_name_scope=loop_name,
-                                        outputs=[utils.make_name("condition_out")])
+                                           outputs=[utils.make_name("condition_out")])
         output_inp_node = graph.make_node("Identity", inputs=[graph.input_names[2]], op_name_scope=loop_name,
                                           outputs=[utils.make_name("inputs_out")])
         output_axis_length_plus_one_node = graph.make_node("Identity", inputs=[graph.input_names[3]],
@@ -712,7 +712,7 @@ class CumProd:
 
         if not isinstance(axis, int): # axis is a tensor, we need to feed it to the loop graph
             output_axis_node = graph.make_node("Identity", inputs=[axis], op_name_scope=loop_name,
-                                        outputs=[utils.make_name("axis_out")])
+                                               outputs=[utils.make_name("axis_out")])
             graph.add_graph_output(output_axis_node.output[0])              # N loop carried dependencies outputs
         return graph
 
@@ -745,7 +745,7 @@ class CumProd:
                                                outputs=[utils.make_name("post_repeat")], op_name_scope=base_name)
 
             pre_pad_node = graph.make_node("Tile", inputs=[zero_node.output[0], axis], op_name_scope=base_name,
-                                            attr={"axis": 0}, outputs=[utils.make_name("pre_pad")])
+                                           attr={"axis": 0}, outputs=[utils.make_name("pre_pad")])
 
             post_pad_node = graph.make_node("Tile", inputs=[zero_node.output[0], post_repeat_node.output[0]],
                                             attr={"axis": 0}, outputs=[utils.make_name("post_pad")],
