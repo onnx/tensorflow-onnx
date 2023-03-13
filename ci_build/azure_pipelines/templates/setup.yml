@@ -72,6 +72,10 @@ steps:
       else
         pip install tensorflow-text
       fi
+      if [[ $CI_TF_VERSION < 2.8 ]] ;
+      then
+        pip install wrapt==1.14.1
+      fi
     fi
 
     # Protobuf 3.20 results in linker errors on Windows in TF.
