@@ -88,7 +88,7 @@ class RandomOp:
         if node.inputs[0].is_const():
             cls.version_1(ctx, node, **kwargs)
         else:
-            seed = node.get_attr("seed2")
+            seed = node.get_attr("seed")
             node.set_attr("seed", float(seed.i))
             cast_node = ctx.make_node("Cast", [node.input[0]], attr={'to': onnx_pb.TensorProto.INT64})
             const_node = ctx.make_node("ConstantOfShape", cast_node.output)
