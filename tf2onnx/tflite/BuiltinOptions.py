@@ -123,4 +123,10 @@ class BuiltinOptions(object):
     BucketizeOptions = 115
     GeluOptions = 116
     DynamicUpdateSliceOptions = 117
+    UnsortedSegmentProdOptions = 118
+    UnsortedSegmentMaxOptions = 119
+    UnsortedSegmentMinOptions = 120
+    UnsortedSegmentSumOptions = 121
+    ATan2Options = 122
+    SignOptions = 123
 

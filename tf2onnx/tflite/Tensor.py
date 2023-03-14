@@ -134,7 +134,39 @@ class Tensor(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
         return o == 0
 
-def Start(builder): builder.StartObject(8)
+    # Tensor
+    def HasRank(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # Tensor
+    def VariantTensors(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        if o != 0:
+            x = self._tab.Vector(o)
+            x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 4
+            x = self._tab.Indirect(x)
+            from tf2onnx.tflite.VariantSubType import VariantSubType
+            obj = VariantSubType()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+    # Tensor
+    def VariantTensorsLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # Tensor
+    def VariantTensorsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        return o == 0
+
+def Start(builder): builder.StartObject(10)
 def TensorStart(builder):
     """This method is deprecated. Please switch to Start."""
     return Start(builder)
@@ -178,6 +210,18 @@ def StartShapeSignatureVector(builder, numElems): return builder.StartVector(4, 
 def TensorStartShapeSignatureVector(builder, numElems):
     """This method is deprecated. Please switch to Start."""
     return StartShapeSignatureVector(builder, numElems)
+def AddHasRank(builder, hasRank): builder.PrependBoolSlot(8, hasRank, 0)
+def TensorAddHasRank(builder, hasRank):
+    """This method is deprecated. Please switch to AddHasRank."""
+    return AddHasRank(builder, hasRank)
+def AddVariantTensors(builder, variantTensors): builder.PrependUOffsetTRelativeSlot(9, flatbuffers.number_types.UOffsetTFlags.py_type(variantTensors), 0)
+def TensorAddVariantTensors(builder, variantTensors):
+    """This method is deprecated. Please switch to AddVariantTensors."""
+    return AddVariantTensors(builder, variantTensors)
+def StartVariantTensorsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def TensorStartVariantTensorsVector(builder, numElems):
+    """This method is deprecated. Please switch to Start."""
+    return StartVariantTensorsVector(builder, numElems)
 def End(builder): return builder.EndObject()
 def TensorEnd(builder):
     """This method is deprecated. Please switch to End."""
