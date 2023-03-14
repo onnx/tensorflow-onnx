@@ -123,10 +123,14 @@ def get_args():
         if not args.tflite:
             parser.error("dequantize flag is currently only supported for tflite")
     if args.extra_opset:
-        tokens = args.extra_opset.split(':')
-        if len(tokens) != 2:
-            parser.error("invalid extra_opset argument")
-        args.extra_opset = [utils.make_opsetid(tokens[0], int(tokens[1]))]
+        all_extra_opsets = args.extra_opset.split(',')
+        extra_opset_list = []
+        for extra_opset in all_extra_opsets:
+            tokens = extra_opset.split(':')
+            if len(tokens) != 2:
+                parser.error("invalid extra_opset argument")
+            extra_opset_list.append(utils.make_opsetid(tokens[0], int(tokens[1])))
+        args.extra_opset = extra_opset_list
     if args.load_op_libraries:
         args.load_op_libraries = args.load_op_libraries.split(",")
     return args
