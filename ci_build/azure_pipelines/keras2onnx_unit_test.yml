@@ -29,6 +29,13 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.12.0
         INSTALL_NUMPY:
 
+      Python310-tf2.10:
+        python.version: '3.10'
+        ONNX_PATH: onnx==1.12.0
+        TENSORFLOW_PATH: tensorflow==2.10.0
+        INSTALL_ORT: pip install onnxruntime==1.13.1
+        INSTALL_NUMPY:
+
       ############ Pure Keras Unit Tests ############
       Keras-Py37-tf1.15.0:
         python.version: '3.7'
@@ -76,6 +83,13 @@ jobs:
         ONNX_PATH: onnx==1.12.0
         TENSORFLOW_PATH: tensorflow==2.9.0
         INSTALL_ORT: pip install onnxruntime==1.12.0
+        INSTALL_NUMPY:
+
+      Python310-tf2.10:
+        python.version: '3.10'
+        ONNX_PATH: onnx==1.12.0
+        TENSORFLOW_PATH: tensorflow==2.10.0
+        INSTALL_ORT: pip install onnxruntime==1.13.1
         INSTALL_NUMPY:
 
       ############ Pure Keras Unit Tests ############
