@@ -60,8 +60,8 @@ class RandomOp:
         # in the rewriter does not trigger. grappler will send the random uniform
         # with shape as input so we need to pickup the input here and if the shape is
         # const we make it an attribute.
-        seed = node.get_attr("seed")
-        node.set_attr("seed", float(seed.f))
+        seed = node.get_attr("seed2")
+        node.set_attr("seed", float(seed.i))
         utils.make_sure(node.inputs[0].is_const(), "%s node with non-const shape requires opset >= 9", node.type)
         shape = node.inputs[0].get_tensor_value()
         ctx.remove_input(node, node.input[0], 0)
