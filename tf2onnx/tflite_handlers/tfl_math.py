@@ -249,3 +249,27 @@ class TflPreluOp:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         pass
+
+@tfl_op(["TFL_UNSORTED_SEGMENT_MAX"], tf_op="UnsortedSegmentMax")
+class TflUnsortedSegmentMax:
+    @classmethod
+    def to_tf(cls, ctx, node, **kwargs):
+        pass
+
+@tfl_op(["TFL_UNSORTED_SEGMENT_MIN"], tf_op="UnsortedSegmentMin")
+class TflUnsortedSegmentMin:
+    @classmethod
+    def to_tf(cls, ctx, node, **kwargs):
+        pass
+
+@tfl_op(["TFL_UNSORTED_SEGMENT_PROD"], tf_op="UnsortedSegmentProd")
+class TflUnsortedSegmentProd:
+    @classmethod
+    def to_tf(cls, ctx, node, **kwargs):
+        pass
+
+@tfl_op(["TFL_UNSORTED_SEGMENT_SUM"], tf_op="UnsortedSegmentSum")
+class TflUnsortedSegmentSum:
+    @classmethod
+    def to_tf(cls, ctx, node, **kwargs):
+        pass
