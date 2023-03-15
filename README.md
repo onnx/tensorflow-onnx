@@ -139,6 +139,7 @@ python -m tf2onnx.convert
     [--signature_def SIGNATURE_DEF]
     [--concrete_function CONCRETE_FUNCTION]
     [--target TARGET]
+    [--extra_opset list-of-extra-opset]
     [--custom-ops list-of-custom-ops]
     [--load_op_libraries tensorflow_library_path]
     [--large_model]
@@ -216,6 +217,11 @@ Only valid with parameter `--saved_model`. If a model contains a list of concret
 #### --target
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
+
+#### --extra_opset
+
+If you want to convert a TF model using an existing custom op, this can specify the correspongding domain and version.
+The format is a comma-separated map of domain and version, for example: `ai.onnx.contrib:1`.
 
 #### --custom-ops
 
