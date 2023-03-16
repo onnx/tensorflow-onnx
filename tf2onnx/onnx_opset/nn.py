@@ -58,7 +58,8 @@ def get_channels_last_permutation(spatial):
 
 
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
-                        input_indices=None, output_indices=None, spatial=2):
+                        input_indices=None, output_indices=None, spatial=2,
+                        quantization_axis=0):
     """Convert input and kernel from tensorflow to onnx. This may be required to
         insert transpose ops for input, kernel, and output unless they are constants
         and we can transpose the constant.
@@ -73,6 +74,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
         new_kernel_shape: Pass to reshape the kernel.
         input_indices: Indices that define the inputs.
         output_indices: Indices that define the outputs.
+        quantization_axis: Axis for the inserted QDQ nodes
     """
 
     if input_indices is None:
@@ -151,8 +153,8 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 weights_node.set_tensor_value(val)
                 need_transpose = False
                 # Change the quantization axis for Q and DQ node accordingly
-                kernel_node.set_attr("axis", 0) # DQ node
-                kernel_node.inputs[0].set_attr("axis", 0) # Q node
+                kernel_node.set_attr("axis", quantization_axis) # DQ node
+                kernel_node.inputs[0].set_attr("axis", quantization_axis) # Q node
             else:
                 val = kernel_node.get_tensor_value(as_list=False)
                 val = np.transpose(val, permutation)
@@ -607,7 +609,7 @@ class ConvTranspose:
         ctx.replace_input(node, node.input[0], node.input[1], 0)
         ctx.replace_input(node, node.input[1], t, 1)
 
-        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
+        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial, quantization_axis=1)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
