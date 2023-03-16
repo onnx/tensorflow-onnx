@@ -607,6 +607,44 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape},
                             rtol=1e-05, process_args=process_args)
 
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_conv2d_quantization_axis(self):
+        x_shape = [1, 1, 5, 5]
+        kernel_shape = _KERNEL3x3
+        strides = [1, 1, 1, 1]
+        x_val = make_xval(x_shape).transpose(NCHW_TO_NHWC)
+        kernel_val = make_xval(_KERNEL3x3)
+
+        def func(x):
+            f = tf.constant(kernel_val, name="kernel", dtype=tf.float32)
+            kernel_dq = quantize_and_dequantize(f, 0, np.prod(kernel_shape))
+            conv = tf.nn.conv2d(x, kernel_dq, strides=strides, padding="VALID")
+            return tf.identity(conv, name=_TFOUTPUT)
+        def graph_validator(g):
+            return check_quantization_axis(g, "DequantizeLinear", 0)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator,
+                            check_shape=False)
+
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_conv2d_transpose_quantization_axis(self):
+        x_shape = [2, 6, 4, 3]
+        output_shape = [2, 13, 9, 2]
+        kernel_shape = [3, 3, 2, 3]
+        strides = [1, 2, 2, 1]
+        x_val = make_xval(x_shape)
+        kernel_val = make_xval(kernel_shape)
+        def func(x):
+            f = tf.constant(kernel_val, name="kernel", dtype=tf.float32)
+            kernel_dq = quantize_and_dequantize(f, 0, np.prod(kernel_shape))
+            conv = tf.nn.conv2d_transpose(x, kernel_dq, output_shape, strides=strides, padding="VALID")
+            return tf.identity(conv, name=_TFOUTPUT)
+        def graph_validator(g):
+            return check_quantization_axis(g, "DequantizeLinear", 1)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator,
+                            check_shape=False)
+
     def test_depthwiseconv_0(self):
         x_shape = [1, 3, 4, 3]
         kernel_shape = [3, 3, 3, 3]
