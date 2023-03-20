@@ -1522,8 +1522,8 @@ class AdjustContrastv2:
             contrast_factor = ctx.make_node("Cast", [dtype], attr={'to': dtype}).output[0]
         rank = ctx.get_rank(images)
         utils.make_sure(rank is not None, "AdjustContrastv2 requires input of known rank")
-        # Reduce everything except channels
-        axes_to_reduce = list(range(rank))[:-1]
+        # Reduce height and width only
+        axes_to_reduce = list(range(rank))[-3:-1]
         mean = ctx.make_node("ReduceMean", [images], attr={'axes': axes_to_reduce, 'keepdims': True},
                              op_name_scope=node.name).output[0]
         diff = ctx.make_node("Sub", [images, mean], op_name_scope=node.name).output[0]
