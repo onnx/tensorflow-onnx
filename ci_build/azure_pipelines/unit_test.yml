@@ -18,6 +18,19 @@ stages:
 
     - template: 'templates/job_generator.yml'
       parameters:
+        python_versions: ['3.10']
+        tf_versions: ['2.11.0']
+        onnx_opsets: ['']
+        skip_tflite_tests: 'False'
+        skip_tf_tests: 'False'
+        skip_tfjs_tests: 'True'
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
         python_versions: ['3.8']
         tf_versions: ['2.8.0']
         onnx_opsets: ['']
@@ -132,10 +145,10 @@ stages:
 
     - template: 'templates/job_generator.yml'
       parameters:
-        python_versions: ['3.9']
+        python_versions: ['3.10']
         platforms: ['windows']
         tf_versions: ['2.9.1']
-        onnx_opsets: ['16']
+        onnx_opsets: ['17']
         job:
           steps:
           - template: 'unit_test.yml'
@@ -145,8 +158,8 @@ stages:
       parameters:
         python_versions: ['3.10']
         platforms: ['windows']
-        tf_versions: ['2.9.1']
-        onnx_opsets: ['17']
+        tf_versions: ['2.11.0']
+        onnx_opsets: ['16']
         job:
           steps:
           - template: 'unit_test.yml'

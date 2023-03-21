@@ -58,7 +58,8 @@ def get_channels_last_permutation(spatial):
 
 
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
-                        input_indices=None, output_indices=None, spatial=2):
+                        input_indices=None, output_indices=None, spatial=2,
+                        quantization_axis=0):
     """Convert input and kernel from tensorflow to onnx. This may be required to
         insert transpose ops for input, kernel, and output unless they are constants
         and we can transpose the constant.
@@ -73,6 +74,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
         new_kernel_shape: Pass to reshape the kernel.
         input_indices: Indices that define the inputs.
         output_indices: Indices that define the outputs.
+        quantization_axis: Axis for the inserted QDQ nodes
     """
 
     if input_indices is None:
@@ -151,8 +153,8 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 weights_node.set_tensor_value(val)
                 need_transpose = False
                 # Change the quantization axis for Q and DQ node accordingly
-                kernel_node.set_attr("axis", 0) # DQ node
-                kernel_node.inputs[0].set_attr("axis", 0) # Q node
+                kernel_node.set_attr("axis", quantization_axis) # DQ node
+                kernel_node.inputs[0].set_attr("axis", quantization_axis) # Q node
             else:
                 val = kernel_node.get_tensor_value(as_list=False)
                 val = np.transpose(val, permutation)
@@ -607,7 +609,7 @@ class ConvTranspose:
         ctx.replace_input(node, node.input[0], node.input[1], 0)
         ctx.replace_input(node, node.input[1], t, 1)
 
-        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
+        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial, quantization_axis=1)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -1389,29 +1391,46 @@ class Resize:
         else:
             mode = "nearest"
         roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
-        const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0]).astype(np.int64))
-        const_two = ctx.make_const(utils.make_name("const_two"), np.array([2]).astype(np.int64))
-        const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([]).astype(np.float32))
         input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
-        shape_input = ctx.make_node("Shape", [input_nchw.output[0]])
-        sliced_shape = ctx.make_node("Slice", [shape_input.output[0], const_zero.output[0], const_two.output[0]])
-        size_int64 = ctx.make_node("Cast", [node.input[1]], attr={"to": onnx_pb.TensorProto.INT64})
-        concat_shape = ctx.make_node("Concat", [sliced_shape.output[0], size_int64.output[0]], {'axis': 0})
-        resize_inputs = [
-            input_nchw.output[0],
-            roi.output[0],
-            const_empty_float.output[0],
-            concat_shape.output[0]
-        ]
+        shape = ctx.get_shape(node.input[0])
+        if shape and shape[2] != -1 and shape[1] != -1 and node.inputs[1].is_const():
+            target_shape = node.inputs[1].get_tensor_value()
+            n, h, w, c = shape
+            nh, nw = target_shape
+            if "sizes" in node.attr:
+                sizes_val = np.array([1.0, 1.0, nh, nw]).astype(np.int64)
+                resize_params = ctx.make_const(utils.make_name("sizes"), sizes_val, raw=False)
+            else:  # scales
+                scale_val = np.array([1.0, 1.0, float(nh) / h, float(nw) / w]).astype(np.float32)
+                resize_params = ctx.make_const(utils.make_name("scales"), scale_val, raw=False)
+            resize_inputs = [
+                input_nchw.output[0],
+                roi.output[0],
+                resize_params.output[0]
+            ]
+        else:
+            const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0]).astype(np.int64))
+            const_two = ctx.make_const(utils.make_name("const_two"), np.array([2]).astype(np.int64))
+            const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([]).astype(np.float32))
+            shape_input = ctx.make_node("Shape", [input_nchw.output[0]])
+            sliced_shape = ctx.make_node("Slice", [shape_input.output[0], const_zero.output[0], const_two.output[0]])
+            size_int64 = ctx.make_node("Cast", [node.input[1]], attr={"to": onnx_pb.TensorProto.INT64})
+            concat_shape = ctx.make_node("Concat", [sliced_shape.output[0], size_int64.output[0]], {'axis': 0})
+            resize_inputs = [
+                input_nchw.output[0],
+                roi.output[0],
+                const_empty_float.output[0],
+                concat_shape.output[0]
+            ]
         transformation_mode = "asymmetric"
         nearest_mode = "floor"
         if "align_corners" in node.attr and node.attr["align_corners"].i:
             transformation_mode = "align_corners"
+            nearest_mode = "round_prefer_ceil"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
             if node.type == "ResizeNearestNeighbor" and not ctx.is_target(constants.TARGET_TENSORRT):
                 # TensorRT only supports nearest_mode = "floor" for mode = "nearest"
-                transformation_mode = "half_pixel"
-                nearest_mode = "round_prefer_ceil"
+                transformation_mode = "tf_half_pixel_for_nn"
             else:
                 transformation_mode = "half_pixel"
         attr = {"mode": mode, "nearest_mode": nearest_mode, "coordinate_transformation_mode": transformation_mode,
@@ -1433,6 +1452,12 @@ class Resize:
         # wants the input to be NHWC - adjust target_shape to this.
         utils.make_sure(node.type != "ResizeBicubic", "Opset 11 is required for bicubic interpolation for node %s",
                         node.name)
+        if "align_corners" in node.attr:
+            utils.make_sure(not node.attr["align_corners"].i,
+                            "Opset 11 is required for align_corners=True for node %s", node.name)
+        if "half_pixel_centers" in node.attr:
+            utils.make_sure(not node.attr["half_pixel_centers"].i,
+                            "Opset 11 is required for half_pixel_centers=True for node %s", node.name)
         mode = "linear" if node.type == "ResizeBilinear" else "nearest"
 
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
@@ -1497,8 +1522,8 @@ class AdjustContrastv2:
             contrast_factor = ctx.make_node("Cast", [dtype], attr={'to': dtype}).output[0]
         rank = ctx.get_rank(images)
         utils.make_sure(rank is not None, "AdjustContrastv2 requires input of known rank")
-        # Reduce everything except channels
-        axes_to_reduce = list(range(rank))[:-1]
+        # Reduce height and width only
+        axes_to_reduce = list(range(rank))[-3:-1]
         mean = ctx.make_node("ReduceMean", [images], attr={'axes': axes_to_reduce, 'keepdims': True},
                              op_name_scope=node.name).output[0]
         diff = ctx.make_node("Sub", [images, mean], op_name_scope=node.name).output[0]
