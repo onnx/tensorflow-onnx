@@ -741,7 +741,7 @@ class MaxPoolWithArgmaxOp:
         # Convert indices from NCHW to NHWC format
         input_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
         input_shape_guess = ctx.get_shape(node.input[0])
-        n, h, w, c = ctx.make_node("Split", [input_shape], attr={'axis': 0}, output_count=4).output
+        n, h, w, c = ctx.make_node("Split", [input_shape], attr={'axis': 0, 'num_outputs': 4}, output_count=4).output
         hw = ctx.make_node("Mul", [h, w]).output[0]
         chw = ctx.make_node("Mul", [hw, c]).output[0]
         consumers = ctx.find_output_consumers(node.output[1])
@@ -854,7 +854,7 @@ class Pad:
 
         output = node.output[0]
         shape = ctx.make_node("Shape", [output]).output[0]
-        dims = ctx.make_node("Split", [shape], output_count=rank).output
+        dims = ctx.make_node("Split", [shape], attr={'num_outputs': rank}, output_count=rank).output
         two_false = ctx.make_const(utils.make_name("two_false"), np.array([False, False], bool)).output[0]
         inv_second = ctx.make_const(utils.make_name("inv_second"), np.array([1, -1], np.int64)).output[0]
         dec_second = ctx.make_const(utils.make_name("dec_second"), np.array([0, 1], np.int64)).output[0]
@@ -1013,16 +1013,16 @@ class BatchNorm:
             utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
                             node.name, tf_type)
             dims = [0] + list(range(2, inp_rank))
-            avg = ctx.make_node("ReduceMean", [node.input[0]], attr={'axes': dims, 'keepdims': True}).output[0]
+            avg = GraphBuilder(ctx).make_reduce_mean({"data": node.input[0], "axes": dims, "keepdims": True})
             avg_squeezed = GraphBuilder(ctx).make_squeeze({"data": avg, "axes": dims})
             sub = ctx.make_node("Sub", [node.input[0], avg]).output[0]
-            var_squeezed = ctx.make_node("ReduceSumSquare", [sub], attr={'axes': dims, 'keepdims': False}).output[0]
+            var_squeezed = GraphBuilder(ctx).make_reduce_sum_square({"data": sub, "axes": dims, "keepdims": False})
 
             inp_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
             dims_const = ctx.make_const(utils.make_name("axes_const"), np.array(dims, dtype=np.int64)).output[0]
             reduce_dims = ctx.make_node("Gather", [inp_shape, dims_const]).output[0]
-            dims_product = ctx.make_node("ReduceProd", [reduce_dims], attr={'axes': [0], 'keepdims': False})
-            cnt_float = ctx.make_node("Cast", [dims_product.output[0]], attr={'to': ctx.get_dtype(node.input[0])})
+            dims_product = GraphBuilder(ctx).make_reduce_prod({"data": reduce_dims, "axes": [0], "keepdims": False})
+            cnt_float = ctx.make_node("Cast", [dims_product], attr={'to': ctx.get_dtype(node.input[0])})
 
             pop_var_squeezed = ctx.make_node("Div", [var_squeezed, cnt_float.output[0]]).output[0]
             ctx.replace_inputs(node, node.input[:3] + [avg_squeezed, pop_var_squeezed])
@@ -1110,7 +1110,7 @@ class SampleDistortedBoundingBox:
 
         rand_attr['shape'] = [max_attempts, 4]
         random_nums = ctx.make_node("RandomUniform", [], attr=rand_attr, op_name_scope=node.name).output[0]
-        r1, r2, r3, r4 = ctx.make_node("Split", [random_nums], attr={'axis': 1}, output_count=4).output
+        r1, r2, r3, r4 = ctx.make_node("Split", [random_nums], attr={'axis': 1, 'num_outputs': 4}, output_count=4).output
 
         # Use r1 to sample the aspect ratio
         scaled_r1 = ctx.make_node("Mul", [r1, ratio_range_node]).output[0]
@@ -1160,7 +1160,7 @@ class SampleDistortedBoundingBox:
             bounding_boxes_flat = ctx.make_node("Reshape", [bounding_boxes, boxes_shape]).output[0]
 
             box_y1, box_x1, box_y2, box_x2 = \
-                ctx.make_node("Split", [bounding_boxes_flat], attr={'axis': 1}, output_count=4).output
+                ctx.make_node("Split", [bounding_boxes_flat], attr={'axis': 1, 'num_outputs': 4}, output_count=4).output
 
             combined_max_y = ctx.make_node("Min", [y2, box_y2]).output[0]
             combined_max_x = ctx.make_node("Min", [x2, box_x2]).output[0]
@@ -1209,7 +1209,7 @@ class SampleDistortedBoundingBox:
         else:
             box_rounded = box_scaled   # Close enough
         box_cast = ctx.make_node("Cast", [box_rounded], attr={'to': int_dtype}).output[0]
-        bb_begin, bb_end = ctx.make_node("Split", [box_cast], attr={'axis': 0}, output_count=2).output
+        bb_begin, bb_end = ctx.make_node("Split", [box_cast], attr={'axis': 0, 'num_outputs': 2}, output_count=2).output
         bb_size = ctx.make_node("Sub", [bb_end, bb_begin]).output[0]
 
         const_zero_int = ctx.make_const(utils.make_name("const_zero"), np.array([0], np_int_dtype)).output[0]
@@ -1524,8 +1524,8 @@ class AdjustContrastv2:
         utils.make_sure(rank is not None, "AdjustContrastv2 requires input of known rank")
         # Reduce height and width only
         axes_to_reduce = list(range(rank))[-3:-1]
-        mean = ctx.make_node("ReduceMean", [images], attr={'axes': axes_to_reduce, 'keepdims': True},
-                             op_name_scope=node.name).output[0]
+        mean = GraphBuilder(ctx).make_reduce_mean({"data": images, "axes": axes_to_reduce, "keepdims": True},
+                                                   op_name_scope=node.name)
         diff = ctx.make_node("Sub", [images, mean], op_name_scope=node.name).output[0]
         scaled = ctx.make_node("Mul", [diff, contrast_factor], op_name_scope=node.name).output[0]
         result = ctx.make_node("Add", [scaled, mean], op_name_scope=node.name).output[0]
@@ -1543,7 +1543,7 @@ class AdjustSaturation:
         k = ctx.make_const(utils.make_name("three"), np.array([3], np.int64)).output[0]
         ordered, indices = ctx.make_node("TopK", [images, k], attr={'axis': -1}, output_count=2).output
         # Sorted and separated into channels
-        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1}, output_count=3).output
+        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1, 'num_outputs': 3}, output_count=3).output
         delta = ctx.make_node("Sub", [max_c, min_c]).output[0]
         scaled_delta = ctx.make_node("Mul", [delta, factor], op_name_scope=node.name).output[0]
         new_delta = ctx.make_node("Min", [scaled_delta, max_c]).output[0]
@@ -1580,7 +1580,7 @@ class AdjustHue:
         ordered, indices = ctx.make_node("TopK", [images, k], attr={'axis': -1},
                                          output_count=2, op_name_scope=node.name).output
         # Sorted and separated into channels
-        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1}, output_count=3).output
+        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1, 'num_outputs': 3}, output_count=3).output
         delta = ctx.make_node("Sub", [max_c, min_c]).output[0]
         delta2 = ctx.make_node("Sub", [mid_c, min_c]).output[0]
         delta_z = ctx.make_node("Equal", [delta, const_zero]).output[0]
@@ -1881,7 +1881,7 @@ def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_nod
     # "-log(q_i)" where i is the selected index specified by label, q_i = logic_i/sum, the detail process is as follows:
     # logit_exp=exp(logit) >> sum = tf.reduce_sum(logit_exp, axis = -1), masked_sum = reduce_sum(mul(logit_exp, mul))
     # >> -log(masked_sum/sum)
-    logit_max = ctx.make_node(op_type="ReduceMax", inputs=[logit], attr={"axes": [-1], "keepdims": 1}).output[0]
+    logit_max = GraphBuilder(ctx).make_reduce_max({"data": logit, "axes": [-1], "keepdims": 1})
     logit_norm = ctx.make_node(op_type="Sub", inputs=[logit, logit_max]).output[0]
     logit_exp = ctx.make_node(op_type="Exp", inputs=[logit_norm]).output[0]
     logit_exp_sum = GraphBuilder(ctx).make_reduce_sum(
@@ -2001,7 +2001,7 @@ class CTCGreedyDecoder:
         merge_repeated = node.get_attr_value("merge_repeated", False)
 
         inp_shape = ctx.make_node("Shape", [inp]).output[0]
-        max_time_unsq, num_batch_unsq, num_classes_unsq = ctx.make_node("Split", [inp_shape], output_count=3).output
+        max_time_unsq, num_batch_unsq, num_classes_unsq = ctx.make_node("Split", [inp_shape], attr={'num_outputs': 3}, output_count=3).output
         max_time = GraphBuilder(ctx).make_squeeze({"data": max_time_unsq, "axes": [0]})
         num_batch = GraphBuilder(ctx).make_squeeze({"data": num_batch_unsq, "axes": [0]})
         num_classes = GraphBuilder(ctx).make_squeeze({"data": num_classes_unsq, "axes": [0]})
@@ -2067,8 +2067,7 @@ class CTCGreedyDecoder:
                                      op_name_scope=node.name).output[0]
         sparse_idx_compress = ctx.make_node("Compress", [sparse_idx, keep_idx_flat], attr={'axis': 0}, shapes=[[-1, 2]],
                                             op_name_scope=node.name).output[0]
-        max_sparse_idx = ctx.make_node("ReduceMax", [sparse_idx_compress],
-                                       attr={'axes': [0], 'keepdims': False}).output[0]
+        max_sparse_idx = GraphBuilder(ctx).make_reduce_max({"data": sparse_idx_compress, "axes": [0], "keepdims": False})
         max_time = GraphBuilder(ctx).make_slice(
             {"data": max_sparse_idx, "starts": [1], "ends": [2], "axes": [0]})
         max_time_inc = ctx.make_node("Add", [max_time, const_one]).output[0]
