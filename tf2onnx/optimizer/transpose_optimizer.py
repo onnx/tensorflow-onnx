@@ -828,7 +828,8 @@ class TransposeOptimizer(GraphOptimizerBase):
         # when the second input is not a constant, let's shuffle it with Split followed by Concat
         # there are examples of models, where this non-constant input
         # gets constant folded anyway by a framework.
-        split = self._g.make_node("Split", inputs=[node.input[1]], attr={'num_outputs': trans_rank * 2}, output_count=trans_rank * 2)
+        split = self._g.make_node("Split", inputs=[node.input[1]], attr={'num_outputs': trans_rank * 2},
+                                  output_count=trans_rank * 2)
         pads = split.output
         new_pads = self._g.make_node("Concat", permute_pads(pads), {'axis': 0})
         self._g.replace_input(node, node.input[1], new_pads.output[0], 1)

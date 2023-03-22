@@ -1340,12 +1340,12 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node1 = helper.make_node("ReduceMean", ["Y", "axes"], ["Z"], keepdims=1, name="reducemean")
         node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm_output, name="trans_2")
         graph = helper.make_graph(
-                    [node0, node1, node2],
-                    "transpose-reducemean-test-18",
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
-                    [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
-                    [helper.make_tensor("axes", data_type=TensorProto.INT64,
-                                        dims=[len(axes)], vals=axes)],
+            [node0, node1, node2],
+            "transpose-reducemean-test-18",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+            [helper.make_tensor("axes", data_type=TensorProto.INT64,
+                                dims=[len(axes)], vals=axes)],
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
@@ -1425,12 +1425,12 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
             [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
             [helper.make_tensor("axes", data_type=TensorProto.INT64,
-                    dims=[len(axes)], vals=axes)],
+                                dims=[len(axes)], vals=axes)],
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
         self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
-                                model_proto, remaining_transpose_num=0)
+                                   model_proto, remaining_transpose_num=0)
 
     def test_transpose_argmax(self):
         input_shape = [1, 2, 3, 4]
@@ -2467,7 +2467,8 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         if self.config.opset < 18:
             node2 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1, split=[1, 3, 2])
         else:
-            node2 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1, split=[1, 3, 2], num_outputs=3)
+            node2 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1, split=[1, 3, 2],
+                                     num_outputs=3)
         node3 = helper.make_node("Sum", ["inp", "out2"], ["out4"])
 
         graph = helper.make_graph(

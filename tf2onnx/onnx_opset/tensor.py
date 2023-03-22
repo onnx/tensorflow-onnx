@@ -2600,7 +2600,8 @@ class RaggedTensorToTensor:
             out_shape = ctx.make_node("Where", [unspec_dims, dense_shape, shape]).output[0]
             out_shape_unsq = GraphBuilder(ctx).make_unsqueeze({'data': out_shape, 'axes': [0]})
             amt_idx_in_bounds = ctx.make_node("Sub", [out_shape_unsq, sparse_indices]).output[0]
-            amt_in_bounds_flat = GraphBuilder(ctx).make_reduce_min({"data": amt_idx_in_bounds, "axes": [1], "keepdims": False})
+            amt_in_bounds_flat = GraphBuilder(ctx).make_reduce_min({"data": amt_idx_in_bounds, "axes": [1],
+                                                                    "keepdims": False})
             idx_in_bounds = ctx.make_node("Greater", [amt_in_bounds_flat, const_zero_int64]).output[0]
             sparse_indices = ctx.make_node("Compress", [sparse_indices, idx_in_bounds], attr={'axis': 0}).output[0]
             values = ctx.make_node("Compress", [values, idx_in_bounds], attr={'axis': 0}).output[0]
@@ -3043,7 +3044,8 @@ class DynamicPartition:
         equal_node = ctx.make_node("Equal", [partition_inp, range_const.output[0]])
         # Cast bool to int since ORT doesn't implement Split on bool.
         equal_int32 = ctx.make_node("Cast", [equal_node.output[0]], attr={"to": TensorProto.INT32})
-        split_node = ctx.make_node("Split", [equal_int32.output[0]], output_count=num_partitions, attr={'axis': 0, 'num_outputs': num_partitions})
+        split_node = ctx.make_node("Split", [equal_int32.output[0]], output_count=num_partitions,
+                                   attr={'axis': 0, 'num_outputs': num_partitions})
         for i in range(num_partitions):
             cond_bools = ctx.make_node("Cast", [split_node.output[i]], attr={"to": TensorProto.BOOL})
             squeeze_node = GraphBuilder(ctx).make_squeeze({'data': cond_bools.output[0], "axes": [0]}, return_node=True)
@@ -3593,7 +3595,7 @@ class MatrixDiag:
             diag_shape = mknode("Shape", [diag])
             diag_depth = mknode("Slice", [diag_shape, minus_two, minus_one])
             k = normalize(node.input[1]) if argc > 1 else zeo
-            k_min = GraphBuilder(ctx).make_reduce_min({"data": k}) 
+            k_min = GraphBuilder(ctx).make_reduce_min({"data": k})
             k_max = GraphBuilder(ctx).make_reduce_max({"data": k})
             k_max_nxt = mknode("Add", [k_max, one])
             k_depth = mknode("Sub", [k_max_nxt, k_min])

@@ -17,7 +17,7 @@ from tf2onnx.graph_builder import GraphBuilder
 logger = logging.getLogger(__name__)
 
 
-# pylint: disable=unused-argument,missing-docstring
+# pylint: disable=unused-argument,missing-docstring,protected-access
 
 @tf_op("Max", onnx_op="ReduceMax")
 @tf_op("Mean", onnx_op="ReduceMean")

@@ -1110,7 +1110,8 @@ class SampleDistortedBoundingBox:
 
         rand_attr['shape'] = [max_attempts, 4]
         random_nums = ctx.make_node("RandomUniform", [], attr=rand_attr, op_name_scope=node.name).output[0]
-        r1, r2, r3, r4 = ctx.make_node("Split", [random_nums], attr={'axis': 1, 'num_outputs': 4}, output_count=4).output
+        r1, r2, r3, r4 = ctx.make_node("Split", [random_nums], attr={'axis': 1, 'num_outputs': 4},
+                                       output_count=4).output
 
         # Use r1 to sample the aspect ratio
         scaled_r1 = ctx.make_node("Mul", [r1, ratio_range_node]).output[0]
@@ -1525,7 +1526,7 @@ class AdjustContrastv2:
         # Reduce height and width only
         axes_to_reduce = list(range(rank))[-3:-1]
         mean = GraphBuilder(ctx).make_reduce_mean({"data": images, "axes": axes_to_reduce, "keepdims": True},
-                                                   op_name_scope=node.name)
+                                                  op_name_scope=node.name)
         diff = ctx.make_node("Sub", [images, mean], op_name_scope=node.name).output[0]
         scaled = ctx.make_node("Mul", [diff, contrast_factor], op_name_scope=node.name).output[0]
         result = ctx.make_node("Add", [scaled, mean], op_name_scope=node.name).output[0]
@@ -1543,7 +1544,8 @@ class AdjustSaturation:
         k = ctx.make_const(utils.make_name("three"), np.array([3], np.int64)).output[0]
         ordered, indices = ctx.make_node("TopK", [images, k], attr={'axis': -1}, output_count=2).output
         # Sorted and separated into channels
-        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1, 'num_outputs': 3}, output_count=3).output
+        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1, 'num_outputs': 3},
+                                            output_count=3).output
         delta = ctx.make_node("Sub", [max_c, min_c]).output[0]
         scaled_delta = ctx.make_node("Mul", [delta, factor], op_name_scope=node.name).output[0]
         new_delta = ctx.make_node("Min", [scaled_delta, max_c]).output[0]
@@ -1580,7 +1582,8 @@ class AdjustHue:
         ordered, indices = ctx.make_node("TopK", [images, k], attr={'axis': -1},
                                          output_count=2, op_name_scope=node.name).output
         # Sorted and separated into channels
-        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1, 'num_outputs': 3}, output_count=3).output
+        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1, 'num_outputs': 3},
+                                            output_count=3).output
         delta = ctx.make_node("Sub", [max_c, min_c]).output[0]
         delta2 = ctx.make_node("Sub", [mid_c, min_c]).output[0]
         delta_z = ctx.make_node("Equal", [delta, const_zero]).output[0]
@@ -2001,7 +2004,8 @@ class CTCGreedyDecoder:
         merge_repeated = node.get_attr_value("merge_repeated", False)
 
         inp_shape = ctx.make_node("Shape", [inp]).output[0]
-        max_time_unsq, num_batch_unsq, num_classes_unsq = ctx.make_node("Split", [inp_shape], attr={'num_outputs': 3}, output_count=3).output
+        max_time_unsq, num_batch_unsq, num_classes_unsq = ctx.make_node("Split", [inp_shape], attr={'num_outputs': 3},
+                                                                        output_count=3).output
         max_time = GraphBuilder(ctx).make_squeeze({"data": max_time_unsq, "axes": [0]})
         num_batch = GraphBuilder(ctx).make_squeeze({"data": num_batch_unsq, "axes": [0]})
         num_classes = GraphBuilder(ctx).make_squeeze({"data": num_classes_unsq, "axes": [0]})
@@ -2065,9 +2069,10 @@ class CTCGreedyDecoder:
         sparse_idx = ctx.make_node("Concat", [batch_flat, time_flat], attr={'axis': 1}).output[0]
         idx_compress = ctx.make_node("Compress", [idx_flat, keep_idx_flat], attr={'axis': 0}, shapes=[[-1]],
                                      op_name_scope=node.name).output[0]
-        sparse_idx_compress = ctx.make_node("Compress", [sparse_idx, keep_idx_flat], attr={'axis': 0}, shapes=[[-1, 2]],
-                                            op_name_scope=node.name).output[0]
-        max_sparse_idx = GraphBuilder(ctx).make_reduce_max({"data": sparse_idx_compress, "axes": [0], "keepdims": False})
+        sparse_idx_compress = ctx.make_node("Compress", [sparse_idx, keep_idx_flat], attr={'axis': 0},
+                                            shapes=[[-1, 2]], op_name_scope=node.name).output[0]
+        max_sparse_idx = GraphBuilder(ctx).make_reduce_max({"data": sparse_idx_compress, "axes": [0],
+                                                            "keepdims": False})
         max_time = GraphBuilder(ctx).make_slice(
             {"data": max_sparse_idx, "starts": [1], "ends": [2], "axes": [0]})
         max_time_inc = ctx.make_node("Add", [max_time, const_one]).output[0]
