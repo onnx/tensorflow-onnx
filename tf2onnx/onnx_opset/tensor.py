@@ -2477,7 +2477,7 @@ def ragged_lengths_to_sparse_indices(ctx, ragged_lens):
 
 def ragged_row_ids_to_sparse_indices(ctx, row_ids):
     _, indices, _, counts = ctx.make_node("Unique", [row_ids], attr={'axis': 0}, output_count=4).output
-    num_cols = ctx.make_node("ReduceMax", [counts], attr={'axes': [0], 'keepdims': True}).output[0]
+    num_cols = GraphBuilder(ctx).make_reduce_max({"data": counts, "axes": [0], "keepdims": True})
     const_one = ctx.make_const(utils.make_name("const_one"), np.array(1, np.int64)).output[0]
     const_zero_unsq = ctx.make_const(utils.make_name("const_zero"), np.array([0], np.int64)).output[0]
     const_zero = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.int64)).output[0]

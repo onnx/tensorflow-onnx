@@ -146,7 +146,10 @@ class SymbolicExecutor:
 
     def compute_reduceprod(self, node, feed_dict):
         inp = feed_dict[node.input[0]]
-        axes = node.get_attr_value("axes")
+        if self.graph.opset < 18:
+            axes = node.get_attr_value("axes")
+        else:
+            axes = feed_dict[node.input[1]]
         keepdims = node.get_attr_value("keepdims", 1)
         return [np.prod(inp, axis=tuple(axes), keepdims=keepdims)]
 
