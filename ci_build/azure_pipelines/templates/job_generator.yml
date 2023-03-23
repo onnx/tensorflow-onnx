@@ -4,7 +4,7 @@ parameters:
   platforms: ['linux']
   python_versions: ['3.7']
   tf_versions: ['']
-  onnx_versions: ['']
+  onnx_versions: ['1.13.1']
   onnx_opsets: ['18', '17', '16', '15', '14', '13']
   onnx_backends: {onnxruntime: ['1.14.1']}
   job: {}
