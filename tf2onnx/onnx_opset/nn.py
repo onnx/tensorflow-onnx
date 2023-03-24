@@ -312,7 +312,7 @@ def conv_kernel_shape(ctx, node, input_idx, spatial=2):
     kernel_shape = kernel_shape[:spatial]
 
     # Set attribute value only if all dimensions are known.
-    if all(d > 1 for d in kernel_shape):
+    if all(d > 0 for d in kernel_shape):
         node.set_attr("kernel_shape", kernel_shape)
 
     return kernel_shape
@@ -652,7 +652,7 @@ class DepthwiseConv2d:
             raise ValueError("input channel must be positive")
         k_output_channels = k_input_channels * k_channel_multiplier
 
-        if k_h >= 0 and k_w >= 0:
+        if k_h > 0 and k_w > 0:
             node.set_attr("kernel_shape", [k_h, k_w])
         strides = conv_dims_attr(node, "strides")
         dilations = conv_dims_attr(node, "dilations")
