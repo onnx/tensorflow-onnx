@@ -1187,6 +1187,41 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((1, 1, 5, 5), (1, 1, 3, 3), (1, 1, 3, 3), (1, 3, 1, 1), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 1, 5, 5, 5), (1, 1, 3, 3, 3), (1, 1, 3, 3, 3), (1, 3, 1, 1, 1), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ((1, 1, 5, 5), (1, 1, 3, 3), (3, 3, 3, 3), (3, 1, 3, 3), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 1, 5, 5, 5), (1, 1, 3, 3, 3), (3, 3, 3, 3, 3), (3, 3, 1, 3, 3), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ((1, 1, 5, 5), (1, 1, 3, 3), (1, 3, 3, 3), (1, 1, 3, 3), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 1, 5, 5, 5), (1, 1, 3, 3, 3), (1, 3, 3, 3, 3), (1, 3, 1, 3, 3), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    def test_transpose_mul_with_conv(self, input_shape, weights_shape, output_shape,
+                                     const_shape, perm_input, perm_output):
+        const_b_val = np.random.randn(*const_shape).astype(np.float32)
+        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, const_shape, const_b_val.flatten())
+        const_b_node = helper.make_node("Constant", [], ["const_b"], value=const_b, name="const_b")
+
+        const_w_val = np.random.randn(*weights_shape).astype(np.float32)
+        const_w = helper.make_tensor("const_w", TensorProto.FLOAT, weights_shape, const_w_val.flatten())
+        const_w_node = helper.make_node("Constant", [], ["const_w"], value=const_w, name="const_w")
+
+        node0 = helper.make_node("Conv", ["x", "const_w"], ["X"], name="conv", pads=[0] * 2 * (len(input_shape) - 2))
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node2 = helper.make_node("Mul", ["Y", "const_b"], ["Z"], name="mul")
+        node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm_output, name="trans_2")
+
+        graph = helper.make_graph(
+            [const_b_node, const_w_node, node0, node1, node2, node3],
+            "transpose-mul-test-with-conv",
+            [helper.make_tensor_value_info("x", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        remaining_transpose_num = 1 if const_shape[0] != 1 or any(shape != 1 for shape in const_shape[2:]) else 0
+        self.run_transpose_compare(["res"], {"x": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=remaining_transpose_num)
+
+    @parameterized.expand([
         ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
