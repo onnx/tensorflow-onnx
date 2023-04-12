@@ -297,8 +297,13 @@ class ConcatV2:
         ctx.remove_input(node, node.input[-1], len(node.input) - 1)
 
         if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
-            input_shape = ctx.get_shape(node.input[0])
-            utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
+            input_shape = None
+            for node_input in node.input:
+                input_shape = ctx.get_shape(node_input)
+                if input_shape is not None:
+                    break
+            utils.make_sure(input_shape is not None,
+                            "the shapes of the following inputs are None: {}".format(', '.join(node.input)))
             axis_val = len(input_shape) + axis_val
         node.set_attr("axis", axis_val)
 
