@@ -51,6 +51,7 @@ __all__ = [
     "check_op_count",
     "check_gru_count",
     "check_lstm_count",
+    "check_quantization_axis",
     "timeout",
 ]
 
@@ -471,6 +472,8 @@ def check_lstm_count(graph, expected_count):
 def check_gru_count(graph, expected_count):
     return check_op_count(graph, "GRU", expected_count)
 
+def check_quantization_axis(graph, op_type, expected_axis):
+    return np.all(np.array([n.get_attr_int("axis") for n in group_nodes_by_type(graph)[op_type]]) == expected_axis)
 
 _MAX_MS_OPSET_VERSION = 1
 

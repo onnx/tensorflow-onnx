@@ -7,6 +7,7 @@ tf2onnx.rewriter - rewrite tensorflow QuantizeAndDequantizeV2|QuantizeAndDequant
 
 import numpy as np
 from onnx import TensorProto, helper
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 from tf2onnx import utils
 
@@ -59,9 +60,10 @@ def create_qdq_nodes(g, match_results):
                 reduce_axes = [i for i in range(inp_rank) if i != axis]
                 reduce_attr['axes'] = reduce_axes
 
-            max_value = g.make_node("ReduceMax", [qdq_node.input[0]], attr=reduce_attr).output[0]
+            reduce_attr['data'] = qdq_node.input[0]
+            max_value = GraphBuilder(g).make_reduce_max(reduce_attr.copy())
             if signed_input:
-                min_value = g.make_node("ReduceMin", [qdq_node.input[0]], attr=reduce_attr).output[0]
+                min_value = GraphBuilder(g).make_reduce_min(reduce_attr.copy())
 
             scale_from_max_side = g.make_node("Div", [max_value, max_quantized_const]).output[0]
             if signed_input:

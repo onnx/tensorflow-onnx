@@ -828,7 +828,8 @@ class TransposeOptimizer(GraphOptimizerBase):
         # when the second input is not a constant, let's shuffle it with Split followed by Concat
         # there are examples of models, where this non-constant input
         # gets constant folded anyway by a framework.
-        split = self._g.make_node("Split", inputs=[node.input[1]], attr={}, output_count=trans_rank * 2)
+        split = self._g.make_node("Split", inputs=[node.input[1]], attr={'num_outputs': trans_rank * 2},
+                                  output_count=trans_rank * 2)
         pads = split.output
         new_pads = self._g.make_node("Concat", permute_pads(pads), {'axis': 0})
         self._g.replace_input(node, node.input[1], new_pads.output[0], 1)
@@ -862,13 +863,13 @@ class TransposeOptimizer(GraphOptimizerBase):
     def _arg_min_max_handler(self, trans, node):
         axis = node.get_attr_value("axis", 0)
         node.set_attr("axes", [axis])
-        result = self._reduce_handler(trans, node)
+        result = self._reduce_base_handler(trans, node)
         new_axis = node.get_attr_value("axes")[0]
         node.set_attr("axis", new_axis)
         del node.attr["axes"]
         return result
 
-    def _reduce_handler(self, trans, node):
+    def _reduce_base_handler(self, trans, node):
         keepdims = node.get_attr_value("keepdims", 1)
         trans_rank = get_transpose_rank(trans)
         axes = node.get_attr_value("axes", list(range(trans_rank)))
@@ -896,25 +897,8 @@ class TransposeOptimizer(GraphOptimizerBase):
             trans.set_attr("perm", new_perm)
         return True
 
-    def _tile_handler(self, trans, node):
-        if not node.inputs[1].is_const():
-            return False
-        if not self._switch_transpose_and_node(node, trans):
-            return False
-        repeats = node.inputs[1].get_tensor_value()
-        perm_inv = invert_perm(trans.get_attr_value("perm"))
-        repeats_val = [repeats[p] for p in perm_inv]
-        new_repeats = np.array(repeats_val, dtype=np.int64)
-        if not self._nodes_has_single_consumer_node([node.inputs[1]]):
-            new_inp = self._g.copy_const(node.inputs[1])
-            self._g.replace_input(node, node.input[1], new_inp.output[0], 1)
-        node.inputs[1].set_tensor_value(new_repeats)
-        return True
-
-    def _reducesum_handler(self, trans, node):
+    def _reduce_latest_handler(self, trans, node):
         keepdims = node.get_attr("keepdims")
-        if self._g.opset <= 12:
-            return self._reduce_handler(trans, node)
         if keepdims and keepdims.i == 0:
             return False
         if node.inputs[1].is_const():
@@ -931,6 +915,31 @@ class TransposeOptimizer(GraphOptimizerBase):
                 self._g.replace_input(node, node.input[1], new_axes_const.output[0], 1)
             return self._switch_transpose_and_node(node, trans)
         return False
+
+    def _reduce_handler(self, trans, node):
+        if self._g.opset < 18:
+            return self._reduce_base_handler(trans, node)
+        return self._reduce_latest_handler(trans, node)
+
+    def _tile_handler(self, trans, node):
+        if not node.inputs[1].is_const():
+            return False
+        if not self._switch_transpose_and_node(node, trans):
+            return False
+        repeats = node.inputs[1].get_tensor_value()
+        perm_inv = invert_perm(trans.get_attr_value("perm"))
+        repeats_val = [repeats[p] for p in perm_inv]
+        new_repeats = np.array(repeats_val, dtype=np.int64)
+        if not self._nodes_has_single_consumer_node([node.inputs[1]]):
+            new_inp = self._g.copy_const(node.inputs[1])
+            self._g.replace_input(node, node.input[1], new_inp.output[0], 1)
+        node.inputs[1].set_tensor_value(new_repeats)
+        return True
+
+    def _reducesum_handler(self, trans, node):
+        if self._g.opset < 13:
+            return self._reduce_base_handler(trans, node)
+        return self._reduce_latest_handler(trans, node)
 
     def _slice_handler(self, trans, node):
         axes = None

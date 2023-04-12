@@ -607,6 +607,44 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: output_shape},
                             rtol=1e-05, process_args=process_args)
 
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_conv2d_quantization_axis(self):
+        x_shape = [1, 1, 5, 5]
+        kernel_shape = _KERNEL3x3
+        strides = [1, 1, 1, 1]
+        x_val = make_xval(x_shape).transpose(NCHW_TO_NHWC)
+        kernel_val = make_xval(_KERNEL3x3)
+
+        def func(x):
+            f = tf.constant(kernel_val, name="kernel", dtype=tf.float32)
+            kernel_dq = quantize_and_dequantize(f, 0, np.prod(kernel_shape))
+            conv = tf.nn.conv2d(x, kernel_dq, strides=strides, padding="VALID")
+            return tf.identity(conv, name=_TFOUTPUT)
+        def graph_validator(g):
+            return check_quantization_axis(g, "DequantizeLinear", 0)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator,
+                            check_shape=False)
+
+    @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_conv2d_transpose_quantization_axis(self):
+        x_shape = [2, 6, 4, 3]
+        output_shape = [2, 13, 9, 2]
+        kernel_shape = [3, 3, 2, 3]
+        strides = [1, 2, 2, 1]
+        x_val = make_xval(x_shape)
+        kernel_val = make_xval(kernel_shape)
+        def func(x):
+            f = tf.constant(kernel_val, name="kernel", dtype=tf.float32)
+            kernel_dq = quantize_and_dequantize(f, 0, np.prod(kernel_shape))
+            conv = tf.nn.conv2d_transpose(x, kernel_dq, output_shape, strides=strides, padding="VALID")
+            return tf.identity(conv, name=_TFOUTPUT)
+        def graph_validator(g):
+            return check_quantization_axis(g, "DequantizeLinear", 1)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator,
+                            check_shape=False)
+
     def test_depthwiseconv_0(self):
         x_shape = [1, 3, 4, 3]
         kernel_shape = [3, 3, 3, 3]
@@ -3171,7 +3209,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_nearest_neighbor(self):
         x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_nearest_neighbor(x, x_new_size_)
@@ -3181,7 +3219,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(9, "resize_nearest_neighbor")
     def test_resize_nearest_neighbor_with_non_const(self):
         x_shape = [3, 10, 8, 5]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1, dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_nearest_neighbor(x, x_new_size_)
@@ -3202,11 +3240,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend()
     @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "coordinate_transformation_mode attr of resize_bilinear")
+    def test_resize_bilinear_align_coreners(self):
+        x_shape = [1, 15, 20, 2]
+        x_new_size = [30, 40]
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
+        def func(x):
+            x_new_size_ = tf.constant(x_new_size)
+            x_ = resize_bilinear(x, x_new_size_, align_corners=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @skip_caffe2_backend()
+    @check_tf_min_version("1.14")
     @check_opset_min_version(11, "coordinate_transformation_mode attr")
     def test_resize_bilinear_half_pixel_centers(self):
         x_shape = [1, 15, 20, 2]
         x_new_size = [30, 40]
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_bilinear(x, x_new_size_, half_pixel_centers=True)
@@ -3216,7 +3267,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(9, "resize_bilinear")
     def test_resize_bilinear_with_non_const(self):
         x_shape = [3, 10, 8, 5]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1, dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_bilinear(x, x_new_size_)
@@ -3227,7 +3278,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_bilinear_with_non_const2(self):
         # scales has an element larger than 1 and also has an element less that 1
         x_shape = [3, 100, 8, 5]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1, dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_bilinear(x, x_new_size_)
@@ -3238,7 +3289,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     @check_opset_min_version(11, "resize_bilinear_v2")
     def test_resize_bilinear_v2_with_non_const(self):
         x_shape = [3, 10, 8, 5]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1, dtype=np.float32).reshape(x_shape)
         x_new_size = np.array([20, 16]).astype(np.int32)
         def func(x, x_new_size_):
             x_ = resize_bilinear_v2(x, x_new_size_)
@@ -3246,13 +3297,13 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_new_size})
 
     def test_adjust_contrast(self):
-        x_shape = [4, 3, 2]
-        x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
-        y_val = np.array(2.1, np.float32)
         def func(x, y):
             x_ = tf.image.adjust_contrast(x, y)
             return tf.identity(x_, name=_TFOUTPUT)
-        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+        for x_shape in [[4, 3, 2], [2, 3, 4, 5], [3, 4, 2, 4, 3]]:
+            x_val = np.arange(1, 1 + np.prod(x_shape), dtype=np.float32).reshape(x_shape)
+            y_val = np.array(2.1, np.float32)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @check_opset_min_version(11, "GatherElements")
     def test_adjust_saturation(self):
@@ -3283,7 +3334,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_bicubic(self):
         x_shape = [1, 15, 20, 2]
         new_size_val = np.array([30, 40], dtype=np.int32)
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x, new_size):
             y = tf.image.resize(x, new_size, method=tf.image.ResizeMethod.BICUBIC)
             return tf.identity(y, name=_TFOUTPUT)
@@ -3293,7 +3344,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_nearest_neighbor2(self):
         x_shape = [1, 300, 20, 2]
         x_new_size = [30, 40]
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_nearest_neighbor(x, x_new_size_)
@@ -3305,10 +3356,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_resize_nearest_neighbor_half_pixel_centers(self):
         x_shape = [1, 10, 20, 2]
         x_new_size = [20, 40]
-        x_val = np.arange(1, 1 + np.prod(x_shape)).astype("float32").reshape(x_shape)
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
         def func(x):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_nearest_neighbor(x, x_new_size_, half_pixel_centers=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_tf_min_version("1.14")
+    @check_opset_min_version(11, "coordinate_transformation_mode and nearest_mode attr")
+    def test_resize_nearest_neighbor_align_corners(self):
+        x_shape = [1, 10, 20, 2]
+        x_new_size = [20, 40]
+        x_val = np.arange(1, 1 + np.prod(x_shape)/10, 0.1).astype("float32").reshape(x_shape)
+        def func(x):
+            x_new_size_ = tf.constant(x_new_size)
+            x_ = resize_nearest_neighbor(x, x_new_size_, align_corners=True)
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
@@ -4669,6 +4732,53 @@ class BackendTests(Tf2OnnxBackendTestBase):
                           21., 22., 23., 24.], dtype=np.float32).reshape((2, 3, 4))
         def func(x):
             x_ = tf.cumsum(x, axis=1, reverse=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_cumprod(self):
+        x_val = np.array([2.0, 3.0, 4.0, 5.0], dtype=np.float32).reshape((2, 2))
+        def func(x):
+            x_ = tf.math.cumprod(x, axis=0)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_cumprod_axis1(self):
+        x_val = np.array([1., 2., 3., 4.,
+                          5., 6., 7., 8.,
+                          9., 10., 11., 12.,
+                          13., 14., 15., 16.,
+                          17., 18., 19., 20.,
+                          21., 22., 23., 24.], dtype=np.float32).reshape((2, 3, 4))
+        def func(x):
+            x_ = tf.math.cumprod(x, axis=1)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_cumprod_axis1_reverse(self):
+        x_val = np.array([1., 2., 3., 4.,
+                          5., 6., 7., 8.,
+                          9., 10., 11., 12.,
+                          13., 14., 15., 16.,
+                          17., 18., 19., 20.,
+                          21., 22., 23., 24.], dtype=np.float32).reshape((2, 3, 4))
+        def func(x):
+            x_ = tf.math.cumprod(x, axis=1, reverse=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_cumprod_axis1_reverse_exclusive(self):
+        x_val = np.array([1., 2., 3., 4.,
+                          5., 6., 7., 8.,
+                          9., 10., 11., 12.,
+                          13., 14., 15., 16.,
+                          17., 18., 19., 20.,
+                          21., 22., 23., 24.], dtype=np.float32).reshape((2, 3, 4))
+        def func(x):
+            x_ = tf.math.cumprod(x, axis=1, reverse=True, exclusive=True)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 

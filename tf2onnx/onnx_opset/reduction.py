@@ -17,13 +17,13 @@ from tf2onnx.graph_builder import GraphBuilder
 logger = logging.getLogger(__name__)
 
 
-# pylint: disable=unused-argument,missing-docstring
+# pylint: disable=unused-argument,missing-docstring,protected-access
 
-@tf_op("Min", onnx_op="ReduceMin")
 @tf_op("Max", onnx_op="ReduceMax")
 @tf_op("Mean", onnx_op="ReduceMean")
-@tf_op("Sum", onnx_op="ReduceSum")
+@tf_op("Min", onnx_op="ReduceMin")
 @tf_op("Prod", onnx_op="ReduceProd")
+@tf_op("Sum", onnx_op="ReduceSum")
 class ReduceOpBase:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
@@ -66,6 +66,20 @@ class ReduceOpBase:
                 ctx.insert_new_node_on_input(node, "Reshape", [node.input[1], new_shape.output[0]])
         else:
             cls.version_11(ctx, node, **kwargs)
+
+    @classmethod
+    def version_18(cls, ctx, node, **kwargs):
+        keep_dims = node.get_attr_value("keep_dims", 0)
+        node.set_attr("keepdims", keep_dims)
+        del node.attr['keep_dims']
+        node.set_attr("noop_with_empty_axes", 1)
+        if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
+        input_shape = ctx.get_shape(node.input[1])
+        input_rank = len(input_shape) if input_shape is not None else None
+        if input_rank != 1:
+            new_shape = ctx.make_const(utils.make_name("reshape_const"), np.array([-1], np.int64))
+            ctx.insert_new_node_on_input(node, "Reshape", [node.input[1], new_shape.output[0]])
 
 @tf_op(["ArgMax", "ArgMin"])
 class ArgMax:
@@ -240,9 +254,9 @@ class SegmentSum():
                 identity_value = np.iinfo(data_np_dtype).max
 
         if not num_segments_specified:
-            max_segment = ctx.make_node("ReduceMax", [segment_inp], attr={'axes': [0], 'keepdims': 0})
+            max_segment = GraphBuilder(ctx).make_reduce_max({"data": segment_inp, "axes": [0], "keepdims": 0})
             one_const = ctx.make_const(utils.make_name("const_one"), np.array(1, dtype=seg_np_dtype))
-            num_segments = ctx.make_node("Add", [max_segment.output[0], one_const.output[0]]).output[0]
+            num_segments = ctx.make_node("Add", [max_segment, one_const.output[0]]).output[0]
         num_segments_unsq = GraphBuilder(ctx).make_unsqueeze({'data': num_segments, 'axes': [0]})
 
         seg_shape = ctx.make_node("Shape", [segment_inp]).output[0]
@@ -255,7 +269,7 @@ class SegmentSum():
         seg_unique_node.output[1] = ""
         seg_values, _, inv_indices, seg_cnts_sorted = seg_unique_node.output
 
-        max_cnt = ctx.make_node("ReduceMax", [seg_cnts_sorted], attr={'axes': [0], 'keepdims': True}).output[0]
+        max_cnt = GraphBuilder(ctx).make_reduce_max({"data": seg_cnts_sorted, "axes": [0], "keepdims": True})
 
         if node.type in ["SegmentMean", "SegmentSqrtN"]:
             zero_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[0])
@@ -307,10 +321,10 @@ class SegmentSum():
         data_grid = ctx.make_node("Gather", [data_with_id, scatted_grid]).output[0]
         if onnx_op == "ReduceSum":
             reduction_result = GraphBuilder(ctx).make_reduce_sum(
-                {'data': data_grid, 'axes': [1], "keepdims": False}, op_name_scope=node.name)
+                {"data": data_grid, "axes": [1], "keepdims": False}, op_name_scope=node.name)
         else:
-            reduction_result = ctx.make_node(
-                onnx_op, [data_grid], attr={'axes': [1], 'keepdims': False}, op_name_scope=node.name).output[0]
+            reduction_result = GraphBuilder(ctx)._make_reduce_op(
+                onnx_op, 18, {"data": data_grid, "axes": [1], "keepdims": False}, op_name_scope=node.name)
         if scaling_amt is not None:
             if data_rank is None:
                 # Left pad scale to match data rank
