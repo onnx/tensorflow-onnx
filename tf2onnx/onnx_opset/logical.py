@@ -45,6 +45,7 @@ def _add_cast_to_same_type_to_inputs(graph, node, supported_dtypes, target_dtype
                 const_node = graph.get_node_by_output(inp)
                 const_node.set_tensor_value(utils.np.array(-1))
 
+
 @tf_op("LogicalNot", onnx_op="Not")
 class DirectOp:
     @classmethod
