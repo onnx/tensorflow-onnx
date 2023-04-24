@@ -1421,6 +1421,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
+    def test_equal_string(self):
+        x_val1 = np.array(['1'], dtype=np.string_)
+        x_val2 = np.array(['2'], dtype=np.string_)
+        def func(x1, x2):
+            mi = tf.equal(x1, x2)
+            return tf.identity(mi, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
+
     def test_equal(self):
         x_val1 = np.array([4, 2, 4, 1], dtype=np.int32).reshape((2, 2))
         x_val2 = np.array([2, 4, 4, 1], dtype=np.int32).reshape((2, 2))
@@ -1684,6 +1692,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_ = tf.concat([x1, x2, x3], -1)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, "input3:0": x_val3})
+
+    def test_concat_negative_axis_none_shape(self):
+        x_val = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32).reshape((2, 3))
+        y_val = np.array([7.0, 8.0, 9.0, 10.0, 11.0, 12.0], dtype=np.float32).reshape((2, 3))
+        s1_val = np.array([1, 1], dtype=np.int32)
+        s2_val = np.array([1, 1], dtype=np.int32)
+        def func():
+            x = tf_placeholder(tf.float32, [2, 3], name=_TFINPUT)
+            y = tf_placeholder(tf.float32, [2, 3], name=_TFINPUT1)
+            s1 = tf_placeholder(tf.int32, [2], name="input3")
+            s2 = tf_placeholder(tf.int32, [2], name="input4")
+            s = tf.add(s1, s2)
+            x_with_none_shape = tf.slice(x, [0, 0], s)
+            t = tf.concat([x_with_none_shape, y], -1)
+            return tf.identity(t, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, "input3:0": s1_val, "input4:0": s2_val},
+                            as_session=True, premade_placeholders=True)
 
     def test_concat_const_string(self):
         x_val1 = np.array([["Hello world", "abc"], ["def", "♦♥♠♣"]], dtype=str)
