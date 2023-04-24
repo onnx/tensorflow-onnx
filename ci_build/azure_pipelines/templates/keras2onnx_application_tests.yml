@@ -19,7 +19,7 @@ steps:
       python -m pip install --upgrade pip
       conda config --set always_yes yes --set changeps1 no
       pip install onnxconverter-common
-      pip install $(ONNX_PATH)
+      pip install -i https://test.pypi.org/simple/ onnx==1.14.0rc2
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
       pip install h5py==3.7.0
@@ -88,7 +88,7 @@ steps:
       python -m pip install --upgrade pip numpy
       echo Test numpy installation... && python -c "import numpy"
       pip install onnxconverter-common
-      pip install %ONNX_PATH%
+      pip install -i https://test.pypi.org/simple/ onnx==1.14.0rc2
       pip uninstall -y protobuf
       pip install "protobuf<4.21.0"
       pip install h5py==3.7.0
