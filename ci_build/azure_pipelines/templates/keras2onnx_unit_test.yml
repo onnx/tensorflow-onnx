@@ -21,7 +21,7 @@ steps:
       pip install onnxconverter-common
       pip install -i https://test.pypi.org/simple/ onnx==1.14.0rc2
       pip uninstall -y protobuf
-      pip install "protobuf<4.21.0"
+      pip install "protobuf==3.20.3"
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
@@ -76,7 +76,7 @@ steps:
       pip install onnxconverter-common
       pip install -i https://test.pypi.org/simple/ onnx==1.14.0rc2
       pip uninstall -y protobuf
-      pip install "protobuf<4.21.0"
+      pip install "protobuf==3.20.3"
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
