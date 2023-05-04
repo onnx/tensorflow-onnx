@@ -28,7 +28,7 @@ steps:
       pip install coloredlogs flatbuffers
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
-      $(INSTALL_ORT)
+      python -m pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort_nightly==1.15.0.dev20230502003
       pip install Pillow==8.2.0
       pip install opencv-python
       pip install tqdm
@@ -97,7 +97,7 @@ steps:
       pip install coloredlogs flatbuffers
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
-      %INSTALL_ORT%
+      python -m pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort_nightly==1.15.0.dev20230502003
       pip install Pillow==8.2.0
       pip install opencv-python
       pip install tqdm

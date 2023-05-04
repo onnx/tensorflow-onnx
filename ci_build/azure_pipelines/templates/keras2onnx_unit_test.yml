@@ -34,7 +34,7 @@ steps:
       pip install -r requirements.txt
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
-      $(INSTALL_ORT)
+      python -m pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort_nightly==1.15.0.dev20230502003
       $(INSTALL_NUMPY)
 
       pip freeze --all
@@ -84,7 +84,7 @@ steps:
       pip install %TENSORFLOW_PATH%
       IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install pytest pytest-cov pytest-runner
-      %INSTALL_ORT%
+      python -m pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort_nightly==1.15.0.dev20230502003
       %INSTALL_NUMPY%
 
       pip freeze --all

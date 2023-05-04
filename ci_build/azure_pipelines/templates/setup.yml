@@ -29,6 +29,11 @@ steps:
       pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
     fi
 
+    # Check ORT 1.15 RC.
+    pip uninstall -y onnxruntime
+    # install numpy upfront since it is not on https://test.pypi.org/simple/
+    python -m pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort_nightly==1.15.0.dev20230502003
+
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
       pip install tensorflowjs==3.18.0
