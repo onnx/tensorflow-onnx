@@ -573,6 +573,9 @@ class TransposeOptimizer(GraphOptimizerBase):
             # make sure conv don't have bias set
             can_opt = t_p.type == "Conv" and t_p.inputs[1].is_const() and len(t_p.input) == 2 and trans_rank == 4
             can_opt = can_opt and self._nodes_has_single_consumer_node([t_p])
+            # make sure multiplier with shape (N,) or (1, N) or (1, 1, N) ....
+            can_opt = can_opt and trans.get_attr_value("perm") == NCHW_TO_NHWC \
+                and all(shape == 1 for shape in multiplier.shape[:-1])
             if can_opt:
                 conv = t_p
                 numpy_val = conv.inputs[1].get_tensor_value(as_list=False)
