@@ -25,7 +25,7 @@ steps:
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
-      pip install coloredlogs flatbuffers
+      pip install coloredlogs flatbuffers sympy
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
       python -m pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort_nightly==1.15.0.dev20230502003
@@ -94,7 +94,7 @@ steps:
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
-      pip install coloredlogs flatbuffers
+      pip install coloredlogs flatbuffers sympy
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
       python -m pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort_nightly==1.15.0.dev20230502003
