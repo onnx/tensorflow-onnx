@@ -1424,13 +1424,12 @@ class Resize:
                 concat_shape.output[0]
             ]
         transformation_mode = "asymmetric"
-        nearest_mode = "floor"
+        nearest_mode = "round_prefer_floor"
         if "align_corners" in node.attr and node.attr["align_corners"].i:
             transformation_mode = "align_corners"
             nearest_mode = "round_prefer_ceil"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
             if node.type == "ResizeNearestNeighbor" and not ctx.is_target(constants.TARGET_TENSORRT):
-                # TensorRT only supports nearest_mode = "floor" for mode = "nearest"
                 transformation_mode = "tf_half_pixel_for_nn"
             else:
                 transformation_mode = "half_pixel"
@@ -1474,7 +1473,7 @@ class Resize:
                 final_target_size.output[0]
             ]
             upsample = ctx.make_node("Resize", resize_inputs,
-                                     attr={"mode": mode, "nearest_mode": "floor",
+                                     attr={"mode": mode, "nearest_mode": "round_prefer_floor",
                                            "coordinate_transformation_mode": "asymmetric"})
         else:
             # first create "scales" info for onnx upsample
