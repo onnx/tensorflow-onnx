@@ -6115,7 +6115,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         updates_val = make_xval([2, 5]) + 3
         self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices_val, _INPUT2: updates_val})
 
-    @check_tf_min_version("1.12.1")
+    @check_tf_min_version("2.3.0")
     @check_opset_min_version(16, "ScatterND")
     @skip_tfjs("not supported in tfjs")
     def test_tensor_scatter_max(self):
@@ -6128,7 +6128,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         updates_val = make_xval([2, 5]) + 3
         self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices_val, _INPUT2: updates_val})
 
-    @check_tf_min_version("1.12.1")
+    @check_tf_min_version("2.3.0")
     @check_opset_min_version(16, "ScatterND")
     @skip_tfjs("not supported in tfjs")
     def test_tensor_scatter_min(self):
