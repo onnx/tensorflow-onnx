@@ -5442,6 +5442,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(8, "CategoryMapper")
     @skip_tfjs("TFJS does not initialize table")
+    @skip_onnx_checker("ONNX can't do type inference on CategoryMapper")
+    def test_hashtable_lookup_invert(self):
+        filnm = "vocab.tmp"
+        words = ["apple", "pear", "banana", "cherry", "grape"]
+        query = np.array([3], dtype=np.int64)
+        with open(filnm, "w") as f:
+            for word in words:
+                f.write(word + "\n")
+        def func(query_holder):
+            hash_table = lookup_ops.index_to_string_table_from_file(filnm)
+            lookup_results = hash_table.lookup(query_holder)
+            ret = tf.identity(lookup_results, name=_TFOUTPUT)
+            return ret
+        self._run_test_case(func, [_OUTPUT], {_INPUT: query}, as_session=True)
+        os.remove(filnm)
+
+    @check_opset_min_version(8, "CategoryMapper")
+    @skip_tfjs("TFJS does not initialize table")
     def test_hashtable_lookup_const(self):
         filnm = "vocab.tmp"
         words = ["apple", "pear", "banana", "cherry ♥", "grape"]
@@ -5454,6 +5472,24 @@ class BackendTests(Tf2OnnxBackendTestBase):
             query = tf.constant(query_val)
             lookup_results = hash_table.lookup(query)
             ret = tf.add(lookup_results, 0, name=_TFOUTPUT)
+            return ret
+        self._run_test_case(func, [_OUTPUT], {}, as_session=True)
+        os.remove(filnm)
+
+    @check_opset_min_version(8, "CategoryMapper")
+    @skip_tfjs("TFJS does not initialize table")
+    def test_hashtable_lookup_invert_const(self):
+        filnm = "vocab.tmp"
+        words = ["apple", "pear", "banana", "cherry", "grape"]
+        query_val = np.array([3, 2], dtype=np.int64).reshape((1, 2, 1))
+        with open(filnm, "w", encoding='UTF-8') as f:
+            for word in words:
+                f.write(word + "\n")
+        def func():
+            hash_table = lookup_ops.index_to_string_table_from_file(filnm)
+            query = tf.constant(query_val)
+            lookup_results = hash_table.lookup(query)
+            ret = tf.identity(lookup_results, name=_TFOUTPUT)
             return ret
         self._run_test_case(func, [_OUTPUT], {}, as_session=True)
         os.remove(filnm)
