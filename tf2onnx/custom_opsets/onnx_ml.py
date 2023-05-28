@@ -42,7 +42,7 @@ class LookupTableFind:
 
         dtype = ctx.get_dtype(node.output[0])
         in_dtype = ctx.get_dtype(node.input[1])
-        utils.make_sure((dtype == TensorProto.INT64 and in_dtype == TensorProto.STRING) or 
+        utils.make_sure((dtype == TensorProto.INT64 and in_dtype == TensorProto.STRING) or
                         (dtype == TensorProto.STRING and in_dtype == TensorProto.INT64),
                         f"Only lookup tables of type string<->int64 are currently supported.")
 
