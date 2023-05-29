@@ -6138,5 +6138,50 @@ class BackendTests(Tf2OnnxBackendTestBase):
         x_val = make_xval([2, 3])
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_tf_min_version("2.3.0")
+    @check_opset_min_version(16, "ScatterND")
+    @skip_tfjs("not supported in tfjs")
+    def test_tensor_scatter_max(self):
+        def func(tensor, indices, updates):
+            op = tf.tensor_scatter_nd_max(tensor, indices, updates)
+            return tf.identity(op, name=_TFOUTPUT)
+
+        tensor_val = make_xval([3, 4, 5])
+        indices_val = np.array([[2, 3], [0, 1]], np.int32)
+        indices64_val = indices_val.astype(np.int64)
+        updates_val = make_xval([2, 5]) + 3
+        self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices_val, _INPUT2: updates_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices64_val, _INPUT2: updates_val})
+
+    @check_tf_min_version("2.3.0")
+    @check_opset_min_version(16, "ScatterND")
+    @skip_tfjs("not supported in tfjs")
+    def test_tensor_scatter_min(self):
+        def func(tensor, indices, updates):
+            op = tf.tensor_scatter_nd_min(tensor, indices, updates)
+            return tf.identity(op, name=_TFOUTPUT)
+
+        tensor_val = make_xval([3, 4, 5])
+        indices_val = np.array([[2, 3], [0, 1]], np.int32)
+        indices64_val = indices_val.astype(np.int64)
+        updates_val = make_xval([2, 5]) + 3
+        self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices_val, _INPUT2: updates_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices64_val, _INPUT2: updates_val})
+
+    @check_tf_min_version("1.12.1")
+    @check_opset_min_version(16, "ScatterND")
+    @skip_tfjs("not supported in tfjs")
+    def test_tensor_scatter_sub(self):
+        def func(tensor, indices, updates):
+            op = tf.tensor_scatter_nd_sub(tensor, indices, updates)
+            return tf.identity(op, name=_TFOUTPUT)
+
+        tensor_val = make_xval([3, 4, 5])
+        indices_val = np.array([[2, 3], [0, 1]], np.int32)
+        indices64_val = indices_val.astype(np.int64)
+        updates_val = make_xval([2, 5]) + 3
+        self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices_val, _INPUT2: updates_val})
+        self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices64_val, _INPUT2: updates_val})
+
 if __name__ == '__main__':
     unittest_main()
