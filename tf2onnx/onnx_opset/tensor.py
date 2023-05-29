@@ -670,6 +670,37 @@ class TensorScatterAdd:
         node.set_attr("reduction", 'add')
 
 
+@tf_op("TensorScatterMax", onnx_op="ScatterND")
+class TensorScatterMax:
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        # indices input must be int64 in ONNX.
+        if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+        node.set_attr("reduction", 'max')
+
+
+@tf_op("TensorScatterMin", onnx_op="ScatterND")
+class TensorScatterMin:
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        # indices input must be int64 in ONNX.
+        if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+        node.set_attr("reduction", 'min')
+
+
+@tf_op("TensorScatterSub", onnx_op="ScatterND")
+class TensorScatterSub:
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        # indices input must be int64 in ONNX.
+        if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+        ctx.insert_new_node_on_input(node, "Neg", node.input[2])
+        node.set_attr("reduction", 'add')
+
+
 @tf_op("TensorScatterUpdate", onnx_op="ScatterND")
 class TensorScatterUpdate:
     @classmethod
