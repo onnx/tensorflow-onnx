@@ -254,6 +254,9 @@
 | TensorListSetItem | 7 ~ 17 |
 | TensorListStack | 7 ~ 17 |
 | TensorScatterAdd | 16 ~ 17 |
+| TensorScatterMax | 16 ~ 17 |
+| TensorScatterMin | 16 ~ 17 |
+| TensorScatterSub | 16 ~ 17 |
 | TensorScatterUpdate | 11 ~ 17 |
 | Tile | 1 ~ 17 |
 | TopKV2 | 1 ~ 17 |
