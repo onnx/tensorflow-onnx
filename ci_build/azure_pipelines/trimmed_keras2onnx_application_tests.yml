@@ -47,7 +47,7 @@ jobs:
 
       Python38-tf2-2.11:
         python.version: '3.9'
-        ONNX_PATH: onnx==1.13.1
+        ONNX_PATH: onnx==1.14
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.11.0
