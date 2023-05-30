@@ -20,7 +20,7 @@ import urllib
 # https://github.com/onnx/tensorflow-onnx/issues/2132
 ORT_OPSET_VERSION = {
     "1.6.0": 13, "1.7.0": 13, "1.8.0": 14, "1.9.0": 15, "1.10.0": 15, "1.11.0": 16,
-    "1.12.0": 17, "1.13.0": 17, "1.14.0": 17
+    "1.12.0": 17, "1.13.0": 17, "1.14.0": 18
 }
 
 working_path = os.path.abspath(os.path.dirname(__file__))
@@ -299,7 +299,7 @@ def run_image(model, model_files, img_path, model_name='onnx_conversion', rtol=1
     except RuntimeError:
         msg = 'keras prediction throws an exception for model ' + model.name + ', skip comparison.'
 
-    onnx_model = mock_keras2onnx.convert_keras(model, model.name)
+    onnx_model = mock_keras2onnx.convert_keras(model, model.name, target_opset=get_max_opset_supported_for_test())
     res = run_onnx_runtime(model_name, onnx_model, x, preds, model_files, rtol=rtol, atol=atol, compare_perf=compare_perf)
     return res, msg
 

@@ -1,7 +1,7 @@
 # Run unit test
 
 parameters:
-    onnx_opsets: ['17', '16', '15', '14', '13']
+    onnx_opsets: ['18', '17', '16', '15', '14']
     skip_tflite_tests: 'True'
     skip_tfjs_tests: 'True'
     skip_tf_tests: 'False'
