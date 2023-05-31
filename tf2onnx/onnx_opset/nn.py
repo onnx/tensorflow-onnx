@@ -311,8 +311,9 @@ def conv_kernel_shape(ctx, node, input_idx, spatial=2):
     # Get spatial part.
     kernel_shape = kernel_shape[:spatial]
 
-    # Set new value and return it.
-    node.set_attr("kernel_shape", kernel_shape)
+    # Set attribute value only if all dimensions are known.
+    if all(d > 0 for d in kernel_shape):
+        node.set_attr("kernel_shape", kernel_shape)
 
     return kernel_shape
 
@@ -379,11 +380,13 @@ class ConvOp:
         data_format = str(node.attr["data_format"].s, encoding="utf8")
         shape_dim = -1
         if data_format == "NHWC":
-            shape_dim = ctx.get_shape(node.input[0])[3]
+            shape_dim = ctx.get_shape(node.input[0])[-1]
         elif data_format == "NCHW":
             shape_dim = ctx.get_shape(node.input[0])[1]
         if shape_dim != -1:
-            groups = int(shape_dim / ctx.get_shape(node.input[1])[2])
+            filter_in_channels = ctx.get_shape(node.input[1])[-2]
+            if filter_in_channels != -1:
+                groups = shape_dim // filter_in_channels
 
         node.set_attr("group", groups)
 
@@ -649,7 +652,8 @@ class DepthwiseConv2d:
             raise ValueError("input channel must be positive")
         k_output_channels = k_input_channels * k_channel_multiplier
 
-        node.set_attr("kernel_shape", [k_h, k_w])
+        if k_h > 0 and k_w > 0:
+            node.set_attr("kernel_shape", [k_h, k_w])
         strides = conv_dims_attr(node, "strides")
         dilations = conv_dims_attr(node, "dilations")
         node.set_attr("group", k_input_channels)
