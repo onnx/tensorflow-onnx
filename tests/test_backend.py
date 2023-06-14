@@ -3135,7 +3135,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return False
             return True
 
-        self._run_test_case(func_multiple_fusedbn, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05, graph_validator=graph_validator)
+        self._run_test_case(func_multiple_fusedbn, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05,
+                            graph_validator=graph_validator)
 
     @check_tf_min_version("1.15")
     @check_opset_min_version(10, "quantize_and_dequantize")
