@@ -4906,7 +4906,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
     
     @check_opset_min_version(18, "BitwiseOr")
-    def test_bitwise_and(self):
+    def test_bitwise_or(self):
         x_val = np.array([21, 4, 87], dtype=np.int32)
         y_val = np.array([45, 69, 173], dtype=np.int32)
         def func(x, y):
@@ -4915,7 +4915,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
     
     @check_opset_min_version(18, "BitwiseXor")
-    def test_bitwise_and(self):
+    def test_bitwise_xor(self):
         x_val = np.array([21, 4, 87], dtype=np.int32)
         y_val = np.array([45, 69, 173], dtype=np.int32)
         def func(x, y):
@@ -4924,10 +4924,10 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
     
     @check_opset_min_version(18, "BitwiseNot")
-    def test_bitwise_and(self):
+    def test_bitwise_not(self):
         x_val = np.array([21, 4, 1], dtype=np.int32)
         def func(x):
-            x_ = tf.bitwise.bitwise_not(x)
+            x_ = tf.bitwise.invert(x)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
