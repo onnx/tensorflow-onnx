@@ -2366,8 +2366,9 @@ class ReverseV2:
 @tf_op("Unique", onnx_op="Unique")
 @tf_op("UniqueWithCounts", onnx_op="Unique")
 class Unique:
-    int_cast =  [TensorProto.BOOL, TensorProto.INT32, TensorProto.INT16, TensorProto.UINT8, TensorProto.UINT16, TensorProto.UINT32, TensorProto.UINT64]
-    dtype_map = {k:TensorProto.INT64 for  k in int_cast}
+    int_cast = [TensorProto.BOOL, TensorProto.INT32, TensorProto.INT16, TensorProto.UINT8,
+                TensorProto.UINT16, TensorProto.UINT32, TensorProto.UINT64]
+    dtype_map = {k: TensorProto.INT64 for k in int_cast}
     dtype_map[TensorProto.DOUBLE] = TensorProto.FLOAT
 
     @classmethod
@@ -2379,22 +2380,23 @@ class Unique:
         inp_dtype = ctx.get_dtype(node.input[0])
 
         ctx.remove_node(node_name)
-        
-        # due to ORT missing implementations we need to cast INT inputs to INT64 and FLOAT inputs to FLOAT32        
+
+        # due to ORT missing implementations we need to cast INT inputs to INT64 and FLOAT inputs to FLOAT32
         if inp_dtype in cls.dtype_map:
             inp_cast = ctx.make_node("Cast", [node_inputs[0]], attr={'to': cls.dtype_map[inp_dtype]}).output[0]
             node_inputs[0] = inp_cast
-        
+
         new_node = ctx.make_node("Unique", node_inputs, name=node_name, attr={'sorted': 0},
-                                 outputs=[utils.make_name("y"), utils.make_name("idx_first"), utils.make_name("idx"), utils.make_name("counts")])    
+                                 outputs=[utils.make_name("y"), utils.make_name("idx_first"),
+                                          utils.make_name("idx"), utils.make_name("counts")])
         ctx.replace_all_inputs(node_outputs[0], new_node.output[0])
         ctx.replace_all_inputs(node_outputs[1], new_node.output[2])
-        if len(node_outputs)==3: # we need counts too (UniqueWithCounts)
+        if len(node_outputs) == 3: # we need counts too (UniqueWithCounts)
             ctx.replace_all_inputs(node_outputs[2], new_node.output[3])
         if ctx.get_dtype(new_node.output[0]) != inp_dtype:
-            ctx.insert_new_node_on_output("Cast", new_node.output[0], name=utils.make_name(node.name) + "_cast",
-                                          to=inp_dtype)
-        
+            ctx.insert_new_node_on_output("Cast", new_node.output[0], to=inp_dtype,
+                                          name=utils.make_name(node.name) + "_cast")
+
         # cast idx and counts if needed
         out_dtype = node.get_attr_value('out_idx')
         if out_dtype != TensorProto.INT64:
