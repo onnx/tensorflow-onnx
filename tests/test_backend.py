@@ -5011,7 +5011,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             y2 = tf.identity(x2_, name=_TFOUTPUT1)
             return y1, y2
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
-    
+
     @check_opset_min_version(11, "Unique")
     def test_unique_with_counts(self):
         x_val = np.array([1, 2, 8, 1, 2, 2, 7, 7, 7, 1], dtype=np.float32)
