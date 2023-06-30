@@ -5038,7 +5038,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_unique_with_counts_out_int32(self):
         x_val = np.array([2, 3, 3, 6, 4, 1, 1], dtype=np.float32)
         def func(x):
-            x1_, x2_, x3_ = tf.unique(x, out_idx=tf.int32)
+            x1_, x2_, x3_ = tf.unique_with_counts(x, out_idx=tf.int32)
             y1 = tf.identity(x1_, name=_TFOUTPUT)
             y2 = tf.identity(x2_, name=_TFOUTPUT1)
             y3 = tf.identity(x3_, name=_TFOUTPUT2)
