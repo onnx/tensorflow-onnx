@@ -58,7 +58,7 @@ def get_img(shape, path, dtype, should_scale=True):
     resize_to = shape[1:3]
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
     img = PIL.Image.open(path)
-    img = img.resize(resize_to, PIL.Image.ANTIALIAS)
+    img = img.resize(resize_to, PIL.Image.LANCZOS)
     img_np = np.array(img).astype(dtype)
     img_np = np.stack([img_np] * shape[0], axis=0).reshape(shape)
     if should_scale:
