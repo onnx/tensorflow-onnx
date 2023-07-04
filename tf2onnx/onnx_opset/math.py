@@ -792,7 +792,6 @@ class Det:
 
 @tf_op(["LeftShift", "RightShift"])
 class BitShift:
-
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         dir_map = {"LeftShift": "LEFT", "RightShift": "RIGHT"}
@@ -816,6 +815,16 @@ class BitShift:
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
             ctx.copy_dtype(node.input[0], node.output[0])
+
+
+@tf_op("BitwiseAnd")
+@tf_op("BitwiseOr")
+@tf_op("BitwiseXor")
+@tf_op("Invert", onnx_op="BitwiseNot")
+class BitwiseOps:
+    @classmethod
+    def version_18(cls, ctx, node, **kwargs):
+        pass
 
 
 @tf_op("SquaredDistance", onnx_op="MeanSquaredDistance")
