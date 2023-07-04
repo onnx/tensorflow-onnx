@@ -53,8 +53,8 @@
 | Cosh | 9 ~ 18 |
 | CropAndResize | 10 ~ 18 |
 | CudnnRNN | 10 ~ 18 |
-| Cumsum | 11 ~ 18 |
 | Cumprod | 10 ~ 18 |
+| Cumsum | 11 ~ 18 |
 | DenseBincount | 11 ~ 18 |
 | DenseToDenseSetOperation | 11 ~ 18 |
 | DepthToSpace | 1 ~ 18 |
