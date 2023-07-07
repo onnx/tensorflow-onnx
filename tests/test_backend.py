@@ -4896,6 +4896,41 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(18, "BitwiseAnd")
+    def test_bitwise_and(self):
+        x_val = np.array([21, 4, 1], dtype=np.int32)
+        y_val = np.array([45, 69, 3], dtype=np.int32)
+        def func(x, y):
+            x_ = tf.bitwise.bitwise_and(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(18, "BitwiseOr")
+    def test_bitwise_or(self):
+        x_val = np.array([21, 4, 87], dtype=np.int32)
+        y_val = np.array([45, 69, 173], dtype=np.int32)
+        def func(x, y):
+            x_ = tf.bitwise.bitwise_or(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(18, "BitwiseXor")
+    def test_bitwise_xor(self):
+        x_val = np.array([21, 4, 87], dtype=np.int32)
+        y_val = np.array([45, 69, 173], dtype=np.int32)
+        def func(x, y):
+            x_ = tf.bitwise.bitwise_xor(x, y)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
+
+    @check_opset_min_version(18, "BitwiseNot")
+    def test_bitwise_not(self):
+        x_val = np.array([21, 4, 1], dtype=np.int32)
+        def func(x):
+            x_ = tf.bitwise.invert(x)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
     @check_tf_min_version("1.14", "tensor_scatter_nd_update needs tf 1.14")
     @check_opset_min_version(11, "ScatterND")
     def test_tensor_scatter_update(self):
