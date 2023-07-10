@@ -731,7 +731,7 @@ def inline_subgraph(parent, g, scope, binding):
         dtypes = n.output_dtypes
         shapes = n.output_shapes
         subgraphs = n.get_body_graphs()
-        
+
         n.graph = parent # we must change node graph exactly here so that previous/following code can work
 
         # if n has subgraphs, we need to set the correct parent graph for them
