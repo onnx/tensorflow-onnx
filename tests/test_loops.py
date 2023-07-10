@@ -308,7 +308,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_dim = tf.shape(x)[0]
             r = tf.cast(tf.zeros(1), x.dtype)
-            for i in range(tf.constant(10)):
+            for i in tf.range(10):
                 if i == x_dim:
                     break
                 r += x[i]
