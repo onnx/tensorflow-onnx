@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main, check_tf_min_version, check_tf_max_version, \
-    check_onnxruntime_min_version, check_tfjs_max_version
+    check_onnxruntime_min_version, check_tfjs_max_version, skip_tflite
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -302,6 +302,21 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @skip_tflite("shape inference fails with tflite")
+    def test_while_loop_cond_subgraphs(self):
+        # test for while_loop with subgraphs in cond
+        def func(x):
+            x_dim = tf.shape(x)[0]
+            r = tf.cast(tf.zeros(1), x.dtype)
+            for i in range(tf.constant(10)):
+                if i == x_dim:
+                    break
+                r += x[i]
+            return tf.identity(r, name="output")
+        input_names_with_port = ["input_1:0"]
+        feed_dict = {"input_1:0": np.arange(0, 15, dtype=np.int32)}
+        output_names_with_port = ["output:0"]
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
 if __name__ == '__main__':
     unittest_main()
