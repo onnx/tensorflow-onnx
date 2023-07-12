@@ -196,14 +196,14 @@ def read_tflite_model(tflite_path):
     try:
         interpreter = tf.lite.Interpreter(tflite_path)
         interpreter.allocate_tensors()
-        tensor_cnt = model.Subgraphs(0).TensorsLength()
-        for i in range(tensor_cnt):
-            name = model.Subgraphs(0).Tensors(i).Name().decode()
-            details = interpreter._get_tensor_details(i)   # pylint: disable=protected-access
-            if "shape_signature" in details:
-                tensor_shapes[name] = details["shape_signature"].tolist()
-            elif "shape" in details:
-                tensor_shapes[name] = details["shape"].tolist()
+        tensor_details = interpreter.get_tensor_details()
+
+        for tensor_detail in tensor_details:
+            name = tensor_detail.get('name')
+            if "shape_signature" in tensor_detail:
+                tensor_shapes[name] = tensor_detail["shape_signature"].tolist()
+            elif "shape" in tensor_detail:
+                tensor_shapes[name] = tensor_detail["shape"].tolist()
     except Exception as e:    # pylint: disable=broad-except
         logger.warning("Error loading model into tflite interpreter: %s", e)
     tflite_graphs = get_model_subgraphs(model)
