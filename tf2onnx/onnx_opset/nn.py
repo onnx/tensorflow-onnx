@@ -383,6 +383,10 @@ class ConvOp:
             shape_dim = ctx.get_shape(node.input[0])[-1]
         elif data_format == "NCHW":
             shape_dim = ctx.get_shape(node.input[0])[1]
+        elif data_format == "NDHWC":
+            shape_dim = ctx.get_shape(node.input[0])[-1]
+        elif data_format == "NCDHW":
+            shape_dim = ctx.get_shape(node.input[0])[1]
         if shape_dim != -1:
             filter_in_channels = ctx.get_shape(node.input[1])[-2]
             if filter_in_channels != -1:
