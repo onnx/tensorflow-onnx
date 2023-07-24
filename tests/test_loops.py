@@ -286,15 +286,12 @@ class LoopTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
 
     @check_tf_min_version("1.9")
-    @check_tf_max_version("1.15")
     def test_simple_while_loop_var_shape(self):
         # test for while_loop with variant shape variables
-        # may not meet ONNX Loop spec
-        # Note: this is not working on tf2 itself.
         def func(i):
             const = tf.constant(np.array([2], dtype=np.int32))
             c = lambda i: tf.reduce_all(tf.shape(i) < 10)
-            b = lambda i: tf.concat([i, const], 0)
+            b = lambda i: [tf.concat([i, const], 0)]
             r = tf.while_loop(c, b, [i], shape_invariants=[tf.TensorShape([None])])
             return tf.identity(r, name="output")
         input_names_with_port = ["input_1:0"]
