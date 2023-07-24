@@ -7,8 +7,8 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version, check_tf_max_version, \
-    check_onnxruntime_min_version, check_tfjs_max_version
+from common import unittest_main, check_tf_min_version, \
+    check_onnxruntime_min_version, check_tfjs_max_version, skip_tflite
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -286,6 +286,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
 
     @check_tf_min_version("1.9")
+    @skip_tflite("infinite loop with tflite")
     def test_simple_while_loop_var_shape(self):
         # test for while_loop with variant shape variables
         def func(i):
