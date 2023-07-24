@@ -303,7 +303,7 @@ class LoopTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
     @check_tf_min_version("2")
-    @skip_tflite("shape inference fails with tflite")
+    @skip_tflite("cond_graph conversion fails with tflite")
     def test_while_loop_cond_subgraphs(self):
         # test for while_loop with subgraphs in cond
         # Note: this is not working on tf1
