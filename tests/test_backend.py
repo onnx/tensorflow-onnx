@@ -5048,6 +5048,39 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: x_val})
 
     @check_opset_min_version(11, "Unique")
+    def test_unique_with_counts(self):
+        x_val = np.array([1, 2, 8, 1, 2, 2, 7, 7, 7, 1], dtype=np.float32)
+        def func(x):
+            x1_, x2_, x3_ = tf.unique_with_counts(x)
+            y1 = tf.identity(x1_, name=_TFOUTPUT)
+            y2 = tf.identity(x2_, name=_TFOUTPUT1)
+            y3 = tf.identity(x3_, name=_TFOUTPUT2)
+            return y1, y2, y3
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Unique")
+    def test_unique_with_counts_out_int64(self):
+        x_val = np.array([2, 3, 3, 6, 4, 1, 1], dtype=np.float32)
+        def func(x):
+            x1_, x2_, x3_ = tf.unique_with_counts(x, out_idx=tf.int64)
+            y1 = tf.identity(x1_, name=_TFOUTPUT)
+            y2 = tf.identity(x2_, name=_TFOUTPUT1)
+            y3 = tf.identity(x3_, name=_TFOUTPUT2)
+            return y1, y2, y3
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Unique")
+    def test_unique_with_counts_out_int32(self):
+        x_val = np.array([2, 3, 3, 6, 4, 1, 1], dtype=np.float32)
+        def func(x):
+            x1_, x2_, x3_ = tf.unique_with_counts(x, out_idx=tf.int32)
+            y1 = tf.identity(x1_, name=_TFOUTPUT)
+            y2 = tf.identity(x2_, name=_TFOUTPUT1)
+            y3 = tf.identity(x3_, name=_TFOUTPUT2)
+            return y1, y2, y3
+        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2], {_INPUT: x_val})
+
+    @check_opset_min_version(11, "Unique")
     def test_bincount(self):
         x_val = np.array([5, 2, 3, 1, 3, 2, 7, 5, 9, 10], dtype=np.int32)
         def func(x):
