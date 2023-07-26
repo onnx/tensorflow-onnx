@@ -32,6 +32,9 @@
 | BiasAdd | 1 ~ 17 |
 | BiasAddV1 | 1 ~ 17 |
 | Bincount | 11 ~ 17 |
+| BitwiseAnd | 18 |
+| BitwiseOr | 18 |
+| BitwiseXor | 18 |
 | BroadcastTo | 8 ~ 17 |
 | CTCGreedyDecoder | 11 ~ 17 |
 | Cast | 1 ~ 17 |
@@ -93,6 +96,7 @@
 | Identity | 1 ~ 17 |
 | IdentityN | 1 ~ 17 |
 | If | 1 ~ 17 |
+| Invert | 18 |
 | InvertPermutation | 11 ~ 17 |
 | IsFinite | 10 ~ 17 |
 | IsInf | 10 ~ 17 |
@@ -254,6 +258,9 @@
 | TensorListSetItem | 7 ~ 17 |
 | TensorListStack | 7 ~ 17 |
 | TensorScatterAdd | 16 ~ 17 |
+| TensorScatterMax | 16 ~ 17 |
+| TensorScatterMin | 16 ~ 17 |
+| TensorScatterSub | 16 ~ 17 |
 | TensorScatterUpdate | 11 ~ 17 |
 | Tile | 1 ~ 17 |
 | TopKV2 | 1 ~ 17 |

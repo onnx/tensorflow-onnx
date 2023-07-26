@@ -42,10 +42,18 @@ class LookupTableFind:
 
         dtype = ctx.get_dtype(node.output[0])
         in_dtype = ctx.get_dtype(node.input[1])
-        utils.make_sure(dtype == TensorProto.INT64 and in_dtype == TensorProto.STRING,
-                        "Only lookup tables of type string->int64 are currently supported.")
+        utils.make_sure((dtype == TensorProto.INT64 and in_dtype == TensorProto.STRING) or
+                        (dtype == TensorProto.STRING and in_dtype == TensorProto.INT64),
+                        f"Only lookup tables of type string<->int64 are currently supported.")
 
-        cats_strings, cats_int64s = initialized_tables[shared_name]
+        if in_dtype == TensorProto.STRING:
+            cats_strings, cats_int64s = initialized_tables[shared_name]
+            default_key = 'default_int64'
+        else:
+            cats_int64s, cats_strings = initialized_tables[shared_name]
+            default_key = 'default_string'
+        attr = {'cats_int64s': cats_int64s, 'cats_strings': cats_strings, default_key: default_val}
+
         shape = ctx.get_shape(node.input[1])
 
         node_name = node.name
@@ -56,18 +64,19 @@ class LookupTableFind:
             # Handle explicitly since const folding doesn't work for tables
             key_np = node.inputs[1].get_tensor_value(as_list=False)
             ctx.remove_node(node.name)
-            key_to_val = dict(zip(cats_strings, cats_int64s))
-            def lookup_value(key):
-                return key_to_val.get(key.encode("UTF-8"), default_val_np)
-            lookup_result = np.vectorize(lookup_value)(key_np)
+            if in_dtype == TensorProto.STRING:
+                key_to_val = dict(zip(cats_strings, cats_int64s))
+                lookup_result = np.vectorize(lambda key: key_to_val.get(key.encode("UTF-8"), default_val_np))(key_np)
+            else:
+                key_to_val = dict(zip(cats_int64s, cats_strings))
+                lookup_result = np.vectorize(lambda key: key_to_val.get(key, default_val_np))(key_np).astype(object)
             onnx_tensor = numpy_helper.from_array(lookup_result, node_name)
             ctx.make_node("Const", name=node_name, inputs=[], outputs=node_outputs,
                           attr={"value": onnx_tensor}, shapes=[lookup_result.shape], dtypes=[dtype])
         else:
             ctx.remove_node(node.name)
             ctx.make_node("CategoryMapper", domain=constants.AI_ONNX_ML_DOMAIN,
-                          name=node_name, inputs=[node_inputs[1]], outputs=node_outputs,
-                          attr={'cats_int64s': cats_int64s, 'cats_strings': cats_strings, 'default_int64': default_val},
+                          name=node_name, inputs=[node_inputs[1]], outputs=node_outputs, attr=attr,
                           shapes=[shape], dtypes=[dtype])
 
         customer_nodes = ctx.find_output_consumers(table_node.output[0])
