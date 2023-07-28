@@ -571,7 +571,8 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
     g.set_dtype(func_inputs[0], onnx_pb.TensorProto.INT64)
     g.inputs = [g.get_node_by_output(inp) for inp in func_inputs]
 
-    for p, c in zip(loop_node.input, func_inputs):
+    # we should use outputs shape, not inputs, since there may be shape invariants
+    for p, c in zip(loop_node.output, func_inputs[2:]):
         g.copy_shape(p, c)
 
     for i, node in enumerate(g.inputs):
@@ -730,7 +731,15 @@ def inline_subgraph(parent, g, scope, binding):
     for n in g.get_nodes():
         dtypes = n.output_dtypes
         shapes = n.output_shapes
-        n.graph = parent
+        subgraphs = n.get_body_graphs()
+
+        n.graph = parent # we must change node graph exactly here so that previous/following code can work
+
+        # if n has subgraphs, we need to set the correct parent graph for them
+        if subgraphs:
+            for sub_name, sub_graph in subgraphs.items():
+                n.set_body_graph_as_attr(sub_name, sub_graph)
+
         for name, shape, dtype in zip(n.output, shapes, dtypes):
             # FIXME: don't access this directly
             parent._output_shapes[name] = shape  # pylint: disable=protected-access
