@@ -267,6 +267,7 @@
 | Transpose | 1 ~ 17 |
 | TruncateDiv | 1 ~ 17 |
 | Unique | 11 ~ 17 |
+| UniqueWithCounts | 11 ~ 18 |
 | Unpack | 1 ~ 17 |
 | UnsortedSegmentMax | 11 ~ 17 |
 | UnsortedSegmentMin | 11 ~ 17 |
