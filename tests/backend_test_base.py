@@ -28,7 +28,6 @@ from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
 from tf2onnx.tf_loader import tf_optimize, is_tf2, get_hash_table_info
 from tf2onnx.tf_utils import compress_graph_def
 from tf2onnx.graph import ExternalTensorStorage
-from tf2onnx.tflite.Model import Model
 
 
 if is_tf2():
@@ -249,14 +248,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def tflite_has_supported_types(self, tflite_path):
         try:
-            with open(tflite_path, 'rb') as f:
-                buf = f.read()
-            buf = bytearray(buf)
-            model = Model.GetRootAsModel(buf, 0)
-            tensor_cnt = model.Subgraphs(0).TensorsLength()
             interpreter = tf.lite.Interpreter(tflite_path)
-            for i in range(tensor_cnt):
-                dtype = interpreter._get_tensor_details(i)['dtype']   # pylint: disable=protected-access
+            tensor_details = interpreter.get_tensor_details()
+            for tensor_detail in tensor_details:
+                dtype = tensor_detail.get('dtype')
                 if np.dtype(dtype).kind == 'O':
                     return False
             return True

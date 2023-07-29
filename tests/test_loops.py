@@ -7,8 +7,8 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_min_version, check_tf_max_version, \
-    check_onnxruntime_min_version, check_tfjs_max_version
+from common import unittest_main, check_tf_min_version, \
+    check_onnxruntime_min_version, check_tfjs_max_version, skip_tflite
 from tf2onnx.tf_loader import is_tf2
 
 
@@ -286,15 +286,13 @@ class LoopTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-5)
 
     @check_tf_min_version("1.9")
-    @check_tf_max_version("1.15")
+    @skip_tflite("infinite loop with tflite")
     def test_simple_while_loop_var_shape(self):
         # test for while_loop with variant shape variables
-        # may not meet ONNX Loop spec
-        # Note: this is not working on tf2 itself.
         def func(i):
             const = tf.constant(np.array([2], dtype=np.int32))
             c = lambda i: tf.reduce_all(tf.shape(i) < 10)
-            b = lambda i: tf.concat([i, const], 0)
+            b = lambda i: [tf.concat([i, const], 0)]
             r = tf.while_loop(c, b, [i], shape_invariants=[tf.TensorShape([None])])
             return tf.identity(r, name="output")
         input_names_with_port = ["input_1:0"]
@@ -302,6 +300,23 @@ class LoopTests(Tf2OnnxBackendTestBase):
         output_names_with_port = ["output:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, rtol=1e-06)
 
+    @check_tf_min_version("2")
+    @skip_tflite("cond_graph conversion fails with tflite")
+    def test_while_loop_cond_subgraphs(self):
+        # test for while_loop with subgraphs in cond
+        # Note: this is not working on tf1
+        def func(x):
+            x_dim = tf.shape(x)[0]
+            r = tf.cast(tf.zeros(1), x.dtype)
+            for i in tf.range(10):
+                if i == x_dim:
+                    break
+                r += x[i]
+            return tf.identity(r, name="output")
+        input_names_with_port = ["input_1:0"]
+        feed_dict = {"input_1:0": np.arange(0, 15, dtype=np.int32)}
+        output_names_with_port = ["output:0"]
+        self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port)
 
 if __name__ == '__main__':
     unittest_main()
