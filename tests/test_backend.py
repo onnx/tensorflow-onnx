@@ -703,7 +703,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         padding = "VALID"
         def func(x):
             kernel = tf.constant(w, dtype=tf.float32, name='k')
-            conv = tf.nn.conv3d(x, kernel, strides=strides, padding=padding, data_format="NDHWC", dilations=dilations)
+            conv = tf.nn.convolution(x, kernel, strides=strides, padding=padding, data_format="NDHWC", dilations=dilations)
             return tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
 
