@@ -695,6 +695,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=0.08)
 
+    def test_depthwiseconv3d(self):
+        strides = [1, 1, 1, 1, 1]
+        dilations = [1, 1, 1, 1, 1]
+        x_val = np.random.random_sample([2, 10, 9, 8, 5]).astype(np.float32)
+        w = np.random.random_sample([2, 3, 4, 1, 6]).astype(np.float32)
+        padding = "VALID"
+        def func(x):
+            kernel = tf.constant(w, dtype=tf.float32, name='k')
+            conv = tf.nn.conv3d(x, kernel, strides=strides, padding=padding, data_format="NDHWC", dilations=dilations)
+            return tf.identity(conv, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-05)
+
     @check_tf_min_version("1.14", "tf depthwise_conv2d dilations")
     @check_opset_min_version(11, "non-const pads")
     def test_depthwiseconv_dilations(self):
