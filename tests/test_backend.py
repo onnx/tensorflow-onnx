@@ -699,7 +699,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         strides = [1, 1, 1, 1, 1]
         dilations = [1, 1, 1, 1, 1]
         x_val = np.random.random_sample([2, 10, 9, 8, 5]).astype(np.float32)
-        w = np.random.random_sample([2, 3, 4, 1, 6]).astype(np.float32)
+        w = np.random.random_sample([2, 3, 4, 1, 5]).astype(np.float32)
         padding = "VALID"
         def func(x):
             kernel = tf.constant(w, dtype=tf.float32, name='k')
