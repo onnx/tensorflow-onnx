@@ -21,7 +21,7 @@ steps:
       pip install onnxconverter-common
       pip install $(ONNX_PATH)
       pip uninstall -y protobuf
-      pip install "protobuf<4.21.0"
+      pip install "protobuf~=3.20"
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
@@ -66,7 +66,7 @@ steps:
   - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
     displayName: Add conda to PATH
 
-  - script: conda create --yes --quiet --name py$(python.version) -c conda-forge python=$(python.version) numpy protobuf
+  - script: conda create --yes --quiet --name py$(python.version) -c conda-forge python=$(python.version) numpy protobuf~=3.20
     displayName: Create Anaconda environment
 
   - script: |
@@ -76,7 +76,7 @@ steps:
       pip install onnxconverter-common
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
-      pip install "protobuf<4.21.0"
+      pip install "protobuf~=3.20"
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
