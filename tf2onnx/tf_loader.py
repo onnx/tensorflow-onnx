@@ -574,7 +574,7 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
             graph_captures = concrete_func.graph.captures  
             captured_inputs = [t_name.name for t_val, t_name in graph_captures]
         else:
-            graph_captures = concrete_func.graph._captures  
+            graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access  
             captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
 
         # graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access

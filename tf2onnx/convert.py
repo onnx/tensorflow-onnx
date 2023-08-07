@@ -479,7 +479,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         graph_captures = concrete_func.graph.captures  
         captured_inputs = [t_name.name for t_val, t_name in graph_captures]
     else:
-        graph_captures = concrete_func.graph._captures  
+        graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access  
         captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
     
     input_names = [input_tensor.name for input_tensor in concrete_func.inputs
