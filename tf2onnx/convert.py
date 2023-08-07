@@ -472,8 +472,16 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
                 tensorflow_core.python.keras.backend.learning_phase = old_get_learning_phase
 
     # These inputs will be removed during freezing (includes resources, etc.)
-    graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
-    captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
+    # graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
+    # captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
+
+    if hasattr(concrete_func.graph, "captures"): #for Tensorflow 2.13+
+        graph_captures = concrete_func.graph.captures  
+        captured_inputs = [t_name.name for t_val, t_name in graph_captures]
+    else:
+        graph_captures = concrete_func.graph._captures  
+        captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
+    
     input_names = [input_tensor.name for input_tensor in concrete_func.inputs
                    if input_tensor.name not in captured_inputs]
     output_names = [output_tensor.name for output_tensor in concrete_func.outputs
