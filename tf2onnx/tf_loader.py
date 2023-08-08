@@ -491,16 +491,16 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     placeholder_to_resource = {}
     graph_captures_copy = None
     func_captures_copy = None
-    if hasattr(concrete_func.graph, 'captures') and hasattr(concrete_func, '_captured_inputs'):
-        graph_captures_copy = concrete_func.graph.captures.copy()
+    if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
+        graph_captures_copy = concrete_func.graph._captures.copy()
         func_captures_copy = concrete_func._captured_inputs.copy()
         variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
-        for k, v in list(concrete_func.graph.captures.items()):
+        for k, v in list(concrete_func.graph._captures.items()):
             val_tensor, name_tensor = v
             if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
                 resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
                 placeholder_to_resource[name_tensor.name.split(':')[0]] = val_tensor
-                del concrete_func.graph.captures[k]
+                del concrete_func.graph._captures[k]
                 for i in reversed(range(len(concrete_func._captured_inputs))):
                     if concrete_func._captured_inputs[i] is val_tensor:
                         concrete_func._captured_inputs.pop(i)
