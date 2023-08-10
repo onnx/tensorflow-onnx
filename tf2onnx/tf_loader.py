@@ -571,10 +571,10 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     if input_names is None:
         inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
         if hasattr(concrete_func.graph, "captures"): #for Tensorflow 2.13+
-            graph_captures = concrete_func.graph.captures  
+            graph_captures = concrete_func.graph.captures
             captured_inputs = [t_name.name for t_val, t_name in graph_captures]
         else:
-            graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access  
+            graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
             captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
 
         # graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
