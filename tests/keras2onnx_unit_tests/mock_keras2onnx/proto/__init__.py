@@ -70,4 +70,4 @@ def is_keras_older_than(version_str):
 
 
 def is_keras_later_than(version_str):
-    return Version(keras_version.__version__.split('-')[0]) > Version(version_str)
+    return Version(keras_version.split('-')[0]) > Version(version_str)
