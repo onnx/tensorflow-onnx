@@ -12,8 +12,7 @@ import numpy as np
 import tensorflow as tf
 from onnx import helper
 
-from common import (check_tf_min_version, check_tf_max_version, unittest_main,
-                    requires_custom_ops, check_opset_min_version, skip_tf_versions)
+from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version, skip_tf_versions
 from tf2onnx.tf_loader import is_tf2
 from backend_test_base import Tf2OnnxBackendTestBase
 import tf2onnx
