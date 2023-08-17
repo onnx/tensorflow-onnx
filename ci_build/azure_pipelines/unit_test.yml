@@ -38,9 +38,10 @@ stages:
 
     - template: 'templates/job_generator.yml'
       parameters:
-        python_versions: ['3.8']
+        python_versions: ['3.7'] # Max version that supports tf 1.15
         tf_versions: ['1.15.5']
-        onnx_opsets: ['']
+        onnx_opsets: ['18', '17', '16', '15', '14']
+        onnx_backends: {onnxruntime: ['1.14.1']} # Max version that supports python 3.7
         job:
           steps:
           - template: 'unit_test.yml'
@@ -124,10 +125,11 @@ stages:
 
     - template: 'templates/job_generator.yml'
       parameters:
-        python_versions: ['3.8']
+        python_versions: ['3.7'] # Max version that supports tf 1.15
         platforms: ['windows']
         tf_versions: ['1.15.5']
-        onnx_opsets: ['']
+        onnx_opsets: ['18', '17', '16', '15', '14']
+        onnx_backends: {onnxruntime: ['1.14.1']} # Max version that supports python 3.7
         job:
           steps:
           - template: 'unit_test.yml'
