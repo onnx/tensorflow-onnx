@@ -73,21 +73,19 @@ steps:
       fi
       if [[ $CI_TF_VERSION == 2.10* ]] || [[ $CI_TF_VERSION == 2.11* ]] ;
         then
-          pip install "tensorflow-text>=2.10,<2.12"
+          pip install "tensorflow-text>=2.10,<2.14"
       else
         pip install tensorflow-text
       fi
+
       if [[ $CI_TF_VERSION < 2.8 ]] ;
       then
         pip install wrapt==1.14.1
       fi
     fi
 
-    # Protobuf 3.20 results in linker errors on Windows in TF.
-    # Protobuf 4.0 is binary incompatible with what C++ TF uses.
-    # https://github.com/tensorflow/tensorflow/blob/c3337c73306b2b859d82fe130912f18e6a1c5c23/tensorflow/tools/pip_package/setup.py#L88
     pip uninstall -y protobuf
-    pip install "protobuf==3.20.3"
+    pip install "protobuf~=3.20"
 
     python setup.py install
 
