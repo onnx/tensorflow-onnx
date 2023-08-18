@@ -3,7 +3,7 @@
 jobs:
 - template: 'templates/job_generator.yml'
   parameters:
-    platforms: ['linux', 'windows']
+    platforms: ['linux']
     python_versions: ['3.7'] # Max version that supports tf 1.15
     tf_versions: ['1.15.5']
     onnx_opsets: ['18', '17', '16', '15']
@@ -14,7 +14,7 @@ jobs:
 
 - template: 'templates/job_generator.yml'
   parameters:
-    platforms: ['linux', 'windows']
+    platforms: ['linux']
     python_versions: ['3.8']
     tf_versions: ['2.8.0', '2.13.0']
     onnx_opsets: ['18', '17', '16', '15']
