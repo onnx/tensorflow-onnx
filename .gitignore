@@ -18,3 +18,7 @@ tests/tfhub/*/*.onnx
 tests/tfhub/*/*.tar.gz
 tests/tfhub/*/*.tflite
 tests/tfhub/*/**
+
+# VSCode
+.vscode/
+!.vscode/extensions.json
