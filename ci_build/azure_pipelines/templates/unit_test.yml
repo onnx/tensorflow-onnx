@@ -19,7 +19,7 @@ steps:
     export TF2ONNX_SKIP_TF_TESTS=$CI_SKIP_TF_TESTS
     python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
   timeoutInMinutes: 15
-  displayName: ${{ format('Run UnitTest - Opset{0}', parameters.onnx_opset) }}
+  displayName: 'Run UnitTest'
   condition: succeededOrFailed()
   env:
       CI_ONNX_OPSET: '${{ parameters.onnx_opset }}'
