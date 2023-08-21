@@ -34,7 +34,6 @@ stages:
         platforms: ['linux', 'windows']
         python_versions: ['3.8']
         tf_versions: ['2.12.0']
-        onnx_opsets: ['']
         job:
           steps:
           - template: 'unit_test.yml'
@@ -45,7 +44,6 @@ stages:
         platforms: ['linux', 'windows']
         python_versions: ['3.9']
         tf_versions: ['2.9.0', '2.10.0',]
-        onnx_opsets: ['']
         job:
           steps:
           - template: 'unit_test.yml'
@@ -56,7 +54,6 @@ stages:
         platforms: ['linux', 'windows']
         python_versions: ['3.10']
         tf_versions: ['2.8.0', '2.11.0', '2.13.0']
-        onnx_opsets: ['']
         job:
           steps:
           - template: 'unit_test.yml'
