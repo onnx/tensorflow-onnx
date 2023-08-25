@@ -60,3 +60,11 @@ stages:
         report_coverage: 'True'
 
   - template: 'templates/combine_test_coverage.yml'
+
+schedules:
+- cron: "0 10 * * *"
+  displayName: Daily nightly Unit Test, full matrix.
+  branches:
+    include:
+    - main
+  always: true
