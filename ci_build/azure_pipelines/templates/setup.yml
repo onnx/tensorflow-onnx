@@ -23,7 +23,8 @@ steps:
 
     if [[ $CI_TF_VERSION == 2.* ]] ;
     then
-      pip install onnxruntime-extensions==0.3.1
+      pip install onnxruntime-extensions
+
       if [[ $CI_TF_VERSION == 2.3* ]] ;
       then
         pip install tensorflow-text==${CI_TF_VERSION}
