@@ -62,8 +62,8 @@ stages:
   - template: 'templates/combine_test_coverage.yml'
 
 schedules:
-- cron: "0 10 * * *"
-  displayName: Daily nightly Unit Test, full matrix.
+- cron: "0 10 */3 * *"
+  displayName: Every 3 days nightly Unit Test, full matrix.
   branches:
     include:
     - main

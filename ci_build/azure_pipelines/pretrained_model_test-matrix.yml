@@ -72,8 +72,8 @@ jobs:
       - template: 'pretrained_model_test.yml'
 
 schedules:
-- cron: "0 10 * * *"
-  displayName: pre-trained model test, full matrix
+- cron: "0 11 */3 * *"
+  displayName: pre-trained model test, full matrix, run every 3 days
   branches:
     include:
     - main
