@@ -54,7 +54,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
 
     @requires_custom_ops("ReduceJoin")
     def test_reduce_join(self):
-        text_val = np.array([["a", "Test 1 2 3"], ["b", "test test"], ["c", "Hi there Test"]], dtype=np.str)
+        text_val = np.array([["a", "Test 1 2 3"], ["b", "test test"], ["c", "Hi there Test"]], dtype=str)
         def func(text):
             x_ = tf.strings.reduce_join(text, axis=1, separator="±")
             return tf.identity(x_, name=_TFOUTPUT)

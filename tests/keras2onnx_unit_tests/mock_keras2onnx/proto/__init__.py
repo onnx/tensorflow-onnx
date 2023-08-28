@@ -60,9 +60,14 @@ else:
             from tensorflow.python import keras
 
 
+keras_version = tensorflow.__version__
+if hasattr(keras, '__version__'):
+    keras_version = keras.__version__
+
+
 def is_keras_older_than(version_str):
-    return Version(keras.__version__.split('-')[0]) < Version(version_str)
+    return Version(keras_version.split('-')[0]) < Version(version_str)
 
 
 def is_keras_later_than(version_str):
-    return Version(keras.__version__.split('-')[0]) > Version(version_str)
+    return Version(keras_version.split('-')[0]) > Version(version_str)

@@ -9,49 +9,37 @@ jobs:
   strategy:
     matrix:
       Python37-tf-1.15:
-        python.version: '3.7'
-        ONNX_PATH: onnx==1.11.0
+        python.version: '3.7' # Max version that supports tf 1.15
+        ONNX_PATH: onnx==1.14.1
         INSTALL_KERAS: pip install keras==2.3.1
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.11.0
+        INSTALL_ORT: pip install onnxruntime==1.14.1 # Max version that supports python 3.7
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS:
         INSTALL_NUMPY: pip install numpy==1.19.0
         INSTALL_LEGACY: pip install h5py==2.9.0
         NIGHTLY_BUILD_TEST: python run_all.py --exclude "test_keras_applications_v2.py"
 
-      Python38-tf-2.9:
+      Python38-tf2-oldest:
         python.version: '3.8'
-        ONNX_PATH: onnx==1.12.0
+        ONNX_PATH: onnx==1.14.1
         INSTALL_KERAS:
         UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==2.9.1
-        INSTALL_ORT: pip install onnxruntime==1.12.0
+        INSTALL_TENSORFLOW: pip install tensorflow==2.8.0
+        INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.2.0
         INSTALL_NUMPY:
         NIGHTLY_BUILD_TEST: python run_all_v2.py
 
-      Python38-tf2-2.10:
+      Python38-tf2-2.13:
         python.version: '3.8'
-        ONNX_PATH: onnx==1.12.0
+        ONNX_PATH: onnx==1.14.1
         INSTALL_KERAS:
         UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==2.10.0
-        INSTALL_ORT: pip install onnxruntime==1.13.1
-        INSTALL_KERAS_RESNET: pip install keras-resnet
-        INSTALL_TRANSFORMERS: pip install transformers==4.2.0
-        INSTALL_NUMPY:
-        NIGHTLY_BUILD_TEST: python run_all_v2.py
-
-      Python38-tf2-2.11:
-        python.version: '3.9'
-        ONNX_PATH: onnx==1.14
-        INSTALL_KERAS:
-        UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==2.11.0
-        INSTALL_ORT: pip install onnxruntime==1.14.1
+        INSTALL_TENSORFLOW: pip install tensorflow==2.13.0
+        INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.2.0
         INSTALL_NUMPY:
