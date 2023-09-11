@@ -54,7 +54,10 @@ def process_bilstm(g, bi_lstms):
         if len(lstm_fw.inputs) > 4:
             lstm_inputs.extend([lstm_fw.input[4], h_node.output[0], c_node.output[0]])
 
-        attr = {"direction": "bidirectional"}
+        attr = {
+            "direction": "bidirectional",
+            "activations": lstm_bw.get_attr_value("activations") + lstm_fw.get_attr_value("activations"),
+        }
         for name in rnn_utils.onnx_rnn_attr_mapping[rnn_utils.ONNX_RNN_TYPE.LSTM]:
             attr_val = lstm_fw.get_attr_value(name)
             if attr_val:
