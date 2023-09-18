@@ -1352,7 +1352,7 @@ class CropAndResize:
         cls.any_version_after11(13, ctx, node, **kwargs)
 
 
-@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic"])
+@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic", "ResizeArea"])
 class Resize:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
