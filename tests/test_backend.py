@@ -85,6 +85,7 @@ elif Version(tf.__version__) >= Version("1.13"):
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
     quantize_and_dequantize = tf.compat.v1.quantization.quantize_and_dequantize
+    resize_area = tf.compat.v1.image.resize_area
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
     resize_bilinear = tf.compat.v1.image.resize_bilinear
     if Version(tf.__version__) >= Version("1.14"):
