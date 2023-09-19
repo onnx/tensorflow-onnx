@@ -29,6 +29,8 @@ steps:
       $(INSTALL_TENSORFLOW)
       $(INSTALL_KERAS)
       $(INSTALL_ORT)
+      pip uninstall -y onnxruntime
+      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.16.0.dev20230908001
       pip install Pillow==8.2.0
       pip install opencv-python
       pip install tqdm
@@ -98,6 +100,8 @@ steps:
       %INSTALL_TENSORFLOW%
       %INSTALL_KERAS%
       %INSTALL_ORT%
+      pip uninstall -y onnxruntime
+      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.16.0.dev20230908001
       pip install Pillow==8.2.0
       pip install opencv-python
       pip install tqdm

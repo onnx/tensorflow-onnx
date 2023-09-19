@@ -66,13 +66,18 @@ steps:
       fi
     fi
 
-    if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
-    then
-      pip uninstall -y onnxruntime
-      # install numpy upfront since it is not on https://test.pypi.org/simple/
-      pip install 'numpy>=1.18'
-      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
-    fi
+    # if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
+    # then
+    #   pip uninstall -y onnxruntime
+    #   # install numpy upfront since it is not on https://test.pypi.org/simple/
+    #   pip install 'numpy>=1.18'
+    #   pip install -i https://aiinfra.visualstudio.com/PublicPackages/_artifacts/feed/ORT-Nightly ort-nightly
+
+    # fi
+
+    # Check ORT 1.16 RC2.
+    pip uninstall -y onnxruntime
+    pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.16.0.dev20230908001
 
     pip uninstall -y protobuf
     pip install "protobuf~=3.20"

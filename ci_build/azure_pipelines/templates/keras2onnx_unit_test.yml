@@ -35,6 +35,8 @@ steps:
       pip install -r requirements-dev.txt
       pip install pytest pytest-cov pytest-runner
       $(INSTALL_ORT)
+      pip uninstall -y onnxruntime
+      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.16.0.dev20230908001
       $(INSTALL_NUMPY)
 
       pip freeze --all
@@ -85,6 +87,8 @@ steps:
       IF NOT "%KERAS%"=="" (pip install %KERAS%)
       pip install pytest pytest-cov pytest-runner
       %INSTALL_ORT%
+      pip uninstall -y onnxruntime
+      pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly==1.16.0.dev20230908001
       %INSTALL_NUMPY%
 
       pip freeze --all
