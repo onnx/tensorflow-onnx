@@ -181,6 +181,7 @@
 | Relu | 1 ~ 18 |
 | Relu6 | 1 ~ 18 |
 | Reshape | 1 ~ 18 |
+| ResizeArea | 7 ~ 18 |
 | ResizeBicubic | 7 ~ 18 |
 | ResizeBilinear | 7 ~ 18 |
 | ResizeNearestNeighbor | 7 ~ 18 |
