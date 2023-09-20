@@ -189,13 +189,14 @@ def run_onnx_runtime(case_name, onnx_model, data, expected, model_files, rtol=1.
     onnx.save_model(onnx_model, temp_model_file)
     try:
         import onnxruntime
+        providers = ['CPUExecutionProvider']
         if enable_profiling:
             from onnxruntime import SessionOptions
             sess_options = SessionOptions()
             sess_options.enable_profiling = True
-            sess = onnxruntime.InferenceSession(temp_model_file, sess_options)
+            sess = onnxruntime.InferenceSession(temp_model_file, sess_options, providers=providers)
         else:
-            sess = onnxruntime.InferenceSession(temp_model_file)
+            sess = onnxruntime.InferenceSession(temp_model_file, providers=providers)
     except ImportError:
         mock_keras2onnx.common.k2o_logger().warning("Cannot import ONNXRuntime!")
         return True
