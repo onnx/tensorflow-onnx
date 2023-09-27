@@ -960,7 +960,7 @@ class Pad:
 @tf_op(["FusedBatchNorm", "FusedBatchNormV2", "FusedBatchNormV3"])
 class BatchNorm:
     @classmethod
-    def version_6(cls, ctx, node, **kwargs):
+    def version_17(cls, ctx, node, **kwargs):
         tf_type = node.type
         input_rank = len(ctx.get_shape(node.input[0]))
         if input_rank == 4:
