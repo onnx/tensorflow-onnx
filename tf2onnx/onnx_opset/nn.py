@@ -1016,7 +1016,7 @@ class BatchNorm:
             utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
                             node.name, tf_type)
             node.type = "LayerNormalization"
-            node.set_attr("axis", 1)
+            node.set_attr("axis", 2)
             ctx.replace_inputs(node, node.input[:2])
         elif is_training:
             logger.warning("Node %s of type %s has is_training set to true, which is not supperted. "
