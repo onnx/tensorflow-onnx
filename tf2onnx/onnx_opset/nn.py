@@ -1012,6 +1012,86 @@ class BatchNorm:
 
         if is_training and node.get_attr_value('exponential_avg_factor', 1.0) == 1.0:
             # Sometimes TF uses a BatchNorm op with training = True and exponential_avg_factor = 1.0
+            # to perform layer normalization.
+            utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
+                            node.name, tf_type)
+            node.type = "LayerNormalization"
+            node.set_attr("axis", 1)
+            ctx.replace_inputs(node, node.input[:2])
+        elif is_training:
+            logger.warning("Node %s of type %s has is_training set to true, which is not supperted. "
+                           "Please re-save the model with training set to false.",
+                           node.name, tf_type)
+            # As long as the mean/variance estimates are provided, we should be OK
+            is_training = False
+
+        if not is_training and mean_shape != scale_shape and all(d >= 0 for d in scale_shape):
+            new_mean_value = np.array(np.resize(node.inputs[3].get_tensor_value(as_list=False), scale_shape),
+                                      dtype=val_type)
+            new_mean_node_name = utils.make_name(node.name)
+            ctx.make_const(new_mean_node_name, new_mean_value)
+            ctx.replace_input(node, node.input[3], new_mean_node_name, 3)
+
+        if not is_training and var_shape != scale_shape and all(d >= 0 for d in scale_shape):
+            new_var_value = np.array(np.resize(node.inputs[4].get_tensor_value(as_list=False), scale_shape),
+                                     dtype=val_type)
+            new_val_node_name = utils.make_name(node.name)
+            ctx.make_const(new_val_node_name, new_var_value)
+            ctx.replace_input(node, node.input[4], new_val_node_name, 4)
+    
+    @classmethod
+    def version_6(cls, ctx, node, **kwargs):
+        tf_type = node.type
+        input_rank = len(ctx.get_shape(node.input[0]))
+        if input_rank == 4:
+            spatial = 2
+        elif input_rank == 5:
+            spatial = 3
+        else:
+            raise ValueError("node input must be 4 or 5-dimensional, is {} now".format(input_rank))
+
+        node.type = "BatchNormalization"
+        # tf inputs: x, scale, bias, mean, variance
+        # tf outputs: y, batch_mean, batch_var
+        # a: data_format, epsilon, is_training
+        # onnx inputs: X, scale, B, mean, variance, attributes: epsilon, momentum=0.9, spatial : 1
+        # output: y, mean, var, savedmean, savedvar,
+        # detach unused outputs. While we could let the unused outputs dangle,
+        # some runtimes like pytorch/caffe2 do complain about it.
+
+        # onnx batchnorm requires same T for all inputs
+        mean_type = ctx.get_dtype(node.input[3])
+        x_dtype = ctx.get_dtype(node.input[0])
+        if x_dtype != mean_type:
+            # TODO: this works but more efficient would be to flip the other inputs. We'd need to check
+            # TODO: first if this works with the onnx implementation so its a later for now
+            ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=mean_type)
+            # casting the input[0] will change the output dtype of bn so we need to cast back
+            cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
+                                                           name=utils.make_name(node.name) + "_castback",
+                                                           to=x_dtype)
+            ctx.set_dtype(cast_back_node.output[0], x_dtype)
+            ctx.copy_shape(node.name, cast_back_node.output[0])
+            ctx.set_dtype(node.output[0], mean_type)
+
+        consumers = [ctx.find_output_consumers(output_name) for output_name in node.output[1:]]
+        if not any(consumers):
+            new_output = [node.output[0]]
+            # the setter makes a copy of new_output
+            node.output = new_output
+
+        conv_convert_inputs(ctx, node, with_kernel=False, spatial=spatial)
+
+        inp_shape = ctx.get_shape(node.input[0])
+        inp_rank = len(inp_shape) if inp_shape is not None else None
+        scale_shape = ctx.get_shape(node.input[1])
+        mean_shape = ctx.get_shape(node.input[3])
+        var_shape = ctx.get_shape(node.input[4])
+        val_type = utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1]))
+        is_training = node.get_attr_value('is_training', True)
+
+        if is_training and node.get_attr_value('exponential_avg_factor', 1.0) == 1.0:
+            # Sometimes TF uses a BatchNorm op with training = True and exponential_avg_factor = 1.0
             # to perform layer mean/variance normalization. In such cases, the mean/var are computed from the input.
             # TF allows mean/variance to be excluded only if is_training and exponential_avg_factor == 1.0
             utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
