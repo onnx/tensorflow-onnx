@@ -1434,8 +1434,9 @@ class Resize:
             nearest_mode = "round_prefer_ceil"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
             if node.type == "ResizeNearestNeighbor" and not ctx.is_target(constants.TARGET_TENSORRT):
-                # TensorRT only supports nearest_mode = "floor" for mode = "nearest"
+                # TensorRT only supports nearest_mode = "round_prefer_floor" for mode = "nearest"
                 transformation_mode = "tf_half_pixel_for_nn"
+                nearest_mode = "round_prefer_floor"
             else:
                 transformation_mode = "half_pixel"
         attr = {"mode": mode, "nearest_mode": nearest_mode, "coordinate_transformation_mode": transformation_mode,
