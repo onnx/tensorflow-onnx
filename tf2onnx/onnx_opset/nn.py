@@ -1016,13 +1016,14 @@ class BatchNorm:
             utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
                             node.name, tf_type)
             node.type = "LayerNormalization"
-            first_axis_to_norm = 1
+            first_axis_to_norm = 2
             node.set_attr("axis", first_axis_to_norm)
-            # TF uses a separate ops for scale and bias, so we use dummy ones here.
-            dummy_scale = ctx.make_const(
-                utils.make_name("ones_scale"),
-                np.ones(inp_shape[0], dtype=val_type)).output[0]
-            ctx.replace_inputs(node, node.input[:1] + [dummy_scale])
+            # Broadcast 1-d scale.
+            broadcast_scale_shape = ctx.make_const(
+                utils.make_name("broadcast_scale_shape"),
+                np.array(scale_shape + [1] * (inp_rank - first_axis_to_norm), dtype=np.int64)).output[0]
+            broadcast_scale = ctx.make_node("Reshape", [node.input[1], broadcast_scale_shape]).output[0]
+            ctx.replace_inputs(node, node.input[:1] + [broadcast_scale])
         elif is_training:
             logger.warning("Node %s of type %s has is_training set to true, which is not supperted. "
                            "Please re-save the model with training set to false.",
