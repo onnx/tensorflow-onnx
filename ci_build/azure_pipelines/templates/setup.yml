@@ -79,12 +79,15 @@ steps:
 
     python setup.py install
 
-    if [[ $ONNX_TEST ==  "true" ]] ;
-    then
-      # onnx-weekly won't satisfy onnx requirement so uninstallation must happen here
-      pip uninstall -y onnx
-      pip install --index-url https://test.pypi.org/simple/ ${PIP_ONNX_NAME:-onnx}
-    fi
+    # if [[ $ONNX_TEST ==  "true" ]] ;
+    # then
+    #   # onnx-weekly won't satisfy onnx requirement so uninstallation must happen here
+    #   pip uninstall -y onnx
+    #   pip install --index-url https://test.pypi.org/simple/ ${PIP_ONNX_NAME:-onnx}
+    # fi
+
+    pip uninstall -y onnx
+    pip install -i https://test.pypi.org/simple/ onnx==1.15.0rc1
 
     pip freeze --all
   displayName: 'Setup Environment'
