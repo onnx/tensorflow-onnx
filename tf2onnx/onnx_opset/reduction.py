@@ -43,7 +43,8 @@ class ReduceOpBase:
         ctx.remove_input(node, node.input[1], 1)
         keep_dims = node.get_attr_value("keep_dims", 0)
         node.set_attr("keepdims", keep_dims)
-        del node.attr['keep_dims']
+        if 'keep_dims' in node.attr:
+            del node.attr['keep_dims']
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -55,7 +56,8 @@ class ReduceOpBase:
         if node.type == "ReduceSum":
             keep_dims = node.get_attr_value("keep_dims", 0)
             node.set_attr("keepdims", keep_dims)
-            del node.attr['keep_dims']
+            if 'keep_dims' in node.attr:
+                del node.attr['keep_dims']
             node.set_attr("noop_with_empty_axes", 1)
             if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
                 ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
@@ -71,7 +73,8 @@ class ReduceOpBase:
     def version_18(cls, ctx, node, **kwargs):
         keep_dims = node.get_attr_value("keep_dims", 0)
         node.set_attr("keepdims", keep_dims)
-        del node.attr['keep_dims']
+        if 'keep_dims' in node.attr:
+            del node.attr['keep_dims']
         node.set_attr("noop_with_empty_axes", 1)
         if ctx.get_dtype(node.input[1]) != onnx_pb.TensorProto.INT64:
             ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=onnx_pb.TensorProto.INT64)
