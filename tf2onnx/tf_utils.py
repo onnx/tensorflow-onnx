@@ -459,7 +459,7 @@ def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=Non
 
         if takeit:
             try:
-                attr = {key: val for key, val in attr.items() if val}
+                attr = {key: val for key, val in attr.items() if not isinstance(val, collections.abc.Iterable) or val}
                 onnx_node = helper.make_node(node_type, input_names, output_names, name=node.name, **attr)
                 onnx_nodes.append(onnx_node)
             except Exception as ex:
