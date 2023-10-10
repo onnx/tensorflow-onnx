@@ -266,9 +266,10 @@ class Node(object):
         )
         return attr_str.decode(encoding)
 
-    def set_attr(self, name, value):
-        default_type = AttributeProto.INTS if isinstance(value, collections.abc.Iterable) and not value else None
-        self.attr[name] = helper.make_attribute(name, value, attr_type=default_type)
+    def set_attr(self, name, value, attr_type=None):
+        if isinstance(value, collections.abc.Iterable) and len(list(value)) == 0:
+            attr_type = AttributeProto.INTS
+        self.attr[name] = helper.make_attribute(name, value, attr_type=attr_type)
 
     def set_attr_onnx(self, value):
         self.attr[value.name] = value
