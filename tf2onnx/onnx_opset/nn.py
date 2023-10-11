@@ -959,7 +959,6 @@ class Pad:
 
 @tf_op(["FusedBatchNorm", "FusedBatchNormV2", "FusedBatchNormV3"])
 class BatchNorm:
-    
     @classmethod
     def version_6(cls, ctx, node, **kwargs):
         tf_type = node.type
@@ -969,7 +968,8 @@ class BatchNorm:
         elif input_rank == 5:
             spatial = 3
         else:
-            raise ValueError("node input must be 4 or 5-dimensional, is {} now".format(input_rank))
+            raise ValueError(
+                "node input must be 4 or 5-dimensional, is {} now".format(input_rank))
 
         node.type = "BatchNormalization"
         # tf inputs: x, scale, bias, mean, variance
@@ -986,16 +986,19 @@ class BatchNorm:
         if x_dtype != mean_type:
             # TODO: this works but more efficient would be to flip the other inputs. We'd need to check
             # TODO: first if this works with the onnx implementation so its a later for now
-            ctx.insert_new_node_on_input(node, "Cast", node.input[0], to=mean_type)
+            ctx.insert_new_node_on_input(
+                node, "Cast", node.input[0], to=mean_type)
             # casting the input[0] will change the output dtype of bn so we need to cast back
             cast_back_node = ctx.insert_new_node_on_output("Cast", node.output[0],
-                                                           name=utils.make_name(node.name) + "_castback",
+                                                           name=utils.make_name(
+                                                               node.name) + "_castback",
                                                            to=x_dtype)
             ctx.set_dtype(cast_back_node.output[0], x_dtype)
             ctx.copy_shape(node.name, cast_back_node.output[0])
             ctx.set_dtype(node.output[0], mean_type)
 
-        consumers = [ctx.find_output_consumers(output_name) for output_name in node.output[1:]]
+        consumers = [ctx.find_output_consumers(
+            output_name) for output_name in node.output[1:]]
         if not any(consumers):
             new_output = [node.output[0]]
             # the setter makes a copy of new_output
@@ -1020,7 +1023,8 @@ class BatchNorm:
                 broadcast_scale_shape = ctx.make_const(
                     utils.make_name("broadcast_scale_shape"),
                     np.array(scale_shape + [1] * (inp_rank - first_axis_to_norm), dtype=np.int64)).output[0]
-                broadcast_scale = ctx.make_node("Reshape", [node.input[1], broadcast_scale_shape]).output[0]
+                broadcast_scale = ctx.make_node(
+                    "Reshape", [node.input[1], broadcast_scale_shape]).output[0]
                 ctx.replace_inputs(node, node.input[:1] + [broadcast_scale])
             else:
                 # Sometimes TF uses a BatchNorm op with training = True and exponential_avg_factor = 1.0
@@ -1029,19 +1033,28 @@ class BatchNorm:
                 utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
                                 node.name, tf_type)
                 dims = [0] + list(range(2, inp_rank))
-                avg = GraphBuilder(ctx).make_reduce_mean({"data": node.input[0], "axes": dims, "keepdims": True})
-                avg_squeezed = GraphBuilder(ctx).make_squeeze({"data": avg, "axes": dims})
+                avg = GraphBuilder(ctx).make_reduce_mean(
+                    {"data": node.input[0], "axes": dims, "keepdims": True})
+                avg_squeezed = GraphBuilder(ctx).make_squeeze(
+                    {"data": avg, "axes": dims})
                 sub = ctx.make_node("Sub", [node.input[0], avg]).output[0]
-                var_squeezed = GraphBuilder(ctx).make_reduce_sum_square({"data": sub, "axes": dims, "keepdims": False})
-    
+                var_squeezed = GraphBuilder(ctx).make_reduce_sum_square(
+                    {"data": sub, "axes": dims, "keepdims": False})
+
                 inp_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
-                dims_const = ctx.make_const(utils.make_name("axes_const"), np.array(dims, dtype=np.int64)).output[0]
-                reduce_dims = ctx.make_node("Gather", [inp_shape, dims_const]).output[0]
-                dims_product = GraphBuilder(ctx).make_reduce_prod({"data": reduce_dims, "axes": [0], "keepdims": False})
-                cnt_float = ctx.make_node("Cast", [dims_product], attr={'to': ctx.get_dtype(node.input[0])})
-    
-                pop_var_squeezed = ctx.make_node("Div", [var_squeezed, cnt_float.output[0]]).output[0]
-                ctx.replace_inputs(node, node.input[:3] + [avg_squeezed, pop_var_squeezed])
+                dims_const = ctx.make_const(utils.make_name(
+                    "axes_const"), np.array(dims, dtype=np.int64)).output[0]
+                reduce_dims = ctx.make_node(
+                    "Gather", [inp_shape, dims_const]).output[0]
+                dims_product = GraphBuilder(ctx).make_reduce_prod(
+                    {"data": reduce_dims, "axes": [0], "keepdims": False})
+                cnt_float = ctx.make_node("Cast", [dims_product], attr={
+                                          'to': ctx.get_dtype(node.input[0])})
+
+                pop_var_squeezed = ctx.make_node(
+                    "Div", [var_squeezed, cnt_float.output[0]]).output[0]
+                ctx.replace_inputs(
+                    node, node.input[:3] + [avg_squeezed, pop_var_squeezed])
         elif is_training:
             logger.warning("Node %s of type %s has is_training set to true, which is not supperted. "
                            "Please re-save the model with training set to false.",
