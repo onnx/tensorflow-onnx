@@ -62,9 +62,9 @@ def process_bilstm(g, bi_lstms):
                 attr[name] = attr_val
         # activation has to be took care, attr here is proto
         activations = [act.decode("utf-8")
-                       for act in lstm_bw.get_attr_value("activations")]
+                       for act in lstm_fw.get_attr_value("activations", [])]
         activations += [act.decode("utf-8")
-                        for act in lstm_fw.get_attr_value("activations")]
+                        for act in lstm_bw.get_attr_value("activations", [])]
         attr.update({"direction": direction, "activations": activations})
 
         bi_lstm_node = g.make_node("LSTM", lstm_inputs, attr=attr, output_count=3)
