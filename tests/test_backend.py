@@ -695,7 +695,9 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(conv, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: x_val}, rtol=0.08)
 
-    def test_depthwiseconv3d(self):
+    @check_tf_min_version("2.11")
+    @check_tf_max_version("2.12")
+    def test_depthwise_conv3d(self):
         strides = [1, 1, 1, 1, 1]
         dilations = [1, 1, 1, 1, 1]
         # in_channel is 5
