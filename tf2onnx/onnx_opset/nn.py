@@ -1714,14 +1714,22 @@ class MatrixBandPart:
             mask_matrix = ctx.make_node(op_type="Transpose", inputs=cast1.output)
         else:
             mask_matrix = squeeze
-        cast2 = ctx.make_node(op_type="Cast", inputs=mask_matrix.output,
-                              attr={"to": ctx.get_dtype(node.input[0])})
         shapes = node.output_shapes
         dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node(op_type="Mul", inputs=[cast2.output[0], node.input[0]],
-                      name=node.name, outputs=node.output, shapes=shapes,
-                      dtypes=dtypes)
+        if ctx.get_dtype(node.input[0]) == TensorProto.BOOL:
+            mask_matrix = ctx.make_node("Cast", inputs=mask_matrix.output, attr={'to': TensorProto.FLOAT}).output[0]
+            data = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.FLOAT}).output[0]
+            result = ctx.make_node(op_type="Mul", inputs=[mask_matrix, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
+            ctx.remove_node(node.name)
+            ctx.make_node("Cast", inputs=result.output, attr={'to': ctx.get_dtype(node.input[0])},
+                          name=node.name, outputs=node.output)
+        else:
+            cast2 = ctx.make_node(op_type="Cast", inputs=mask_matrix.output,
+                                  attr={"to": ctx.get_dtype(node.input[0])})
+            ctx.remove_node(node.name)
+            ctx.make_node(op_type="Mul", inputs=[cast2.output[0], node.input[0]],
+                          name=node.name, outputs=node.output, shapes=shapes,
+                          dtypes=dtypes)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -1746,10 +1754,18 @@ class MatrixBandPart:
                 identity_node = ctx.make_node("EyeLike", [const_of_shape]).output[0]
             shapes = node.output_shapes
             dtypes = node.output_dtypes
-            ctx.remove_node(node.name)
-            ctx.make_node(op_type="Mul", inputs=[identity_node, data],
-                          name=node.name, outputs=node.output, shapes=shapes,
-                          dtypes=dtypes)
+            if dtype == TensorProto.BOOL:
+                identity_node = ctx.make_node("Cast", [identity_node], attr={'to': TensorProto.FLOAT}).output[0]
+                data = ctx.make_node("Cast", [data], attr={'to': TensorProto.FLOAT}).output[0]
+                result = ctx.make_node(op_type="Mul", inputs=[identity_node, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
+                ctx.remove_node(node.name)
+                ctx.make_node("Cast", inputs=result.output, attr={'to': dtype},
+                              name=node.name, outputs=node.output)
+            else:
+                ctx.remove_node(node.name)
+                ctx.make_node(op_type="Mul", inputs=[identity_node, data],
+                              name=node.name, outputs=node.output, shapes=shapes,
+                              dtypes=dtypes)
             return
         zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, np.int64)).output[0]
         one_const = ctx.make_const(utils.make_name("one"), np.array(1, np.int64)).output[0]
@@ -1788,13 +1804,22 @@ class MatrixBandPart:
             cond = conditions[0]
         if len(conditions) == 2:
             cond = ctx.make_node("And", conditions).output[0]
-        mask = ctx.make_node("Cast", [cond], attr={'to': ctx.get_dtype(data)}).output[0]
         shapes = node.output_shapes
         dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node(op_type="Mul", inputs=[mask, data],
-                      name=node.name, outputs=node.output, shapes=shapes,
-                      dtypes=dtypes)
+        if dtype == TensorProto.BOOL:
+            # cast inputs to supported data types
+            mask = ctx.make_node("Cast", [cond], attr={'to': TensorProto.FLOAT}).output[0]
+            data = ctx.make_node("Cast", [data], attr={'to': TensorProto.FLOAT}).output[0]
+            result = ctx.make_node("Mul", inputs=[mask, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
+            ctx.remove_node(node.name)
+            ctx.make_node(op_type="Cast", inputs=result.output, attr={'to': dtype},
+                          name=node.name, outputs=node.output)
+        else:
+            mask = ctx.make_node("Cast", [cond], attr={'to': ctx.get_dtype(data)}).output[0]
+            ctx.remove_node(node.name)
+            ctx.make_node(op_type="Mul", inputs=[mask, data],
+                          name=node.name, outputs=node.output, shapes=shapes,
+                          dtypes=dtypes)
 
 
 def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
