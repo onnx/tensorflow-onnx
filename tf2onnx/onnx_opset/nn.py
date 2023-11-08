@@ -1716,16 +1716,16 @@ class MatrixBandPart:
             mask_matrix = squeeze
         shapes = node.output_shapes
         dtypes = node.output_dtypes
-        if ctx.get_dtype(node.input[0]) == TensorProto.BOOL:
+        dtype = ctx.get_dtype(node.input[0])
+        if dtype == TensorProto.BOOL:
             mask_matrix = ctx.make_node("Cast", inputs=mask_matrix.output, attr={'to': TensorProto.FLOAT}).output[0]
             data = ctx.make_node("Cast", [node.input[0]], attr={'to': TensorProto.FLOAT}).output[0]
             result = ctx.make_node(op_type="Mul", inputs=[mask_matrix, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
             ctx.remove_node(node.name)
-            ctx.make_node("Cast", inputs=result.output, attr={'to': ctx.get_dtype(node.input[0])},
-                          name=node.name, outputs=node.output)
+            ctx.make_node("Cast", inputs=result.output, attr={'to': dtype},
+                          name=node.name, outputs=node.output, dtypes=dtypes)
         else:
-            cast2 = ctx.make_node(op_type="Cast", inputs=mask_matrix.output,
-                                  attr={"to": ctx.get_dtype(node.input[0])})
+            cast2 = ctx.make_node(op_type="Cast", inputs=mask_matrix.output, attr={"to": dtype})
             ctx.remove_node(node.name)
             ctx.make_node(op_type="Mul", inputs=[cast2.output[0], node.input[0]],
                           name=node.name, outputs=node.output, shapes=shapes,
@@ -1813,7 +1813,7 @@ class MatrixBandPart:
             result = ctx.make_node("Mul", inputs=[mask, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
             ctx.remove_node(node.name)
             ctx.make_node(op_type="Cast", inputs=result.output, attr={'to': dtype},
-                          name=node.name, outputs=node.output)
+                          name=node.name, outputs=node.output, dtypes=dtypes)
         else:
             mask = ctx.make_node("Cast", [cond], attr={'to': ctx.get_dtype(data)}).output[0]
             ctx.remove_node(node.name)
