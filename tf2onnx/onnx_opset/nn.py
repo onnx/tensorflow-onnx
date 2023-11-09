@@ -1796,7 +1796,7 @@ class MatrixBandPart:
         if len(conditions) == 1:
             cond = conditions[0]
         if len(conditions) == 2:
-            cond = ctx.make_node("And", inputs=[c.output[0] for x in conditions])
+            cond = ctx.make_node("And", inputs=[c.output[0] for c in conditions])
         cls._apply_mask_and_transform(ctx, node, cond)
 
 
