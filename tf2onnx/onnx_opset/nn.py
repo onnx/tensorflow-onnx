@@ -1654,14 +1654,14 @@ class MatrixBandPart:
             # bool is not supported for 'Mul', so convert mask and input supported dtype
             mask = ctx.make_node("Cast", inputs=mask.output, attr={'to': TensorProto.FLOAT}).output[0]
             data = ctx.make_node("Cast", [data], attr={'to': TensorProto.FLOAT}).output[0]
-            result = ctx.make_node(op_type="Mul", inputs=[mask_matrix, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
+            result = ctx.make_node(op_type="Mul", inputs=[mask, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
             ctx.remove_node(node.name)
             ctx.make_node("Cast", inputs=result.output, attr={'to': dtype},
                           name=node.name, outputs=node.output, dtypes=dtypes)
         else:
-            cast = ctx.make_node(op_type="Cast", inputs=mask.output, attr={"to": dtype}).output[0]
+            mask = ctx.make_node(op_type="Cast", inputs=mask.output, attr={"to": dtype}).output[0]
             ctx.remove_node(node.name)
-            ctx.make_node(op_type="Mul", inputs=[cast, data],
+            ctx.make_node(op_type="Mul", inputs=[mask, data],
                           name=node.name, outputs=node.output, shapes=shapes,
                           dtypes=dtypes)
 
@@ -1780,14 +1780,14 @@ class MatrixBandPart:
             if ctx.get_dtype(num_upper) != TensorProto.INT64:
                 num_upper = ctx.make_node("Cast", [num_upper], attr={'to': TensorProto.INT64}).output[0]
             greater = ctx.make_node("Greater", [idx_diff, num_upper]).output[0]
-            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater])
             conditions.append(less_or_equal)
         if num_lower_const is None or num_lower_const >= 0:
             if ctx.get_dtype(num_lower) != TensorProto.INT64:
                 num_lower = ctx.make_node("Cast", [num_lower], attr={'to': TensorProto.INT64}).output[0]
             num_lower_neg = ctx.make_node("Neg", [num_lower]).output[0]
             greater = ctx.make_node("Greater", [num_lower_neg, idx_diff]).output[0]
-            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater])
             conditions.append(less_or_equal)
         if len(conditions) == 0:
             node.type = "Identity"
@@ -1796,7 +1796,7 @@ class MatrixBandPart:
         if len(conditions) == 1:
             cond = conditions[0]
         if len(conditions) == 2:
-            cond = ctx.make_node("And", conditions).output[0]
+            cond = ctx.make_node("And", inputs=[c.output[0] for x in conditions])
         cls._apply_mask_and_transform(ctx, node, cond)
 
 
