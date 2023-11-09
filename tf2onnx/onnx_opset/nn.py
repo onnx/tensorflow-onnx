@@ -1753,11 +1753,11 @@ class MatrixBandPart:
                 {'data': whole_shape, 'starts': [-2], 'ends': [int_max_val], 'axes': [0]})
         if num_lower_const == 0 and num_upper_const == 0:
             if rank == 2:
-                identity_node = ctx.make_node("EyeLike", [data]).output[0]
+                identity_node = ctx.make_node("EyeLike", [data])
             else:
                 zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
                 const_of_shape = ctx.make_node("ConstantOfShape", [shape], attr={'value': zero_tensor}).output[0]
-                identity_node = ctx.make_node("EyeLike", [const_of_shape]).output[0]
+                identity_node = ctx.make_node("EyeLike", [const_of_shape])
             cls._apply_mask_and_transform(ctx, node, identity_node)
             return
         zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, np.int64)).output[0]
