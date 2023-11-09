@@ -1757,7 +1757,8 @@ class MatrixBandPart:
             if dtype == TensorProto.BOOL:
                 identity_node = ctx.make_node("Cast", [identity_node], attr={'to': TensorProto.FLOAT}).output[0]
                 data = ctx.make_node("Cast", [data], attr={'to': TensorProto.FLOAT}).output[0]
-                result = ctx.make_node(op_type="Mul", inputs=[identity_node, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
+                result = ctx.make_node(op_type="Mul", inputs=[identity_node, data], shapes=shapes,
+                                       dtypes=[TensorProto.FLOAT])
                 ctx.remove_node(node.name)
                 ctx.make_node("Cast", inputs=result.output, attr={'to': dtype},
                               name=node.name, outputs=node.output)
