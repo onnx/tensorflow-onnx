@@ -4104,7 +4104,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x, _INPUT1: input_y})
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x.astype(np.int32), _INPUT1: input_y}, as_session=True,
                             graph_validator=lambda g: check_op_count(g, "ConstantOfShape", 1, disabled=False))
-    
+
     @check_tf_max_version("2.13.1")
     @check_opset_min_version(9, "ConstantOfShape")
     @check_opset_max_version(9, "ConstantOfShape")
