@@ -3926,7 +3926,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 return tf.identity(res, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: input_val, _INPUT1: low_val, _INPUT2: high_val})
 
-    @check_opset_min_version(11, "CumSum")
     def test_matrix_band_part_bool(self):
         input_val = np.random.choice([False, True], size=(10, 15))
         def func(input_x):
