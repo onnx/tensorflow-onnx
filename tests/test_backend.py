@@ -4113,6 +4113,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_x.astype(np.int32), _INPUT1: input_y}, as_session=True,
                             graph_validator=lambda g: check_op_count(g, "ConstantOfShape", 1, disabled=False))
 
+    def test_ones_like(self):
+        input_x = np.random.random_sample([3, 16, 16]).astype(np.float32)
+        input_y = np.array([16, 16, 3]).astype(np.int64)
+
+        def func(x, y):
+            z = tf.reshape(x, y)
+            return tf.ones_like(z, name=_TFOUTPUT)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: input_x, _INPUT1: input_y})
+
     @check_opset_min_version(9, "is_nan")
     def test_isnan(self):
         # only compatible with dtype `float32`
