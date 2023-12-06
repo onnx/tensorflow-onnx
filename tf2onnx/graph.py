@@ -267,7 +267,11 @@ class Node(object):
         return attr_str.decode(encoding)
 
     def set_attr(self, name, value):
-        self.attr[name] = helper.make_attribute(name, value)
+        if not isinstance(value, bytes) and isinstance(value, collections.abc.Sequence) and len(list(value)) == 0:
+            attr_type = AttributeProto.INTS
+            self.attr[name] = helper.make_attribute(name, value, attr_type=attr_type)
+        else:
+            self.attr[name] = helper.make_attribute(name, value)
 
     def set_attr_onnx(self, value):
         self.attr[value.name] = value
