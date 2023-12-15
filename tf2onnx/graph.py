@@ -644,7 +644,7 @@ class Graph(object):
             n = self.get_node_by_output_in_current_graph(o)
             utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
 
-        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
+        onnx_node = utils.make_onnx_node_with_attr(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
         for name2 in onnx_node.input:
             self._register_input_name(name2, onnx_node)
