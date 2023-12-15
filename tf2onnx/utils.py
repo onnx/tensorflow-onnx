@@ -190,7 +190,8 @@ def make_onnx_node_with_attr(
 ) -> NodeProto:
     """
     Since ONNX 1.15.0, helper.make_attribute() does not support empty iterators.
-    But empty lists are expected for some attributes like shape, explicit_paddings, etc.
+    But tf2onnx will leverage ONNX attributes to transfer some extra data along with the ONNX node 
+    across different conversion stages.
     This function removes empty lists from kwargs and adds them back as INTS attributes by default.
     """
     attr_empty_lists = {}
