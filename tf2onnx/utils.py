@@ -7,6 +7,7 @@ tf2onnx.utils - misc utilities for tf2onnx
 
 import os
 import collections
+import inspect
 import re
 import shutil
 import tempfile
@@ -179,6 +180,8 @@ def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
         **kwargs
     )
 
+_attr_type_in_signature = inspect.signature(helper.make_attribute).parameters.get("attr_type", None) is not None
+
 
 def make_onnx_node_with_attr(
     op_type: str,
@@ -209,7 +212,10 @@ def make_onnx_node_with_attr(
 
     if attr_empty_lists:
         for key, value in attr_empty_lists.items():
-            onnx_node.attribute.extend([helper.make_attribute(key, value, attr_type=AttributeProto.INTS)])
+            if _attr_type_in_signature:
+                onnx_node.attribute.extend([helper.make_attribute(key, value, attr_type=AttributeProto.INTS)])
+            else:
+                onnx_node.attribute.extend([helper.make_attribute(key, value)])
 
     return onnx_node
 
