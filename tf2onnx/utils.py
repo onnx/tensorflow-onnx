@@ -15,18 +15,20 @@ import types
 import zipfile
 import logging
 
+from typing import Any, Optional, Sequence
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import numpy as np
 from google.protobuf import text_format
 from onnx import helper, onnx_pb, defs, numpy_helper, AttributeProto, ModelProto, NodeProto, __version__
-from typing import Any, Optional, Sequence
-
 from . import constants
 
 
 logger = logging.getLogger(__file__)
+
+
+# pylint: unexpected-keyword-arg
 
 
 #
@@ -187,7 +189,7 @@ def make_onnx_node_with_attr(op_type: str, inputs: Sequence[str], outputs: Seque
                              domain: Optional[str] = None, **kwargs: Any) -> NodeProto:
     """
     Since ONNX 1.15.0, helper.make_attribute() does not support empty iterators.
-    But tf2onnx will leverage ONNX attributes to transfer some extra data along with the ONNX node 
+    But tf2onnx will leverage ONNX attributes to transfer some extra data along with the ONNX node
     across different conversion stages.
     This function removes empty lists from kwargs and adds them back as INTS attributes by default.
     """
@@ -199,7 +201,7 @@ def make_onnx_node_with_attr(op_type: str, inputs: Sequence[str], outputs: Seque
                 attr_empty_lists[key] = value
 
     if attr_empty_lists:
-        for key in attr_empty_lists.keys():
+        for key, _ in attr_empty_lists.items():
             del kwargs[key]
 
     onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **kwargs)

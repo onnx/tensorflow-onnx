@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 # todo(pengwa): remove protected-access later
-# pylint: disable=broad-except,protected-access
+# pylint: disable=broad-except,protected-access,unexpected-keyword-arg
 
 class ExternalTensorStorage():
     """Passed into graph and node methods to accumulate tensors to save externally"""
@@ -267,8 +267,8 @@ class Node(object):
         return attr_str.decode(encoding)
 
     def set_attr(self, name, value):
-        if (utils._attr_type_in_signature and not isinstance(value, bytes)
-        and isinstance(value, collections.abc.Sequence) and len(list(value)) == 0):
+        if utils._attr_type_in_signature and not isinstance(value, bytes) and \
+            isinstance(value, collections.abc.Sequence) and len(list(value)) == 0:
             attr_type = AttributeProto.INTS
             self.attr[name] = helper.make_attribute(name, value, attr_type=attr_type)
         else:
