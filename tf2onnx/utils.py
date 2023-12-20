@@ -183,14 +183,8 @@ def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
 _attr_type_in_signature = inspect.signature(helper.make_attribute).parameters.get("attr_type", None) is not None
 
 
-def make_onnx_node_with_attr(
-    op_type: str,
-    inputs: Sequence[str],
-    outputs: Sequence[str],
-    name: Optional[str] = None,
-    domain: Optional[str] = None,
-    **kwargs: Any,
-) -> NodeProto:
+def make_onnx_node_with_attr(op_type: str, inputs: Sequence[str], outputs: Sequence[str], name: Optional[str] = None,
+                             domain: Optional[str] = None, **kwargs: Any) -> NodeProto:
     """
     Since ONNX 1.15.0, helper.make_attribute() does not support empty iterators.
     But tf2onnx will leverage ONNX attributes to transfer some extra data along with the ONNX node 
