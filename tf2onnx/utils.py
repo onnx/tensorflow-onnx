@@ -28,7 +28,7 @@ from . import constants
 logger = logging.getLogger(__file__)
 
 
-# pylint: unexpected-keyword-arg
+# pylint: disable=unexpected-keyword-arg
 
 
 #
