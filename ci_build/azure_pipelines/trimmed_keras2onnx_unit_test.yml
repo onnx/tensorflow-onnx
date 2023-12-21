@@ -11,21 +11,21 @@ jobs:
       ############ TF Keras Unit Tests ############
       Python37-tf-1.15:
         python.version: '3.7' # Max version that supports tf 1.15
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.14.1 # Max version that supports python 3.7
         TENSORFLOW_PATH: tensorflow==1.15.0
         INSTALL_ORT: pip install onnxruntime==1.14.1 # Max version that supports python 3.7
         INSTALL_NUMPY: pip install numpy==1.19.0
 
       Python38-tf2-oldest:
         python.version: '3.8'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         TENSORFLOW_PATH: tensorflow==2.8.0
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
 
       Python38-tf2-2.13:
         python.version: '3.8'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         TENSORFLOW_PATH: tensorflow==2.13.0
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
@@ -33,11 +33,12 @@ jobs:
       ############ Pure Keras Unit Tests ############
       Keras-Py37-tf-1.15:
         python.version: '3.7' # Max version that supports tf 1.15
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.14.1 # Max version that supports python 3.7
         KERAS: keras==2.4.3
         TENSORFLOW_PATH: tensorflow==1.15.0
         INSTALL_ORT: pip install onnxruntime==1.14.1 # Max version that supports python 3.7
         INSTALL_NUMPY: pip install numpy==1.19.0
+
 
   steps:
   - template: 'templates/keras2onnx_unit_test.yml'
@@ -52,21 +53,21 @@ jobs:
       ############ TF Keras Unit Tests ############
       Python37-tf-1.15:
         python.version: '3.7' # Max version that supports tf 1.15
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.14.1 # Max version that supports python 3.7
         TENSORFLOW_PATH: tensorflow==1.15.0
         INSTALL_ORT: pip install onnxruntime==1.14.1 # Max version that supports python 3.7
         INSTALL_NUMPY: pip install numpy==1.19.0
 
       Python38-tf2-oldest:
         python.version: '3.8'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         TENSORFLOW_PATH: tensorflow==2.8.0
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
 
       Python38-tf2-2.13:
         python.version: '3.8'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         TENSORFLOW_PATH: tensorflow==2.13.0
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
@@ -74,11 +75,12 @@ jobs:
       ############ Pure Keras Unit Tests ############
       Keras-Py37-tf-1.15:
         python.version: '3.7' # Max version that supports tf 1.15
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.14.1 # Max version that supports python 3.7
         KERAS: keras==2.4.3
         TENSORFLOW_PATH: tensorflow==1.15.0
         INSTALL_ORT: pip install onnxruntime==1.14.1 # Max version that supports python 3.7
         INSTALL_NUMPY: pip install numpy==1.19.0
+
 
   steps:
   - template: 'templates/keras2onnx_unit_test.yml'

@@ -8,6 +8,7 @@ stages:
         platforms: ['linux', 'windows']
         python_versions: [3.7']
         tf_versions: ['1.15.5']
+        onnx_versions: ['1.14.1'] # Max version that supports python 3.7
         onnx_backends: {onnxruntime: ['nightly']}
         job:
           steps:

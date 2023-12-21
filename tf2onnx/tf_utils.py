@@ -14,8 +14,9 @@ import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2, graph_pb2
 from tensorflow.python.framework import tensor_util
 
-from onnx import helper, onnx_pb, numpy_helper
+from onnx import onnx_pb, numpy_helper
 
+from tf2onnx import utils
 from tf2onnx.utils import make_sure, is_tf_const_op, port_name, map_onnx_to_numpy_type
 from . import logging
 
@@ -459,7 +460,7 @@ def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=Non
 
         if takeit:
             try:
-                onnx_node = helper.make_node(node_type, input_names, output_names, name=node.name, **attr)
+                onnx_node = utils.make_onnx_node_with_attr(node_type, input_names, output_names, name=node.name, **attr)
                 onnx_nodes.append(onnx_node)
             except Exception as ex:
                 logger.error("pass1 convert failed for %s, ex=%s", node, ex)

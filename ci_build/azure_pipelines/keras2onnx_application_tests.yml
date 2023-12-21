@@ -10,7 +10,7 @@ jobs:
     matrix:
       Python37-tf-1.15:
         python.version: '3.7' # Max version that supports tf 1.15
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.14.1 # Max version that supports python 3.7
         INSTALL_KERAS: pip install keras==2.3.1
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
@@ -23,7 +23,7 @@ jobs:
 
       Python39-tf2-2.12:
         python.version: '3.9'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.12.0
@@ -35,7 +35,7 @@ jobs:
 
       Python310-tf2-2.11:
         python.version: '3.10'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.11.0
@@ -47,7 +47,7 @@ jobs:
 
       Python38-tf2-2.10:
         python.version: '3.8'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.10.0
@@ -59,7 +59,7 @@ jobs:
 
       Python310-tf2-oldest:
         python.version: '3.10'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.8.0
@@ -82,7 +82,7 @@ jobs:
     matrix:
       Python37-tf-1.15:
         python.version: '3.7' # Max version that supports tf 1.15
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.14.1 # Max version that supports python 3.7
         INSTALL_KERAS: pip install keras==2.3.1
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
@@ -95,7 +95,7 @@ jobs:
 
       Python39-tf2-2.12:
         python.version: '3.9'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.12.0
@@ -107,7 +107,7 @@ jobs:
 
       Python310-tf2-2.11:
         python.version: '3.10'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.11.0
@@ -119,7 +119,7 @@ jobs:
 
       Python38-tf2-2.10:
         python.version: '3.8'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.10.0
@@ -131,7 +131,7 @@ jobs:
 
       Python310-tf2-oldest:
         python.version: '3.10'
-        ONNX_PATH: onnx==1.14.1
+        ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.8.0
