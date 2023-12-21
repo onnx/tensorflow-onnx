@@ -269,8 +269,7 @@ class Node(object):
     def set_attr(self, name, value):
         if utils._attr_type_in_signature and not isinstance(value, bytes) and \
             isinstance(value, collections.abc.Sequence) and len(list(value)) == 0:
-            attr_type = AttributeProto.INTS
-            self.attr[name] = helper.make_attribute(name, value, attr_type=attr_type)
+            self.attr[name] = helper.make_attribute(name, value, attr_type=AttributeProto.INTS)
         else:
             self.attr[name] = helper.make_attribute(name, value)
 

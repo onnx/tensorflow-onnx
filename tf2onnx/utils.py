@@ -191,27 +191,25 @@ def make_onnx_node_with_attr(op_type: str, inputs: Sequence[str], outputs: Seque
     Since ONNX 1.15.0, helper.make_attribute() does not support empty iterators.
     But tf2onnx will leverage ONNX attributes to transfer some extra data along with the ONNX node
     across different conversion stages.
-    This function removes empty lists from kwargs and adds them back as INTS attributes by default.
+    This function removes empty lists from kwargs and adds them back with attr_type=INTS attributes by default.
     """
-    attr_empty_lists = {}
-    if kwargs:
-        for key, value in sorted(kwargs.items()):
-            if not isinstance(value, bytes) and isinstance(value, collections.abc.Sequence) and len(list(value)) == 0:
-                print(f"{key} is set to INTS type")
-                attr_empty_lists[key] = value
+    if _attr_type_in_signature:
+        attr_empty_lists = {}
+        valid_attrs = {}
+        if kwargs:
+            for key, value in sorted(kwargs.items()):
+                if not isinstance(value, bytes) and isinstance(value, collections.abc.Sequence) and len(list(value)) == 0:
+                    attr_empty_lists[key] = value
+                else:
+                    valid_attrs[key] = value
 
-    if attr_empty_lists:
-        for key, _ in attr_empty_lists.items():
-            del kwargs[key]
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **valid_attrs)
 
-    onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **kwargs)
-
-    if attr_empty_lists:
-        for key, value in attr_empty_lists.items():
-            if _attr_type_in_signature:
+        if attr_empty_lists:
+            for key, value in attr_empty_lists.items():
                 onnx_node.attribute.extend([helper.make_attribute(key, value, attr_type=AttributeProto.INTS)])
-            else:
-                onnx_node.attribute.extend([helper.make_attribute(key, value)])
+    else:
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **kwargs)
 
     return onnx_node
 
