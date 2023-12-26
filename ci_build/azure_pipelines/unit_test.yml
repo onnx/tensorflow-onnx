@@ -30,6 +30,16 @@ stages:
           - template: 'unit_test.yml'
         report_coverage: 'True'
 
+    - template: 'templates/job_generator.yml'
+      parameters:
+        platforms: ['linux', 'windows']
+        python_versions: ['3.10']
+        tf_versions: ['2.8.0', '2.13.0']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
     # TODO: Enable these tests once https://github.com/onnx/tensorflow-onnx/issues/2118 is fixed.
     # - template: 'templates/job_generator.yml'
     #   parameters:
