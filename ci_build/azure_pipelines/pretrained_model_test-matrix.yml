@@ -41,7 +41,7 @@ jobs:
     platforms: ['linux', 'windows']
     python_versions: ['3.8']
     tf_versions: ['2.8.0', '2.13.0']
-    onnx_opsets: ['14']
+    onnx_opsets: ['17', '16', '14']
     job:
       steps:
       - template: 'pretrained_model_test.yml'
