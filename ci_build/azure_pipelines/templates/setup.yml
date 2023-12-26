@@ -37,7 +37,7 @@ steps:
         then
           pip install "tensorflow-text>=2.10,<2.14"
       else
-        pip install tensorflow-text<=$(CI_TF_VERSION)
+        pip install "tensorflow-text<=$(CI_TF_VERSION)"
       fi
 
       if [[ $CI_TF_VERSION < 2.8 ]] ;
