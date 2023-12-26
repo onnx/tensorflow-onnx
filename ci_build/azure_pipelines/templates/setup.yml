@@ -39,6 +39,7 @@ steps:
       pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
     fi
 
+    pip uninstall -y tensorflow
     pip install $(CI_PIP_TF_NAME)
     pip uninstall -y protobuf
     pip install "protobuf~=3.20"
