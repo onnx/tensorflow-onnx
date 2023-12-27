@@ -23,7 +23,17 @@ steps:
     if [[ $CI_TF_VERSION == 2.* ]] ;
     then
       pip install onnxruntime-extensions
-      pip install "tensorflow-text<=$(CI_TF_VERSION)"
+
+      # Maximum version of tensorflow-text in python 3.8 is 2.13.
+      if [[ $CI_PYTHON_VERSION > 3.8 ]] || [[ $CI_TF_VERSION < 2.14 ]] ;
+      then
+        pip install "tensorflow-text~=$(CI_TF_VERSION)"
+      fi
+
+      if [[ $CI_PYTHON_VERSION == 3.8 ]] ;
+      then
+        pip install "tensorflow-text<=$(CI_TF_VERSION)"
+      fi
 
       if [[ $CI_TF_VERSION < 2.8 ]] ;
       then
