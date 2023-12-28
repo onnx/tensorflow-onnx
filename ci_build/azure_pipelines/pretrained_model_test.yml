@@ -17,7 +17,7 @@ jobs:
   parameters:
     platforms: ['linux']
     python_versions: ['3.8']
-    tf_versions: ['2.8.0', '2.13.0']
+    tf_versions: ['2.9.0', '2.14.0']
     onnx_opsets: ['18', '15']
     job:
       steps:
@@ -27,7 +27,7 @@ jobs:
   parameters:
     platforms: ['linux']
     python_versions: ['3.10']
-    tf_versions: ['2.8.0', '2.13.0']
+    tf_versions: ['2.9.0', '2.14.0']
     onnx_opsets: ['18', '15']
     job:
       steps:
