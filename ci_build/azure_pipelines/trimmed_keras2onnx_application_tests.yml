@@ -38,7 +38,7 @@ jobs:
         ONNX_PATH: onnx==1.15.0
         INSTALL_KERAS:
         UNINSTALL_KERAS:
-        INSTALL_TENSORFLOW: pip install tensorflow==2.14.0
+        INSTALL_TENSORFLOW: pip install tensorflow==2.13.0
         INSTALL_ORT: pip install onnxruntime==1.16.3
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.2.0

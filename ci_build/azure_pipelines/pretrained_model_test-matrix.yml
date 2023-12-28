@@ -18,7 +18,17 @@ jobs:
   parameters:
     platforms: ['windows']
     python_versions: ['3.8']
-    tf_versions: ['2.9.0', '2.14.0']
+    tf_versions: ['2.9.0']
+    onnx_opsets: ['18', '17', '16', '15']
+    job:
+      steps:
+      - template: 'pretrained_model_test.yml'
+
+- template: 'templates/job_generator.yml'
+  parameters:
+    platforms: ['windows']
+    python_versions: ['3.9']
+    tf_versions: ['2.14.0']
     onnx_opsets: ['18', '17', '16', '15']
     job:
       steps:
@@ -40,7 +50,17 @@ jobs:
   parameters:
     platforms: ['linux', 'windows']
     python_versions: ['3.8']
-    tf_versions: ['2.9.0', '2.14.0']
+    tf_versions: ['2.9.0']
+    onnx_opsets: ['17', '16', '14']
+    job:
+      steps:
+      - template: 'pretrained_model_test.yml'
+
+- template: 'templates/job_generator.yml'
+  parameters:
+    platforms: ['linux', 'windows']
+    python_versions: ['3.9']
+    tf_versions: ['2.14.0']
     onnx_opsets: ['17', '16', '14']
     job:
       steps:

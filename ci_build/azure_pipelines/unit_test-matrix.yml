@@ -7,7 +7,21 @@ stages:
       parameters:
         python_versions: ['3.8']
         platforms: ['linux', 'windows']
-        tf_versions: ['2.9.0', '2.14.0']
+        tf_versions: ['2.9.0']
+        onnx_opsets: ['17', '16', '14']
+        skip_tflite_tests: 'False'
+        skip_tf_tests: 'False'
+        skip_tfjs_tests: 'True'
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        python_versions: ['3.9']
+        platforms: ['linux', 'windows']
+        tf_versions: ['2.14.0']
         onnx_opsets: ['17', '16', '14']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'False'
