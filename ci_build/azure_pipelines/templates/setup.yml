@@ -5,14 +5,7 @@ steps:
     set -ex
     pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
     pip install $(CI_PIP_ONNX_NAME)
-
-    # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
-    if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
-    then 
-        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
-    else
-        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy==1.23.4
-    fi
+    pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
@@ -24,11 +17,6 @@ steps:
     then
       pip install onnxruntime-extensions
       pip install "tensorflow-text<=$(CI_TF_VERSION)"
-
-      if [[ $CI_TF_VERSION < 2.8 ]] ;
-      then
-        pip install wrapt==1.14.1
-      fi
     fi
 
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
