@@ -8,13 +8,6 @@ jobs:
   strategy:
     matrix:
       ############ TF Keras Unit Tests ############
-      Python39-tf2-2.14:
-        python.version: '3.9'
-        ONNX_PATH: onnx==1.15.0
-        TENSORFLOW_PATH: tensorflow==2.14.0
-        INSTALL_ORT: pip install onnxruntime==1.15.0
-        INSTALL_NUMPY:
-
       Python310-tf2-2.13:
         python.version: '3.10'
         ONNX_PATH: onnx==1.15.0
@@ -70,13 +63,6 @@ jobs:
   strategy:
     matrix:
       ############ TF Keras Unit Tests ############
-      Python39-tf2-2.14:
-        python.version: '3.9'
-        ONNX_PATH: onnx==1.15.0
-        TENSORFLOW_PATH: tensorflow==2.14.0
-        INSTALL_ORT: pip install onnxruntime==1.15.0
-        INSTALL_NUMPY:
-
       Python310-tf2-2.13:
         python.version: '3.10'
         ONNX_PATH: onnx==1.15.0

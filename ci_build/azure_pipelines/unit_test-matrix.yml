@@ -21,7 +21,7 @@ stages:
       parameters:
         python_versions: ['3.9']
         platforms: ['linux', 'windows']
-        tf_versions: ['2.14.0']
+        tf_versions: ['2.13.0']
         onnx_opsets: ['17', '16', '14']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'False'
@@ -68,7 +68,7 @@ stages:
       parameters:
         platforms: ['linux', 'windows']
         python_versions: ['3.10']
-        tf_versions: ['2.9.0', '2.13.0', '2.14.0']
+        tf_versions: ['2.9.0', '2.13.0']
         job:
           steps:
           - template: 'unit_test.yml'
