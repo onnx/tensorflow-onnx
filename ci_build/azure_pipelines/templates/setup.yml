@@ -17,11 +17,6 @@ steps:
     then
       pip install onnxruntime-extensions
       pip install "tensorflow-text<=$(CI_TF_VERSION)"
-
-      if [[ $CI_TF_VERSION < 2.8 ]] ;
-      then
-        pip install wrapt==1.14.1
-      fi
     fi
 
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
@@ -34,8 +29,8 @@ steps:
 
     pip uninstall -y tensorflow
     pip install $(CI_PIP_TF_NAME)
-    pip uninstall -y protobuf
-    pip install "protobuf~=3.20"
+    # pip uninstall -y protobuf
+    # pip install "protobuf~=3.20"
 
     python setup.py install
 
