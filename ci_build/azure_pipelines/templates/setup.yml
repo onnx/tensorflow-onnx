@@ -5,7 +5,7 @@ steps:
     set -ex
     pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
     pip install $(CI_PIP_ONNX_NAME)
-    pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy==1.23.4
+    pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
