@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import requires_custom_ops, check_tf_min_version, check_opset_min_version
+from common import requires_custom_ops, check_tf_min_version, check_opset_min_version, get_test_config
 from tf2onnx import utils
 from tf2onnx import constants
 
@@ -118,6 +118,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
             return tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
+    @unittest.skipIf(get_test_config().is_windows, "tensorflow-text lacks versions in windows.")
     @requires_custom_ops("RegexSplitWithOffsets")
     @check_tf_min_version("2.3", "tensorflow_text")
     def test_regex_split_with_offsets(self):

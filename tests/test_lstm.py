@@ -776,6 +776,30 @@ class LSTMTests(Tf2OnnxBackendTestBase):
         self.run_test_case(func, {"input:0": x_val}, [], ["output:0", "output1:0"], rtol=1e-05, atol=1e-06)
 
     @check_tf_min_version("2.0")
+    def test_keras_bilstm_recurrent_activation_is_hard_sigmoid(self):
+        in_shape = [10, 3]
+        x_val = np.random.uniform(size=[2, 10, 3]).astype(np.float32)
+
+        model_in = tf.keras.layers.Input(tuple(in_shape), batch_size=2)
+        x = tf.keras.layers.Bidirectional(
+            tf.keras.layers.LSTM(
+                units=5,
+                return_sequences=True,
+                return_state=True,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43),
+                recurrent_activation="hard_sigmoid",
+            )
+        )(model_in)
+        model = tf.keras.models.Model(inputs=model_in, outputs=x)
+
+        def func(x):
+            y = model(x)
+            return tf.identity(y[0], name="output"), tf.identity(y[1], name="output1")
+        self.run_test_case(func, {"input:0": x_val}, [], ["output:0", "output1:0"], rtol=1e-05, atol=1e-06)
+
+    @check_tf_min_version("2.0")
     @skip_tfjs("TFJS converts model incorrectly")
     def test_keras_lstm_sigmoid_dropout(self):
         in_shape = [16, 16]

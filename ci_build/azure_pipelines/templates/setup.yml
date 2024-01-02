@@ -4,16 +4,8 @@ steps:
 - bash: |
     set -ex
     pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
-    pip install $(CI_PIP_TF_NAME)
     pip install $(CI_PIP_ONNX_NAME)
-
-    # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
-    if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
-    then 
-        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
-    else
-        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy==1.23.4
-    fi
+    pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy
 
     if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
@@ -24,46 +16,7 @@ steps:
     if [[ $CI_TF_VERSION == 2.* ]] ;
     then
       pip install onnxruntime-extensions
-
-      if [[ $CI_TF_VERSION == 2.3* ]] ;
-      then
-        pip install tensorflow-text==${CI_TF_VERSION}
-      fi
-      if [[ $CI_TF_VERSION == 2.4* ]] ;
-      then
-        pip install tensorflow-text==${CI_TF_VERSION}
-      fi
-      if [[ $CI_TF_VERSION == 2.5* ]] ;
-      then
-        pip install "tensorflow-text>=2.5,<2.6"
-      fi
-      if [[ $CI_TF_VERSION == 2.6* ]] ;
-      then
-        pip install "tensorflow-text>=2.6,<2.7"
-      fi
-      if [[ $CI_TF_VERSION == 2.7* ]] ;
-      then
-        pip install "tensorflow-text>=2.7,<2.8"
-      fi
-      if [[ $CI_TF_VERSION == 2.8* ]] ;
-      then
-        pip install "tensorflow-text>=2.8,<2.9"
-      fi
-      if [[ $CI_TF_VERSION == 2.9* ]] ;
-        then
-          pip install "tensorflow-text>=2.9,<2.10"
-      fi
-      if [[ $CI_TF_VERSION == 2.10* ]] || [[ $CI_TF_VERSION == 2.11* ]] ;
-        then
-          pip install "tensorflow-text>=2.10,<2.14"
-      else
-        pip install tensorflow-text
-      fi
-
-      if [[ $CI_TF_VERSION < 2.8 ]] ;
-      then
-        pip install wrapt==1.14.1
-      fi
+      pip install "tensorflow-text<=$(CI_TF_VERSION)"
     fi
 
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
@@ -74,6 +27,8 @@ steps:
       pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
     fi
 
+    pip uninstall -y tensorflow
+    pip install $(CI_PIP_TF_NAME)
     pip uninstall -y protobuf
     pip install "protobuf~=3.20"
 
