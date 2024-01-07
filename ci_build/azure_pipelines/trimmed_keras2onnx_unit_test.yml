@@ -59,11 +59,11 @@ jobs:
     parameters:
       platform: 'linux'
 
-- job: 'Win'
-  pool:
-    vmImage: 'windows-2019'
-  strategy:
-    matrix:
+# - job: 'Win'
+#   pool:
+#     vmImage: 'windows-2019'
+#   strategy:
+#     matrix:
       # ############ TF Keras Unit Tests ############
       # Python37-tf-1.15:
       #   python.version: '3.7' # Max version that supports tf 1.15
@@ -96,7 +96,7 @@ jobs:
       #   INSTALL_NUMPY: pip install numpy==1.19.0
 
 
-  steps:
-  - template: 'templates/keras2onnx_unit_test.yml'
-    parameters:
-      platform: 'windows'
+  # steps:
+  # - template: 'templates/keras2onnx_unit_test.yml'
+  #   parameters:
+  #     platform: 'windows'
