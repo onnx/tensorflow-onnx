@@ -59,7 +59,7 @@ except ImportError:
 
 if is_tf2():
     convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
-    from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
+    from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2, convert_variables_to_constants_v2_as_graph
 else:
     from tensorflow.python.framework.graph_util import convert_variables_to_constants
 
@@ -267,7 +267,7 @@ def from_function(func, input_names, output_names, large_model=False):
         if get_tf_version() < Version("2.2"):
             frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
         else:
-            frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
+            frozen_func, graph_def = convert_variables_to_constants_v2_as_graph(func, lower_control_flow=False, aggressive_inlining=True)
     except ValueError as e:
         if "incompatible with expected resource" in str(e):
             bad_graph_def = convert_variables_to_constants_large_model(func)
@@ -277,7 +277,7 @@ def from_function(func, input_names, output_names, large_model=False):
             raise e
     else:
         graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
-    graph_def = fix_freezing_errors_part2(graph_def)
+    # graph_def = fix_freezing_errors_part2(graph_def)
 
     # output_names = [i.name for i in frozen_func.outputs]
     with tf.Graph().as_default() as tf_graph:
@@ -636,14 +636,13 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
 
 def from_keras(model_path, input_names, output_names):
     """Load keras model - experimental for now."""
-    from tensorflow.python import keras as _keras
-    from tensorflow.python.eager import context
+    from tensorflow import keras as _keras
     from tensorflow.python.keras.saving import saving_utils as _saving_utils
 
     # Handles Keras when Eager mode is enabled.
     custom_objects = None
     with tf.device("/cpu:0"):
-        if context.executing_eagerly():
+        if tf.executing_eagerly():
             _keras.backend.clear_session()
             _keras.backend.set_learning_phase(False)
             keras_model = _keras.models.load_model(model_path, custom_objects)
