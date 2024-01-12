@@ -8,7 +8,6 @@ import uuid
 from packaging.version import Version
 
 import tensorflow as tf
-import numpy as np
 from google.protobuf.message import DecodeError
 from tensorflow.core.framework import tensor_pb2
 from tensorflow.core.protobuf import saved_model_pb2
@@ -486,6 +485,7 @@ def _get_resources_from_captures(concrete_func, graph_captures):
     placeholder_to_resource = {}
     keys_to_be_removed = []
 
+    # pylint: disable=protected-access
     variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
     for k, v in list(graph_captures.items()):
         val_tensor, name_tensor = v
