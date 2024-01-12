@@ -80,7 +80,6 @@ class ApiTests(Tf2OnnxBackendTestBase):
     @requires_custom_ops()
     @check_tf_min_version("1.15")
     @check_opset_min_version(11, "SparseToDense")
-    @skip_tf_versions(["2.1", "2.13"], "TF ['2.1', '2.13'] keras model doesn't work; table not initialized")
     def test_keras_hashtable(self):
 
         feature_cols = [

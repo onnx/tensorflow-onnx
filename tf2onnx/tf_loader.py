@@ -267,7 +267,7 @@ def from_function(func, input_names, output_names, large_model=False):
         if get_tf_version() < Version("2.2"):
             frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False)
         else:
-            frozen_func, graph_def = convert_variables_to_constants_v2_as_graph(func, lower_control_flow=False, aggressive_inlining=True)
+            frozen_func = convert_variables_to_constants_v2(func, lower_control_flow=False, aggressive_inlining=True)
     except ValueError as e:
         if "incompatible with expected resource" in str(e):
             bad_graph_def = convert_variables_to_constants_large_model(func)
@@ -277,7 +277,7 @@ def from_function(func, input_names, output_names, large_model=False):
             raise e
     else:
         graph_def = frozen_func.graph.as_graph_def(add_shapes=True)
-    # graph_def = fix_freezing_errors_part2(graph_def)
+    graph_def = fix_freezing_errors_part2(graph_def)
 
     # output_names = [i.name for i in frozen_func.outputs]
     with tf.Graph().as_default() as tf_graph:
@@ -481,6 +481,25 @@ def _get_hash_table_info_from_trackable(trackable, table_info,
                 placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = new_table_info[0]
 
 
+def _get_resources_from_captures(concrete_func, graph_captures):
+    resource_id_to_placeholder = {}
+    placeholder_to_resource = {}
+    keys_to_be_removed = []
+
+    variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
+    for k, v in list(graph_captures.items()):
+        val_tensor, name_tensor = v
+        if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
+            resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
+            placeholder_to_resource[name_tensor.name.split(':')[0]] = val_tensor
+            keys_to_be_removed.append(k)
+            for i in reversed(range(len(concrete_func._captured_inputs))):
+                if concrete_func._captured_inputs[i] is val_tensor:
+                    concrete_func._captured_inputs.pop(i)
+
+    return resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed
+
+
 def _remove_non_variable_resources_from_captures(concrete_func):
     """
     Removes all non-variable resources (such as tables) from a function's captured inputs to prevent tf from
@@ -494,22 +513,25 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
         graph_captures_copy = concrete_func.graph._captures.copy()
         func_captures_copy = concrete_func._captured_inputs.copy()
-        variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
-        for k, v in list(concrete_func.graph._captures.items()):
-            val_tensor, name_tensor = v
-            if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
-                resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
-                placeholder_to_resource[name_tensor.name.split(':')[0]] = val_tensor
-                del concrete_func.graph._captures[k]
-                for i in reversed(range(len(concrete_func._captured_inputs))):
-                    if concrete_func._captured_inputs[i] is val_tensor:
-                        concrete_func._captured_inputs.pop(i)
-            elif val_tensor.dtype != tf.resource:
-                npval = val_tensor.numpy()
-                if not hasattr(npval, 'dtype'):
-                    # Hack around a TF bug until PR is merged: https://github.com/tensorflow/tensorflow/pull/45610
-                    arr = np.array(npval)
-                    val_tensor.numpy = lambda arr=arr: arr
+
+        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = _get_resources_from_captures(
+                                                                                    concrete_func,
+                                                                                    concrete_func.graph._captures)
+        for key in keys_to_be_removed:
+            del concrete_func.graph._captures[key]
+    elif hasattr(concrete_func.graph, 'function_captures') and hasattr(concrete_func, '_captured_inputs'):
+        # Since tensorflow 2.13.0, _captures has been removed and replaced with function_captures
+        graph_captures = {}
+        for k, v in concrete_func.graph.function_captures.by_val_external.items():
+            graph_captures[k] = (v, concrete_func.graph.function_captures.by_val_internal[k])
+        graph_captures_copy = graph_captures.copy()
+        func_captures_copy = concrete_func._captured_inputs.copy()
+
+        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = _get_resources_from_captures(
+                                                                                    concrete_func, graph_captures)
+        for key in keys_to_be_removed:
+            del concrete_func.graph.function_captures.by_val_internal[key]
+            del concrete_func.graph.function_captures.by_val_external[key]
     else:
         logger.warning(
             "Could not search for non-variable resources. Concrete function internal representation may have changed.")
