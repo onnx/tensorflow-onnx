@@ -59,7 +59,7 @@ except ImportError:
 
 if is_tf2():
     convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
-    from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2, convert_variables_to_constants_v2_as_graph
+    from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
 else:
     from tensorflow.python.framework.graph_util import convert_variables_to_constants
 
@@ -514,9 +514,8 @@ def _remove_non_variable_resources_from_captures(concrete_func):
         graph_captures_copy = concrete_func.graph._captures.copy()
         func_captures_copy = concrete_func._captured_inputs.copy()
 
-        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = _get_resources_from_captures(
-                                                                                    concrete_func,
-                                                                                    concrete_func.graph._captures)
+        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = \
+            _get_resources_from_captures(concrete_func, concrete_func.graph._captures)
         for key in keys_to_be_removed:
             del concrete_func.graph._captures[key]
     elif hasattr(concrete_func.graph, 'function_captures') and hasattr(concrete_func, '_captured_inputs'):
@@ -527,8 +526,8 @@ def _remove_non_variable_resources_from_captures(concrete_func):
         graph_captures_copy = graph_captures.copy()
         func_captures_copy = concrete_func._captured_inputs.copy()
 
-        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = _get_resources_from_captures(
-                                                                                    concrete_func, graph_captures)
+        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = \
+            _get_resources_from_captures(concrete_func, graph_captures)
         for key in keys_to_be_removed:
             del concrete_func.graph.function_captures.by_val_internal[key]
             del concrete_func.graph.function_captures.by_val_external[key]
