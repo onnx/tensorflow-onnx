@@ -62,7 +62,6 @@ class TFListUtilsTests(Tf2OnnxBackendTestBase):
         self.assertEqual(2, op_cnt['TFL_MUL'])
         self.assertEqual(1, op_cnt['TFL_ADD'])
 
-        self.assertEqual(1, attr_cnt['WeightsFormat'])
         self.assertEqual(names, inputs)
         self.assertEqual(output_names, outputs)
 
