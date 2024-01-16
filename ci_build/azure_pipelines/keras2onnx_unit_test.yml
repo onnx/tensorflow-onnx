@@ -15,8 +15,8 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
 
-      Python38-tf2-2.12:
-        python.version: '3.8'
+      Python39-tf2-2.12:
+        python.version: '3.9'
         ONNX_PATH: onnx==1.15.0
         TENSORFLOW_PATH: tensorflow==2.12.0
         INSTALL_ORT: pip install onnxruntime==1.15.0
@@ -29,17 +29,10 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
 
-      Python310-tf2-2.10:
-        python.version: '3.10'
+      Python38-tf2-2.10:
+        python.version: '3.8'
         ONNX_PATH: onnx==1.15.0
         TENSORFLOW_PATH: tensorflow==2.10.0
-        INSTALL_ORT: pip install onnxruntime==1.15.0
-        INSTALL_NUMPY:
-
-      Python310-tf2-oldest:
-        python.version: '3.10'
-        ONNX_PATH: onnx==1.15.0
-        TENSORFLOW_PATH: tensorflow==2.9.0
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
 
@@ -63,8 +56,15 @@ jobs:
   strategy:
     matrix:
       ############ TF Keras Unit Tests ############
-      Python310-tf2-2.13:
+      Python310-tf2-2.14:
         python.version: '3.10'
+        ONNX_PATH: onnx==1.15.0
+        TENSORFLOW_PATH: tensorflow==2.14.0
+        INSTALL_ORT: pip install onnxruntime==1.15.0
+        INSTALL_NUMPY:
+
+      Python39-tf2-2.13:
+        python.version: '3.9'
         ONNX_PATH: onnx==1.15.0
         TENSORFLOW_PATH: tensorflow==2.13.0
         INSTALL_ORT: pip install onnxruntime==1.15.0
@@ -84,17 +84,10 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
 
-      Python310-tf2-2.10:
-        python.version: '3.10'
+      Python38-tf2-2.10:
+        python.version: '3.8'
         ONNX_PATH: onnx==1.15.0
         TENSORFLOW_PATH: tensorflow==2.10.0
-        INSTALL_ORT: pip install onnxruntime==1.15.0
-        INSTALL_NUMPY:
-
-      Python310-tf2-oldest:
-        python.version: '3.10'
-        ONNX_PATH: onnx==1.15.0
-        TENSORFLOW_PATH: tensorflow==2.9.0
         INSTALL_ORT: pip install onnxruntime==1.15.0
         INSTALL_NUMPY:
 

@@ -23,24 +23,24 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.16.3
         INSTALL_NUMPY:
 
-      Python38-tf2-latest:
-        python.version: '3.8'
+      Python39-tf2-latest:
+        python.version: '3.9'
         ONNX_PATH: onnx==1.15.0
-        TENSORFLOW_PATH: tensorflow==2.13.0
+        TENSORFLOW_PATH: tensorflow==2.15.0
         INSTALL_ORT: pip install onnxruntime==1.16.3
         INSTALL_NUMPY:
 
-      Python310-tf2-oldest:
-        python.version: '3.10'
+      Python39-tf2-oldest-plus-1:
+        python.version: '3.9'
         ONNX_PATH: onnx==1.15.0
-        TENSORFLOW_PATH: tensorflow==2.9.0
+        TENSORFLOW_PATH: tensorflow==2.10.0
         INSTALL_ORT: pip install onnxruntime==1.16.3
         INSTALL_NUMPY:
 
-      Python310-tf2-latest:
+      Python310-tf2-latest-minus-1:
         python.version: '3.10'
         ONNX_PATH: onnx==1.15.0
-        TENSORFLOW_PATH: tensorflow==2.13.0
+        TENSORFLOW_PATH: tensorflow==2.14.0
         INSTALL_ORT: pip install onnxruntime==1.16.3
         INSTALL_NUMPY:
 
@@ -79,10 +79,10 @@ jobs:
         INSTALL_ORT: pip install onnxruntime==1.16.3
         INSTALL_NUMPY:
 
-      Python38-tf2-latest:
-        python.version: '3.8'
+      Python39-tf2-latest:
+        python.version: '3.9'
         ONNX_PATH: onnx==1.15.0
-        TENSORFLOW_PATH: tensorflow==2.13.0
+        TENSORFLOW_PATH: tensorflow==2.15.0
         INSTALL_ORT: pip install onnxruntime==1.16.3
         INSTALL_NUMPY:
 

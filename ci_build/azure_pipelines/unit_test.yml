@@ -21,7 +21,7 @@ stages:
       parameters:
         python_versions: ['3.9']
         platforms: ['linux', 'windows']
-        tf_versions: ['2.13.0']
+        tf_versions: ['2.15.0']
         onnx_opsets: ['18', '15']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'False'
@@ -35,7 +35,7 @@ stages:
       parameters:
         python_versions: ['3.10']
         platforms: ['linux']
-        tf_versions: ['2.9.0', '2.13.0']
+        tf_versions: ['2.9.0', '2.15.0']
         onnx_opsets: ['18', '15']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'False'
