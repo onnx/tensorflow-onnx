@@ -19,7 +19,7 @@ stages:
       parameters:
         platforms: ['linux', 'windows']
         python_versions: ['3.8']
-        tf_versions: ['2.9.0', '2.10.0', '2.15.0']
+        tf_versions: ['2.9.0', '2.10.0']
         onnx_backends: {onnxruntime: ['nightly']}
         job:
           steps:
@@ -41,7 +41,7 @@ stages:
       parameters:
         platforms: ['linux', 'windows']
         python_versions: ['3.10']
-        tf_versions: ['2.9.0', '2.15.0']
+        tf_versions: ['2.13.0', '2.15.0']
         onnx_backends: {onnxruntime: ['nightly']}
         job:
           steps:

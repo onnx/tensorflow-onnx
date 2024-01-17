@@ -31,7 +31,7 @@ jobs:
     platforms: ['windows']
     python_versions: ['3.9']
     tf_versions: ['2.9.0', '2.15.0']
-    onnx_opsets: ['18', '17', '16', '15', '14']
+    onnx_opsets: ['18', '17', '16', '15']
     job:
       steps:
       - template: 'pretrained_model_test.yml'
