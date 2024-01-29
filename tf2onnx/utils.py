@@ -198,8 +198,8 @@ def make_onnx_node_with_attr(op_type: str, inputs: Sequence[str], outputs: Seque
         valid_attrs = {}
         if kwargs:
             for key, value in sorted(kwargs.items()):
-                if not isinstance(value, bytes) and \
-                    isinstance(value, collections.abc.Sequence) and len(list(value)) == 0:
+                if not isinstance(value, (bytes, str)) and \
+                    isinstance(value, collections.abc.Iterable) and len(list(value)) == 0:
                     attr_empty_lists[key] = value
                 else:
                     valid_attrs[key] = value
