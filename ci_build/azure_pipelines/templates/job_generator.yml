@@ -6,7 +6,7 @@ parameters:
   tf_versions: ['']
   onnx_versions: ['1.15.0']
   onnx_opsets: ['18', '17', '16', '15', '14']
-  onnx_backends: {onnxruntime: ['1.16.3']}
+  onnx_backends: {onnxruntime: ['1.17.0']}
   job: {}
   run_setup: 'True'
   report_coverage: 'False'

@@ -14,7 +14,7 @@ jobs:
         INSTALL_KERAS: pip install keras==2.3.1
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==1.15.0
-        INSTALL_ORT: pip install onnxruntime==1.14.1 # Max version that supports python 3.7
+        INSTALL_ORT: pip install onnxruntime==1.17.0 # Max version that supports python 3.7
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS:
         INSTALL_NUMPY: pip install numpy==1.19.0
@@ -27,7 +27,7 @@ jobs:
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.9.0
-        INSTALL_ORT: pip install onnxruntime==1.16.3
+        INSTALL_ORT: pip install onnxruntime==1.17.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.2.0
         INSTALL_NUMPY:
@@ -39,7 +39,7 @@ jobs:
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.15.0
-        INSTALL_ORT: pip install onnxruntime==1.16.3
+        INSTALL_ORT: pip install onnxruntime==1.17.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.2.0
         INSTALL_NUMPY:
@@ -51,7 +51,7 @@ jobs:
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.10.0
-        INSTALL_ORT: pip install onnxruntime==1.16.3
+        INSTALL_ORT: pip install onnxruntime==1.17.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.2.0
         INSTALL_NUMPY:
@@ -63,7 +63,7 @@ jobs:
         INSTALL_KERAS:
         UNINSTALL_KERAS:
         INSTALL_TENSORFLOW: pip install tensorflow==2.14.0
-        INSTALL_ORT: pip install onnxruntime==1.16.3
+        INSTALL_ORT: pip install onnxruntime==1.17.0
         INSTALL_KERAS_RESNET: pip install keras-resnet
         INSTALL_TRANSFORMERS: pip install transformers==4.2.0
         INSTALL_NUMPY:
