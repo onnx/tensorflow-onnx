@@ -7,8 +7,36 @@ stages:
       parameters:
         python_versions: ['3.8']
         platforms: ['linux', 'windows']
-        tf_versions: ['2.8.0', '2.13.0']
-        onnx_opsets: ['18', '17', '16', '15']
+        tf_versions: ['2.9.0']
+        onnx_opsets: ['18', '15']
+        skip_tflite_tests: 'False'
+        skip_tf_tests: 'False'
+        skip_tfjs_tests: 'True'
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        python_versions: ['3.9']
+        platforms: ['linux', 'windows']
+        tf_versions: ['2.15.0']
+        onnx_opsets: ['18', '15']
+        skip_tflite_tests: 'False'
+        skip_tf_tests: 'False'
+        skip_tfjs_tests: 'True'
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        python_versions: ['3.10']
+        platforms: ['linux']
+        tf_versions: ['2.9.0', '2.15.0']
+        onnx_opsets: ['18', '15']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'False'
         skip_tfjs_tests: 'True'
@@ -22,7 +50,8 @@ stages:
         python_versions: ['3.7'] # Max version that supports tf 1.15
         platforms: ['linux']
         tf_versions: ['1.15.5']
-        onnx_opsets: ['18', '17', '16', '15']
+        onnx_versions: ['1.14.1'] # Max version that supports python 3.7
+        onnx_opsets: ['15']
         onnx_backends: {onnxruntime: ['1.14.1']} # Max version that supports python 3.7
         job:
           steps:
@@ -33,7 +62,7 @@ stages:
     # - template: 'templates/job_generator.yml'
     #   parameters:
     #     python_versions: ['3.9']
-    #     tf_versions: ['2.8.0']
+    #     tf_versions: ['2.9.0']
     #     onnx_opsets: ['']
     #     skip_tfjs_tests: 'False'
     #     skip_tf_tests: 'True'

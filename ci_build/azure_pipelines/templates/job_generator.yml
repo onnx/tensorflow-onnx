@@ -4,9 +4,9 @@ parameters:
   platforms: ['linux']
   python_versions: ['3.8']
   tf_versions: ['']
-  onnx_versions: ['1.14.1']
+  onnx_versions: ['1.15.0']
   onnx_opsets: ['18', '17', '16', '15', '14']
-  onnx_backends: {onnxruntime: ['1.15.1']}
+  onnx_backends: {onnxruntime: ['1.16.3']}
   job: {}
   run_setup: 'True'
   report_coverage: 'False'
@@ -78,22 +78,10 @@ jobs:
     - bash: env
       displayName: 'Display Environment Variables'
 
-# TODO: ordinary python is preferred but built-in python3.6 does not have libpython3.6m.so, onnxruntime will fail with
-# Error: 'libpython3.6m.so.1.0: cannot open shared object file: No such file or directory'
-# so have to use conda here, may switch back to UsePythonVersion when the issue is fixed.
-#    - task: UsePythonVersion@0
-#      inputs:
-#        versionSpec: '$(CI_PYTHON_VERSION)'
-#        architecture: 'x64'
-
-# TODO: Conda Environment task is deprecating, move to raw python after issue above is fixed.
-# https://github.com/Microsoft/azure-pipelines-tasks/pull/9573
-    - task: CondaEnvironment@1
+    - task: UsePythonVersion@0
       inputs:
-        createCustomEnvironment: 'true'
-        environmentName: 'tf2onnx'
-        packageSpecs: 'python=$(CI_PYTHON_VERSION)'
-        updateConda: 'false'
+        versionSpec: '$(CI_PYTHON_VERSION)'
+        architecture: 'x64'
 
     - ${{ if eq(parameters.run_setup, 'True') }}:
       - template: 'setup.yml'

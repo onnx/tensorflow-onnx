@@ -8,7 +8,6 @@ import uuid
 from packaging.version import Version
 
 import tensorflow as tf
-import numpy as np
 from google.protobuf.message import DecodeError
 from tensorflow.core.framework import tensor_pb2
 from tensorflow.core.protobuf import saved_model_pb2
@@ -481,6 +480,26 @@ def _get_hash_table_info_from_trackable(trackable, table_info,
                 placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = new_table_info[0]
 
 
+def _get_resources_from_captures(concrete_func, graph_captures):
+    resource_id_to_placeholder = {}
+    placeholder_to_resource = {}
+    keys_to_be_removed = []
+
+    # pylint: disable=protected-access
+    variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
+    for k, v in list(graph_captures.items()):
+        val_tensor, name_tensor = v
+        if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
+            resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
+            placeholder_to_resource[name_tensor.name.split(':')[0]] = val_tensor
+            keys_to_be_removed.append(k)
+            for i in reversed(range(len(concrete_func._captured_inputs))):
+                if concrete_func._captured_inputs[i] is val_tensor:
+                    concrete_func._captured_inputs.pop(i)
+
+    return resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed
+
+
 def _remove_non_variable_resources_from_captures(concrete_func):
     """
     Removes all non-variable resources (such as tables) from a function's captured inputs to prevent tf from
@@ -494,22 +513,24 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
         graph_captures_copy = concrete_func.graph._captures.copy()
         func_captures_copy = concrete_func._captured_inputs.copy()
-        variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
-        for k, v in list(concrete_func.graph._captures.items()):
-            val_tensor, name_tensor = v
-            if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
-                resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
-                placeholder_to_resource[name_tensor.name.split(':')[0]] = val_tensor
-                del concrete_func.graph._captures[k]
-                for i in reversed(range(len(concrete_func._captured_inputs))):
-                    if concrete_func._captured_inputs[i] is val_tensor:
-                        concrete_func._captured_inputs.pop(i)
-            elif val_tensor.dtype != tf.resource:
-                npval = val_tensor.numpy()
-                if not hasattr(npval, 'dtype'):
-                    # Hack around a TF bug until PR is merged: https://github.com/tensorflow/tensorflow/pull/45610
-                    arr = np.array(npval)
-                    val_tensor.numpy = lambda arr=arr: arr
+
+        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = \
+            _get_resources_from_captures(concrete_func, concrete_func.graph._captures)
+        for key in keys_to_be_removed:
+            del concrete_func.graph._captures[key]
+    elif hasattr(concrete_func.graph, 'function_captures') and hasattr(concrete_func, '_captured_inputs'):
+        # Since tensorflow 2.13.0, _captures has been removed and replaced with function_captures
+        graph_captures = {}
+        for k, v in concrete_func.graph.function_captures.by_val_external.items():
+            graph_captures[k] = (v, concrete_func.graph.function_captures.by_val_internal[k])
+        graph_captures_copy = graph_captures.copy()
+        func_captures_copy = concrete_func._captured_inputs.copy()
+
+        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = \
+            _get_resources_from_captures(concrete_func, graph_captures)
+        for key in keys_to_be_removed:
+            del concrete_func.graph.function_captures.by_val_internal[key]
+            del concrete_func.graph.function_captures.by_val_external[key]
     else:
         logger.warning(
             "Could not search for non-variable resources. Concrete function internal representation may have changed.")
@@ -636,14 +657,13 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
 
 def from_keras(model_path, input_names, output_names):
     """Load keras model - experimental for now."""
-    from tensorflow.python import keras as _keras
-    from tensorflow.python.eager import context
+    from tensorflow import keras as _keras
     from tensorflow.python.keras.saving import saving_utils as _saving_utils
 
     # Handles Keras when Eager mode is enabled.
     custom_objects = None
     with tf.device("/cpu:0"):
-        if context.executing_eagerly():
+        if tf.executing_eagerly():
             _keras.backend.clear_session()
             _keras.backend.set_learning_phase(False)
             keras_model = _keras.models.load_model(model_path, custom_objects)

@@ -299,6 +299,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         def get_shape(info):
             if not info.type.tensor_type.HasField("shape"):
                 return None
+            for d in info.type.tensor_type.shape.dim:
+                if d.HasField('dim_param') and d.dim_param.startswith("unk"):
+                    return None
+
             return [d.dim_value if d.HasField('dim_value') else -1 for d in info.type.tensor_type.shape.dim]
         def get_dtype(info):
             tensor_type = info.type.tensor_type
@@ -315,7 +319,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 continue
             onnx_shape = get_shape(info)
             tf2onnx_shape = graph.get_shape(info.name)
-            if onnx_shape is None:
+            if onnx_shape is None or not onnx_shape:
                 continue
             if allow_missing and tf2onnx_shape is None:
                 continue

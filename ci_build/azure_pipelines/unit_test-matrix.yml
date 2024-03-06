@@ -7,8 +7,22 @@ stages:
       parameters:
         python_versions: ['3.8']
         platforms: ['linux', 'windows']
-        tf_versions: ['2.8.0', '2.13.0']
-        onnx_opsets: ['14']
+        tf_versions: ['2.9.0']
+        onnx_opsets: ['17', '16', '14']
+        skip_tflite_tests: 'False'
+        skip_tf_tests: 'False'
+        skip_tfjs_tests: 'True'
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        python_versions: ['3.9']
+        platforms: ['linux', 'windows']
+        tf_versions: ['2.15.0']
+        onnx_opsets: ['17', '16', '14']
         skip_tflite_tests: 'False'
         skip_tf_tests: 'False'
         skip_tfjs_tests: 'True'
@@ -22,6 +36,7 @@ stages:
         python_versions: ['3.7'] # Max version that supports tf 1.15
         platforms: ['windows']
         tf_versions: ['1.15.5']
+        onnx_versions: ['1.14.1'] # Max version that supports python 3.7
         onnx_opsets: ['18', '17', '16', '15']
         onnx_backends: {onnxruntime: ['1.14.1']} # Max version that supports python 3.7
         job:
@@ -31,19 +46,12 @@ stages:
 
     - template: 'templates/job_generator.yml'
       parameters:
-        platforms: ['linux', 'windows']
-        python_versions: ['3.8']
-        tf_versions: ['2.12.0']
-        job:
-          steps:
-          - template: 'unit_test.yml'
-        report_coverage: 'True'
-
-    - template: 'templates/job_generator.yml'
-      parameters:
-        platforms: ['linux', 'windows']
-        python_versions: ['3.9']
-        tf_versions: ['2.9.0', '2.10.0',]
+        python_versions: ['3.7'] # Max version that supports tf 1.15
+        platforms: ['linux']
+        tf_versions: ['1.15.5']
+        onnx_versions: ['1.14.1'] # Max version that supports python 3.7
+        onnx_opsets: ['18', '17', '16']
+        onnx_backends: {onnxruntime: ['1.14.1']} # Max version that supports python 3.7
         job:
           steps:
           - template: 'unit_test.yml'
@@ -53,7 +61,27 @@ stages:
       parameters:
         platforms: ['linux', 'windows']
         python_versions: ['3.10']
-        tf_versions: ['2.8.0', '2.11.0', '2.13.0']
+        tf_versions: ['2.14.0']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        platforms: ['linux', 'windows']
+        python_versions: ['3.9']
+        tf_versions: ['2.12.0']
+        job:
+          steps:
+          - template: 'unit_test.yml'
+        report_coverage: 'True'
+
+    - template: 'templates/job_generator.yml'
+      parameters:
+        platforms: ['linux', 'windows']
+        python_versions: ['3.8']
+        tf_versions: ['2.10.0', '2.11.0']
         job:
           steps:
           - template: 'unit_test.yml'

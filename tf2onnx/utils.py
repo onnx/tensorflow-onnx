@@ -6,6 +6,8 @@ tf2onnx.utils - misc utilities for tf2onnx
 """
 
 import os
+import collections
+import inspect
 import re
 import shutil
 import tempfile
@@ -13,17 +15,20 @@ import types
 import zipfile
 import logging
 
+from typing import Any, Optional, Sequence
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import numpy as np
 from google.protobuf import text_format
-from onnx import helper, onnx_pb, defs, numpy_helper, ModelProto, __version__
-
+from onnx import helper, onnx_pb, defs, numpy_helper, AttributeProto, ModelProto, NodeProto, __version__
 from . import constants
 
 
 logger = logging.getLogger(__file__)
+
+
+# pylint: disable=unexpected-keyword-arg
 
 
 #
@@ -177,6 +182,38 @@ def make_onnx_inputs_outputs(name, elem_type, shape, **kwargs):
         **kwargs
     )
 
+_attr_type_in_signature = inspect.signature(helper.make_attribute).parameters.get("attr_type", None) is not None
+
+
+def make_onnx_node_with_attr(op_type: str, inputs: Sequence[str], outputs: Sequence[str], name: Optional[str] = None,
+                             domain: Optional[str] = None, **kwargs: Any) -> NodeProto:
+    """
+    Since ONNX 1.15.0, helper.make_attribute() does not support empty iterators.
+    But tf2onnx will leverage ONNX attributes to transfer some extra data along with the ONNX node
+    across different conversion stages.
+    This function removes empty lists from kwargs and adds them back with attr_type=INTS attributes by default.
+    """
+    if _attr_type_in_signature:
+        attr_empty_lists = {}
+        valid_attrs = {}
+        if kwargs:
+            for key, value in sorted(kwargs.items()):
+                if not isinstance(value, (bytes, str)) and \
+                    isinstance(value, collections.abc.Iterable) and len(list(value)) == 0:
+                    attr_empty_lists[key] = value
+                else:
+                    valid_attrs[key] = value
+
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **valid_attrs)
+
+        if attr_empty_lists:
+            for key, value in attr_empty_lists.items():
+                onnx_node.attribute.extend([helper.make_attribute(key, value, attr_type=AttributeProto.INTS)])
+    else:
+        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **kwargs)
+
+    return onnx_node
+
 
 def find_opset(opset):
     """Find opset."""
@@ -253,15 +290,18 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
 
     return target_path
 
+
 def save_onnx_zip(target_path, model_proto, external_tensor_storage):
     with zipfile.ZipFile(target_path, 'w') as z:
         z.writestr("__MODEL_PROTO.onnx", model_proto.SerializeToString())
         for k, v in external_tensor_storage.name_to_tensor_data.items():
             z.writestr(k, v)
 
+
 def make_sure(bool_val, error_msg, *args):
     if not bool_val:
         raise ValueError("make_sure failure: " + error_msg % args)
+
 
 def combine_seeds(seed, seed2):
     """Produces an onnx float seed from two tf int seeds. Returns None if both seeds are 0."""
@@ -270,6 +310,7 @@ def combine_seeds(seed, seed2):
         combined_seed = (seed + seed2 + 1) * (seed + seed2 + 2) // 2 - seed
         return float(combined_seed)
     return None
+
 
 def topological_sort(dependencies):
     """
