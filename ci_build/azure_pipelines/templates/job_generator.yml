@@ -88,12 +88,16 @@ jobs:
 
 # TODO: Conda Environment task is deprecating, move to raw python after issue above is fixed.
 # https://github.com/Microsoft/azure-pipelines-tasks/pull/9573
-    - task: CondaEnvironment@1
+    # - task: CondaEnvironment@1
+    #   inputs:
+    #     createCustomEnvironment: 'true'
+    #     environmentName: 'tf2onnx'
+    #     packageSpecs: 'python=$(CI_PYTHON_VERSION)'
+    #     updateConda: 'false'
+    - task: UsePythonVersion@0
       inputs:
-        createCustomEnvironment: 'true'
-        environmentName: 'tf2onnx'
-        packageSpecs: 'python=$(CI_PYTHON_VERSION)'
-        updateConda: 'false'
+        versionSpec: '$(CI_PYTHON_VERSION)'
+        architecture: 'x64'
 
     - ${{ if eq(parameters.run_setup, 'True') }}:
       - template: 'setup.yml'
