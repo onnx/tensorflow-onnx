@@ -20,12 +20,10 @@ stages:
         artifactName: '${{ parameters.artifact_name }}'
         downloadPath: $(System.DefaultWorkingDirectory)
   
-    - task: CondaEnvironment@1
+    - task: UsePythonVersion@0
       inputs:
-        createCustomEnvironment: 'true'
-        environmentName: 'tf2onnx'
-        packageSpecs: 'python=3.7'
-        updateConda: 'false'
+        versionSpec: '3.7'
+        architecture: 'x64'
   
     - bash: |
         pip install -U coverage
