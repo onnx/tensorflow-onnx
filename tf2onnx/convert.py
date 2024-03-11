@@ -168,7 +168,7 @@ def _convert_common(frozen_graph, name="unknown", large_model=False, output_path
         g = process_tf_graph(tf_graph, const_node_values=const_node_values,
                              custom_op_handlers=custom_op_handlers, **kwargs)
         if constants.ENV_TF2ONNX_CATCH_ERRORS in os.environ:
-            catch_errors = constants.ENV_TF2ONNX_CATCH_ERRORS.upper() == "TRUE"
+            catch_errors = os.environ.get(constants.ENV_TF2ONNX_CATCH_ERRORS).upper() == "TRUE"
         else:
             catch_errors = not large_model
         onnx_graph = optimizer.optimize_graph(g, catch_errors, optimizers=optimizers)

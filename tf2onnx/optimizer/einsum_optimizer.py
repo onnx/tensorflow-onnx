@@ -373,6 +373,8 @@ class EinsumSubOp:
         self._check_row_(row, True)
         self._check_arg_('axes', tuple)
         axes = self.kwargs['axes']
+        if not axes:
+            raise RuntimeError("Parameter axes of expand_dims should not be empty.")
         for axis in axes:
             if not isinstance(axis, tuple):
                 raise TypeError(
