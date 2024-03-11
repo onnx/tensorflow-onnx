@@ -1352,7 +1352,7 @@ class CropAndResize:
         cls.any_version_after11(13, ctx, node, **kwargs)
 
 
-@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic"])
+@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic", "ResizeArea"])
 class Resize:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
@@ -1645,6 +1645,27 @@ class AdjustHue:
 @tf_op("MatrixBandPart")
 class MatrixBandPart:
     @classmethod
+    def _apply_mask_and_transform(cls, ctx, node, mask):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        dtype = ctx.get_dtype(node.input[0])
+        data = node.input[0]
+        if dtype == TensorProto.BOOL:
+            # bool is not supported for 'Mul', so convert mask and input supported dtype
+            mask = ctx.make_node("Cast", inputs=mask.output, attr={'to': TensorProto.FLOAT}).output[0]
+            data = ctx.make_node("Cast", [data], attr={'to': TensorProto.FLOAT}).output[0]
+            result = ctx.make_node(op_type="Mul", inputs=[mask, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
+            ctx.remove_node(node.name)
+            ctx.make_node("Cast", inputs=result.output, attr={'to': dtype},
+                          name=node.name, outputs=node.output, dtypes=dtypes)
+        else:
+            mask = ctx.make_node(op_type="Cast", inputs=mask.output, attr={"to": dtype}).output[0]
+            ctx.remove_node(node.name)
+            ctx.make_node(op_type="Mul", inputs=[mask, data],
+                          name=node.name, outputs=node.output, shapes=shapes,
+                          dtypes=dtypes)
+
+    @classmethod
     def version_7(cls, ctx, node, **kwargs):
         # T output = MatrixBandPart(T input, int num_lower, int num_upper)
         # data-flow: first generate mask matrix and then use element-wise mul op
@@ -1714,14 +1735,7 @@ class MatrixBandPart:
             mask_matrix = ctx.make_node(op_type="Transpose", inputs=cast1.output)
         else:
             mask_matrix = squeeze
-        cast2 = ctx.make_node(op_type="Cast", inputs=mask_matrix.output,
-                              attr={"to": ctx.get_dtype(node.input[0])})
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node(op_type="Mul", inputs=[cast2.output[0], node.input[0]],
-                      name=node.name, outputs=node.output, shapes=shapes,
-                      dtypes=dtypes)
+        cls._apply_mask_and_transform(ctx, node, mask_matrix)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -1739,17 +1753,12 @@ class MatrixBandPart:
                 {'data': whole_shape, 'starts': [-2], 'ends': [int_max_val], 'axes': [0]})
         if num_lower_const == 0 and num_upper_const == 0:
             if rank == 2:
-                identity_node = ctx.make_node("EyeLike", [data]).output[0]
+                identity_node = ctx.make_node("EyeLike", [data])
             else:
                 zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
                 const_of_shape = ctx.make_node("ConstantOfShape", [shape], attr={'value': zero_tensor}).output[0]
-                identity_node = ctx.make_node("EyeLike", [const_of_shape]).output[0]
-            shapes = node.output_shapes
-            dtypes = node.output_dtypes
-            ctx.remove_node(node.name)
-            ctx.make_node(op_type="Mul", inputs=[identity_node, data],
-                          name=node.name, outputs=node.output, shapes=shapes,
-                          dtypes=dtypes)
+                identity_node = ctx.make_node("EyeLike", [const_of_shape])
+            cls._apply_mask_and_transform(ctx, node, identity_node)
             return
         zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, np.int64)).output[0]
         one_const = ctx.make_const(utils.make_name("one"), np.array(1, np.int64)).output[0]
@@ -1771,14 +1780,14 @@ class MatrixBandPart:
             if ctx.get_dtype(num_upper) != TensorProto.INT64:
                 num_upper = ctx.make_node("Cast", [num_upper], attr={'to': TensorProto.INT64}).output[0]
             greater = ctx.make_node("Greater", [idx_diff, num_upper]).output[0]
-            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater])
             conditions.append(less_or_equal)
         if num_lower_const is None or num_lower_const >= 0:
             if ctx.get_dtype(num_lower) != TensorProto.INT64:
                 num_lower = ctx.make_node("Cast", [num_lower], attr={'to': TensorProto.INT64}).output[0]
             num_lower_neg = ctx.make_node("Neg", [num_lower]).output[0]
             greater = ctx.make_node("Greater", [num_lower_neg, idx_diff]).output[0]
-            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater])
             conditions.append(less_or_equal)
         if len(conditions) == 0:
             node.type = "Identity"
@@ -1787,14 +1796,8 @@ class MatrixBandPart:
         if len(conditions) == 1:
             cond = conditions[0]
         if len(conditions) == 2:
-            cond = ctx.make_node("And", conditions).output[0]
-        mask = ctx.make_node("Cast", [cond], attr={'to': ctx.get_dtype(data)}).output[0]
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node(op_type="Mul", inputs=[mask, data],
-                      name=node.name, outputs=node.output, shapes=shapes,
-                      dtypes=dtypes)
+            cond = ctx.make_node("And", inputs=[c.output[0] for c in conditions])
+        cls._apply_mask_and_transform(ctx, node, cond)
 
 
 def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):

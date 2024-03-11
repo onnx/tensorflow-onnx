@@ -1,25 +1,28 @@
 # Run unit test
 
 parameters:
-    onnx_opsets: ['18', '17', '16', '15', '14']
-    skip_tflite_tests: 'True'
-    skip_tfjs_tests: 'True'
-    skip_tf_tests: 'False'
+    onnx_opset: ''
+    skip_tflite_tests: ''
+    skip_tfjs_tests: ''
+    skip_tf_tests: ''
 
 steps:
-- ${{ each onnx_opset in parameters.onnx_opsets }}:
-  - bash: |
-      export TF2ONNX_TEST_BACKEND=$CI_ONNX_BACKEND
-      export TF2ONNX_TEST_OPSET=$CI_ONNX_OPSET
-      export TF2ONNX_SKIP_TFLITE_TESTS=$CI_SKIP_TFLITE_TESTS
-      export TF2ONNX_SKIP_TFJS_TESTS=$CI_SKIP_TFJS_TESTS
-      export TF2ONNX_SKIP_TF_TESTS=$CI_SKIP_TF_TESTS
-      python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
-    timeoutInMinutes: 15
-    displayName: ${{ format('Run UnitTest - Opset{0}', onnx_opset) }}
-    condition: succeededOrFailed()
-    env:
-        CI_ONNX_OPSET: '${{ onnx_opset }}'
-        CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tflite_tests }}'
-        CI_SKIP_TFJS_TESTS: '${{ parameters.skip_tfjs_tests }}'
-        CI_SKIP_TF_TESTS: '${{ parameters.skip_tf_tests }}'
+- bash: |
+    parameters.onnx_opset=$CI_ONNX_OPSET
+    parameters.skip_tflite_tests=$CI_SKIP_TFLITE_TESTS
+    parameters.skip_tfjs_tests=$CI_SKIP_TFJS_TESTS
+    parameters.skip_tf_tests=$CI_SKIP_TF_TESTS
+    export TF2ONNX_TEST_BACKEND=$CI_ONNX_BACKEND
+    export TF2ONNX_TEST_OPSET=$CI_ONNX_OPSET
+    export TF2ONNX_SKIP_TFLITE_TESTS=$CI_SKIP_TFLITE_TESTS
+    export TF2ONNX_SKIP_TFJS_TESTS=$CI_SKIP_TFJS_TESTS
+    export TF2ONNX_SKIP_TF_TESTS=$CI_SKIP_TF_TESTS
+    python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
+  timeoutInMinutes: 15
+  displayName: 'Run UnitTest'
+  condition: succeededOrFailed()
+  env:
+      CI_ONNX_OPSET: '${{ parameters.onnx_opset }}'
+      CI_SKIP_TFLITE_TESTS: '${{ parameters.skip_tflite_tests }}'
+      CI_SKIP_TFJS_TESTS: '${{ parameters.skip_tfjs_tests }}'
+      CI_SKIP_TF_TESTS: '${{ parameters.skip_tf_tests }}'

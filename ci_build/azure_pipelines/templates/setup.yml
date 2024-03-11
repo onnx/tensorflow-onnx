@@ -4,21 +4,19 @@ steps:
 - bash: |
     set -ex
     pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
-    pip install $(CI_PIP_TF_NAME)
     pip install $(CI_PIP_ONNX_NAME)
+    pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy
 
-    # TF < 2.7 reuires numpy <= 1.19, but onnxruntime >= 1.11 requires numpy >= 1.21
-    if [[ $CI_TF_VERSION < 2.7 ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
-    then 
-        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
-    else
-        pip install $(CI_PIP_ONNX_BACKEND_NAME) numpy==1.23.4
-    fi
-    # TF 1.10 requires numpy <=1.14.5 and >=1.13.3, but onnxruntime 0.2.1 does not work with numpy <= 1.14.5
-    # Upgrade numpy only within constraints from other packages if any.
-    if [[ $CI_TF_VERSION == 1.10* ]] && [[ $CI_ONNX_BACKEND == "onnxruntime" ]] ;
+    if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
     then
-        pip install $(CI_PIP_ONNX_NAME) $(CI_PIP_ONNX_BACKEND_NAME) numpy --no-deps -U
+      pip install tensorflowjs==3.18.0
+      npm install @tensorflow/tfjs
+    fi
+
+    if [[ $CI_TF_VERSION == 2.* ]] ;
+    then
+      pip install onnxruntime-extensions
+      pip install "tensorflow-text<=$(CI_TF_VERSION)"
     fi
 
     if [[ $CI_ONNXRUNTIME_NIGHTLY == "true" ]] ;
@@ -29,65 +27,10 @@ steps:
       pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
     fi
 
-    if [[ $CI_SKIP_TFJS_TESTS == "False" ]] ;
-    then
-      pip install tensorflowjs==3.18.0
-      npm install @tensorflow/tfjs
-    fi
-
-    if [[ $CI_TF_VERSION == 2.* ]] ;
-    then
-      # onnxruntime-extensions is not supported Python 3.10 so far.
-      # https://github.com/microsoft/onnxruntime-extensions/issues/273
-      if [[ $CI_PYTHON_VERSION != 3.10 ]] ;
-      then
-        pip install onnxruntime-extensions==0.3.1
-      fi
-      if [[ $CI_TF_VERSION == 2.3* ]] ;
-      then
-        pip install tensorflow-text==${CI_TF_VERSION}
-      fi
-      if [[ $CI_TF_VERSION == 2.4* ]] ;
-      then
-        pip install tensorflow-text==${CI_TF_VERSION}
-      fi
-      if [[ $CI_TF_VERSION == 2.5* ]] ;
-      then
-        pip install "tensorflow-text>=2.5,<2.6"
-      fi
-      if [[ $CI_TF_VERSION == 2.6* ]] ;
-      then
-        pip install "tensorflow-text>=2.6,<2.7"
-      fi
-      if [[ $CI_TF_VERSION == 2.7* ]] ;
-      then
-        pip install "tensorflow-text>=2.7,<2.8"
-      fi
-      if [[ $CI_TF_VERSION == 2.8* ]] ;
-      then
-        pip install "tensorflow-text>=2.8,<2.9"
-      fi
-      if [[ $CI_TF_VERSION == 2.9* ]] ;
-        then
-          pip install "tensorflow-text>=2.9,<2.10"
-      fi
-      if [[ $CI_TF_VERSION == 2.10* ]] || [[ $CI_TF_VERSION == 2.11* ]] ;
-        then
-          pip install "tensorflow-text>=2.10,<2.12"
-      else
-        pip install tensorflow-text
-      fi
-      if [[ $CI_TF_VERSION < 2.8 ]] ;
-      then
-        pip install wrapt==1.14.1
-      fi
-    fi
-
-    # Protobuf 3.20 results in linker errors on Windows in TF.
-    # Protobuf 4.0 is binary incompatible with what C++ TF uses.
-    # https://github.com/tensorflow/tensorflow/blob/c3337c73306b2b859d82fe130912f18e6a1c5c23/tensorflow/tools/pip_package/setup.py#L88
+    pip uninstall -y tensorflow
+    pip install $(CI_PIP_TF_NAME)
     pip uninstall -y protobuf
-    pip install "protobuf==3.20.3"
+    pip install "protobuf~=3.20"
 
     python setup.py install
 

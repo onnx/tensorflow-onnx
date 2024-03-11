@@ -5,23 +5,10 @@ stages:
     jobs:
     - template: 'templates/job_generator.yml'
       parameters:
-        python_versions: ['3.7']
-        tf_versions: ['2.5.0', '2.3.0']
-        onnx_opsets: ['']
-        onnx_backends: {onnxruntime: ['nightly']}
-        skip_tflite_tests: 'False'
-        skip_tf_tests: 'True'
-        job:
-          steps:
-          - template: 'unit_test.yml'
-        report_coverage: 'True'
-
-    - template: 'templates/job_generator.yml'
-      parameters:
         platforms: ['linux', 'windows']
         python_versions: [3.7']
-        tf_versions: ['1.15.2','2.1.0']
-        onnx_opsets: ['']
+        tf_versions: ['1.15.5']
+        onnx_versions: ['1.14.1'] # Max version that supports python 3.7
         onnx_backends: {onnxruntime: ['nightly']}
         job:
           steps:
@@ -32,8 +19,7 @@ stages:
       parameters:
         platforms: ['linux', 'windows']
         python_versions: ['3.8']
-        tf_versions: ['2.7.3']
-        onnx_opsets: ['']
+        tf_versions: ['2.9.0', '2.10.0']
         onnx_backends: {onnxruntime: ['nightly']}
         job:
           steps:
@@ -44,8 +30,7 @@ stages:
       parameters:
         platforms: ['linux', 'windows']
         python_versions: ['3.9']
-        tf_versions: ['2.8.0']
-        onnx_opsets: ['']
+        tf_versions: ['2.11.0', '2.12.0']
         onnx_backends: {onnxruntime: ['nightly']}
         job:
           steps:
@@ -56,8 +41,7 @@ stages:
       parameters:
         platforms: ['linux', 'windows']
         python_versions: ['3.10']
-        tf_versions: ['2.9.1']
-        onnx_opsets: ['']
+        tf_versions: ['2.13.0', '2.15.0']
         onnx_backends: {onnxruntime: ['nightly']}
         job:
           steps:
@@ -67,8 +51,8 @@ stages:
   - template: 'templates/combine_test_coverage.yml'
 
 schedules:
-- cron: "0 10 * * *"
-  displayName: Daily onnxruntime nightly unittest
+- cron: "0 12 */3 * *"
+  displayName: Every 3 days onnxruntime nightly unittest
   branches:
     include:
     - main
