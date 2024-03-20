@@ -24,6 +24,7 @@ from tf2onnx.rewriter.ragged_variant_shape_rewriter import rewrite_ragged_varian
 from tf2onnx.rewriter.lstm_tf2_rewriter import rewriter_lstm_tf2
 from tf2onnx.rewriter.gru_tf2_rewriter import rewrite_gru_tf2
 from tf2onnx.rewriter.fused_op_rewriter import rewrite_fused_ops
+from tf2onnx.rewriter.extract_image_patches_rewriter import rewrite_extract_image_patches
 
 
 __all__ = [
@@ -53,4 +54,5 @@ __all__ = [
     "rewriter_lstm_tf2",
     "rewrite_gru_tf2",
     "rewrite_fused_ops",
+    "rewrite_extract_image_patches",
 ]
