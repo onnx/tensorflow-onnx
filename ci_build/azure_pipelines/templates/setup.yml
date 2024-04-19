@@ -30,7 +30,8 @@ steps:
     pip uninstall -y tensorflow
     pip install $(CI_PIP_TF_NAME)
     pip uninstall -y protobuf
-    pip install "protobuf~=3.20"
+    # pip install "protobuf~=3.20"
+    pip install protobuf
 
     python setup.py install
 

@@ -19,8 +19,8 @@ steps:
       conda config --set always_yes yes --set changeps1 no
       pip install onnxconverter-common
       pip install $(ONNX_PATH)
-      pip uninstall -y protobuf
-      pip install "protobuf~=3.20"
+      # pip uninstall -y protobuf
+      # pip install "protobuf~=3.20"
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
@@ -67,8 +67,8 @@ steps:
       echo Test numpy installation... && python -c "import numpy"
       pip install onnxconverter-common
       pip install %ONNX_PATH%
-      pip uninstall -y protobuf
-      pip install "protobuf~=3.20"
+      # pip uninstall -y protobuf
+      # pip install "protobuf~=3.20"
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
