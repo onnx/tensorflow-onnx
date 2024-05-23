@@ -1,0 +1,29 @@
+name: Pylint Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  pylint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8  # Specify the desired Python version (e.g., 3.8, 3.9)
+
+      - name: Install dependencies
+        run: pip install pylint==2.4.4
+
+      - name: Run pylint
+        run: |
+          pip freeze
+          pylint --rcfile=tools/pylintrc --ignore=version.py,tflite --disable=cyclic-import tf2onnx tests/*.py tools -j 0
+        displayName: 'Pylint'
+
+# Add other jobs or steps as needed
