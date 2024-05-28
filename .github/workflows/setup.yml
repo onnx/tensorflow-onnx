@@ -1,0 +1,65 @@
+name: Setup Environment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
+          pip install ${{ env.CI_PIP_ONNX_NAME }}
+          pip install ${{ env.CI_PIP_ONNX_BACKEND_NAME }} numpy
+
+          if [[ ${{ env.CI_SKIP_TFJS_TESTS }} == "False" ]]; then
+            pip install tensorflowjs==3.18.0
+            npm install @tensorflow/tfjs
+          fi
+
+          if [[ ${{ env.CI_TF_VERSION }} == 2.* ]]; then
+            pip install onnxruntime-extensions
+            pip install "tensorflow-text<=$(env.CI_TF_VERSION)"
+          fi
+
+          if [[ ${{ env.CI_ONNXRUNTIME_NIGHTLY }} == "true" ]]; then
+            pip uninstall -y onnxruntime
+            # install numpy upfront since it is not on https://test.pypi.org/simple/
+            pip install 'numpy>=1.18'
+            pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ ort-nightly
+          fi
+
+          pip uninstall -y tensorflow
+          pip install ${{ env.CI_PIP_TF_NAME }}
+          pip uninstall -y protobuf
+          pip install "protobuf~=3.20"
+
+          python setup.py install
+
+          if [[ ${{ env.ONNX_TEST }} == "true" ]]; then
+            # onnx-weekly won't satisfy onnx requirement so uninstallation must happen here
+            pip uninstall -y onnx
+            pip install --index-url https://test.pypi.org/simple/ ${{ env.PIP_ONNX_NAME:-onnx }}
+          fi
+
+          pip freeze --all
+
+      - name: Fix Paths (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          $site_dir = python -c "import site; print(site.getsitepackages()[1])"
+          echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+          $base_dir = python -c "import site; print(site.getsitepackages()[0])"
+          echo "##vso[task.prependpath]$base_dir/Library/bin"
+
+      - name: Display Environment Variables
+        run: env

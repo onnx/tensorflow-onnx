@@ -1,0 +1,19 @@
+# .github/workflows/main.yml
+
+name: My Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  my-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # Call the composite action defined in my-action.yml
+      - uses: ./.github/workflows/my-action
