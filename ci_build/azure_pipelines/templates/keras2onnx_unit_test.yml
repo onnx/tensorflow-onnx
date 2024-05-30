@@ -20,7 +20,7 @@ steps:
       pip install onnxconverter-common
       pip install $(ONNX_PATH)
       pip uninstall -y protobuf
-      pip install "protobuf~=3.20"
+      pip install "protobuf<6.0.0"
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
@@ -68,7 +68,7 @@ steps:
       pip install onnxconverter-common
       pip install %ONNX_PATH%
       pip uninstall -y protobuf
-      pip install "protobuf~=3.20"
+      pip install "protobuf<6.0.0"
       pip install h5py==3.7.0
       pip install parameterized
       pip install timeout-decorator
