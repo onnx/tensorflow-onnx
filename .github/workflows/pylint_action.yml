@@ -25,6 +25,5 @@ jobs:
         run: |
           pip freeze
           pylint --rcfile=tools/pylintrc --ignore=version.py,tflite --disable=cyclic-import tf2onnx tests/*.py tools -j 0
-        displayName: 'Pylint'
 
 # Add other jobs or steps as needed
