@@ -16,6 +16,7 @@ import tempfile
 import time
 import zipfile
 import random
+import six
 from collections import namedtuple
 from packaging.version import Version
 
@@ -23,7 +24,7 @@ from packaging.version import Version
 import yaml
 import numpy as np
 import PIL.Image
-import six
+
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
