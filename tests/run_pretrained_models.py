@@ -16,8 +16,9 @@ import tempfile
 import time
 import zipfile
 import random
-import six
+
 from collections import namedtuple
+import six
 from packaging.version import Version
 
 
