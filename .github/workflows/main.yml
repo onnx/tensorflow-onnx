@@ -19,5 +19,8 @@ jobs:
           repository: fatcat-z/tensorflow-onnx
           ref: migrate_ci
 
+      - name: Check folder
+        run: ls ./.github/workflows/
+
       # Call the composite action defined in my-action.yml
       - uses: ./.github/workflows/setup.yml
