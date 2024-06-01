@@ -1,11 +1,12 @@
 # .github/workflows/main.yml
 
-name: My Workflow
+name: Main Workflow
 
 on:
   push:
     branches:
       - main
+  pull_request:
 
 jobs:
   my-job:
@@ -16,4 +17,4 @@ jobs:
         uses: actions/checkout@v2
 
       # Call the composite action defined in my-action.yml
-      - uses: ./.github/workflows/my-action
+      - uses: ./.github/workflows/setup
