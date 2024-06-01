@@ -1,4 +1,4 @@
-name: Setup Environment
+name: setup-common
 
 on:
   push:
