@@ -16,7 +16,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          path: migrate_ci
+          ref: migrate_ci
 
       # Call the composite action defined in my-action.yml
       - uses: ./.github/workflows/setup.yml
