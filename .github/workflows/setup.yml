@@ -22,6 +22,9 @@ jobs:
         with:
           python-version: 3.9
 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install dependencies
         run: |
           # pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
