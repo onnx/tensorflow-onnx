@@ -23,9 +23,8 @@ jobs:
         run: ls ./.github/workflows/
 
       # Call the composite action defined in my-action.yml
-      - name: Run my action
-        uses: ./.github/workflows/setup-common
+      # - name: Run my action
+      #   uses: ./.github/workflows/setup-common
 
-      # Call the composite action defined in my-action.yml
-      - name: Run my action yml
-        uses: ./.github/workflows/setup.yml
+  call-setup-yml:
+    uses: ./.github/workflows/setup.yml
