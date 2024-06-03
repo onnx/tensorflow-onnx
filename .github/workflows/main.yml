@@ -15,9 +15,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          repository: fatcat-z/tensorflow-onnx
-          ref: migrate_ci
+        # with:
+        #   repository: fatcat-z/tensorflow-onnx
+        #   ref: migrate_ci
 
       - name: Check folder
         run: ls ./.github/workflows/
