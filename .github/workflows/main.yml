@@ -24,11 +24,11 @@ jobs:
       - id: prepare-variables
         name: Prepare Variables
         run: |
-          # echo "tf_version=2.10.0" >> $GITHUB_OUTPUT
-          echo "##[set-output name=tf_version;]2.10.0"
+          echo "tf_version=2.10.0" >> $GITHUB_OUTPUT
+          # echo "##[set-output name=tf_version;]2.10.0"
 
   call-setup-yml:
     needs: prepare-variables-job
     uses: ./.github/workflows/setup.yml
     with:
-      tf_version: ${{ needs.prepare-variables.outputs.tensorflow_version }}
+      tf_version: ${{ needs.prepare-variables-job.outputs.tensorflow_version }}
