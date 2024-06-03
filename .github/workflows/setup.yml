@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
+          # pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
           pip install numpy
 
           pip install onnxruntime-extensions
@@ -35,7 +35,8 @@ jobs:
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
 
-          python ./setup.py install
+          ls *.py
+          python setup.py install
 
           pip freeze --all
 
