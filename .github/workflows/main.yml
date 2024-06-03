@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check folder
-        run: ls ./.github/workflows/
+        run: ls ./
 
       - id: prepare-variables
         name: Prepare Variables
