@@ -35,7 +35,8 @@ jobs:
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
 
-          ls
+          ls /home/runner/work/tensorflow-onnx/tensorflow-onnx/
+          ls /home/runner/work/tensorflow-onnx/
           python setup.py install
 
           pip freeze --all
