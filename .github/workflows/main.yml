@@ -12,9 +12,7 @@ jobs:
   prepare-variables-job:
     runs-on: ubuntu-latest
     outputs:
-      tensorflow_version:
-        description: "The version of target tensorflow"
-        value: ${{ jobs.prepare-variables-job.outputs.tf_version }}
+      tensorflow_version: ${{ jobs.prepare-variables-job.outputs.tf_version }}
 
     steps:
       - name: Checkout code
