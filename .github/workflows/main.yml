@@ -24,7 +24,7 @@ jobs:
       - id: prepare-variables
         name: Prepare Variables
         run: |
-          echo "##[set-output name=tf_version;]2.10.0"
+          echo "tf_version=2.10.0" >> $GITHUB_ENV
 
   call-setup-yml:
     needs: prepare-variables-job
