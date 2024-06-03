@@ -12,7 +12,7 @@ jobs:
   prepare-variables-job:
     runs-on: ubuntu-latest
     outputs:
-      tensorflow_version: ${{ jobs.prepare-variables-job.outputs.tf_version }}
+      tensorflow_version: ${{ steps.prepare-variables.outputs.tf_version }}
 
     steps:
       - name: Checkout code
@@ -21,7 +21,7 @@ jobs:
       - name: Check folder
         run: ls ./.github/workflows/
 
-      - id: prepare-variables-job
+      - id: prepare-variables
         name: Prepare Variables
         run: |
           echo "##[set-output name=tf_version;]2.10.0"
