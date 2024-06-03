@@ -35,7 +35,7 @@ jobs:
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
 
-          python setup.py install
+          python ./setup.py install
 
           pip freeze --all
 
