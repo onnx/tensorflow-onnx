@@ -9,22 +9,27 @@ on:
   pull_request:
 
 jobs:
-  my-job:
+  prepare-variables-job:
     runs-on: ubuntu-latest
+    outputs:
+      tensorflow_version:
+        description: "The version of target tensorflow"
+        value: ${{ jobs.prepare-variables-job.outputs.tf_version }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        # with:
-        #   repository: fatcat-z/tensorflow-onnx
-        #   ref: migrate_ci
 
       - name: Check folder
         run: ls ./.github/workflows/
 
-      # Call the composite action defined in my-action.yml
-      # - name: Run my action
-      #   uses: ./.github/workflows/setup-common
+      - id: prepare-variables-job
+        name: Prepare Variables
+        run: |
+          echo "##[set-output name=tf_version;]2.10.0"
 
   call-setup-yml:
+    needs: prepare-variables-job
     uses: ./.github/workflows/setup.yml
+    with:
+      tf_version: ${{ needs.prepare-variables-job.outputs.tensorflow_version }}
