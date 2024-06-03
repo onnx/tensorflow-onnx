@@ -30,4 +30,4 @@ jobs:
     needs: prepare-variables-job
     uses: ./.github/workflows/setup.yml
     with:
-      tf_version: ${{ needs.prepare-variables-job.outputs.tensorflow_version }}
+      tf_version: ${{ needs.prepare-variables.outputs.tensorflow_version }}
