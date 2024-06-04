@@ -17,13 +17,19 @@ on:
 
 jobs:
   setup:
+    strategy:
+      matrix:
+        tf_version: ['2.10.0', '2.11.0', '2.13.0']
+        python_version: ['3.8', '3.9', '3.10']
+
     runs-on: ubuntu-latest
 
     steps:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: ${{ inputs.py_version }}
+          # python-version: ${{ inputs.py_version }}
+          python-version: ${{ matrix.py_version }}
 
       - name: Checkout code (${{ matrix.py_version }}-${{ matrix.tf_version }})
         uses: actions/checkout@v4
@@ -34,10 +40,12 @@ jobs:
           pip install numpy
 
           pip install onnxruntime-extensions
-          pip install "tensorflow-text<=${{ inputs.tf_version }}"
+          # pip install "tensorflow-text<=${{ inputs.tf_version }}"
+          pip install "tensorflow-text<=${{ matrix.tf_version }}"
 
           pip uninstall -y tensorflow
-          pip install tensorflow==${{ inputs.tf_version }}
+          # pip install tensorflow==${{ inputs.tf_version }}
+          pip install tensorflow==${{ matrix.tf_version }}
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
 
@@ -47,13 +55,13 @@ jobs:
 
           pip freeze --all
 
-      - name: Fix Paths (Windows only)
-        if: runner.os == 'Windows'
-        run: |
-          $site_dir = python -c "import site; print(site.getsitepackages()[1])"
-          echo "##vso[task.prependpath]$site_dir\numpy\.libs"
-          $base_dir = python -c "import site; print(site.getsitepackages()[0])"
-          echo "##vso[task.prependpath]$base_dir/Library/bin"
+      # - name: Fix Paths (Windows only)
+      #   if: runner.os == 'Windows'
+      #   run: |
+      #     $site_dir = python -c "import site; print(site.getsitepackages()[1])"
+      #     echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+      #     $base_dir = python -c "import site; print(site.getsitepackages()[0])"
+      #     echo "##vso[task.prependpath]$base_dir/Library/bin"
 
       - name: Display Environment Variables
         run: env
