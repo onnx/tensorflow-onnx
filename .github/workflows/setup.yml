@@ -9,7 +9,10 @@ on:
       tf_version:
         description: 'TensorFlow version'
         required: true
-        default: '2.14.0'
+        type: string
+      py_version:
+        description: 'Python version'
+        required: true
         type: string
 
 jobs:
@@ -20,9 +23,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: 3.9
+          python-version: ${{ inputs.py_version }}
 
-      - name: Checkout code
+      - name: Checkout code (${{ matrix.py_version }}-${{ matrix.tf_version }})
         uses: actions/checkout@v4
 
       - name: Install dependencies
