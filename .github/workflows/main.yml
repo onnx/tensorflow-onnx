@@ -6,14 +6,14 @@ on:
   push:
     branches:
       - main
-  # pull_request:
+  pull_request:
 
 jobs:
   prepare-variables-job:
-    strategy:
-      matrix:
-        tf_version: ['2.10.0', '2.11.0', '2.13.0']
-        python_version: ['3.8', '3.9', '3.10']
+    # strategy:
+    #   matrix:
+    #     tf_version: ['2.10.0', '2.11.0', '2.13.0']
+    #     python_version: ['3.8', '3.9', '3.10']
     runs-on: ubuntu-latest
     outputs:
       tensorflow_version: ${{ steps.prepare-variables.outputs.tf_version }}
@@ -23,8 +23,10 @@ jobs:
       - id: prepare-variables
         name: Prepare Variables
         run: |
-          echo "tf_version=${{ matrix.tf_version }}" >> $GITHUB_OUTPUT
-          echo "py_version=${{ matrix.python_version }}" >> $GITHUB_OUTPUT
+          # echo "tf_version=${{ matrix.tf_version }}" >> $GITHUB_OUTPUT
+          # echo "py_version=${{ matrix.python_version }}" >> $GITHUB_OUTPUT
+          echo "tf_version='2.10'" >> $GITHUB_OUTPUT
+          echo "py_version='3.8'" >> $GITHUB_OUTPUT
 
   call-setup-yml:
     needs: prepare-variables-job
