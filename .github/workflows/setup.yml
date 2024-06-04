@@ -37,15 +37,13 @@ jobs:
 
       - name: Install dependencies (tf ${{ matrix.tf_version }})
         run: |
-          # pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
+          pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
           pip install numpy
 
           pip install onnxruntime-extensions
-          # pip install "tensorflow-text<=${{ inputs.tf_version }}"
           pip install "tensorflow-text<=${{ matrix.tf_version }}"
 
           pip uninstall -y tensorflow
-          # pip install tensorflow==${{ inputs.tf_version }}
           pip install tensorflow==${{ matrix.tf_version }}
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
@@ -54,13 +52,13 @@ jobs:
 
           pip freeze --all
 
-      # - name: Fix Paths (Windows only)
-      #   if: runner.os == 'Windows'
-      #   run: |
-      #     $site_dir = python -c "import site; print(site.getsitepackages()[1])"
-      #     echo "##vso[task.prependpath]$site_dir\numpy\.libs"
-      #     $base_dir = python -c "import site; print(site.getsitepackages()[0])"
-      #     echo "##vso[task.prependpath]$base_dir/Library/bin"
+      - name: Fix Paths (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          $site_dir = python -c "import site; print(site.getsitepackages()[1])"
+          echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+          $base_dir = python -c "import site; print(site.getsitepackages()[0])"
+          echo "##vso[task.prependpath]$base_dir/Library/bin"
 
       - name: Display Environment Variables
         run: env
