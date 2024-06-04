@@ -20,25 +20,22 @@ jobs:
   setup:
     strategy:
       matrix:
-        tf_version: ['2.10.0', '2.11.0', '2.13.0']
+        tf_version: ['2.10', '2.11', '2.13']
         python_version: ['3.8', '3.9', '3.10']
-    permissions:
-      actions: write
-      checks: write
 
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set up Python
+      - name: Set up Python (${{ matrix.python_version }})
         uses: actions/setup-python@v2
         with:
           # python-version: ${{ inputs.py_version }}
           python-version: ${{ matrix.python_version }}
 
-      - name: Checkout code (${{ matrix.python_version }}-${{ matrix.tf_version }})
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install dependencies (tf ${{ matrix.tf_version }})
         run: |
           # pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
           pip install numpy
