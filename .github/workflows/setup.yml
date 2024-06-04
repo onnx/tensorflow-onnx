@@ -39,6 +39,8 @@ jobs:
       - name: Install dependencies (tf ${{ matrix.tf_version }})
         run: |
           pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
+          pip install onnx
+          pip install onnxruntime==1.16.3
           pip install numpy
 
           pip install onnxruntime-extensions
