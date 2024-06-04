@@ -22,6 +22,9 @@ jobs:
       matrix:
         tf_version: ['2.10.0', '2.11.0', '2.13.0']
         python_version: ['3.8', '3.9', '3.10']
+    permissions:
+      actions: write
+      checks: write
 
     runs-on: ubuntu-latest
 
@@ -52,6 +55,7 @@ jobs:
 
           ls /home/runner/work/tensorflow-onnx/tensorflow-onnx/
           ls /home/runner/work/tensorflow-onnx/
+          cd /home/runner/work/tensorflow-onnx/tensorflow-onnx/
           python setup.py install
 
           pip freeze --all
