@@ -22,6 +22,7 @@ jobs:
       matrix:
         tf_version: ['2.10', '2.11', '2.13']
         python_version: ['3.8', '3.9', '3.10']
+        opset_version: ['17', '16', '14']
 
     runs-on: ubuntu-latest
 
@@ -60,5 +61,12 @@ jobs:
           $base_dir = python -c "import site; print(site.getsitepackages()[0])"
           echo "##vso[task.prependpath]$base_dir/Library/bin"
 
-      - name: Display Environment Variables
-        run: env
+      - name: Run pretrained_model_test
+        run: |
+          set -x
+          status=0
+          # TODO: fix unity model path
+          # python tests/run_pretrained_models.py --backend $CI_ONNX_BACKEND --opset $CI_ONNX_OPSET --config tests/unity.yaml || status=$?
+          python tests/run_pretrained_models.py --backend onnxruntime --opset ${{ matrix.opset_version }} --skip_tf_tests False --skip_tflite_tests False --skip_tfjs_tests True --config tests/run_pretrained_models.yaml || status=$?
+          exit $status
+
