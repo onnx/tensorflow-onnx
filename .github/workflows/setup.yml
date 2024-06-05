@@ -43,6 +43,7 @@ jobs:
       - name: Install dependencies (tf ${{ matrix.tf_version }})
         shell: bash
         run: |
+          chmod +x ./tests/setup_test_env.sh
           ./tests/setup_test_env.sh ${{ matrix.tf_version }}
         #   pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
         #   pip install onnx
