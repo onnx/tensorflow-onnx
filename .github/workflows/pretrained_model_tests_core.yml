@@ -1,9 +1,6 @@
 name: Pretrained Model Test (Core)
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
 
 jobs:
