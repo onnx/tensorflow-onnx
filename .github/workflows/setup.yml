@@ -23,8 +23,7 @@ jobs:
         tf_version: ['2.10', '2.13']
         python_version: ['3.8', '3.9']
         opset_version: ['17']
-    env:
-      tensorflow_version: ${{ github.event.inputs.tf_version }}
+
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +33,7 @@ jobs:
           # python-version: ${{ inputs.py_version }}
           python-version: ${{ matrix.python_version }}
 
-      - name: Checkout code ($tensorflow_version)
+      - name: Checkout code (${{ github.event.inputs.tf_version }})
         uses: actions/checkout@v4
 
       - name: Check folder
