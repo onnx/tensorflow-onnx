@@ -34,7 +34,7 @@ jobs:
           # python-version: ${{ inputs.py_version }}
           python-version: ${{ matrix.python_version }}
 
-      - name: Checkout code
+      - name: Checkout code ($tensorflow_version)
         uses: actions/checkout@v4
 
       - name: Check folder
