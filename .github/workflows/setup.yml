@@ -41,7 +41,7 @@ jobs:
           ls ./.github/workflows/
 
       - name: Install dependencies (tf ${{ matrix.tf_version }})
-        uses: ./.github/workflows/preparation.yml
+        uses: ./.github/actions/prepare_env
         with:
           tf_version: ${{ matrix.tf_version }}
         # run: |
