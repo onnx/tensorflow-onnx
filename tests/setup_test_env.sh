@@ -9,6 +9,8 @@
 # Assign the argument to a variable
 TF_VERSION=$1
 
+echo "=============== TensorFlow version: $TF_VERSION"
+
 pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
 pip install onnx
 pip install onnxruntime==1.16.3
