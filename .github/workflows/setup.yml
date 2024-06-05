@@ -38,13 +38,11 @@ jobs:
 
       - name: Check folder
         run: |
-          ls ./.github/workflows/
+          ls ./tests/
 
       - name: Install dependencies (tf ${{ matrix.tf_version }})
-        uses: ./.github/actions/prepare_env/
-        with:
-          tf_version: ${{ matrix.tf_version }}
-        # run: |
+        run: |
+          python ./tests/setup_test_env.sh ${{ matrix.tf_version }}
         #   pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
         #   pip install onnx
         #   pip install onnxruntime==1.16.3
