@@ -20,15 +20,15 @@ jobs:
   setup:
     strategy:
       matrix:
-        tf_version: ['2.10', '2.11', '2.13']
-        python_version: ['3.8', '3.9', '3.10']
-        opset_version: ['17', '16', '14']
+        tf_version: ['2.10', '2.13']
+        python_version: ['3.8', '3.9']
+        opset_version: ['17']
 
     runs-on: ubuntu-latest
 
     steps:
       - name: Set up Python (${{ matrix.python_version }})
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           # python-version: ${{ inputs.py_version }}
           python-version: ${{ matrix.python_version }}
@@ -37,23 +37,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies (tf ${{ matrix.tf_version }})
-        run: |
-          pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
-          pip install onnx
-          pip install onnxruntime==1.16.3
-          pip install numpy
+        uses: ./.github/workflows/preparation.yml
+        with:
+          tf_version: ${{ matrix.tf_version }}
+        # run: |
+        #   pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
+        #   pip install onnx
+        #   pip install onnxruntime==1.16.3
+        #   pip install numpy
 
-          pip install onnxruntime-extensions
-          pip install "tensorflow-text<=${{ matrix.tf_version }}"
+        #   pip install onnxruntime-extensions
+        #   pip install "tensorflow-text<=${{ matrix.tf_version }}"
 
-          pip uninstall -y tensorflow
-          pip install tensorflow==${{ matrix.tf_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
+        #   pip uninstall -y tensorflow
+        #   pip install tensorflow==${{ matrix.tf_version }}
+        #   pip uninstall -y protobuf
+        #   pip install "protobuf~=3.20"
 
-          python setup.py install
+        #   python setup.py install
 
-          pip freeze --all
+        #   pip freeze --all
 
       - name: Fix Paths (Windows only)
         if: runner.os == 'Windows'

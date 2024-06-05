@@ -1,0 +1,49 @@
+name: Prepare Environment.
+
+on:
+  workflow_call:
+    inputs:
+      tf_version:
+        description: 'TensorFlow version'
+        required: true
+        type: string
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (tf ${{ inputs.tf_version }})
+        run: |
+          pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
+          pip install onnx
+          pip install onnxruntime==1.16.3
+          pip install numpy
+
+          pip install onnxruntime-extensions
+          pip install "tensorflow-text<=${{ inputs.tf_version }}"
+
+          pip uninstall -y tensorflow
+          pip install tensorflow==${{ inputs.tf_version }}
+          pip uninstall -y protobuf
+          pip install "protobuf~=3.20"
+
+          python setup.py install
+
+          pip freeze --all
+
+      - name: Fix Paths (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          $site_dir = python -c "import site; print(site.getsitepackages()[1])"
+          echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+          $base_dir = python -c "import site; print(site.getsitepackages()[0])"
+          echo "##vso[task.prependpath]$base_dir/Library/bin"
+
+      - name: List all dependencies
+        run: |
+          pip list
+
