@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # # Check if the argument is provided
-# if [ "$#" -ne 1 ]; then
-#     echo "Usage: $0 <tensorflow_version>"
-#     exit 1
-# fi
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <tensorflow_version>"
+    exit 1
+fi
 
 # Assign the argument to a variable
 TF_VERSION=$1
 
-echo "=============== TensorFlow version: $TF_VERSION"
+echo "==== TensorFlow version: $TF_VERSION"
 
 pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
 pip install onnx
