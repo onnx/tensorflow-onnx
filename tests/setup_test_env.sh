@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Check if the argument is provided
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <tensorflow_version>"
-    exit 1
-fi
+# # Check if the argument is provided
+# if [ "$#" -ne 1 ]; then
+#     echo "Usage: $0 <tensorflow_version>"
+#     exit 1
+# fi
 
 # Assign the argument to a variable
 TF_VERSION=$1
