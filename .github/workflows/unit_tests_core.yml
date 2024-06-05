@@ -1,0 +1,54 @@
+name: Unit Tests (Core)
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  setup:
+    strategy:
+      matrix:
+        tf_version: ['2.9.0', '2.15.0']
+        python_version: ['3.8', '3.9', '3.10']
+        opset_version: ['18', '15']
+        ort_version: ['1.16.3']
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python (${{ matrix.python_version }})
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (tf v${{ matrix.tf_version }})
+        shell: bash
+        run: |
+          chmod +x ./tests/setup_test_env.sh
+          ./tests/setup_test_env.sh ${{ matrix.tf_version }} ${{ matrix.ort_version }}
+
+      - name: Fix Paths (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          $site_dir = python -c "import site; print(site.getsitepackages()[1])"
+          echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+          $base_dir = python -c "import site; print(site.getsitepackages()[0])"
+          echo "##vso[task.prependpath]$base_dir/Library/bin"
+
+      - name: Run unit_test
+        run: |
+          set -x
+          status=0
+          export TF2ONNX_TEST_BACKEND=onnxruntime
+          export TF2ONNX_TEST_OPSET=${{ matrix.opset_version }}
+          export TF2ONNX_SKIP_TFLITE_TESTS=False
+          export TF2ONNX_SKIP_TFJS_TESTS=True
+          export TF2ONNX_SKIP_TF_TESTS=False
+          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
+          exit $status
+
