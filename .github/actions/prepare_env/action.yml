@@ -11,12 +11,14 @@ on:
 jobs:
   setup:
     runs-on: ubuntu-latest
-
+    env:
+      tensorflow_version: ${{ inputs.tf_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies (tf ${{ inputs.tf_version }})
+      # - name: Install dependencies (tf ${{ inputs.tf_version }})
+      - name: Install dependencies (tf $tensorflow_version)
         run: |
           pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
           pip install onnx
@@ -24,10 +26,12 @@ jobs:
           pip install numpy
 
           pip install onnxruntime-extensions
-          pip install "tensorflow-text<=${{ inputs.tf_version }}"
+          # pip install "tensorflow-text<=${{ inputs.tf_version }}"
+          pip install "tensorflow-text<=$tensorflow_version"
 
           pip uninstall -y tensorflow
-          pip install tensorflow==${{ inputs.tf_version }}
+          # pip install tensorflow==${{ inputs.tf_version }}
+          pip install tensorflow==$tensorflow_version
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
 
