@@ -1,12 +1,6 @@
 name: Prepare Environment.
 
 on:
-  workflow_dispatch:
-    inputs:
-      tf_version:
-        description: 'TensorFlow version'
-        required: true
-        type: string
   workflow_call:
     inputs:
       tf_version:
@@ -18,7 +12,7 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     env:
-      tensorflow_version: ${{ inputs.tf_version }}
+      tensorflow_version: ${{ github.event.inputs.tf_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
