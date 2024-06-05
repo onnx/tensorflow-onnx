@@ -10,9 +10,9 @@ jobs:
   setup:
     strategy:
       matrix:
-        tf_version: ['2.10', '2.13']
-        python_version: ['3.8', '3.10']
-        opset_version: ['17', '16', '14']
+        tf_version: ['2.9.0', '2.15.0']
+        python_version: ['3.8', '3.9', '3.10']
+        opset_version: ['18', '15']
         ort_version: ['1.16.3']
 
     runs-on: ubuntu-latest
@@ -23,14 +23,10 @@ jobs:
         with:
           python-version: ${{ matrix.python_version }}
 
-      - name: Checkout code (${{ github.event.inputs.tf_version }})
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check folder
-        run: |
-          ls ./tests/
-
-      - name: Install dependencies (tf ${{ matrix.tf_version }})
+      - name: Install dependencies (tf v${{ matrix.tf_version }})
         shell: bash
         run: |
           chmod +x ./tests/setup_test_env.sh
