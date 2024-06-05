@@ -13,6 +13,7 @@ jobs:
         tf_version: ['2.10', '2.13']
         python_version: ['3.8', '3.10']
         opset_version: ['17', '16', '14']
+        ort_version: ['1.16.3']
 
     runs-on: ubuntu-latest
 
@@ -33,7 +34,7 @@ jobs:
         shell: bash
         run: |
           chmod +x ./tests/setup_test_env.sh
-          ./tests/setup_test_env.sh ${{ matrix.tf_version }}
+          ./tests/setup_test_env.sh ${{ matrix.tf_version }} ${{ matrix.ort_version }}
 
       - name: Fix Paths (Windows only)
         if: runner.os == 'Windows'

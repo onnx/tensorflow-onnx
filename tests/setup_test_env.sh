@@ -2,8 +2,7 @@
 
 # # Check if the argument is provided
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <tensorflow_version>"
-    echo "Usage: $1 <onnxruntime_version>"
+    echo "Usage: $0 <tensorflow_version> <onnxruntime_version>"
     exit 1
 fi
 
