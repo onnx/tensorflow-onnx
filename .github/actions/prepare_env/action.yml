@@ -1,6 +1,12 @@
 name: Prepare Environment.
 
 on:
+  workflow_dispatch:
+    inputs:
+      tf_version:
+        description: 'TensorFlow version'
+        required: true
+        type: string
   workflow_call:
     inputs:
       tf_version:
