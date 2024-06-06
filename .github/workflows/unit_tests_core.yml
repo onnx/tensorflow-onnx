@@ -56,9 +56,9 @@ jobs:
       - name: Run unit_test (Windows)
         if: runner.os == 'Windows'
         run: |
-          %TF2ONNX_TEST_BACKEND%=onnxruntime
-          %TF2ONNX_TEST_OPSET%=${{ matrix.opset_version }}
-          %TF2ONNX_SKIP_TFLITE_TESTS%=False
-          %TF2ONNX_SKIP_TFJS_TESTS%=True
-          %TF2ONNX_SKIP_TF_TESTS%=False
+          set TF2ONNX_TEST_BACKEND=onnxruntime
+          set TF2ONNX_TEST_OPSET=${{ matrix.opset_version }}
+          set TF2ONNX_SKIP_TFLITE_TESTS=False
+          set TF2ONNX_SKIP_TFJS_TESTS=True
+          set TF2ONNX_SKIP_TF_TESTS=False
           python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
