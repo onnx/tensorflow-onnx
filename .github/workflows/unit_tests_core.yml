@@ -16,8 +16,9 @@ jobs:
         python_version: ['3.8', '3.9', '3.10']
         opset_version: ['18', '15']
         ort_version: ['1.16.3']
+        os: ['ubuntu-latest', 'windows-2022']
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Set up Python (${{ matrix.python_version }})
@@ -28,7 +29,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies (tf v${{ matrix.tf_version }})
+      - name: Install dependencies (tf-v${{ matrix.tf_version }})
         shell: bash
         run: |
           chmod +x ./tests/utils/setup_test_env.sh
