@@ -45,13 +45,10 @@ jobs:
 
       - name: Run unit_test
         run: |
-          set -x
-          status=0
           export TF2ONNX_TEST_BACKEND=onnxruntime
           export TF2ONNX_TEST_OPSET=${{ matrix.opset_version }}
           export TF2ONNX_SKIP_TFLITE_TESTS=False
           export TF2ONNX_SKIP_TFJS_TESTS=True
           export TF2ONNX_SKIP_TF_TESTS=False
           python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
-          exit $status
 
