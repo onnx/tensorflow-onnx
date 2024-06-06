@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           chmod +x ./tests/setup_test_env.sh
-          ./tests/setup_test_env.sh ${{ matrix.tf_version }} ${{ matrix.ort_version }}
+          ./tests/utils/setup_test_env.sh ${{ matrix.tf_version }} ${{ matrix.ort_version }}
 
       - name: Fix Paths (Windows only)
         if: runner.os == 'Windows'
