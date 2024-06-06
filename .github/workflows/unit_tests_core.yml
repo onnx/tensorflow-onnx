@@ -29,7 +29,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies (tf-v${{ matrix.tf_version }})
+      - name: Install dependencies (TF-v${{ matrix.tf_version }})
         shell: bash
         run: |
           chmod +x ./tests/utils/setup_test_env.sh
@@ -62,3 +62,22 @@ jobs:
           set TF2ONNX_SKIP_TFJS_TESTS=True
           set TF2ONNX_SKIP_TF_TESTS=False
           python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
+
+  publish-test-results:
+    name: "Publish Tests Results to Github"
+    needs: run_tests
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
+    if: always()
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: "artifacts/**/*.xml"
