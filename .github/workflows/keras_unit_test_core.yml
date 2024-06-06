@@ -42,8 +42,6 @@ jobs:
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
           pip install tensorflow==${{ matrix.tf_version }}
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
           pip install pytest pytest-cov pytest-runner
           pip install onnxruntime==${{ matrix.ort_version }}
 
