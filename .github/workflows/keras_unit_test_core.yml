@@ -44,6 +44,7 @@ jobs:
           pip install onnxruntime==${{ matrix.ort_version }}
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
+          pip install -e .
 
           echo "----- List all of depdencies:"
           pip freeze --all
