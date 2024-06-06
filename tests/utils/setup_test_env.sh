@@ -28,4 +28,5 @@ pip install "protobuf~=3.20"
 
 python setup.py install
 
+echo "----- List all of depdencies:"
 pip freeze --all

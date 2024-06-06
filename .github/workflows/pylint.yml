@@ -1,10 +1,12 @@
 name: Pylint Workflow
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
-  pull_request:
 
 jobs:
   pylint:
