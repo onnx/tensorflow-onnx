@@ -35,8 +35,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ matrix.onnx_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
           pip install h5py==3.7.0
           pip install parameterized
           pip install timeout-decorator
@@ -44,6 +42,8 @@ jobs:
           pip install tensorflow==${{ matrix.tf_version }}
           pip install pytest pytest-cov pytest-runner
           pip install onnxruntime==${{ matrix.ort_version }}
+          pip uninstall -y protobuf
+          pip install "protobuf~=3.20"
 
           echo "----- List all of depdencies:"
           pip freeze --all

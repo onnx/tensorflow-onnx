@@ -33,7 +33,6 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          # conda config --set always_yes yes --set changeps1 no
           pip install onnxconverter-common
           pip install onnx==${{ matrix.onnx_version }}
           pip uninstall -y protobuf
