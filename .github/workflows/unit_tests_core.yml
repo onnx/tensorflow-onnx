@@ -52,6 +52,7 @@ jobs:
           export TF2ONNX_SKIP_TFJS_TESTS=True
           export TF2ONNX_SKIP_TF_TESTS=False
           python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
+          ls
 
       - name: Run unit_test (Windows)
         if: runner.os == 'Windows'
@@ -62,6 +63,7 @@ jobs:
           set TF2ONNX_SKIP_TFJS_TESTS=True
           set TF2ONNX_SKIP_TF_TESTS=False
           python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
+          ls
 
   publish-test-results:
     name: "Publish Tests Results to Github"
@@ -72,12 +74,7 @@ jobs:
       pull-requests: write
     if: always()
     steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: artifacts
-
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: "artifacts/**/*.xml"
+          files: "**/test-results.xml"

@@ -47,22 +47,23 @@ jobs:
           # TODO: fix unity model path
           # python tests/run_pretrained_models.py --backend $CI_ONNX_BACKEND --opset $CI_ONNX_OPSET --config tests/unity.yaml || status=$?
           python tests/run_pretrained_models.py --backend onnxruntime --opset ${{ matrix.opset_version }} --skip_tf_tests False --skip_tflite_tests False --skip_tfjs_tests True --config tests/run_pretrained_models.yaml || status=$?
+          ls *.xml
 
-  publish-test-results:
-    name: "Publish Tests Results to Github"
-    needs: run_tests
-    runs-on: ubuntu-latest
-    permissions:
-      checks: write
-      pull-requests: write
-    if: always()
-    steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: artifacts
+  # publish-test-results:
+  #   name: "Publish Tests Results to Github"
+  #   needs: run_tests
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     checks: write
+  #     pull-requests: write
+  #   if: always()
+  #   steps:
+  #     - name: Download Artifacts
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         path: artifacts
 
-      - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        with:
-          files: "artifacts/**/*.xml"
+  #     - name: Publish Test Results
+  #       uses: EnricoMi/publish-unit-test-result-action@v2
+  #       with:
+  #         files: "**/pytest*.xml"
