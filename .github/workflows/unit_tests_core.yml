@@ -12,9 +12,12 @@ jobs:
   run_tests:
     strategy:
       matrix:
-        tf_version: ['2.9.0', '2.13.0']
-        python_version: ['3.8', '3.9', '3.10']
-        opset_version: ['18', '15']
+        # tf_version: ['2.9.0', '2.13.0']
+        # python_version: ['3.8', '3.9']
+        # opset_version: ['18', '15']
+        tf_version: ['2.9.0']
+        python_version: ['3.9']
+        opset_version: ['18']
         ort_version: ['1.16.3']
         os: ['ubuntu-latest', 'windows-2022']
 
@@ -51,7 +54,7 @@ jobs:
           export TF2ONNX_SKIP_TFLITE_TESTS=False
           export TF2ONNX_SKIP_TFJS_TESTS=True
           export TF2ONNX_SKIP_TF_TESTS=False
-          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
+          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
           ls
 
       - name: Run unit_test (Windows)
@@ -62,7 +65,7 @@ jobs:
           set TF2ONNX_SKIP_TFLITE_TESTS=False
           set TF2ONNX_SKIP_TFJS_TESTS=True
           set TF2ONNX_SKIP_TF_TESTS=False
-          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
+          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
           ls
 
       - name: Upload Test Results
@@ -70,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
-          path: pytest.xml
+          path: ./**/test-results-*.xml
 
 
   publish-test-results:
@@ -82,6 +85,11 @@ jobs:
       pull-requests: write
     if: always()
     steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:

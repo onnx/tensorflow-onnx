@@ -47,7 +47,7 @@ jobs:
           # TODO: fix unity model path
           # python tests/run_pretrained_models.py --backend $CI_ONNX_BACKEND --opset $CI_ONNX_OPSET --config tests/unity.yaml || status=$?
           python tests/run_pretrained_models.py --backend onnxruntime --opset ${{ matrix.opset_version }} --skip_tf_tests False --skip_tflite_tests False --skip_tfjs_tests True --config tests/run_pretrained_models.yaml || status=$?
-          ls *.xml
+          ls
 
   # publish-test-results:
   #   name: "Publish Tests Results to Github"
