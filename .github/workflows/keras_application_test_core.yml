@@ -144,6 +144,13 @@ jobs:
           cd tests/keras2onnx_applications/nightly_build
           python run_all_v2.py --exclude "test_keras_applications_v2.py"
 
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
+          path: pytest.xml
+
 
   publish-test-results:
     name: "Publish Tests Results to Github"

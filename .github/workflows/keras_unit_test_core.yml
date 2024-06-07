@@ -104,6 +104,14 @@ jobs:
           python -c "import onnxconverter_common"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
 
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
+          path: pytest.xml
+
+
   publish-test-results:
     name: "Publish Tests Results to Github"
     needs: run_tests

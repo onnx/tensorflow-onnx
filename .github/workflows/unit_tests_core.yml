@@ -65,6 +65,14 @@ jobs:
           python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append
           ls
 
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
+          path: pytest.xml
+
+
   publish-test-results:
     name: "Publish Tests Results to Github"
     needs: run_tests
@@ -77,4 +85,4 @@ jobs:
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: "**/test-results.xml"
+          files: "artifacts/**/*.xml"
