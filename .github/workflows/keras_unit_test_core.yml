@@ -1,4 +1,4 @@
-name: Keras2onnx Unit Tests (Core)
+name: Keras2onnx Unit Tests (CI)
 
 on:
   pull_request:
@@ -7,17 +7,16 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   run_tests:
     strategy:
       matrix:
-        # tf_version: ['2.9.0', '2.13.0']
-        # python_version: ['3.8', '3.9']
-        # opset_version: ['18', '15']
-        tf_version: ['2.9.0']
-        python_version: ['3.9']
-        opset_version: ['18']        ort_version: ['1.16.3']
+        tf_version: ['2.9.0', '2.13.0']
+        python_version: ['3.8', '3.9']
+        opset_version: ['18', '15']
+        ort_version: ['1.16.3']
         onnx_version: ['1.15.0']
         os: ['ubuntu-latest', 'windows-2022']
 

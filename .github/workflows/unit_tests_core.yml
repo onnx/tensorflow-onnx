@@ -1,4 +1,4 @@
-name: Unit Tests (Core)
+name: Unit Tests (CI)
 
 on:
   pull_request:
@@ -7,17 +7,15 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   run_tests:
     strategy:
       matrix:
-        # tf_version: ['2.9.0', '2.13.0']
-        # python_version: ['3.8', '3.9']
-        # opset_version: ['18', '15']
-        tf_version: ['2.9.0']
-        python_version: ['3.9']
-        opset_version: ['18']
+        tf_version: ['2.9.0', '2.13.0']
+        python_version: ['3.8', '3.9']
+        opset_version: ['18', '15']
         ort_version: ['1.16.3']
         os: ['ubuntu-latest', 'windows-2022']
 
@@ -74,7 +72,6 @@ jobs:
         with:
           name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
           path: ./**/test-results-*.xml
-
 
   publish-test-results:
     name: "Publish Tests Results to Github"
