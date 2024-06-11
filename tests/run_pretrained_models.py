@@ -16,14 +16,16 @@ import tempfile
 import time
 import zipfile
 import random
+
 from collections import namedtuple
+import six
 from packaging.version import Version
 
 
 import yaml
 import numpy as np
 import PIL.Image
-import six
+
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
