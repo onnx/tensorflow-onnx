@@ -1,0 +1,93 @@
+name: Unit Tests (CI)
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  run_tests:
+    strategy:
+      matrix:
+        tf_version: ['2.9.0', '2.13.0']
+        python_version: ['3.8', '3.9']
+        opset_version: ['18', '15']
+        ort_version: ['1.16.3']
+        os: ['ubuntu-latest', 'windows-2022']
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Set up Python (${{ matrix.python_version }})
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (TF-v${{ matrix.tf_version }})
+        shell: bash
+        run: |
+          chmod +x ./tests/utils/setup_test_env.sh
+          ./tests/utils/setup_test_env.sh ${{ matrix.tf_version }} ${{ matrix.ort_version }}
+
+      - name: Fix Paths (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          $site_dir = python -c "import site; print(site.getsitepackages()[1])"
+          echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+          $base_dir = python -c "import site; print(site.getsitepackages()[0])"
+          echo "##vso[task.prependpath]$base_dir/Library/bin"
+
+      - name: Run unit_test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          export TF2ONNX_TEST_BACKEND=onnxruntime
+          export TF2ONNX_TEST_OPSET=${{ matrix.opset_version }}
+          export TF2ONNX_SKIP_TFLITE_TESTS=False
+          export TF2ONNX_SKIP_TFJS_TESTS=True
+          export TF2ONNX_SKIP_TF_TESTS=False
+          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
+          ls
+
+      - name: Run unit_test (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          set TF2ONNX_TEST_BACKEND=onnxruntime
+          set TF2ONNX_TEST_OPSET=${{ matrix.opset_version }}
+          set TF2ONNX_SKIP_TFLITE_TESTS=False
+          set TF2ONNX_SKIP_TFJS_TESTS=True
+          set TF2ONNX_SKIP_TF_TESTS=False
+          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
+          ls
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
+          path: ./**/test-results-*.xml
+
+  publish-test-results:
+    name: "Publish Tests Results to Github"
+    needs: run_tests
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
+    if: always()
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: "artifacts/**/*.xml"
