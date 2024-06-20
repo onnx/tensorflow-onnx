@@ -1,4 +1,4 @@
-name: Pylint Workflow
+name: Pylint
 
 on:
   pull_request:
