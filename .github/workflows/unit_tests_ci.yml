@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
   run_tests:
-  name: Test (${{ matrix.python_version }}-${{ matrix.tf_version }}-${{ matrix.opset_version }}-${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
