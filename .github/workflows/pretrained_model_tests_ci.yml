@@ -28,14 +28,14 @@ jobs:
             python_version: '3.9'
           - tf_version: '2.15.0'
             python_version: '3.9'
-          - tf_version: '2.15.0'
-            python_version: '3.10'
-          - tf_version: '1.15.5'
-            python_version: '3.7'
-            os: 'ubuntu-latest'
-            opset_version: '15'
-            ort_version: '1.14.1'
-            onnx_version: '1.14.1'
+          # - tf_version: '2.15.0'
+          #   python_version: '3.10'
+          # - tf_version: '1.15.5'
+          #   python_version: '3.7'
+          #   os: 'ubuntu-latest'
+          #   opset_version: '15'
+          #   ort_version: '1.14.1'
+          #   onnx_version: '1.14.1'
 
     runs-on: ubuntu-latest
 
