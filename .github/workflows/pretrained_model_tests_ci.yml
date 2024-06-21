@@ -20,7 +20,7 @@ jobs:
       matrix:
         opset_version: ['18', '15']
         ort_version: ['1.16.3']
-        onnx_version: [''1.16.1']
+        onnx_version: ['1.16.1']
         include:
           - tf_version: '2.9.0'
             python_version: '3.8'
