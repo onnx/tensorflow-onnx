@@ -19,12 +19,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-2022]
-        tf_version:
-          - '2.9.0'
-          - '2.15.0'
-        python_version:
-          - '3.9'
-          - '3.10'
+        tf_version: ['2.9.0', '2.15.0']
+        python_version: ['3.9', '3.10']
         include:
           - tf_version: '2.9.0'
             python_version: '3.8'
