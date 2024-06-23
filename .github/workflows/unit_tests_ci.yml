@@ -18,7 +18,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-latest', 'windows-2022']
+        os: [ubuntu-latest, windows-2022]
+        tf_version:
+          - '2.9.0'
+          - '2.15.0'
         include:
           - tf_version: '2.9.0'
             python_version: '3.8'
