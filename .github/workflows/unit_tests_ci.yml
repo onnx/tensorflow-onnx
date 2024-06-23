@@ -19,9 +19,9 @@ jobs:
       fail-fast: false
       matrix:
         os: ['ubuntu-latest', 'windows-2022']
-        ort_version: '1.16.3'
-        onnx_version: '1.16.1'
-        skip_tflite: 'False'
+        ort_version: 1.16.3
+        onnx_version: 1.16.1
+        skip_tflite: False
         include:
           - tf_version: '2.9.0'
             python_version: '3.8'
