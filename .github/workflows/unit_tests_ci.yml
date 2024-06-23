@@ -24,7 +24,6 @@ jobs:
           - 'py38-tf2.9'
           - 'py39-tf2.15'
           - 'py310-tf2.15'
-          - 'py37-tf1.15'
         include:
           - name: 'py38-tf2.9'
             tf_version: '2.9.0'
