@@ -22,43 +22,38 @@ jobs:
         name:
           - 'test_01'
           - 'test_02'
-          - 'test_03'
           - 'test_04'
           - 'test_05'
+        skip_tflite: 'False'
         include:
           - name: 'test_01'
             tf_version: '2.9.0'
             python_version: '3.8'
             opset_version: '18'
-            ort_version: 1.16.3
-            onnx_version: 1.16.1
-            skip_tflite: 'False'
+            ort_version: '1.16.3'
+            onnx_version: '1.16.1'
+            # skip_tflite: 'False'
           - name: 'test_02'
             tf_version: '2.9.0'
             python_version: '3.8'
             opset_version: '15'
-            ort_version: 1.16.3
-            onnx_version: 1.16.1
-            skip_tflite: 'False'
-          - name: 'test_03'
-            tf_version: '2.9.0'
-            python_version: '3.9'
-            opset_version: '15'
             ort_version: '1.16.3'
             onnx_version: '1.16.1'
+            # skip_tflite: 'False'
           - name: 'test_04'
             tf_version: '2.15.0'
             python_version: '3.9'
             opset_version: '18'
-            ort_version: 1.16.3
-            onnx_version: 1.16.1
+            ort_version: '1.16.3'
+            onnx_version: '1.16.1'
+            # skip_tflite: 'False'
           - name: 'test_05'
             tf_version: '2.15.0'
             python_version: '3.10'
             opset_version: '18'
-            ort_version: 1.16.3
-            onnx_version: 1.16.1
-            skip_tflite: 'False'
+            ort_version: '1.16.3'
+            onnx_version: '1.16.1'
+            # skip_tflite: 'False'
           - name: 'test_06'
             tf_version: '1.15.5'
             python_version: '3.7'
