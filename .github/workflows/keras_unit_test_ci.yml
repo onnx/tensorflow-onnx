@@ -1,4 +1,4 @@
-name: Keras2onnx Application Tests (CI)
+name: Keras2onnx Unit Test (CI)
 
 on:
   pull_request:
@@ -9,16 +9,37 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name == 'workflow_dispatch' }}
+  cancel-in-progress: true
+
 jobs:
   run_tests:
     strategy:
+      fail-fast: false
       matrix:
-        tf_version: ['2.9.0', '2.13.0']
-        python_version: ['3.8', '3.9']
+        name:
+          - 'py38-tf2.9'
+          - 'py39-tf2.10'
+          - 'py39-tf2.14'
+          - 'py310-tf2.15'
+        os: ['ubuntu-latest', 'windows-2022']
         opset_version: ['18', '15']
         ort_version: ['1.16.3']
-        onnx_version: ['1.15.0']
-        os: ['ubuntu-latest', 'windows-2022']
+        onnx_version: ['1.16.1']
+        include:
+          - name: 'py38-tf2.9'
+            tf_version: '2.9.0'
+            python_version: '3.8'
+          - name: 'py39-tf2.10'
+            tf_version: '2.10.0'
+            python_version: '3.9'
+          - name: 'py39-tf2.14'
+            tf_version: '2.14.0'
+            python_version: '3.9'
+          - name: 'py310-tf2.15'
+            tf_version: '2.15.0'
+            python_version: '3.10'
 
     runs-on: ${{ matrix.os }}
 
@@ -37,44 +58,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ matrix.onnx_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
           pip install h5py==3.7.0
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
           pip install tensorflow==${{ matrix.tf_version }}
-          pip install onnxruntime==${{ matrix.ort_version }}
-          pip install Pillow==8.2.0
-          pip install opencv-python
-          pip install tqdm
-          pip install keras-segmentation==0.2.0
-          git clone https://github.com/matterport/Mask_RCNN
-          cd Mask_RCNN
-          pip install -r requirements.txt
-          python setup.py install
-          cd ..
-          pip install matplotlib
-          git clone https://github.com/qqwweee/keras-yolo3
-          pip install keras-resnet
-          pip install git+https://www.github.com/keras-team/keras-contrib.git
-          pip install keras-tcn==2.8.3
-          pip install git+https://github.com/qubvel/efficientnet
-          pip install transformers==4.2.0
-          pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
+          pip install onnxruntime==${{ matrix.ort_version }}
+          pip uninstall -y protobuf
+          pip install "protobuf~=3.20"
+          pip install "numpy<2"
 
           pip install -e .
 
           echo "----- List all of depdencies:"
           pip freeze --all
 
-      - name: Run keras application tests (${{ matrix.os }})
+      - name: Run keras unit tests (${{ matrix.os }})
         run: |
           python -c "import onnxruntime"
+          python -c "import onnxconverter_common"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
-          cd tests/keras2onnx_applications/nightly_build
-          python run_all_v2.py
 
       - name: Upload Test Results
         if: always()
@@ -104,7 +108,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies (TF-v${{ matrix.tf_version }})
+      - name: Install dependencies (tf v${{ matrix.tf_version }})
         shell: bash
         run: |
           python -m pip install --upgrade pip
@@ -117,40 +121,19 @@ jobs:
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
           pip install tensorflow==${{ matrix.tf_version }}
-          pip install keras==2.3.1
-          pip install onnxruntime==${{ matrix.ort_version }}
-          pip install Pillow==8.2.0
-          pip install opencv-python
-          pip install tqdm
-          pip install keras-segmentation==0.2.0
-          git clone https://github.com/matterport/Mask_RCNN
-          cd Mask_RCNN
-          pip install -r requirements.txt
-          python setup.py install
-          cd ..
-          pip install matplotlib
-          git clone https://github.com/qqwweee/keras-yolo3
-          pip install keras-resnet
-          pip install git+https://www.github.com/keras-team/keras-contrib.git
-          pip install keras-tcn==2.8.3
-          pip install git+https://github.com/qubvel/efficientnet
-          pip install transformers==4.2.0
-          pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
+          pip install onnxruntime==${{ matrix.ort_version }}
           pip install numpy==1.19.0
-          pip install h5py==2.9.0
-
           pip install -e .
 
           echo "----- List all of depdencies:"
           pip freeze --all
 
-      - name: Run keras application tests (${{ matrix.os }})
+      - name: Run keras unit tests (${{ matrix.os }})
         run: |
           python -c "import onnxruntime"
+          python -c "import onnxconverter_common"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
-          cd tests/keras2onnx_applications/nightly_build
-          python run_all_v2.py --exclude "test_keras_applications_v2.py"
 
       - name: Upload Test Results
         if: always()
@@ -158,6 +141,7 @@ jobs:
         with:
           name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
           path: ./**/test-results*.xml
+
 
   publish-test-results:
     name: "Publish Tests Results to Github"

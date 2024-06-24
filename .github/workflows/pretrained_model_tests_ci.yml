@@ -9,14 +9,43 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name == 'workflow_dispatch' }}
+  cancel-in-progress: true
+
 jobs:
   run_tests:
     strategy:
+      fail-fast: false
       matrix:
-        tf_version: ['2.9.0', '2.13.0']
-        python_version: ['3.8', '3.9', '3.10']
+        name:
+          - 'py38-tf2.9'
+          - 'py39-tf2.9'
+          - 'py39-tf2.15'
+          - 'py310-tf2.15'
         opset_version: ['18', '15']
         ort_version: ['1.16.3']
+        onnx_version: ['1.16.1']
+        include:
+          - name: 'py38-tf2.9'
+            tf_version: '2.9.0'
+            python_version: '3.8'
+          - name: 'py39-tf2.9'
+            tf_version: '2.9.0'
+            python_version: '3.9'
+          - name: 'py39-tf2.15'
+            tf_version: '2.15.0'
+            python_version: '3.9'
+          - name: 'py310-tf2.15'
+            tf_version: '2.15.0'
+            python_version: '3.10'
+          - name: 'py37-tf1.15'
+            tf_version: '1.15.5'
+            python_version: '3.7'
+            os: 'ubuntu-latest'
+            opset_version: '15'
+            ort_version: '1.14.1'
+            onnx_version: '1.14.1'
 
     runs-on: ubuntu-latest
 
@@ -33,7 +62,7 @@ jobs:
         shell: bash
         run: |
           chmod +x ./tests/utils/setup_test_env.sh
-          ./tests/utils/setup_test_env.sh ${{ matrix.tf_version }} ${{ matrix.ort_version }}
+          ./tests/utils/setup_test_env.sh ${{ matrix.tf_version }} ${{ matrix.ort_version }} ${{ matrix.onnx_version }}
 
       - name: Fix Paths (Windows only)
         if: runner.os == 'Windows'
