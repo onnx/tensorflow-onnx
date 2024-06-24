@@ -84,7 +84,7 @@ jobs:
           pip install transformers==4.2.0
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
-          pip install numpy==1.21.6
+          pip install "numpy<2"
 
           pip install -e .
 
