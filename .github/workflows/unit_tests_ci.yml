@@ -1,4 +1,4 @@
-name: Unit Tests (CI)
+name: Unit Test (CI)
 
 on:
   pull_request:
@@ -20,10 +20,11 @@ jobs:
       matrix:
         name:
           - 'py38-tf2.9'
+          - 'py39-tf2.10'
           - 'py39-tf2.15'
           - 'py310-tf2.15'
         os: ['ubuntu-latest', 'windows-2022']
-        opset_version: [18, 15]
+        opset_version: ['18', '15']
         ort_version: ['1.16.3']
         onnx_version: ['1.16.1']
         skip_tflite: ['False']
@@ -31,6 +32,9 @@ jobs:
           - name: 'py38-tf2.9'
             tf_version: '2.9.0'
             python_version: '3.8'
+          - name: 'py39-tf2.10'
+            tf_version: '2.10.0'
+            python_version: '3.9'
           - name: 'py39-tf2.15'
             tf_version: '2.15.0'
             python_version: '3.9'
