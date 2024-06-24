@@ -25,26 +25,18 @@ jobs:
         os: ['ubuntu-latest', 'windows-2022']
         opset_version: [18, 15]
         ort_version: ['1.16.3']
+        onnx_version: ['1.16.1']
+        skip_tflite: ['False']
         include:
           - name: 'py38-tf2.9'
             tf_version: '2.9.0'
             python_version: '3.8'
-            onnx_version: '1.16.1'
-            skip_tflite: 'False'
           - name: 'py39-tf2.15'
             tf_version: '2.15.0'
             python_version: '3.9'
-            # opset_version: '18'
-            # ort_version: '1.16.3'
-            onnx_version: '1.16.1'
-            skip_tflite: 'False'
           - name: 'py310-tf2.15'
             tf_version: '2.15.0'
             python_version: '3.10'
-            # opset_version: '18'
-            # ort_version: '1.16.3'
-            onnx_version: '1.16.1'
-            skip_tflite: 'False'
           - name: 'py37-tf1.15'
             tf_version: '1.15.5'
             python_version: '3.7'
