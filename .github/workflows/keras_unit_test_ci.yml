@@ -14,71 +14,85 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  run_tests:
+
+  Test_min_py_with_min_tf: # Do not change this name because it is used in Ruleset of this repo.
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py38-TF2.9)
+        uses: ./.github/actions/keras_unit_test
+        with:
+          tf_version: '2.9.0'
+          python_version: '3.8'
+          ort_version: '1.16.3'
+          onnx_version: '1.16.1'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (Py38-TF2.9-ubuntu)
+          path: ./**/test-results-*.xml
+
+  Test_max_py_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py39-TF2.15)
+        uses: ./.github/actions/keras_unit_test
+        with:
+          tf_version: '2.15.0'
+          python_version: '3.9'
+          ort_version: '1.16.3'
+          onnx_version: '1.16.1'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (Py39-TF2.15-ubuntu)
+          path: ./**/test-results-*.xml
+
+  Extra_tests:
     strategy:
       fail-fast: false
       matrix:
         name:
-          - 'py38-tf2.9'
           - 'py39-tf2.10'
-          - 'py39-tf2.14'
           - 'py310-tf2.15'
         os: ['ubuntu-latest', 'windows-2022']
-        opset_version: ['18', '15']
         ort_version: ['1.16.3']
         onnx_version: ['1.16.1']
         include:
-          - name: 'py38-tf2.9'
-            tf_version: '2.9.0'
-            python_version: '3.8'
           - name: 'py39-tf2.10'
             tf_version: '2.10.0'
-            python_version: '3.9'
-          - name: 'py39-tf2.14'
-            tf_version: '2.14.0'
             python_version: '3.9'
           - name: 'py310-tf2.15'
             tf_version: '2.15.0'
             python_version: '3.10'
-
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Set up Python (${{ matrix.python_version }})
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python_version }}
-
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies (TF-v${{ matrix.tf_version }})
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          pip install onnxconverter-common
-          pip install onnx==${{ matrix.onnx_version }}
-          pip install h5py==3.7.0
-          pip install parameterized
-          pip install timeout-decorator
-          pip install coloredlogs flatbuffers
-          pip install tensorflow==${{ matrix.tf_version }}
-          pip install pytest pytest-cov pytest-runner
-          pip install onnxruntime==${{ matrix.ort_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
-          pip install "numpy<2"
-
-          pip install -e .
-
-          echo "----- List all of depdencies:"
-          pip freeze --all
-
-      - name: Run keras unit tests (${{ matrix.os }})
-        run: |
-          python -c "import onnxruntime"
-          python -c "import onnxconverter_common"
-          pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
+      - name: Run Tests (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.ort_version }})
+        uses: ./.github/actions/keras_unit_test
+        with:
+          tf_version: '2.9.0'
+          python_version: '3.8'
+          ort_version: '1.16.3'
+          onnx_version: '1.16.1'
 
       - name: Upload Test Results
         if: always()
@@ -92,7 +106,6 @@ jobs:
       matrix:
         tf_version: ['1.15.0']
         python_version: ['3.7'] # Max version that supports tf 1.15
-        opset_version: ['18', '15']
         ort_version: ['1.14.1'] # Max version that supports python 3.7
         onnx_version: ['1.14.1'] # Max version that supports python 3.7
         os: ['ubuntu-latest', 'windows-2022']
@@ -142,29 +155,9 @@ jobs:
           name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
           path: ./**/test-results*.xml
 
-
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: run_tests
-    runs-on: ubuntu-latest
-    permissions:
-      checks: write
-      pull-requests: write
-    if: always()
-    steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: artifacts
-
-      - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        with:
-          files: "artifacts/**/*.xml"
-
-  publish-test-results-tf-15:
-    name: "Publish Tests Results(TF15) to Github"
-    needs: run_tests_tf_15
+    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Extra_tests, run_tests_tf_15]
     runs-on: ubuntu-latest
     permissions:
       checks: write

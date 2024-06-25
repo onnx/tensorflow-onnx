@@ -1,8 +1,6 @@
 name: Unit Test Run
 
 inputs:
-  os:
-    description: 'OS type'
   tf_version:
     description: 'TensorFlow version'
   python_version:
@@ -11,10 +9,6 @@ inputs:
     description: 'ONNXRuntime version'
   onnx_version:
     description: 'ONNX version'
-  opset_version:
-    description: 'OPSET version'
-  skip_tflite:
-    description: 'Skip TFLite tests'
 
 runs:
   using: "composite"
@@ -27,38 +21,29 @@ runs:
     - name: Install dependencies (TF-v${{ inputs.tf_version }})
       shell: bash
       run: |
-        chmod +x ./tests/utils/setup_test_env.sh
-        ./tests/utils/setup_test_env.sh ${{ inputs.tf_version }} ${{ inputs.ort_version }} ${{ inputs.onnx_version }}
+          python -m pip install --upgrade pip
+          pip install onnxconverter-common
+          pip install onnx==${{ inputs.onnx_version }}
+          pip install h5py==3.7.0
+          pip install parameterized
+          pip install timeout-decorator
+          pip install coloredlogs flatbuffers
+          pip install tensorflow==${{ inputs.tf_version }}
+          pip install pytest pytest-cov pytest-runner
+          pip install onnxruntime==${{ inputs.ort_version }}
+          pip uninstall -y protobuf
+          pip install "protobuf~=3.20"
+          pip install "numpy<2"
 
-    - name: Fix Paths (Windows only)
-      shell: pwsh
-      if: runner.os == 'Windows'
-      run: |
-        $site_dir = python -c "import site; print(site.getsitepackages()[1])"
-        echo "##vso[task.prependpath]$site_dir\numpy\.libs"
-        $base_dir = python -c "import site; print(site.getsitepackages()[0])"
-        echo "##vso[task.prependpath]$base_dir/Library/bin"
+          pip install -e .
 
-    - name: Run unit_test (Linux)
+          echo "----- List all of depdencies:"
+          pip freeze --all
+
+    - name: Run keras_unit_test (Linux)
       shell: bash
       if: runner.os == 'Linux'
       run: |
-        export TF2ONNX_TEST_BACKEND=onnxruntime
-        export TF2ONNX_TEST_OPSET=${{ inputs.opset_version }}
-        export TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
-        export TF2ONNX_SKIP_TFJS_TESTS=True
-        export TF2ONNX_SKIP_TF_TESTS=False
-        python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
-        ls
-
-    - name: Run unit_test (Windows)
-      shell: pwsh
-      if: runner.os == 'Windows'
-      run: |
-        set TF2ONNX_TEST_BACKEND=onnxruntime
-        set TF2ONNX_TEST_OPSET=${{ inputs.opset_version }}
-        set TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
-        set TF2ONNX_SKIP_TFJS_TESTS=True
-        set TF2ONNX_SKIP_TF_TESTS=False
-        python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
-        ls
+          python -c "import onnxruntime"
+          python -c "import onnxconverter_common"
+          pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
