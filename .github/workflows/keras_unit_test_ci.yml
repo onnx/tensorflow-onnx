@@ -14,7 +14,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   Test_min_py_with_min_tf: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
@@ -48,11 +47,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Tests (Py39-TF2.15)
+      - name: Run Tests (Py310-TF2.15)
         uses: ./.github/actions/keras_unit_test
         with:
           tf_version: '2.15.0'
-          python_version: '3.9'
+          python_version: '3.10'
           ort_version: '1.16.3'
           onnx_version: '1.16.1'
 
@@ -60,7 +59,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: Test Results (Py39-TF2.15-ubuntu)
+          name: Test Results (Py310-TF2.15-ubuntu)
           path: ./**/test-results-*.xml
 
   Extra_tests:
@@ -69,7 +68,7 @@ jobs:
       matrix:
         name:
           - 'py39-tf2.10'
-          - 'py310-tf2.15'
+          - 'py39-tf2.15'
         os: ['ubuntu-latest', 'windows-2022']
         ort_version: ['1.16.3']
         onnx_version: ['1.16.1']
@@ -77,9 +76,9 @@ jobs:
           - name: 'py39-tf2.10'
             tf_version: '2.10.0'
             python_version: '3.9'
-          - name: 'py310-tf2.15'
+          - name: 'py39-tf2.15'
             tf_version: '2.15.0'
-            python_version: '3.10'
+            python_version: '3.9'
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -89,16 +88,15 @@ jobs:
       - name: Run Tests (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.ort_version }})
         uses: ./.github/actions/keras_unit_test
         with:
-          tf_version: '2.9.0'
-          python_version: '3.8'
-          ort_version: '1.16.3'
-          onnx_version: '1.16.1'
-
+          tf_version: ${{ matrix.tf_version }}
+          python_version: ${{ matrix.python_version }}
+          ort_version: ${{ matrix.ort_version }}
+          onnx_version: ${{ matrix.onnx_version }}
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
+          name: Test Results (${{ matrix.python_version }}-${{ matrix.tf_version }}-${{ matrix.os }})
           path: ./**/test-results*.xml
 
   run_tests_tf_15:

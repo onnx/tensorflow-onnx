@@ -1,4 +1,4 @@
-name: Unit Test Run
+name: Keras2onnx Unit Test Run
 
 inputs:
   tf_version:
