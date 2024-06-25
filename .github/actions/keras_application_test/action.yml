@@ -23,15 +23,15 @@ runs:
       run: |
           python -m pip install --upgrade pip
           pip install onnxconverter-common
-          pip install onnx==${{ matrix.onnx_version }}
+          pip install onnx==${{ inputs.onnx_version }}
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
           pip install h5py==3.7.0
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
-          pip install tensorflow==${{ matrix.tf_version }}
-          pip install onnxruntime==${{ matrix.ort_version }}
+          pip install tensorflow==${{ inputs.tf_version }}
+          pip install onnxruntime==${{ inputs.ort_version }}
           pip install Pillow==8.2.0
           pip install opencv-python
           pip install tqdm
