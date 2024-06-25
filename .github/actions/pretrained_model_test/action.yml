@@ -38,6 +38,7 @@ runs:
         echo "##vso[task.prependpath]$base_dir/Library/bin"
 
     - name: Run pretrained_model_test
+      shell: bash
       run: |
         # TODO: fix unity model path
         # python tests/run_pretrained_models.py --backend $CI_ONNX_BACKEND --opset $CI_ONNX_OPSET --config tests/unity.yaml || status=$?
