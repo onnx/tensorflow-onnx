@@ -14,33 +14,80 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  run_tests:
+
+  Test_min_py_with_min_tf:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py38-TF2.9-18)
+        uses: ./.github/actions/unit_test_run
+        with:
+          os: 'ubuntu-latest'
+          tf_version: '2.9.0'
+          python_version: '3.8'
+          ort_version: '1.16.3'
+          onnx_version: '1.16.1'
+          opset_version: '18'
+          skip_tflite: 'False'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (Py38-TF2.9-18-ubuntu)
+          path: ./**/test-results-*.xml
+
+  Test_max_py_with_latest_tf:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py39-TF2.15-18)
+        uses: ./.github/actions/unit_test_run
+        with:
+          os: 'ubuntu-latest'
+          tf_version: '2.15.0'
+          python_version: '3.9'
+          ort_version: '1.16.3'
+          onnx_version: '1.16.1'
+          opset_version: '18'
+          skip_tflite: 'False'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (Py39-TF2.15-18-ubuntu)
+          path: ./**/test-results-*.xml
+
+  Extra_tests:
     strategy:
       fail-fast: false
       matrix:
         name:
-          - 'py38-tf2.9'
           - 'py39-tf2.10'
           - 'py39-tf2.15'
-          - 'py310-tf2.15'
-        os: ['ubuntu-latest', 'windows-2022']
+        os: ['windows-2022']
         opset_version: ['18', '15']
         ort_version: ['1.16.3']
         onnx_version: ['1.16.1']
         skip_tflite: ['False']
         include:
-          - name: 'py38-tf2.9'
-            tf_version: '2.9.0'
-            python_version: '3.8'
           - name: 'py39-tf2.10'
             tf_version: '2.10.0'
             python_version: '3.9'
           - name: 'py39-tf2.15'
             tf_version: '2.15.0'
             python_version: '3.9'
-          - name: 'py310-tf2.15'
-            tf_version: '2.15.0'
-            python_version: '3.10'
           - name: 'py37-tf1.15'
             tf_version: '1.15.5'
             python_version: '3.7'
@@ -53,55 +100,25 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Set up Python (${{ matrix.python_version }})
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python_version }}
-
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies (TF-v${{ matrix.tf_version }})
-        shell: bash
-        run: |
-          chmod +x ./tests/utils/setup_test_env.sh
-          ./tests/utils/setup_test_env.sh ${{ matrix.tf_version }} ${{ matrix.ort_version }} ${{ matrix.onnx_version }}
-
-      - name: Fix Paths (Windows only)
-        if: runner.os == 'Windows'
-        run: |
-          $site_dir = python -c "import site; print(site.getsitepackages()[1])"
-          echo "##vso[task.prependpath]$site_dir\numpy\.libs"
-          $base_dir = python -c "import site; print(site.getsitepackages()[0])"
-          echo "##vso[task.prependpath]$base_dir/Library/bin"
-
-      - name: Run unit_test (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          export TF2ONNX_TEST_BACKEND=onnxruntime
-          export TF2ONNX_TEST_OPSET=${{ matrix.opset_version }}
-          export TF2ONNX_SKIP_TFLITE_TESTS=${{ matrix.skip_tflite }}
-          export TF2ONNX_SKIP_TFJS_TESTS=True
-          export TF2ONNX_SKIP_TF_TESTS=False
-          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
-          ls
-
-      - name: Run unit_test (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          set TF2ONNX_TEST_BACKEND=onnxruntime
-          set TF2ONNX_TEST_OPSET=${{ matrix.opset_version }}
-          set TF2ONNX_SKIP_TFLITE_TESTS=${{ matrix.skip_tflite }}
-          set TF2ONNX_SKIP_TFJS_TESTS=True
-          set TF2ONNX_SKIP_TF_TESTS=False
-          python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
-          ls
+      - name: Run Tests (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.opset_version }}_${{ matrix.ort_version }}_${{ matrix.skip_tflite }})
+        uses: ./.github/actions/unit_test
+        with:
+          os: ${{ matrix.os }}
+          tf_version: ${{ matrix.tf_version }}
+          python_version: ${{ matrix.python_version }}
+          ort_version: ${{ matrix.ort_version }}
+          onnx_version: ${{ matrix.onnx_version }}
+          opset_version: ${{ matrix.opset_version }}
+          skip_tflite: ${{ matrix.skip_tflite }}
 
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
+          name: Test Results (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.opset_version }}_${{ matrix.ort_version }}_${{ matrix.skip_tflite }})
           path: ./**/test-results-*.xml
 
   publish-test-results:

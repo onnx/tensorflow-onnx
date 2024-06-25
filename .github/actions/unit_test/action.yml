@@ -1,0 +1,64 @@
+name: Unit Test Run
+
+inputs:
+  os:
+    description: 'OS type'
+  tf_version:
+    description: 'TensorFlow version'
+  python_version:
+    description: 'Python version'
+  ort_version:
+    description: 'ONNXRuntime version'
+  onnx_version:
+    description: 'ONNX version'
+  opset_version:
+    description: 'OPSET version'
+  skip_tflite:
+    description: 'Skip TFLite tests'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python (${{ inputs.python_version }})
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Install dependencies (TF-v${{ inputs.tf_version }})
+      shell: bash
+      run: |
+        chmod +x ./tests/utils/setup_test_env.sh
+        ./tests/utils/setup_test_env.sh ${{ inputs.tf_version }} ${{ inputs.ort_version }} ${{ inputs.onnx_version }}
+
+    - name: Fix Paths (Windows only)
+      shell: pwsh
+      if: runner.os == 'Windows'
+      run: |
+        $site_dir = python -c "import site; print(site.getsitepackages()[1])"
+        echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+        $base_dir = python -c "import site; print(site.getsitepackages()[0])"
+        echo "##vso[task.prependpath]$base_dir/Library/bin"
+
+    - name: Run unit_test (Linux)
+      shell: bash
+      if: runner.os == 'Linux'
+      run: |
+        export TF2ONNX_TEST_BACKEND=onnxruntime
+        export TF2ONNX_TEST_OPSET=${{ inputs.opset_version }}
+        export TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
+        export TF2ONNX_SKIP_TFJS_TESTS=True
+        export TF2ONNX_SKIP_TF_TESTS=False
+        python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
+        ls
+
+    - name: Run unit_test (Windows)
+      shell: pwsh
+      if: runner.os == 'Windows'
+      run: |
+        set TF2ONNX_TEST_BACKEND=onnxruntime
+        set TF2ONNX_TEST_OPSET=${{ inputs.opset_version }}
+        set TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
+        set TF2ONNX_SKIP_TFJS_TESTS=True
+        set TF2ONNX_SKIP_TF_TESTS=False
+        python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
+        ls
