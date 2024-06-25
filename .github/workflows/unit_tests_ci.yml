@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Tests (Py38-TF2.9-18)
-        uses: ./.github/actions/unit_test_run
+        uses: ./.github/actions/unit_test
         with:
           os: 'ubuntu-latest'
           tf_version: '2.9.0'
@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Tests (Py39-TF2.15-18)
-        uses: ./.github/actions/unit_test_run
+        uses: ./.github/actions/unit_test
         with:
           os: 'ubuntu-latest'
           tf_version: '2.15.0'
