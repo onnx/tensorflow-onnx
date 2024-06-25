@@ -1,4 +1,4 @@
-name: Unit Test (CI)
+name: Pretrained Model Test (CI)
 
 on:
   pull_request:
@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Tests (Py38-TF2.9-18)
-        uses: ./.github/actions/unit_test
+        uses: ./.github/actions/pretrained_model_test
         with:
           os: 'ubuntu-latest'
           tf_version: '2.9.0'
@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Tests (Py39-TF2.15-18)
-        uses: ./.github/actions/unit_test
+        uses: ./.github/actions/pretrained_model_test
         with:
           os: 'ubuntu-latest'
           tf_version: '2.15.0'
@@ -74,19 +74,19 @@ jobs:
       fail-fast: false
       matrix:
         name:
-          - 'py39-tf2.10'
-          - 'py39-tf2.15'
+          - 'py38-tf2.13'
+          - 'py39-tf2.14'
         os: ['windows-2022']
         opset_version: ['18', '15']
         ort_version: ['1.16.3']
         onnx_version: ['1.16.1']
         skip_tflite: ['False']
         include:
-          - name: 'py39-tf2.10'
-            tf_version: '2.10.0'
-            python_version: '3.9'
-          - name: 'py39-tf2.15'
-            tf_version: '2.15.0'
+          - name: 'py38-tf2.13'
+            tf_version: '2.13.0'
+            python_version: '3.8'
+          - name: 'py39-tf2.14'
+            tf_version: '2.14.0'
             python_version: '3.9'
           - name: 'py37-tf1.15'
             tf_version: '1.15.5'
@@ -95,18 +95,16 @@ jobs:
             opset_version: '15'
             ort_version: '1.14.1'
             onnx_version: '1.14.1'
-            skip_tflite: 'True'
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run Tests (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.opset_version }}_${{ matrix.ort_version }}_${{ matrix.skip_tflite }})
-        uses: ./.github/actions/unit_test
+        uses: ./.github/actions/pretrained_model_test
         with:
-          os: ${{ matrix.os }}
           tf_version: ${{ matrix.tf_version }}
           python_version: ${{ matrix.python_version }}
           ort_version: ${{ matrix.ort_version }}
@@ -138,4 +136,4 @@ jobs:
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: "artifacts/**/*.xml"
+          files: "**/pytest*.xml"

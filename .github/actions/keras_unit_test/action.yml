@@ -1,6 +1,8 @@
 name: Unit Test Run
 
 inputs:
+  os:
+    description: 'OS type'
   tf_version:
     description: 'TensorFlow version'
   python_version:
