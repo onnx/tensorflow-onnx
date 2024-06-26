@@ -63,6 +63,30 @@ jobs:
           name: Test Results (Py310-TF2.15-ubuntu)
           path: ./**/test-results-*.xml
 
+  Test_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py37-TF1.15)
+        uses: ./.github/actions/keras_application_test
+        with:
+          tf_version: '1.15.5'
+          python_version: '3.7'
+          ort_version: '1.14.1'
+          onnx_version: '1.14.1'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (Py37-TF1.15-ubuntu)
+          path: ./**/test-results-*.xml
+
   Extra_tests:
     strategy:
       fail-fast: false
@@ -100,84 +124,84 @@ jobs:
           name: Test Results (${{ matrix.python_version }}-${{ matrix.tf_version }}-${{ matrix.os }})
           path: ./**/test-results*.xml
 
-  run_tests_tf_15:
-    strategy:
-      matrix:
-        tf_version: ['1.15.0']
-        python_version: ['3.7'] # Max version that supports tf 1.15
-        ort_version: ['1.14.1'] # Max version that supports python 3.7
-        onnx_version: ['1.14.1'] # Max version that supports python 3.7
-        os: ['ubuntu-latest', 'windows-2022']
+  # run_tests_tf_15:
+  #   strategy:
+  #     matrix:
+  #       tf_version: ['1.15.0']
+  #       python_version: ['3.7'] # Max version that supports tf 1.15
+  #       ort_version: ['1.14.1'] # Max version that supports python 3.7
+  #       onnx_version: ['1.14.1'] # Max version that supports python 3.7
+  #       os: ['ubuntu-latest', 'windows-2022']
 
-    runs-on: ${{ matrix.os }}
+  #   runs-on: ${{ matrix.os }}
 
-    steps:
-      - name: Set up Python (${{ matrix.python_version }})
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python_version }}
+  #   steps:
+  #     - name: Set up Python (${{ matrix.python_version }})
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python_version }}
 
-      - name: Checkout code
-        uses: actions/checkout@v4
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Install dependencies (TF-v${{ matrix.tf_version }})
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          pip install onnxconverter-common
-          pip install onnx==${{ matrix.onnx_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
-          pip install h5py==3.7.0
-          pip install parameterized
-          pip install timeout-decorator
-          pip install coloredlogs flatbuffers
-          pip install tensorflow==${{ matrix.tf_version }}
-          pip install keras==2.3.1
-          pip install onnxruntime==${{ matrix.ort_version }}
-          pip install Pillow==8.2.0
-          pip install opencv-python
-          pip install tqdm
-          pip install keras-segmentation==0.2.0
-          git clone https://github.com/matterport/Mask_RCNN
-          cd Mask_RCNN
-          pip install -r requirements.txt
-          python setup.py install
-          cd ..
-          pip install matplotlib
-          git clone https://github.com/qqwweee/keras-yolo3
-          pip install keras-resnet
-          pip install git+https://www.github.com/keras-team/keras-contrib.git
-          pip install keras-tcn==2.8.3
-          pip install git+https://github.com/qubvel/efficientnet
-          pip install transformers==4.2.0
-          pip install keras-self-attention
-          pip install pytest pytest-cov pytest-runner
-          pip install numpy==1.19.0
-          pip install h5py==2.9.0
+  #     - name: Install dependencies (TF-v${{ matrix.tf_version }})
+  #       shell: bash
+  #       run: |
+  #         python -m pip install --upgrade pip
+  #         pip install onnxconverter-common
+  #         pip install onnx==${{ matrix.onnx_version }}
+  #         pip uninstall -y protobuf
+  #         pip install "protobuf~=3.20"
+  #         pip install h5py==3.7.0
+  #         pip install parameterized
+  #         pip install timeout-decorator
+  #         pip install coloredlogs flatbuffers
+  #         pip install tensorflow==${{ matrix.tf_version }}
+  #         pip install keras==2.3.1
+  #         pip install onnxruntime==${{ matrix.ort_version }}
+  #         pip install Pillow==8.2.0
+  #         pip install opencv-python
+  #         pip install tqdm
+  #         pip install keras-segmentation==0.2.0
+  #         git clone https://github.com/matterport/Mask_RCNN
+  #         cd Mask_RCNN
+  #         pip install -r requirements.txt
+  #         python setup.py install
+  #         cd ..
+  #         pip install matplotlib
+  #         git clone https://github.com/qqwweee/keras-yolo3
+  #         pip install keras-resnet
+  #         pip install git+https://www.github.com/keras-team/keras-contrib.git
+  #         pip install keras-tcn==2.8.3
+  #         pip install git+https://github.com/qubvel/efficientnet
+  #         pip install transformers==4.2.0
+  #         pip install keras-self-attention
+  #         pip install pytest pytest-cov pytest-runner
+  #         pip install numpy==1.19.0
+  #         pip install h5py==2.9.0
 
-          pip install -e .
+  #         pip install -e .
 
-          echo "----- List all of depdencies:"
-          pip freeze --all
+  #         echo "----- List all of depdencies:"
+  #         pip freeze --all
 
-      - name: Run keras application tests (${{ matrix.os }})
-        run: |
-          python -c "import onnxruntime"
-          pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
-          cd tests/keras2onnx_applications/nightly_build
-          python run_all_v2.py --exclude "test_keras_applications_v2.py"
+  #     - name: Run keras application tests (${{ matrix.os }})
+  #       run: |
+  #         python -c "import onnxruntime"
+  #         pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
+  #         cd tests/keras2onnx_applications/nightly_build
+  #         python run_all_v2.py --exclude "test_keras_applications_v2.py"
 
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
-          path: ./**/test-results*.xml
+  #     - name: Upload Test Results
+  #       if: always()
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: Test Results (${{ matrix.tf_version }}-${{ matrix.python_version }}-${{ matrix.os }})
+  #         path: ./**/test-results*.xml
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Extra_tests, run_tests_tf_15]
+    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Test_py37_with_tf1_15, Extra_tests]
     runs-on: ubuntu-latest
     permissions:
       checks: write

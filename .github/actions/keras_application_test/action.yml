@@ -28,7 +28,6 @@ runs:
           pip install "protobuf~=3.20"
           pip install h5py==3.7.0
           pip install parameterized
-          pip install tokenizers
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
           pip install tensorflow==${{ inputs.tf_version }}
@@ -48,7 +47,14 @@ runs:
           pip install git+https://www.github.com/keras-team/keras-contrib.git
           pip install keras-tcn==2.8.3
           pip install git+https://github.com/qubvel/efficientnet
-          pip install transformers
+          if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
+              pip install keras==2.3.1
+              pip install transformers==4.2.0
+              pip uninstall -y h5py
+              pip install h5py==2.9.0
+          else 
+              pip install transformers
+          fi
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
           pip install "numpy<2"
