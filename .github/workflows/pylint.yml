@@ -1,4 +1,4 @@
-name: Pylint Workflow
+name: Pylint
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  pylint:
+  enforce-style:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
