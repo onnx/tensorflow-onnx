@@ -1,0 +1,46 @@
+name: Pretrained Model Test Run
+
+inputs:
+  tf_version:
+    description: 'TensorFlow version'
+  python_version:
+    description: 'Python version'
+  ort_version:
+    description: 'ONNXRuntime version'
+  onnx_version:
+    description: 'ONNX version'
+  opset_version:
+    description: 'OPSET version'
+  skip_tflite:
+    description: 'Skip TFLite tests'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python (${{ inputs.python_version }})
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Install dependencies (TF-v${{ inputs.tf_version }})
+      shell: bash
+      run: |
+        chmod +x ./tests/utils/setup_test_env.sh
+        ./tests/utils/setup_test_env.sh ${{ inputs.tf_version }} ${{ inputs.ort_version }} ${{ inputs.onnx_version }}
+
+    - name: Fix Paths (Windows only)
+      shell: pwsh
+      if: runner.os == 'Windows'
+      run: |
+        $site_dir = python -c "import site; print(site.getsitepackages()[1])"
+        echo "##vso[task.prependpath]$site_dir\numpy\.libs"
+        $base_dir = python -c "import site; print(site.getsitepackages()[0])"
+        echo "##vso[task.prependpath]$base_dir/Library/bin"
+
+    - name: Run pretrained_model_test
+      shell: bash
+      run: |
+        # TODO: fix unity model path
+        # python tests/run_pretrained_models.py --backend $CI_ONNX_BACKEND --opset $CI_ONNX_OPSET --config tests/unity.yaml || status=$?
+        python tests/run_pretrained_models.py --backend onnxruntime --opset ${{ inputs.opset_version }} --skip_tf_tests False --skip_tflite_tests ${{ inputs.skip_tflite }} --skip_tfjs_tests True --config tests/run_pretrained_models.yaml || status=$?
+        ls
