@@ -33,7 +33,11 @@ runs:
           pip install onnxruntime==${{ inputs.ort_version }}
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
-          pip install "numpy<2"
+          if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
+              pip install numpy==1.19.0
+          else 
+              pip install "numpy<2"
+          fi
 
           pip install -e .
 
