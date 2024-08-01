@@ -292,6 +292,9 @@ def save_onnx_model(save_path_root, onnx_file_name, feed_dict, model_proto, incl
 
 
 def save_onnx_zip(target_path, model_proto, external_tensor_storage):
+    dir_name = os.path.dirname(target_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
     with zipfile.ZipFile(target_path, 'w') as z:
         z.writestr("__MODEL_PROTO.onnx", model_proto.SerializeToString())
         for k, v in external_tensor_storage.name_to_tensor_data.items():
