@@ -1199,7 +1199,7 @@ class Graph(object):
             }
         if "opset_imports" not in kwargs:
             opsets = [helper.make_opsetid(constants.ONNX_DOMAIN, self._opset)]
-            opsets.append(constants.AI_ONNX_ML_OPSET)
+            # opsets.append(constants.AI_ONNX_ML_OPSET)
             if self.extra_opset is not None:
                 opsets.extend(self.extra_opset)
             kwargs["opset_imports"] = opsets
