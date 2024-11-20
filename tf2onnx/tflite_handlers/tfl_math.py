@@ -215,7 +215,7 @@ class TflFullyConnectedOp:
             ctx.replace_inputs(node, [reshape_node.output[0], node.input[1]])
 
         transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1],
-                                                    name=None, input_index=1, perm=[1, 0])
+                                                      name=None, input_index=1, perm=[1, 0])
         transpose_node.skip_conversion = True
         node.set_attr("transpose_a", 0)
         node.set_attr("transpose_b", 0)
