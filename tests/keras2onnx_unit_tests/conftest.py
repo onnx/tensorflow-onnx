@@ -12,6 +12,12 @@ from mock_keras2onnx.proto.tfcompat import is_tf2
 
 K = keras.backend
 
+def is_keras_3():
+    return tf.__version__.startswith("2.18") or tf.__version__.startswith("2.17") or tf.__version__.startswith("2.16")
+
+if is_keras_3():
+    import tf_keras
+    K = tf_keras.backend
 
 @pytest.fixture(scope='function')
 def runner():
