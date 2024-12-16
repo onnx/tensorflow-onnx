@@ -2105,7 +2105,19 @@ class ExtractImagePatches:
         rates = node.get_attr_value("rates")
         padding = node.get_attr_str("padding")
 
-        # Our constraints.
+        # This implementation of ExtractImagePatches does not generalize
+        # to outputs that are empty. For example:
+        #
+        #   tf.image.extract_patches(
+        #     np.random.rand(1, 1, 1, 1), sizes=[1, 2, 2, 1], strides=[1, 1, 1, 1],
+        #     rates=[1, 1, 1, 1], padding="VALID"
+        #   )
+        #
+        # succeeds with the output of:
+        #
+        #   <tf.Tensor: shape=(1, 0, 0, 4), dtype=float64, numpy=array([], shape=(1, 0, 0, 4), dtype=float64)>
+        #
+        # whereas attempting the same here results in an "Invalid input shape" error for the "Conv" node.
         utils.make_sure(0 not in output_shape, "Empty ExtractImagePatches output is unsupported.")
         [_, size_rows, size_cols, _] = sizes
 
