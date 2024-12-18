@@ -28,6 +28,8 @@ pip install tensorflow==$TF_VERSION
 pip uninstall -y protobuf
 pip install "protobuf~=3.20"
 
+pip install tf_keras
+
 python setup.py install
 
 echo "----- List all of depdencies:"
