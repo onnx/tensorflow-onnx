@@ -65,7 +65,7 @@ jobs:
   Test_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout code

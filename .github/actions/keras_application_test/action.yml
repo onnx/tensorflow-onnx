@@ -72,5 +72,7 @@ runs:
       run: |
           python -c "import onnxruntime"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
+
+          export TF_USE_LEGACY_KERAS=True
           cd tests/keras2onnx_applications/nightly_build
           python run_all_v2.py
