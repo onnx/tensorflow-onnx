@@ -46,6 +46,7 @@ runs:
         export TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
         export TF2ONNX_SKIP_TFJS_TESTS=True
         export TF2ONNX_SKIP_TF_TESTS=False
+        export TF_USE_LEGACY_KERAS=True
         python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
         ls
 
@@ -58,5 +59,6 @@ runs:
         set TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
         set TF2ONNX_SKIP_TFJS_TESTS=True
         set TF2ONNX_SKIP_TF_TESTS=False
+        set TF_USE_LEGACY_KERAS=True
         python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
         ls
