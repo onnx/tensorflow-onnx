@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
 
-  Test_min_py_with_min_tf: # Do not change this name because it is used in Ruleset of this repo.
+  Test_min_py_with_min_tf: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -42,7 +42,7 @@ jobs:
           name: Test Results (Py38-TF2.9-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_max_py_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
+  Test_max_py_with_latest_tf: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -69,7 +69,33 @@ jobs:
           name: Test Results (Py310-TF2.15-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Extra_tests:
+  Test_py37_with_tf1_15: # Do not change this name because it is used in 'publish-test-results' section below.
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py310-TF2.15-18)
+        uses: ./.github/actions/pretrained_model_test
+        with:
+          tf_version: '1.15.5'
+          python_version: '3.7'
+          os: 'ubuntu-22.04'  # Max ubuntu version supports python 3.7.
+          opset_version: '15'
+          ort_version: '1.14.1'
+          onnx_version: '1.14.1'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (Py37-TF1.15-15-ubuntu)
+          path: ./**/test-results-*.xml
+
+  Extra_tests:  # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
       matrix:
@@ -88,15 +114,7 @@ jobs:
           - name: 'py39-tf2.15'
             tf_version: '2.15.0'
             python_version: '3.9'
-          - name: 'py37-tf1.15'
-            tf_version: '1.15.5'
-            python_version: '3.7'
-            os: 'ubuntu-22.04'  # Max ubuntu version supports python 3.7.
-            opset_version: '15'
-            ort_version: '1.14.1'
-            onnx_version: '1.14.1'
-
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout code
@@ -121,7 +139,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Extra_tests]
+    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Test_py37_with_tf1_15, Extra_tests]
     runs-on: ubuntu-latest
     permissions:
       checks: write
