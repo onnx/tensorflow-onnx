@@ -28,7 +28,7 @@ jobs:
         uses: ./.github/actions/pretrained_model_test
         with:
           os: 'ubuntu-latest'
-          tf_version: '2.12.0'
+          tf_version: '2.13.1'
           python_version: '3.8'
           ort_version: '1.16.3'
           onnx_version: '1.16.1'
@@ -82,9 +82,9 @@ jobs:
         onnx_version: ['1.16.1']
         skip_tflite: ['False']
         include:
-          - name: 'py38-tf2.17'
+          - name: 'py39-tf2.17'
             tf_version: '2.17.0'
-            python_version: '3.8'
+            python_version: '3.9'
           - name: 'py39-tf2.18'
             tf_version: '2.18.0'
             python_version: '3.9'
