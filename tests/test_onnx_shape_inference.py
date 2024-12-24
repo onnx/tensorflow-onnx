@@ -87,7 +87,7 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
         shapes = [[5, 6, 7]]
         dtypes = [TensorProto.FLOAT]
         graph = self._create_empty_graph(inputs, shapes, dtypes)
-        node = graph.make_node("Split", [INPUT1], output_count=2, attr={"axis": 1})
+        node = graph.make_node("Split", [INPUT1], output_count=2, attr={"axis": 1, "num_outputs": 2})
         graph.add_graph_output(node.output[0])
         graph.add_graph_output(node.output[1])
         self._run_test_case(graph, self._generate_random_inputs(inputs, shapes, dtypes))

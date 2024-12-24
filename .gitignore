@@ -1,4 +1,3 @@
-.coverage*
 *.pyc
 .idea
 build
@@ -13,7 +12,19 @@ __pycache__
 .eggs
 *.egg-info
 run.sh
+node_modules/*
 tests/tfhub/*/*.onnx
 tests/tfhub/*/*.tar.gz
 tests/tfhub/*/*.tflite
 tests/tfhub/*/**
+
+# Unit test / coverage reports
+.coverage*
+.cache
+.hypothesis/
+.pytest_cache/
+test-output.xml
+
+# VSCode
+.vscode/
+!.vscode/extensions.json

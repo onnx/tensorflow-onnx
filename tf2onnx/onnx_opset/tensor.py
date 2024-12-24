@@ -297,8 +297,13 @@ class ConcatV2:
         ctx.remove_input(node, node.input[-1], len(node.input) - 1)
 
         if axis_val < 0:  # onnxruntime does not support -1 axis, but TF supports.
-            input_shape = ctx.get_shape(node.input[0])
-            utils.make_sure(input_shape is not None, "shape of {} is None".format(node.input[0]))
+            input_shape = None
+            for node_input in node.input:
+                input_shape = ctx.get_shape(node_input)
+                if input_shape is not None:
+                    break
+            utils.make_sure(input_shape is not None,
+                            "the shapes of the following inputs are None: {}".format(', '.join(node.input)))
             axis_val = len(input_shape) + axis_val
         node.set_attr("axis", axis_val)
 
@@ -385,7 +390,7 @@ class Roll:
                 {'data': shifts_casted, "axes": [0]}, op_name_scope=node.name, return_node=True)
             shifts_split = [unsqueeze_node.output[0]]
         else:
-            shifts_split = ctx.make_node("Split", [shifts_casted], attr={'axis': 0},
+            shifts_split = ctx.make_node("Split", [shifts_casted], attr={'axis': 0, 'num_outputs': len(axes)},
                                          output_count=len(axes), op_name_scope=node.name).output
 
         zero_const = ctx.make_const(utils.make_name("zeros_const"), np.array([0], np.int64)).output[0]
@@ -665,6 +670,37 @@ class TensorScatterAdd:
         node.set_attr("reduction", 'add')
 
 
+@tf_op("TensorScatterMax", onnx_op="ScatterND")
+class TensorScatterMax:
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        # indices input must be int64 in ONNX.
+        if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+        node.set_attr("reduction", 'max')
+
+
+@tf_op("TensorScatterMin", onnx_op="ScatterND")
+class TensorScatterMin:
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        # indices input must be int64 in ONNX.
+        if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+        node.set_attr("reduction", 'min')
+
+
+@tf_op("TensorScatterSub", onnx_op="ScatterND")
+class TensorScatterSub:
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        # indices input must be int64 in ONNX.
+        if ctx.get_dtype(node.input[1]) != TensorProto.INT64:
+            ctx.insert_new_node_on_input(node, "Cast", node.input[1], to=TensorProto.INT64)
+        ctx.insert_new_node_on_input(node, "Neg", node.input[2])
+        node.set_attr("reduction", 'add')
+
+
 @tf_op("TensorScatterUpdate", onnx_op="ScatterND")
 class TensorScatterUpdate:
     @classmethod
@@ -681,6 +717,7 @@ class Split:
         # T outputs = Split(T input, @INT axis, @INTS split)
         split_dims = node.inputs[0].get_tensor_value()
         ctx.remove_input(node, node.input[0], 0)
+        node.set_attr("num_outputs", node.get_attr_int("num_split"))
         node.set_attr("axis", split_dims)
 
     @classmethod
@@ -1294,8 +1331,11 @@ class Unpack:
             shape = ctx.get_shape(node.input[0])
             utils.make_sure(shape is not None, "shape of unpack input is None: {}".format(node.input[0]))
             axis += len(shape)
+        num_outputs = node.get_attr_value("num")
         # split the tensor into n outputs
         node.type = "Split"
+        node.set_attr("num_outputs", num_outputs)
+        node.set_attr("axis", axis)
 
         # for each output we need to squeeze axis
         for n in node.output:
@@ -1529,7 +1569,7 @@ class BatchToSpace:
                 reshape = ctx.make_node("Cast",
                                         ctx.make_node("Reshape", inputs=[node.input[2], shape.output[0]]).output,
                                         attr={"to": utils.map_numpy_to_onnx_dtype(np.int64)})
-                crops = ctx.make_node("Split", inputs=reshape.output, attr={}, output_count=4).output
+                crops = ctx.make_node("Split", inputs=reshape.output, attr={'num_outputs': 4}, output_count=4).output
                 zero = ctx.make_const(name=utils.make_name("zero"), np_val=np.array([0], dtype=np.int64)).output[0]
                 int32_max = ctx.make_const(name=utils.make_name("int32_max"),
                                            np_val=np.array([np.iinfo(np.int32).max], dtype=np.int64)).output[0]
@@ -1717,7 +1757,7 @@ class SpaceToBatch:
                 shape = ctx.make_const(name=utils.make_name("shape"), np_val=np.array([-1], dtype=np.int64))
                 reshape = ctx.make_node("Reshape", inputs=[node.input[2], shape.output[0]])
                 cast = ctx.make_node("Cast", reshape.output, attr={'to': utils.map_numpy_to_onnx_dtype(np.int64)})
-                split = ctx.make_node("Split", inputs=cast.output, attr={}, output_count=4)
+                split = ctx.make_node("Split", inputs=cast.output, attr={'num_outputs': 4}, output_count=4)
                 pads = split.output
                 zero = ctx.make_const(name=utils.make_name("zero"), np_val=np.array([0], dtype=np.int64)).output[0]
                 new_pads = ctx.make_node("Concat", [zero, zero, pads[0], pads[2], zero, zero, pads[1], pads[3]],
@@ -2324,32 +2364,45 @@ class ReverseV2:
 
 
 @tf_op("Unique", onnx_op="Unique")
+@tf_op("UniqueWithCounts", onnx_op="Unique")
 class Unique:
+    int_cast = [TensorProto.BOOL, TensorProto.INT32, TensorProto.INT16, TensorProto.UINT8,
+                TensorProto.UINT16, TensorProto.UINT32, TensorProto.UINT64]
+    dtype_map = {k: TensorProto.INT64 for k in int_cast}
+    dtype_map[TensorProto.DOUBLE] = TensorProto.FLOAT
+
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         # opset 11 supports explicitly
-        dtypes = node.output_dtypes
         node_name = node.name
         node_inputs = node.input
         node_outputs = node.output
+        inp_dtype = ctx.get_dtype(node.input[0])
+
         ctx.remove_node(node_name)
-        if dtypes[0] in [TensorProto.INT32, TensorProto.INT16, TensorProto.UINT8, TensorProto.UINT16]:
-            inp_cast = ctx.make_node("Cast", [node_inputs[0]], attr={'to': TensorProto.INT64}).output[0]
+
+        # due to ORT missing implementations we need to cast INT inputs to INT64 and FLOAT inputs to FLOAT32
+        if inp_dtype in cls.dtype_map:
+            inp_cast = ctx.make_node("Cast", [node_inputs[0]], attr={'to': cls.dtype_map[inp_dtype]}).output[0]
             node_inputs[0] = inp_cast
-        new_node = ctx.make_node("Unique", node_inputs, name=node_name, output_count=3, attr={'sorted': 0})
+
+        new_node = ctx.make_node("Unique", node_inputs, name=node_name, attr={'sorted': 0},
+                                 outputs=[utils.make_name("y"), utils.make_name("idx_first"),
+                                          utils.make_name("idx"), utils.make_name("counts")])
         ctx.replace_all_inputs(node_outputs[0], new_node.output[0])
         ctx.replace_all_inputs(node_outputs[1], new_node.output[2])
-        if ctx.get_dtype(new_node.output[0]) != dtypes[0]:
-            ctx.insert_new_node_on_output("Cast", new_node.output[0], name=utils.make_name(node.name) + "_cast",
-                                          to=dtypes[0])
-        if len(node_outputs) > 1:
-            # cast to int64 if needed
-            if dtypes[1] != onnx_pb.TensorProto.INT64:
-                cast_node = ctx.insert_new_node_on_output("Cast", new_node.output[2],
-                                                          name=utils.make_name(node.name) + "_cast",
-                                                          to=dtypes[1])
-                ctx.set_dtype(cast_node.output[0], dtypes[1])
-                ctx.copy_shape(new_node.output[2], cast_node.output[0])
+        if len(node_outputs) == 3: # we need counts too (UniqueWithCounts)
+            ctx.replace_all_inputs(node_outputs[2], new_node.output[3])
+        if ctx.get_dtype(new_node.output[0]) != inp_dtype:
+            ctx.insert_new_node_on_output("Cast", new_node.output[0], to=inp_dtype,
+                                          name=utils.make_name(node.name) + "_cast")
+
+        # cast idx and counts if needed
+        out_dtype = node.get_attr_value('out_idx')
+        if out_dtype != TensorProto.INT64:
+            for i in range(1, len(node_outputs)):
+                cast_node = ctx.insert_new_node_on_output("Cast", new_node.output[i+1], to=out_dtype,
+                                                          name=utils.make_name(node.name) + "_cast")
 
 
 @tf_op(["Bincount", "DenseBincount"])
@@ -2451,7 +2504,7 @@ class SparseToDense:
 
 def ragged_lengths_to_sparse_indices(ctx, ragged_lens):
     const_zero_int64 = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=np.int64)).output[0]
-    num_cols = ctx.make_node("ReduceMax", [ragged_lens], attr={'axes': [0], 'keeepdims': True}).output[0]
+    num_cols = GraphBuilder(ctx).make_reduce_max({"data": ragged_lens, "axes": [0], "keepdims": True})
     num_rows = ctx.make_node("Shape", [ragged_lens]).output[0]
     range_len = ctx.make_node("Mul", [num_cols, num_rows]).output[0]
 
@@ -2473,7 +2526,7 @@ def ragged_lengths_to_sparse_indices(ctx, ragged_lens):
 
 def ragged_row_ids_to_sparse_indices(ctx, row_ids):
     _, indices, _, counts = ctx.make_node("Unique", [row_ids], attr={'axis': 0}, output_count=4).output
-    num_cols = ctx.make_node("ReduceMax", [counts], attr={'axes': [0], 'keepdims': True}).output[0]
+    num_cols = GraphBuilder(ctx).make_reduce_max({"data": counts, "axes": [0], "keepdims": True})
     const_one = ctx.make_const(utils.make_name("const_one"), np.array(1, np.int64)).output[0]
     const_zero_unsq = ctx.make_const(utils.make_name("const_zero"), np.array([0], np.int64)).output[0]
     const_zero = ctx.make_const(utils.make_name("const_zero"), np.array(0, np.int64)).output[0]
@@ -2596,8 +2649,9 @@ class RaggedTensorToTensor:
             out_shape = ctx.make_node("Where", [unspec_dims, dense_shape, shape]).output[0]
             out_shape_unsq = GraphBuilder(ctx).make_unsqueeze({'data': out_shape, 'axes': [0]})
             amt_idx_in_bounds = ctx.make_node("Sub", [out_shape_unsq, sparse_indices]).output[0]
-            amt_in_bounds_flat = ctx.make_node("ReduceMin", [amt_idx_in_bounds], attr={'axes': [1], 'keepdims': False})
-            idx_in_bounds = ctx.make_node("Greater", [amt_in_bounds_flat.output[0], const_zero_int64]).output[0]
+            amt_in_bounds_flat = GraphBuilder(ctx).make_reduce_min({"data": amt_idx_in_bounds, "axes": [1],
+                                                                    "keepdims": False})
+            idx_in_bounds = ctx.make_node("Greater", [amt_in_bounds_flat, const_zero_int64]).output[0]
             sparse_indices = ctx.make_node("Compress", [sparse_indices, idx_in_bounds], attr={'axis': 0}).output[0]
             values = ctx.make_node("Compress", [values, idx_in_bounds], attr={'axis': 0}).output[0]
         else:
@@ -2814,8 +2868,8 @@ class SparseReshape:
     def any_version(cls, opset, ctx, node, **kwargs):
         indices_inp, shape_inp, new_shape_inp = node.input
 
-        product_curr_dims = ctx.make_node("ReduceProd", [shape_inp], attr={'axes': [0], 'keepdims': 1}).output[0]
-        product_new_dims = ctx.make_node("ReduceProd", [new_shape_inp], attr={'axes': [0], 'keepdims': 1}).output[0]
+        product_curr_dims = GraphBuilder(ctx).make_reduce_prod({"data": shape_inp, "axes": [0], "keepdims": 1})
+        product_new_dims = GraphBuilder(ctx).make_reduce_prod({"data": new_shape_inp, "axes": [0], "keepdims": 1})
         neg_missing_dims = ctx.make_node("Div", [product_curr_dims, product_new_dims]).output[0]
         pos_missing_dims = ctx.make_node("Neg", [neg_missing_dims]).output[0]
         zero_const = ctx.make_const(utils.make_name("cosnt_zero"), np.array(0, dtype=np.int64)).output[0]
@@ -2841,7 +2895,7 @@ class SparseReshape:
                 lower_triangular_bool = ctx.make_node("Cast", [lower_triangular],
                                                       attr={'to': TensorProto.BOOL}).output[0]
             terms = ctx.make_node("Where", [lower_triangular_bool, one_const, vector]).output[0]
-            return ctx.make_node("ReduceProd", [terms], attr={'axes': [1], 'keepdims': 0}).output[0]
+            return GraphBuilder(ctx).make_reduce_prod({"data": terms, "axes": [1], "keepdims": 0})
 
         cum_prod_curr_shape = cum_prod_of_vector(shape_inp)
         cum_prod_new_shape = cum_prod_of_vector(new_shape)
@@ -3005,7 +3059,7 @@ class DenseToDenseSetOperation:
         _, idx_loc, _, idx_cnts, = ctx.make_node("Unique", [merged_indices], attr={'axis': 0},
                                                  output_count=4, op_name_scope=node.name).output
 
-        max_cnt = ctx.make_node("ReduceMax", [idx_cnts], attr={'axes': [0], 'keepdims': True}).output[0]
+        max_cnt = GraphBuilder(ctx).make_reduce_max({"data": idx_cnts, "axes": [0], "keepdims": True})
         final_shape = ctx.make_node("Concat", [shape_prefix, max_cnt], attr={'axis': 0}).output[0]
         one_minus_cnts = ctx.make_node("Sub", [const_one, idx_cnts]).output[0]
         cnts_sliced = GraphBuilder(ctx).make_slice(
@@ -3039,7 +3093,8 @@ class DynamicPartition:
         equal_node = ctx.make_node("Equal", [partition_inp, range_const.output[0]])
         # Cast bool to int since ORT doesn't implement Split on bool.
         equal_int32 = ctx.make_node("Cast", [equal_node.output[0]], attr={"to": TensorProto.INT32})
-        split_node = ctx.make_node("Split", [equal_int32.output[0]], output_count=num_partitions, attr={'axis': 0})
+        split_node = ctx.make_node("Split", [equal_int32.output[0]], output_count=num_partitions,
+                                   attr={'axis': 0, 'num_outputs': num_partitions})
         for i in range(num_partitions):
             cond_bools = ctx.make_node("Cast", [split_node.output[i]], attr={"to": TensorProto.BOOL})
             squeeze_node = GraphBuilder(ctx).make_squeeze({'data': cond_bools.output[0], "axes": [0]}, return_node=True)
@@ -3589,7 +3644,8 @@ class MatrixDiag:
             diag_shape = mknode("Shape", [diag])
             diag_depth = mknode("Slice", [diag_shape, minus_two, minus_one])
             k = normalize(node.input[1]) if argc > 1 else zeo
-            k_min, k_max = mknode("ReduceMin", [k]), mknode("ReduceMax", [k])
+            k_min = GraphBuilder(ctx).make_reduce_min({"data": k})
+            k_max = GraphBuilder(ctx).make_reduce_max({"data": k})
             k_max_nxt = mknode("Add", [k_max, one])
             k_depth = mknode("Sub", [k_max_nxt, k_min])
             equal = mknode("Equal", [k_depth, diag_depth])
@@ -3639,7 +3695,7 @@ class MatrixDiag:
         diag_depth = mknode("Slice", [diag_shape, minus_two, minus_one])
         k_range = mknode("Range", [squeeze(k_min), squeeze(k_max_nxt), squeeze(one)])
         abs_k_range = mknode("Abs", [k_range])
-        min_k2zeo = mknode("ReduceMin", [abs_k_range])
+        min_k2zeo = GraphBuilder(ctx).make_reduce_min({"data": abs_k_range})
         max_diag_len = mknode("Add", [min_k2zeo, diag_width])
 
         def outrowcol():

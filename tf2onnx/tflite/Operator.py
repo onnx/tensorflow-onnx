@@ -196,7 +196,21 @@ class Operator(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
         return o == 0
 
-def Start(builder): builder.StartObject(9)
+    # Operator
+    def LargeCustomOptionsOffset(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # Operator
+    def LargeCustomOptionsSize(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+def Start(builder): builder.StartObject(11)
 def OperatorStart(builder):
     """This method is deprecated. Please switch to Start."""
     return Start(builder)
@@ -256,6 +270,14 @@ def StartIntermediatesVector(builder, numElems): return builder.StartVector(4, n
 def OperatorStartIntermediatesVector(builder, numElems):
     """This method is deprecated. Please switch to Start."""
     return StartIntermediatesVector(builder, numElems)
+def AddLargeCustomOptionsOffset(builder, largeCustomOptionsOffset): builder.PrependUint64Slot(9, largeCustomOptionsOffset, 0)
+def OperatorAddLargeCustomOptionsOffset(builder, largeCustomOptionsOffset):
+    """This method is deprecated. Please switch to AddLargeCustomOptionsOffset."""
+    return AddLargeCustomOptionsOffset(builder, largeCustomOptionsOffset)
+def AddLargeCustomOptionsSize(builder, largeCustomOptionsSize): builder.PrependUint64Slot(10, largeCustomOptionsSize, 0)
+def OperatorAddLargeCustomOptionsSize(builder, largeCustomOptionsSize):
+    """This method is deprecated. Please switch to AddLargeCustomOptionsSize."""
+    return AddLargeCustomOptionsSize(builder, largeCustomOptionsSize)
 def End(builder): return builder.EndObject()
 def OperatorEnd(builder):
     """This method is deprecated. Please switch to End."""

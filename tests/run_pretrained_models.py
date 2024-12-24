@@ -16,14 +16,16 @@ import tempfile
 import time
 import zipfile
 import random
+
 from collections import namedtuple
+import six
 from packaging.version import Version
 
 
 import yaml
 import numpy as np
 import PIL.Image
-import six
+
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
@@ -58,7 +60,7 @@ def get_img(shape, path, dtype, should_scale=True):
     resize_to = shape[1:3]
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
     img = PIL.Image.open(path)
-    img = img.resize(resize_to, PIL.Image.ANTIALIAS)
+    img = img.resize(resize_to, PIL.Image.LANCZOS)
     img_np = np.array(img).astype(dtype)
     img_np = np.stack([img_np] * shape[0], axis=0).reshape(shape)
     if should_scale:
@@ -525,7 +527,7 @@ class Test(object):
                         inputs[k] = np_value.astype(expected_dtype)
                     else:
                         if expected_dtype == "string":
-                            inputs[k] = self.make_input(v).astype(np.str).astype(object)
+                            inputs[k] = self.make_input(v).astype(str).astype(object)
                         else:
                             inputs[k] = self.make_input(v).astype(expected_dtype)
 

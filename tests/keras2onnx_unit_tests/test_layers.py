@@ -1139,8 +1139,8 @@ def test_conv1d_padding(conv1_runner):
     test_causal = False
     if is_tf_keras:
         import tensorflow
-        from distutils.version import StrictVersion
-        if StrictVersion(tensorflow.__version__.split('-')[0]) >= StrictVersion('1.12.0'):
+        from packaging.version import Version
+        if Version(tensorflow.__version__.split('-')[0]) >= Version('1.12.0'):
             test_causal = True
     else:
         test_causal = True

@@ -13,7 +13,7 @@ import onnx
 import urllib.request
 from yolov3 import YOLO, convert_model
 
-from distutils.version import StrictVersion
+from packaging.version import Version
 import mock_keras2onnx
 from test_utils import is_bloburl_access
 
@@ -45,7 +45,7 @@ class TestYoloV3(unittest.TestCase):
             out_boxes.append(all_boxes[idx_1])
         return [out_boxes, out_scores, out_classes]
 
-    @unittest.skipIf(StrictVersion(onnx.__version__.split('-')[0]) < StrictVersion("1.5.0"),
+    @unittest.skipIf(Version(onnx.__version__.split('-')[0]) < Version("1.5.0"),
                      "NonMaxSuppression op is not supported for onnx < 1.5.0.")
     @unittest.skipIf(not is_bloburl_access(YOLOV3_WEIGHTS_PATH) or not is_bloburl_access(YOLOV3_TINY_WEIGHTS_PATH),
                      "Model blob url can't access.")

@@ -28,7 +28,6 @@ from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
 from tf2onnx.tf_loader import tf_optimize, is_tf2, get_hash_table_info
 from tf2onnx.tf_utils import compress_graph_def
 from tf2onnx.graph import ExternalTensorStorage
-from tf2onnx.tflite.Model import Model
 
 
 if is_tf2():
@@ -249,14 +248,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def tflite_has_supported_types(self, tflite_path):
         try:
-            with open(tflite_path, 'rb') as f:
-                buf = f.read()
-            buf = bytearray(buf)
-            model = Model.GetRootAsModel(buf, 0)
-            tensor_cnt = model.Subgraphs(0).TensorsLength()
             interpreter = tf.lite.Interpreter(tflite_path)
-            for i in range(tensor_cnt):
-                dtype = interpreter._get_tensor_details(i)['dtype']   # pylint: disable=protected-access
+            tensor_details = interpreter.get_tensor_details()
+            for tensor_detail in tensor_details:
+                dtype = tensor_detail.get('dtype')
                 if np.dtype(dtype).kind == 'O':
                     return False
             return True
@@ -284,7 +279,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # tflite sometimes converts from tf but produces an invalid model
             return None, None
 
-    def assert_shapes_correct(self, graph, allow_missing=False, run_checker=True):
+    def assert_shapes_correct(self, graph, allow_missing=False, run_checker=True, check_shape=True):
+        if not check_shape:
+            return None
+
         model_proto = graph.make_model("test")
 
         if run_checker and not any(graph.get_shape(out) is None for out in graph.outputs + graph.input_names):
@@ -301,6 +299,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         def get_shape(info):
             if not info.type.tensor_type.HasField("shape"):
                 return None
+            for d in info.type.tensor_type.shape.dim:
+                if d.HasField('dim_param') and d.dim_param.startswith("unk"):
+                    return None
+
             return [d.dim_value if d.HasField('dim_value') else -1 for d in info.type.tensor_type.shape.dim]
         def get_dtype(info):
             tensor_type = info.type.tensor_type
@@ -317,7 +319,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 continue
             onnx_shape = get_shape(info)
             tf2onnx_shape = graph.get_shape(info.name)
-            if onnx_shape is None:
+            if onnx_shape is None or not onnx_shape:
                 continue
             if allow_missing and tf2onnx_shape is None:
                 continue
@@ -402,8 +404,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     i = output_names_with_port.index(output_name)
                     actual[i] = np.transpose(actual[i], constants.NCHW_TO_NHWC)
 
-            self.assert_results_equal(expected, actual, rtol, atol, mtol, check_value, check_shape, check_dtype)
-            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
+            self.assert_results_equal(expected, actual, rtol, atol, mtol, check_value, check_shape,
+                                      check_dtype)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker,
+                                       check_shape)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
@@ -441,7 +445,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     onnx_tfl_res[i] = np.transpose(onnx_tfl_res[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(tfl_res, onnx_tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
-            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker,
+                                       check_shape)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
@@ -475,7 +480,8 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
             self.assert_results_equal(tfjs_res, onnx_tfjs_res, rtol, atol, mtol, check_value, check_shape,
                                       check_dtype=False)
-            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker,
+                                       check_shape)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))

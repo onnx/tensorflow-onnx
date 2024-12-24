@@ -60,8 +60,8 @@ class RandomOp:
         # in the rewriter does not trigger. grappler will send the random uniform
         # with shape as input so we need to pickup the input here and if the shape is
         # const we make it an attribute.
-        seed = node.get_attr("seed")
-        node.set_attr("seed", float(seed.f))
+        seed = node.get_attr("seed2")
+        node.set_attr("seed", float(seed.i))
         utils.make_sure(node.inputs[0].is_const(), "%s node with non-const shape requires opset >= 9", node.type)
         shape = node.inputs[0].get_tensor_value()
         ctx.remove_input(node, node.input[0], 0)
@@ -88,8 +88,8 @@ class RandomOp:
         if node.inputs[0].is_const():
             cls.version_1(ctx, node, **kwargs)
         else:
-            seed = node.get_attr("seed")
-            node.set_attr("seed", float(seed.f))
+            seed = node.get_attr("seed2")
+            node.set_attr("seed", float(seed.i))
             cast_node = ctx.make_node("Cast", [node.input[0]], attr={'to': onnx_pb.TensorProto.INT64})
             const_node = ctx.make_node("ConstantOfShape", cast_node.output)
             inputs = node.input.copy()
@@ -227,31 +227,50 @@ class Multinomial:
         ctx.remove_input(node, node.input[1], 1)
 
 
+def _const_like_version_1(ctx, node, value):
+    shapes = node.output_shapes
+    dtypes = node.output_dtypes
+    ctx.remove_node(node.name)
+    casted_input = ctx.make_node("Cast", node.input, attr={'to': onnx_pb.TensorProto.INT64})
+    const_value = ctx.make_const(utils.make_name("value"), np.array(value).astype(np.int64))
+    mul_node = ctx.make_node('Mul', inputs=[casted_input.output[0], const_value.output[0]])
+    ctx.make_node("Cast", inputs=[mul_node.output[0]],
+                  attr={'to': dtypes[0]},
+                  name=node.name, outputs=node.output,
+                  shapes=shapes, dtypes=dtypes)
+
+
+def _const_like_version_9(ctx, node, value):
+    dtypes = node.output_dtypes
+    ctx.remove_node(node.name)
+    shape = ctx.make_node("Shape", node.input).output[0]
+    value_tensor = helper.make_tensor("value", dtypes[0], [1], vals=[value])
+    ctx.make_node("ConstantOfShape", inputs=[shape],
+                  attr={'value': value_tensor},
+                  name=node.name, outputs=node.output,
+                  dtypes=dtypes)
+
+
 @tf_op("ZerosLike")
 class ZerosLike:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        casted_input = ctx.make_node("Cast", node.input, attr={'to': onnx_pb.TensorProto.INT64})
-        const_zero = ctx.make_const(utils.make_name("zero"), np.array(0).astype(np.int64))
-        mul_node = ctx.make_node('Mul', inputs=[casted_input.output[0], const_zero.output[0]])
-        ctx.make_node("Cast", inputs=[mul_node.output[0]],
-                      attr={'to': dtypes[0]},
-                      name=node.name, outputs=node.output,
-                      shapes=shapes, dtypes=dtypes)
+        _const_like_version_1(ctx, node, 0)
 
     @classmethod
     def version_9(cls, ctx, node, **kwargs):
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        shape = ctx.make_node("Shape", node.input).output[0]
-        zero_tensor = helper.make_tensor("value", dtypes[0], [1], vals=[0])
-        ctx.make_node("ConstantOfShape", inputs=[shape],
-                      attr={'value': zero_tensor},
-                      name=node.name, outputs=node.output,
-                      dtypes=dtypes)
+        _const_like_version_9(ctx, node, 0)
+
+
+@tf_op("OnesLike")
+class OnesLike:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        _const_like_version_1(ctx, node, 1)
+
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        _const_like_version_9(ctx, node, 1)
 
 
 @tf_op(["IteratorV2", "FIFOQueueV2"])

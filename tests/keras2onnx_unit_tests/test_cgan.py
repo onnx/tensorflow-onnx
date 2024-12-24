@@ -6,7 +6,7 @@ import mock_keras2onnx
 import numpy as np
 from mock_keras2onnx.proto import keras, is_tf_keras, is_tensorflow_older_than
 from tf2onnx.keras2onnx_api import convert_keras
-from distutils.version import StrictVersion
+from packaging.version import Version
 
 Activation = keras.layers.Activation
 BatchNormalization = keras.layers.BatchNormalization
@@ -116,7 +116,7 @@ class CGAN():
 
 
 @pytest.mark.skipif(mock_keras2onnx.proto.tfcompat.is_tf2 and is_tf_keras, reason="Tensorflow 1.x only tests.")
-@pytest.mark.skipif(is_tf_keras and StrictVersion(tf.__version__.split('-')[0]) < StrictVersion("1.14.0"),
+@pytest.mark.skipif(is_tf_keras and Version(tf.__version__.split('-')[0]) < Version("1.14.0"),
                     reason="Not supported before tensorflow 1.14.0 for tf_keras")
 @pytest.mark.skipif(mock_keras2onnx.proto.tfcompat.is_tf2 and is_tensorflow_older_than('2.2'),
                     reason="Variable freezing fails to replace ResourceGather op")

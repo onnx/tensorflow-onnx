@@ -51,7 +51,14 @@ class TransposeConvOptions(object):
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def Start(builder): builder.StartObject(3)
+    # TransposeConvOptions
+    def FusedActivationFunction(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Int8Flags, o + self._tab.Pos)
+        return 0
+
+def Start(builder): builder.StartObject(4)
 def TransposeConvOptionsStart(builder):
     """This method is deprecated. Please switch to Start."""
     return Start(builder)
@@ -67,6 +74,10 @@ def AddStrideH(builder, strideH): builder.PrependInt32Slot(2, strideH, 0)
 def TransposeConvOptionsAddStrideH(builder, strideH):
     """This method is deprecated. Please switch to AddStrideH."""
     return AddStrideH(builder, strideH)
+def AddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(3, fusedActivationFunction, 0)
+def TransposeConvOptionsAddFusedActivationFunction(builder, fusedActivationFunction):
+    """This method is deprecated. Please switch to AddFusedActivationFunction."""
+    return AddFusedActivationFunction(builder, fusedActivationFunction)
 def End(builder): return builder.EndObject()
 def TransposeConvOptionsEnd(builder):
     """This method is deprecated. Please switch to End."""

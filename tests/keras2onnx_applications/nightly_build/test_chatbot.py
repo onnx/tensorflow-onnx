@@ -9,7 +9,7 @@ from mock_keras2onnx.proto import keras
 from mock_keras2onnx.proto.tfcompat import is_tf2
 from os.path import dirname, abspath
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from test_utils import run_keras_and_ort, test_level_0
+from test_utils import run_keras_and_ort, test_level_0, get_max_opset_supported_for_test
 K = keras.backend
 
 Activation = keras.layers.Activation
@@ -96,7 +96,7 @@ class TestChatBot(unittest.TestCase):
         data1 = np.random.rand(2, 12).astype(np.float32)
         data2 = np.random.rand(2, 12).astype(np.float32)
         expected = keras_model.predict([data1, data2])
-        onnx_model = mock_keras2onnx.convert_keras(keras_model, keras_model.name)
+        onnx_model = mock_keras2onnx.convert_keras(keras_model, keras_model.name, target_opset=get_max_opset_supported_for_test())
         self.assertTrue(
             run_keras_and_ort(onnx_model.graph.name, onnx_model, keras_model, [data1, data2], expected, self.model_files))
 

@@ -127,7 +127,10 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         output_shape = [output_before_trans[i] for i in perm]
         for axis in range(len(input_shape)):
             node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=inner_perm, name="trans1")
-            node2 = helper.make_node("Split", ["Y"], ["Z"], axis=axis, name="split")
+            if self.config.opset < 18:
+                node2 = helper.make_node("Split", ["Y"], ["Z"], axis=axis, name="split")
+            else:
+                node2 = helper.make_node("Split", ["Y"], ["Z"], axis=axis, name="split", num_outputs=1)
             node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm, name="trans2")
 
             graph = helper.make_graph(
@@ -148,7 +151,10 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
     @check_opset_max_version(12, "split attribute changed to input since opset 13")
     def test_transpose_with_split_dynamic_shape(self, input_shape, specific_input, output_shape, perm):
         node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm, name="trans")
-        node2 = helper.make_node("Split", ["Y"], ["Z"], axis=1, split=[1], name="split")
+        if self.config.opset < 18:
+            node2 = helper.make_node("Split", ["Y"], ["Z"], axis=1, split=[1], name="split")
+        else:
+            node2 = helper.make_node("Split", ["Y"], ["Z"], axis=1, split=[1], name="split", num_outputs=1)
         node3 = helper.make_node("Squeeze", ["Z"], ["B"], name="squeeze")
 
         graph = helper.make_graph(
@@ -1181,6 +1187,41 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((1, 1, 5, 5), (1, 1, 3, 3), (1, 1, 3, 3), (1, 3, 1, 1), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 1, 5, 5, 5), (1, 1, 3, 3, 3), (1, 1, 3, 3, 3), (1, 3, 1, 1, 1), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ((1, 1, 5, 5), (1, 1, 3, 3), (3, 3, 3, 3), (3, 1, 3, 3), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 1, 5, 5, 5), (1, 1, 3, 3, 3), (3, 3, 3, 3, 3), (3, 3, 1, 3, 3), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+        ((1, 1, 5, 5), (1, 1, 3, 3), (1, 3, 3, 3), (1, 1, 3, 3), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 1, 5, 5, 5), (1, 1, 3, 3, 3), (1, 3, 3, 3, 3), (1, 3, 1, 3, 3), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    def test_transpose_mul_with_conv(self, input_shape, weights_shape, output_shape,
+                                     const_shape, perm_input, perm_output):
+        const_b_val = np.random.randn(*const_shape).astype(np.float32)
+        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, const_shape, const_b_val.flatten())
+        const_b_node = helper.make_node("Constant", [], ["const_b"], value=const_b, name="const_b")
+
+        const_w_val = np.random.randn(*weights_shape).astype(np.float32)
+        const_w = helper.make_tensor("const_w", TensorProto.FLOAT, weights_shape, const_w_val.flatten())
+        const_w_node = helper.make_node("Constant", [], ["const_w"], value=const_w, name="const_w")
+
+        node0 = helper.make_node("Conv", ["x", "const_w"], ["X"], name="conv", pads=[0] * 2 * (len(input_shape) - 2))
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node2 = helper.make_node("Mul", ["Y", "const_b"], ["Z"], name="mul")
+        node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm_output, name="trans_2")
+
+        graph = helper.make_graph(
+            [const_b_node, const_w_node, node0, node1, node2, node3],
+            "transpose-mul-test-with-conv",
+            [helper.make_tensor_value_info("x", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        remaining_transpose_num = 1 if const_shape[0] != 1 or any(shape != 1 for shape in const_shape[2:]) else 0
+        self.run_transpose_compare(["res"], {"x": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=remaining_transpose_num)
+
+    @parameterized.expand([
         ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
@@ -1305,6 +1346,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         ((1, 3, 4, 5), (1, 3, 1, 1), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 3, 4, 5, 6), (1, 3, 1, 1, 1), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
     ])
+    @check_opset_max_version(17, "ReduceMean from opset <= 17 has axes as an attribute")
     def test_transpose_reducemean(self, input_shape, output_shape, perm_input, perm_output):
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
         node1 = helper.make_node("ReduceMean", ["Y"], ["Z"], axes=list(range(1, len(input_shape) - 1)),
@@ -1316,6 +1358,29 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             "transpose-reducemean-test",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
             [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
+        ((3, 4, 5), (3, 4, 1), [1], [0, 2, 1], [0, 2, 1]),
+        ((1, 3, 4, 5), (1, 3, 1, 1), [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 3, 4, 5, 6), (1, 3, 1, 1, 1), [1, 2, 3], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    @check_opset_min_version(18, "ReduceMean from opset > 17 has axes as an input")
+    def test_transpose_reducemean_18(self, input_shape, output_shape, axes, perm_input, perm_output):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node1 = helper.make_node("ReduceMean", ["Y", "axes"], ["Z"], keepdims=1, name="reducemean")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm_output, name="trans_2")
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-reducemean-test-18",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+            [helper.make_tensor("axes", data_type=TensorProto.INT64,
+                                dims=[len(axes)], vals=axes)],
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
@@ -1357,6 +1422,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         ((1, 3, 4, 5, 6), (1, 3), [1, 2, 3], [0, 2, 3, 4, 1], [0, 1]),
         ((1, 3, 4, 5, 6), (), [0, 1, 2, 3, 4], [0, 2, 3, 4, 1], []),
     ])
+    @check_opset_max_version(17, "ReduceMax from opset <= 17 has axes as an attribute")
     def test_transpose_reducemax(self, input_shape, output_shape, axes, perm_input, perm_output):
         node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
         node1 = helper.make_node("ReduceMax", ["Y"], ["Z"], axes=axes,
@@ -1371,6 +1437,30 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             "transpose-reducemax-test",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
             [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_transpose_compare(["res"], {"X": np.random.randn(*input_shape).astype(np.float32)},
+                                   model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
+        ((3, 4, 5), (3, 4, 1), [1], [0, 2, 1], [0, 2, 1]),
+        ((1, 3, 4, 5), (1, 3, 1, 1), [1, 2], [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 3, 4, 5, 6), (1, 3, 1, 1, 1), [1, 2, 3], [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    @check_opset_min_version(18, "ReduceMax from opset > 17 has axes as an input")
+    def test_transpose_reducemax_18(self, input_shape, output_shape, axes, perm_input, perm_output):
+        node0 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node1 = helper.make_node("ReduceMax", ["Y", "axes"], ["Z"], keepdims=1, name="reducemax")
+        node2 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm_output, name="trans_2")
+
+        graph = helper.make_graph(
+            [node0, node1, node2],
+            "transpose-reducemax-test-18",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+            [helper.make_tensor("axes", data_type=TensorProto.INT64,
+                                dims=[len(axes)], vals=axes)],
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
@@ -1858,6 +1948,7 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         self.run_merge_duplicated_nodes_compare(["OUT"], {"X": np.random.randn(5, 5).astype(np.float32)}, model_proto,
                                                 op_type="Add", remaining_op_num=2)
 
+    @check_opset_max_version(17, "ReduceMin from opset <= 17 has axes as an attribute")
     def test_duplicated_duplicated_attributes(self):
         # same attr or not
         node0 = helper.make_node('ReduceMin', inputs=["X"], outputs=["value0"], axes=[0], keepdims=0)
@@ -1871,6 +1962,31 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             "test_duplicated_duplicated_attributes",
             [helper.make_tensor_value_info("X", TensorProto.FLOAT, (5, 5))],
             [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, (5,))],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        self.run_merge_duplicated_nodes_compare(["OUT"], {"X": np.random.randn(5, 5).astype(np.float32)}, model_proto,
+                                                op_type="ReduceMin", remaining_op_num=2)
+
+    @check_opset_min_version(18, "ReduceMin from opset > 17 has axes as an input")
+    def test_duplicated_duplicated_attributes_18(self):
+        # same attr or not
+        node0 = helper.make_node('ReduceMin', inputs=["X", "axes0"], outputs=["value0"], keepdims=0)
+        node1 = helper.make_node('ReduceMin', inputs=["X", "axes1"], outputs=["value1"], keepdims=0)
+        node2 = helper.make_node('ReduceMin', inputs=["X", "axes2"], outputs=["value2"], keepdims=0)
+        node3 = helper.make_node('Add', inputs=["value0", "value1"], outputs=["value3"])
+        node4 = helper.make_node("Mul", ["value2", "value3"], ["OUT"])
+
+        graph = helper.make_graph(
+            [node0, node1, node2, node3, node4],
+            "test_duplicated_duplicated_attributes_18",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, (5, 5))],
+            [helper.make_tensor_value_info("OUT", TensorProto.FLOAT, (5,))],
+            [
+                helper.make_tensor("axes0", data_type=TensorProto.INT64, dims=[1], vals=[0]),
+                helper.make_tensor("axes1", data_type=TensorProto.INT64, dims=[1], vals=[0]),
+                helper.make_tensor("axes2", data_type=TensorProto.INT64, dims=[1], vals=[1]),
+            ]
         )
 
         model_proto = self.make_model(graph, producer_name="onnx-tests")
@@ -2062,7 +2178,10 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node55 = helper.make_node("Constant", [], ["six"], value=six_tensor)
 
         node6 = helper.make_node("Gather", ["S", "g_indices"], ["dims12"])
-        node7 = helper.make_node("ReduceProd", ["dims12"], ["dims12_prod"], axes=[0])
+        if self.config.opset >= 18:
+            node7 = helper.make_node("ReduceProd", ["dims12", "axes"], ["dims12_prod"])
+        else:
+            node7 = helper.make_node("ReduceProd", ["dims12"], ["dims12_prod"], axes=[0])
         if self.config.opset >= 10:
             node8 = helper.make_node("Slice", ["S", "starts", "ends", ""], ["dim0"])
         else:
@@ -2312,7 +2431,10 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
                                           vals=np.random.randn(2, 6, 1).flatten().astype(np.float32))
         node0 = helper.make_node("Constant", [], ["const"], value=const_tensor)
-        node1 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1)
+        if self.config.opset < 18:
+            node1 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1)
+        else:
+            node1 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1, num_outputs=3)
         node2 = helper.make_node("Sum", ["inp", "out1", "out2", "out3"], ["out4"])
 
         graph = helper.make_graph(
@@ -2331,7 +2453,10 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
                                           vals=np.random.randn(2, 6, 1).flatten().astype(np.float32))
         node0 = helper.make_node("Constant", [], ["const"], value=const_tensor)
-        node1 = helper.make_node("Split", ["const"], ["out1"], axis=1)
+        if self.config.opset < 18:
+            node1 = helper.make_node("Split", ["const"], ["out1"], axis=1)
+        else:
+            node1 = helper.make_node("Split", ["const"], ["out1"], axis=1, num_outputs=1)
         node2 = helper.make_node("Sum", ["inp", "out1"], ["out4"])
 
         graph = helper.make_graph(
@@ -2374,7 +2499,11 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         const_tensor = helper.make_tensor(name='const_tensor', data_type=TensorProto.FLOAT, dims=shape,
                                           vals=np.random.randn(2, 6, 1).flatten().astype(np.float32))
         node0 = helper.make_node("Constant", [], ["const"], value=const_tensor)
-        node2 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1, split=[1, 3, 2])
+        if self.config.opset < 18:
+            node2 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1, split=[1, 3, 2])
+        else:
+            node2 = helper.make_node("Split", ["const"], ["out1", "out2", "out3"], axis=1, split=[1, 3, 2],
+                                     num_outputs=3)
         node3 = helper.make_node("Sum", ["inp", "out2"], ["out4"])
 
         graph = helper.make_graph(

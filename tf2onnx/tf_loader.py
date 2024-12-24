@@ -8,7 +8,6 @@ import uuid
 from packaging.version import Version
 
 import tensorflow as tf
-import numpy as np
 from google.protobuf.message import DecodeError
 from tensorflow.core.framework import tensor_pb2
 from tensorflow.core.protobuf import saved_model_pb2
@@ -74,7 +73,6 @@ if is_tf2():
     tf_gfile = tf.io.gfile
     tf_placeholder = tf.compat.v1.placeholder
     tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-    extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 elif Version(tf.__version__) >= Version("1.13"):
     # 1.13 introduced the compat namespace
     tf_reset_default_graph = tf.compat.v1.reset_default_graph
@@ -85,7 +83,6 @@ elif Version(tf.__version__) >= Version("1.13"):
     tf_gfile = tf.gfile
     tf_placeholder = tf.compat.v1.placeholder
     tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-    extract_sub_graph = tf.compat.v1.graph_util.extract_sub_graph
 else:
     # older than 1.13
     tf_reset_default_graph = tf.reset_default_graph
@@ -96,7 +93,6 @@ else:
     tf_gfile = tf.gfile
     tf_placeholder = tf.placeholder
     tf_placeholder_with_default = tf.placeholder_with_default
-    extract_sub_graph = tf.graph_util.extract_sub_graph
 
 
 def inputs_without_resource(sess, input_names):
@@ -293,8 +289,8 @@ def from_function(func, input_names, output_names, large_model=False):
 
 def freeze_session(sess, input_names=None, output_names=None, get_tables=False):
     """Freezes the state of a session into a pruned computation graph."""
-    output_node_names = [i.split(':')[:-1][0] for i in output_names]
-    keep_var_names = [i.split(':')[:-1][0] for i in input_names]
+    output_node_names = [i.split(':')[0] for i in output_names]
+    keep_var_names = [i.split(':')[0] for i in input_names]
     with sess.graph.as_default():
         output_node_names = output_node_names or []
         output_node_names += [v.op.name for v in tf_global_variables()]
@@ -484,6 +480,26 @@ def _get_hash_table_info_from_trackable(trackable, table_info,
                 placeholder_to_table_info[removed_resource_to_placeholder[table_handle]] = new_table_info[0]
 
 
+def _get_resources_from_captures(concrete_func, graph_captures):
+    resource_id_to_placeholder = {}
+    placeholder_to_resource = {}
+    keys_to_be_removed = []
+
+    # pylint: disable=protected-access
+    variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
+    for k, v in list(graph_captures.items()):
+        val_tensor, name_tensor = v
+        if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
+            resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
+            placeholder_to_resource[name_tensor.name.split(':')[0]] = val_tensor
+            keys_to_be_removed.append(k)
+            for i in reversed(range(len(concrete_func._captured_inputs))):
+                if concrete_func._captured_inputs[i] is val_tensor:
+                    concrete_func._captured_inputs.pop(i)
+
+    return resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed
+
+
 def _remove_non_variable_resources_from_captures(concrete_func):
     """
     Removes all non-variable resources (such as tables) from a function's captured inputs to prevent tf from
@@ -497,22 +513,24 @@ def _remove_non_variable_resources_from_captures(concrete_func):
     if hasattr(concrete_func.graph, '_captures') and hasattr(concrete_func, '_captured_inputs'):
         graph_captures_copy = concrete_func.graph._captures.copy()
         func_captures_copy = concrete_func._captured_inputs.copy()
-        variable_handles = {id(v.handle) for v in concrete_func.graph.variables}
-        for k, v in list(concrete_func.graph._captures.items()):
-            val_tensor, name_tensor = v
-            if val_tensor.dtype == tf.resource and id(val_tensor) not in variable_handles:
-                resource_id_to_placeholder[id(val_tensor)] = name_tensor.name.split(':')[0]
-                placeholder_to_resource[name_tensor.name.split(':')[0]] = val_tensor
-                del concrete_func.graph._captures[k]
-                for i in reversed(range(len(concrete_func._captured_inputs))):
-                    if concrete_func._captured_inputs[i] is val_tensor:
-                        concrete_func._captured_inputs.pop(i)
-            elif val_tensor.dtype != tf.resource:
-                npval = val_tensor.numpy()
-                if not hasattr(npval, 'dtype'):
-                    # Hack around a TF bug until PR is merged: https://github.com/tensorflow/tensorflow/pull/45610
-                    arr = np.array(npval)
-                    val_tensor.numpy = lambda arr=arr: arr
+
+        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = \
+            _get_resources_from_captures(concrete_func, concrete_func.graph._captures)
+        for key in keys_to_be_removed:
+            del concrete_func.graph._captures[key]
+    elif hasattr(concrete_func.graph, 'function_captures') and hasattr(concrete_func, '_captured_inputs'):
+        # Since tensorflow 2.13.0, _captures has been removed and replaced with function_captures
+        graph_captures = {}
+        for k, v in concrete_func.graph.function_captures.by_val_external.items():
+            graph_captures[k] = (v, concrete_func.graph.function_captures.by_val_internal[k])
+        graph_captures_copy = graph_captures.copy()
+        func_captures_copy = concrete_func._captured_inputs.copy()
+
+        resource_id_to_placeholder, placeholder_to_resource, keys_to_be_removed = \
+            _get_resources_from_captures(concrete_func, graph_captures)
+        for key in keys_to_be_removed:
+            del concrete_func.graph.function_captures.by_val_internal[key]
+            del concrete_func.graph.function_captures.by_val_external[key]
     else:
         logger.warning(
             "Could not search for non-variable resources. Concrete function internal representation may have changed.")
@@ -573,8 +591,12 @@ def _from_saved_model_v2(model_path, input_names, output_names, tag, signature_d
     tensors_to_rename = {}
     if input_names is None:
         inputs = [tensor.name for tensor in concrete_func.inputs if tensor.dtype != tf.dtypes.resource]
-        graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
-        captured_inputs = [t_name.name for _, t_name in graph_captures.values()]
+        if hasattr(concrete_func.graph, '_captures'):
+            graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
+            captured_inputs = [t_name.name for _, t_name in graph_captures.values()]
+        else:
+            graph_captures = concrete_func.graph.function_captures.by_val_internal
+            captured_inputs = [t.name for t in graph_captures.values()]
         inputs = [inp for inp in inputs if inp not in captured_inputs]
         if concrete_func.structured_input_signature is not None and not use_graph_names:
             flat_structured_inp = tf.nest.flatten(concrete_func.structured_input_signature)
@@ -635,14 +657,13 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
 
 def from_keras(model_path, input_names, output_names):
     """Load keras model - experimental for now."""
-    from tensorflow.python import keras as _keras
-    from tensorflow.python.eager import context
+    from tensorflow import keras as _keras
     from tensorflow.python.keras.saving import saving_utils as _saving_utils
 
     # Handles Keras when Eager mode is enabled.
     custom_objects = None
     with tf.device("/cpu:0"):
-        if context.executing_eagerly():
+        if tf.executing_eagerly():
             _keras.backend.clear_session()
             _keras.backend.set_learning_phase(False)
             keras_model = _keras.models.load_model(model_path, custom_objects)
@@ -708,11 +729,6 @@ def tf_optimize(input_names, output_names, graph_def):
     """Extract inference subgraph and optimize graph."""
     assert isinstance(input_names, list)
     assert isinstance(output_names, list)
-
-    # TODO: is this needed ?
-    needed_names = [utils.node_name(i) for i in input_names] + \
-                   [utils.node_name(i) for i in output_names]
-    graph_def = extract_sub_graph(graph_def, needed_names)
 
     want_grappler = is_tf2() or Version(tf.__version__) >= Version("1.15")
     if want_grappler:

@@ -80,7 +80,6 @@ class ApiTests(Tf2OnnxBackendTestBase):
     @requires_custom_ops()
     @check_tf_min_version("1.15")
     @check_opset_min_version(11, "SparseToDense")
-    @skip_tf_versions(["2.1"], "TF 2.1 keras model doesn't work; table not initialized")
     def test_keras_hashtable(self):
 
         feature_cols = [
@@ -103,7 +102,7 @@ class ApiTests(Tf2OnnxBackendTestBase):
         model.compile(optimizer='adam', loss=tf.keras.losses.mean_squared_error)
 
         inp1 = np.array([[2.], [3.]], dtype=np.float32)
-        inp2 = np.array([["a"], ["b"]], dtype=np.str)
+        inp2 = np.array([["a"], ["b"]], dtype=str)
         if not is_tf2():
             tf.keras.backend.get_session().run(tf.tables_initializer(name='init_all_tables'))
         k_res = model.predict([inp1, inp2])
