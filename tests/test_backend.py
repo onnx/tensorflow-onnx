@@ -73,6 +73,7 @@ if is_tf2():
     matrix_diag_part = tf.compat.v1.matrix_diag_part
     fake_quant_with_min_max_args = tf.quantization.fake_quant_with_min_max_args
     fake_quant_with_min_max_vars = tf.quantization.fake_quant_with_min_max_vars
+    extract_image_patches = tf.image.extract_patches
 elif Version(tf.__version__) >= Version("1.13"):
     conv2d_backprop_input = tf.compat.v1.nn.conv2d_backprop_input
     conv3d_transpose = tf.compat.v1.nn.conv3d_transpose
@@ -96,6 +97,7 @@ elif Version(tf.__version__) >= Version("1.13"):
     matrix_diag_part = tf.compat.v1.matrix_diag_part
     fake_quant_with_min_max_args = tf.compat.v1.quantization.fake_quant_with_min_max_args
     fake_quant_with_min_max_vars = tf.compat.v1.quantization.fake_quant_with_min_max_vars
+    extract_image_patches = tf.compat.v1.extract_image_patches
 else:
     conv2d_backprop_input = tf.nn.conv2d_backprop_input
     conv3d_transpose = tf.nn.conv3d_transpose
@@ -113,6 +115,7 @@ else:
     is_inf = tf.is_inf
     floormod = tf.floormod
     matrix_diag_part = tf.matrix_diag_part
+    extract_image_patches = tf.extract_image_patches
 
 
 def make_xval(shape):
@@ -6360,6 +6363,23 @@ class BackendTests(Tf2OnnxBackendTestBase):
         updates_val = make_xval([2, 5]) + 3
         self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices_val, _INPUT2: updates_val})
         self._run_test_case(func, [_OUTPUT], {_INPUT: tensor_val, _INPUT1: indices64_val, _INPUT2: updates_val})
+
+    @check_opset_min_version(9, "EyeLike and ConstantOfShape")
+    def test_extract_image_patches(self):
+        for rates in [[1, 1], [1, 4], [4, 1], [3, 3]]:
+            for _, padding, x_shape, sizes, strides in get_conv_getdata():
+                def func(x):
+                    return extract_image_patches(
+                        x,
+                        sizes=sizes,
+                        strides=strides,
+                        rates=[1] + rates + [1],
+                        padding=padding,
+                        name=_TFOUTPUT
+                    )
+
+                x_val = make_xval(x_shape)
+                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
 if __name__ == '__main__':
     unittest_main()
