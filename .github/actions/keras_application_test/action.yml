@@ -58,6 +58,7 @@ runs:
               pip install numpy==1.19.0
           else 
               pip install transformers
+              pip install tf_keras
               pip install "numpy<2"
           fi
 
@@ -71,5 +72,7 @@ runs:
       run: |
           python -c "import onnxruntime"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
+
+          export TF_USE_LEGACY_KERAS=True
           cd tests/keras2onnx_applications/nightly_build
           python run_all_v2.py
