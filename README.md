@@ -117,7 +117,7 @@ You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSD
 
 We recently added support for tflite. You convert ```tflite``` models via command line, for example:
 
-```python -m tf2onnx.convert --opset 16 --tflite tflite--file --output model.onnx```
+```python -m tf2onnx.convert --opset 16 --tflite tflite-file --output model.onnx```
 
 ## CLI reference
 
