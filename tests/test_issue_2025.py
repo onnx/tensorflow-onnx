@@ -1,12 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-import os
+# noqa: C0415, C0114, C0115
 import unittest
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import (
-    check_opset_min_version,
-    check_opset_max_version,
-    check_tf_min_version,
-)
 
 
 class TestIssue2025(Tf2OnnxBackendTestBase):
@@ -16,7 +11,6 @@ class TestIssue2025(Tf2OnnxBackendTestBase):
         import tf2onnx
         from tf2onnx.handler import tf_op
         import numpy as np
-        import onnx
 
         @tf_op("TanhGrad")
         class TanhGrad:
