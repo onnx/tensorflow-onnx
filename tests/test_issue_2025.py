@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# noqa: C0415, C0114, C0115
+# pylint: disable=missing-docstring,unused-import
 import unittest
 from backend_test_base import Tf2OnnxBackendTestBase
 
