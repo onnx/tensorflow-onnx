@@ -18,7 +18,8 @@ import urllib
 # Mapping opset to ONNXRuntime version.
 ORT_OPSET_VERSION = {
     "1.6.0": 13, "1.7.0": 13, "1.8.0": 14, "1.9.0": 15, "1.10.0": 15, "1.11.0": 16,
-    "1.12.0": 17, "1.13.0": 17, "1.14.0": 18, "1.15.0": 18, "1.16.0": 18
+    "1.12.0": 17, "1.13.0": 17, "1.14.0": 18, "1.15.0": 18, "1.16.0": 18, "1.17.0": 18,
+    "1.18.0": 18, "1.19.0": 18, "1.20.0": 18,
 }
 
 working_path = os.path.abspath(os.path.dirname(__file__))
@@ -319,13 +320,14 @@ def get_max_opset_supported_by_ort():
         if ort_ver in ORT_OPSET_VERSION.keys():
             return ORT_OPSET_VERSION[ort_ver]
         else:
-            print("Given onnxruntime version doesn't exist in ORT_OPSET_VERSION: {}".format(ort_ver))
             return None
     except ImportError:
         return None
 
 
 def get_max_opset_supported_for_test():
+    if get_max_opset_supported_by_ort() is None:
+        return get_maximum_opset_supported()
     return min(get_max_opset_supported_by_ort(), get_maximum_opset_supported())
 
 
