@@ -17,8 +17,8 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 | Build Type | OS | Python | TensorFlow | ONNX opset | Status |
 | ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, MacOS<sup>\*</sup>, Windows<sup>\*</sup> | 3.7-3.10 | 1.13-1.15, 2.1-2.9 | 13-17 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
-| Unit Test - Full | Linux, MacOS, Windows | 3.7-3.10 | 1.13-1.15, 2.1-2.9 | 13-17 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
+| Unit Test - Basic | Linux, Windows | 3.7-3.10 | 1.15, 2.9-2.15 | 14-18 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
+| Unit Test - Full | Linux, Windows | 3.7-3.10 | 1.15, 2.9-2.15 | 14-18 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
 <br/>
 
 ## Supported Versions
@@ -27,14 +27,14 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 tf2onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support and test ONNX opset-13 to opset-17. opset-6 to opset-12 should work but we don't test them.
-By default we use ```opset-13``` for the resulting ONNX graph.
+We support and test ONNX opset-14 to opset-18. opset-6 to opset-13 should work but we don't test them.
+By default we use ```opset-15``` for the resulting ONNX graph.
 
-If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 13```.
+If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 15```.
 
 ### TensorFlow
 
-We support ```tf-1.x graphs``` and ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.13 or better```.
+We support ```tf-1.x graphs``` and ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.15 or better```.
 
 When running under tf-2.x tf2onnx will use the tensorflow V2 controlflow.
 
@@ -90,16 +90,16 @@ To create a wheel for distribution:
 
 ## Getting started
 
-To get started with `tensorflow-onnx`, run the `t2onnx.convert` command, providing:
+To get started with `tensorflow-onnx`, run the `tf2onnx.convert` command, providing:
 
 * the path to your TensorFlow model (where the model is in `saved model` format)
 * a name for the ONNX output file:
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-path --output model.onnx```
 
-The above command uses a default of `13` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
+The above command uses a default of `15` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
 
-```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 17 --output model.onnx```
+```python -m tf2onnx.convert --saved-model tensorflow-model-path --opset 18 --output model.onnx```
 
 If your TensorFlow model is in a format other than `saved model`, then you need to provide the inputs and outputs of the model graph.
 
@@ -117,7 +117,7 @@ You find an end-to-end tutorial for ssd-mobilenet [here](tutorials/ConvertingSSD
 
 We recently added support for tflite. You convert ```tflite``` models via command line, for example:
 
-```python -m tf2onnx.convert --opset 16 --tflite tflite--file --output model.onnx```
+```python -m tf2onnx.convert --opset 16 --tflite tflite-file --output model.onnx```
 
 ## CLI reference
 
@@ -139,6 +139,7 @@ python -m tf2onnx.convert
     [--signature_def SIGNATURE_DEF]
     [--concrete_function CONCRETE_FUNCTION]
     [--target TARGET]
+    [--extra_opset list-of-extra-opset]
     [--custom-ops list-of-custom-ops]
     [--load_op_libraries tensorflow_library_path]
     [--large_model]
@@ -191,7 +192,7 @@ ONNX requires default values for graph inputs to be constant, while Tensorflow's
 
 #### --opset
 
-By default we use the opset 13 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 17``` would create a onnx graph that uses only ops available in opset 17. Because older opsets have in most cases fewer ops, some models might not convert on a older opset.
+By default we use the opset 15 to generate the graph. By specifying ```--opset``` the user can override the default to generate a graph with the desired opset. For example ```--opset 17``` would create a onnx graph that uses only ops available in opset 17. Because older opsets have in most cases fewer ops, some models might not convert on an older opset.
 
 #### --dequantize
 
@@ -216,6 +217,11 @@ Only valid with parameter `--saved_model`. If a model contains a list of concret
 #### --target
 
 Some models require special handling to run on some runtimes. In particular, the model may use unsupported data types. Workarounds are activated with ```--target TARGET```. Currently supported values are listed on this [wiki](https://github.com/onnx/tensorflow-onnx/wiki/target). If your model will be run on Windows ML, you should specify the appropriate target value.
+
+#### --extra_opset
+
+If you want to convert a TF model using an existing custom op, this can specify the correspongding domain and version.
+The format is a comma-separated map of domain and version, for example: `ai.onnx.contrib:1`.
 
 #### --custom-ops
 

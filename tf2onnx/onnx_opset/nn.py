@@ -58,7 +58,8 @@ def get_channels_last_permutation(spatial):
 
 
 def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
-                        input_indices=None, output_indices=None, spatial=2):
+                        input_indices=None, output_indices=None, spatial=2,
+                        quantization_axis=0):
     """Convert input and kernel from tensorflow to onnx. This may be required to
         insert transpose ops for input, kernel, and output unless they are constants
         and we can transpose the constant.
@@ -73,6 +74,7 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
         new_kernel_shape: Pass to reshape the kernel.
         input_indices: Indices that define the inputs.
         output_indices: Indices that define the outputs.
+        quantization_axis: Axis for the inserted QDQ nodes
     """
 
     if input_indices is None:
@@ -151,8 +153,8 @@ def conv_convert_inputs(ctx, node, with_kernel=False, new_kernel_shape=None,
                 weights_node.set_tensor_value(val)
                 need_transpose = False
                 # Change the quantization axis for Q and DQ node accordingly
-                kernel_node.set_attr("axis", 0) # DQ node
-                kernel_node.inputs[0].set_attr("axis", 0) # Q node
+                kernel_node.set_attr("axis", quantization_axis) # DQ node
+                kernel_node.inputs[0].set_attr("axis", quantization_axis) # Q node
             else:
                 val = kernel_node.get_tensor_value(as_list=False)
                 val = np.transpose(val, permutation)
@@ -309,8 +311,9 @@ def conv_kernel_shape(ctx, node, input_idx, spatial=2):
     # Get spatial part.
     kernel_shape = kernel_shape[:spatial]
 
-    # Set new value and return it.
-    node.set_attr("kernel_shape", kernel_shape)
+    # Set attribute value only if all dimensions are known.
+    if all(d > 0 for d in kernel_shape):
+        node.set_attr("kernel_shape", kernel_shape)
 
     return kernel_shape
 
@@ -377,11 +380,13 @@ class ConvOp:
         data_format = str(node.attr["data_format"].s, encoding="utf8")
         shape_dim = -1
         if data_format == "NHWC":
-            shape_dim = ctx.get_shape(node.input[0])[3]
+            shape_dim = ctx.get_shape(node.input[0])[-1]
         elif data_format == "NCHW":
             shape_dim = ctx.get_shape(node.input[0])[1]
         if shape_dim != -1:
-            groups = int(shape_dim / ctx.get_shape(node.input[1])[2])
+            filter_in_channels = ctx.get_shape(node.input[1])[-2]
+            if filter_in_channels != -1:
+                groups = shape_dim // filter_in_channels
 
         node.set_attr("group", groups)
 
@@ -607,7 +612,7 @@ class ConvTranspose:
         ctx.replace_input(node, node.input[0], node.input[1], 0)
         ctx.replace_input(node, node.input[1], t, 1)
 
-        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial)
+        conv_convert_inputs(ctx, node, with_kernel=True, spatial=spatial, quantization_axis=1)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -647,7 +652,8 @@ class DepthwiseConv2d:
             raise ValueError("input channel must be positive")
         k_output_channels = k_input_channels * k_channel_multiplier
 
-        node.set_attr("kernel_shape", [k_h, k_w])
+        if k_h > 0 and k_w > 0:
+            node.set_attr("kernel_shape", [k_h, k_w])
         strides = conv_dims_attr(node, "strides")
         dilations = conv_dims_attr(node, "dilations")
         node.set_attr("group", k_input_channels)
@@ -739,7 +745,7 @@ class MaxPoolWithArgmaxOp:
         # Convert indices from NCHW to NHWC format
         input_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
         input_shape_guess = ctx.get_shape(node.input[0])
-        n, h, w, c = ctx.make_node("Split", [input_shape], attr={'axis': 0}, output_count=4).output
+        n, h, w, c = ctx.make_node("Split", [input_shape], attr={'axis': 0, 'num_outputs': 4}, output_count=4).output
         hw = ctx.make_node("Mul", [h, w]).output[0]
         chw = ctx.make_node("Mul", [hw, c]).output[0]
         consumers = ctx.find_output_consumers(node.output[1])
@@ -852,7 +858,7 @@ class Pad:
 
         output = node.output[0]
         shape = ctx.make_node("Shape", [output]).output[0]
-        dims = ctx.make_node("Split", [shape], output_count=rank).output
+        dims = ctx.make_node("Split", [shape], attr={'num_outputs': rank}, output_count=rank).output
         two_false = ctx.make_const(utils.make_name("two_false"), np.array([False, False], bool)).output[0]
         inv_second = ctx.make_const(utils.make_name("inv_second"), np.array([1, -1], np.int64)).output[0]
         dec_second = ctx.make_const(utils.make_name("dec_second"), np.array([0, 1], np.int64)).output[0]
@@ -1011,16 +1017,16 @@ class BatchNorm:
             utils.make_sure(inp_rank is not None, "Cannot convert node %s of type %s with input of unknown rank.",
                             node.name, tf_type)
             dims = [0] + list(range(2, inp_rank))
-            avg = ctx.make_node("ReduceMean", [node.input[0]], attr={'axes': dims, 'keepdims': True}).output[0]
+            avg = GraphBuilder(ctx).make_reduce_mean({"data": node.input[0], "axes": dims, "keepdims": True})
             avg_squeezed = GraphBuilder(ctx).make_squeeze({"data": avg, "axes": dims})
             sub = ctx.make_node("Sub", [node.input[0], avg]).output[0]
-            var_squeezed = ctx.make_node("ReduceSumSquare", [sub], attr={'axes': dims, 'keepdims': False}).output[0]
+            var_squeezed = GraphBuilder(ctx).make_reduce_sum_square({"data": sub, "axes": dims, "keepdims": False})
 
             inp_shape = ctx.make_node("Shape", [node.input[0]]).output[0]
             dims_const = ctx.make_const(utils.make_name("axes_const"), np.array(dims, dtype=np.int64)).output[0]
             reduce_dims = ctx.make_node("Gather", [inp_shape, dims_const]).output[0]
-            dims_product = ctx.make_node("ReduceProd", [reduce_dims], attr={'axes': [0], 'keepdims': False})
-            cnt_float = ctx.make_node("Cast", [dims_product.output[0]], attr={'to': ctx.get_dtype(node.input[0])})
+            dims_product = GraphBuilder(ctx).make_reduce_prod({"data": reduce_dims, "axes": [0], "keepdims": False})
+            cnt_float = ctx.make_node("Cast", [dims_product], attr={'to': ctx.get_dtype(node.input[0])})
 
             pop_var_squeezed = ctx.make_node("Div", [var_squeezed, cnt_float.output[0]]).output[0]
             ctx.replace_inputs(node, node.input[:3] + [avg_squeezed, pop_var_squeezed])
@@ -1108,7 +1114,8 @@ class SampleDistortedBoundingBox:
 
         rand_attr['shape'] = [max_attempts, 4]
         random_nums = ctx.make_node("RandomUniform", [], attr=rand_attr, op_name_scope=node.name).output[0]
-        r1, r2, r3, r4 = ctx.make_node("Split", [random_nums], attr={'axis': 1}, output_count=4).output
+        r1, r2, r3, r4 = ctx.make_node("Split", [random_nums], attr={'axis': 1, 'num_outputs': 4},
+                                       output_count=4).output
 
         # Use r1 to sample the aspect ratio
         scaled_r1 = ctx.make_node("Mul", [r1, ratio_range_node]).output[0]
@@ -1158,7 +1165,7 @@ class SampleDistortedBoundingBox:
             bounding_boxes_flat = ctx.make_node("Reshape", [bounding_boxes, boxes_shape]).output[0]
 
             box_y1, box_x1, box_y2, box_x2 = \
-                ctx.make_node("Split", [bounding_boxes_flat], attr={'axis': 1}, output_count=4).output
+                ctx.make_node("Split", [bounding_boxes_flat], attr={'axis': 1, 'num_outputs': 4}, output_count=4).output
 
             combined_max_y = ctx.make_node("Min", [y2, box_y2]).output[0]
             combined_max_x = ctx.make_node("Min", [x2, box_x2]).output[0]
@@ -1207,7 +1214,7 @@ class SampleDistortedBoundingBox:
         else:
             box_rounded = box_scaled   # Close enough
         box_cast = ctx.make_node("Cast", [box_rounded], attr={'to': int_dtype}).output[0]
-        bb_begin, bb_end = ctx.make_node("Split", [box_cast], attr={'axis': 0}, output_count=2).output
+        bb_begin, bb_end = ctx.make_node("Split", [box_cast], attr={'axis': 0, 'num_outputs': 2}, output_count=2).output
         bb_size = ctx.make_node("Sub", [bb_end, bb_begin]).output[0]
 
         const_zero_int = ctx.make_const(utils.make_name("const_zero"), np.array([0], np_int_dtype)).output[0]
@@ -1345,7 +1352,7 @@ class CropAndResize:
         cls.any_version_after11(13, ctx, node, **kwargs)
 
 
-@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic"])
+@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic", "ResizeArea"])
 class Resize:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
@@ -1389,29 +1396,46 @@ class Resize:
         else:
             mode = "nearest"
         roi = ctx.make_const(utils.make_name("roi"), np.array([]).astype(np.float32))
-        const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0]).astype(np.int64))
-        const_two = ctx.make_const(utils.make_name("const_two"), np.array([2]).astype(np.int64))
-        const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([]).astype(np.float32))
         input_nchw = ctx.make_node("Transpose", [node.input[0]], {"perm": constants.NHWC_TO_NCHW})
-        shape_input = ctx.make_node("Shape", [input_nchw.output[0]])
-        sliced_shape = ctx.make_node("Slice", [shape_input.output[0], const_zero.output[0], const_two.output[0]])
-        size_int64 = ctx.make_node("Cast", [node.input[1]], attr={"to": onnx_pb.TensorProto.INT64})
-        concat_shape = ctx.make_node("Concat", [sliced_shape.output[0], size_int64.output[0]], {'axis': 0})
-        resize_inputs = [
-            input_nchw.output[0],
-            roi.output[0],
-            const_empty_float.output[0],
-            concat_shape.output[0]
-        ]
+        shape = ctx.get_shape(node.input[0])
+        if shape and shape[2] != -1 and shape[1] != -1 and node.inputs[1].is_const():
+            target_shape = node.inputs[1].get_tensor_value()
+            n, h, w, c = shape
+            nh, nw = target_shape
+            if "sizes" in node.attr:
+                sizes_val = np.array([1.0, 1.0, nh, nw]).astype(np.int64)
+                resize_params = ctx.make_const(utils.make_name("sizes"), sizes_val, raw=False)
+            else:  # scales
+                scale_val = np.array([1.0, 1.0, float(nh) / h, float(nw) / w]).astype(np.float32)
+                resize_params = ctx.make_const(utils.make_name("scales"), scale_val, raw=False)
+            resize_inputs = [
+                input_nchw.output[0],
+                roi.output[0],
+                resize_params.output[0]
+            ]
+        else:
+            const_zero = ctx.make_const(utils.make_name("const_zero"), np.array([0]).astype(np.int64))
+            const_two = ctx.make_const(utils.make_name("const_two"), np.array([2]).astype(np.int64))
+            const_empty_float = ctx.make_const(utils.make_name("const_empty_float"), np.array([]).astype(np.float32))
+            shape_input = ctx.make_node("Shape", [input_nchw.output[0]])
+            sliced_shape = ctx.make_node("Slice", [shape_input.output[0], const_zero.output[0], const_two.output[0]])
+            size_int64 = ctx.make_node("Cast", [node.input[1]], attr={"to": onnx_pb.TensorProto.INT64})
+            concat_shape = ctx.make_node("Concat", [sliced_shape.output[0], size_int64.output[0]], {'axis': 0})
+            resize_inputs = [
+                input_nchw.output[0],
+                roi.output[0],
+                const_empty_float.output[0],
+                concat_shape.output[0]
+            ]
         transformation_mode = "asymmetric"
         nearest_mode = "floor"
         if "align_corners" in node.attr and node.attr["align_corners"].i:
             transformation_mode = "align_corners"
+            nearest_mode = "round_prefer_ceil"
         if "half_pixel_centers" in node.attr and node.attr["half_pixel_centers"].i:
             if node.type == "ResizeNearestNeighbor" and not ctx.is_target(constants.TARGET_TENSORRT):
                 # TensorRT only supports nearest_mode = "floor" for mode = "nearest"
-                transformation_mode = "half_pixel"
-                nearest_mode = "round_prefer_ceil"
+                transformation_mode = "tf_half_pixel_for_nn"
             else:
                 transformation_mode = "half_pixel"
         attr = {"mode": mode, "nearest_mode": nearest_mode, "coordinate_transformation_mode": transformation_mode,
@@ -1433,6 +1457,12 @@ class Resize:
         # wants the input to be NHWC - adjust target_shape to this.
         utils.make_sure(node.type != "ResizeBicubic", "Opset 11 is required for bicubic interpolation for node %s",
                         node.name)
+        if "align_corners" in node.attr:
+            utils.make_sure(not node.attr["align_corners"].i,
+                            "Opset 11 is required for align_corners=True for node %s", node.name)
+        if "half_pixel_centers" in node.attr:
+            utils.make_sure(not node.attr["half_pixel_centers"].i,
+                            "Opset 11 is required for half_pixel_centers=True for node %s", node.name)
         mode = "linear" if node.type == "ResizeBilinear" else "nearest"
 
         # because onnxruntime only supports to scale the last two dims so transpose is inserted
@@ -1497,10 +1527,10 @@ class AdjustContrastv2:
             contrast_factor = ctx.make_node("Cast", [dtype], attr={'to': dtype}).output[0]
         rank = ctx.get_rank(images)
         utils.make_sure(rank is not None, "AdjustContrastv2 requires input of known rank")
-        # Reduce everything except channels
-        axes_to_reduce = list(range(rank))[:-1]
-        mean = ctx.make_node("ReduceMean", [images], attr={'axes': axes_to_reduce, 'keepdims': True},
-                             op_name_scope=node.name).output[0]
+        # Reduce height and width only
+        axes_to_reduce = list(range(rank))[-3:-1]
+        mean = GraphBuilder(ctx).make_reduce_mean({"data": images, "axes": axes_to_reduce, "keepdims": True},
+                                                  op_name_scope=node.name)
         diff = ctx.make_node("Sub", [images, mean], op_name_scope=node.name).output[0]
         scaled = ctx.make_node("Mul", [diff, contrast_factor], op_name_scope=node.name).output[0]
         result = ctx.make_node("Add", [scaled, mean], op_name_scope=node.name).output[0]
@@ -1518,7 +1548,8 @@ class AdjustSaturation:
         k = ctx.make_const(utils.make_name("three"), np.array([3], np.int64)).output[0]
         ordered, indices = ctx.make_node("TopK", [images, k], attr={'axis': -1}, output_count=2).output
         # Sorted and separated into channels
-        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1}, output_count=3).output
+        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1, 'num_outputs': 3},
+                                            output_count=3).output
         delta = ctx.make_node("Sub", [max_c, min_c]).output[0]
         scaled_delta = ctx.make_node("Mul", [delta, factor], op_name_scope=node.name).output[0]
         new_delta = ctx.make_node("Min", [scaled_delta, max_c]).output[0]
@@ -1555,7 +1586,8 @@ class AdjustHue:
         ordered, indices = ctx.make_node("TopK", [images, k], attr={'axis': -1},
                                          output_count=2, op_name_scope=node.name).output
         # Sorted and separated into channels
-        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1}, output_count=3).output
+        max_c, mid_c, min_c = ctx.make_node("Split", [ordered], attr={'axis': -1, 'num_outputs': 3},
+                                            output_count=3).output
         delta = ctx.make_node("Sub", [max_c, min_c]).output[0]
         delta2 = ctx.make_node("Sub", [mid_c, min_c]).output[0]
         delta_z = ctx.make_node("Equal", [delta, const_zero]).output[0]
@@ -1612,6 +1644,27 @@ class AdjustHue:
 
 @tf_op("MatrixBandPart")
 class MatrixBandPart:
+    @classmethod
+    def _apply_mask_and_transform(cls, ctx, node, mask):
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        dtype = ctx.get_dtype(node.input[0])
+        data = node.input[0]
+        if dtype == TensorProto.BOOL:
+            # bool is not supported for 'Mul', so convert mask and input supported dtype
+            mask = ctx.make_node("Cast", inputs=mask.output, attr={'to': TensorProto.FLOAT}).output[0]
+            data = ctx.make_node("Cast", [data], attr={'to': TensorProto.FLOAT}).output[0]
+            result = ctx.make_node(op_type="Mul", inputs=[mask, data], shapes=shapes, dtypes=[TensorProto.FLOAT])
+            ctx.remove_node(node.name)
+            ctx.make_node("Cast", inputs=result.output, attr={'to': dtype},
+                          name=node.name, outputs=node.output, dtypes=dtypes)
+        else:
+            mask = ctx.make_node(op_type="Cast", inputs=mask.output, attr={"to": dtype}).output[0]
+            ctx.remove_node(node.name)
+            ctx.make_node(op_type="Mul", inputs=[mask, data],
+                          name=node.name, outputs=node.output, shapes=shapes,
+                          dtypes=dtypes)
+
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
         # T output = MatrixBandPart(T input, int num_lower, int num_upper)
@@ -1682,14 +1735,7 @@ class MatrixBandPart:
             mask_matrix = ctx.make_node(op_type="Transpose", inputs=cast1.output)
         else:
             mask_matrix = squeeze
-        cast2 = ctx.make_node(op_type="Cast", inputs=mask_matrix.output,
-                              attr={"to": ctx.get_dtype(node.input[0])})
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node(op_type="Mul", inputs=[cast2.output[0], node.input[0]],
-                      name=node.name, outputs=node.output, shapes=shapes,
-                      dtypes=dtypes)
+        cls._apply_mask_and_transform(ctx, node, mask_matrix)
 
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
@@ -1707,17 +1753,12 @@ class MatrixBandPart:
                 {'data': whole_shape, 'starts': [-2], 'ends': [int_max_val], 'axes': [0]})
         if num_lower_const == 0 and num_upper_const == 0:
             if rank == 2:
-                identity_node = ctx.make_node("EyeLike", [data]).output[0]
+                identity_node = ctx.make_node("EyeLike", [data])
             else:
                 zero_tensor = helper.make_tensor("value", dtype, dims=[1], vals=[0])
                 const_of_shape = ctx.make_node("ConstantOfShape", [shape], attr={'value': zero_tensor}).output[0]
-                identity_node = ctx.make_node("EyeLike", [const_of_shape]).output[0]
-            shapes = node.output_shapes
-            dtypes = node.output_dtypes
-            ctx.remove_node(node.name)
-            ctx.make_node(op_type="Mul", inputs=[identity_node, data],
-                          name=node.name, outputs=node.output, shapes=shapes,
-                          dtypes=dtypes)
+                identity_node = ctx.make_node("EyeLike", [const_of_shape])
+            cls._apply_mask_and_transform(ctx, node, identity_node)
             return
         zero_const = ctx.make_const(utils.make_name("zero"), np.array(0, np.int64)).output[0]
         one_const = ctx.make_const(utils.make_name("one"), np.array(1, np.int64)).output[0]
@@ -1739,14 +1780,14 @@ class MatrixBandPart:
             if ctx.get_dtype(num_upper) != TensorProto.INT64:
                 num_upper = ctx.make_node("Cast", [num_upper], attr={'to': TensorProto.INT64}).output[0]
             greater = ctx.make_node("Greater", [idx_diff, num_upper]).output[0]
-            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater])
             conditions.append(less_or_equal)
         if num_lower_const is None or num_lower_const >= 0:
             if ctx.get_dtype(num_lower) != TensorProto.INT64:
                 num_lower = ctx.make_node("Cast", [num_lower], attr={'to': TensorProto.INT64}).output[0]
             num_lower_neg = ctx.make_node("Neg", [num_lower]).output[0]
             greater = ctx.make_node("Greater", [num_lower_neg, idx_diff]).output[0]
-            less_or_equal = ctx.make_node("Not", [greater]).output[0]
+            less_or_equal = ctx.make_node("Not", [greater])
             conditions.append(less_or_equal)
         if len(conditions) == 0:
             node.type = "Identity"
@@ -1755,14 +1796,8 @@ class MatrixBandPart:
         if len(conditions) == 1:
             cond = conditions[0]
         if len(conditions) == 2:
-            cond = ctx.make_node("And", conditions).output[0]
-        mask = ctx.make_node("Cast", [cond], attr={'to': ctx.get_dtype(data)}).output[0]
-        shapes = node.output_shapes
-        dtypes = node.output_dtypes
-        ctx.remove_node(node.name)
-        ctx.make_node(op_type="Mul", inputs=[mask, data],
-                      name=node.name, outputs=node.output, shapes=shapes,
-                      dtypes=dtypes)
+            cond = ctx.make_node("And", inputs=[c.output[0] for c in conditions])
+        cls._apply_mask_and_transform(ctx, node, cond)
 
 
 def _make_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_node):
@@ -1856,7 +1891,7 @@ def _make_sparse_softmax_cross_entropy_with_logits(ctx, label, logit, tf_ori_nod
     # "-log(q_i)" where i is the selected index specified by label, q_i = logic_i/sum, the detail process is as follows:
     # logit_exp=exp(logit) >> sum = tf.reduce_sum(logit_exp, axis = -1), masked_sum = reduce_sum(mul(logit_exp, mul))
     # >> -log(masked_sum/sum)
-    logit_max = ctx.make_node(op_type="ReduceMax", inputs=[logit], attr={"axes": [-1], "keepdims": 1}).output[0]
+    logit_max = GraphBuilder(ctx).make_reduce_max({"data": logit, "axes": [-1], "keepdims": 1})
     logit_norm = ctx.make_node(op_type="Sub", inputs=[logit, logit_max]).output[0]
     logit_exp = ctx.make_node(op_type="Exp", inputs=[logit_norm]).output[0]
     logit_exp_sum = GraphBuilder(ctx).make_reduce_sum(
@@ -1976,7 +2011,8 @@ class CTCGreedyDecoder:
         merge_repeated = node.get_attr_value("merge_repeated", False)
 
         inp_shape = ctx.make_node("Shape", [inp]).output[0]
-        max_time_unsq, num_batch_unsq, num_classes_unsq = ctx.make_node("Split", [inp_shape], output_count=3).output
+        max_time_unsq, num_batch_unsq, num_classes_unsq = ctx.make_node("Split", [inp_shape], attr={'num_outputs': 3},
+                                                                        output_count=3).output
         max_time = GraphBuilder(ctx).make_squeeze({"data": max_time_unsq, "axes": [0]})
         num_batch = GraphBuilder(ctx).make_squeeze({"data": num_batch_unsq, "axes": [0]})
         num_classes = GraphBuilder(ctx).make_squeeze({"data": num_classes_unsq, "axes": [0]})
@@ -2040,10 +2076,10 @@ class CTCGreedyDecoder:
         sparse_idx = ctx.make_node("Concat", [batch_flat, time_flat], attr={'axis': 1}).output[0]
         idx_compress = ctx.make_node("Compress", [idx_flat, keep_idx_flat], attr={'axis': 0}, shapes=[[-1]],
                                      op_name_scope=node.name).output[0]
-        sparse_idx_compress = ctx.make_node("Compress", [sparse_idx, keep_idx_flat], attr={'axis': 0}, shapes=[[-1, 2]],
-                                            op_name_scope=node.name).output[0]
-        max_sparse_idx = ctx.make_node("ReduceMax", [sparse_idx_compress],
-                                       attr={'axes': [0], 'keepdims': False}).output[0]
+        sparse_idx_compress = ctx.make_node("Compress", [sparse_idx, keep_idx_flat], attr={'axis': 0},
+                                            shapes=[[-1, 2]], op_name_scope=node.name).output[0]
+        max_sparse_idx = GraphBuilder(ctx).make_reduce_max({"data": sparse_idx_compress, "axes": [0],
+                                                            "keepdims": False})
         max_time = GraphBuilder(ctx).make_slice(
             {"data": max_sparse_idx, "starts": [1], "ends": [2], "axes": [0]})
         max_time_inc = ctx.make_node("Add", [max_time, const_one]).output[0]
@@ -2055,3 +2091,93 @@ class CTCGreedyDecoder:
         ctx.replace_all_inputs(node.output[3], sum_max_neg)
 
         ctx.remove_node(node.name)
+
+
+@tf_op("ExtractImagePatches")
+class ExtractImagePatches:
+    @classmethod
+    def version_9(cls, ctx, node, **kwargs):
+        input_shape = ctx.get_shape(node.input[0])
+        output_shape = node.output_shapes[0]
+
+        sizes = node.get_attr_value("ksizes")
+        strides = node.get_attr_value("strides")
+        rates = node.get_attr_value("rates")
+        padding = node.get_attr_str("padding")
+
+        # This implementation of ExtractImagePatches does not generalize
+        # to outputs that are empty. For example:
+        #
+        #   tf.image.extract_patches(
+        #     np.random.rand(1, 1, 1, 1), sizes=[1, 2, 2, 1], strides=[1, 1, 1, 1],
+        #     rates=[1, 1, 1, 1], padding="VALID"
+        #   )
+        #
+        # succeeds with the output of:
+        #
+        #   <tf.Tensor: shape=(1, 0, 0, 4), dtype=float64, numpy=array([], shape=(1, 0, 0, 4), dtype=float64)>
+        #
+        # whereas attempting the same here results in an "Invalid input shape" error for the "Conv" node.
+        utils.make_sure(0 not in output_shape, "Empty ExtractImagePatches output is unsupported.")
+        [_, size_rows, size_cols, _] = sizes
+
+        # Transform input into [N * C, H, W, 1].
+        transformed_input = ctx.make_node("Reshape", inputs=[
+            ctx.make_node("Transpose", inputs=node.input, attr=dict(perm=[0, 3, 1, 2])).output[0],
+            ctx.make_const(utils.make_name("new_shape"), np.int64([
+                input_shape[0] * input_shape[3],
+                input_shape[1],
+                input_shape[2],
+                1,
+            ])).output[0],
+        ])
+
+        # Create identity kernel.
+        k = size_rows * size_cols
+        identity_kernel = ctx.make_node("Reshape", inputs=[
+            ctx.make_node("EyeLike", inputs=[
+                ctx.make_node("ConstantOfShape", inputs=[
+                    ctx.make_const(utils.make_name("eye_size"), np.array([k, k], dtype=np.int64)).output[0],
+                ]).output[0],
+            ]).output[0],
+            ctx.make_const(utils.make_name("new_shape"), np.array([
+                size_rows,
+                size_cols,
+                1,
+                k,
+            ], dtype=np.int64)).output[0],
+        ])
+
+        # Construct placeholder convolution node and transform into [N * C, K, ?H, ?W].
+        convolution = ctx.make_node("Conv", inputs=[transformed_input.output[0], identity_kernel.output[0]],
+                                    shapes=[[input_shape[0] * input_shape[3], output_shape[1], output_shape[2], k]],
+                                    attr=dict(strides=strides, dilations=rates, padding=padding, data_format="NHWC"),
+                                    dtypes=node.output_dtypes)
+
+        # Transform into [N, ?H, ?W, C * K].
+        output_node = ctx.make_node("Reshape", inputs=[
+            ctx.make_node("Transpose", inputs=[
+                ctx.make_node("Reshape", inputs=[
+                    convolution.output[0],
+                    ctx.make_const(utils.make_name("new_shape"), np.array([
+                        input_shape[0],
+                        input_shape[3],
+                        output_shape[1],
+                        output_shape[2],
+                        k,
+                    ], dtype=np.int64)).output[0],
+                ]).output[0],
+            ], attr=dict(perm=[0, 2, 3, 4, 1])).output[0],
+            ctx.make_const(utils.make_name("new_shape"), np.array(output_shape, dtype=np.int64)).output[0],
+        ])
+
+        # Replace original node.
+        ctx.replace_all_inputs(node.output[0], output_node.output[0])
+        ctx.remove_node(node.name)
+
+        # Transform convolution node.
+        kernel_shape = conv_kernel_shape(ctx, convolution, 1)
+        strides = conv_dims_attr(convolution, "strides")
+        dilations = conv_dims_attr(convolution, "dilations")
+        add_padding(ctx, convolution, kernel_shape, strides, dilations)
+        conv_convert_inputs(ctx, convolution, with_kernel=True)

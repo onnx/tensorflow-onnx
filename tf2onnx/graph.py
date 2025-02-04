@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 # todo(pengwa): remove protected-access later
-# pylint: disable=broad-except,protected-access
+# pylint: disable=broad-except,protected-access,unexpected-keyword-arg
 
 class ExternalTensorStorage():
     """Passed into graph and node methods to accumulate tensors to save externally"""
@@ -267,7 +267,11 @@ class Node(object):
         return attr_str.decode(encoding)
 
     def set_attr(self, name, value):
-        self.attr[name] = helper.make_attribute(name, value)
+        if utils._attr_type_in_signature and not isinstance(value, bytes) and \
+            isinstance(value, collections.abc.Sequence) and len(list(value)) == 0:
+            self.attr[name] = helper.make_attribute(name, value, attr_type=AttributeProto.INTS)
+        else:
+            self.attr[name] = helper.make_attribute(name, value)
 
     def set_attr_onnx(self, value):
         self.attr[value.name] = value
@@ -640,7 +644,7 @@ class Graph(object):
             n = self.get_node_by_output_in_current_graph(o)
             utils.make_sure(n is None, "output tensor named %s already exists in node: \n%s", o, n)
 
-        onnx_node = helper.make_node(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
+        onnx_node = utils.make_onnx_node_with_attr(op_type, inputs, outputs, name=name, domain=domain, **raw_attr)
 
         for name2 in onnx_node.input:
             self._register_input_name(name2, onnx_node)

@@ -481,7 +481,7 @@ def read_tfjs_graph(nodes, weights, func=None, graph_inputs=None, graph_outputs=
                 op_type = 'Identity'
                 graph_inputs = [inp for inp in graph_inputs if inp != node_name + ":0"]
 
-        onnx_node = helper.make_node(op_type, input_names, output_names, name=node_name, **onnx_attr)
+        onnx_node = utils.make_onnx_node_with_attr(op_type, input_names, output_names, name=node_name, **onnx_attr)
         onnx_nodes.append(onnx_node)
 
     for inp in graph_inputs:

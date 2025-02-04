@@ -41,9 +41,10 @@ class BackToBackOptimizer(GraphOptimizerBase):
 
             # topological sort of candidates
             # simplifying assumption for back-to-back-optimizer is
-            # the op_types have 1 input, 1 output, but multiple consumers
+            # the op_types have 1 input, 1 output, but multiple consumers.
+            # if optype contains 2 elements, the second element should not be considered as a consumer.
             has_dependencies = set()
-            consumer_node_ids = {n.output[0]: [] for n in nodes}
+            consumer_node_ids = {n.output[0]: [] for n in nodes if len(optype) < 2 or n.type == optype[0]}
             for n in nodes:
                 if n.input[0] in consumer_node_ids:
                     consumer_node_ids[n.input[0]].extend([n])

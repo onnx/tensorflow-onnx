@@ -25,9 +25,10 @@ class TestEinsum(Tf2OnnxBackendTestBase):
         raise AssertionError("%r was not raised." % exc_type)
 
     def apply_einsum_sequence(self, seq, *inputs):
+        providers = ['CPUExecutionProvider']
         names = ["X%d" % i for i in range(len(inputs))]
         onx = seq.to_onnx('Y', *names, opset=self.config.opset)
-        sess = InferenceSession(onx.SerializeToString())
+        sess = InferenceSession(onx.SerializeToString(), providers=providers)
         inps = {n: i.astype(np.float32) for n, i in zip(names, inputs)}
         res = sess.run(None, inps)
         return res[0]

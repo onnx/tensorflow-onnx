@@ -65,7 +65,14 @@ class UnidirectionalSequenceLSTMOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def Start(builder): builder.StartObject(5)
+    # UnidirectionalSequenceLSTMOptions
+    def DiagonalRecurrentTensors(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+def Start(builder): builder.StartObject(6)
 def UnidirectionalSequenceLSTMOptionsStart(builder):
     """This method is deprecated. Please switch to Start."""
     return Start(builder)
@@ -89,6 +96,10 @@ def AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs): builder.Prep
 def UnidirectionalSequenceLSTMOptionsAddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs):
     """This method is deprecated. Please switch to AddAsymmetricQuantizeInputs."""
     return AddAsymmetricQuantizeInputs(builder, asymmetricQuantizeInputs)
+def AddDiagonalRecurrentTensors(builder, diagonalRecurrentTensors): builder.PrependBoolSlot(5, diagonalRecurrentTensors, 0)
+def UnidirectionalSequenceLSTMOptionsAddDiagonalRecurrentTensors(builder, diagonalRecurrentTensors):
+    """This method is deprecated. Please switch to AddDiagonalRecurrentTensors."""
+    return AddDiagonalRecurrentTensors(builder, diagonalRecurrentTensors)
 def End(builder): return builder.EndObject()
 def UnidirectionalSequenceLSTMOptionsEnd(builder):
     """This method is deprecated. Please switch to End."""

@@ -11,6 +11,7 @@ from collections import defaultdict
 
 from packaging.version import Version
 from parameterized import parameterized
+import timeout_decorator
 import numpy as np
 import tensorflow as tf
 
@@ -50,6 +51,8 @@ __all__ = [
     "check_op_count",
     "check_gru_count",
     "check_lstm_count",
+    "check_quantization_axis",
+    "timeout",
 ]
 
 
@@ -75,6 +78,10 @@ class TestConfig(object):
     @property
     def is_mac(self):
         return self.platform == "darwin"
+
+    @property
+    def is_windows(self):
+        return self.platform.startswith("win")
 
     @property
     def is_onnxruntime_backend(self):
@@ -465,6 +472,8 @@ def check_lstm_count(graph, expected_count):
 def check_gru_count(graph, expected_count):
     return check_op_count(graph, "GRU", expected_count)
 
+def check_quantization_axis(graph, op_type, expected_axis):
+    return np.all(np.array([n.get_attr_int("axis") for n in group_nodes_by_type(graph)[op_type]]) == expected_axis)
 
 _MAX_MS_OPSET_VERSION = 1
 
@@ -493,3 +502,14 @@ def check_node_domain(node, domain):
     if not domain:
         return not node.domain
     return node.domain == domain
+
+def timeout(seconds):
+    """
+    Decorator for enforcing a time limit on a test.
+
+    NOTE: Please only use for ensuring that a test does not time out.
+    Do not write tests that intentionally time out.
+    """
+    if get_test_config().is_windows:
+        return unittest.skip("timeout testing is unreliable on Windows.")
+    return timeout_decorator.timeout(seconds)
