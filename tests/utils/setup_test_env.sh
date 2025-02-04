@@ -22,7 +22,7 @@ pip install onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions
 if [[ $TF_VERSION == 1.* ]]; then 
     pip install numpy==1.19.0
 else 
-    if [[ "$TF_VERSION" != "2.13" && "$TF_VERSION" != "2.9" ]]; then 
+    if [[ "$TF_VERSION" != "2.13.0" && "$TF_VERSION" != "2.9.0" ]]; then 
         echo "-- install-3 TF-KERAS ${{ inputs.tf_version }}"
         pip install tf_keras==$TF_VERSION
     else

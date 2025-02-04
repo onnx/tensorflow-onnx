@@ -34,7 +34,7 @@ runs:
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               pip install numpy==1.19.0
           else 
-              if [[ "${{ inputs.tf_version }}" != "2.13" && "${{ inputs.tf_version }}" != "2.9" ]]; then 
+              if [[ "${{ inputs.tf_version }}" != "2.13.0" && "${{ inputs.tf_version }}" != "2.9.0" ]]; then 
                 echo "-- install-2 TF-KERAS ${{ inputs.tf_version }}"
                 pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }}
               else
