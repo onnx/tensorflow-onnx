@@ -46,6 +46,7 @@ runs:
           pip install git+https://github.com/qubvel/efficientnet
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
+          pip uninstall -y protobuf
 
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               pip install keras==2.3.1
@@ -60,7 +61,7 @@ runs:
                 pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }}
               else
                 echo "-- install-1 TF ${{ inputs.tf_version }}"
-                pip install "protobuf<3.20" tensorflow==${{ inputs.tf_version }}
+                pip install protobuf tensorflow==${{ inputs.tf_version }}
               fi
           fi
 

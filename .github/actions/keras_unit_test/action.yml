@@ -39,7 +39,7 @@ runs:
                 pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }}
               else
                 echo "-- install-2 TF ${{ inputs.tf_version }}"
-                pip install "protobuf<3.20" tensorflow==${{ inputs.tf_version }}
+                pip install protobuf tensorflow==${{ inputs.tf_version }}
               fi
           fi
 
