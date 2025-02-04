@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# pylint: disable=missing-docstring,unused-import
+# pylint: disable=missing-docstring,unused-import,import-outside-toplevel,unused-variable
 import unittest
 from backend_test_base import Tf2OnnxBackendTestBase
 
@@ -15,7 +15,7 @@ class TestIssue2025(Tf2OnnxBackendTestBase):
         @tf_op("TanhGrad")
         class TanhGrad:
             @classmethod
-            def version_1(cls, ctx, node, **kwargs):
+            def version_1(cls, ctx, node, **_kwargs):
                 tanh_output = node.input[0]
                 grad = node.input[1]
                 square = ctx.make_node("Mul", [tanh_output, tanh_output])
