@@ -24,13 +24,10 @@ runs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ inputs.onnx_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
           pip install h5py
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
-          pip install tensorflow==${{ inputs.tf_version }}
           pip install onnxruntime==${{ inputs.ort_version }}
           pip install pillow
           pip install opencv-python
@@ -50,10 +47,6 @@ runs:
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
 
-          if [[ ${{ inputs.tf_version }} <= 2.15 ]]; then 
-            pip install "protobuf<3.20"
-          fi
-
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               pip install keras==2.3.1
               pip install transformers==4.2.0
@@ -62,8 +55,10 @@ runs:
               pip install numpy==1.19.0
           else 
               pip install transformers
-              if [[ ${{ inputs.tf_version }} != 2.13 && ${{ inputs.tf_version }} != 2.9 ]]; then 
-                pip install tf_keras==${{ inputs.tf_version }}
+              if [[ "${{ inputs.tf_version }}" != "2.13" && "${{ inputs.tf_version }}" != "2.9" ]]; then 
+                pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }}
+              else
+                pip install "protobuf<3.20" tensorflow==${{ inputs.tf_version }}
               fi
           fi
 

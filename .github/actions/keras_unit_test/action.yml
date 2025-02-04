@@ -28,16 +28,16 @@ runs:
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
-          pip install tensorflow==${{ inputs.tf_version }}
           pip install pytest pytest-cov pytest-runner
           pip install onnxruntime==${{ inputs.ort_version }}
           pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               pip install numpy==1.19.0
           else 
-              if [[ ${{ inputs.tf_version }} != 2.13 && ${{ inputs.tf_version }} != 2.9 ]]; then 
-                pip install tf_keras==${{ inputs.tf_version }}
+              if [[ "${{ inputs.tf_version }}" != "2.13" && "${{ inputs.tf_version }}" != "2.9" ]]; then 
+                pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }}
+              else
+                pip install "protobuf<3.20" tensorflow==${{ inputs.tf_version }}
               fi
           fi
 
