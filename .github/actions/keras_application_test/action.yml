@@ -62,7 +62,7 @@ runs:
               pip install numpy==1.19.0
           else 
               pip install transformers
-              if [[ ${{ inputs.tf_version }} != 2.13 ]]; then 
+              if [[ ${{ inputs.tf_version }} != 2.13 && ${{ inputs.tf_version }} != 2.9 ]]; then 
                 pip install tf_keras==${{ inputs.tf_version }}
               fi
           fi
