@@ -46,14 +46,11 @@ runs:
           pip install git+https://github.com/qubvel/efficientnet
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
-          pip uninstall -y protobuf
+          pip uninstall -y protobuf h5py
 
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
-              pip install keras==2.3.1
-              pip install transformers==4.2.0
-              pip uninstall -y h5py
-              pip install h5py==2.9.0
-              pip install numpy==1.19.0 tensorflow==${{ inputs.tf_version }}
+              echo "-- install-1 TF1-KERAS ${{ inputs.tf_version }}"
+              pip install numpy==1.19.0 tensorflow==${{ inputs.tf_version }} protobuf h5py==2.9.0 transformers==4.2.0 keras h5py
           else 
               pip install transformers
               if [[ "${{ inputs.tf_version }}" != "2.13.0" && "${{ inputs.tf_version }}" != "2.9.0" ]]; then

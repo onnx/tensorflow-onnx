@@ -16,11 +16,12 @@ echo "==== ONNXRuntime version: $ORT_VERSION"
 echo "==== ONNX version: $ONNX_VERSION"
 
 pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
-pip uninstall -y tensorflow
+pip uninstall -y tensorflow protobuf h5py
 pip install onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions
 
 if [[ $TF_VERSION == 1.* ]]; then 
-    pip install numpy==1.19.0 tensorflow==$TF_VERSION
+    echo "-- install-3 TF1-KERAS $TF_VERSION"
+    pip install numpy==1.19.0 tensorflow==$TF_VERSION protobug keras h5py
 else 
     pip uninstall -y protobuf
     if [[ "$TF_VERSION" != "2.13.0" && "$TF_VERSION" != "2.9.0" ]]; then 
