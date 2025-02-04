@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  Test_min_py_with_min_tf: # Do not change this name because it is used in Ruleset of this repo.
+  Test_min_py38_with_min_tf: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -38,7 +38,7 @@ jobs:
           name: Test Results (Py38-TF2.9-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_max_py_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
+  Test_max_py310_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -60,6 +60,54 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Test Results (Py310-TF2.18-ubuntu)
+          path: ./**/test-results-*.xml
+
+  Test_max_py311_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py311-TF2.18)
+        uses: ./.github/actions/keras_unit_test
+        with:
+          tf_version: '2.18.0'
+          python_version: '3.11'
+          ort_version: '1.20.1'
+          onnx_version: '1.17.0'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Results (Py311-TF2.18-ubuntu)
+          path: ./**/test-results-*.xml
+
+  Test_max_py312_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py312-TF2.18)
+        uses: ./.github/actions/keras_unit_test
+        with:
+          tf_version: '2.18.0'
+          python_version: '3.12'
+          ort_version: '1.20.1'
+          onnx_version: '1.17.0'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Results (Py312-TF2.18-ubuntu)
           path: ./**/test-results-*.xml
 
   Test_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
@@ -125,7 +173,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Test_py37_with_tf1_15, Extra_tests]
+    needs: [Test_min_py38_with_min_tf, Test_max_py310_with_latest_tf, Test_max_py311_with_latest_tf, Test_max_py312_with_latest_tf, Test_py37_with_tf1_15, Extra_tests]
     runs-on: ubuntu-latest
     permissions:
       checks: write
