@@ -51,11 +51,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Tests (Py310-TF2.15-18)
+      - name: Run Tests (Py310-TF2.18-18)
         uses: ./.github/actions/pretrained_model_test
         with:
           os: 'ubuntu-latest'
-          tf_version: '2.15.0'
+          tf_version: '2.18.0'
           python_version: '3.10'
           ort_version: '1.16.3'
           onnx_version: '1.16.1'
@@ -66,7 +66,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Test Results (Py310-TF2.15-18-ubuntu)
+          name: Test Results (Py310-TF2.18-18-ubuntu)
           path: ./**/test-results-*.xml
 
   Test_py37_with_tf1_15: # Do not change this name because it is used in 'publish-test-results' section below.

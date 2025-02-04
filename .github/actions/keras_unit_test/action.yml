@@ -36,6 +36,7 @@ runs:
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               pip install numpy==1.19.0
           else 
+              pip install tf_keras
               pip install "numpy<2"
           fi
 
@@ -48,6 +49,7 @@ runs:
       shell: bash
       if: runner.os == 'Linux'
       run: |
+          export TF_USE_LEGACY_KERAS=True
           python -c "import onnxruntime"
           python -c "import onnxconverter_common"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
