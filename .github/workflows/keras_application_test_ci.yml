@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
 
-  Test_min_py38_tf2_9: # Do not change this name because it is used in Ruleset of this repo.
+  Test1_py38_tf2_9: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -39,7 +39,7 @@ jobs:
           name: Test Results (Py38-TF2.9-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_max_py310_tf2_18: # Do not change this name because it is used in Ruleset of this repo.
+  Test1_py310_tf2_18: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -63,7 +63,7 @@ jobs:
           name: Test Results (Py310-TF2.18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
+  Test1_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-22.04
@@ -146,7 +146,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py38_tf2_9, Test_max_py310_tf2_18, Test_py37_with_tf1_15, Extra_tests]
+    needs: [Test1_py38_tf2_9, Test1_py310_tf2_18, Test1_py37_with_tf1_15, Extra_tests1]
     runs-on: ubuntu-latest
     permissions:
       checks: write
