@@ -36,7 +36,7 @@ runs:
           else 
               if [[ "${{ inputs.tf_version }}" != "2.13.0" && "${{ inputs.tf_version }}" != "2.9.0" ]]; then 
                 echo "-- install-2 TF-KERAS ${{ inputs.tf_version }}"
-                pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }} h5py
+                pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }} h5py protobuf
               else
                 echo "-- install-2 TF ${{ inputs.tf_version }}"
                 pip install protobuf tensorflow==${{ inputs.tf_version }} h5py
