@@ -26,7 +26,9 @@ def runner():
         return run_onnx_runtime(*args, model_files, **kwargs)
 
     # Ensure Keras layer naming is reset for each function
-    K.reset_uids()
+    if hasattr(K, "reset_uids"):
+        # see https://github.com/onnx/tensorflow-onnx/issues/2370
+        K.reset_uids()
     # Reset the TensorFlow session to avoid resource leaking between tests
     K.clear_session()
 
