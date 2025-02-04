@@ -53,7 +53,7 @@ runs:
               pip install transformers==4.2.0
               pip uninstall -y h5py
               pip install h5py==2.9.0
-              pip install numpy==1.19.0
+              pip install numpy==1.19.0 tensorflow==${{ inputs.tf_version }}
           else 
               pip install transformers
               if [[ "${{ inputs.tf_version }}" != "2.13.0" && "${{ inputs.tf_version }}" != "2.9.0" ]]; then

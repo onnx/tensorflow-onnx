@@ -32,7 +32,7 @@ runs:
           pip install onnxruntime==${{ inputs.ort_version }}
           pip uninstall -y protobuf
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
-              pip install numpy==1.19.0
+              pip install numpy==1.19.0 tensorflow==${{ inputs.tf_version }}
           else 
               if [[ "${{ inputs.tf_version }}" != "2.13.0" && "${{ inputs.tf_version }}" != "2.9.0" ]]; then 
                 echo "-- install-2 TF-KERAS ${{ inputs.tf_version }}"
