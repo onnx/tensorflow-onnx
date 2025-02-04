@@ -36,8 +36,7 @@ runs:
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               pip install numpy==1.19.0
           else 
-              pip install tf_keras
-              pip install "numpy<2"
+              pip install tf_keras==${{ inputs.tf_version }}
           fi
 
           pip install -e .
