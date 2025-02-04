@@ -1793,6 +1793,7 @@ class MatrixBandPart:
             node.type = "Identity"
             ctx.replace_inputs(node, [data])
             return
+        cond = None
         if len(conditions) == 1:
             cond = conditions[0]
         if len(conditions) == 2:

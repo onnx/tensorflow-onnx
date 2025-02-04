@@ -492,7 +492,7 @@ class Test(object):
                     tf.profiler.experimental.start(self.tf_profile)
                 while time.time() < stop:
                     for _ in range(PERF_STEP):
-                        _ = concrete_func(**inputs)
+                        _ = self.concrete_function(**inputs)
                     n += PERF_STEP
                 if self.tf_profile is not None:
                     tf.profiler.experimental.stop()
